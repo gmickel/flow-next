@@ -12,6 +12,7 @@ Run:
 
 from __future__ import annotations
 
+import argparse
 import concurrent.futures
 import importlib.util
 import io
@@ -80,6 +81,43 @@ CURSOR_TOP = BACKEND_REGISTRY["cursor"]["models"][0]
 CODEX_OK_STREAM = '{"type":"thread.started","thread_id":"t1"}\n{"type":"agent_message","message":"<verdict>SHIP</verdict>"}'
 CURSOR_OK_STREAM = '{"type":"result","is_error":false,"result":"ok","session_id":"s1"}'
 
+# claude (fn-221): probed 2026-09-05 on Claude Code 2.1.260. A bad ``--model``
+# EXITS 0; the signature is the JSON payload (``is_error`` + ``api_error_status``
+# 404 + the selected-model text) and/or the stderr tag. Exit code is never the
+# signal, so every claude fixture below returns rc 0.
+CLAUDE_TOP, CLAUDE_SECOND, CLAUDE_THIRD = BACKEND_REGISTRY["claude"]["models"][:3]
+CLAUDE_OK_STREAM = (
+    '{"type":"result","subtype":"success","is_error":false,'
+    '"result":"<verdict>SHIP</verdict>","session_id":"claude-s1"}'
+)
+CLAUDE_UNAVAILABLE_STDERR = (
+    "[claude-code:unrecognized_model] Model not found: definitely-not-a-model"
+)
+# The fixed read-only argv every claude dispatch carries (fn-221 R2).
+CLAUDE_FIXED_ARGV = [
+    "-p", "--output-format", "json", "--permission-mode", "dontAsk",
+    "--tools", "Read", "Grep", "Glob", "--strict-mcp-config",
+]
+
+
+def _claude_result(
+    *, is_error=True, status=404, text="There's an issue with the selected model."
+) -> str:
+    """Build a claude result payload; ``status=None`` omits api_error_status."""
+    payload = {
+        "type": "result",
+        "subtype": "error" if is_error else "success",
+        "is_error": is_error,
+        "result": text,
+        "session_id": "claude-s1",
+    }
+    if status is not None:
+        payload["api_error_status"] = status
+    return json.dumps(payload)
+
+
+CLAUDE_UNAVAILABLE_JSON = _claude_result()
+
 
 def _model_of(argv: list) -> Optional[str]:
     """Return the ``--model`` value in an argv, or None (floor omits --model)."""
@@ -96,21 +134,27 @@ class _Fake:
 
 
 @contextmanager
-def _scripted(module, *, dispatch_result, version="0.142", list_models=None, calls=None):
+def _scripted(module, *, dispatch_result, version="0.142", list_models=None, calls=None, inputs=None):
     """Stub subprocess.run + shutil.which for the review CLIs.
 
     ``dispatch_result(model) -> (stdout, stderr, rc)`` decides each dispatch's
     outcome by the ``--model`` value (None = floor). ``--version`` returns
     ``version``; ``--list-models`` returns ``list_models`` (newline-joined).
-    Every call's argv is appended to ``calls`` (when given).
+    Every call's argv is appended to ``calls`` (when given); each dispatch's
+    ``input=`` kwarg (stdin delivery, claude) to ``inputs``. ``git`` argv is
+    passed through to the real subprocess so fixtures can read a repo.
     """
     real_run = module.subprocess.run
     real_which = module.shutil.which
 
     def fake_run(cmd, **kwargs):
         argv = list(cmd)
+        if argv and argv[0] == "git":
+            return real_run(cmd, **kwargs)
         if calls is not None:
             calls.append(argv)
+        if inputs is not None and "--version" not in argv:
+            inputs.append(kwargs.get("input"))
         if "--version" in argv:
             return _Fake(stdout=version, returncode=0)
         if "--list-models" in argv:
@@ -125,7 +169,7 @@ def _scripted(module, *, dispatch_result, version="0.142", list_models=None, cal
         return _Fake(stdout=out, stderr=err, returncode=rc)
 
     def fake_which(binary):
-        if binary in ("codex", "copilot", "cursor-agent"):
+        if binary in ("codex", "copilot", "cursor-agent", "claude"):
             return f"/fake/bin/{binary}"
         return real_which(binary)
 
@@ -195,6 +239,36 @@ class TestSignatureDetectors(unittest.TestCase):
         self.assertTrue(
             flowctl._cursor_model_unavailable("", CURSOR_UNAVAILABLE_STREAM)
         )
+
+    def test_claude_signature_matches(self) -> None:
+        # fn-221 R3: the full JSON signature, or the stderr tag alone.
+        self.assertTrue(
+            flowctl._claude_model_unavailable(json.loads(CLAUDE_UNAVAILABLE_JSON), "")
+        )
+        self.assertTrue(
+            flowctl._claude_model_unavailable(None, CLAUDE_UNAVAILABLE_STDERR)
+        )
+        self.assertTrue(
+            flowctl._claude_model_unavailable(
+                json.loads(_claude_result(status=None)), CLAUDE_UNAVAILABLE_STDERR
+            )
+        )
+
+    def test_claude_partial_signatures_do_not_match(self) -> None:
+        # A 404 without the selected-model text, the text without a 404, a
+        # non-error payload, or no payload at all: transport failures, never a
+        # ladder step (fn-221 R3 negative fixtures).
+        for payload in (
+            json.loads(_claude_result(text="Request failed")),
+            json.loads(_claude_result(status=None)),
+            json.loads(_claude_result(status=500)),
+            json.loads(_claude_result(is_error=False)),
+            None,
+        ):
+            with self.subTest(payload=payload):
+                self.assertFalse(
+                    flowctl._claude_model_unavailable(payload, "connection reset")
+                )
 
     def test_non_signature_failures_do_not_match(self) -> None:
         # Auth / network / sandbox / timeout must never look like model-unavailable.
@@ -418,6 +492,307 @@ class TestCursorLadder(unittest.TestCase):
                 flowctl.run_cursor_exec("p", spec=BackendSpec("cursor"), repo_root=root, resolution_out=res)
         self.assertEqual(res["model"], "auto")
         self.assertTrue(res["floor"])
+
+
+class TestClaudeLadder(unittest.TestCase):
+    """fn-221 R3: the claude ladder keys on the probed signature only."""
+
+    def _run(self, root, result, *, calls=None, inputs=None, version="2.1.260",
+             res=None, session_id=None, spec=None):
+        with _scripted(flowctl, dispatch_result=result, version=version, calls=calls, inputs=inputs):
+            with redirect_stderr(io.StringIO()):
+                return flowctl.run_claude_exec(
+                    "p", session_id, spec=spec or BackendSpec("claude"),
+                    repo_root=root, resolution_out=res,
+                )
+
+    def test_steps_down_on_full_json_signature_at_exit_0(self) -> None:
+        def result(model):
+            if model == CLAUDE_TOP:
+                return (CLAUDE_UNAVAILABLE_JSON, "", 0)  # exit 0 on a bad model
+            return (CLAUDE_OK_STREAM, "", 0)
+
+        calls: list = []
+        inputs: list = []
+        with _repo() as root:
+            out, sid, rc, err = self._run(root, result, calls=calls, inputs=inputs)
+        self.assertEqual(rc, 0)
+        self.assertEqual(sid, "claude-s1")
+        self.assertEqual(out, "<verdict>SHIP</verdict>")
+        self.assertEqual([_model_of(c) for c in calls if "-p" in c], [CLAUDE_TOP, CLAUDE_SECOND])
+        self.assertEqual(inputs, ["p", "p"])  # prompt on stdin, every dispatch
+
+    def test_steps_down_on_stderr_tag(self) -> None:
+        def result(model):
+            if model == CLAUDE_TOP:
+                return (_claude_result(status=None), CLAUDE_UNAVAILABLE_STDERR, 0)
+            return (CLAUDE_OK_STREAM, "", 0)
+
+        calls: list = []
+        with _repo() as root:
+            out, sid, rc, err = self._run(root, result, calls=calls)
+        self.assertEqual(rc, 0)
+        self.assertEqual([_model_of(c) for c in calls if "-p" in c], [CLAUDE_TOP, CLAUDE_SECOND])
+
+    def test_partial_signature_is_transport_failure_no_step_no_cache(self) -> None:
+        # fn-221 R3 negative fixtures: exit-0 error payloads WITHOUT the
+        # signature propagate as failures - one dispatch, no cache write.
+        for stdout in (
+            _claude_result(text="Request failed"),  # 404 without the text
+            _claude_result(status=None),  # the text without a 404
+            "not json at all",  # not the result JSON
+        ):
+            with self.subTest(stdout=stdout[:40]):
+                calls: list = []
+                with _repo() as root:
+                    out, sid, rc, err = self._run(root, lambda m, _out=stdout: (_out, "", 0), calls=calls)
+                    cache_file = root / ".flow" / ".cache" / "model-resolution.json"
+                    self.assertFalse(cache_file.exists())
+                self.assertEqual(rc, 1)
+                self.assertEqual(len([c for c in calls if "-p" in c]), 1)
+
+    def test_max_two_steps_then_floor_omits_model_and_effort(self) -> None:
+        calls: list = []
+        res: dict = {}
+
+        def result(model):
+            return (CLAUDE_UNAVAILABLE_JSON, "", 0) if model is not None else (CLAUDE_OK_STREAM, "", 0)
+
+        with _repo() as root:
+            out, sid, rc, err = self._run(root, result, calls=calls, res=res)
+        self.assertEqual(rc, 0)
+        dispatched = [c for c in calls if "-p" in c]
+        self.assertEqual(
+            [_model_of(c) for c in dispatched],
+            [CLAUDE_TOP, CLAUDE_SECOND, CLAUDE_THIRD, None],
+        )
+        # Every non-floor rung carried the resolved effort; the floor neither.
+        for argv in dispatched[:3]:
+            self.assertIn("--effort", argv)
+        floor_argv = dispatched[-1]
+        self.assertNotIn("--model", floor_argv)
+        self.assertNotIn("--effort", floor_argv)
+        self.assertTrue(res["floor"])
+        self.assertIsNone(res["model"])
+        # The receipt agrees with the argv: no effort at the floor.
+        self.assertEqual(
+            flowctl._receipt_model_effort(BackendSpec("claude").resolve(), res),
+            ("default", None),
+        )
+
+    def test_caches_per_cli_version(self) -> None:
+        def step_once(model):
+            return (CLAUDE_UNAVAILABLE_JSON, "", 0) if model == CLAUDE_TOP else (CLAUDE_OK_STREAM, "", 0)
+
+        with _repo() as root:
+            self._run(root, step_once, version="2.1.260")
+            cache = _cache_models(root)
+            self.assertEqual(list(cache.values()), [CLAUDE_SECOND])
+            self.assertTrue(next(iter(cache)).startswith("claude@2.1.260@"))
+            # Same version: the cached rung dispatches directly, no top round-trip.
+            calls: list = []
+            self._run(root, lambda m: (CLAUDE_OK_STREAM, "", 0), calls=calls, version="2.1.260")
+            self.assertEqual([_model_of(c) for c in calls if "-p" in c], [CLAUDE_SECOND])
+            # A newer CLI: different key, cold, the top is tried again. The
+            # in-process --version memo (success-only, per executable path)
+            # would otherwise report the old version inside this one test
+            # process; a real upgrade is always a new process.
+            flowctl._CLI_VERSION_CACHE.clear()
+            calls = []
+            self._run(root, lambda m: (CLAUDE_OK_STREAM, "", 0), calls=calls, version="2.2.0")
+            self.assertEqual([_model_of(c) for c in calls if "-p" in c], [CLAUDE_TOP])
+
+    def test_argv_is_the_fixed_read_only_token_list(self) -> None:
+        calls: list = []
+        inputs: list = []
+        with _repo() as root:
+            self._run(root, lambda m: (CLAUDE_OK_STREAM, "", 0), calls=calls, inputs=inputs,
+                      session_id="sid-9")
+        argv = [c for c in calls if "-p" in c][0]
+        self.assertEqual(argv[0], "/fake/bin/claude")
+        self.assertEqual(
+            argv[1:],
+            CLAUDE_FIXED_ARGV + ["--model", CLAUDE_TOP, "--effort", "high", "--resume", "sid-9"],
+        )
+        tools = argv[argv.index("--tools") + 1: argv.index("--strict-mcp-config")]
+        self.assertEqual(tools, ["Read", "Grep", "Glob"])
+        self.assertNotIn("--allowedTools", argv)
+        for forbidden in ("Bash", "Edit", "Write"):
+            self.assertNotIn(forbidden, argv)
+        self.assertEqual(inputs, ["p"])  # the prompt is never a positional
+
+
+@contextmanager
+def _git_repo():
+    """A real git repo with three commits; yields (root, [sha0, sha1, sha2])."""
+    with _repo() as root:
+        def git(*a):
+            return subprocess.run(["git", *a], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+        git("init", "-q")
+        git("config", "user.email", "t@example.com")
+        git("config", "user.name", "t")
+        shas = []
+        for i in range(3):
+            (root / "f.txt").write_text(f"line {i}\n", encoding="utf-8")
+            git("add", "f.txt")
+            git("commit", "-q", "-m", f"c{i}")
+            shas.append(git("rev-parse", "HEAD"))
+        yield root, shas
+
+
+def _diff_name(receipt_id: str, base: str, head: str) -> str:
+    return f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
+
+
+class TestClaudeAdapterBoundary(unittest.TestCase):
+    """fn-221 R2: ``_claude_run_exec`` delivers the diff by path on PRIMARY
+    dispatches (``args.claude_range`` set), never on optional passes."""
+
+    def _call(self, root, *, args, session_id=None, calls=None, inputs=None, seen=None):
+        scratch = root / ".flow" / "tmp" / "claude-review"
+
+        def result(model):
+            if seen is not None:
+                seen.append(sorted(p.name for p in scratch.glob("*.diff")) if scratch.exists() else [])
+            return (CLAUDE_OK_STREAM, "", 0)
+
+        with _scripted(flowctl, dispatch_result=result, calls=calls, inputs=inputs):
+            with redirect_stderr(io.StringIO()):
+                return flowctl._claude_run_exec(
+                    "p", session_id=session_id, repo_root=root,
+                    spec=BackendSpec("claude"), resolution_out={}, args=args,
+                )
+
+    def test_primary_rereview_and_changed_base_write_distinct_files(self) -> None:
+        with _git_repo() as (root, (c0, c1, c2)):
+            scratch = root / ".flow" / "tmp" / "claude-review"
+            first = scratch / _diff_name("rcpt", c0, c1)
+            calls: list = []
+            inputs: list = []
+            seen: list = []
+            # Primary, no session: the file exists BEFORE the stub runs.
+            out, sid, rc, err = self._call(
+                root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")),
+                calls=calls, inputs=inputs, seen=seen,
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(seen, [[first.name]])
+            expected = subprocess.run(
+                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True, text=True, check=True,
+            ).stdout
+            self.assertEqual(first.read_text(encoding="utf-8"), expected)
+            self.assertIn(str(first), inputs[0])
+            self.assertIn(f"{c0}..{c1}", inputs[0])
+            self.assertNotIn("--resume", calls[-1])
+            first_bytes = first.read_bytes()
+
+            # Re-review after a fix: same receipt, a session, a NEW head.
+            calls, inputs = [], []
+            second = scratch / _diff_name("rcpt", c0, c2)
+            self._call(
+                root, args=argparse.Namespace(claude_range=(c0, c2, "rcpt")),
+                session_id="sid-1", calls=calls, inputs=inputs,
+            )
+            self.assertEqual(calls[-1][calls[-1].index("--resume") + 1], "sid-1")
+            self.assertTrue(second.exists())
+            self.assertIn(str(second), inputs[0])
+            self.assertIn(f"{c0}..{c2}", inputs[0])
+            self.assertEqual(first.read_bytes(), first_bytes)
+
+            # Same head, a different base: a third file, the others untouched.
+            second_bytes = second.read_bytes()
+            third = scratch / _diff_name("rcpt", c1, c2)
+            self._call(
+                root, args=argparse.Namespace(claude_range=(c1, c2, "rcpt")),
+                session_id="sid-1",
+            )
+            self.assertEqual(
+                sorted(p.name for p in scratch.iterdir()),
+                sorted([first.name, second.name, third.name]),
+            )
+            self.assertEqual(first.read_bytes(), first_bytes)
+            self.assertEqual(second.read_bytes(), second_bytes)
+
+    def test_optional_pass_resumes_and_writes_nothing(self) -> None:
+        with _git_repo() as (root, (c0, c1, c2)):
+            scratch = root / ".flow" / "tmp" / "claude-review"
+            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")))
+            before = sorted(p.name for p in scratch.iterdir())
+            # HEAD moves, then a deep pass / validate (no range field) resumes.
+            subprocess.run(["git", "reset", "-q", "--hard", c2], cwd=root, check=True)
+            calls: list = []
+            inputs: list = []
+            out, sid, rc, err = self._call(
+                root, args=argparse.Namespace(sandbox="auto", json=False),
+                session_id="sid-1", calls=calls, inputs=inputs,
+            )
+            self.assertEqual(rc, 0)
+            self.assertIn("--resume", calls[-1])
+            self.assertEqual(inputs, ["p"])  # no transport note appended
+            self.assertEqual(sorted(p.name for p in scratch.iterdir()), before)
+
+    def test_two_receipt_ids_write_two_files(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            scratch = root / ".flow" / "tmp" / "claude-review"
+            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "a")))
+            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "b")))
+            self.assertEqual(
+                sorted(p.name for p in scratch.iterdir()),
+                sorted([_diff_name("a", c0, c1), _diff_name("b", c0, c1)]),
+            )
+            # Atomic: no temp file is left beside the published diffs.
+            self.assertFalse(any(p.suffix == ".tmp" for p in scratch.iterdir()))
+
+    def test_symlinked_scratch_paths_fail_before_spawn(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            with tempfile.TemporaryDirectory() as elsewhere:
+                scratch = root / ".flow" / "tmp" / "claude-review"
+                scratch.parent.mkdir(parents=True, exist_ok=True)
+                scratch.symlink_to(elsewhere, target_is_directory=True)
+                calls: list = []
+                out, sid, rc, err = self._call(
+                    root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")),
+                    session_id="sid-1", calls=calls,
+                )
+                self.assertEqual(rc, 2)
+                self.assertEqual(sid, "sid-1")
+                self.assertIn("symlink", err)
+                self.assertEqual([c for c in calls if "-p" in c], [])
+                scratch.unlink()
+            # A symlinked leaf is refused too.
+            scratch.mkdir(parents=True)
+            with tempfile.TemporaryDirectory() as elsewhere:
+                target = Path(elsewhere) / "victim.diff"
+                target.write_text("", encoding="utf-8")
+                (scratch / _diff_name("rcpt", c0, c1)).symlink_to(target)
+                calls = []
+                out, sid, rc, err = self._call(
+                    root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")), calls=calls,
+                )
+                self.assertEqual(rc, 2)
+                self.assertIn("symlink", err)
+                self.assertEqual([c for c in calls if "-p" in c], [])
+                self.assertEqual(target.read_text(encoding="utf-8"), "")
+
+    def test_dispatch_backend_review_sets_the_range_field(self) -> None:
+        # The driver, not the adapter, owns the range: the primary boundary
+        # stamps (base, head, receipt-id) on args before run_exec sees them.
+        recorded: dict = {}
+
+        def run_exec(prompt, *, session_id, repo_root, spec, resolution_out, args):
+            recorded["range"] = args.claude_range
+            return "ok", "sid", 0, ""
+
+        args = argparse.Namespace(json=False)
+        flowctl._dispatch_backend_review(
+            backend="claude", reg={"run_exec": run_exec, "cli_label": "claude"},
+            args=args, prompt="p", session_id=None, repo_root=Path("."),
+            resolved_spec=BackendSpec("claude"), resolution_out={},
+            receipt_path="/x/.flow/review-receipts/fn-9.1-impl.json",
+            spec_id="fn-9", review_kind="impl", review_type="impl",
+            reviewed_head_sha="b" * 40, reviewed_base_sha="a" * 40,
+        )
+        self.assertEqual(recorded["range"], ("a" * 40, "b" * 40, "fn-9.1-impl"))
 
 
 # --- R4: per-CLI-version cache ---

@@ -156,6 +156,7 @@ class ReviewPromptConstraintTest(unittest.TestCase):
             "run_codex_exec",
             "run_copilot_exec",
             "run_cursor_exec",
+            "run_claude_exec",
         }
         observed: Counter[tuple[str, str]] = Counter()
         for node in ast.walk(tree):
@@ -177,6 +178,7 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("run_codex_exec", "_codex_run_exec"): 1,
                 ("run_copilot_exec", "_copilot_run_exec"): 1,
                 ("run_cursor_exec", "_cursor_run_exec"): 1,
+                ("run_claude_exec", "_claude_run_exec"): 1,
                 ("subprocess.run", "get_repo_root"): 1,
                 ("subprocess.run", "find_strategy_file"): 1,
                 ("subprocess.run", "get_state_dir"): 1,
@@ -193,6 +195,11 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_cursor_list_models"): 1,
                 ("subprocess.run", "get_copilot_version"): 1,
                 ("subprocess.run", "get_cursor_version"): 1,
+                ("subprocess.run", "get_claude_version"): 1,
+                # fn-221: the claude reviewer has no shell, so the reviewed
+                # diff is materialised by path - a deterministic `git diff`
+                # read, not an execution bridge.
+                ("subprocess.run", "_claude_review_diff_text"): 1,
                 ("subprocess.run", "get_actor"): 2,
                 # issue #279: best-effort HEAD-sha provenance on review-attempt
                 # rows - a deterministic git read, not an execution bridge.
@@ -255,7 +262,8 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.Popen", "_prime_parse_ls_files_staged"): 1,
                 ("subprocess.run", "_prime_git_free_tool"): 1,
                 ("subprocess.run", "run_codex_exec"): 1,
-                ("subprocess.run", "_dispatch"): 3,
+                # codex, copilot, cursor, claude: one CLI spawn per ladder rung.
+                ("subprocess.run", "_dispatch"): 4,
                 ("subprocess.run", "_branch_slug"): 1,
             }
         )

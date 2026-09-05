@@ -4451,6 +4451,39 @@ def _cursor_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
     return any(m in blob for m in _CURSOR_UNAVAILABLE_MARKERS)
 
 
+# claude (fn-221 R3): probed 2026-09-05 on Claude Code 2.1.260. A bad
+# ``--model`` EXITS 0; the signature lives in the ``--output-format json``
+# result object (``is_error`` true, ``api_error_status`` 404, result text
+# "There's an issue with the selected model ...") and on stderr
+# (``[claude-code:unrecognized_model]``). Tuples, not str: the prompt-pin
+# scanner reads module-level str constants only, and these are matched, never
+# emitted.
+_CLAUDE_UNAVAILABLE_RESULT_MARKERS = ("issue with the selected model",)
+_CLAUDE_UNAVAILABLE_STDERR_MARKERS = ("[claude-code:unrecognized_model]",)
+
+
+def _claude_model_unavailable(payload: Any, err: Optional[str]) -> bool:
+    """Exact claude model-unavailable predicate (fn-221 R3).
+
+    ``payload`` is the parsed ``--output-format json`` result object (or None
+    when stdout was not one). True when EITHER the stderr tag is present OR the
+    payload carries ALL THREE of ``is_error`` true, ``api_error_status`` 404 and
+    the selected-model text. A 404 without that text, or the text without a
+    404, with no stderr tag, is a transport failure - the ladder must not step
+    and the cache must not learn from it.
+    """
+    if err and any(m in err for m in _CLAUDE_UNAVAILABLE_STDERR_MARKERS):
+        return True
+    if not isinstance(payload, dict) or not payload.get("is_error"):
+        return False
+    if str(payload.get("api_error_status")) != "404":
+        return False
+    text = payload.get("result")
+    return isinstance(text, str) and any(
+        m in text for m in _CLAUDE_UNAVAILABLE_RESULT_MARKERS
+    )
+
+
 def _model_cache_path(repo_root: Optional[Path]) -> Optional[Path]:
     if repo_root is None:
         return None
@@ -7999,6 +8032,26 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "efforts": None,
         "default_model": "gpt-5.6-sol-high",  # == models[0] (fn-76 invariant)
     },
+    "claude": {
+        # fn-221: the Claude Code CLI (``claude -p``) as a packaged review
+        # backend. fn-76 shape: ``models`` is an ORDERED quality ranking
+        # (strongest first) and ``default_model`` == ``models[0]``. The ladder
+        # (run_claude_exec) steps DOWN this list on the claude model-unavailable
+        # signature only (JSON ``is_error`` + 404 + selected-model text, or the
+        # ``[claude-code:unrecognized_model]`` stderr tag - the CLI exits 0 on
+        # a bad model, so exit codes are never the signal). Ids probed
+        # 2026-09-05 on Claude Code 2.1.260; the CLI has no ``--list-models``.
+        "models": [
+            "claude-fable-5-1",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
+        ],
+        # The CLI's own ``--effort`` set (2.1.260).
+        "efforts": {"low", "medium", "high", "xhigh", "max"},
+        "default_model": "claude-fable-5-1",  # == models[0] (fn-76 invariant)
+        "default_effort": "high",
+    },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
         # be stored as a spec without special-casing upstream.
@@ -8785,6 +8838,45 @@ def get_cursor_version() -> Optional[str]:
 CURSOR_ARGV_TRANSPORT_MAX = COPILOT_ARGV_PROMPT_MAX
 
 
+def _headless_result_object(stdout: str) -> Optional[dict]:
+    """Find the single ``{"type":"result",...}`` object in a headless CLI's stdout.
+
+    Shared by the cursor and claude parsers: both CLIs emit one result object
+    under ``--output-format json`` (``{"type":"result","is_error":bool,
+    "result":"<text>","session_id":"<id>"}``); streaming JSON-lines are
+    tolerated by scanning for the LAST result object. None when stdout is
+    empty or holds no such object.
+    """
+    text = (stdout or "").strip()
+    if not text:
+        return None
+
+    def _is_result_obj(d: Any) -> bool:
+        return isinstance(d, dict) and (
+            d.get("type") == "result"
+            or ("result" in d and "session_id" in d)
+        )
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if _is_result_obj(parsed):
+        return parsed
+    # Streaming JSON-lines fallback — take the last result object.
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cand = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if _is_result_obj(cand):
+            return cand
+    return None
+
+
 def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
     """Parse cursor-agent ``--output-format json`` stdout.
 
@@ -8795,37 +8887,7 @@ def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
     object. On unparseable / empty output we return ``("", None, True)`` so the
     caller treats it as a backend failure (never a false SHIP).
     """
-    text = (stdout or "").strip()
-    if not text:
-        return "", None, True
-
-    def _is_result_obj(d: Any) -> bool:
-        return isinstance(d, dict) and (
-            d.get("type") == "result"
-            or ("result" in d and "session_id" in d)
-        )
-
-    obj: Optional[dict] = None
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        parsed = None
-    if _is_result_obj(parsed):
-        obj = parsed
-    else:
-        # Streaming JSON-lines fallback — take the last result object.
-        for line in reversed(text.splitlines()):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                cand = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if _is_result_obj(cand):
-                obj = cand
-                break
-
+    obj = _headless_result_object(stdout)
     if obj is None:
         return "", None, True
 
@@ -8984,6 +9046,193 @@ def run_cursor_exec(
         version_fn=get_cursor_version,
         resolution_out=resolution_out,
         list_available=_cursor_list_models,
+        max_steps=2,
+    )
+
+
+# --- claude (fn-221): ``claude -p`` as a packaged review backend ---
+#
+# Mirrors the cursor helpers, adjusted for the live CLI (probed 2026-09-05 on
+# Claude Code 2.1.260). Deliberate divergences:
+#   - the prompt travels on STDIN (``claude -p`` with no positional reads it), so
+#     there is no argv transport cap and no fitter; every argv flag is a fixed
+#     token
+#   - read-only by construction: ``--tools Read Grep Glob`` RESTRICTS the
+#     built-in tool set (``--allowedTools`` only pre-approves and leaves a user's
+#     own ``permissions.allow`` reachable), ``--strict-mcp-config`` with no
+#     ``--mcp-config`` excludes MCP tools, ``--permission-mode dontAsk`` denies
+#     the rest without prompting; the CLI has no filesystem sandbox
+#   - session is RESUME-ONLY (``--resume <sid>``; the id comes from the JSON)
+#   - ``--model`` AND ``--effort`` are BOTH omitted at the ladder floor
+#   - the reviewer has no shell, so the reviewed diff is delivered BY PATH
+#     (``_claude_run_exec`` materialises it under ``.flow/tmp/claude-review/``)
+
+
+def require_claude() -> str:
+    """Ensure the claude CLI is available. Returns path to claude."""
+    claude = shutil.which("claude")
+    if not claude:
+        error_exit("claude not found in PATH", use_json=False, code=2)
+    return claude
+
+
+def get_claude_version() -> Optional[str]:
+    """Get claude CLI version, or None if not available.
+
+    ``claude --version`` prints e.g. ``2.1.260 (Claude Code)``; the dotted
+    version is captured, else the output verbatim. Memoized per resolved
+    executable path, success-only - see _CLI_VERSION_CACHE.
+    """
+    claude = shutil.which("claude")
+    if not claude:
+        return None
+    cached = _CLI_VERSION_CACHE.get(claude)
+    if cached is not None:
+        return cached
+    try:
+        result = subprocess.run(
+            [claude, "--version"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=True,
+        )
+        output = result.stdout.strip()
+        match = re.search(r"(\d+\.\d+\.\d+)", output)
+        version = match.group(1) if match else output
+        _CLI_VERSION_CACHE[claude] = version
+        return version
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+# The fixed, read-only argv every claude dispatch carries (fn-221 R2). Never
+# ``--allowedTools``, never a Bash / Edit / Write tool name.
+CLAUDE_REVIEW_ARGV = (
+    "-p",
+    "--output-format", "json",
+    "--permission-mode", "dontAsk",
+    "--tools", "Read", "Grep", "Glob",
+    "--strict-mcp-config",
+)
+
+
+def _parse_claude_result(
+    stdout: str,
+) -> tuple[str, Optional[str], bool, Optional[dict]]:
+    """Parse ``claude -p --output-format json`` stdout.
+
+    Returns ``(result_text, session_id, is_error, payload)``. A non-JSON or
+    non-result payload yields ``("", None, True, None)`` - a transport failure,
+    never a verdict. ``payload`` is the parsed result object so the ladder's
+    unavailable predicate can read ``api_error_status`` beside the text.
+    """
+    obj = _headless_result_object(stdout)
+    if obj is None:
+        return "", None, True, None
+    result_text = obj.get("result")
+    if not isinstance(result_text, str):
+        result_text = ""
+    session_id = obj.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
+        session_id = None
+    return result_text, session_id, bool(obj.get("is_error", False)), obj
+
+
+def run_claude_exec(
+    prompt: str,
+    session_id: Optional[str] = None,
+    *,
+    spec: Optional["BackendSpec"] = None,
+    repo_root: Path,
+    resolution_out: Optional[dict] = None,
+) -> tuple[str, str, int, str]:
+    """Run the claude CLI headless. Returns (result_text, session_id, exit_code, stderr).
+
+    Invocation (prompt on STDIN)::
+
+        claude -p --output-format json --permission-mode dontAsk \\
+            --tools Read Grep Glob --strict-mcp-config \\
+            [--model <m>] [--effort <e>] [--resume <session_id>]
+
+    run with ``cwd=repo_root`` so the reviewer's ``Read`` resolves repo paths,
+    bounded by `get_review_exec_timeout()`. Session is resume-only:
+    ``session_id=None`` omits ``--resume`` and the id minted by the CLI is
+    returned from the result JSON. ``--model`` / ``--effort`` come from the
+    resolved spec; the ladder floor omits BOTH (the receipt records no effort
+    there either, so argv and receipt agree).
+
+    exit_code 0 = success; non-zero on ``is_error`` / the model-unavailable
+    signature / CLI failure / timeout (the CLI exits 0 on a bad model, so the
+    signature is promoted to a non-zero code here). On timeout returns
+    ("", session_id or "", 2, "<msg>").
+    """
+    review_exec_timeout = get_review_exec_timeout()
+    claude = require_claude()
+
+    if spec is None:
+        explicit_model = False
+        spec = BackendSpec("claude").resolve()
+    else:
+        # ``model_explicit`` is the only authority (see run_cursor_exec).
+        if spec.model is None:
+            spec = spec.resolve()
+        explicit_model = spec.model_explicit
+
+    # The driver's predicate contract is ``(out, err)`` strings; the claude
+    # signature lives in the parsed JSON, so the closure keeps the last payload
+    # and the predicate reads it beside stderr.
+    last: dict = {}
+
+    def _dispatch(model, is_floor):
+        cmd = [claude, *CLAUDE_REVIEW_ARGV]
+        if model is not None:
+            cmd += ["--model", model]
+        if not is_floor and spec.effort:
+            cmd += ["--effort", spec.effort]
+        if session_id is not None:
+            cmd += ["--resume", session_id]
+        try:
+            result = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True, encoding="utf-8",
+                check=False,
+                timeout=review_exec_timeout,
+                cwd=str(repo_root),
+            )
+        except subprocess.TimeoutExpired:
+            last["payload"] = None
+            return "", (session_id or ""), 2, f"claude timed out ({review_exec_timeout}s)"
+
+        result_text, returned_session_id, is_error, payload = _parse_claude_result(
+            result.stdout
+        )
+        last["payload"] = payload
+        if returned_session_id is None:
+            returned_session_id = session_id or ""
+        exit_code = result.returncode
+        if exit_code == 0 and (
+            is_error or _claude_model_unavailable(payload, result.stderr)
+        ):
+            # Logical error (or the exit-0 unavailable signature) without a
+            # non-zero exit — never let it read as a clean review.
+            exit_code = 1
+        return result_text, returned_session_id, exit_code, result.stderr
+
+    def _is_unavailable(out: Optional[str], err: Optional[str]) -> bool:
+        return _claude_model_unavailable(last.get("payload"), err)
+
+    return _dispatch_review_with_fallback(
+        backend="claude",
+        spec=spec,
+        explicit_model=explicit_model,
+        repo_root=repo_root,
+        dispatch=_dispatch,
+        is_unavailable=_is_unavailable,
+        floor_model=None,
+        version_fn=get_claude_version,
+        resolution_out=resolution_out,
         max_steps=2,
     )
 
@@ -41990,6 +42239,123 @@ def _cursor_run_exec(
     )
 
 
+class ClaudeReviewDiffError(RuntimeError):
+    """The reviewed diff could not be materialised for the claude reviewer."""
+
+
+def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
+    """``git diff <base>..<head>`` at ``repo_root`` for delivery by path."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", f"{base}..{head}"],
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+            cwd=str(repo_root),
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise ClaudeReviewDiffError(
+            f"cannot read review diff for {base}..{head}: {exc}"
+        ) from exc
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip() or f"exit {result.returncode}"
+        raise ClaudeReviewDiffError(
+            f"cannot read review diff for {base}..{head}: {detail}"
+        )
+    text = result.stdout
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
+def _claude_materialise_review_diff(
+    repo_root: Path, receipt_id: str, base: str, head: str
+) -> Path:
+    """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
+
+    The file name IS the range identity:
+    ``<receipt-id>-<base7>-<head7>.diff`` - a collision means the same range and
+    the same bytes (the atomic replace is a no-op), a re-review on a new head
+    gets its own file, and a changed base at the same head gets its own file, so
+    a resumed pass never replaces a file a reviewer may still be reading.
+
+    Guards (all fail BEFORE the CLI is spawned): the directory and the leaf must
+    not be symlinks, the resolved leaf must stay under ``<repo>/.flow/tmp``, the
+    receipt id must be a single path segment, and the write is atomic.
+    """
+    if (
+        not receipt_id
+        or "/" in receipt_id
+        or "\\" in receipt_id
+        or receipt_id in (".", "..")
+    ):
+        raise ClaudeReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
+    tmp_root = repo_root / ".flow" / "tmp"
+    directory = tmp_root / "claude-review"
+    directory.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink():
+        raise ClaudeReviewDiffError(
+            f"refusing symlinked review scratch directory: {directory}"
+        )
+    leaf = directory / f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
+    if leaf.is_symlink():
+        raise ClaudeReviewDiffError(f"refusing symlinked review diff path: {leaf}")
+    expected_root = repo_root.resolve() / ".flow" / "tmp"
+    resolved = leaf.resolve()
+    if expected_root not in resolved.parents:
+        raise ClaudeReviewDiffError(
+            f"review diff path escapes {expected_root}: {resolved}"
+        )
+    atomic_write(leaf, _claude_review_diff_text(repo_root, base, head))
+    return leaf
+
+
+def _claude_diff_transport_note(path: Path, base: str, head: str) -> str:
+    """Prompt tail telling the shell-less claude reviewer where the diff lives."""
+    return (
+        "\n\n## Diff delivery (claude backend)\n\n"
+        "This session has no shell: `git diff` and every other command are "
+        "unavailable, and the only tools are Read, Grep and Glob. The complete "
+        f"diff for `{base}..{head}` has been written to `{path}` - read it with "
+        "Read instead of running git. Repository files are readable at their "
+        "normal paths.\n"
+    )
+
+
+def _claude_run_exec(
+    prompt: str,
+    *,
+    session_id: Optional[str],
+    repo_root: Path,
+    spec: "BackendSpec",
+    resolution_out: dict,
+    args: argparse.Namespace,
+) -> tuple[str, Optional[str], int, str]:
+    """Claude spawn: resume-only, diff delivered by path on PRIMARY dispatches.
+
+    The primary-versus-optional discriminator is the DISPATCH KIND, never
+    ``session_id``: ``_dispatch_backend_review`` (impl / plan / completion,
+    resumed or not) sets ``args.claude_range = (base, head, receipt_id)`` and
+    this adapter materialises the diff and appends the transport note;
+    ``_dispatch_session_pass`` (deep pass, validate) sets no range, so nothing
+    is written and the resumed session keeps the primary's file. A failed
+    materialisation returns a non-zero tuple BEFORE the CLI is spawned.
+    """
+    review_range = getattr(args, "claude_range", None)
+    if review_range is not None:
+        base, head, receipt_id = review_range
+        try:
+            diff_path = _claude_materialise_review_diff(
+                repo_root, receipt_id, base, head
+            )
+        except (ClaudeReviewDiffError, OSError) as exc:
+            return "", (session_id or ""), 2, f"claude review diff: {exc}"
+        prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    return run_claude_exec(
+        prompt, session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out,
+    )
+
+
 def stamp_ralph_iteration(receipt: dict) -> None:
     """Stamp ``iteration`` from ``RALPH_ITERATION`` when set and parseable.
 
@@ -42630,6 +42996,32 @@ def _wire_backend_review_hooks() -> None:
         "prompt_fit": "cursor_argv",
         "needs_persona_override": True,
     })
+    BACKEND_REGISTRY["claude"].update({
+        # fn-221: spawn shape = stdin prompt + fixed read-only argv; the
+        # reviewed diff is delivered by path (see _claude_run_exec).
+        "run_exec": _claude_run_exec,
+        "resolve_spec": _resolve_claude_review_spec,
+        "check_probe": get_claude_version,
+        "resume_modes": ("claude",),
+        "track_prior_receipt_model": False,
+        # Resume-only: non-empty prior sid required; the CLI mints the id.
+        "require_nonempty_sid": True,
+        "mint_session_id": False,
+        "has_sandbox": False,
+        # Effort is a real CLI axis (--effort), dropped only at the ladder floor.
+        "include_effort": True,
+        "extract_review": lambda output: output,
+        "display_name": "Claude",
+        "cli_label": "claude",
+        "no_verdict_label": "Claude",
+        # Prompt-fit: none (stdin delivery; no argv budget).
+        "prompt_fit": "none",
+        # ``claude -p`` loads the repo's CLAUDE.md - the same ambient-instruction
+        # hazard cursor neutralises with the persona override.
+        "needs_persona_override": True,
+        # No ``fanout_draws``: the first-round three-draw fan-out is codex-only
+        # (fn-215 R15).
+    })
 
 
 def cmd_backend_review(
@@ -42709,6 +43101,17 @@ def _dispatch_backend_review(
         and session_id is not None
         and bool(reg.get("two_phase_resume"))
     )
+    # fn-221: this helper IS the primary-dispatch boundary (impl / plan /
+    # completion; ``_dispatch_session_pass`` never comes through here), so the
+    # reviewed range travels to the adapter on ``args`` - consumed by
+    # ``_claude_run_exec``, which delivers the diff by path; every other
+    # adapter ignores it. Never derived from the current HEAD downstream.
+    if reviewed_base_sha and reviewed_head_sha:
+        receipt_id = (
+            Path(receipt_path).stem if receipt_path
+            else (task_id or spec_id or "branch")
+        )
+        args.claude_range = (reviewed_base_sha, reviewed_head_sha, receipt_id)
     try:
         if two_phase:
             out, sid, rc, err = reg["run_exec"](
@@ -46723,6 +47126,41 @@ def _resolve_cursor_review_spec(
     # model names cross over); only Cursor's format demands this.
     if resolved.backend != "cursor":
         return BackendSpec("cursor").resolve()
+    return resolved
+
+
+def _resolve_claude_review_spec(
+    args: argparse.Namespace,
+    task_id: Optional[str],
+    spec_id: Optional[str] = None,
+) -> BackendSpec:
+    """Resolve ``BackendSpec`` for a claude review command (fn-221).
+
+    Same precedence as ``_resolve_cursor_review_spec``: a strict ``--spec``
+    parse first (a non-claude backend exits 2), then
+    ``resolve_review_spec("claude", task_id, spec_id=spec_id)``. Claude model
+    ids do not cross over to other backends and theirs do not cross over here,
+    so ANY resolved non-claude spec - env/config default or a stored per-task /
+    per-spec pin - is coerced to the claude default; a ``claude:<model>[:<effort>]``
+    pin from any source is honoured as-is.
+    """
+    spec_arg = getattr(args, "spec", None)
+    if spec_arg:
+        try:
+            parsed = BackendSpec.parse(spec_arg)
+            if parsed.backend != "claude":
+                error_exit(
+                    "claude commands require a claude:<model>[:<effort>] --spec "
+                    f"(got '{parsed.backend}')",
+                    use_json=args.json,
+                    code=2,
+                )
+            return parsed.resolve()
+        except ValueError as e:
+            error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
+    resolved = resolve_review_spec("claude", task_id, spec_id=spec_id)
+    if resolved.backend != "claude":
+        return BackendSpec("claude").resolve()
     return resolved
 
 
