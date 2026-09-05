@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-222-make-flow-next-easier-to-understand-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Make Flow-Next easier to understand and adopt",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-04T23:42:36.810037Z"
+  "updated_at": "2026-09-05T00:04:52.270792Z"
 }
