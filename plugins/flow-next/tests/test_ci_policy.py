@@ -1,5 +1,5 @@
 """Exercise CI selection, aggregate status and exact-release evidence contracts."""
-import importlib.util
+import importlib
 import json
 import os
 import sys
@@ -14,10 +14,10 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts/ci' / f'{name}.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return importlib.import_module(name)
+
+
+sys.path.insert(0, str(ROOT / 'scripts/ci'))
 
 
 class CIPolicy(unittest.TestCase):
@@ -45,6 +45,23 @@ class CIPolicy(unittest.TestCase):
                     self.assertEqual(mod.changed_paths(event, base, head), ['file.md'])
                     for bad_base in ('', '0' * 40, 'missing', head):
                         self.assertIsNone(mod.changed_paths(event, bad_base, head))
+            git('checkout', '-q', base)
+            (Path(temp) / 'scripts').mkdir()
+            (Path(temp) / 'scripts/launcher').write_text('launcher')
+            git('add', '.')
+            git('commit', '-qm', 'launcher')
+            old = git('rev-parse', 'HEAD')
+            git('mv', 'scripts/launcher', 'README.md')
+            git('commit', '-qm', 'move launcher out of runtime')
+            renamed = git('rev-parse', 'HEAD')
+            with mock.patch.object(mod.subprocess, 'run', side_effect=run):
+                for event in ('push', 'pull_request'):
+                    paths = mod.changed_paths(event, old, renamed)
+                    self.assertEqual(set(paths), {'scripts/launcher', 'README.md'})
+                    self.assertTrue(mod.classify(event, paths)['run_windows_stub'])
+                    self.assertEqual(mod.classify(event, paths)['units_matrix'], mod.FULL)
+                self.assertIn('file.md', mod.changed_paths('push', head, renamed))
+                self.assertNotIn('file.md', mod.changed_paths('pull_request', head, renamed))
             with mock.patch.object(mod.subprocess, 'run', side_effect=OSError('unavailable')):
                 self.assertIsNone(mod.changed_paths('push', base, head))
 

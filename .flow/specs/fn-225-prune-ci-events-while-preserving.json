@@ -8,11 +8,65 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-225-prune-ci-events-while-preserving",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-225-prune-ci-events-while-preserving.1": 1
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "c3ad64575adbad794bd20d2ce79fac440f420e2882f957c9b8ac3352a4717306",
+      "backend": "codex",
+      "base_sha": "32f73742251dafd76e9799d6893518778c4e9408",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1d9577d1d32204946a625a070d066463",
+            "classification": "introduced",
+            "findingId": "finding-1d9577d1d32204946a625a070d066463",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "384ccd60b0fa8d0bd6ad8a97a190112c11a7cd7a",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2783,
+      "output_sha256": "f47563c25c873f355fbc9b83cf9ad4ed4fc5af0254c5d46dbe098b2ec6b9778e",
+      "reservation_id": "03d2cacffa8841508684e43a531217be",
+      "round_consumed": true,
+      "scope": "impl:fn-225-prune-ci-events-while-preserving.1",
+      "superseded_by": null,
+      "task": "fn-225-prune-ci-events-while-preserving.1",
+      "timestamp": "2026-09-05T16:07:15.849478Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-225-prune-ci-events-while-preserving.1": 0
+  },
   "spec_path": ".flow/specs/fn-225-prune-ci-events-while-preserving.md",
   "status": "open",
   "title": "Prune CI events while preserving platform and release evidence",
@@ -27,5 +81,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-05T15:31:37.053097Z"
+  "updated_at": "2026-09-05T16:07:15.851628Z"
 }

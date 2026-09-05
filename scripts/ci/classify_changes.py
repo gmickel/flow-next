@@ -34,7 +34,7 @@ def changed_paths(event, base, head):
         return None
     separator = '...' if event == 'pull_request' else '..'
     try:
-        result = subprocess.run(['git', 'diff', '--name-only', '-z', f'{base}{separator}{head}'],
+        result = subprocess.run(['git', 'diff', '--no-renames', '--name-only', '-z', f'{base}{separator}{head}'],
                                 check=True, capture_output=True, timeout=60)
         return result.stdout.decode('utf-8').rstrip('\0').split('\0') if result.stdout else None
     except (OSError, subprocess.SubprocessError, UnicodeError):

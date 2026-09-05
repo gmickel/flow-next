@@ -6,6 +6,8 @@ All notable changes to the flow-next.
 
 ### Fixed
 
+- Windows Codex installs read and write config and role files as UTF-8 regardless of the system locale, preventing `UnicodeDecodeError` and preserving non-ASCII settings.
+
 - Codex installs recover duplicate Flow-Next agent registrations left behind when opening comment markers were removed. The installer preserves unrelated settings and role overrides, places the thread limit in the correct table, and validates the merged config before replacing it with a private backup. Conflicting user-owned roles or malformed unrelated TOML stop the install instead of breaking Codex startup. Reported by @gmickel.
 
 ## [flow-next 4.16.0] - 2026-09-05

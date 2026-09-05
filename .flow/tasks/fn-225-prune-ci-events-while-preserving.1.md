@@ -1,9 +1,12 @@
+---
+satisfies: [R1, R2, R3, R4, R5]
+---
 # fn-225-prune-ci-events-while-preserving.1 Implement CI classification, bounds and release evidence
 
 ## Description
 # Implement CI classification, bounds and release evidence
 
-**Touches:** .github/workflows/**, scripts/ci/**, scripts/merge_codex_config.py, plugins/flow-next/tests/test_ci*.py, plugins/flow-next/tests/test_codex_config*.py, agent_docs/project.md
+**Touches:** CHANGELOG.md, .github/workflows/**, scripts/ci/**, scripts/merge_codex_config.py, plugins/flow-next/tests/test_ci*.py, plugins/flow-next/tests/test_codex_config*.py, agent_docs/project.md
 **Satisfies:** R1, R2, R3, R4, R5
 
 Implement the spec through existing workflow/classifier patterns. Remove top-level PR path filtering if needed to expose a stable always-running aggregate check, conservatively classify unrelated bookkeeping paths. Preserve all required unit corpus behavior and Windows coverage. Fix verified locale-dependent UTF-8 decoding in Codex config merger, covered by cp1252 simulation regression. Release may use exact main push CI evidence (not workflow_dispatch diagnostics), or a reusable gate. Do not publish releases.
@@ -15,7 +18,11 @@ Implement the spec through existing workflow/classifier patterns. Remove top-lev
 
 Read all scoped instructions. No broad test exclusions. Cross-platform acceptance remains GitHub CI. Downstream public docs n/a for CI-only infrastructure; Codex encoding fix may warrant concise Unreleased note if required.
 ## Acceptance
-- [ ] TBD
+- [ ] R1: PR cancellation and bounded jobs preserve main/release execution.
+- [ ] R2: Conservative PR/main range classification preserves required unit coverage.
+- [ ] R3: Scoped Windows stub has weekly backstop; Windows encoding regression fixed.
+- [ ] R4: Stable aggregate and exact main push CI block unverified publication.
+- [ ] R5: Focused regressions, full suite and Ruff pass.
 
 ## Done summary
 TBD
