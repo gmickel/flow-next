@@ -3916,14 +3916,24 @@ class TestRereviewPromptPair(unittest.TestCase):
 
     def test_single_phase_is_byte_identical_to_the_old_behavior(self):
         for review_type in self.REVIEW_TYPES:
-            dispatch, injected, preamble = self._pair(review_type, two_phase=False)
+            dispatch, injected = self._pair(review_type, two_phase=False)
+            preamble = flowctl.build_rereview_preamble(
+                ["a.py"], review_type,
+                prior_findings="Prior finding #1: something",
+                prior_items=_ratchet_prior_container()["items"],
+            )
             self.assertIsNone(injected, review_type)
             self.assertEqual(dispatch, preamble + "BODY", review_type)
             self.assertIn("<prior_findings>", dispatch, review_type)
 
     def test_two_phase_drops_priors_from_the_dispatch_prompt_only(self):
         for review_type in self.REVIEW_TYPES:
-            dispatch, injected, preamble = self._pair(review_type, two_phase=True)
+            dispatch, injected = self._pair(review_type, two_phase=True)
+            preamble = flowctl.build_rereview_preamble(
+                ["a.py"], review_type,
+                prior_findings="Prior finding #1: something",
+                prior_items=_ratchet_prior_container()["items"], resumed=True,
+            )
             self.assertNotIn("<prior_findings>", dispatch, review_type)
             self.assertIn("<prior_findings>", injected, review_type)
             self.assertEqual(dispatch, preamble + "BODY", review_type)
@@ -3932,7 +3942,7 @@ class TestRereviewPromptPair(unittest.TestCase):
 
     def test_two_phase_keeps_the_machine_read_grammar_in_every_review_type(self):
         for review_type in self.REVIEW_TYPES:
-            dispatch, _injected, _preamble = self._pair(review_type, two_phase=True)
+            dispatch, _injected = self._pair(review_type, two_phase=True)
             self.assertRegex(
                 dispatch,
                 r"(?m)^\s*Prior finding #\d+: (?:fixed|not-fixed|withdrawn)\s*$",

@@ -1384,6 +1384,25 @@ class ProjectionSerializationTests(unittest.TestCase):
             # No remote work happened without the lock.
             self.assertEqual(results["calls"], [])
 
+    def test_tracker_locks_reject_symlinked_parent_without_external_writes(self) -> None:
+        from flowctl_tracker import subjects as SJ
+        from flowctl_tracker.config_lock import ConfigLockTimeout
+
+        for lock in (SJ.chart_projection_lock, SJ.charts_resource_lock):
+            with self.subTest(lock=lock.__name__), tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                external = Path(tmp) / "external"
+                flow.mkdir()
+                external.mkdir()
+                try:
+                    (flow / "locks").symlink_to(external, target_is_directory=True)
+                except (OSError, NotImplementedError):
+                    self.skipTest("directory symlinks unavailable")
+                with self.assertRaises(ConfigLockTimeout):
+                    with lock(flow):
+                        self.fail("acquired a lock through a symlinked parent")
+                self.assertEqual(list(external.iterdir()), [])
+
 
 # ---------------------------------------------------------------------------
 # Remote read failure aborts the update step

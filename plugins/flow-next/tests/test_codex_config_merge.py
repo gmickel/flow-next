@@ -18,6 +18,17 @@ ROLE = '[agents.agents_md_scout]\ndescription = "old"\nconfig_file = "agents/age
 
 
 class ConfigMergeTests(unittest.TestCase):
+    def test_commented_headers_and_array_tables_preserve_user_settings(self):
+        text = '[features] # user switches\ncodex_hooks = true\n'
+        text += '[custom] # other hooks\nhooks = false\n'
+        text += '[[skills.config]] # disabled skill\npath = "/mine"\nenabled = false\n'
+        result = mod.merge(text, SOURCE, 12)
+        data = tomllib.loads(result)
+        self.assertTrue(data['features']['hooks'])
+        self.assertEqual(data['custom'], {'hooks': False})
+        self.assertEqual(data['skills'], tomllib.loads(text)['skills'])
+        self.assertEqual(mod.merge(result, SOURCE, 12), result)
+
     def test_unmarked_duplicate_recovery_and_scope(self):
         text = '[agents]\nenabled = true\nmax_concurrent_threads_per_session = 12\n' + ROLE
         text += mod.END + '\n' + mod.BEGIN + '\nmax_threads = 12\n' + ROLE + mod.END + '\n'

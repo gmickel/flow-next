@@ -82,22 +82,31 @@ def route_evidence(repo_root: Path) -> dict[str, Any]:
             100 * (b1_chars - candidate_chars) / b1_chars, 2
         )
         rows.append(candidate)
+    measured_paths = {
+        row["route"]: {file["path"] for file in row["metrics"]["files"]}
+        for row in rows
+    }
     accuracy = {
         "all_routes_have_common": all(
-            COMMON.as_posix() in row["required_reads"] for row in rows
+            COMMON.as_posix() in measured_paths[row["route"]] for row in rows
         ),
         "none_export_backend_cold": all(
             row["selected_backend"] is None
-            and all(backend_file(b).as_posix() in row["forbidden_reads"] for b in BACKENDS)
+            and all(
+                backend_file(b).as_posix() not in measured_paths[row["route"]]
+                for b in BACKENDS
+            )
             for row in rows
             if row["route"] in ("none", "export")
         ),
         "exactly_one_selected_backend": all(
             sum(
-                backend_file(b).as_posix() in row["required_reads"]
+                backend_file(b).as_posix() in measured_paths[row["route"]]
                 for b in BACKENDS
             )
             == 1
+            and backend_file(row["selected_backend"]).as_posix()
+            in measured_paths[row["route"]]
             for row in rows
             if row["route"] not in ("none", "export")
         ),

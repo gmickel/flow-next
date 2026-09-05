@@ -116,6 +116,20 @@ class Credentials(unittest.TestCase):
         with mock.patch.dict(os.environ, {"GITLAB_TOKEN": "glpat-abcdefghijkl"}):
             self.assertNotIn("glpat-abcdefghijkl", CR.redact("failed: glpat-abcdefghijkl"))
 
+    def test_jira_basic_credential_is_redacted_after_environment_changes(self) -> None:
+        with mock.patch.object(CR, "_SEEN", set()):
+            with mock.patch.dict(os.environ, {
+                "JIRA_EMAIL": "fake@example.test",
+                "JIRA_API_TOKEN": "test-only-token-12345678",
+            }):
+                headers = {}
+                CR.resolve("jira", auth_scheme="cloud-basic").attach(headers)
+            authorization = headers["Authorization"]
+            encoded = authorization.removeprefix("Basic ")
+            self.assertEqual(CR.redact(f"echo: {authorization}"),
+                             "echo: Basic <redacted>")
+            self.assertEqual(CR.redact(encoded), "<redacted>")
+
 
 class CredentialPolicyHonoured(unittest.TestCase):
     """The presigned case: an always-inject executor leaks the key to the asset host."""
@@ -150,6 +164,25 @@ class CredentialPolicyHonoured(unittest.TestCase):
         seen = self._capture(CredentialPolicy.PROVIDER_AUTH)
         joined = " ".join(f"{k}:{v}" for k, v in seen.items())
         self.assertIn("lin_secret_value_1234", joined)
+
+    def test_anonymous_requests_do_not_resolve_provider_credentials(self) -> None:
+        for policy in (CredentialPolicy.PRESIGNED_ANONYMOUS, CredentialPolicy.NONE):
+            with self.subTest(policy=policy), \
+                 mock.patch.object(X, "resolve", side_effect=ValueError("unavailable")) as resolve:
+                request = Request(provider="linear", op="upload", method="PUT",
+                                  url_or_argv="https://uploads.example.com/x",
+                                  credential_policy=policy)
+                response = mock.MagicMock()
+                response.__enter__.return_value = response
+                response.status, response.headers = 200, {}
+                response.read.return_value = b"{}"
+                with mock.patch("urllib.request.OpenerDirector.open", return_value=response) as send:
+                    result = X.execute(request)
+                self.assertIsInstance(result, Response)
+                resolve.assert_not_called()
+                sent = send.call_args.args[0]
+                self.assertFalse({"authorization", "private-token", "x-api-key"}
+                                 & {name.lower() for name, _ in sent.header_items()})
 
 
 class Bounds(unittest.TestCase):

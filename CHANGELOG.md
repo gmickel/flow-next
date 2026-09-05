@@ -6,6 +6,8 @@ All notable changes to the flow-next.
 
 ### Fixed
 
+- Forced task takeovers now transfer ownership when a custom claim note is supplied. Anonymous tracker uploads proceed without resolving provider credentials, echoed Jira Basic credentials are redacted, and tracker chart locks reject symlinked lock directories.
+- Codex hook normalization preserves unrelated settings after commented TOML table headers and array tables. Cursor install verification now detects missing or unexpected nested payload files.
 - Codex installs recover duplicate Flow-Next agent registrations left behind when opening comment markers were removed. The installer preserves unrelated settings and role overrides, places the thread limit in the correct table, and validates the merged config before replacing it with a private backup. Conflicting user-owned roles or malformed unrelated TOML stop the install instead of breaking Codex startup. Reported by @gmickel.
 
 ## [flow-next 4.16.0] - 2026-09-05
