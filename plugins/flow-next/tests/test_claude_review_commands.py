@@ -46,7 +46,7 @@ PASS_TEXT = "No new issues.\n<verdict>NEEDS_WORK</verdict>\n"
 
 def _git_raw(repo: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, encoding="utf-8",
     ).stdout
 
 
