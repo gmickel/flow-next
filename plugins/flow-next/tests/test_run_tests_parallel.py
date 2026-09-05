@@ -597,11 +597,28 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         matters most).
         """
         self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
+        real_popen = self.mod.subprocess.Popen
+
+        def launch_shard(*args, **kwargs):
+            proc = real_popen(*args, **kwargs)
+
+            def reap_shard():
+                if proc.poll() is None:
+                    proc.kill()
+                proc.wait(timeout=30)
+
+            # This test disables the runner's kill; own its parent as well as
+            # the grandchild, including when an assertion or the runner fails.
+            self.addCleanup(reap_shard)
+            return proc
+
         with mock.patch.object(
             self.mod._ShardTree,
             "terminate",
             lambda _self: "process-tree: kill suppressed (test)",
-        ), mock.patch.object(self.mod, "POST_KILL_COLLECT_S", 2):
+        ), mock.patch.object(self.mod, "POST_KILL_COLLECT_S", 2), mock.patch.object(
+            self.mod.subprocess, "Popen", side_effect=launch_shard
+        ):
             rc, out, wall = self._run()
         self.assertEqual(rc, 1, out)
         self.assertIn("output collection: ABANDONED after 2s", out)
