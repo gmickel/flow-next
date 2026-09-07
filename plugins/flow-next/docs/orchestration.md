@@ -152,6 +152,14 @@ parsing, retry accounting and receipts. This applies to primary reviews, fanout
 draws, validation and deep passes. An absent URL preserves ordinary CLI execution;
 an invalid endpoint, refusal or failed response never falls back to an ambient CLI.
 
+Managed controllers can pass `--require-managed-execution` to packaged
+`completion-review` commands. Flowctl then requires valid local endpoint and token
+configuration before entering the review pipeline or reserving a round. An older
+kernel rejects the unknown flag before dispatch. This flag is opt-in; standalone
+Flow-Next keeps its existing native/CLI execution when it is absent. An unscoped
+controller must consume an existing valid Flow-Next receipt or request a review
+inside a scoped managed host session.
+
 The endpoint accepts a JSON POST with `schemaVersion: 1`, `requestId`, `backend`,
 `model`, `effort`, `prompt`, `repositoryPath`, nullable `sessionId`, `resumeOnly`,
 `permissionMode: "read-only"` and `timeoutSeconds`. The request ID hashes the

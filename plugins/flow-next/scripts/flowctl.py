@@ -12,6 +12,7 @@ import hashlib
 import heapq
 import html
 import io
+import ipaddress
 import json
 import math
 import os
@@ -26,6 +27,9 @@ import sys
 import tempfile
 import threading
 import unicodedata
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from collections import deque
 from collections.abc import Iterator
@@ -42149,9 +42153,85 @@ def _rereview_prompt_pair(
     return lean + prompt, preamble + prompt
 
 
+class _NoReviewRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def require_execution_provider_configuration():
+    """Validate configured local reach before reserving a managed-only review."""
+    url = os.environ.get("FLOW_REVIEW_EXECUTION_URL", "")
+    parsed = urllib.parse.urlsplit(url)
+    if (parsed.scheme != "http" or not parsed.hostname
+            or not ipaddress.ip_address(parsed.hostname).is_loopback
+            or parsed.username or parsed.password or parsed.fragment):
+        raise ValueError("provider URL must be a loopback HTTP endpoint")
+    token = os.environ.get("FLOW_REVIEW_EXECUTION_TOKEN", "")
+    if not token or "\r" in token or "\n" in token:
+        raise ValueError("provider requires a scoped token")
+    return url, token
+
+
+def execute_review(*, backend, model, effort, prompt, repository_path,
+                   session_id, resume_only, timeout, resolution_out, request_scope=None):
+    """Return the adapter tuple, or None only when no provider was configured.
+
+    Kept inside flowctl.py so named-file installs retain the execution boundary.
+    Only inference crosses it; flowctl owns review reservations and receipts.
+    """
+    url = os.environ.get("FLOW_REVIEW_EXECUTION_URL")
+    if url is None:
+        return None
+    try:
+        url, token = require_execution_provider_configuration()
+        payload = {
+            "schemaVersion": 1,
+            "backend": backend, "model": model, "effort": effort,
+            "prompt": prompt, "repositoryPath": str(repository_path),
+            "sessionId": session_id, "resumeOnly": resume_only,
+            "permissionMode": "read-only", "timeoutSeconds": timeout,
+        }
+        identity = {key: value for key, value in payload.items() if key != "timeoutSeconds"}
+        identity["requestScope"] = request_scope
+        payload["requestId"] = hashlib.sha256(
+            json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        request = urllib.request.Request(
+            url, data=json.dumps(payload).encode("utf-8"), method="POST",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        )
+        # Local scope credentials must not follow redirects or environment proxies.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoReviewRedirect())
+        with opener.open(request, timeout=timeout) as response:
+            raw = response.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            raise ValueError("provider response exceeds 16 MiB")
+        result = json.loads(raw)
+        if (not isinstance(result, dict) or result.get("schemaVersion") != 1
+                or not isinstance(result.get("output"), str)
+                or not isinstance(result.get("stderr"), str)
+                or type(result.get("exitCode")) is not int
+                or result["exitCode"] < 0
+                or (result.get("sessionId") is not None
+                    and not isinstance(result["sessionId"], str))
+                or type(result.get("resumeFailed", False)) is not bool
+                or (result.get("observedModel") is not None
+                    and not isinstance(result["observedModel"], str))):
+            raise ValueError("invalid provider response")
+        if result.get("resumeFailed") and (not session_id or result["exitCode"] == 0):
+            raise ValueError("invalid resume failure")
+        if resolution_out is not None:
+            resolution_out["resume_failed"] = result.get("resumeFailed", False)
+        # Nonzero transport outcomes must never leak a verdict into the parser.
+        return (result["output"] if result["exitCode"] == 0 else "",
+                result.get("sessionId"), result["exitCode"], result["stderr"])
+    except (OSError, ValueError, TypeError, urllib.error.URLError):
+        # Avoid copying URLs, response bodies or credentials into ordinary logs.
+        return "", session_id, 2, "managed review execution failed; inspect the provider's protected diagnostics"
+
+
 def _managed_review_exec(prompt, *, backend, session_id, repo_root, spec, resolution_out,
                          resume_only=False, args=None):
-    from flowctl_review_execution import execute_review
     return execute_review(
         backend=backend, model=spec.model, effort=spec.effort,
         prompt=prompt, repository_path=repo_root, session_id=session_id,
@@ -43024,6 +43104,17 @@ def cmd_backend_review(
     from ``args.review_backend`` / ``args.review_kind`` (parameterized argparse).
     Supports impl / plan / completion kinds.
     """
+    if getattr(args, "require_managed_execution", False):
+        try:
+            require_execution_provider_configuration()
+        except (ValueError, TypeError):
+            error_exit(
+                "managed execution required: completion review needs a scoped "
+                "FLOW_REVIEW_EXECUTION_URL and FLOW_REVIEW_EXECUTION_TOKEN; "
+                "run it inside a managed host session",
+                use_json=getattr(args, "json", False),
+                code=2,
+            )
     _wire_backend_review_hooks()
     backend = backend or getattr(args, "review_backend", None)
     kind = kind or getattr(args, "review_kind", None)
@@ -52408,6 +52499,10 @@ def _add_plan_review_parser(sub, backend: str):
 def _add_completion_review_parser(sub, backend: str):
     """Register ``completion-review`` for a backend (fn-112 parameterized argparse)."""
     p = sub.add_parser("completion-review", help="Spec completion review")
+    p.add_argument(
+        "--require-managed-execution", action="store_true",
+        help="Require a scoped local execution provider before reserving a review",
+    )
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument("--base", default="main", help="Base branch for diff")
     p.add_argument("--receipt", help="Receipt file path for session continuity")

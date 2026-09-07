@@ -4,7 +4,10 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -165,6 +168,68 @@ class ManagedReviewExecutionTests(unittest.TestCase):
             self.assertFalse(receipt.exists())
             self.assertEqual(flowctl._current_review_rounds(
                 "fn-1-claude-demo", "impl", task_id="fn-1-claude-demo.1", use_json=True), 0)
+
+    def test_required_managed_completion_refuses_before_pipeline_without_valid_scope(self):
+        from test_claude_review_commands import _run_cli
+        for backend in ("codex", "claude", "cursor", "copilot"):
+            for environment in ({}, {"FLOW_REVIEW_EXECUTION_URL": "http://127.0.0.1/review"},
+                                {"FLOW_REVIEW_EXECUTION_URL": "http://example.com/review",
+                                 "FLOW_REVIEW_EXECUTION_TOKEN": "secret"}):
+                with self.subTest(backend=backend, environment=list(environment)), \
+                        mock.patch.dict(os.environ, environment, clear=True), \
+                        mock.patch.object(flowctl, "_backend_completion_review") as pipeline:
+                    code, output, _ = _run_cli(
+                        backend, "completion-review", "fn-1", "--json",
+                        "--require-managed-execution",
+                    )
+                    self.assertEqual(code, 2)
+                    self.assertIn("managed execution required", json.loads(output)["error"])
+                    pipeline.assert_not_called()
+        self.assertEqual(self.requests, [])
+
+    def test_required_managed_completion_publishes_upstream_receipt(self):
+        from test_claude_review_commands import _flow_repo, _run_cli, EPIC_ID
+        with _flow_repo() as (repo, base):
+            receipt = repo / "managed-completion.json"
+            with mock.patch.object(flowctl, "run_claude_exec", side_effect=AssertionError("ambient CLI")):
+                code, output, err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--base", base,
+                    "--receipt", str(receipt), "--json", "--require-managed-execution",
+                )
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(output)["verdict"], "SHIP")
+            published = json.loads(receipt.read_text())
+            self.assertEqual(published["type"], "completion_review")
+            self.assertEqual(published["mode"], "claude")
+            self.assertEqual(published["session_id"], "managed-1")
+
+    def test_flat_flowctl_install_contains_the_hook_and_required_scope_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            installed = Path(directory) / "flowctl.py"
+            shutil.copy2(Path(flowctl.__file__), installed)
+            script = (
+                "import json, os, runpy, sys; namespace=runpy.run_path(sys.argv[1]); "
+                "result=namespace['execute_review'](backend='claude', model='selected', "
+                "effort='high', prompt='flat install', repository_path=os.getcwd(), "
+                "session_id=None, resume_only=False, timeout=5, resolution_out={}); "
+                "print(json.dumps(result))"
+            )
+            managed = subprocess.run(
+                [sys.executable, "-c", script, str(installed)],
+                cwd=directory, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(managed.returncode, 0, managed.stderr)
+            self.assertEqual(json.loads(managed.stdout)[0], "<verdict>SHIP</verdict>")
+            environment = dict(os.environ)
+            environment.pop("FLOW_REVIEW_EXECUTION_URL", None)
+            environment.pop("FLOW_REVIEW_EXECUTION_TOKEN", None)
+            refused = subprocess.run(
+                [sys.executable, str(installed), "codex", "completion-review", "fn-1",
+                 "--require-managed-execution", "--json"],
+                cwd=directory, capture_output=True, text=True, timeout=30, env=environment,
+            )
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("managed execution required", json.loads(refused.stdout)["error"])
 
 
 if __name__ == "__main__":
