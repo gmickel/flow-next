@@ -38144,7 +38144,8 @@ def _dispatch_session_pass(
     # no payload; if one ever exceeds cursor's argv transport boundary,
     # ``run_cursor_exec`` refuses explicitly rather than silently truncating.
     # Codex sandbox defaults to auto (matches prior validate/deep handlers).
-    args = argparse.Namespace(sandbox="auto", json=use_json)
+    args = argparse.Namespace(sandbox="auto", json=use_json,
+                              managed_review_request_scope=uuid.uuid4().hex)
     _resolution: dict = {}
     output, _sid, exit_code, stderr = reg["run_exec"](
         prompt,
@@ -42148,6 +42149,18 @@ def _rereview_prompt_pair(
     return lean + prompt, preamble + prompt
 
 
+def _managed_review_exec(prompt, *, backend, session_id, repo_root, spec, resolution_out,
+                         resume_only=False, args=None):
+    from flowctl_review_execution import execute_review
+    return execute_review(
+        backend=backend, model=spec.model, effort=spec.effort,
+        prompt=prompt, repository_path=repo_root, session_id=session_id,
+        resume_only=resume_only, timeout=get_review_exec_timeout(),
+        resolution_out=resolution_out,
+        request_scope=getattr(args, "managed_review_request_scope", None),
+    )
+
+
 def _codex_run_exec(
     prompt: str,
     *,
@@ -42159,6 +42172,12 @@ def _codex_run_exec(
     resume_only: bool = False,
 ) -> tuple[str, Optional[str], int, str]:
     """Codex spawn: resolve sandbox from args, then run_codex_exec."""
+    managed = _managed_review_exec(
+        prompt, backend="codex", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, resume_only=resume_only, args=args,
+    )
+    if managed is not None:
+        return managed
     try:
         sandbox = resolve_codex_sandbox(getattr(args, "sandbox", "auto"))
     except ValueError as e:
@@ -42180,6 +42199,12 @@ def _copilot_run_exec(
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
     """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    managed = _managed_review_exec(
+        prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_copilot_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -42196,6 +42221,12 @@ def _cursor_run_exec(
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
     """Cursor spawn: resume-only (session_id None omits --resume)."""
+    managed = _managed_review_exec(
+        prompt, backend="cursor", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -42313,6 +42344,12 @@ def _claude_run_exec(
         except (ClaudeReviewDiffError, OSError) as exc:
             return "", (session_id or ""), 2, f"claude review diff: {exc}"
         prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    managed = _managed_review_exec(
+        prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_claude_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -43048,6 +43085,7 @@ def _dispatch_backend_review(
     on failure) and phase 2 rebuilds. One review round still reserves exactly one
     round: a failed resume returns no verdict, so nothing is double-consumed.
     """
+    args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
     two_phase = (
         injected_prompt is not None
         and session_id is not None
@@ -44729,6 +44767,8 @@ def _review_fanout_run_draw(
 ) -> dict:
     """One draw runner: no record/refund/receipt writes (fn-215 R14)."""
     axis = draw["axis"]
+    args = argparse.Namespace(**vars(args))
+    args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
     spec = draw["spec"]
     backend = spec.backend
     reg = BACKEND_REGISTRY[backend]

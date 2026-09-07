@@ -143,6 +143,44 @@ The Codex mirror maps these groups to that host's own tiers at sync time (`scrip
 
 The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
+Managed hosts can supply a local execution provider for those four packaged
+backends. Set `FLOW_REVIEW_EXECUTION_URL` to a literal loopback HTTP endpoint and
+`FLOW_REVIEW_EXECUTION_TOKEN` to its session-scoped bearer credential in the host's
+execution environment. The provider runs inference through its account-aware
+runtime; flowctl still owns backend selection, prompts, reservations, verdict
+parsing, retry accounting and receipts. This applies to primary reviews, fanout
+draws, validation and deep passes. An absent URL preserves ordinary CLI execution;
+an invalid endpoint, refusal or failed response never falls back to an ambient CLI.
+
+The endpoint accepts a JSON POST with `schemaVersion: 1`, `requestId`, `backend`,
+`model`, `effort`, `prompt`, `repositoryPath`, nullable `sessionId`, `resumeOnly`,
+`permissionMode: "read-only"` and `timeoutSeconds`. The request ID hashes the
+semantic request and Flow-Next reservation or dispatch identity (excluding
+timeout); the provider scopes idempotency to the authenticated parent incarnation.
+A new review round gets a new execution identity even for identical prompts.
+The provider must enforce repository/account authority,
+the requested model and read-only execution, retain correlated results, and refuse
+unsupported backends or controls. Flowctl sends complete prompts and artifact
+paths. Claude's reviewed diff is materialized before dispatch as on the CLI path.
+
+The JSON response contains `schemaVersion: 1`, `output` (the final assistant text),
+nullable `sessionId` (an opaque continuation handle), integer `exitCode`, and
+`stderr`. Optional `resumeFailed: true` requires a prior session and a nonzero exit;
+Codex's existing two-phase primary review may then dispatch its rebuilt fresh
+prompt. Continuation-only phases fail when resume is unsupported. Optional
+`observedModel` is provider metadata and does not rewrite the selected backend or
+model. A nonzero result cannot contribute a verdict. Flowctl accepts at most
+16 MiB of response data, follows no redirects, ignores proxy environment settings,
+and uses its existing review execution timeout. The provider must cancel or
+reconcile work when the caller disconnects; flowctl does not retry the HTTP call.
+
+Keep the endpoint credential out of prompts, repository files and logs. Hosts
+must not inject it into reviewer children. This hook is an integration boundary,
+not operating-system isolation against a host with full filesystem access. The
+provider's durable session record supplies account provenance; the official
+Flow-Next receipt continues to record the backend, selected model and returned
+session handle. Managed completion alone never constitutes a passing receipt.
+
 ```bash
 flowctl config set review.backend codex                    # project default
 flowctl config set review.backend cursor:<model>          # cursor folds effort into the model name
