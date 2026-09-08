@@ -159,6 +159,10 @@ class ManagedReviewExecutionTests(unittest.TestCase):
         with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open", return_value=response):
             self.assertEqual(self.call()[2], 2)
         response.__enter__.return_value.read.assert_called_once_with(16 * 1024 * 1024 + 1)
+        for raw in (b"not-json", b"[" * 20000 + b"]" * 20000):
+            response.__enter__.return_value.read.return_value = raw
+            with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open", return_value=response):
+                self.assertEqual(self.call()[2], 2)
 
     def test_proxy_environment_is_ignored(self):
         with mock.patch.dict(os.environ, {"http_proxy": "http://127.0.0.1:1",

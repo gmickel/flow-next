@@ -42234,7 +42234,7 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
         # Nonzero transport outcomes must never leak a verdict into the parser.
         return (result["output"] if result["exitCode"] == 0 else "",
                 result.get("sessionId"), result["exitCode"], result["stderr"])
-    except (OSError, ValueError, TypeError, http.client.HTTPException):
+    except (OSError, ValueError, TypeError, RecursionError, http.client.HTTPException):
         # Avoid copying URLs, response bodies or credentials into ordinary logs.
         return "", session_id, 2, "managed review execution failed; inspect the provider's protected diagnostics"
 
