@@ -56,7 +56,7 @@
     "impl:fn-224-refactorpython-remove-dead-paths-and.1": 0
   },
   "spec_path": ".flow/specs/fn-224-refactorpython-remove-dead-paths-and.md",
-  "status": "open",
+  "status": "done",
   "title": "refactor(python): remove dead paths and fix exposed regressions",
   "tracker": {
     "baseHashFlow": null,
@@ -69,5 +69,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-08T11:05:55.781573Z"
+  "updated_at": "2026-09-08T11:26:40.558037Z"
 }
