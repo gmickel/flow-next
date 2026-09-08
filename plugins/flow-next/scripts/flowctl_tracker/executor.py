@@ -47,11 +47,6 @@ def _slots_for(cap: Optional[int]) -> threading.BoundedSemaphore:
         return _SLOTS_BY_CAP[cap]
 
 
-def concurrency_slots_available() -> int:
-    """Test seam: how many transports may still start."""
-    return _SLOTS._value  # noqa: SLF001 - deliberate introspection for tests
-
-
 class Executor(Protocol):
     def __call__(self, request: Request) -> Result: ...
 
@@ -279,11 +274,9 @@ def execute(
                             subtype="construction")
     is_cli = isinstance(request.url_or_argv, (list, tuple))
     cred: Optional[Credential] = None
-    if not is_cli:
-        # HTTP route only. `_cli` never consumes the credential - gh/glab carry
-        # their own auth - so resolving here anyway meant a garbage GITLAB_TOKEN
-        # in the environment failed a glab CLI call with auth/resolve even
-        # though the call would have succeeded. Unused state must not gate.
+    if not is_cli and request.credential_policy is CredentialPolicy.PROVIDER_AUTH:
+        # Only authenticated HTTP requests consume provider credentials.
+        # CLI routes authenticate themselves; anonymous requests need no secret.
         try:
             # A corrupt glab config or an unreadable credential source must not
             # escape either - this sits outside every other guard.

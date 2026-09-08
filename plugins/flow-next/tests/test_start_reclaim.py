@@ -155,6 +155,16 @@ class StartReclaimTest(unittest.TestCase):
         self.assertEqual(state["assignee"], "me")
         self.assertEqual(state["claim_note"], TAKEOVER_NOTE)
 
+    def test_force_with_explicit_note_still_transfers_claim(self) -> None:
+        task = self._claimed_task()
+        previous_claimed_at = self._state(task)["claimed_at"]
+        proc = self._run("start", task, "--force", "--note", "handoff", actor="me")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        state = self._state(task)
+        self.assertEqual(state["assignee"], "me")
+        self.assertNotEqual(state["claimed_at"], previous_claimed_at)
+        self.assertEqual(state["claim_note"], "handoff")
+
     def test_claimed_by_other_without_flags_still_refuses(self) -> None:
         task = self._claimed_task()
         proc = self._run("start", task, actor="me")

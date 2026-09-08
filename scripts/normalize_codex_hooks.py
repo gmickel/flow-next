@@ -30,7 +30,7 @@ import sys
 
 _HOOKS_LINE = "hooks = true  # flow-next"
 # A section header like `[features]` or `[agents.foo]`. Leading whitespace tolerated.
-_SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+_SECTION_RE = re.compile(r"^\s*\[(\[?[^\]]+\]?)\]\s*(?:#.*)?$")
 _CODEX_HOOKS_RE = re.compile(r"^\s*codex_hooks\s*=")
 _HOOKS_RE = re.compile(r"^\s*hooks\s*=")
 
@@ -83,11 +83,7 @@ def normalize(text: str) -> str:
         out.append("[features]")
         out.append(_HOOKS_LINE)
 
-    result = "\n".join(out)
-    # Preserve a single trailing newline if the original had one (or add it).
-    if text.endswith("\n") or not text.endswith("\n"):
-        result = result.rstrip("\n") + "\n"
-    return result
+    return "\n".join(out).rstrip("\n") + "\n"
 
 
 def main(argv: list[str]) -> int:

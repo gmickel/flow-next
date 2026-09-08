@@ -27,14 +27,13 @@ import tempfile
 import threading
 import unicodedata
 import uuid
-from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager, redirect_stdout, suppress
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, ContextManager, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 
 # Cross-process locks use platform-native kernel locks. The kernel releases
@@ -960,41 +959,10 @@ def get_state_dir() -> Path:
     return get_flow_dir() / "state"
 
 
-# --- StateStore (runtime task state) ---
+# --- Runtime task state ---
 
 
-class StateStore(ABC):
-    """Abstract interface for runtime task state storage."""
-
-    @abstractmethod
-    def load_runtime(self, task_id: str) -> Optional[dict]:
-        """Load runtime state for a task. Returns None if no state file."""
-        ...
-
-    @abstractmethod
-    def save_runtime(self, task_id: str, data: dict) -> None:
-        """Save runtime state for a task."""
-        ...
-
-    @abstractmethod
-    def lock_task(self, task_id: str) -> ContextManager:
-        """Context manager for exclusive task lock."""
-        ...
-
-    @abstractmethod
-    def load_all_runtime(
-        self, task_ids: Optional[set[str]] = None
-    ) -> dict[str, dict]:
-        """Load readable runtime state, optionally restricted to task IDs."""
-        ...
-
-    @abstractmethod
-    def delete_runtime(self, task_id: str) -> None:
-        """Delete a task's runtime state when present."""
-        ...
-
-
-class LocalFileStateStore(StateStore):
+class LocalFileStateStore:
     """File-based state store with portable cross-process locking."""
 
     def __init__(self, state_dir: Path):
@@ -1754,21 +1722,7 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 def load_flow_config() -> dict:
     """Load .flow/config.json, merging with defaults for missing keys."""
-    config_path = get_flow_dir() / CONFIG_FILE
-    defaults = get_default_config()
-    if not config_path.exists():
-        return _with_tracker_spec_ids_normalized(defaults)
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            # fn-213: alias a retired persisted cleanReviewCommentPattern
-            # default to the current built-in (read-time; disk untouched).
-            return _with_retired_clean_review_pattern_upgraded(
-                _with_tracker_spec_ids_normalized(deep_merge(defaults, data))
-            )
-        return _with_tracker_spec_ids_normalized(defaults)
-    except (json.JSONDecodeError, Exception):
-        return _with_tracker_spec_ids_normalized(defaults)
+    return load_config_snapshot().merged
 
 
 def _walk_config_value(config, key: str, default=None):
@@ -1794,6 +1748,19 @@ def get_config(key: str, default=None):
 _CONFIG_RAW_SENTINEL = object()
 
 
+def _load_raw_flow_config() -> Optional[dict]:
+    """Read the persisted config object, or None when absent or unreadable."""
+    config_path = get_flow_dir() / CONFIG_FILE
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return None
+
+
 def _get_config_from_file(key: str):
     """Probe the raw .flow/config.json for `key` without applying defaults.
 
@@ -1803,21 +1770,10 @@ def _get_config_from_file(key: str):
     set the key to None / false" from "key never written" — load-bearing
     for distinguishing unset keys from explicit false/null.
     """
-    config_path = get_flow_dir() / CONFIG_FILE
-    if not config_path.exists():
+    data = _load_raw_flow_config()
+    if data is None:
         return _CONFIG_RAW_SENTINEL
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, Exception):
-        return _CONFIG_RAW_SENTINEL
-    if not isinstance(data, dict):
-        return _CONFIG_RAW_SENTINEL
-    current = data
-    for part in key.split("."):
-        if not isinstance(current, dict) or part not in current:
-            return _CONFIG_RAW_SENTINEL
-        current = current[part]
-    return current
+    return _tree_probe(data, key)
 
 
 # --- Command-scoped config snapshot (fn-110.1) -----------------------------
@@ -1862,15 +1818,7 @@ def load_config_snapshot() -> ConfigSnapshot:
     thread the result through `resolve_config_key_for_read(..., snapshot=)`
     and the root/subtree emission paths instead of re-reading per key.
     """
-    config_path = get_flow_dir() / CONFIG_FILE
-    raw = None
-    if config_path.exists():
-        try:
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                raw = data
-        except (json.JSONDecodeError, Exception):
-            raw = None
+    raw = _load_raw_flow_config()
     defaults = get_default_config()
     if raw is None:
         merged = defaults
@@ -7921,8 +7869,8 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
 # model). Every validation error lists the valid set sorted alphabetically so
 # users get a deterministic, copy-pasteable hint.
 #
-# fn-112 review-driver hooks (run_exec / resolve_spec / check_probe / gather_diff
-# / prompt_fit / …) are attached lazily by ``_wire_backend_review_hooks`` so this
+# fn-112 review-driver hooks (run_exec / resolve_spec / check_probe / …)
+# are attached lazily by ``_wire_backend_review_hooks`` so this
 # static table stays free of forward references to helpers defined later.
 #
 # Codex ``minimal`` effort caveat: passes codex config validation but the server
@@ -15020,18 +14968,6 @@ def _apply_parked_to_chart_body(md_text: str, parked: list) -> str:
     )
 
 
-def _parse_iso_ts(raw: Optional[str]) -> Optional[datetime]:
-    if not raw or not isinstance(raw, str):
-        return None
-    text = raw.strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        return datetime.fromisoformat(text)
-    except ValueError:
-        return None
-
-
 def _claim_age_hours(claimed_at: Optional[str]) -> Optional[float]:
     ts = _parse_iso_ts(claimed_at)
     if ts is None:
@@ -19534,7 +19470,7 @@ class TaskInventory:
         spec_ids: Optional[set[str]] = None,
         collect_consistency_errors: bool = False,
         collect_load_errors: bool = False,
-        state_store: Optional["StateStore"] = None,
+        state_store: Optional[LocalFileStateStore] = None,
     ) -> "TaskInventory":
         task_files = list(iter_task_json_files(flow_dir, spec_id=spec_id))
         if spec_ids is not None:
@@ -35462,28 +35398,23 @@ def cmd_start(args: argparse.Namespace) -> None:
 
         # Build runtime state updates
         runtime_updates = {**runtime, "status": "in_progress", "updated_at": now_iso()}
-        if not existing_assignee:
+        taking_over = bool(
+            args.force and existing_assignee and existing_assignee != current_actor
+        )
+        if not existing_assignee or reclaiming or taking_over:
             runtime_updates["assignee"] = current_actor
             runtime_updates["claimed_at"] = now_iso()
         if args.note:
             runtime_updates["claim_note"] = args.note
-            if reclaiming:
-                runtime_updates["assignee"] = current_actor
-                runtime_updates["claimed_at"] = now_iso()
         elif reclaiming:
             # Identity repair: distinct from the --force takeover note so the
             # record says which one happened.
-            runtime_updates["assignee"] = current_actor
-            runtime_updates["claimed_at"] = now_iso()
             runtime_updates["claim_note"] = (
                 f"Reclaimed from {existing_assignee} (identity repair)"
             )
-        elif args.force and existing_assignee and existing_assignee != current_actor:
+        elif taking_over:
             # Force override: note the takeover
-            runtime_updates["assignee"] = current_actor
-            runtime_updates["claimed_at"] = now_iso()
-            if not args.note:
-                runtime_updates["claim_note"] = f"Taken over from {existing_assignee}"
+            runtime_updates["claim_note"] = f"Taken over from {existing_assignee}"
 
         # Write inside lock
         store.save_runtime(args.id, runtime_updates)
@@ -42193,8 +42124,8 @@ def _rereview_prompt_pair(
     prior_findings: Optional[str],
     prior_items: Optional[dict],
     two_phase: bool,
-) -> tuple[str, Optional[str], str]:
-    """Build the (dispatch, injected, preamble) triple for one re-review round.
+) -> tuple[str, Optional[str]]:
+    """Build the (dispatch, injected) prompt pair for one re-review round.
 
     fn-169 R2. Shared by all three review handlers — implementation, plan, and
     completion — because the resume/injection contract is a property of the
@@ -42203,21 +42134,18 @@ def _rereview_prompt_pair(
     dispatch prompt carries the rendered priors and ``injected`` is None, which
     is byte-for-byte the pre-fn-169 behavior.
 
-    The third element is the preamble actually prefixed to the dispatch prompt;
-    cursor's argv fitter strips and re-fits exactly that string, and cursor is
-    never two-phase, so it always receives the full one.
     """
     preamble = build_rereview_preamble(
         files, review_type,
         prior_findings=prior_findings, prior_items=prior_items,
     )
     if not two_phase:
-        return preamble + prompt, None, preamble
+        return preamble + prompt, None
     lean = build_rereview_preamble(
         files, review_type,
         prior_findings=prior_findings, prior_items=prior_items, resumed=True,
     )
-    return lean + prompt, preamble + prompt, lean
+    return lean + prompt, preamble + prompt
 
 
 def _codex_run_exec(
@@ -42943,7 +42871,7 @@ def _load_epic_and_task_specs(
     return epic_spec_path, tasks_dir, epic_spec, task_specs, task_ids
 
 def _wire_backend_review_hooks() -> None:
-    """Attach run_exec / resolve_spec / check_probe / prompt-fit hooks.
+    """Attach run_exec / resolve_spec / check_probe hooks.
 
     Idempotent. Called at the top of cmd_backend_review so the static
     BACKEND_REGISTRY (defined before run_copilot_exec / resolve_* helpers)
@@ -42976,17 +42904,14 @@ def _wire_backend_review_hooks() -> None:
         "has_sandbox": True,
         "include_effort": True,
         "extract_review": extract_codex_final_message,
-        "display_name": "Codex",
         "cli_label": "codex exec",
         "no_verdict_label": "Codex",
-        # Prompt-fit: none (stdin delivery; no argv budget).
-        "prompt_fit": "none",
         # fn-187 R1: ON. The False here was never a decision — it mechanically
         # preserved pre-#296 behavior when the registry was extracted. codex exec
         # inherits the host AGENTS.md and (with the codex plugin installed) the
         # flow-next coordinator skill catalogs, which taught the reviewer to
-        # re-dispatch instead of declaring a verdict (#331). Delivery is stdin
-        # with prompt_fit "none", so the preamble costs no argv budget.
+        # re-dispatch instead of declaring a verdict (#331). Delivery is
+        # through stdin, so the preamble costs no argv budget.
         "needs_persona_override": True,
         # fn-215 R15: fan-out is a registry gate on the impl pipeline, never
         # inside _dispatch_backend_review (plan/completion share that helper).
@@ -43005,10 +42930,8 @@ def _wire_backend_review_hooks() -> None:
         "has_sandbox": False,
         "include_effort": True,
         "extract_review": lambda output: output,
-        "display_name": "Copilot",
         "cli_label": "copilot",
         "no_verdict_label": "Copilot",
-        "prompt_fit": "none",
         "needs_persona_override": False,
     })
     BACKEND_REGISTRY["cursor"].update({
@@ -43024,11 +42947,8 @@ def _wire_backend_review_hooks() -> None:
         "has_sandbox": False,
         "include_effort": False,
         "extract_review": lambda output: output,
-        "display_name": "Cursor",
         "cli_label": "cursor",
         "no_verdict_label": "Cursor",
-        # Prompt-fit: dynamic diff fit + persona override + final argv backstop.
-        "prompt_fit": "cursor_argv",
         "needs_persona_override": True,
     })
     BACKEND_REGISTRY["claude"].update({
@@ -43046,11 +42966,8 @@ def _wire_backend_review_hooks() -> None:
         # Effort is a real CLI axis (--effort), dropped only at the ladder floor.
         "include_effort": True,
         "extract_review": lambda output: output,
-        "display_name": "Claude",
         "cli_label": "claude",
         "no_verdict_label": "Claude",
-        # Prompt-fit: none (stdin delivery; no argv budget).
-        "prompt_fit": "none",
         # ``claude -p`` loads the repo's CLAUDE.md - the same ambient-instruction
         # hazard cursor neutralises with the persona override.
         "needs_persona_override": True,
@@ -43344,7 +43261,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     prior_findings = _read_prior_findings(receipt_path)
     prior_items = _read_prior_structured_findings(receipt_path)
     if is_rereview or prior_findings is not None or prior_items is not None:
-        prompt, injected_prompt, _ = _rereview_prompt_pair(
+        prompt, injected_prompt = _rereview_prompt_pair(
             prompt,
             files=get_changed_files(base_branch),
             review_type="implementation",
@@ -43787,17 +43704,14 @@ def _bind_receipt_model_effort(
     prior_receipt_effort: Optional[str],
 ) -> tuple["BackendSpec", Optional[str], Optional[str]]:
     """Apply _receipt_model_effort; codex rebinds the BackendSpec (PR #203 r2)."""
-    if backend == "codex":
-        _rm, _re = _receipt_model_effort(
-            resolved_spec, resolution,
-            prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
-        )
-        resolved_spec = dataclass_replace(resolved_spec, model=_rm, effort=_re)
-        return resolved_spec, resolved_spec.model, resolved_spec.effort
     effective_model, effective_effort = _receipt_model_effort(
         resolved_spec, resolution,
         prior_model=prior_receipt_model, prior_effort=prior_receipt_effort,
     )
+    if backend == "codex":
+        resolved_spec = dataclass_replace(
+            resolved_spec, model=effective_model, effort=effective_effort,
+        )
     return resolved_spec, effective_model, effective_effort
 
 def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
@@ -43862,7 +43776,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     prior_findings = _read_prior_findings(receipt_path)
     prior_items = _read_prior_structured_findings(receipt_path)
     if is_rereview or prior_findings is not None or prior_items is not None:
-        prompt, injected_prompt, _ = _rereview_prompt_pair(
+        prompt, injected_prompt = _rereview_prompt_pair(
             prompt,
             files=spec_files,
             review_type="plan",
@@ -44172,7 +44086,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     prior_findings = _read_prior_findings(receipt_path)
     prior_items = _read_prior_structured_findings(receipt_path)
     if is_rereview or prior_findings is not None or prior_items is not None:
-        prompt, injected_prompt, _ = _rereview_prompt_pair(
+        prompt, injected_prompt = _rereview_prompt_pair(
             prompt,
             files=get_changed_files(base_branch),
             review_type="completion",

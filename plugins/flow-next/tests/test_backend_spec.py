@@ -1928,7 +1928,6 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "resolve_spec",
             "check_probe",
             "needs_persona_override",
-            "prompt_fit",
             "resume_modes",
             "mint_session_id",
             "include_effort",
@@ -1958,10 +1957,6 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
         self.assertTrue(BACKEND_REGISTRY["codex"]["include_effort"])
         self.assertTrue(BACKEND_REGISTRY["copilot"]["include_effort"])
         self.assertFalse(BACKEND_REGISTRY["cursor"]["include_effort"])
-
-        self.assertEqual(BACKEND_REGISTRY["codex"]["prompt_fit"], "none")
-        self.assertEqual(BACKEND_REGISTRY["copilot"]["prompt_fit"], "none")
-        self.assertEqual(BACKEND_REGISTRY["cursor"]["prompt_fit"], "cursor_argv")
 
         self.assertEqual(
             BACKEND_REGISTRY["codex"]["resume_modes"], (None, "codex")
@@ -2093,10 +2088,8 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "has_sandbox": False,
             "include_effort": True,
             "extract_review": lambda output: output,
-            "display_name": "MockReview",
             "cli_label": "mockreview",
             "no_verdict_label": "MockReview",
-            "prompt_fit": "none",
         }
 
         prev_cwd = os.getcwd()

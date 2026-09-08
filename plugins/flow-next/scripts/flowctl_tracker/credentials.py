@@ -63,7 +63,9 @@ def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
 def _basic(user: str, token: str) -> str:
     import base64
 
-    return "Basic " + base64.b64encode(f"{user}:{token}".encode()).decode()
+    encoded = base64.b64encode(f"{user}:{token}".encode()).decode()
+    _remember(encoded)
+    return "Basic " + encoded
 
 
 def resolve(provider: str, *, auth_scheme: Optional[str] = None,
