@@ -24,13 +24,13 @@ import stat
 import subprocess
 import shlex
 import shutil
+import socket
 import sys
 import tempfile
 import threading
+import time
 import unicodedata
-import urllib.error
 import urllib.parse
-import urllib.request
 import uuid
 from collections import deque
 from collections.abc import Iterator
@@ -42154,11 +42154,6 @@ def _rereview_prompt_pair(
     return lean + prompt, preamble + prompt
 
 
-class _NoReviewRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
 def require_execution_provider_configuration():
     """Validate configured local reach before reserving a managed-only review."""
     url = os.environ.get("FLOW_REVIEW_EXECUTION_URL", "")
@@ -42175,6 +42170,52 @@ def require_execution_provider_configuration():
     if not token or "\r" in token or "\n" in token:
         raise ValueError("provider requires a scoped token")
     return url, token
+
+
+def _read_review_execution_response(url, token, payload, timeout):
+    """One direct local HTTP request, bounded across headers and body reads."""
+    parsed = urllib.parse.urlsplit(url)
+    connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
+    deadline = time.monotonic() + timeout
+    timer = None
+    try:
+        connection.connect()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("provider deadline expired")
+        # Retain the socket because HTTPResponse can detach it from connection
+        # on Connection: close. shutdown interrupts blocked reads on every OS;
+        # a socket-operation timeout alone lets a trickled response run forever.
+        transport = connection.sock
+
+        def expire():
+            with suppress(OSError):
+                transport.shutdown(socket.SHUT_RDWR)
+
+        timer = threading.Timer(remaining, expire)
+        timer.daemon = True
+        timer.start()
+        target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+        connection.request("POST", target, body=json.dumps(payload).encode("utf-8"),
+                           headers={"Content-Type": "application/json",
+                                    "Authorization": f"Bearer {token}"})
+        # Direct HTTPConnection ignores environment proxies and never follows
+        # redirects, so the scoped credential cannot leave the local endpoint.
+        with connection.getresponse() as response:
+            if not 200 <= response.status < 300:
+                raise ValueError("provider refused execution")
+            raw = response.read(16 * 1024 * 1024 + 1)
+            # Sized reads can return premature EOF without IncompleteRead.
+            if response.length not in (None, 0):
+                raise ValueError("incomplete provider response")
+            if time.monotonic() >= deadline:
+                raise TimeoutError("provider deadline expired")
+            return raw
+    finally:
+        if timer is not None:
+            timer.cancel()
+            timer.join()
+        connection.close()
 
 
 def execute_review(*, backend, model, effort, prompt, repository_path,
@@ -42201,14 +42242,7 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
         payload["requestId"] = hashlib.sha256(
             json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
-        request = urllib.request.Request(
-            url, data=json.dumps(payload).encode("utf-8"), method="POST",
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-        )
-        # Local scope credentials must not follow redirects or environment proxies.
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoReviewRedirect())
-        with opener.open(request, timeout=timeout) as response:
-            raw = response.read(16 * 1024 * 1024 + 1)
+        raw = _read_review_execution_response(url, token, payload, timeout)
         if len(raw) > 16 * 1024 * 1024:
             raise ValueError("provider response exceeds 16 MiB")
         result = json.loads(raw)
@@ -42229,11 +42263,16 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
         if resume_only and (not session_id or (
                 result["exitCode"] == 0 and result.get("sessionId") != session_id)):
             raise ValueError("provider did not preserve the continuation session")
+        if token in (result.get("sessionId") or ""):
+            raise ValueError("provider returned a credential as a session handle")
         if resolution_out is not None:
             resolution_out["resume_failed"] = result.get("resumeFailed", False)
         # Nonzero transport outcomes must never leak a verdict into the parser.
-        return (result["output"] if result["exitCode"] == 0 else "",
-                result.get("sessionId"), result["exitCode"], result["stderr"])
+        if result["exitCode"] != 0:
+            return ("", result.get("sessionId"), result["exitCode"],
+                    "managed review execution failed; inspect the provider's protected diagnostics")
+        return (result["output"].replace(token, "[redacted]"), result.get("sessionId"),
+                0, result["stderr"].replace(token, "[redacted]"))
     except (OSError, ValueError, TypeError, RecursionError, http.client.HTTPException):
         # Avoid copying URLs, response bodies or credentials into ordinary logs.
         return "", session_id, 2, "managed review execution failed; inspect the provider's protected diagnostics"

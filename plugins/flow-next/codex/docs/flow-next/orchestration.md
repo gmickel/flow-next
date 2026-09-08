@@ -183,9 +183,14 @@ prompt. Validation and deep passes set `resumeOnly: true` and require the
 successful response to retain the original session handle. Optional
 `observedModel` is provider metadata and does not rewrite the selected backend or
 model. A nonzero result cannot contribute a verdict. Flowctl accepts at most
-16 MiB of response data, follows no redirects, ignores proxy environment settings,
-and uses its existing review execution timeout. The provider must cancel or
+16 MiB of response data, rejects incomplete HTTP bodies, follows no redirects,
+ignores proxy environment settings, and bounds the complete HTTP exchange by its
+existing review execution timeout. The provider must cancel or
 reconcile work when the caller disconnects; flowctl does not retry the HTTP call.
+
+Provider failures expose a generic diagnostic; detailed errors stay at the
+provider. Flowctl masks the scoped token from returned text and refuses a
+continuation handle containing it.
 
 Keep the endpoint credential out of prompts, repository files and logs. Hosts
 must not inject it into reviewer children. This hook is an integration boundary,

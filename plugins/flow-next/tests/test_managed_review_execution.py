@@ -2,6 +2,7 @@
 
 import argparse
 import http.client
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
@@ -24,6 +26,7 @@ class ManagedReviewExecutionTests(unittest.TestCase):
         self.response = {"schemaVersion": 1, "output": "<verdict>SHIP</verdict>",
                          "stderr": "", "sessionId": "managed-1", "exitCode": 0}
         self.status = 200
+        self.trickle = False
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -34,7 +37,17 @@ class ManagedReviewExecutionTests(unittest.TestCase):
                 if owner.status == 307:
                     self.send_header("Location", "/leaked-credential")
                 self.end_headers()
-                self.wfile.write(json.dumps(owner.response).encode())
+                body = json.dumps(owner.response).encode()
+                try:
+                    if owner.trickle:
+                        for byte in body:
+                            self.wfile.write(bytes([byte]))
+                            self.wfile.flush()
+                            time.sleep(0.01)
+                    else:
+                        self.wfile.write(body)
+                except OSError:
+                    pass  # A deadline test intentionally closes the socket.
 
             def log_message(self, *args):
                 pass
@@ -151,18 +164,42 @@ class ManagedReviewExecutionTests(unittest.TestCase):
 
     def test_transport_timeout_truncation_and_oversize_fail_closed(self):
         for failure in (TimeoutError(), http.client.IncompleteRead(b"private", 20)):
-            with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open",
+            with mock.patch.object(flowctl, "_read_review_execution_response",
                                    side_effect=failure):
                 self.assertEqual(self.call()[2], 2)
-        response = mock.MagicMock()
-        response.__enter__.return_value.read.return_value = b"x" * (16 * 1024 * 1024 + 1)
-        with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open", return_value=response):
-            self.assertEqual(self.call()[2], 2)
-        response.__enter__.return_value.read.assert_called_once_with(16 * 1024 * 1024 + 1)
-        for raw in (b"not-json", b"[" * 20000 + b"]" * 20000):
-            response.__enter__.return_value.read.return_value = raw
-            with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open", return_value=response):
+        for raw in (b"x" * (16 * 1024 * 1024 + 1), b"not-json", b"[" * 20000 + b"]" * 20000):
+            with mock.patch.object(flowctl, "_read_review_execution_response", return_value=raw):
                 self.assertEqual(self.call()[2], 2)
+
+    def test_trickled_response_obeys_total_execution_deadline(self):
+        self.trickle = True
+        start = time.monotonic()
+        result = flowctl.execute_review(
+            backend="codex", model="selected", effort="high", prompt="review",
+            repository_path=Path.cwd(), session_id=None, resume_only=False,
+            timeout=0.15, resolution_out={},
+        )
+        self.assertEqual(result[2], 2)
+        self.assertLess(time.monotonic() - start, 0.75)
+
+    def test_provider_failure_cannot_disclose_token_or_publish_verdict(self):
+        from test_claude_review_commands import _flow_repo, _impl_review
+        self.response.update(exitCode=2, stderr="Auth refused: Bearer session-secret",
+                             output="session-secret <verdict>SHIP</verdict>")
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            code, output, err = _impl_review(repo, base, receipt)
+            self.assertEqual(code, 2)
+            self.assertNotIn("session-secret", output + err)
+            self.assertFalse(receipt.exists())
+
+    def test_provider_success_redacts_token_and_refuses_secret_session_handle(self):
+        self.response.update(output="session-secret <verdict>SHIP</verdict>", stderr="session-secret")
+        output, _, code, err = self.call()
+        self.assertEqual(code, 0)
+        self.assertNotIn("session-secret", output + err)
+        self.response["sessionId"] = "session-secret"
+        self.assertEqual(self.call()[2], 2)
 
     def test_proxy_environment_is_ignored(self):
         with mock.patch.dict(os.environ, {"http_proxy": "http://127.0.0.1:1",
@@ -354,6 +391,35 @@ class ManagedReviewExecutionTests(unittest.TestCase):
             )
             self.assertEqual(refused.returncode, 2)
             self.assertIn("managed execution required", json.loads(refused.stdout)["error"])
+
+
+class ManagedReviewHTTPFramingTests(unittest.TestCase):
+    """Actual HTTP parser tests also run in sandboxes that prohibit sockets."""
+
+    def test_declared_content_length_must_be_fully_received(self):
+        body = json.dumps({"schemaVersion": 1, "output": "<verdict>SHIP</verdict>",
+                           "stderr": "", "sessionId": "managed-1", "exitCode": 0}).encode()
+        for missing_bytes in (0, 100):
+            with self.subTest(missing_bytes=missing_bytes):
+                transport = mock.Mock()
+                transport.makefile.return_value = io.BytesIO(
+                    f"HTTP/1.1 200 OK\r\nContent-Length: {len(body) + missing_bytes}\r\n\r\n".encode() + body
+                )
+                response = http.client.HTTPResponse(transport)
+                response.begin()
+                connection = mock.Mock()
+                connection.getresponse.return_value = response
+                with mock.patch.object(flowctl.http.client, "HTTPConnection", return_value=connection), \
+                        mock.patch.dict(os.environ, {"FLOW_REVIEW_EXECUTION_URL": "http://127.0.0.1/review",
+                                                     "FLOW_REVIEW_EXECUTION_TOKEN": "session-secret"}):
+                    output, _, code, _ = flowctl.execute_review(
+                        backend="codex", model="selected", effort="high", prompt="review",
+                        repository_path=Path.cwd(), session_id=None, resume_only=False,
+                        timeout=5, resolution_out={},
+                    )
+                self.assertEqual(code, 2 if missing_bytes else 0)
+                self.assertEqual(output, "" if missing_bytes else "<verdict>SHIP</verdict>")
+                connection.close.assert_called_once()
 
 
 if __name__ == "__main__":
