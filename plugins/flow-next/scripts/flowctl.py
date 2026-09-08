@@ -11,6 +11,7 @@ import errno
 import hashlib
 import heapq
 import html
+import http.client
 import io
 import ipaddress
 import json
@@ -38148,7 +38149,7 @@ def _dispatch_session_pass(
     # no payload; if one ever exceeds cursor's argv transport boundary,
     # ``run_cursor_exec`` refuses explicitly rather than silently truncating.
     # Codex sandbox defaults to auto (matches prior validate/deep handlers).
-    args = argparse.Namespace(sandbox="auto", json=use_json,
+    args = argparse.Namespace(sandbox="auto", json=use_json, managed_resume_only=True,
                               managed_review_request_scope=uuid.uuid4().hex)
     _resolution: dict = {}
     output, _sid, exit_code, stderr = reg["run_exec"](
@@ -42166,6 +42167,10 @@ def require_execution_provider_configuration():
             or not ipaddress.ip_address(parsed.hostname).is_loopback
             or parsed.username or parsed.password or parsed.fragment):
         raise ValueError("provider URL must be a loopback HTTP endpoint")
+    # Accessing port validates malformed and out-of-range values before a
+    # managed-required command can reserve a review round.
+    if parsed.port == 0 or any(ord(char) <= 32 or ord(char) == 127 for char in url):
+        raise ValueError("invalid provider endpoint")
     token = os.environ.get("FLOW_REVIEW_EXECUTION_TOKEN", "")
     if not token or "\r" in token or "\n" in token:
         raise ValueError("provider requires a scoped token")
@@ -42207,7 +42212,8 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
         if len(raw) > 16 * 1024 * 1024:
             raise ValueError("provider response exceeds 16 MiB")
         result = json.loads(raw)
-        if (not isinstance(result, dict) or result.get("schemaVersion") != 1
+        if (not isinstance(result, dict) or type(result.get("schemaVersion")) is not int
+                or result["schemaVersion"] != 1
                 or not isinstance(result.get("output"), str)
                 or not isinstance(result.get("stderr"), str)
                 or type(result.get("exitCode")) is not int
@@ -42220,12 +42226,15 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
             raise ValueError("invalid provider response")
         if result.get("resumeFailed") and (not session_id or result["exitCode"] == 0):
             raise ValueError("invalid resume failure")
+        if resume_only and (not session_id or (
+                result["exitCode"] == 0 and result.get("sessionId") != session_id)):
+            raise ValueError("provider did not preserve the continuation session")
         if resolution_out is not None:
             resolution_out["resume_failed"] = result.get("resumeFailed", False)
         # Nonzero transport outcomes must never leak a verdict into the parser.
         return (result["output"] if result["exitCode"] == 0 else "",
                 result.get("sessionId"), result["exitCode"], result["stderr"])
-    except (OSError, ValueError, TypeError, urllib.error.URLError):
+    except (OSError, ValueError, TypeError, http.client.HTTPException):
         # Avoid copying URLs, response bodies or credentials into ordinary logs.
         return "", session_id, 2, "managed review execution failed; inspect the provider's protected diagnostics"
 
@@ -42235,7 +42244,8 @@ def _managed_review_exec(prompt, *, backend, session_id, repo_root, spec, resolu
     return execute_review(
         backend=backend, model=spec.model, effort=spec.effort,
         prompt=prompt, repository_path=repo_root, session_id=session_id,
-        resume_only=resume_only, timeout=get_review_exec_timeout(),
+        resume_only=resume_only or getattr(args, "managed_resume_only", False),
+        timeout=get_review_exec_timeout(),
         resolution_out=resolution_out,
         request_scope=getattr(args, "managed_review_request_scope", None),
     )

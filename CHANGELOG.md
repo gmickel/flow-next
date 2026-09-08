@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **Managed hosts can run reviews through their scoped execution provider.** A host can supply a local endpoint and session token for Codex, Claude, Cursor or Copilot reviews while Flow-Next owns prompts, rounds, verdicts and receipts. Standalone users keep ordinary CLI execution. Managed completion reviews can require scoped execution before reserving work with `--require-managed-execution`; configured provider failures never fall back to a local CLI. The hook ships inside the installed launcher runtime.
+
 ## [flow-next 4.16.1] - 2026-09-08
 
 A maintenance release for anyone installing flow-next into Codex or running the tracker and task tooling day to day. Reinstalling the Codex plugin no longer risks a broken Codex startup or a garbled config on Windows, a forced task takeover with a custom note now actually hands the task over, and anonymous tracker uploads stop asking for credentials they never needed. Under the hood, a five-reviewer pass over the Python removed 141 lines of dead paths without changing a single prompt byte; the review surfaced the defects fixed below.

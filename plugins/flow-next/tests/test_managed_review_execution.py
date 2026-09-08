@@ -1,6 +1,7 @@
 """Packaged adapters consume the local provider without invoking ambient CLIs."""
 
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -135,6 +136,125 @@ class ManagedReviewExecutionTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FLOW_REVIEW_EXECUTION_TOKEN": ""}):
             self.assertEqual(self.call()[2], 2)
         self.assertEqual(self.requests, [])
+
+    def test_invalid_ports_and_control_characters_refuse_before_pipeline(self):
+        from test_claude_review_commands import _run_cli
+        for endpoint in ("http://127.0.0.1:bogus/review", "http://127.0.0.1:65536/review",
+                         "http://127.0.0.1:0/review", "http://127.0.0.1/review\n"):
+            with self.subTest(endpoint=repr(endpoint)), mock.patch.dict(
+                os.environ, {"FLOW_REVIEW_EXECUTION_URL": endpoint}
+            ), mock.patch.object(flowctl, "_backend_completion_review") as pipeline:
+                code, _, _ = _run_cli("codex", "completion-review", "fn-1", "--json",
+                                      "--require-managed-execution")
+                self.assertEqual(code, 2)
+                pipeline.assert_not_called()
+
+    def test_transport_timeout_truncation_and_oversize_fail_closed(self):
+        for failure in (TimeoutError(), http.client.IncompleteRead(b"private", 20)):
+            with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open",
+                                   side_effect=failure):
+                self.assertEqual(self.call()[2], 2)
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"x" * (16 * 1024 * 1024 + 1)
+        with mock.patch.object(flowctl.urllib.request.OpenerDirector, "open", return_value=response):
+            self.assertEqual(self.call()[2], 2)
+        response.__enter__.return_value.read.assert_called_once_with(16 * 1024 * 1024 + 1)
+
+    def test_proxy_environment_is_ignored(self):
+        with mock.patch.dict(os.environ, {"http_proxy": "http://127.0.0.1:1",
+                                         "HTTP_PROXY": "http://127.0.0.1:1", "NO_PROXY": ""}):
+            self.assertEqual(self.call()[2], 0)
+        self.assertEqual(len(self.requests), 1)
+
+    def test_boolean_schema_version_is_rejected(self):
+        self.response["schemaVersion"] = True
+        self.assertEqual(self.call()[2], 2)
+
+    def test_continuation_only_passes_require_the_original_session(self):
+        for backend in ("codex", "claude", "cursor", "copilot"):
+            with self.subTest(backend=backend):
+                output = flowctl._dispatch_session_pass(
+                    backend, "continue review", session_id="managed-1",
+                    spec_arg=backend, use_json=True, fail_label="pass",
+                )
+                self.assertEqual(flowctl.parse_codex_verdict(output), "SHIP")
+                self.assertTrue(self.requests[-1][1]["resumeOnly"])
+        self.response["sessionId"] = "different-session"
+        self.assertEqual(self.call(session_id="managed-1", resume_only=True)[2], 2)
+
+    def test_managed_command_does_not_probe_local_backend_cli(self):
+        from test_claude_review_commands import _flow_repo, _run_cli, EPIC_ID
+        real_which = shutil.which
+        def which(name, *args, **kwargs):
+            if name in ("codex", "claude", "cursor-agent", "copilot"):
+                raise AssertionError("managed execution probed local CLI")
+            return real_which(name, *args, **kwargs)
+        for backend in ("codex", "claude", "cursor", "copilot"):
+            with self.subTest(backend=backend), _flow_repo() as (repo, base), \
+                    mock.patch.object(flowctl.shutil, "which", side_effect=which):
+                code, _, err = _run_cli(backend, "completion-review", EPIC_ID,
+                                        "--base", base, "--receipt", str(repo / "receipt.json"),
+                                        "--json", "--require-managed-execution")
+                self.assertEqual(code, 0, err)
+
+    @unittest.skipIf(os.name == "nt", "Codex installer is a bash script")
+    def test_real_codex_install_runs_managed_and_standalone_receipts(self):
+        from test_claude_review_commands import _flow_repo, EPIC_ID
+        source = Path(flowctl.__file__).resolve().parents[3]
+        with tempfile.TemporaryDirectory() as temporary:
+            install = Path(temporary) / "codex-profile"
+            install.mkdir()
+            env = {**os.environ, "CODEX_HOME": str(install)}
+            installed = subprocess.run(["bash", str(source / "scripts/install-codex.sh")],
+                                       env=env, capture_output=True, text=True, timeout=120)
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            launcher = install / "scripts/flowctl"
+            self.assertEqual((install / "scripts/flowctl.py").read_bytes(),
+                             Path(flowctl.__file__).read_bytes())
+            help_result = subprocess.run([str(launcher), "claude", "completion-review", "--help"],
+                                         env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(help_result.returncode, 0, help_result.stderr)
+            self.assertIn("--require-managed-execution", help_result.stdout)
+            # An executable CLI double proves the full standalone subprocess path.
+            binary = Path(temporary) / "bin"
+            binary.mkdir()
+            marker = binary / "called"
+            stub = binary / "claude"
+            stub.write_text(
+                f"#!{sys.executable}\nimport json, pathlib, sys\n"
+                f"pathlib.Path({str(marker)!r}).write_text(sys.stdin.read())\n"
+                "print(json.dumps({'type':'result','subtype':'success','is_error':False,"
+                "'result':'<verdict>SHIP</verdict>','session_id':'standalone-1'}))\n",
+                encoding="utf-8",
+            )
+            stub.chmod(0o700)
+            env["PATH"] = str(binary) + os.pathsep + env["PATH"]
+            for mode in ("managed", "failed", "standalone", "required-missing"):
+                with self.subTest(mode=mode), _flow_repo() as (repo, base):
+                    receipt = repo / "receipt.json"
+                    invocation_env = dict(env)
+                    if mode in ("standalone", "required-missing"):
+                        invocation_env.pop("FLOW_REVIEW_EXECUTION_URL", None)
+                        invocation_env.pop("FLOW_REVIEW_EXECUTION_TOKEN", None)
+                    self.response["exitCode"] = 2 if mode == "failed" else 0
+                    argv = [str(launcher), "claude", "completion-review", EPIC_ID,
+                            "--base", base, "--receipt", str(receipt), "--json"]
+                    if mode != "standalone":
+                        argv.append("--require-managed-execution")
+                    result = subprocess.run(argv, env=invocation_env, cwd=repo,
+                                            capture_output=True, text=True, timeout=30)
+                    if mode in ("failed", "required-missing"):
+                        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                        self.assertFalse(receipt.exists())
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        published = json.loads(receipt.read_text())
+                        self.assertEqual(published["verdict"], "SHIP")
+                        self.assertEqual(published["session_id"],
+                                         "standalone-1" if mode == "standalone" else "managed-1")
+                    if mode in ("managed", "failed"):
+                        self.assertFalse(marker.exists())
+            self.assertIn("review", marker.read_text().lower())
 
     def test_claude_diff_delivery_precedes_hook(self):
         with mock.patch.object(flowctl, "_claude_materialise_review_diff", return_value=Path("/tmp/review.diff")):

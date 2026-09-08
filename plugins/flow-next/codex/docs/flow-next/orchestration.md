@@ -154,14 +154,15 @@ runtime; flowctl still owns backend selection, prompts, reservations, verdict
 parsing, retry accounting and receipts. This applies to primary reviews, fanout
 draws, validation and deep passes. An absent URL preserves ordinary CLI execution;
 an invalid endpoint, refusal or failed response never falls back to an ambient CLI.
+Managed review commands do not require the backend CLI on the caller's PATH.
 
 Managed controllers can pass `--require-managed-execution` to packaged
 `completion-review` commands. Flowctl then requires valid local endpoint and token
 configuration before entering the review pipeline or reserving a round. An older
 kernel rejects the unknown flag before dispatch. This flag is opt-in; standalone
-Flow-Next keeps its existing native/CLI execution when it is absent. An unscoped
-controller must consume an existing valid Flow-Next receipt or request a review
-inside a scoped managed host session.
+Flow-Next keeps its existing native/CLI execution when it is absent. Hosts can
+check the installed `flowctl <backend> completion-review --help` output for
+`--require-managed-execution` before dispatch. This probe runs no inference.
 
 The endpoint accepts a JSON POST with `schemaVersion: 1`, `requestId`, `backend`,
 `model`, `effort`, `prompt`, `repositoryPath`, nullable `sessionId`, `resumeOnly`,
@@ -178,7 +179,8 @@ The JSON response contains `schemaVersion: 1`, `output` (the final assistant tex
 nullable `sessionId` (an opaque continuation handle), integer `exitCode`, and
 `stderr`. Optional `resumeFailed: true` requires a prior session and a nonzero exit;
 Codex's existing two-phase primary review may then dispatch its rebuilt fresh
-prompt. Continuation-only phases fail when resume is unsupported. Optional
+prompt. Validation and deep passes set `resumeOnly: true` and require the
+successful response to retain the original session handle. Optional
 `observedModel` is provider metadata and does not rewrite the selected backend or
 model. A nonzero result cannot contribute a verdict. Flowctl accepts at most
 16 MiB of response data, follows no redirects, ignores proxy environment settings,

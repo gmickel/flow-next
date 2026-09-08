@@ -2154,10 +2154,19 @@ flowctl codex plan-review <spec-id> --files <file1,file2,...> [--sandbox <mode>]
 # Note: Spec/task markdown is included automatically; --files should be CODE files for repository context.
 
 # Completion review (reviews spec implementation against acceptance criteria)
-flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] [--json]
+flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] [--require-managed-execution] [--json]
 # Example: flowctl codex completion-review fn-1 --sandbox auto --receipt /tmp/completion-fn-1.json
 # Runs after all tasks done; verifies implementation matches spec requirements
 ```
+
+Hosts may supply `FLOW_REVIEW_EXECUTION_URL` and `FLOW_REVIEW_EXECUTION_TOKEN`
+to run review inference through a scoped local provider. The packaged Codex,
+Copilot, Cursor and Claude completion commands accept `--require-managed-execution`
+to refuse missing or invalid scope before reserving work. Hosts can probe for
+the flag with `flowctl <backend> completion-review --help` without inference.
+With no provider URL, ordinary CLI execution remains the default. See the
+[execution contract](orchestration.md#review-backends-cross-model-review) for the request, response
+and failure rules.
 
 **First-round fan-out (fn-215) - two coordinator-visible invocations:**
 
@@ -2419,7 +2428,7 @@ flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec
 flowctl copilot plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
-flowctl copilot completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
+flowctl copilot completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]
 
 # Validator pass (fn-32.1 --validate)
 flowctl copilot validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
@@ -2443,7 +2452,7 @@ flowctl cursor impl-review <task-id> --base <branch> [--receipt <path>] [--spec 
 flowctl cursor plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
-flowctl cursor completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
+flowctl cursor completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]
 
 # Validator pass (fn-32.1 --validate)
 flowctl cursor validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
@@ -2467,7 +2476,7 @@ flowctl claude impl-review <task-id> --base <branch> [--receipt <path>] [--spec 
 flowctl claude plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
-flowctl claude completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
+flowctl claude completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]
 
 # Validator pass (fn-32.1 --validate)
 flowctl claude validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
