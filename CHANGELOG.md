@@ -2,14 +2,21 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.16.1] - 2026-09-08
+
+A maintenance release for anyone installing flow-next into Codex or running the tracker and task tooling day to day. Reinstalling the Codex plugin no longer risks a broken Codex startup or a garbled config on Windows, a forced task takeover with a custom note now actually hands the task over, and anonymous tracker uploads stop asking for credentials they never needed. Under the hood, a five-reviewer pass over the Python removed 141 lines of dead paths without changing a single prompt byte; the review surfaced the defects fixed below.
 
 ### Fixed
 
-- Windows Codex installs read and write config and role files as UTF-8 regardless of the system locale, preventing `UnicodeDecodeError` and preserving non-ASCII settings.
-- Forced task takeovers now transfer ownership when a custom claim note is supplied. Anonymous tracker uploads proceed without resolving provider credentials, echoed Jira Basic credentials are redacted, and tracker chart locks reject symlinked lock directories.
-- Codex hook normalization preserves unrelated settings after commented TOML table headers and array tables. Cursor install verification now detects missing or unexpected nested payload files.
-- Codex installs recover duplicate Flow-Next agent registrations left behind when opening comment markers were removed. The installer preserves unrelated settings and role overrides, places the thread limit in the correct table, and validates the merged config before replacing it with a private backup. Conflicting user-owned roles or malformed unrelated TOML stop the install instead of breaking Codex startup. Reported by @gmickel.
+- **Codex reinstalls are safe again.** Codex installs recover duplicate Flow-Next agent registrations left behind when opening comment markers were removed. The installer preserves unrelated settings and role overrides, places the thread limit in the correct table, and validates the merged config before replacing it with a private backup. Conflicting user-owned roles or malformed unrelated TOML stop the install instead of breaking Codex startup. Reported by @gmickel.
+- **Windows Codex installs keep non-ASCII settings intact.** Config and role files are read and written as UTF-8 regardless of the system locale, so a `UnicodeDecodeError` no longer aborts the install and user settings with non-ASCII text survive the merge.
+- **Codex hook normalization no longer disturbs settings that follow commented TOML table headers or array tables.** Cursor install verification now detects missing or unexpected nested payload files instead of reporting a clean install over a partial one.
+- **Forced task takeovers transfer ownership when a custom claim note is supplied.** Previously the note path skipped the transfer, leaving the task claimed by the previous owner.
+- **Tracker hardening.** Anonymous tracker uploads proceed without resolving provider credentials, echoed Jira Basic credentials are redacted in output, and tracker chart locks reject symlinked lock directories.
+
+### Removed
+
+- **Dead Python paths.** Unused abstractions, registry fields, helpers, and repeated checks across flowctl, the tracker package, and OpenCode generation are gone; production Python is 141 lines smaller. Public contracts, skill prose, and emitted review prompts are byte-for-byte unchanged, pinned by the existing prompt tests. (fn-224)
 
 ## [flow-next 4.16.0] - 2026-09-05
 
