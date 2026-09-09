@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Fixed
+
+- QA passes now preserve populated requirement coverage when writing their verdict receipt, instead of failing with a JSON parsing error. Empty or unset coverage still defaults to an empty object.
+
 ## [flow-next 4.18.0] - 2026-09-10
 
 Developers can hand a ready, cohesive spec to one capable coding agent and keep the full acceptance contract through implementation and verification. Separate task planning remains available when dependencies, ownership, staged delivery or execution constraints benefit from decomposition.
