@@ -146,7 +146,7 @@
     "impl:fn-236-scoped-review-execution-provider.1": 0
   },
   "spec_path": ".flow/specs/fn-236-scoped-review-execution-provider.md",
-  "status": "open",
+  "status": "done",
   "title": "Scoped review execution provider integration",
   "tracker": {
     "baseHashFlow": null,
@@ -159,5 +159,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-08T20:50:32.862980Z"
+  "updated_at": "2026-09-09T06:55:27.614914Z"
 }
