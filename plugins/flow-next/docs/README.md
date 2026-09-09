@@ -74,6 +74,8 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 
 ## Notable updates
 
+- **Managed review execution (4.17.0)** - compatible hosts can run reviews through their selected provider accounts while Flow-Next owns the review and receipt. Enable: update Flow-Next and use the host's managed review integration; standalone CLI behavior is unchanged. Details: [orchestration.md](orchestration.md#review-backends-cross-model-review).
+
 See [documentation release history](release-history.md) for the accumulated behavior notes and [CHANGELOG](../../../CHANGELOG.md) for releases. Current defaults belong to each subsystem reference.
 
 ## Conventions

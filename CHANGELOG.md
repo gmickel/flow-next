@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 4.17.0] - 2026-09-09
+
+Developers working in a compatible managed host can keep reviews on the host's selected provider account while retaining Flow-Next's findings, fix loop and receipts. The host supplies the session's execution path; users choose their review backend as before. Standalone users keep their existing CLI workflow, and a configured managed-provider failure stops the review instead of silently switching accounts through a local CLI.
+
 ### Added
 
 - **Managed hosts can run reviews through their scoped execution provider.** A host can supply a local endpoint and session token for Codex, Claude, Cursor or Copilot reviews while Flow-Next owns prompts, rounds, verdicts and receipts. Standalone users keep ordinary CLI execution. Managed completion reviews can require scoped execution before reserving work with `--require-managed-execution`; configured provider failures never fall back to a local CLI. The hook ships inside the installed launcher runtime.
