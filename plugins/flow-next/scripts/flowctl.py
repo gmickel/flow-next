@@ -11,7 +11,9 @@ import errno
 import hashlib
 import heapq
 import html
+import http.client
 import io
+import ipaddress
 import json
 import math
 import os
@@ -22,10 +24,13 @@ import stat
 import subprocess
 import shlex
 import shutil
+import socket
 import sys
 import tempfile
 import threading
+import time
 import unicodedata
+import urllib.parse
 import uuid
 from collections import deque
 from collections.abc import Iterator
@@ -38144,7 +38149,8 @@ def _dispatch_session_pass(
     # no payload; if one ever exceeds cursor's argv transport boundary,
     # ``run_cursor_exec`` refuses explicitly rather than silently truncating.
     # Codex sandbox defaults to auto (matches prior validate/deep handlers).
-    args = argparse.Namespace(sandbox="auto", json=use_json)
+    args = argparse.Namespace(sandbox="auto", json=use_json, managed_resume_only=True,
+                              managed_review_request_scope=uuid.uuid4().hex)
     _resolution: dict = {}
     output, _sid, exit_code, stderr = reg["run_exec"](
         prompt,
@@ -42148,6 +42154,142 @@ def _rereview_prompt_pair(
     return lean + prompt, preamble + prompt
 
 
+def require_execution_provider_configuration():
+    """Validate configured local reach before reserving a managed-only review."""
+    url = os.environ.get("FLOW_REVIEW_EXECUTION_URL", "")
+    parsed = urllib.parse.urlsplit(url)
+    if (parsed.scheme != "http" or not parsed.hostname
+            or not ipaddress.ip_address(parsed.hostname).is_loopback
+            or parsed.username or parsed.password or parsed.fragment):
+        raise ValueError("provider URL must be a loopback HTTP endpoint")
+    # Accessing port validates malformed and out-of-range values before a
+    # managed-required command can reserve a review round.
+    if parsed.port == 0 or any(ord(char) <= 32 or ord(char) == 127 for char in url):
+        raise ValueError("invalid provider endpoint")
+    token = os.environ.get("FLOW_REVIEW_EXECUTION_TOKEN", "")
+    if not token or "\r" in token or "\n" in token:
+        raise ValueError("provider requires a scoped token")
+    return url, token
+
+
+def _read_review_execution_response(url, token, payload, timeout):
+    """One direct local HTTP request, bounded across headers and body reads."""
+    parsed = urllib.parse.urlsplit(url)
+    connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
+    deadline = time.monotonic() + timeout
+    timer = None
+    try:
+        connection.connect()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("provider deadline expired")
+        # Retain the socket because HTTPResponse can detach it from connection
+        # on Connection: close. shutdown interrupts blocked reads on every OS;
+        # a socket-operation timeout alone lets a trickled response run forever.
+        transport = connection.sock
+
+        def expire():
+            with suppress(OSError):
+                transport.shutdown(socket.SHUT_RDWR)
+
+        timer = threading.Timer(remaining, expire)
+        timer.daemon = True
+        timer.start()
+        target = urllib.parse.urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+        connection.request("POST", target, body=json.dumps(payload).encode("utf-8"),
+                           headers={"Content-Type": "application/json",
+                                    "Authorization": f"Bearer {token}"})
+        # Direct HTTPConnection ignores environment proxies and never follows
+        # redirects, so the scoped credential cannot leave the local endpoint.
+        with connection.getresponse() as response:
+            if not 200 <= response.status < 300:
+                raise ValueError("provider refused execution")
+            raw = response.read(16 * 1024 * 1024 + 1)
+            # Sized reads can return premature EOF without IncompleteRead.
+            if response.length not in (None, 0):
+                raise ValueError("incomplete provider response")
+            if time.monotonic() >= deadline:
+                raise TimeoutError("provider deadline expired")
+            return raw
+    finally:
+        if timer is not None:
+            timer.cancel()
+            timer.join()
+        connection.close()
+
+
+def execute_review(*, backend, model, effort, prompt, repository_path,
+                   session_id, resume_only, timeout, resolution_out, request_scope=None):
+    """Return the adapter tuple, or None only when no provider was configured.
+
+    Kept inside flowctl.py so named-file installs retain the execution boundary.
+    Only inference crosses it; flowctl owns review reservations and receipts.
+    """
+    url = os.environ.get("FLOW_REVIEW_EXECUTION_URL")
+    if url is None:
+        return None
+    try:
+        url, token = require_execution_provider_configuration()
+        payload = {
+            "schemaVersion": 1,
+            "backend": backend, "model": model, "effort": effort,
+            "prompt": prompt, "repositoryPath": str(repository_path),
+            "sessionId": session_id, "resumeOnly": resume_only,
+            "permissionMode": "read-only", "timeoutSeconds": timeout,
+        }
+        identity = {key: value for key, value in payload.items() if key != "timeoutSeconds"}
+        identity["requestScope"] = request_scope
+        payload["requestId"] = hashlib.sha256(
+            json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        raw = _read_review_execution_response(url, token, payload, timeout)
+        if len(raw) > 16 * 1024 * 1024:
+            raise ValueError("provider response exceeds 16 MiB")
+        result = json.loads(raw)
+        if (not isinstance(result, dict) or type(result.get("schemaVersion")) is not int
+                or result["schemaVersion"] != 1
+                or not isinstance(result.get("output"), str)
+                or not isinstance(result.get("stderr"), str)
+                or type(result.get("exitCode")) is not int
+                or result["exitCode"] < 0
+                or (result.get("sessionId") is not None
+                    and not isinstance(result["sessionId"], str))
+                or type(result.get("resumeFailed", False)) is not bool
+                or (result.get("observedModel") is not None
+                    and not isinstance(result["observedModel"], str))):
+            raise ValueError("invalid provider response")
+        if result.get("resumeFailed") and (not session_id or result["exitCode"] == 0):
+            raise ValueError("invalid resume failure")
+        if resume_only and (not session_id or (
+                result["exitCode"] == 0 and result.get("sessionId") != session_id)):
+            raise ValueError("provider did not preserve the continuation session")
+        if token in (result.get("sessionId") or ""):
+            raise ValueError("provider returned a credential as a session handle")
+        if resolution_out is not None:
+            resolution_out["resume_failed"] = result.get("resumeFailed", False)
+        # Nonzero transport outcomes must never leak a verdict into the parser.
+        if result["exitCode"] != 0:
+            return ("", result.get("sessionId"), result["exitCode"],
+                    "managed review execution failed; inspect the provider's protected diagnostics")
+        return (result["output"].replace(token, "[redacted]"), result.get("sessionId"),
+                0, result["stderr"].replace(token, "[redacted]"))
+    except (OSError, ValueError, TypeError, RecursionError, http.client.HTTPException):
+        # Avoid copying URLs, response bodies or credentials into ordinary logs.
+        return "", session_id, 2, "managed review execution failed; inspect the provider's protected diagnostics"
+
+
+def _managed_review_exec(prompt, *, backend, session_id, repo_root, spec, resolution_out,
+                         resume_only=False, args=None):
+    return execute_review(
+        backend=backend, model=spec.model, effort=spec.effort,
+        prompt=prompt, repository_path=repo_root, session_id=session_id,
+        resume_only=resume_only or getattr(args, "managed_resume_only", False),
+        timeout=get_review_exec_timeout(),
+        resolution_out=resolution_out,
+        request_scope=getattr(args, "managed_review_request_scope", None),
+    )
+
+
 def _codex_run_exec(
     prompt: str,
     *,
@@ -42159,6 +42301,12 @@ def _codex_run_exec(
     resume_only: bool = False,
 ) -> tuple[str, Optional[str], int, str]:
     """Codex spawn: resolve sandbox from args, then run_codex_exec."""
+    managed = _managed_review_exec(
+        prompt, backend="codex", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, resume_only=resume_only, args=args,
+    )
+    if managed is not None:
+        return managed
     try:
         sandbox = resolve_codex_sandbox(getattr(args, "sandbox", "auto"))
     except ValueError as e:
@@ -42180,6 +42328,12 @@ def _copilot_run_exec(
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
     """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    managed = _managed_review_exec(
+        prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_copilot_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -42196,6 +42350,12 @@ def _cursor_run_exec(
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
     """Cursor spawn: resume-only (session_id None omits --resume)."""
+    managed = _managed_review_exec(
+        prompt, backend="cursor", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_cursor_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -42313,6 +42473,12 @@ def _claude_run_exec(
         except (ClaudeReviewDiffError, OSError) as exc:
             return "", (session_id or ""), 2, f"claude review diff: {exc}"
         prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    managed = _managed_review_exec(
+        prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
+        resolution_out=resolution_out, args=args,
+    )
+    if managed is not None:
+        return managed
     return run_claude_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
@@ -42987,6 +43153,17 @@ def cmd_backend_review(
     from ``args.review_backend`` / ``args.review_kind`` (parameterized argparse).
     Supports impl / plan / completion kinds.
     """
+    if getattr(args, "require_managed_execution", False):
+        try:
+            require_execution_provider_configuration()
+        except (ValueError, TypeError):
+            error_exit(
+                "managed execution required: completion review needs a scoped "
+                "FLOW_REVIEW_EXECUTION_URL and FLOW_REVIEW_EXECUTION_TOKEN; "
+                "run it inside a managed host session",
+                use_json=getattr(args, "json", False),
+                code=2,
+            )
     _wire_backend_review_hooks()
     backend = backend or getattr(args, "review_backend", None)
     kind = kind or getattr(args, "review_kind", None)
@@ -43048,6 +43225,7 @@ def _dispatch_backend_review(
     on failure) and phase 2 rebuilds. One review round still reserves exactly one
     round: a failed resume returns no verdict, so nothing is double-consumed.
     """
+    args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
     two_phase = (
         injected_prompt is not None
         and session_id is not None
@@ -44729,6 +44907,8 @@ def _review_fanout_run_draw(
 ) -> dict:
     """One draw runner: no record/refund/receipt writes (fn-215 R14)."""
     axis = draw["axis"]
+    args = argparse.Namespace(**vars(args))
+    args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
     spec = draw["spec"]
     backend = spec.backend
     reg = BACKEND_REGISTRY[backend]
@@ -52368,6 +52548,10 @@ def _add_plan_review_parser(sub, backend: str):
 def _add_completion_review_parser(sub, backend: str):
     """Register ``completion-review`` for a backend (fn-112 parameterized argparse)."""
     p = sub.add_parser("completion-review", help="Spec completion review")
+    p.add_argument(
+        "--require-managed-execution", action="store_true",
+        help="Require a scoped local execution provider before reserving a review",
+    )
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument("--base", default="main", help="Base branch for diff")
     p.add_argument("--receipt", help="Receipt file path for session continuity")

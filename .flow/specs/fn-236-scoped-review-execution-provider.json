@@ -1,0 +1,163 @@
+{
+  "branch_name": "mf-plug-and-play-reviews",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-08T20:50:32.862970Z",
+  "created_at": "2026-09-08T19:28:52.023020Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-236-scoped-review-execution-provider",
+  "impl_review_rounds": {
+    "fn-236-scoped-review-execution-provider.1": 0
+  },
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "2b66d6deb122b63e38478e672174887a02cdb7b9d3ecf6e7c7f3f2e5f99bd8d5",
+      "backend": "codex",
+      "base_sha": "d35b4d9be7c7e7193c3758b2bf6d71db9c7844b2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-79db6dafce083f99ef859aa9eab119f9",
+            "classification": "introduced",
+            "findingId": "finding-79db6dafce083f99ef859aa9eab119f9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b35980bd0caff7cfba76bd78ec5c4244",
+            "classification": "introduced",
+            "findingId": "finding-b35980bd0caff7cfba76bd78ec5c4244",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-03dd410827839295d0471954b9669650",
+            "classification": "introduced",
+            "findingId": "finding-03dd410827839295d0471954b9669650",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2c708b722b65d878009b9819ba3ca2f22ad9b4d1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2433,
+      "output_sha256": "b10fad60c728ee6fe8ca65d1ed8ec6af2c2836705fe55ceeb33397e4a87d9b80",
+      "reservation_id": "58613b666ee84d9cb5cdb3395feb8c21",
+      "round_consumed": true,
+      "scope": "impl:fn-236-scoped-review-execution-provider.1",
+      "superseded_by": null,
+      "task": "fn-236-scoped-review-execution-provider.1",
+      "timestamp": "2026-09-08T19:48:51.284515Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "a9eda2d9acd41a3f2dab1b8a3ec7c4cb0f795d019be737ce09700b3a9315804c",
+      "backend": "codex",
+      "base_sha": "d35b4d9be7c7e7193c3758b2bf6d71db9c7844b2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-79db6dafce083f99ef859aa9eab119f9",
+            "classification": "introduced",
+            "findingId": "finding-79db6dafce083f99ef859aa9eab119f9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-b35980bd0caff7cfba76bd78ec5c4244",
+            "classification": "introduced",
+            "findingId": "finding-b35980bd0caff7cfba76bd78ec5c4244",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-03dd410827839295d0471954b9669650",
+            "classification": "introduced",
+            "findingId": "finding-03dd410827839295d0471954b9669650",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "88bdc5818ca39a46cc135bd609ceb0337cc1e2e5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1196,
+      "output_sha256": "9af0b062a59a8ee41e655e657f582729aa204507ba37bc74cd142192b3bf2474",
+      "reservation_id": "ad6cca7037b14ceda3ec0410d075a7a4",
+      "round_consumed": true,
+      "scope": "impl:fn-236-scoped-review-execution-provider.1",
+      "superseded_by": null,
+      "task": "fn-236-scoped-review-execution-provider.1",
+      "timestamp": "2026-09-08T19:56:37.814776Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-236-scoped-review-execution-provider.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-236-scoped-review-execution-provider.1": 0
+  },
+  "spec_path": ".flow/specs/fn-236-scoped-review-execution-provider.md",
+  "status": "open",
+  "title": "Scoped review execution provider integration",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-08T20:50:32.862980Z"
+}

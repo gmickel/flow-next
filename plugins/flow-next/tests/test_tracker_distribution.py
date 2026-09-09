@@ -309,9 +309,15 @@ class ExecutableInstallerFailClosed(unittest.TestCase):
                             ignore=shutil.ignore_patterns("__pycache__"))
             with tempfile.TemporaryDirectory() as home:
                 (Path(home) / ".codex").mkdir()  # installer probes for Codex CLI
+                env = {**os.environ, "HOME": home,
+                       "CODEX_HOME": str(Path(home) / ".codex")}
+                # Refuse to run this intentionally destructive installer fixture
+                # against any inherited host profile, even if setup regresses.
+                self.assertEqual(Path(env["CODEX_HOME"]).parent, Path(home))
                 out = subprocess.run(
                     ["bash", str(mutated / "scripts" / "install-codex.sh")],
                     capture_output=True, text=True, timeout=300,
-                    env={**os.environ, "HOME": home})
+                    env=env)
+                self.assertTrue((Path(home) / ".codex" / "scripts" / "flowctl.py").exists())
             self.assertNotEqual(out.returncode, 0)
             self.assertIn("flowctl_tracker", out.stdout + out.stderr)
