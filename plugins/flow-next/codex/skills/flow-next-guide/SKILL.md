@@ -48,13 +48,16 @@ Match the **starting state**. First clear match wins. Chart only when one oversi
 | Existing structured brief with resolved business and technical choices | `$flow-next-capture` the brief | Structured brief / chart briefing package ready | Skip chart. Narrow or skip interview **only after** capture read-back proves no material gaps - never pre-declare skip interview |
 | Tiny, local, low-risk change that fits one implementation context | Direct change + review path appropriate to the repo | One-context fix; low risk | Skip chart **and** the full spec pipeline (`signal absent`). Still run the review/consent gates the change would need |
 | A valid spec with unresolved judgment questions | `$flow-next-interview` | Spec exists; judgment gaps remain | Do not reopen discovery as chart unless the questions reveal the **effort itself is not yet specifiable** - only then route backward to chart |
-| A ready zero-task spec whose work is fully known, near-zero risk, one implementation context | `$flow-next-work <spec-id> --no-plan` (or answer the zero-task fork's ask with "work directly") | Task decomposition would convert no unknown; the fork mints one implicit task and runs the standard pipeline | Prefer `$flow-next-plan` when independent surfaces could parallelize or design risk remains; autonomous loops keep planning - pilot routes here only for a spec carrying the explicit `no_plan` field (`flowctl spec set-no-plan`) |
-| A ready spec whose work is understood | `$flow-next-plan` | Spec ready / work understood enough to task | Chart is too late. Unshaped oversized freeform ideas are not plan input - route those to chart first |
+| A spec whose design needs an independent assessment | `$flow-next-plan-review <spec-id>` | Consequential design choices deserve review, including a spec with zero tasks | Review the spec directly; task decomposition is not a prerequisite |
+| A ready cohesive spec with no intentional task plan | `$flow-next-work <spec-id> --no-plan` | A capable coding agent can own the complete acceptance contract; decomposition adds no coordination value | Plan when dependencies, separate owners, staged delivery, or execution constraints make a breakdown useful. Risk or multiple files alone do not require decomposition |
+| A ready spec that benefits from coordinated execution units | `$flow-next-plan` | Dependencies, ownership boundaries, stages, or constraints need an explicit task breakdown | Use work --no-plan when one owner can carry the cohesive spec. Chart is too late for understood work |
 | Planned tasks ready to implement | `$flow-next-work`, then existing review / QA / ship choices | Tasks exist and are actionable | Stay on work + the repo's review/QA/ship menu. Guide does not invent new ship stages |
 | A repo with a drivable user surface whose navigation should compound across QA/drive runs | `$flow-next-features` | No `.flow/features/` yet (seed), or a present map that needs a cadence maintain pass | Skip when there is no drivable surface. Never a pipeline stage; pilot/land/Ralph never dispatch it. QA and drive consume the map when it exists |
 | Output too dense - a plan, spec, task, or diff needs reviewing at a glance | `$flow-next-visual` | Structure has to be reconstructed by serial reading (spec + N task files, an unread diff, a wall of prose) | Skip when the text is already short enough to judge directly. The digest is a lens, not a stage - it never advances the pipeline and never replaces reading the file you drill into |
 | A substantial reply, report, or summary needs prose discipline | `$flow-next-prose` | The output is chat prose - self-applied by the agent at the drafting moment, or invoked with a draft to tighten | Skip for short turns, tool narration, the visual digest, and anything landing in a file, PR, or tracker - those artifact surfaces carry their own pointers to `docs/prose.md`. Never a pipeline stage |
 | Unsure which of these situations applies | This matrix (this skill) | Ambiguous starting state | Ask at most **one** plain-text numbered prompt when two routes would **materially** differ; otherwise recommend one route |
+
+Unknown model identity needs no detector or plain-text numbered prompt: judge the spec and execution context available. A direct-route recommendation names Flow-Next work; it never means bypassing its implementation review, coverage, completion policy, or opt-in QA.
 
 There is **no** fixed prospect -> chart -> capture conveyor. Each hop re-evaluates the matrix.
 
@@ -92,7 +95,8 @@ Examples of natural-language next prompts (not required flags):
 - "Chart this: multi-tenant billing with unknown pricing and migration risks"
 - "Capture what we just agreed - intent and boundaries are clear"
 - "Interview fn-12 on the open product judgment questions"
-- "Plan the ready spec fn-12"
+- "Execute the ready cohesive spec fn-12 through Flow-Next work --no-plan"
+- "Plan the dependencies and separate owners for fn-12"
 - "Just fix the typo in README and open a small review"
 
 ## Forbidden

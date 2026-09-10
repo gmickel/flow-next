@@ -152,7 +152,7 @@ Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markd
 Flowctl accepts schema v1 and v2 (and v3 post-migration); new fields are optional and defaulted.
 
 New fields:
-- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (canonical JSON field for cross-spec deps), `branch_name`, `default_impl`, `default_review`, `default_sync`, `ready` (1.12.0+, lazy - written only after a toggle; absent reads `false`), `no_plan` (fn-214, same lazy contract - marks a zero-task spec for work's direct route; set refused once tasks exist)
+- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (canonical JSON field for cross-spec deps), `branch_name`, `default_impl`, `default_review`, `default_sync`, `ready` (1.12.0+, lazy - written only after a toggle; absent reads `false`), `no_plan` (fn-214, same lazy contract - records the direct route; explicit set refused once tasks exist)
 - Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
@@ -450,7 +450,7 @@ Both verbs are **idempotent no-ops** when the flag already matches (no write, no
 
 ### spec set-no-plan / spec clear-no-plan
 
-Mark / clear the spec-level `no_plan` field (fn-214) — the durable "ready, and too small to plan" signal. A ready zero-task spec with `no_plan: true` is classified by pilot straight to the work stage's [no-plan route](pipeline-variations.md#no-plan-route) (one implicit task, no plan/plan-review), and work reads the field as the explicit no-plan instruction. Set it at capture time (`/flow-next:capture ... --no-plan`) or manually; no autonomous path ever sets it.
+Mark or clear the spec-level `no_plan` field, the durable choice to execute through Flow-Next work without separate task planning. Recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. A ready zero-task spec with `no_plan: true` routes pilot to work's [no-plan route](pipeline-variations.md#no-plan-route). Capture (`--no-plan`), an explicit setter, or accepted direct work records the choice; pilot consumes it rather than choosing it on its own.
 
 ```bash
 flowctl spec set-no-plan fn-1 [--json]
@@ -462,7 +462,7 @@ Output:
 {"id": "fn-1", "no_plan": true, "changed": true, "message": "Spec fn-1 marked no-plan"}
 ```
 
-Same lazy, idempotent contract as `spec ready`/`spec unready` (sidecar carries `no_plan` only after a toggle changes state; absent reads `false`; matching toggles are byte-identical no-ops; task ids rejected). One extra rule: **setting is refused once the spec has any tasks** (nonzero exit naming why — a planned spec routes through its tasks), while **clearing is always allowed**, including on specs with tasks (stale-field cleanup). A field left set on a spec that later gained tasks is inert: pilot's zero-task classification rows never match it and work ignores it with a one-line notice. The field is flow-local — no tracker projection (`tracker.readyState` projects readiness only). Exposed as an explicit boolean on `show --json`, `specs --json`, `list --json`, and as `noPlan` on `ready --all` rows.
+Same lazy, idempotent contract as `spec ready`/`spec unready` (sidecar carries `no_plan` only after a toggle changes state; absent reads `false`; matching toggles are byte-identical no-ops; task ids rejected). One extra rule: **setting is refused once the spec has any tasks** (nonzero exit naming why — a planned spec routes through its tasks), while **clearing is always allowed**, including on specs with tasks (stale-field cleanup). Guarded direct mint marks the task `implicit_owner: true`, exposed in the task rows of spec `show --json`. The recorded choice plus that sole owner lets pilot resume direct work without demanding automatic plan review merely because the task exists. An active or explicitly requested review remains authoritative. Added tasks and intentional plans use normal planned routing; a stale field alone cannot bypass their review. The field is flow-local — no tracker projection (`tracker.readyState` projects readiness only). Exposed as an explicit boolean on `show --json`, `specs --json`, `list --json`, and as `noPlan` on `ready --all` rows.
 
 ### spec add-dep / spec rm-dep
 
@@ -853,7 +853,7 @@ Output:
 }
 ```
 
-Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the human-set "too small to plan" marker pilot's zero-task classification consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the recorded direct-route choice pilot consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
 
 ### pilot strikes
 
@@ -897,10 +897,12 @@ flowctl next [--specs-file specs.json] [--require-plan-review] [--require-comple
 
 Output:
 ```json
-{"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_tasks|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
+{"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_tasks|needs_implicit_task|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
 
-A non-closed spec with zero tasks (never-planned) surfaces as `status: plan` with `reason: needs_tasks` rather than being silently skipped — the same classification pilot applies to the zero-task state. Selection stops at the first such spec in id order, exactly as with the other statuses. The zero-task check fires before the `--require-plan-review` gate: a never-planned spec reports `needs_tasks` even when its `plan_review_status` is not `ship`, because planning is what it needs first (and Ralph's typed zero-task stop keys on that reason).
+A non-closed zero-task spec with recorded `no_plan: true` returns `status: work`, its spec ID, `task: null`, and `reason: needs_implicit_task`. This selects work's spec-level direct route; it is neither a runnable task nor completed work. Consumers that require a task must stop safely or invoke spec-level work to mint the owner. An unmet explicit `--require-plan-review` takes precedence for that direct spec and returns `status: plan`, `task: null`, `reason: needs_plan_review`, so the spec can be reviewed before tasks exist.
+
+An ordinary zero-task spec still returns `status: plan`, `reason: needs_tasks`, before its plan-review check. Selection stops at the first eligible spec in id order.
 
 The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 

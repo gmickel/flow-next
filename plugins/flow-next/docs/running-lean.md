@@ -1,6 +1,6 @@
 # Running lean - operating profiles
 
-flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you can leave off and reach for when a piece of work warrants it. (The plan stage has a recorded direct variant for zero-task specs - the [no-plan route](pipeline-variations.md#no-plan-route); the default framing here is unchanged.)
+For a ready cohesive spec and a capable coding agent, the recommended route is **spec -> `/flow-next:work <id> --no-plan`**. Add task planning when dependencies, ownership, staged delivery or execution constraints need decomposition. [Pipeline variations](pipeline-variations.md#no-plan-route) separates that choice from refinement and verification; configured gates still apply.
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
 
@@ -19,7 +19,7 @@ An extra reviewer adds a review pass. A fix adds implementation and re-review. L
 | Who is watching | You are, at the keyboard | Nobody, until morning |
 | What the layers do | Give you a capability on demand | Stand in for the judgment you are not there to apply |
 | Default posture | Run lean; add a layer when the work asks for it | Run gated; the gates are what make the run trustworthy |
-| Typical shape | `spec -> plan -> work`, plus whatever the change needs | `/flow-next:pilot` + `/flow-next:land` under a host loop |
+| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:pilot` + `/flow-next:land` under a host loop |
 
 **Neither is the real mode.** They are two answers to one question: *who applies judgment at each handover?* When you are present, you are the reviewer, the tracker, and the QA - a review backend, a bidirectional tracker sync, and a live QA stage are then buying you convenience, not safety, and you should switch each one on only where the convenience is worth its cost. When nobody is present, those same layers stop being convenience: they are the only thing standing between an unattended loop and an unreviewed merge, and running without them is the actual risk.
 

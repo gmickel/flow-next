@@ -35,6 +35,30 @@ Detect input type in this order (first match wins):
 
 **Track the mode** — it controls looping in Phase 3.
 
+**Direct-route review gate (both modes):** after reading the parent spec metadata,
+apply this gate before proceeding in either `SINGLE_TASK_MODE` (including Ralph's
+task-ID dispatch) or `SPEC_MODE`. It applies only to zero-task specs or
+`no_plan: true` with exactly one task in total marked `implicit_owner: true`.
+Stop if `plan_review_status` is `needs_work` or `needs_human`, or the current user
+message or carried invocation host context explicitly requests spec/design review
+before work. Report `NEEDS_HUMAN` and instruct the user to run
+`$flow-next-plan-review` for this spec separately, resolve its findings, then
+re-invoke work. Stop before route writes, task minting, claims or dispatch,
+including when no review backend is available. Work's `--review` selects
+implementation review; it does not satisfy this gate.
+
+**Direct-owner resume admission (both modes):** for the sole implicit-owner shape
+above, fetch `$FLOWCTL show <owner-id> --json` after reading the parent spec.
+If that owner is `in_progress`, admit it for resume only with a matching actor
+claim and positive evidence identifying its ended prior invocation (terminal host
+session/process record or explicit user confirmation). Read any carried host
+context for the owner ID and evidence reference; these are context, not target
+arguments. Resolve that reference and verify it identifies the current actor/claim
+and its ended prior invocation. Missing, inaccessible, ambiguous or mismatched
+evidence stops with `NEEDS_HUMAN` before claims or dispatch. Age, silence and an
+empty ready list prove nothing. Retain the input's `SINGLE_TASK_MODE` or `SPEC_MODE`
+and carry the admitted owner to 3a.
+
 ---
 
 **Flow task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M)** → SINGLE_TASK_MODE:
@@ -56,12 +80,16 @@ Detect input type in this order (first match wins):
   legacy fall-through (a zero-task run reaching Phase 3 and a completion
   review over an empty diff) is unreachable. A spec with tasks — whatever
   their status — never reads that file.
-- **Stale no-plan signal:** if the `tasks` array is NON-empty and the metadata
-  reads `no_plan: true` (or `NO_PLAN=1` was parsed), emit the one-line notice
-  here — `Note: no_plan signal ignored — spec already has tasks; running the
-  planned tasks.` — and continue normally. Never load no-plan-route.md for
-  this.
-- Get first ready task: `$FLOWCTL ready --spec <id> --json`
+- **Direct continuation:** `no_plan: true` plus exactly one task marked
+  `implicit_owner: true` retains the accepted direct route. Never mint again or
+  demand plan-review merely because the owner now exists. The direct-route review
+  gate above still applies. Re-read the full current spec, including added requirements;
+  keep the owner's `satisfies:` declaration current via `task set-spec` before dispatch.
+- **Intentional tasks:** any other non-empty task set is the planned route,
+  including extra tasks added after direct execution. A stale `no_plan: true` or
+  invocation flag does not replace it; report that the existing tasks govern.
+- Read the ready frontier: `$FLOWCTL ready --spec <id> --json`. An admitted
+  direct owner is selected by 3a even when this list is empty.
 
 **Spec file start (.md path that exists)**:
 1. Check file exists: `test -f "<path>"` — if not, treat as idea text
@@ -167,7 +195,14 @@ requested task alone. Every task still gets a fresh-context worker.
 $FLOWCTL ready --spec <spec-id> --json
 ```
 
-If no ready tasks, check for completion review gate (see 3g below).
+For a direct owner admitted for resume in Phase 1, re-read its task status and
+claim. While it remains `in_progress` under this actor, select that owner alone
+instead of the ready list; re-anchor and continue through the usual claim and
+worker gates. Stop on a changed owner. Once the task is `done`, discard the resume
+selection. Retain the original mode: `SINGLE_TASK_MODE` executes no other task and
+proceeds to Phase 4; `SPEC_MODE` uses the normal frontier, including the 3f loop
+and 3g completion-review policy when the frontier is empty.
+For every non-resume selection, an empty ready frontier proceeds to 3g as usual.
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
 (fail-closed — fn-176)**. **Concurrent dispatch requires all five conditions

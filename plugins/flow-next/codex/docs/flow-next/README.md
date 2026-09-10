@@ -28,7 +28,7 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 | Doc | Answers |
 |---|---|
 | [`running-lean.md`](running-lean.md) | Which layers to switch on at all, what each one costs, and how to get the capability without the standing cost |
-| [`pipeline-variations.md`](pipeline-variations.md) | Six worked routes from epic to docs chore, and the risk-and-unknowns rule that picks between them |
+| [`pipeline-variations.md`](pipeline-variations.md) | Direct work from a ready spec, optional task planning, refinement and verification choices |
 | [`architecture.md`](architecture.md) | The `.flow/` layout, the spec-first task model, and what a spec's [`## Quick commands`](architecture.md#verification-tiers-the-specs-quick-commands) block is for |
 | [`self-improving.md`](self-improving.md) | How memory, glossary, decisions, strategy, and the feature map compound through work you already do |
 | [`teams.md`](teams.md) | Handover objects, spec-as-PR, parallel work from one spec, the adoption ladder |
@@ -76,6 +76,8 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 **Deep links worth knowing:** [tiers](orchestration.md#tiers-what-kind-of-model-a-job-wants) · [review backends](orchestration.md#review-backends-cross-model-review) · [the bridge route](orchestration.md#implementation-offload-the-bridge-route) · [turning the review dial down](running-lean.md#turning-the-dial-none-and-host) · [finding identity and lineage](review-findings.md#identity-and-lineage) · [review bookkeeping authority](architecture.md#review-bookkeeping-authority-and-write-ordering) · [chart projection](tracker-sync.md#chart-lifecycle-projection) · [OpenCode install](platforms.md#opencode) · [backlog mode](../../skills/flow-next-pilot/references/backlog-mode.md) · [chart workflow](../../skills/flow-next-chart/workflow.md) · [land workflow](../../skills/flow-next-land/workflow.md) · [make-pr create and finalize](../../skills/flow-next-make-pr/create-and-finalize.md) · [prime](../../skills/flow-next-prime/SKILL.md) · [drive](../../skills/flow-next-drive/SKILL.md) (consumes `.flow/features/` when present) · [chart resolve](flowctl.md#chart-resolve)
 
 ## Notable updates
+
+- **Optional task decomposition (4.18.0)** - a ready cohesive spec can run through Flow-Next work with its full acceptance contract and configured verification. Use `/flow-next:work <id> --no-plan`; add planning when dependencies, owners or delivery constraints justify a task graph. Details: [pipeline variations](pipeline-variations.md#no-plan-route).
 
 - **Managed review execution (4.17.0)** - compatible hosts can run reviews through their selected provider accounts while Flow-Next owns the review and receipt. Enable: update Flow-Next and use the host's managed review integration; standalone CLI behavior is unchanged. Details: [orchestration.md](orchestration.md#review-backends-cross-model-review).
 

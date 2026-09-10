@@ -3,42 +3,32 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-The default pipeline composes ([root README](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline)). This page owns the **stage axis**: which stages a given piece of work runs, shown as six worked examples from a full epic down to a docs chore.
+For a ready, cohesive spec and a capable coding agent, start with `/flow-next:work <spec-id> --no-plan`. The spec remains the acceptance contract; the owner investigates and implements it through Flow-Next's normal work pipeline. Separate task planning helps when dependencies, separate ownership, staged delivery, or execution constraints need a durable decomposition.
 
-> Adjacent, not the same: [`running-lean.md`](running-lean.md) is about which **layers** (subsystems) you switch on at all and what each costs to keep on. This page is about which **stages** one piece of work passes through. [`/flow-next:guide`](../../skills/flow-next-guide/SKILL.md) is the router that answers the question live for one specific situation - this page is the reference it rhymes with, not a second router.
-
-Who picks the route at run time, and what each decider prints, is the [pipeline routing](orchestration.md#pipeline-routing-who-decides-the-shape) section of the orchestration page; this page is the rubric those deciders apply.
-
-**Read the variants below as worked examples.** They illustrate routes the smallest-sufficient rule produces for six common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
+This page explains which stages help a piece of work. [Running lean](running-lean.md) describes optional subsystems, and [pipeline routing](orchestration.md#pipeline-routing-who-decides-the-shape) names the runtime deciders. The examples below are arrangements you can compose.
 
 ## Pick by risk and unknowns
 
-Size and complexity correlate with ceremony, but neither is the criterion. The question each stage answers is: **what don't we know yet, and what does it cost to be wrong?**
+Choose refinement, decomposition, and verification separately:
 
-- A five-line change to auth handling deserves more ceremony than a five-hundred-line refactor of well-understood code.
-- Every stage exists either to **convert an unknown into a known** - interview burns down requirement unknowns, plan-review burns down design risk, QA burns down runtime-behavior risk - or to **bound the cost of being wrong**: gates, receipts, and review make a bad outcome visible and cheap instead of silent and compounding.
-- When a stage has no unknown left to convert and no risk left to bound, it is ceremony. Skip it - and record the skip (see [What holds on every route](#what-holds-on-every-route)).
-
-Three questions pick the route:
-
-1. **What's unknown?** Requirements unclear → capture + interview. Design contested → plan-review. Runtime behavior unproven → QA. Nothing unknown → straight to work.
-2. **What breaks if we're wrong?** High blast radius (auth, data, money, public API) justifies review stages even on a small diff. Low blast radius on a large diff may need none beyond the standard review contract.
-3. **Who else needs the record?** A team consuming handover objects, a tracker audience, or an autonomous loop that must re-anchor from files all pull toward the fuller spec surface. Solo, present, at the keyboard pulls lean.
+1. **Refine material choices.** Use capture to preserve intent and interview to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
+2. **Plan coordination.** Use plan when dependencies, separate ownership, staged delivery, or execution constraints benefit from explicit tasks. Risk, line count, and multiple files alone do not require decomposition. Otherwise, recommend execution through `/flow-next:work <id> --no-plan` for a ready cohesive spec. Unknown model identity does not require a detector or a blocking question; use the available context and explicit user instructions.
+3. **Verify the relevant risk.** An explicit `/flow-next:plan-review <id>` can review the spec's design before task files exist. Configured implementation review, acceptance coverage, completion-review policy, and opted-in live QA apply independently of the planning choice. Neither review nor QA guarantees every regression will be caught.
 
 ## Before the pipeline: discovery is upstream, often already done
 
 [`/flow-next:prospect`](../../skills/flow-next-prospect/SKILL.md) (ranked candidates) and [`/flow-next:chart`](../../skills/flow-next-chart/SKILL.md) (decision-map discovery for one oversized, unclear idea) are **upstream of every variant, not stages of any of them**. In most organizations their work already happened under another name: a roadmap, a product brief, a groomed backlog item *is* prospect/chart output. Reach for them only when no shaped intent exists yet - when you cannot state the outcome in a sentence.
 
-The pipeline proper starts where shaped intent exists: at **capture** (turn the intent into a spec) or directly at **plan** (when the intent is already sharp enough to decompose).
+The pipeline proper starts where shaped intent exists: at **capture** (turn the intent into a spec) or at **work** for an implementation-ready spec. Use **plan** when decomposition adds coordination value.
 
 ## The variants
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Many requirement unknowns, high blast radius, multi-task scope | capture → interview → plan → plan-review → work → qa → make-pr → land |
-| [Feature, requirements known](#feature-requirements-known) | Design risk remains; requirements already clear | plan → plan-review → work → make-pr |
-| [No-plan route](#no-plan-route) | Spec exists and is fully known; task decomposition would convert nothing | work `--no-plan` (zero-task fork → one implicit task) |
-| [Small task](#small-task) | Low risk, one implementation context, no real unknowns | plan → work (or `work "idea text"`) |
+| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → interview → plan → plan-review → work → [opt-in qa] → make-pr → land |
+| [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
+| [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
+| [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
 | [Docs or chore](#docs-or-chore) | Near-zero risk, fully known | direct change → triage-skip receipt → PR |
 
@@ -51,52 +41,50 @@ flowchart LR
     E([Epic intent]) --> C[/capture/] --> I[/interview/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
 ```
 
-The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **interview sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, QA drives the live app when there is one, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
+The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **interview sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
 
 ### Feature, requirements known
 
-**Signal:** requirements are already clear - a good brief or ticket exists, or the team already argued this out - but design risk remains.
+**Signal:** the spec is ready for implementation, but the approach deserves an independent design review.
 
 ```mermaid
 flowchart LR
-    B([Brief / ticket]) --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> M[/make-pr/]
+    S([Ready spec]) --> PR[/plan-review/] --> W[/work --no-plan/] --> M[/make-pr/]
 ```
 
-Capture and interview are skipped because their unknown is already converted: the requirements exist. Plan turns the brief into R-IDs and tasks; plan-review is kept because the design is where the remaining risk lives. What still holds: R-IDs, gates, review, receipts - the full evidence chain from plan onward.
+Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without task files. Then use `/flow-next:work <spec-id> --no-plan` if decomposition adds no coordination value. When the design needs dependent stages or separate owners, plan those tasks and review the resulting plan instead. The design-review decision does not force task decomposition.
 
 ### No-plan route
 
-**Signal:** a spec already exists and is fully known - acceptance criteria are clear, the work fits one implementation context, and decomposing it into tasks would convert no unknown. The [GLOSSARY entry](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md#no-plan-route) names this the **No-plan route**.
+**Signal:** acceptance criteria and material decisions are ready, the work is cohesive, and a capable coding agent can own its implementation. This is the recommended route when task decomposition adds no coordination value. The [GLOSSARY entry](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md#no-plan-route) names it the **No-plan route**.
 
 ```mermaid
 flowchart LR
-    S([Zero-task spec]) --> F{explicit fork} -->|work directly| M[mint one implicit task] --> W[/work/]
-    F -->|plan first| P[/plan/]
+    S([Ready cohesive spec]) --> W[/work --no-plan/] --> T[one implicit owner task] --> V[configured verification]
 ```
 
 ```bash
-/flow-next:work fn-N --no-plan     # pre-answer the fork ("no plan" / "skip planning" in prose works too)
-/flow-next:work fn-N               # or take the fork's interactive ask
-flowctl spec set-no-plan fn-N      # or mark the SPEC itself (durable; also settable at capture via --no-plan)
+/flow-next:work fn-N --no-plan
+flowctl spec set-no-plan fn-N      # record the choice before a pilot run
 ```
 
-`/flow-next:work <spec-id>` on a zero-task spec forks explicitly instead of falling through: an interactive ask offers plan-first vs work-directly with an agent-judged recommendation and its reason (no static default), and `--no-plan` or stated natural-language intent pre-answers it so the ask never fires. The direct route mints exactly one minimal implicit task ("implement this spec", `satisfies` listing all the spec's R-IDs) and runs the standard pipeline from there - receipts, review, evidence, and the single-task completion-review policy skip compose unchanged, and the minted task's dispatch licenses judicious subagent use with the shape chosen at execution time. Autonomous loops keep planning: a zero-task spec under autonomy without an explicit no-plan instruction stops with a typed report. The durable form of that instruction is the spec-level `no_plan` field (fn-214; `flowctl spec set-no-plan`, or `--no-plan` at capture) — pilot classifies a ready zero-task spec carrying it straight to the work stage's direct route, and work reads the field as the same explicit instruction as the flag; pilot itself takes no no-plan flag and never decides no-plan on its own. Setting the field is refused once tasks exist, and a stale field on a later-planned spec is inert (zero-task classification rows never match; work notices and ignores). The single implicit task takes work's wave route (one lane has nothing for rolling admission to schedule). What still holds: everything - the fork skips plan and its automatic plan-review, nothing else.
+The flag, recorded spec choice, or explicit natural-language instruction selects the route. An interactive zero-task run without a choice offers the fork with a recommendation; unattended work without that choice stops with a typed report. Pilot consumes the recorded route; pilot itself takes no `--no-plan` flag.
+
+Work creates one implicit owner task whose `satisfies` covers every spec R-ID. That task inherits the complete spec contract and can use bounded delegation during implementation. The accepted choice survives mint, restart, claim, and pilot continuation, so the implicit task's existence does not create a new automatic plan-review requirement. An intentional plan, conflicting signals, or an explicit design-review request retains its authority. Added tasks follow the planned route. Added requirements remain part of the full spec contract: refresh the owner's coverage declaration and run the applicable implementation and completion gates.
+
+The direct route omits separate decomposition and its automatic plan review. It retains configured implementation review, coverage, evidence, completion-review policy, approvals, and opted-in QA. No synthetic SHIP verdict substitutes for a skipped stage. The single owner uses work's wave route. Read the [CLI reference](flowctl.md#spec-set-no-plan-spec-clear-no-plan) for route state and [next](flowctl.md#next) for spec-level selection before mint.
 
 ### Small task
 
-**Signal:** low risk, fits one implementation context, nothing genuinely unknown.
-
-```mermaid
-flowchart LR
-    T([One-liner]) --> P[/plan/] --> W[/work/]
-```
+**Signal:** a clear outcome with one owner.
 
 ```bash
-/flow-next:plan "rename the config key"   # minimal spec + one task
-/flow-next:work fn-N
+/flow-next:work fn-N --no-plan     # ready cohesive spec
+/flow-next:work fn-N.M               # one task from an existing plan
+/flow-next:work "rename the config key"   # idea text creates the minimal spec and task
 ```
 
-Or skip the explicit plan call entirely: `/flow-next:work "rename the config key"` accepts idea text and mints the minimal spec + task itself, and `/flow-next:work fn-N.M` runs one task of an existing spec without looping to the next. Spec-less is a UX affordance, not a data model - a spec always exists underneath, which is why the contracts still hold: `flowctl done` demands evidence JSON on this route exactly as on the slowest one, the green receipt gates completion, and the review contract the change needs still applies.
+A small task can use the same direct route as a larger cohesive change. `/flow-next:work fn-N.M` runs a task from an existing plan. A spec still exists underneath idea-text entry, so the acceptance and evidence contracts remain available to review.
 
 ### Bug or defect
 
@@ -127,11 +115,11 @@ Skipping a stage never skips the **evidence, consent, or review contract** that 
 - **Evidence:** `flowctl done` requires evidence JSON (commits, test commands) on every variant. There is no route where a task closes on narration.
 - **Gates and receipts:** green receipts, review receipts, and QA verdict receipts gate the same transitions regardless of how much ceremony preceded them.
 - **Recorded skips:** every orchestrated stage records `ran`, `skipped(reason)`, or `failed(reason)` in the receipts it already writes - read back with `flowctl usage --stages <spec-id>`. A stage you deliberately left off is an explicit entry with your reason attached, not a silent absence ([`running-lean.md`](running-lean.md#a-lean-run-still-leaves-a-record)).
-- **Review:** the review path scales with the risk (a cross-model backend, an in-host pass, or a triage-skip receipt) but some review artifact exists on every route. The dial from a cross-model backend down to `host` or `none`, and what each setting keeps running, is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
+- **Review:** configured review policy applies, including an explicit `none` setting or a qualifying triage-skip receipt. The dial from a cross-model backend down to `host` or `none`, and what each setting keeps running, is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
 That set - gates, receipts, evidence, review - is the verification spine (the docs-site page *Verification Spine* is its long-form treatment). The variants differ in which unknowns they pay to convert; none of them touches the spine.
 
-The capture and plan closers apply this doc's rule at the decision point: each prints one `Recommended next:` line judged against the risk-and-unknowns selector above, right where the route is chosen.
+The capture and plan closers print one `Recommended next:` line using the distinctions above. Live QA remains opt-in (`pipeline.qa`, default off). Pilot can advance QA findings or inability to verify into a draft PR; the draft and its evidence do not grant merge approval.
 
 ## See also
 

@@ -4,6 +4,15 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 4.18.0] - 2026-09-10
+
+Developers can hand a ready, cohesive spec to one capable coding agent and keep the full acceptance contract through implementation and verification. Separate task planning remains available when dependencies, ownership, staged delivery or execution constraints benefit from decomposition.
+
+### Changed
+
+- **Direct execution is the recommended route for a ready cohesive spec.** Use `/flow-next:work <id> --no-plan`; the choice survives task creation and continuation. Explicit spec/design review remains available without task files, and configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
+- Internal benchmarking showed that Flow-Next’s direct route can produce higher-scoring implementations with capable frontier coding models.
+
 ## [flow-next 4.17.0] - 2026-09-09
 
 Developers working in a compatible managed host can keep reviews on the host's selected provider account while retaining Flow-Next's findings, fix loop and receipts. The host supplies the session's execution path; users choose their review backend as before. Standalone users keep their existing CLI workflow, and a configured managed-provider failure stops the review instead of silently switching accounts through a local CLI.

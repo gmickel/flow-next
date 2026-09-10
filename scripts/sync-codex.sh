@@ -425,6 +425,8 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-pilot/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-work/phases.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
@@ -433,6 +435,8 @@ for nf in \
     -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
     -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
     -e 's|Parked unknowns lean `/flow-next:interview`|Parked unknowns lean `$flow-next-interview`|g' \
+    -e 's|product or authority choices lean `/flow-next:interview`|product or authority choices lean `$flow-next-interview`|g' \
+    -e 's|ownership or delivery boundaries lean `/flow-next:plan`|ownership or delivery boundaries lean `$flow-next-plan`|g' \
     -e 's|design risk lean `/flow-next:plan`|design risk lean `$flow-next-plan`|g' \
     -e 's|still leans `/flow-next:plan`|still leans `$flow-next-plan`|g' \
     -e 's|Legal targets are ONLY `/flow-next:interview`, `/flow-next:plan`|Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan`|g' \
@@ -450,15 +454,15 @@ for nf in \
     -e 's|Reviewer should run: /flow-next:resolve-pr|Reviewer should run: $flow-next-resolve-pr|g' \
     -e 's|re-run /flow-next:make-pr (skill detects the existing branch and re-tries)|re-run $flow-next-make-pr (skill detects the existing branch and re-tries)|g' \
     -e 's|An OPEN PR exists. /flow-next:resolve-pr addresses review feedback|An OPEN PR exists. $flow-next-resolve-pr addresses review feedback|g' \
-    -e 's|→ `/flow-next:plan fn-N`|→ `$flow-next-plan fn-N`|g' \
+    -e 's|Use `/flow-next:plan fn-N`|Use `$flow-next-plan fn-N`|g' \
     -e 's|→ `/flow-next:work fn-N` (or more interview|→ `$flow-next-work fn-N` (or more interview|g' \
     -e 's|→ `/flow-next:work fn-N.M`|→ `$flow-next-work fn-N.M`|g' \
     -e 's|→ `/flow-next:plan <file>`|→ `$flow-next-plan <file>`|g' \
     -e 's|`/flow-next:visual fn-N` for a spec input|`$flow-next-visual fn-N` for a spec input|g' \
     -e 's|`/flow-next:visual fn-N.M` for a task input|`$flow-next-visual fn-N.M` for a task input|g' \
     -e 's|`/flow-next:visual <file-path>` for the file input|`$flow-next-visual <file-path>` for the file input|g' \
-    -e 's|Run `/flow-next:plan fn-N` to research|Run `$flow-next-plan fn-N` to research|g' \
-    -e 's|then suggest `/flow-next:plan`.|then suggest `$flow-next-plan`.|g' \
+    -e 's|recommend `/flow-next:work fn-N --no-plan`|recommend `$flow-next-work fn-N --no-plan`|g' \
+    -e 's|Use `/flow-next:plan-review fn-N`|Use `$flow-next-plan-review fn-N`|g' \
     -e 's|instead: `/flow-next:interview <spec-id>`|instead: `$flow-next-interview <spec-id>`|g' \
     -e 's|suggest `/flow-next:plan <file>` to create spec + tasks|suggest `$flow-next-plan <file>` to create spec + tasks|g' \
     -e 's|(ask /flow-next:interview what to refine)|(ask $flow-next-interview what to refine)|g' \
@@ -470,12 +474,21 @@ for nf in \
     -e 's|recommends `/flow-next:memory-migrate` first|recommends `$flow-next-memory-migrate` first|g' \
     -e 's|`/flow-next:memory-migrate` first to make these auditable|`$flow-next-memory-migrate` first to make these auditable|g' \
     -e 's|redirect to plain `/flow-next:work <spec-id> --no-plan`|redirect to plain `$flow-next-work <spec-id> --no-plan`|g' \
-    -e 's|(or `/flow-next:work fn-N --no-plan` when the refined spec|(or `$flow-next-work fn-N --no-plan` when the refined spec|g' \
-    -e 's;| `/flow-next:work <spec-id> --no-plan` (or answer;| `$flow-next-work <spec-id> --no-plan` (or answer;g' \
-    -e 's|Prefer `/flow-next:plan` when independent surfaces|Prefer `$flow-next-plan` when independent surfaces|g' \
-    -e 's|leans `/flow-next:work <SPEC_ID> --no-plan`|leans `$flow-next-work <SPEC_ID> --no-plan`|g' \
-    -e 's|`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|g' \
-    -e 's|spec has no tasks - run /flow-next:plan <spec-id>|spec has no tasks - run $flow-next-plan <spec-id>|g' \
+    -e 's|recommend `/flow-next:work fn-N --no-plan`|recommend `$flow-next-work fn-N --no-plan`|g' \
+    -e 's;| `/flow-next:work <spec-id> --no-plan`;| `$flow-next-work <spec-id> --no-plan`;g' \
+    -e 's;| `/flow-next:plan-review <spec-id>`;| `$flow-next-plan-review <spec-id>`;g' \
+    -e 's|Recommend `/flow-next:work <SPEC_ID> --no-plan`|Recommend `$flow-next-work <SPEC_ID> --no-plan`|g' \
+    -e 's|Recommend `/flow-next:work <spec-id> --no-plan`|Recommend `$flow-next-work <spec-id> --no-plan`|g' \
+    -e 's|use `/flow-next:plan-review fn-N`|use `$flow-next-plan-review fn-N`|g' \
+    -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
+    -e 's|Use `/flow-next:guide`|Use `$flow-next-guide`|g' \
+    -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
+    -e 's|- `plan`: `/flow-next:plan |- `plan`: `$flow-next-plan |g' \
+    -e 's|- `plan-review`: `/flow-next:plan-review |- `plan-review`: `$flow-next-plan-review |g' \
+    -e 's|- `work`: `/flow-next:work |- `work`: `$flow-next-work |g' \
+    -e 's|- `qa`: `/flow-next:qa |- `qa`: `$flow-next-qa |g' \
+    -e 's|- `make-pr`: `/flow-next:make-pr |- `make-pr`: `$flow-next-make-pr |g' \
+    -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
     -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
@@ -2322,6 +2335,8 @@ while IFS="$(printf '\t')" read -r rel pat expect; do
     closer_literal_fails=$((closer_literal_fails + 1))
   fi
 done <<'CLOSER_ROSTER'
+flow-next-capture/workflow.md	choices lean `/flow-next:interview`	choices lean `$flow-next-interview`
+flow-next-capture/workflow.md	boundaries lean `/flow-next:plan`	boundaries lean `$flow-next-plan`
 flow-next-capture/workflow.md	  /flow-next:plan <SPEC_ID>	  $flow-next-plan <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:interview <SPEC_ID>	  $flow-next-interview <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:visual <SPEC_ID>	  $flow-next-visual <SPEC_ID>
@@ -2339,15 +2354,15 @@ flow-next-make-pr/create-and-finalize.md	Body inspection → /flow-next:make-pr	
 flow-next-make-pr/create-and-finalize.md	Reviewer should run: /flow-next:resolve-pr	Reviewer should run: $flow-next-resolve-pr
 flow-next-make-pr/create-and-finalize.md	re-run /flow-next:make-pr (skill detects	re-run $flow-next-make-pr (skill detects
 flow-next-make-pr/create-and-finalize.md	An OPEN PR exists. /flow-next:resolve-pr	An OPEN PR exists. $flow-next-resolve-pr
-flow-next-interview/SKILL.md	→ `/flow-next:plan fn-N`	→ `$flow-next-plan fn-N`
+flow-next-interview/SKILL.md	Use `/flow-next:plan fn-N`	Use `$flow-next-plan fn-N`
 flow-next-interview/SKILL.md	→ `/flow-next:work fn-N` (or more interview	→ `$flow-next-work fn-N` (or more interview
 flow-next-interview/SKILL.md	→ `/flow-next:work fn-N.M`	→ `$flow-next-work fn-N.M`
 flow-next-interview/SKILL.md	→ `/flow-next:plan <file>`	→ `$flow-next-plan <file>`
 flow-next-interview/SKILL.md	`/flow-next:visual fn-N` for a spec input	`$flow-next-visual fn-N` for a spec input
 flow-next-interview/SKILL.md	`/flow-next:visual fn-N.M` for a task input	`$flow-next-visual fn-N.M` for a task input
 flow-next-interview/SKILL.md	`/flow-next:visual <file-path>` for the file input	`$flow-next-visual <file-path>` for the file input
-flow-next-interview/references/write-back.md	Run `/flow-next:plan fn-N` to research	Run `$flow-next-plan fn-N` to research
-flow-next-interview/references/write-back.md	then suggest `/flow-next:plan`.	then suggest `$flow-next-plan`.
+flow-next-interview/references/write-back.md	recommend `/flow-next:work fn-N --no-plan`	recommend `$flow-next-work fn-N --no-plan`
+flow-next-interview/references/write-back.md	Use `/flow-next:plan-review fn-N`	Use `$flow-next-plan-review fn-N`
 flow-next-interview/references/write-back.md	instead: `/flow-next:interview <spec-id>`	instead: `$flow-next-interview <spec-id>`
 flow-next-interview/references/write-back.md	suggest `/flow-next:plan <file>` to create spec + tasks	suggest `$flow-next-plan <file>` to create spec + tasks
 flow-next-prospect/workflow.md	(ask /flow-next:interview what to refine)	(ask $flow-next-interview what to refine)
@@ -2367,16 +2382,27 @@ flow-next-guide/SKILL.md	| `/flow-next:interview`	| `$flow-next-interview`
 flow-next-guide/SKILL.md	| `/flow-next:plan`	| `$flow-next-plan`
 flow-next-guide/SKILL.md	| `/flow-next:work`	| `$flow-next-work`
 flow-next-guide/SKILL.md	| `/flow-next:visual`	| `$flow-next-visual`
-flow-next-capture/workflow.md	leans `/flow-next:work <SPEC_ID> --no-plan`	leans `$flow-next-work <SPEC_ID> --no-plan`
-flow-next-capture/workflow.md	`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk	`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk
-flow-next-interview/SKILL.md	(or `/flow-next:work fn-N --no-plan`	(or `$flow-next-work fn-N --no-plan`
-flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan` (or answer	| `$flow-next-work <spec-id> --no-plan` (or answer
-flow-next-guide/SKILL.md	Prefer `/flow-next:plan` when independent surfaces	Prefer `$flow-next-plan` when independent surfaces
-flow-next-work/references/no-plan-route.md	spec has no tasks - run /flow-next:plan <spec-id>	spec has no tasks - run $flow-next-plan <spec-id>
+flow-next-capture/workflow.md	Recommend `/flow-next:work <SPEC_ID> --no-plan`	Recommend `$flow-next-work <SPEC_ID> --no-plan`
+flow-next-capture/workflow.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-interview/SKILL.md	recommend `/flow-next:work fn-N --no-plan`	recommend `$flow-next-work fn-N --no-plan`
+flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan`	| `$flow-next-work <spec-id> --no-plan`
+flow-next-guide/SKILL.md	| `/flow-next:plan-review <spec-id>`	| `$flow-next-plan-review <spec-id>`
+flow-next-work/references/no-plan-route.md	spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>	spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-route.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
 flow-next-work/references/no-plan-route.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
 flow-next-work/references/no-plan-route.md	`/flow-next:interview` — never mint an empty task	`$flow-next-interview` — never mint an empty task
+flow-next-work/references/no-plan-route.md	Recommend `/flow-next:work <spec-id> --no-plan`	Recommend `$flow-next-work <spec-id> --no-plan`
+flow-next-work/references/no-plan-route.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-work/phases.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-pilot/workflow.md	`plan`: `/flow-next:plan 	`plan`: `$flow-next-plan
+flow-next-pilot/workflow.md	`plan-review`: `/flow-next:plan-review 	`plan-review`: `$flow-next-plan-review
+flow-next-pilot/workflow.md	`work`: `/flow-next:work 	`work`: `$flow-next-work
+flow-next-pilot/workflow.md	`qa`: `/flow-next:qa 	`qa`: `$flow-next-qa
+flow-next-pilot/workflow.md	`make-pr`: `/flow-next:make-pr 	`make-pr`: `$flow-next-make-pr
+flow-next-interview/SKILL.md	use `/flow-next:plan-review fn-N`	use `$flow-next-plan-review fn-N`
+flow-next-interview/references/write-back.md	suggest `/flow-next:plan fn-N`	suggest `$flow-next-plan fn-N`
+flow-next-capture/workflow.md	Use `/flow-next:guide`	Use `$flow-next-guide`
 CLOSER_ROSTER
 if [ "$closer_literal_fails" != "0" ]; then
   echo -e "  ${RED}✗${NC} $closer_literal_fails un-rewritten closer literal(s) — a transform anchor no longer matches its canonical text"

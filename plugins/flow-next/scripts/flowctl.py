@@ -29957,6 +29957,13 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                         f"task ({spec_id}.{base}); refusing to create another.",
                         use_json=use_json,
                     )
+                direct_owner = (
+                    len(items) == 1
+                    and getattr(args, "require_empty_spec", False)
+                    and load_json_or_exit(
+                        spec_path, f"Spec {spec_id}", use_json=use_json
+                    ).get("no_plan") is True
+                )
                 planned: list[dict] = []
                 for offset, item in enumerate(items):
                     task_num = base + 1 + offset
@@ -29993,6 +30000,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                         "created_at": created_at,
                         "updated_at": created_at,
                     }
+                    if direct_owner:
+                        task_data["implicit_owner"] = True
                     json_content = (
                         json.dumps(task_data, indent=2, sort_keys=True) + "\n"
                     )
@@ -30153,6 +30162,14 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 "created_at": created_at,
                 "updated_at": created_at,
             }
+            if getattr(args, "require_empty_spec", False):
+                spec_data = load_json_or_exit(
+                    find_spec_json_path(flow_dir, spec_id),
+                    f"Spec {spec_id}",
+                    use_json=use_json,
+                )
+                if spec_data.get("no_plan") is True:
+                    task_data["implicit_owner"] = True
             json_content = json.dumps(task_data, indent=2, sort_keys=True) + "\n"
             spec_content = create_task_spec(
                 task_id,
@@ -30293,6 +30310,7 @@ def cmd_show(args: argparse.Namespace) -> None:
                     "status_source": task_data.get(
                         "status_source", STATUS_SOURCE_COMMITTED
                     ),
+                    "implicit_owner": task_data.get("implicit_owner") is True,
                     "priority": task_data.get("priority"),
                     "depends_on": task_data.get(
                         "depends_on", task_data.get("deps", [])
@@ -35171,24 +35189,28 @@ def cmd_next(args: argparse.Namespace) -> None:
         }
 
         if not tasks:
-            # fn-209 R8: a non-closed spec with zero tasks is never-planned.
-            # Surface it as a plan unit (mirrors pilot's classification)
-            # instead of silently falling through to the next spec / none.
-            # This check fires BEFORE the --require-plan-review gate: what a
-            # never-planned spec needs first is planning, regardless of
-            # plan_review_status, and Ralph's typed zero-task stop keys on
-            # reason=needs_tasks.
+            direct = epic_data.get("no_plan") is True
+            review_needed = (
+                args.require_plan_review
+                and epic_data.get("plan_review_status") != "ship"
+            )
+            status = "work" if direct and not review_needed else "plan"
+            reason = (
+                "needs_plan_review" if direct and review_needed
+                else "needs_implicit_task" if direct
+                else "needs_tasks"
+            )
             if args.json:
                 json_output(
                     {
-                        "status": "plan",
+                        "status": status,
                         "spec": epic_id,
                         "task": None,
-                        "reason": "needs_tasks",
+                        "reason": reason,
                     }
                 )
             else:
-                print(f"plan {epic_id} needs_tasks")
+                print(f"{status} {epic_id} {reason}")
             return
 
         if args.require_plan_review and epic_data.get("plan_review_status") != "ship":

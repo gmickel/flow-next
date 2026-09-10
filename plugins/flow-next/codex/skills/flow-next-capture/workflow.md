@@ -690,12 +690,23 @@ Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (re
 Recommended next: $flow-next-<stage> <SPEC_ID> — <one-clause reason>; <named alternative when it applies>
 
 Next:
+  $flow-next-work <SPEC_ID> --no-plan → execute the cohesive spec
+  $flow-next-plan-review <SPEC_ID> → assess the spec design
   $flow-next-plan <SPEC_ID>      → research + break into tasks
   $flow-next-interview <SPEC_ID> → refine via Q&A
   $flow-next-visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
-The `Recommended next:` line is MANDATORY every run — never silently omitted. It is host judgment applied at the moment of maximal context: judge the just-written spec per the smallest-sufficient rule in [docs/pipeline-variations.md](../../docs/flow-next/pipeline-variations.md) (risk + remaining unknowns — that doc is the single rubric home; copy none of it here). Judgment inputs: the spec's readiness state, open `[inferred]` criteria, and Parked unknowns lean `$flow-next-interview`; resolved decisions with real design risk lean `$flow-next-plan`; a near-zero-risk fully-known change leans `$flow-next-work <SPEC_ID> --no-plan` — the no-plan route's zero-task fork mints the one implicit task itself, so no plan pass is required for this shape (plan stays the alternative when an explicit minimal breakdown still helps, and plan-review is typically ceremony here per pipeline-variations). Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan` (optionally noting a minimal single-task plan fits when the near-zero-risk shape still wants an explicit breakdown), `$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only), and — when signals genuinely conflict — `$flow-next-guide` with a "signals conflict" reason; `chart` is never a target (it sits upstream of capture). The line is a recommendation with a reason, never a readiness claim. Informational only — never a plain-text numbered prompt; the `Next:` menu below stays verbatim.
+The `Recommended next:` line is MANDATORY every run. Apply the smallest-sufficient
+rule in [docs/pipeline-variations.md](../../docs/flow-next/pipeline-variations.md) to the
+just-written spec. Recommend `$flow-next-work <SPEC_ID> --no-plan` for a ready
+cohesive spec when decomposition adds no coordination value. Material unresolved
+product or authority choices lean `$flow-next-interview`; useful dependency,
+ownership or delivery boundaries lean `$flow-next-plan`; independent design
+assessment leans `$flow-next-plan-review`, which can review a spec with zero tasks.
+Risk and multi-file scope alone do not require decomposition. Use `$flow-next-guide`
+when signals conflict; `chart` remains upstream of capture. This is an informational
+recommendation with a reason, never a readiness write or permission to execute.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 

@@ -14,17 +14,16 @@ fn-214, set at capture time or via `flowctl spec set-no-plan`) also sets `NO_PLA
 it is the same explicit human instruction, carried by the item instead of the
 invocation. If `NO_PLAN=1`: skip the ask, go straight to Direct route. Contradictory
 signals (flag or field says direct, prose says plan first) → ask instead of guessing.
-The signal (flag or field) on a spec that already has tasks was already ignored with
-a one-line notice back at Phase 1's stale-signal bullet — it never reaches this file
-(this file only loads when the task count is zero). A run that asked under a clean
-`NO_PLAN=1` has broken this.
+On a later invocation, Phase 1 recognizes a sole `implicit_owner: true` task under
+`no_plan: true` as this route's continuation. Intentional tasks stay authoritative.
+A run that asked under a clean `NO_PLAN=1` has broken this.
 
 ## Autonomous refusal
 
 Under ANY autonomy marker (`FLOW_RALPH`, `FLOW_AUTONOMOUS`, `AUTONOMOUS=1` /
 `mode:autonomous`, `REVIEW_RECEIPT_PATH` — scan the marker family/namespace, never a
 fixed two-var list) WITHOUT an explicit no-plan instruction, stop with the typed
-report: `NEEDS_HUMAN: spec has no tasks - run $flow-next-plan <spec-id>`.
+report: `NEEDS_HUMAN: spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>`.
 Never ask, never fall through. An explicit no-plan instruction — the flag or stated
 intent in the dispatching invocation, or the spec's own `no_plan: true` field (fn-214;
 an explicit human write, which is how pilot's classification routes here) — is the
@@ -34,10 +33,13 @@ A run that asked or continued under autonomy without that instruction has broken
 
 ## The ask (interactive only)
 
-Judge the spec (size, independent surfaces, blast-radius / riskiness of touched areas)
-and state the recommendation plus its reason in one line. No static default. If the
-spec is unreadable or those inputs are missing, recommend plan-first with exactly that
-stated reason.
+Recommend `$flow-next-work <spec-id> --no-plan` for a ready cohesive spec when
+decomposition adds no coordination value. Plan when dependencies, separate owners,
+staged delivery, or execution constraints benefit from an explicit breakdown. Risk
+or multiple files alone do not require planning; use spec/design review for design
+risk and interview for material unresolved product or authority choices. Ordinary
+implementation decisions may remain with the worker. Unknown model identity does
+not require a detector or plain-text numbered prompt. State the recommendation and reason.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
@@ -46,26 +48,40 @@ proceed?" plus the recommendation line, with these two options — and wait for 
 answer. Never silently skip the question.
 
 - **Plan first** — stop; run $flow-next-plan (reviewed task breakdown, parallelizable waves, per-task review)
-- **Work directly** — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
+- **Flow-Next work --no-plan** — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
 
 A run that continued before the answer arrived has broken this.
 
 ## Plan-first answer
 
-STOP this run with a one-line pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`. Work never invokes plan itself and never chains into it. A run that invoked or chained `/flow-next:plan` has broken this.
+Persist this choice with `$FLOWCTL spec clear-no-plan <spec-id> --json`; stop on
+failure. Then STOP this run with a one-line pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`. Work never invokes plan itself and never chains into it. A run that invoked or chained `/flow-next:plan` has broken this.
 
 ## Direct route: mint the implicit task
+
+Re-read `$FLOWCTL show <spec-id> --json` and apply Phase 1's direct-route review
+gate before writing the route or minting. A persisted `needs_work` / `needs_human`
+or a request for design review made during the fork stops this run with
+`NEEDS_HUMAN`; instruct separate `$flow-next-plan-review` for this spec before
+re-invoking work. No backend or `--no-plan` choice bypasses that gate.
 
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
 worker could act on): hand back to the user with a pointer to `$flow-next-plan` or
 `$flow-next-interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
-task, no further confirmation:
+task, no further confirmation. First persist the accepted route, including flag-only
+and interactive choices. Stop on a failed write; never mint after one. This survives
+a crash before mint without fabricating a plan-review verdict.
 
 ```bash
+$FLOWCTL spec set-no-plan <spec-id> --json
 $FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfies "R1,R2,..." \
   --acceptance "Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly." \
   --require-empty-spec --json
 ```
+
+`--require-empty-spec` on this recorded direct spec marks the task
+`implicit_owner: true`. The marker distinguishes it from an intentional plan; it
+is not a review verdict. Additional tasks make the ordinary planned route apply.
 
 `--satisfies` lists ALL the spec's R-IDs (keeps the 3g single-task policy skip and the
 make-pr coverage table correct); a spec with no R-IDs (goal-only) omits the flag

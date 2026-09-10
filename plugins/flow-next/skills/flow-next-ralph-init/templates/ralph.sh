@@ -1060,9 +1060,13 @@ while (( iter <= MAX_ITERATIONS )); do
   # Export iteration for receipt tracking
   export RALPH_ITERATION="$iter"
 
-  # Zero-task spec (fn-209 R8): flowctl next surfaces it as status=plan with
-  # reason=needs_tasks. Ralph never plans a taskless spec - dispatching the
-  # plan-review prompt here would spin on an unchanged artifact. Typed stop.
+  if [[ "$status" == "work" && -z "$task_id" ]]; then
+    log "spec $spec_id needs an owner task - stopping (run /flow-next:work $spec_id --no-plan)"
+    ui_complete "spec $spec_id needs an owner task - run /flow-next:work $spec_id --no-plan"
+    write_completion_marker "NEEDS_TASKS"
+    exit 0
+  fi
+
   if [[ "$status" == "plan" && "$reason" == "needs_tasks" ]]; then
     log "zero-task spec $spec_id - stopping (run /flow-next:plan $spec_id)"
     ui_complete "spec $spec_id has no tasks - run /flow-next:plan $spec_id"

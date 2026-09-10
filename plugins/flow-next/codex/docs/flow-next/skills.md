@@ -11,13 +11,13 @@ One surface ships without a row here, on purpose: `/flow-next:uninstall` is a co
 
 ## Lifecycle skills
 
-The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture** and are optional - never mandatory stages.
+Skills below follow their lifecycle position. For a ready cohesive spec and a capable coding agent, recommend `/flow-next:work <id> --no-plan`; task planning is optional when decomposition adds coordination value. Explicit plan-review can review a spec before tasks exist. Chart and guide are optional orientation and discovery tools.
 
 | Skill | Trigger | What it does |
 |---|---|---|
 | [`flow-next-strategy`](../../skills/flow-next-strategy/SKILL.md) | `/flow-next:strategy` | Create or maintain repo-root `STRATEGY.md` - target problem, approach, who it's for, key metrics, active tracks. Downstream skills read it for grounding. |
 | [`flow-next-prospect`](../../skills/flow-next-prospect/SKILL.md) | `/flow-next:prospect` | Generate ranked candidate ideas grounded in the repo, upstream of capture/plan. Optional focus hint (concept, path, constraint, volume). |
-| [`flow-next-guide`](../../skills/flow-next-guide/SKILL.md) | `/flow-next:guide` | Prompt-first router: recommends the **smallest sufficient** next workflow from the starting state (when to chart, skip chart, capture, interview, plan, or direct change). Stateless - no flowctl mutations. Use when unsure which pre-build stage applies. |
+| [`flow-next-guide`](../../skills/flow-next-guide/SKILL.md) | `/flow-next:guide` | Prompt-first router: recommends the **smallest sufficient** next workflow from the starting state (when to chart, skip chart, capture, interview, plan, spec/design review, or Flow-Next work --no-plan). Stateless - no flowctl mutations. Use when unsure which pre-build stage applies. |
 | [`flow-next-chart`](../../skills/flow-next-chart/SKILL.md) | `/flow-next:chart` | **Optional** pre-capture decision-map discovery for **one** oversized/unclear idea. Grounds a bounded snapshot, resolves **one decision (D-ID) per invocation**, re-charts the frontier, emits a briefing for capture. Never writes a spec, never sets `ready`. Skip when intent is already stateable. |
 | [`flow-next-capture`](../../skills/flow-next-capture/SKILL.md) | `/flow-next:capture` | Synthesize the current conversation (or chart briefing) into a spec - source-tagged acceptance criteria (`[user]` / `[paraphrase]` / `[inferred]`), mandatory read-back before write. Chart handoff preserves D-ID/evidence links; criterion tags apply only to newly authored bullets. |
 | [`flow-next-interview`](../../skills/flow-next-interview/SKILL.md) | `/flow-next:interview` | Deep Q&A over a spec or task to extract complete detail - lead-with-recommendation, confidence tiers, codebase-first investigation; `--scope=business\|technical\|both`. |

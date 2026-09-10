@@ -100,6 +100,18 @@ echo "$SHOW_JSON"                        # command substitution hides stdout —
 
 **Unshaped oversized freeform (fn-135):** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:guide`) instead of planning through the fog. Ready specs stay on Route A.
 
+**Explicit planning choice:** inspect the existing spec's metadata (for task-ID
+input, fetch its parent with `$FLOWCTL show <spec-id> --json`). If `no_plan: true`
+and the spec contains exactly one task in total, marked `implicit_owner: true`,
+stop before clearing the route or changing tasks with
+`NEEDS_HUMAN: needs-owner-reconciliation`, naming the owner and the required
+decision about its whole-spec scope and existing work. Do not convert, delete or
+duplicate the owner automatically, or prompt under autonomy.
+Otherwise, for a spec carrying `no_plan: true`, run
+`$FLOWCTL spec clear-no-plan <spec-id> --json` before creating or changing its tasks.
+The invocation chooses intentional planning; clearing the previous direct choice
+makes a restart before task creation resume that choice. Stop if the write fails.
+
 **Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and before the scout fan-out (warn before spending research tokens on a half-baked spec). It applies only when the input resolved to an existing spec (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
 
 ```bash
