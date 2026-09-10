@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-237-optional-task-decomposition-and",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-10T15:12:21.325637Z",
   "created_at": "2026-09-10T14:36:36.020615Z",
   "default_impl": null,
   "default_review": null,
@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-237-optional-task-decomposition-and",
   "impl_review_rounds": {
-    "fn-237-optional-task-decomposition-and.1": 1
+    "fn-237-optional-task-decomposition-and.1": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -59,9 +59,55 @@
       "task": "fn-237-optional-task-decomposition-and.1",
       "timestamp": "2026-09-10T15:00:45.368321Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "4b23e58c5e2d68d9411605fb947b5ba3bd78274483e3adde577fe36ec2ed7f06",
+      "backend": "codex",
+      "base_sha": "d4eded4790d392c40fa419f78d31947dbae740a6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-633e655c0bb43fd1aebe91e6d10c1037",
+            "classification": "introduced",
+            "findingId": "finding-633e655c0bb43fd1aebe91e6d10c1037",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "87eb1ad875ae0bd88ea43fe771a6b6fc01f6d599",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1341,
+      "output_sha256": "cc2de4d38c56aa58989f6a863bb967da69c52d8f69e7766b3f9531928ae4290f",
+      "reservation_id": "060a40a77d03483897488bfd922f574d",
+      "round_consumed": true,
+      "scope": "impl:fn-237-optional-task-decomposition-and.1",
+      "superseded_by": null,
+      "task": "fn-237-optional-task-decomposition-and.1",
+      "timestamp": "2026-09-10T15:09:46.515761Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-237-optional-task-decomposition-and.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -81,5 +127,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-10T15:00:45.370329Z"
+  "updated_at": "2026-09-10T15:12:21.325643Z"
 }
