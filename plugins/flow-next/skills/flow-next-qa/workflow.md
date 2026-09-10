@@ -556,7 +556,7 @@ BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
        QA_OUTCOME HEAD_SHA BRANCH \
        QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
-       RID_COVERAGE="${RID_COVERAGE:-{}}" \
+       RID_COVERAGE="${RID_COVERAGE:-}" \
        BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
 # Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
