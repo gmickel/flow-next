@@ -206,7 +206,7 @@ Anthropic's official ralph-wiggum uses a Stop hook to keep Claude in the same se
 
 | Aspect | Ralph | Pilot |
 |--------|-------|-------|
-| Scope | fully **planned** spec → work → reviews (never plans) | ready spec → recorded direct/planned route → work → [opt-in qa] → draft PR (opt-in **backlog mode** widens selection to the whole open backlog: triage → that same span) |
+| Scope | spec with executable tasks (planned or direct-owner) → work → reviews (never plans or mints tasks) | ready spec → recorded direct/planned route → work → [opt-in qa] → draft PR (opt-in **backlog mode** widens selection to the whole open backlog: triage → that same span) |
 | Loop owner | External `ralph.sh` | Host `/loop` / `/goal` |
 | Session | Fresh per iteration | In-session ticks |
 | Proof-of-work | Receipts under `.flow/review-receipts/` | `PILOT_VERDICT` lines echoed to the transcript |

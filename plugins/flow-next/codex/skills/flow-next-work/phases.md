@@ -35,6 +35,18 @@ Detect input type in this order (first match wins):
 
 **Track the mode** — it controls looping in Phase 3.
 
+**Direct-route review gate (both modes):** after reading the parent spec metadata,
+apply this gate before proceeding in either `SINGLE_TASK_MODE` (including Ralph's
+task-ID dispatch) or `SPEC_MODE`. It applies only to zero-task specs or
+`no_plan: true` with exactly one task in total marked `implicit_owner: true`.
+Stop if `plan_review_status` is `needs_work` or `needs_human`, or the current user
+message or carried invocation host context explicitly requests spec/design review
+before work. Report `NEEDS_HUMAN` and instruct the user to run
+`$flow-next-plan-review` for this spec separately, resolve its findings, then
+re-invoke work. Stop before route writes, task minting, claims or dispatch,
+including when no review backend is available. Work's `--review` selects
+implementation review; it does not satisfy this gate.
+
 ---
 
 **Flow task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M)** → SINGLE_TASK_MODE:
@@ -46,15 +58,6 @@ Detect input type in this order (first match wins):
 **Flow spec ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → SPEC_MODE:
 - Read spec metadata: `$FLOWCTL show <id> --json`
 - Read spec markdown: `$FLOWCTL cat <id>`
-- **Direct-route review gate:** applies only to zero-task specs or `no_plan: true`
-  with exactly one task in total marked `implicit_owner: true`. Before the fork or
-  continuation, stop if `plan_review_status` is `needs_work` or `needs_human`, or
-  the current user message or carried invocation host context explicitly requests
-  spec/design review before work. Report
-  `NEEDS_HUMAN` and instruct the user to run `$flow-next-plan-review` for this spec
-  separately, resolve its findings, then re-invoke work. Stop before route writes,
-  task minting, claims or dispatch, including when no review backend is available.
-  Work's `--review` selects implementation review; it does not satisfy this gate.
 - **Zero-task fork:** if the metadata's `tasks` array is EMPTY, the spec was
   never planned — distinct from all-tasks-done, where tasks exist and read
   `done` (that state proceeds normally and reaches 3g). Read

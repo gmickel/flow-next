@@ -29957,6 +29957,13 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                         f"task ({spec_id}.{base}); refusing to create another.",
                         use_json=use_json,
                     )
+                direct_owner = (
+                    len(items) == 1
+                    and getattr(args, "require_empty_spec", False)
+                    and load_json_or_exit(
+                        spec_path, f"Spec {spec_id}", use_json=use_json
+                    ).get("no_plan") is True
+                )
                 planned: list[dict] = []
                 for offset, item in enumerate(items):
                     task_num = base + 1 + offset
@@ -29993,6 +30000,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                         "created_at": created_at,
                         "updated_at": created_at,
                     }
+                    if direct_owner:
+                        task_data["implicit_owner"] = True
                     json_content = (
                         json.dumps(task_data, indent=2, sort_keys=True) + "\n"
                     )

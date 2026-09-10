@@ -581,6 +581,37 @@ class RequireEmptySpecTestCase(TaskCreateFilesTestCase):
                 if not (direct and guarded):
                     self.assertNotIn("implicit_owner", shown)
 
+    def test_bulk_mint_marks_only_a_guarded_direct_singleton(self) -> None:
+        for direct, guarded, count in (
+            (True, True, 1), (True, True, 2), (True, False, 1), (False, True, 1)
+        ):
+            with self.subTest(direct=direct, guarded=guarded, count=count):
+                spec_id = self._call(
+                    func=self.flowctl.cmd_spec_create, title="Bulk route", branch=None
+                )["id"]
+                if direct:
+                    self._call(func=self.flowctl.cmd_spec_set_no_plan, id=spec_id)
+                bulk = self._write(
+                    "route-tasks.json",
+                    json.dumps([{"title": f"Task {n}"} for n in range(count)]),
+                )
+                result = self._call(
+                    func=self.flowctl.cmd_task_create,
+                    **self._create_ns(
+                        require_empty_spec=guarded, spec=spec_id,
+                        title=None, from_json=bulk,
+                    ),
+                )
+                expected = direct and guarded and count == 1
+                for task in result["tasks"]:
+                    shown = self._call(func=self.flowctl.cmd_show, id=task["id"])
+                    self.assertIs(shown.get("implicit_owner", False), expected)
+                spec = self._call(func=self.flowctl.cmd_show, id=spec_id)
+                self.assertEqual(
+                    [task["implicit_owner"] for task in spec["tasks"]],
+                    [expected] * count,
+                )
+
     def test_direct_owner_lifecycle_preserves_gates_and_added_task_provenance(self) -> None:
         self._call(func=self.flowctl.cmd_spec_set_no_plan, id=self.spec_id)
         owner = self._call(
