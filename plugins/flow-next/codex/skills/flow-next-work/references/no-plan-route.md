@@ -59,13 +59,18 @@ failure. Then STOP this run with a one-line pointer: run `$flow-next-plan <spec-
 
 ## Direct route: mint the implicit task
 
+Re-read `$FLOWCTL show <spec-id> --json` and apply Phase 1's direct-route review
+gate before writing the route or minting. A persisted `needs_work` / `needs_human`
+or a request for design review made during the fork stops this run with
+`NEEDS_HUMAN`; instruct separate `$flow-next-plan-review` for this spec before
+re-invoking work. No backend or `--no-plan` choice bypasses that gate.
+
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
 worker could act on): hand back to the user with a pointer to `$flow-next-plan` or
 `$flow-next-interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
 task, no further confirmation. First persist the accepted route, including flag-only
 and interactive choices. Stop on a failed write; never mint after one. This survives
-a crash before mint without fabricating a plan-review verdict. An explicit request
-for spec/design review is still honored before execution; no-plan skips decomposition.
+a crash before mint without fabricating a plan-review verdict.
 
 ```bash
 $FLOWCTL spec set-no-plan <spec-id> --json

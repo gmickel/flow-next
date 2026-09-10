@@ -425,6 +425,7 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-work/phases.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
@@ -2386,6 +2387,8 @@ flow-next-work/references/no-plan-route.md	pointer: run `/flow-next:plan <spec-i
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
 flow-next-work/references/no-plan-route.md	`/flow-next:interview` — never mint an empty task	`$flow-next-interview` — never mint an empty task
 flow-next-work/references/no-plan-route.md	Recommend `/flow-next:work <spec-id> --no-plan`	Recommend `$flow-next-work <spec-id> --no-plan`
+flow-next-work/references/no-plan-route.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-work/phases.md	`/flow-next:plan-review`	`$flow-next-plan-review`
 flow-next-interview/SKILL.md	use `/flow-next:plan-review fn-N`	use `$flow-next-plan-review fn-N`
 flow-next-interview/references/write-back.md	suggest `/flow-next:plan fn-N`	suggest `$flow-next-plan fn-N`
 flow-next-capture/workflow.md	Use `/flow-next:guide`	Use `$flow-next-guide`

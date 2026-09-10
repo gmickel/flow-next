@@ -368,6 +368,7 @@ request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` w
 | Condition | Stage |
 |---|---|
 | Explicit spec/design review requested and no review backend is configured | `NEEDS_HUMAN`, reason `explicit design review needs a review backend` |
+| `plan_review_status` is `needs_work` / `needs_human` and no review backend is configured | `NEEDS_HUMAN`, reason `unresolved plan review needs a review backend` |
 | Explicit spec/design review requested, or `plan_review_status` is `needs_work` / `needs_human`, and review backend is configured | `plan-review` (spec-only review is supported) |
 | 0 tasks exist and `SPEC_JSON` reads `no_plan == true` (absent reads false) | `work`, dispatched with `--no-plan` |
 | 0 tasks exist | `plan` |
@@ -393,7 +394,7 @@ A spec whose only remaining tasks are `blocked` still classifies as `work`; if w
 cannot advance it, the healthy-no-advance strike path handles it. Other
 in-progress-only cases retain the crash-class `NEEDS_HUMAN` (no dispatch, no strike).
 
-Without an explicit design-review request, review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
+Without an explicit design-review request or a recorded `needs_work` / `needs_human` plan review, review backend `none` or `ASK` skips both plan-review and completion-review gates. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
