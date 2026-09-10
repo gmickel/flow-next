@@ -4,7 +4,9 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Developers with a ready cohesive spec can let one capable coding agent own implementation through Flow-Next work. Separate task planning remains available when dependencies, ownership, staged delivery or execution constraints benefit from decomposition.
+## [flow-next 4.18.0] - 2026-09-10
+
+Developers can hand a ready, cohesive spec to one capable coding agent and keep the full acceptance contract through implementation and verification. Separate task planning remains available when dependencies, ownership, staged delivery or execution constraints benefit from decomposition.
 
 ### Changed
 

@@ -77,6 +77,8 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 
 ## Notable updates
 
+- **Optional task decomposition (4.18.0)** - a ready cohesive spec can run through Flow-Next work with its full acceptance contract and configured verification. Use `/flow-next:work <id> --no-plan`; add planning when dependencies, owners or delivery constraints justify a task graph. Details: [pipeline variations](pipeline-variations.md#no-plan-route).
+
 - **Managed review execution (4.17.0)** - compatible hosts can run reviews through their selected provider accounts while Flow-Next owns the review and receipt. Enable: update Flow-Next and use the host's managed review integration; standalone CLI behavior is unchanged. Details: [orchestration.md](orchestration.md#review-backends-cross-model-review).
 
 See [documentation release history](release-history.md) for the accumulated behavior notes and [CHANGELOG](https://github.com/gmickel/flow-next/blob/main/CHANGELOG.md) for releases. Current defaults belong to each subsystem reference.
