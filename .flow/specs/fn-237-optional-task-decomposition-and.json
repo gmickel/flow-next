@@ -114,7 +114,7 @@
     "impl:fn-237-optional-task-decomposition-and.1": 0
   },
   "spec_path": ".flow/specs/fn-237-optional-task-decomposition-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Optional task decomposition and consistent spec-owned work",
   "tracker": {
     "baseHashFlow": null,
@@ -127,5 +127,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-10T15:12:21.325643Z"
+  "updated_at": "2026-09-10T17:28:26.812726Z"
 }
