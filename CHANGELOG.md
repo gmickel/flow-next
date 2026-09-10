@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 4.18.1] - 2026-09-10
+
 ### Fixed
 
 - QA passes now preserve populated requirement coverage when writing their verdict receipt, instead of failing with a JSON parsing error. Empty or unset coverage still defaults to an empty object.
