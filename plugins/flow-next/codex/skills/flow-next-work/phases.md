@@ -61,13 +61,16 @@ Detect input type in this order (first match wins):
   demand plan-review merely because the owner now exists. Explicit design-review
   requests still apply. Re-read the full current spec, including added requirements;
   keep the owner's `satisfies:` declaration current via `task set-spec` before dispatch.
-  If that owner is `in_progress`, select it alone for resume only after establishing
-  that its prior run ended and the claim belongs to this actor. Otherwise stop with
-  a typed ownership report. Do not enter completion from an empty ready list.
+  If that owner is `in_progress`, admit it for resume only with a matching actor
+  claim and positive evidence identifying its ended prior invocation (terminal host
+  session/process record or explicit user confirmation). Verify any evidence passed
+  by pilot; age, silence and an empty ready list prove nothing. Otherwise stop with
+  a typed ownership report. Retain `SPEC_MODE` and carry the admitted owner to 3a.
 - **Intentional tasks:** any other non-empty task set is the planned route,
   including extra tasks added after direct execution. A stale `no_plan: true` or
   invocation flag does not replace it; report that the existing tasks govern.
-- Get first ready task: `$FLOWCTL ready --spec <id> --json`
+- Read the ready frontier: `$FLOWCTL ready --spec <id> --json`. An admitted
+  direct owner is selected by 3a even when this list is empty.
 
 **Spec file start (.md path that exists)**:
 1. Check file exists: `test -f "<path>"` — if not, treat as idea text
@@ -173,10 +176,13 @@ requested task alone. Every task still gets a fresh-context worker.
 $FLOWCTL ready --spec <spec-id> --json
 ```
 
-For a direct owner admitted for resume in Phase 1, select that owner alone even
-though `ready` omits `in_progress`; re-anchor and continue through the usual claim
-and worker gates. Otherwise, if no ready tasks, check the completion review gate
-(see 3g below).
+For a direct owner admitted for resume in Phase 1, re-read its task status and
+claim. While it remains `in_progress` under this actor, select that owner alone
+instead of the ready list; re-anchor and continue through the usual claim and
+worker gates. Stop on a changed owner. Once the task is `done`, discard the resume
+selection and use the normal frontier; an empty frontier then reaches 3g. Keep
+`SPEC_MODE` throughout, including the 3f loop and completion-review policy.
+For every non-resume selection, an empty ready frontier proceeds to 3g as usual.
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
 (fail-closed — fn-176)**. **Concurrent dispatch requires all five conditions

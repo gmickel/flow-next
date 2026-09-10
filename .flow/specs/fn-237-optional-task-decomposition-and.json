@@ -1,11 +1,72 @@
 {
   "branch_name": "fn-237-optional-task-decomposition-and",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-09-10T14:36:36.020615Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-237-optional-task-decomposition-and",
+  "impl_review_rounds": {
+    "fn-237-optional-task-decomposition-and.1": 1
+  },
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "a3619e683d3760dc577ca1c5eae99ed07d7bb7cd46be1ffbc8becac73ff03b05",
+      "backend": "codex",
+      "base_sha": "d4eded4790d392c40fa419f78d31947dbae740a6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-633e655c0bb43fd1aebe91e6d10c1037",
+            "classification": "introduced",
+            "findingId": "finding-633e655c0bb43fd1aebe91e6d10c1037",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "90c9b70d167573fd02664c82227e94fc5f38fdbc",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2626,
+      "output_sha256": "bf86b2bddc706cefb554efcfd66ab31d22b59608ba35394ea678ea083dea6988",
+      "reservation_id": "45eb3a81d93f4a90bed92f4f62a03170",
+      "round_consumed": true,
+      "scope": "impl:fn-237-optional-task-decomposition-and.1",
+      "superseded_by": null,
+      "task": "fn-237-optional-task-decomposition-and.1",
+      "timestamp": "2026-09-10T15:00:45.368321Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-237-optional-task-decomposition-and.1": 0
+  },
   "spec_path": ".flow/specs/fn-237-optional-task-decomposition-and.md",
   "status": "open",
   "title": "Optional task decomposition and consistent spec-owned work",
@@ -20,5 +81,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-10T14:38:02.808578Z"
+  "updated_at": "2026-09-10T15:00:45.370329Z"
 }

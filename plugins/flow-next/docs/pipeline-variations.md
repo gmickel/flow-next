@@ -25,7 +25,7 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 | [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → interview → plan → plan-review → work → [opt-in qa] → make-pr → land |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
-| [Small task](#small-task) | Clear outcome and one owner | work `--no-plan` (or `work "idea text"`) |
+| [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
 | [Docs or chore](#docs-or-chore) | Near-zero risk, fully known | direct change → triage-skip receipt → PR |
 
@@ -76,7 +76,8 @@ The direct route omits separate decomposition and its automatic plan review. It 
 **Signal:** a clear outcome with one owner.
 
 ```bash
-/flow-next:work fn-N --no-plan     # ready spec
+/flow-next:work fn-N --no-plan     # ready cohesive spec
+/flow-next:work fn-N.M               # one task from an existing plan
 /flow-next:work "rename the config key"   # idea text creates the minimal spec and task
 ```
 

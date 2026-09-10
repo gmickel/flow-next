@@ -366,11 +366,22 @@ request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` w
 | 0 tasks exist | `plan` |
 | tasks exist, are not a direct owner, and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
+| The sole direct owner is `in_progress`, its assignee matches this resolved actor, and positive evidence proves its prior run ended | `work`, resuming that owner through spec-level work |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status` outside the satisfying set (`ship`, `not_required`) and review backend is configured | `work` |
 | all tasks done and completion is satisfied-or-ungated (satisfying set `ship`/`not_required`) | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **any merged PR + branch head differing from the newest merged head** → `make-pr` (merged-presence wins — historical closed PRs on the branch are irrelevant); **merged with nothing new / closed-without-merge and no merged PR / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
 
-A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
+For the direct-owner resume branch, retain the task ID and the evidence identifying
+the ended prior invocation: a terminal host session/process record or an explicit
+user confirmation of that run's termination. A claim's age, an empty ready list,
+missing output, or an unassigned claim is not proof. With absent or ambiguous proof,
+keep `NEEDS_HUMAN`; never infer termination or steal a claim. Pass the evidence
+reference to work and keep the spec ID as its target so completion review remains
+reachable. Work rechecks ownership and selects the owner outside the ready list.
+
+A spec whose only remaining tasks are `blocked` still classifies as `work`; if work
+cannot advance it, the healthy-no-advance strike path handles it. Other
+in-progress-only cases retain the crash-class `NEEDS_HUMAN` (no dispatch, no strike).
 
 Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
 
@@ -460,7 +471,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 
 - `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when classification matched the zero-task `no_plan` row, append `--no-plan`. A sole marked direct owner resumes the recorded route without minting or automatic plan-review; additional or intentional tasks follow the planned route.
+- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when classification matched the zero-task `no_plan` row, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`. Work re-anchors the owner without minting or automatic plan-review; additional or intentional tasks follow the planned route.
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
