@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-10T14:38:03.077457Z",
+  "depends_on": [],
+  "id": "fn-237-optional-task-decomposition-and.1",
+  "priority": null,
+  "spec": "fn-237-optional-task-decomposition-and",
+  "spec_path": ".flow/tasks/fn-237-optional-task-decomposition-and.1.md",
+  "status": "todo",
+  "title": "Implement optional decomposition and downstream guidance",
+  "updated_at": "2026-09-10T14:38:03.077457Z"
+}
