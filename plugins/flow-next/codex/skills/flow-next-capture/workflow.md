@@ -701,8 +701,8 @@ The `Recommended next:` line is MANDATORY every run. Apply the smallest-sufficie
 rule in [docs/pipeline-variations.md](../../docs/flow-next/pipeline-variations.md) to the
 just-written spec. Recommend `$flow-next-work <SPEC_ID> --no-plan` for a ready
 cohesive spec when decomposition adds no coordination value. Material unresolved
-product or authority choices lean `/flow-next:interview`; useful dependency,
-ownership or delivery boundaries lean `/flow-next:plan`; independent design
+product or authority choices lean `$flow-next-interview`; useful dependency,
+ownership or delivery boundaries lean `$flow-next-plan`; independent design
 assessment leans `$flow-next-plan-review`, which can review a spec with zero tasks.
 Risk and multi-file scope alone do not require decomposition. Use `$flow-next-guide`
 when signals conflict; `chart` remains upstream of capture. This is an informational

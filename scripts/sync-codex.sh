@@ -433,6 +433,8 @@ for nf in \
     -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
     -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
     -e 's|Parked unknowns lean `/flow-next:interview`|Parked unknowns lean `$flow-next-interview`|g' \
+    -e 's|product or authority choices lean `/flow-next:interview`|product or authority choices lean `$flow-next-interview`|g' \
+    -e 's|ownership or delivery boundaries lean `/flow-next:plan`|ownership or delivery boundaries lean `$flow-next-plan`|g' \
     -e 's|design risk lean `/flow-next:plan`|design risk lean `$flow-next-plan`|g' \
     -e 's|still leans `/flow-next:plan`|still leans `$flow-next-plan`|g' \
     -e 's|Legal targets are ONLY `/flow-next:interview`, `/flow-next:plan`|Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan`|g' \
@@ -2326,6 +2328,8 @@ while IFS="$(printf '\t')" read -r rel pat expect; do
     closer_literal_fails=$((closer_literal_fails + 1))
   fi
 done <<'CLOSER_ROSTER'
+flow-next-capture/workflow.md	choices lean `/flow-next:interview`	choices lean `$flow-next-interview`
+flow-next-capture/workflow.md	boundaries lean `/flow-next:plan`	boundaries lean `$flow-next-plan`
 flow-next-capture/workflow.md	  /flow-next:plan <SPEC_ID>	  $flow-next-plan <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:interview <SPEC_ID>	  $flow-next-interview <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:visual <SPEC_ID>	  $flow-next-visual <SPEC_ID>

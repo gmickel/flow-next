@@ -63,8 +63,11 @@ Detect input type in this order (first match wins):
   keep the owner's `satisfies:` declaration current via `task set-spec` before dispatch.
   If that owner is `in_progress`, admit it for resume only with a matching actor
   claim and positive evidence identifying its ended prior invocation (terminal host
-  session/process record or explicit user confirmation). Verify any evidence passed
-  by pilot; age, silence and an empty ready list prove nothing. Otherwise stop with
+  session/process record or explicit user confirmation). Read pilot's chained host
+  context for the owner ID and evidence reference; these are context, not target
+  arguments. Resolve that reference and verify it identifies the current actor/claim
+  and its ended prior invocation; inaccessible or mismatched evidence stops resume.
+  Age, silence and an empty ready list prove nothing. Otherwise stop with
   a typed ownership report. Retain `SPEC_MODE` and carry the admitted owner to 3a.
 - **Intentional tasks:** any other non-empty task set is the planned route,
   including extra tasks added after direct execution. A stale `no_plan: true` or

@@ -353,9 +353,13 @@ if [ "${CHAIN_STAGES:-}" = "on" ]; then CHAIN_ENABLED=1; fi   # ONLY the literal
 
 `CHAIN_ENABLED` is consumed by the dry-run report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert and the tick is byte-for-byte today's.
 
-Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins. A direct owner is
-exactly one entry in `SPEC_JSON.tasks` with `implicit_owner == true` under
-`SPEC_JSON.no_plan == true`; the minimal `TASKS_JSON` listing omits provenance. Only that
+Classify from `SPEC_JSON`, `TASKS_JSON`, the authoritative task details fetched
+at SELECT, and current-invocation design-review intent retained at Mode Detection;
+first match wins. Re-read `$FLOWCTL show <owner-id> --json` before admitting a
+resume and compare its current assignee with the resolved actor. A direct owner requires
+`SPEC_JSON.tasks` to contain exactly one task in total, that sole task to have
+`implicit_owner == true`, and `SPEC_JSON.no_plan == true`;
+the minimal `TASKS_JSON` listing omits provenance. Only that
 shape continues the direct route; ordinary or added tasks retain the planned route.
 The route excuses automatic decomposition review, never an explicit design-review
 request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` write.
@@ -363,6 +367,7 @@ request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` w
 
 | Condition | Stage |
 |---|---|
+| Explicit spec/design review requested and no review backend is configured | `NEEDS_HUMAN`, reason `explicit design review needs a review backend` |
 | Explicit spec/design review requested, or `plan_review_status` is `needs_work` / `needs_human`, and review backend is configured | `plan-review` (spec-only review is supported) |
 | 0 tasks exist and `SPEC_JSON` reads `no_plan == true` (absent reads false) | `work`, dispatched with `--no-plan` |
 | 0 tasks exist | `plan` |
@@ -378,14 +383,17 @@ the ended prior invocation: a terminal host session/process record or an explici
 user confirmation of that run's termination. A claim's age, an empty ready list,
 missing output, or an unassigned claim is not proof. With absent or ambiguous proof,
 keep `NEEDS_HUMAN`; never infer termination or steal a claim. Pass the evidence
-reference to work and keep the spec ID as its target so completion review remains
-reachable. Work rechecks ownership and selects the owner outside the ready list.
+reference to work in the chained host context, identifying the owner, actor/claim,
+and prior invocation it proves ended. Use a resolvable record path or a specific
+user-message reference; if work cannot access it, keep `NEEDS_HUMAN`. Keep the spec
+ID as the target so completion review remains reachable. Work rechecks ownership
+and selects the owner outside the ready list.
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work
 cannot advance it, the healthy-no-advance strike path handles it. Other
 in-progress-only cases retain the crash-class `NEEDS_HUMAN` (no dispatch, no strike).
 
-Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
+Without an explicit design-review request, review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 

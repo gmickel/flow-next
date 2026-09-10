@@ -54,6 +54,11 @@ Dirty tree means dirty outside `.flow/`; pilot leaves state untouched. No cleanu
 
 ## Mode Detection
 
+Retain an explicit request in the current user message to review the selected
+spec's design before work (for example, "pilot --spec fn-12; review its design first")
+as host context for CLASSIFY. This intent is separate from argument parsing and
+`--review`, which selects a backend; it expires with this tick.
+
 Parse `$ARGUMENTS` for the scope lock, dry-run switch, and passthroughs. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
 The loop handles both `--flag=value` and space-separated `--flag value` forms directly via a `PREV` token holder. It deliberately avoids bash positional parameters (`shift`-based parsing) — the host's argument interpolation rewrites positional tokens inside skill code blocks, which corrupts a `case`-on-positionals parse (observed live in the 1.13.0 dogfood).
