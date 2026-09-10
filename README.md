@@ -39,7 +39,7 @@ The [evidence page](https://flow-next.dev/project/evidence/) covers the measured
 Decide what to build, build it, and verify the result. Describe the workflow in plain language or invoke its skills directly. The host agent runs the process and adapts it to the work.
 
 **Everything reaches your queue already reviewed.**
-A different model reviews every plan and every implementation, the loop iterates until SHIP, and a task cannot be marked done without evidence JSON.
+Configured review checks the design or implementation and records its verdict; a task cannot be marked done without evidence JSON. Review settings, completion-review policy and opt-in QA apply on both direct and planned routes.
 
 **Open a PR that already makes its argument.**
 The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
@@ -56,7 +56,7 @@ Live QA drives the app the way a user would, from the spec's own criteria, and f
 **Hand over as much as the receipts have earned.**
 One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
 
-**Plan on your best model, implement on a cheaper one.**
+**Choose the model for each job.**
 Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it. The pipeline shape per item and the model per job are decided separately, and each decision prints its reason: [orchestration](plugins/flow-next/docs/orchestration.md).
 
 **A way of working, not a tool you bolt on.**
@@ -71,9 +71,9 @@ The same specs, gates, receipts, and task state across harnesses. In a harness t
 | Tenet | What it means |
 |---|---|
 | **Spec-driven** | Intent survives the chat. The unit of work is the spec, never the ticket, the transcript, or the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. Acceptance criteria are prose judged against evidence (unlike ATDD, where a criterion only counts once it exists as an executable test). |
-| **Context-fit planning** | Right-sized task slices. Specs decompose into dependency-ordered tasks, each sized to one fresh ~100k-token context window. |
+| **Context-fit planning** | Optional task decomposition for dependencies, separate ownership, staged delivery or execution constraints. A ready cohesive spec can run through work with one owner. |
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
-| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor / Claude) reviews every plan and every implementation. Different models make different mistakes, and the disagreement surface is where the gaps live. |
+| **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor / Claude) reviews the design or implementation when configured. Different models make different mistakes, and the disagreement surface is where the gaps live. |
 | **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task, never narration. |
 | **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode. |
 | **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run, with no manual "refresh" ceremony, ever. |
@@ -160,17 +160,18 @@ Use installation commands in your terminal or the host's plugin interface as sho
 
 **Trying it for the first time?** [Your First 30 Minutes](https://flow-next.dev/first-30-minutes/) includes a two-file Python example, the review setup, and the output to inspect. You need your agent access, Python 3.11+, and the project tools; review and GitHub PR plumbing also use `jq` and `gh`.
 
-### The 5-command happy path
+<a id="the-5-command-happy-path"></a>
+
+### The recommended happy path
 
 ```bash
 /flow-next:capture                   # 1. Synthesize conversation → .flow/specs/<id>.md
-/flow-next:plan <spec-id>            # 2. Break the spec into dependency-ordered tasks
-/flow-next:work <spec-id>            # 3. Execute tasks in fresh-context worker subagents
-/flow-next:make-pr <spec-id>         # 4. Render a cognitive-aid PR body (9 input streams)
-/flow-next:resolve-pr <PR#>          # 5. Fetch review threads → triage → resolve
+/flow-next:work <spec-id> --no-plan  # 2. Implement a ready cohesive spec through Flow-Next
+/flow-next:make-pr <spec-id>         # 3. Open a PR connecting requirements to evidence
+/flow-next:resolve-pr <PR#>          # 4. Fetch review threads → triage → resolve
 ```
 
-This is a starting route. You can work a fully understood spec directly, review a risky approach before implementation, or add live QA before the PR. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
+This is the recommended route for a ready cohesive spec and a capable coding agent. Use plan when dependencies, separate ownership, staged delivery or execution constraints benefit from tasks; multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with interview. An explicit plan-review can review the spec design without task files. Live QA is opt-in and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
 
 ### After every update
 
@@ -184,10 +185,10 @@ Start with the established workflow, then shape it in plain language. Choose whi
 
 | Your situation | What to say |
 |---|---|
-| A small change you will review | "Work this change directly; I will review the diff." |
-| A migration whose approach needs checking | "Plan this migration first, then review the approach with another model family." |
+| A ready cohesive spec | "Run /flow-next:work fn-N --no-plan with the configured checks." |
+| A migration whose approach needs checking | "Review this spec design with another model family; plan tasks if staged delivery needs them." |
 | Ready work between your visits | "Work the ready backlog overnight; stop on unresolved product decisions." |
-| A prototype that settled the requirements | "Capture the intent from this prototype, then plan it against our architecture." |
+| A prototype that settled the requirements | "Capture the intent from this prototype, then run Flow-Next work --no-plan if the spec is ready and cohesive." |
 | Several jobs that need different models | "Keep the UI work yourself; send the API plumbing to the implementer tier." |
 
 The host reads the item's state and your instructions, chooses the route, and reports its reason. A stage you invoke keeps its execution and evidence contract; configured review policy applies across the arrangements you choose. [Pipeline variations](plugins/flow-next/docs/pipeline-variations.md) · [Orchestration and model routing](plugins/flow-next/docs/orchestration.md) · [Cookbook](https://flow-next.dev/guides/cookbook/).

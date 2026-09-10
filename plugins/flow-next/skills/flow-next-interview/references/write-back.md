@@ -61,7 +61,7 @@ Hard rules:
 
 ### For NEW IDEA (text input, no Flow ID)
 
-Create spec with interview output. **This branch writes a spec and zero tasks** — task creation is `/flow-next:plan`'s job. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
+Create spec with interview output. **This branch writes a spec and zero tasks** — task creation belongs to plan or work's direct route. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). Since fn-220 `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
@@ -154,7 +154,7 @@ Then hand flowctl the draft file — the literal path typed verbatim (never a sh
 $FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
 ```
 
-Then suggest: "Run `/flow-next:plan fn-N` to research best practices and create tasks."
+Then recommend `/flow-next:work fn-N --no-plan` for a ready cohesive spec; suggest `/flow-next:plan fn-N` when dependencies, ownership, stages, or execution constraints benefit from decomposition. Use `/flow-next:plan-review fn-N` for an independent spec/design review, including without tasks.
 
 ### For EXISTING SPEC (fn-N that already has tasks)
 
@@ -165,7 +165,7 @@ $FLOWCTL tasks --spec <id> --json
 
 **If tasks exist:** Only update the spec (add edge cases, clarify requirements). **Do NOT touch task specs** — plan already created them.
 
-**If no tasks:** Update spec, then suggest `/flow-next:plan`.
+**If no tasks:** Update the spec and use the same next-step judgment above. Risk or multiple files alone do not require decomposition; unresolved material choices need refinement.
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 

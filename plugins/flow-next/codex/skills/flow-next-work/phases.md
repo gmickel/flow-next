@@ -56,11 +56,17 @@ Detect input type in this order (first match wins):
   legacy fall-through (a zero-task run reaching Phase 3 and a completion
   review over an empty diff) is unreachable. A spec with tasks — whatever
   their status — never reads that file.
-- **Stale no-plan signal:** if the `tasks` array is NON-empty and the metadata
-  reads `no_plan: true` (or `NO_PLAN=1` was parsed), emit the one-line notice
-  here — `Note: no_plan signal ignored — spec already has tasks; running the
-  planned tasks.` — and continue normally. Never load no-plan-route.md for
-  this.
+- **Direct continuation:** `no_plan: true` plus exactly one task marked
+  `implicit_owner: true` retains the accepted direct route. Never mint again or
+  demand plan-review merely because the owner now exists. Explicit design-review
+  requests still apply. Re-read the full current spec, including added requirements;
+  keep the owner's `satisfies:` declaration current via `task set-spec` before dispatch.
+  If that owner is `in_progress`, select it alone for resume only after establishing
+  that its prior run ended and the claim belongs to this actor. Otherwise stop with
+  a typed ownership report. Do not enter completion from an empty ready list.
+- **Intentional tasks:** any other non-empty task set is the planned route,
+  including extra tasks added after direct execution. A stale `no_plan: true` or
+  invocation flag does not replace it; report that the existing tasks govern.
 - Get first ready task: `$FLOWCTL ready --spec <id> --json`
 
 **Spec file start (.md path that exists)**:
@@ -167,7 +173,10 @@ requested task alone. Every task still gets a fresh-context worker.
 $FLOWCTL ready --spec <spec-id> --json
 ```
 
-If no ready tasks, check for completion review gate (see 3g below).
+For a direct owner admitted for resume in Phase 1, select that owner alone even
+though `ready` omits `in_progress`; re-anchor and continue through the usual claim
+and worker gates. Otherwise, if no ready tasks, check the completion review gate
+(see 3g below).
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
 (fail-closed — fn-176)**. **Concurrent dispatch requires all five conditions

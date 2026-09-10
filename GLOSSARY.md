@@ -267,7 +267,7 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 
 ## No-plan route
 
-The work-level pipeline variation that starts /flow-next:work directly from a zero-task spec: an explicit fork mints one minimal implicit task ("implement this spec") from the spec instead of running plan/plan-review. Interactive-only by default; pilot forwards an explicit no-plan instruction through, never decides it.
+Execution through `/flow-next:work <spec-id> --no-plan`, recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 
 _Relates to_: Spec, Task, R-ID

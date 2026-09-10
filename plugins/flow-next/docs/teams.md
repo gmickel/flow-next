@@ -4,7 +4,7 @@ Agentic engineering compresses implementation from weeks to hours - and the touc
 
 The vocabulary on this page - *handover objects*, *Delegate / Review / Own*, *lifecycle steps [1]-[9]* - comes from the [AI-x-SDLC Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md). That document is the *theory*. This page is the *implementation* - the same lifecycle, mapped to concrete `flowctl` commands and `.flow/` artefacts.
 
-> **Solo dev?** You can skip most of this page. The single-developer flow is `prospect → [optional chart] → capture → plan → work → make-pr`, covered in the [root README](../../../README.md). Chart is only for one oversized/unclear idea; skip it when intent is already stateable. This page is for teams running multiple humans + multiple agents against the same repo.
+> **Solo dev?** You can skip most of this page. For a ready cohesive spec and a capable coding agent, start with `capture → work --no-plan → make-pr`, covered in the [root README](../../../README.md). Chart is only for one oversized/unclear idea; skip it when intent is already stateable. This page is for teams running multiple humans + multiple agents against the same repo.
 
 ---
 
@@ -39,7 +39,7 @@ Choose one repository and one change the team already understands. Keep the norm
 | Person | What they open | What they do |
 |---|---|---|
 | Product owner | The spec in the repository, tracker mirror, or optional HTML view | Review the goal, acceptance criteria, and non-goals |
-| Engineer | The same spec, then its task breakdown | Add constraints, check the approach, and start the implementation |
+| Engineer | The same spec and any useful task breakdown | Add constraints, check the approach, and start the implementation |
 | Implementing agent | The spec, current task, and repository | Build and verify the change; leave evidence |
 | Reviewer | The pull request | Follow acceptance coverage, inspect the important changes, and check the evidence |
 
@@ -59,13 +59,17 @@ flowchart LR
     Idea --> Capture
     Capture --> Interview[/flow-next:interview/]
     Interview -.scoped operation.-> InterviewScope{{"--scope=business · --scope=technical · --scope=both<br/>(default: --scope=technical)"}}
+    Capture -->|ready cohesive spec| DirectWork[/flow-next:work --no-plan/]
+    DirectWork --> ImplReview
     Interview --> PlanReview[/flow-next:plan-review/]
-    PlanReview --> Plan[/flow-next:plan/]
+    PlanReview -->|coordination needs tasks| Plan[/flow-next:plan/]
+    PlanReview -->|cohesive spec| DirectWork
     Plan --> Work[/flow-next:work/]
     Work --> ImplReview[/flow-next:impl-review/]
     ImplReview -->|SHIP| SpecCompletionReview[/flow-next:spec-completion-review/]
     ImplReview -->|NEEDS_WORK| Work
-    SpecCompletionReview --> QA[/flow-next:qa/]
+    SpecCompletionReview -->|QA enabled| QA[/flow-next:qa/]
+    SpecCompletionReview -->|QA off| MakePR
     QA -.opt-in live-app QA.-> QAGate{{"live deploy + driver?<br/>YES → drive · NO → BLOCKED · no UI → N/A"}}
     QA -->|YES or N.A.| MakePR[/flow-next:make-pr/]
     QA -->|NO| Work
@@ -76,7 +80,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a pilot stage. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. Unsure which path is smallest? `/flow-next:guide`. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:interview` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict (an open P0/P1 confirmed against the running app) sends you back to `/work`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. This map is the **fullest** route - the one an epic with many unknowns and real blast radius earns. Smaller shapes of work run shorter routes through the same contracts: [`pipeline-variations.md`](pipeline-variations.md) shows six worked examples and the risk-and-unknowns reasoning that selects between them.
+The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a pilot stage. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. Unsure which path is smallest? `/flow-next:guide`. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:interview` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict reports an open P0/P1 confirmed against the running app. In an attended run those findings guide fixes; pilot can carry findings or an inability to verify into a draft PR. QA defaults off and grants no merge approval. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. The diagram includes the direct route and optional coordination and verification stages. Dependencies, separate owners, staged delivery and execution constraints justify planning; size or risk alone does not. Review and QA do not guarantee every regression will be caught. See [`pipeline-variations.md`](pipeline-variations.md) shows six worked examples and the risk-and-unknowns reasoning that selects between them.
 
 ---
 
@@ -176,6 +180,8 @@ Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope)
 Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoPrompt / Codex / Copilot / Cursor / Claude) reads the fully-completed spec and reports gaps, ambiguities, and hidden assumptions. The disagreement surface between the writing model and the review model is where the gaps live.
 
 ### [4] Implementation plan: Handover #3
+
+Use this optional handover when dependencies, separate ownership, staged delivery or execution constraints benefit from decomposition. Otherwise, recommend `/flow-next:work <spec-id> --no-plan` for a ready cohesive spec and a capable coding agent. A requested spec/design review can run before any task files exist.
 
 `/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies. Its summary shows the resulting execution waves so the parallel candidates are visible before work starts.
 
@@ -462,7 +468,7 @@ Ralph is deprecated. Existing installations retain their [reference](ralph.md); 
 
 ## Tracker sync & Linear Diffs
 
-Teams that live in Linear, GitHub Issues, GitLab, or Jira don't have to leave their board. `/flow-next:tracker-sync` **projects** a `.flow/specs/<id>.md` spec onto a tracker issue (Linear, GitHub, GitLab, or Jira) and reconciles body, status, and comments two-way. **Projection, not coordination** - the spec stays the source of truth and the quality layer; the tracker is a co-editable mirror that never drives flow state or spawns agents. Hook it up once via the discovery ceremony; from then on the lifecycle (capture → plan → work → completion-review) keeps the linked issue in sync - on by default per event, opt out with `flowctl config set tracker.perEvent.<event> off`.
+Teams that live in Linear, GitHub Issues, GitLab, or Jira don't have to leave their board. `/flow-next:tracker-sync` **projects** a `.flow/specs/<id>.md` spec onto a tracker issue (Linear, GitHub, GitLab, or Jira) and reconciles body, status, and comments two-way. **Projection, not coordination** - the spec stays the source of truth and the quality layer; the tracker is a co-editable mirror that never drives flow state or spawns agents. Hook it up once via the discovery ceremony; from then on the lifecycle (capture → [optional plan] → work → completion-review) keeps the linked issue in sync - on by default per event, opt out with `flowctl config set tracker.perEvent.<event> off`.
 
 **Tracker-keyed ids are the recommended team default.** Parallel agents and branches that each scan only local `.flow/specs/` collide on `fn-N` - that is structural, not unlucky. With a tracker configured, set `flowctl config set tracker.specIds tracker` so new specs mint from the issue key (Linear/Jira `WOR-17` → `wor-17-slug`; GitHub `#123` → `gh-123-slug`; GitLab iid → `gl-N-slug`). The tracker is the distributed allocator; mixed `fn-*` and tracker-keyed stores coexist and both resolve. `/flow-next:setup` asks this once when a tracker is configured and the key is still unset. Full model: [`tracker-sync.md`](tracker-sync.md) § Hybrid id model.
 

@@ -97,7 +97,11 @@ Next:
   $flow-next-visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
-The `Recommended next:` line follows the base-footer rule (workflow.md §Phase 6) and is MANDATORY here too — a rewrite is precisely when the route may change, so re-judge the rewritten spec's risk and remaining unknowns (readiness state, open `[inferred]` criteria, Parked unknowns) against the smallest-sufficient rule in [docs/pipeline-variations.md](../../../docs/flow-next/pipeline-variations.md). Same legal targets (`$flow-next-interview`, `$flow-next-plan` optionally noting a minimal single-task plan fits the near-zero-risk shape, `$flow-next-guide` on genuinely conflicting signals); informational only — never a plain-text numbered prompt.
+The `Recommended next:` line follows workflow.md Phase 6 and is mandatory here
+too. Apply [pipeline variations](../../../docs/flow-next/pipeline-variations.md) to the rewritten spec: work --no-plan for
+a ready cohesive spec, plan for useful decomposition, interview for material gaps,
+plan-review for independent design assessment, or guide when signals conflict.
+This remains informational, never a readiness write or permission to execute.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 

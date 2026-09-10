@@ -93,7 +93,11 @@ export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BA
 
 No branch flag exists in v1. Branch resolution is pilot-owned from the selected spec's `branch_name`.
 
-Pilot has no no-plan flag (fn-214): the no-plan decision is spec state — the `no_plan` field, set at capture time or via `flowctl spec set-no-plan`, read from `SPEC_JSON` at classification. A stray `--no-plan` argument lands in the unknown-flag branch above (one-line notice, tick proceeds; the affected zero-task specs classify `plan`, the safe default). Pilot never decides no-plan on its own — the field is an explicit human instruction on the item, never inferred, and pilot only forwards it to the work dispatch.
+Pilot has no no-plan flag: the accepted choice is the spec's `no_plan` field,
+set at capture or by work before mint. A stray `--no-plan` gets the unknown-flag
+notice; pilot never infers consent. Classification forwards the recorded choice
+for a zero-task spec and recognizes its sole `implicit_owner` task on later ticks.
+Intentional plans and explicit design-review requests remain authoritative.
 
 ### Autonomy mode resolution (R1) — gate the wide backlog behavior
 

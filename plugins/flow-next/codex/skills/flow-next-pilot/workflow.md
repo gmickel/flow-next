@@ -352,13 +352,19 @@ if [ "${CHAIN_STAGES:-}" = "on" ]; then CHAIN_ENABLED=1; fi   # ONLY the literal
 
 `CHAIN_ENABLED` is consumed by the dry-run report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert and the tick is byte-for-byte today's.
 
-Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
+Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins. A direct owner is
+exactly one entry in `SPEC_JSON.tasks` with `implicit_owner == true` under
+`SPEC_JSON.no_plan == true`; the minimal `TASKS_JSON` listing omits provenance. Only that
+shape continues the direct route; ordinary or added tasks retain the planned route.
+The route excuses automatic decomposition review, never an explicit design-review
+request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` write.
 
 | Condition | Stage |
 |---|---|
-| 0 tasks exist and `SPEC_JSON` reads `no_plan == true` (spec-level field, fn-214 — absent reads false) | `work` — dispatched with `--no-plan` (R2/R4: the row must sit ahead of the default zero-task row or that row consumes the case and the instruction never reaches work; task-count-first matching keeps a stale field on a planned spec inert — the zero-task rows never match once tasks exist) |
+| Explicit spec/design review requested, or `plan_review_status` is `needs_work` / `needs_human`, and review backend is configured | `plan-review` (spec-only review is supported) |
+| 0 tasks exist and `SPEC_JSON` reads `no_plan == true` (absent reads false) | `work`, dispatched with `--no-plan` |
 | 0 tasks exist | `plan` |
-| tasks exist and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
+| tasks exist, are not a direct owner, and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status` outside the satisfying set (`ship`, `not_required`) and review backend is configured | `work` |
@@ -454,7 +460,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 
 - `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when classification matched the zero-task `no_plan` row, append `--no-plan` (work treats it as the explicit no-plan instruction on a zero-task spec; on a spec that already has tasks work ignores it with a one-line notice)
+- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when classification matched the zero-task `no_plan` row, append `--no-plan`. A sole marked direct owner resumes the recorded route without minting or automatic plan-review; additional or intentional tasks follow the planned route.
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 

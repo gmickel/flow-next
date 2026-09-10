@@ -28,7 +28,7 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 | Doc | Answers |
 |---|---|
 | [`running-lean.md`](running-lean.md) | Which layers to switch on at all, what each one costs, and how to get the capability without the standing cost |
-| [`pipeline-variations.md`](pipeline-variations.md) | Six worked routes from epic to docs chore, and the risk-and-unknowns rule that picks between them |
+| [`pipeline-variations.md`](pipeline-variations.md) | Direct work from a ready spec, optional task planning, refinement and verification choices |
 | [`architecture.md`](architecture.md) | The `.flow/` layout, the spec-first task model, and what a spec's [`## Quick commands`](architecture.md#verification-tiers-the-specs-quick-commands) block is for |
 | [`self-improving.md`](self-improving.md) | How memory, glossary, decisions, strategy, and the feature map compound through work you already do |
 | [`teams.md`](teams.md) | Handover objects, spec-as-PR, parallel work from one spec, the adoption ladder |

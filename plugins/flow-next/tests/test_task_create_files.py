@@ -562,6 +562,66 @@ class RequireEmptySpecTestCase(TaskCreateFilesTestCase):
         ns.update(overrides)
         return ns
 
+    def test_implicit_owner_provenance_requires_both_route_and_atomic_mint(self) -> None:
+        for direct, guarded in ((False, True), (True, False), (True, True)):
+            with self.subTest(direct=direct, guarded=guarded):
+                spec_id = self._call(
+                    func=self.flowctl.cmd_spec_create, title=f"Route {direct} {guarded}", branch=None
+                )["id"]
+                if direct:
+                    self._call(func=self.flowctl.cmd_spec_set_no_plan, id=spec_id)
+                task = self._call(
+                    func=self.flowctl.cmd_task_create,
+                    **self._create_ns(require_empty_spec=guarded, spec=spec_id),
+                )
+                shown = self._call(func=self.flowctl.cmd_show, id=task["id"])
+                spec = self._call(func=self.flowctl.cmd_show, id=spec_id)
+                self.assertEqual(shown.get("implicit_owner", False), direct and guarded)
+                self.assertIs(spec["tasks"][0]["implicit_owner"], direct and guarded)
+                if not (direct and guarded):
+                    self.assertNotIn("implicit_owner", shown)
+
+    def test_direct_owner_lifecycle_preserves_gates_and_added_task_provenance(self) -> None:
+        self._call(func=self.flowctl.cmd_spec_set_no_plan, id=self.spec_id)
+        owner = self._call(
+            func=self.flowctl.cmd_task_create,
+            **self._create_ns(require_empty_spec=True),
+        )["id"]
+
+        def next_unit(*, plan_review=False, completion_review=False):
+            return self._call(
+                func=self.flowctl.cmd_next,
+                specs_file=None,
+                require_plan_review=plan_review,
+                require_completion_review=completion_review,
+            )
+
+        result = next_unit(plan_review=True)
+        self.assertEqual((result["status"], result["reason"]), ("plan", "needs_plan_review"))
+        result = next_unit()
+        self.assertEqual((result["task"], result["reason"]), (owner, "ready_task"))
+        self._call(func=self.flowctl.cmd_start, id=owner, force=False, note=None)
+        result = next_unit()
+        self.assertEqual((result["task"], result["reason"]), (owner, "resume_in_progress"))
+        shown = self._call(func=self.flowctl.cmd_show, id=self.spec_id)
+        self.assertIs(shown["no_plan"], True)
+        self.assertIs(shown["tasks"][0]["implicit_owner"], True)
+
+        self.flowctl.save_task_runtime(owner, {"status": "done"})
+        result = next_unit(completion_review=True)
+        self.assertEqual(
+            (result["status"], result["task"], result["reason"]),
+            ("completion_review", None, "needs_completion_review"),
+        )
+        added = self._create(title="Additional requirement")["id"]
+        shown = self._call(func=self.flowctl.cmd_show, id=self.spec_id)
+        self.assertEqual(
+            [(task["id"], task["implicit_owner"]) for task in shown["tasks"]],
+            [(owner, True), (added, False)],
+        )
+        result = next_unit(plan_review=True)
+        self.assertEqual(result["reason"], "needs_plan_review")
+
     def test_flag_on_empty_spec_succeeds(self) -> None:
         result = self._call(
             func=self.flowctl.cmd_task_create,
