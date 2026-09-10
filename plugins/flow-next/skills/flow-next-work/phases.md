@@ -47,6 +47,18 @@ re-invoke work. Stop before route writes, task minting, claims or dispatch,
 including when no review backend is available. Work's `--review` selects
 implementation review; it does not satisfy this gate.
 
+**Direct-owner resume admission (both modes):** for the sole implicit-owner shape
+above, fetch `$FLOWCTL show <owner-id> --json` after reading the parent spec.
+If that owner is `in_progress`, admit it for resume only with a matching actor
+claim and positive evidence identifying its ended prior invocation (terminal host
+session/process record or explicit user confirmation). Read any carried host
+context for the owner ID and evidence reference; these are context, not target
+arguments. Resolve that reference and verify it identifies the current actor/claim
+and its ended prior invocation. Missing, inaccessible, ambiguous or mismatched
+evidence stops with `NEEDS_HUMAN` before claims or dispatch. Age, silence and an
+empty ready list prove nothing. Retain the input's `SINGLE_TASK_MODE` or `SPEC_MODE`
+and carry the admitted owner to 3a.
+
 ---
 
 **Flow task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M)** → SINGLE_TASK_MODE:
@@ -73,14 +85,6 @@ implementation review; it does not satisfy this gate.
   demand plan-review merely because the owner now exists. The direct-route review
   gate above still applies. Re-read the full current spec, including added requirements;
   keep the owner's `satisfies:` declaration current via `task set-spec` before dispatch.
-  If that owner is `in_progress`, admit it for resume only with a matching actor
-  claim and positive evidence identifying its ended prior invocation (terminal host
-  session/process record or explicit user confirmation). Read pilot's chained host
-  context for the owner ID and evidence reference; these are context, not target
-  arguments. Resolve that reference and verify it identifies the current actor/claim
-  and its ended prior invocation; inaccessible or mismatched evidence stops resume.
-  Age, silence and an empty ready list prove nothing. Otherwise stop with
-  a typed ownership report. Retain `SPEC_MODE` and carry the admitted owner to 3a.
 - **Intentional tasks:** any other non-empty task set is the planned route,
   including extra tasks added after direct execution. A stale `no_plan: true` or
   invocation flag does not replace it; report that the existing tasks govern.
@@ -195,8 +199,9 @@ For a direct owner admitted for resume in Phase 1, re-read its task status and
 claim. While it remains `in_progress` under this actor, select that owner alone
 instead of the ready list; re-anchor and continue through the usual claim and
 worker gates. Stop on a changed owner. Once the task is `done`, discard the resume
-selection and use the normal frontier; an empty frontier then reaches 3g. Keep
-`SPEC_MODE` throughout, including the 3f loop and completion-review policy.
+selection. Retain the original mode: `SINGLE_TASK_MODE` executes no other task and
+proceeds to Phase 4; `SPEC_MODE` uses the normal frontier, including the 3f loop
+and 3g completion-review policy when the frontier is empty.
 For every non-resume selection, an empty ready frontier proceeds to 3g as usual.
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule

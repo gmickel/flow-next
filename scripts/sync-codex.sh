@@ -425,6 +425,7 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-pilot/workflow.md" \
   "$CODEX_DIR/skills/flow-next-work/phases.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
@@ -482,6 +483,11 @@ for nf in \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
     -e 's|Use `/flow-next:guide`|Use `$flow-next-guide`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
+    -e 's|- `plan`: `/flow-next:plan |- `plan`: `$flow-next-plan |g' \
+    -e 's|- `plan-review`: `/flow-next:plan-review |- `plan-review`: `$flow-next-plan-review |g' \
+    -e 's|- `work`: `/flow-next:work |- `work`: `$flow-next-work |g' \
+    -e 's|- `qa`: `/flow-next:qa |- `qa`: `$flow-next-qa |g' \
+    -e 's|- `make-pr`: `/flow-next:make-pr |- `make-pr`: `$flow-next-make-pr |g' \
     -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
     -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
@@ -2389,6 +2395,11 @@ flow-next-work/references/no-plan-route.md	`/flow-next:interview` — never mint
 flow-next-work/references/no-plan-route.md	Recommend `/flow-next:work <spec-id> --no-plan`	Recommend `$flow-next-work <spec-id> --no-plan`
 flow-next-work/references/no-plan-route.md	`/flow-next:plan-review`	`$flow-next-plan-review`
 flow-next-work/phases.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-pilot/workflow.md	`plan`: `/flow-next:plan 	`plan`: `$flow-next-plan
+flow-next-pilot/workflow.md	`plan-review`: `/flow-next:plan-review 	`plan-review`: `$flow-next-plan-review
+flow-next-pilot/workflow.md	`work`: `/flow-next:work 	`work`: `$flow-next-work
+flow-next-pilot/workflow.md	`qa`: `/flow-next:qa 	`qa`: `$flow-next-qa
+flow-next-pilot/workflow.md	`make-pr`: `/flow-next:make-pr 	`make-pr`: `$flow-next-make-pr
 flow-next-interview/SKILL.md	use `/flow-next:plan-review fn-N`	use `$flow-next-plan-review fn-N`
 flow-next-interview/references/write-back.md	suggest `/flow-next:plan fn-N`	suggest `$flow-next-plan fn-N`
 flow-next-capture/workflow.md	Use `/flow-next:guide`	Use `$flow-next-guide`
