@@ -5,12 +5,12 @@
 > default-OFF, so the default per-task review never loads any of this (~5.4k tokens saved/review).
 
 **Contents**
-- [Phase ordering & flag-combination matrix](#phase-ordering--flag-combination-matrix-fn-324)
-- [Deep-Pass Phase (`--deep`)](#deep-pass-phase-fn-322---deep--all-backends)
-- [Validator Pass (`--validate`)](#validator-pass-fn-321---validate--all-backends)
-- [Interactive Walkthrough Phase (`--interactive`)](#interactive-walkthrough-phase-fn-323---interactive--all-backends)
+- [Phase ordering & flag-combination matrix](#phase-ordering--flag-combination-matrix)
+- [Deep-Pass Phase (`--deep`)](#deep-pass-phase---deep--all-backends)
+- [Validator Pass (`--validate`)](#validator-pass---validate--all-backends)
+- [Interactive Walkthrough Phase (`--interactive`)](#interactive-walkthrough-phase---interactive--all-backends)
 
-## Phase ordering & flag-combination matrix (fn-32.4)
+## Phase ordering & flag-combination matrix
 
 The opt-in flags (`--validate`, `--deep`, `--interactive`) layer on top of the
 primary review. When multiple are set, phases run in a fixed order:
@@ -25,7 +25,7 @@ primary review. When multiple are set, phases run in a fixed order:
 6. Receipt           each phase writes its own additive block without disturbing others
 ```
 
-Mode split (fn-113): steps 2-3 mutate the receipt ONLY under autonomy markers
+Mode split: steps 2-3 mutate the receipt ONLY under autonomy markers
 (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set / FLOW_AUTONOMOUS=1). In an interactive
 session deep/validate return raw JSON with host_judges: true and leave the
 receipt unchanged - the host judges merge/promotion/survivors from that JSON
@@ -89,7 +89,7 @@ Step 0).
 
 ---
 
-## Deep-Pass Phase (fn-32.2 --deep) — all backends
+## Deep-Pass Phase (--deep) — all backends
 
 When `DEEP=true`, run the selected specialized passes after the primary
 review completes — regardless of verdict. Each pass continues the primary
@@ -198,7 +198,7 @@ for pass in $SELECTED_PASSES; do
       :
       ;;
     host)
-      # fn-123 R5: no flowctl subprocess for host. Dispatch each selected
+      # No flowctl subprocess for host. Dispatch each selected
       # pass as ANOTHER fresh read-only host-native reviewer subagent with
       # the SAME cross-family pin as the primary review (workflow-host.md
       # Step 1). Give it the pass-specific prompt from deep-passes.md plus
@@ -215,7 +215,7 @@ done
 
 ### Step D.4: Re-compute verdict after merge
 
-Mode split (fn-113): under autonomy markers (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`
+Mode split: under autonomy markers (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`
 set, or `FLOW_AUTONOMOUS=1`) each `deep-pass` call writes the merged receipt in
 place and the final verdict is read back from the receipt as below. In an
 INTERACTIVE session the call instead returns raw findings with `host_judges: true`
@@ -264,7 +264,7 @@ ignore the new keys.
 
 ---
 
-## Validator Pass (fn-32.1 --validate) — all backends
+## Validator Pass (--validate) — all backends
 
 When `VALIDATE=true` AND the primary review verdict is `NEEDS_WORK`, run a
 validator pass before the fix loop. The validator re-checks each finding
@@ -351,7 +351,7 @@ case "$BACKEND" in
     # and update receipt's validator block accordingly.
     ;;
   host)
-    # fn-123 R5: no flowctl subprocess for host. Dispatch the validator as a
+    # No flowctl subprocess for host. Dispatch the validator as a
     # fresh read-only host-native subagent with the SAME cross-family pin as
     # the primary review (workflow-host.md Step 1), prompted from
     # validate-pass.md with the findings block injected. Parse its
@@ -365,7 +365,7 @@ esac
 
 ### Step V.3: Re-compute verdict from validator result
 
-Mode split (fn-113): under autonomy markers the `codex validate` and
+Mode split: under autonomy markers the `codex validate` and
 `copilot validate` subcommands merge the validator result into the receipt
 and upgrade verdict to SHIP if all findings dropped - the read-back below
 applies there. In an INTERACTIVE session the call returns raw validator
@@ -436,7 +436,7 @@ never invents them.
 
 ---
 
-## Interactive Walkthrough Phase (fn-32.3 --interactive) — all backends
+## Interactive Walkthrough Phase (--interactive) — all backends
 
 When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
 (still NEEDS_WORK after validator if `--validate` also set), walk through

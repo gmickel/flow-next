@@ -365,7 +365,7 @@ $FLOWCTL memory add \
   --body-file /tmp/memory-body.md
 ```
 
-`memory add` always creates unless you pass explicit `--update <id>` (fn-113). The JSON response always includes `matches` (scored retrieval signal): on high overlap, either re-run with `--update <match-id>` to fold into the existing entry, or accept the create. Moderate overlap creates a new entry with `related_to` cross-reference. The worker owns the update-vs-create judgment.
+`memory add` always creates unless you pass explicit `--update <id>`. The JSON response always includes `matches` (scored retrieval signal): on high overlap, either re-run with `--update <match-id>` to fold into the existing entry, or accept the create. Moderate overlap creates a new entry with `related_to` cross-reference. The worker owns the update-vs-create judgment.
 
 Optional flags with sensible defaults (omit unless you need to override):
 - `--problem-type` — derived from `--category` (`runtime-errors` → `runtime-error`, `build-errors` → `build-error`, `test-failures` → `test-failure`; other categories default to `build-error`). Pass explicitly only when the derived default is wrong.
@@ -404,7 +404,7 @@ commit, or select more work. The conductor joins the full wave, integrates,
 reviews, updates the evidence for integrated commit IDs, and calls
 `flowctl done`.
 
-**host-deferred branch (fn-123 R5) — DO NOT run `flowctl done`.** When `REVIEW_MODE` is `host-deferred`: run the Verify block below as normal (the gates still run), write your summary markdown and evidence JSON to the handover paths (same content you would pass to `done`), and RETURN with the task still `in_progress`. Report the file paths, commits, and gate evidence in your final message. The conductor runs the mandatory host review and calls `flowctl done` itself only on a SHIP verdict — a task must never be `done` before its host review. Every other REVIEW_MODE proceeds through this phase unchanged.
+**host-deferred branch — DO NOT run `flowctl done`.** When `REVIEW_MODE` is `host-deferred`: run the Verify block below as normal (the gates still run), write your summary markdown and evidence JSON to the handover paths (same content you would pass to `done`), and RETURN with the task still `in_progress`. Report the file paths, commits, and gate evidence in your final message. The conductor runs the mandatory host review and calls `flowctl done` itself only on a SHIP verdict — a task must never be `done` before its host review. Every other REVIEW_MODE proceeds through this phase unchanged.
 
 **Verify before completing (if project has tests/lints):**
 ```bash
@@ -460,7 +460,7 @@ Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 in the SAME block, so no shell variable has to survive across tool calls.
 `base_commit` is an additive evidence field — always include it. Include any
 `GATE_SKIPPED` lines recorded during this task as plain strings in `tests[]`
-alongside real command strings (fn-99 plain-string schema - no new fields or
+alongside real command strings (plain-string schema - no new fields or
 objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
@@ -492,7 +492,7 @@ stage: impl-review - ran [<start>..<end>] | skipped(config: REVIEW_MODE=none) | 
 EOF
 ```
 
-**Stage-outcome lines (fn-178):** the summary records one `stage:` line for
+**Stage-outcome lines:** the summary records one `stage:` line for
 every optional stage THIS worker orchestrated (the impl-review dispatch) — pick
 the branch that happened and delete the others. A
 skipped stage is an event with a reason (policy/config/empty/error), never an
@@ -510,7 +510,7 @@ EVIDENCE_FILE="/tmp/evidence.json"
 <FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
 ```
 
-**Stage the receipt (fn-192 / #346):** `done` writes the summary into the
+**Stage the receipt:** `done` writes the summary into the
 TRACKED task file after your Phase 3 commit - it reports the path under
 `modified_paths` (and prints a note when the file is left dirty). Commit it
 now with the standard catch-all staging (`git add -A && git commit -m

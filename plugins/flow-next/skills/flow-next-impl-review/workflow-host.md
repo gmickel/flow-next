@@ -2,7 +2,7 @@
 
 Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
-**fn-123 R5:** `host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
+`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
 
 ## Critical rules
 
@@ -14,7 +14,7 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; the CLI backends exist for exactly that, and the user chose `host` to avoid them. Dispatch through the harness's own subagent primitive with the model named in the dispatch; an unhonored model request degrades to the session model, and then rule 5 decides — never a CLI fallback
 
 
-**fn-169 — host is the documented always-inject exception.** The `codex` backend
+**Host is the documented always-inject exception.** The `codex` backend
 resumes the reviewer's own session on a re-review and therefore sends the
 shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
 keep injecting unconditionally until their resume semantics are measured the way
@@ -46,7 +46,7 @@ subagent prompt — it has the same repository you do.
 
 The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
-**First round of a scope = three-draw fan-out (fn-215).** The first review round
+**First round of a scope = three-draw fan-out.** The first review round
 dispatches **three** fresh read-only reviewer subagents — one per fixed axis
 lens — and you merge their findings into one consolidated set for one fix pass.
 Re-review rounds after fixes dispatch exactly **one** fresh subagent carrying
@@ -209,7 +209,7 @@ defaults to the standard three same-pin draws.
 ### Round 2+: one fresh subagent, merged container injected
 
 Every re-review dispatches exactly **one** fresh read-only subagent — host
-sessions are never resumed (fn-123): no context reuse, no fabricated resume
+sessions are never resumed: no context reuse, no fabricated resume
 ids. Inject the FULL merged prior-finding container from the previous round's
 receipt into its prompt (every merged ordinal present, rendered as structured
 `findings.items` per the list below) — the fresh subagent holds nothing from

@@ -1,16 +1,18 @@
 # Pipeline variations - worked routes through the menu
 
-For a ready, cohesive spec and a capable coding agent, start with `/flow-next:work <spec-id> --no-plan`. The spec remains the acceptance contract; the owner investigates and implements it through Flow-Next's normal work pipeline. Separate task planning helps when dependencies, separate ownership, staged delivery, or execution constraints need a durable decomposition.
+For a ready, cohesive spec and a capable coding agent, start with `/flow-next:work <spec-id> --no-plan`. The spec remains the acceptance contract; the owner investigates and implements it through Flow-Next's normal work pipeline. Separate task planning is the exception: it is chosen on a positive signal, never on size or risk alone.
 
-This page explains which stages help a piece of work. [Running lean](running-lean.md) describes optional subsystems, and [pipeline routing](orchestration.md#pipeline-routing-who-decides-the-shape) names the runtime deciders. The examples below are arrangements you can compose.
+`/flow-next:flow` is the conductor that applies these rules for you: say what you have and it picks the smallest sufficient route, runs it, and stops at the next decision that is yours. `/flow-next:flow --explain` shows the route and its reason without running anything. The rules themselves live in the [flow skill's routing reference](../skills/flow-next-flow/SKILL.md), one small file per rule; this page is the narrative that walks the worked routes and links each rule where the story touches it. [Running lean](running-lean.md) describes optional subsystems, and [pipeline routing](orchestration.md#pipeline-routing-who-decides-the-shape) names the runtime deciders.
 
 ## Pick by risk and unknowns
 
 Choose refinement, decomposition, and verification separately:
 
-1. **Refine material choices.** Use capture to preserve intent and interview to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
-2. **Plan coordination.** Use plan when dependencies, separate ownership, staged delivery, or execution constraints benefit from explicit tasks. Risk, line count, and multiple files alone do not require decomposition. Otherwise, recommend execution through `/flow-next:work <id> --no-plan` for a ready cohesive spec. Unknown model identity does not require a detector or a blocking question; use the available context and explicit user instructions.
-3. **Verify the relevant risk.** An explicit `/flow-next:plan-review <id>` can review the spec's design before task files exist. Configured implementation review, acceptance coverage, completion-review policy, and opted-in live QA apply independently of the planning choice. Neither review nor QA guarantees every regression will be caught.
+1. **Refine material choices.** Use capture to preserve intent and refine to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
+2. **Plan coordination.** Direct execution is the default; plan needs a positive signal. The signals, and the things that never count as one, are stated once in [`plan-vs-no-plan.md`](../skills/flow-next-flow/references/plan-vs-no-plan.md). Whether one intent is one spec or several is the [spec-count rule](../skills/flow-next-flow/references/spec-count.md).
+3. **Verify the relevant risk.** An explicit `/flow-next:plan-review <id>` can review the spec's design before task files exist. Which review, QA, and completion gate applies, and from which config key or flag, is [`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md); the gates apply independently of the planning choice. Neither review nor QA guarantees every regression will be caught.
+
+Which starting state takes which route, with the positive signal and the safe skip for each, is the [route matrix](../skills/flow-next-flow/references/route-matrix.md). Before a fork becomes a question, [prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) decides whether running something settles it. Where an attended run ends, and what converging an open PR means, is the [tail rule](../skills/flow-next-flow/references/tail.md).
 
 ## Before the pipeline: discovery is upstream, often already done
 
@@ -22,11 +24,16 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → interview → plan → plan-review → work → [opt-in qa] → make-pr → land |
+| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → refine → plan → plan-review → work → [opt-in qa] → make-pr → land |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
+| [Refactoring](#refactoring) | Structure changes, behaviour does not | pin the contract as the R-ID → work → review |
+| [Performance](#performance) | A measured slowness to move once | baseline as the R-ID → work → post-change measurement as evidence |
+| [Hill climb](#hill-climb) | One metric against a target, many attempts | frozen harness → one change, one measurement, keep or revert, inside work |
+| [Investigation](#investigation) | A read-only question | cited answer; no `.flow/` write, no PR |
+| [Prototype](#prototype) | A fork whose answer is observable | throwaway build → observed decision → capture or work |
 | [Docs or chore](#docs-or-chore) | Near-zero risk, fully known | direct change → triage-skip receipt → PR |
 
 ### Epic
@@ -35,10 +42,10 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 ```mermaid
 flowchart LR
-    E([Epic intent]) --> C[/capture/] --> I[/interview/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
+    E([Epic intent]) --> C[/capture/] --> I[/refine/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
 ```
 
-The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **interview sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
+The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
 
 ### Feature, requirements known
 
@@ -85,14 +92,34 @@ A small task can use the same direct route as a larger cohesive change. `/flow-n
 
 ### Bug or defect
 
-**Signal:** the unknown is not the requirements - it's the **cause**. The risk is regression.
+**Signal:** the unknown is not the requirements - it's the **cause**. The risk is regression. This is the defect variant flow routes a reported defect to, whatever form the report took.
 
 ```mermaid
 flowchart LR
     R([Bug report]) --> Repro[reproduce as failing test] --> W[/work/] --> Rev[/impl-review/]
 ```
 
-The sharpening tool for a defect is **reproduction, not conversation** - an interview is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+The sharpening tool for a defect is **reproduction, not conversation** - refine is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+
+### Refactoring
+
+**Signal:** the structure changes and the behaviour does not. The pinned contract is the R-ID; the row in the [route matrix](../skills/flow-next-flow/references/route-matrix.md) names the pin and the skip.
+
+### Performance
+
+**Signal:** a measured slowness to move once. The baseline and its target are the R-ID and the post-change measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names what counts as a measurement.
+
+### Hill climb
+
+**Signal:** one metric against a target through many attempts. The target is the R-ID and each attempt's comparable measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row separates it from the one-off fix.
+
+### Investigation
+
+**Signal:** a read-only question. The deliverable is a cited answer with no `.flow/` write and no PR; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names the sources and when a question routes as a change instead.
+
+### Prototype
+
+**Signal:** a fork whose answer is observable. [Prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) settles it and the observed decision routes the real build to capture or work.
 
 ### Docs or chore
 
@@ -116,14 +143,14 @@ Skipping a stage never skips the **evidence, consent, or review contract** that 
 
 That set - gates, receipts, evidence, review - is the verification spine (the docs-site page *Verification Spine* is its long-form treatment). The variants differ in which unknowns they pay to convert; none of them touches the spine.
 
-The capture and plan closers print one `Recommended next:` line using the distinctions above. Live QA remains opt-in (`pipeline.qa`, default off). Pilot can advance QA findings or inability to verify into a draft PR; the draft and its evidence do not grant merge approval.
+The capture and plan closers, `flow --explain`, and flow's own route step all read the same [routing reference](../skills/flow-next-flow/SKILL.md), so the recommendation you see and the route that runs cannot diverge. Live QA is `pipeline.qa` `off | on | auto`, default off; `auto` runs QA only when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, and records `skipped(reason)` otherwise ([`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md)). Pilot can advance QA findings or inability to verify into a draft PR; the draft and its evidence do not grant merge approval.
 
 ## See also
 
 - [`../../../README.md`](../../../README.md#compose-the-pipeline) - how the stages compose and the composition moves (chain, prompt-into, reorder, parallelize).
-- [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the live router: one situation in, the smallest sufficient route out.
-- [`../skills/flow-next-capture/workflow.md`](../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) - capture's Phase 6 closer, which judges the just-written spec against this doc's rule and prints its `Recommended next:` line.
-- [`../skills/flow-next-plan/references/next-steps-menu.md`](../skills/flow-next-plan/references/next-steps-menu.md) - plan's interactive menu, which applies this doc's rule to the plan-review-vs-work decision.
+- [`../skills/flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md) - `/flow-next:flow`, the attended conductor that applies the routing reference; `--explain` shows the route without running it.
+- [`../skills/flow-next-capture/workflow.md`](../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) - capture's Phase 6 closer, which reads the routing reference and prints its `Recommended next:` line.
+- [`../skills/flow-next-plan/references/next-steps-menu.md`](../skills/flow-next-plan/references/next-steps-menu.md) - plan's interactive menu, which reads the same reference for the plan-review-vs-work decision.
 - [`running-lean.md`](running-lean.md) - the layer axis: which subsystems to run at all, priced.
 - [`teams.md`](teams.md) - the full nine-step lifecycle and the handover objects the epic variant produces.
 - [`architecture.md`](architecture.md) - what `.flow/` holds regardless of route.

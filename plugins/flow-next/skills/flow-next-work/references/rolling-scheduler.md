@@ -19,7 +19,7 @@ Contents:
 - [3e Plan-sync stage lines](#3e-plan-sync-stage-lines) - mandatory skip line per completed task (plan-sync-on runs took the wave route)
 - [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, completion gate pointer, end-of-run notes cleanup
 
-**Why isolated worktrees (design rationale, fn-203 eval).** The pre-registered
+**Why isolated worktrees (design rationale).** The pre-registered
 three-arm eval also tested this scheduler over a single shared checkout with
 commit discipline (stage only your declared paths, commit under a mutex). That
 arm was faster still - and failed quality parity, with a measured mechanism:
@@ -130,7 +130,7 @@ Rolling run ended: spec contended (fn-X.N in_progress by another run) - quiesce 
 This is the same fail-closed posture as 3b's claim contention: runs never
 steal from or bless over each other.
 
-Apply the **admission rule (fail-closed - the fn-176 wave rule of phases.md
+Apply the **admission rule (fail-closed - the wave rule of phases.md
 3a, re-scoped from wave peers to the in-flight set)**. Admission within one
 event is **incremental**: consider candidates one at a time (ready-list
 order), and judge each against the **comparison set** = every task currently

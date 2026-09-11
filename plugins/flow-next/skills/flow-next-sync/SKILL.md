@@ -23,7 +23,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 Arguments: $ARGUMENTS
 Format: `<id> [--dry-run]`
 
-- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or spec ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`), **or a resolvable tracker handle** (`wor-17` / `wor-17.M`) that `flowctl show` maps to the linked spec/task (fn-52.10, R16)
+- `<id>` - task ID `fn-N-slug.M` (or legacy `fn-N.M`, `fn-N-xxx.M`) or spec ID `fn-N-slug` (or legacy `fn-N`, `fn-N-xxx`), **or a resolvable tracker handle** (`wor-17` / `wor-17.M`) that `flowctl show` maps to the linked spec/task
 - `--dry-run` - show changes without writing
 
 ## Workflow
@@ -39,7 +39,7 @@ Parse $ARGUMENTS for:
 - `--dry-run` flag = `DRY_RUN` (true/false)
 
 **Validate ID first (handle-recognition rule, R16):**
-- **The id is resolved by `flowctl show`, not by a prefix check.** A session that rejects a resolvable tracker handle as an unknown id — because it gated on "must start with `fn-`" — has broken this. Route the arg through `$FLOWCTL show <ID> --json` (Step 3); flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new id. `/flow-next:sync wor-17` therefore resolves the linked spec.
+- **The id is resolved by `flowctl show`, not by a prefix check.** A session that rejects a resolvable tracker handle as an unknown id — because it gated on "must start with `fn-`" — has broken this. Route the arg through `$FLOWCTL show <ID> --json` (Step 3); flowctl's widened resolver maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new id. `/flow-next:sync wor-17` therefore resolves the linked spec.
 - If no ID provided: "Usage: /flow-next:sync <id> [--dry-run]"
 - If the arg does not resolve via `flowctl show` (Step 3): "Unknown ID. Use fn-N-slug (spec) / fn-N-slug.M (task), a tracker handle (wor-17), or legacy fn-N, fn-N-xxx."
 

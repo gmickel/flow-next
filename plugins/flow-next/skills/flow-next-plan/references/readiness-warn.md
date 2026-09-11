@@ -1,4 +1,4 @@
-# Plan readiness warning (fn-58)
+# Plan readiness warning
 
 Load this reference only when the Step 1 readiness soft-check printed its
 sentinel (`READINESS_WARN=true`): the input resolved to an existing SPEC that is

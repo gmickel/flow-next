@@ -115,10 +115,10 @@ configured/overridden backend — codex, copilot, cursor, claude, rp, or host �
 
 **No-plan (direct spec execution)**:
 - `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated
-- The spec's own `no_plan` field (`no_plan: true` in `$FLOWCTL show <spec-id> --json`, set at capture time or via `flowctl spec set-no-plan` — fn-214) counts the same as the flag: it is an explicit human instruction carried by the item, read at Phase 1's fork, never inferred
+- The spec's own `no_plan` field (`no_plan: true` in `$FLOWCTL show <spec-id> --json`, set at capture time or via `flowctl spec set-no-plan`) counts the same as the flag: it is an explicit human instruction carried by the item, read at Phase 1's fork, never inferred
 - Contradictory signals (the flag or field says direct, the prose asks to plan first) → the fork asks instead of guessing
 - Existing intentional tasks govern despite a stale direct signal. A sole `implicit_owner` task under `no_plan: true` retains the direct route on resume; Phase 1 resolves the distinction.
-- Recommend this route for ready cohesive specs when decomposition adds no coordination value; implementation review, coverage, completion policy and opt-in QA remain unchanged.
+- The fork's recommendation comes from the shared rule in [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md), read only when the fork fires; implementation review, coverage, completion policy and opt-in QA remain unchanged on this route.
 - The fork's semantics (ask, autonomous refusal, durable choice, implicit-task mint) live in phases.md Phase 1's gated [references/no-plan-route.md](references/no-plan-route.md), read only when the fork fires
 
 **Autonomous mode**:
@@ -153,7 +153,7 @@ If user chose review, pass the resolved review mode to every worker. On the wave
 
 **The no-tracker path is the documented default and is behaviorally unchanged.** **A tracker touchpoint fires only when the bridge is active *and* its specific event is opted in** (the **shared gating predicate**); otherwise it is a silent no-op — no new steps, no new prerequisites. A run that adds a tracker step with the bridge inactive has broken this. The bridge is active iff `flowctl sync active --json` reports `active: true`. The touchpoint mechanics — the perEvent table, the shared gating predicate, and the three dispatch payloads (phases.md 3b.1 first-claim, 3d.1 done, 3g completion-review) — live in [references/tracker-touchpoints.md](references/tracker-touchpoints.md). **That reference is read only when a phases.md tracker gate prints its active read/execute/continue sentinel** (bridge active, or the gate's probe errored — fail open); a default bridge-inactive run that loaded it has broken this. Phase 5's end-of-run `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary slot stay inline in phases.md Phase 5 and run on every run (the slot reads `n/a (bridge inactive)` when no tracker is configured).
 
-**Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
+**Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles) before treating it as idea text, so a tracker key is never re-created as a new spec.
 
 **Spec-id scheme on mint:** with a tracker configured, tracker-first is the recommended team default (`tracker.specIds=tracker`) — it stops parallel `fn-N` collisions. Gate: phases.md Phase 1.
 

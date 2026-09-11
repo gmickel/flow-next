@@ -1,4 +1,4 @@
-# Validator prompt (fn-32.1 --validate)
+# Validator prompt (--validate)
 
 You are validating review findings for false positives. The primary review has
 already produced a NEEDS_WORK verdict with a list of findings. For each finding

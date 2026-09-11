@@ -66,7 +66,7 @@ The per-backend "at a glance" descriptions, the `backend[:model[:effort]]` spec 
 
 **Per-backend rules** for `rp`, `codex`, `copilot`, `cursor`, and `claude` live at the top of each `workflow-<backend>.md` — read the active backend's file (routing table above) and follow its Critical Rules section.
 
-**For host backend (fn-123 R5 / fn-126):**
+**For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
 The review must use a fresh, tool-enforced read-only reviewer from a different
 model family and fail closed when no cross-family pin is available.
@@ -86,9 +86,9 @@ Arguments: $ARGUMENTS
 Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interactive] [focus areas]`
 
 - `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
-- `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (fn-32.1, opt-in)
-- `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (fn-32.2, opt-in)
-- `--interactive` - On NEEDS_WORK, walk through each finding with the user (Apply/Defer/Skip/Acknowledge) (fn-32.3, opt-in, Ralph-incompatible)
+- `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (opt-in)
+- `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (opt-in)
+- `--interactive` - On NEEDS_WORK, walk through each finding with the user (Apply/Defer/Skip/Acknowledge) (opt-in, Ralph-incompatible)
 - Task ID - Optional, for context and receipt tracking
 - Focus areas - Optional, specific areas to examine
 
@@ -96,7 +96,7 @@ Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interacti
 - With `--base`: Reviews only changes since that commit (task-scoped)
 - Without `--base`: Reviews entire branch vs main/master (full branch review)
 
-**Opt-in flags (fn-32):**
+**Opt-in flags:**
 - `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
   for false positives. All findings dropping upgrades verdict to SHIP.
 - `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
@@ -119,15 +119,15 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 Parse $ARGUMENTS for:
 - `--base <commit>` → `BASE_COMMIT` (if provided, use for scoped diff)
 - `--no-triage` → set `TRIAGE_DISABLED=1` (skip trivial-diff pre-check)
-- `--validate` → set `VALIDATE=true` (fn-32.1 validator pass on NEEDS_WORK)
-- `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV (fn-32.2)
-- `--interactive` → set `INTERACTIVE=true` (fn-32.3 per-finding walkthrough on NEEDS_WORK; Ralph-blocked)
+- `--validate` → set `VALIDATE=true` (validator pass on NEEDS_WORK)
+- `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV
+- `--interactive` → set `INTERACTIVE=true` (per-finding walkthrough on NEEDS_WORK; Ralph-blocked)
 - First positional arg matching `fn-*` → `TASK_ID`
 - Remaining args → focus areas
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
 
-**Opt-in flags + env vars — ONE parse fence (fn-110) for `--validate` / `--deep` / `--interactive`:**
+**Opt-in flags + env vars — ONE parse fence for `--validate` / `--deep` / `--interactive`:**
 
 ```bash
 VALIDATE=false
@@ -174,7 +174,7 @@ PHASES_RESUME_SESSION=0
 [[ "$DEEP" == "true" || "$VALIDATE" == "true" ]] && PHASES_RESUME_SESSION=1
 echo "PHASES_RESUME_SESSION=$PHASES_RESUME_SESSION"
 
-# Ralph-block (fn-32.3): Ralph must never engage interactive.
+# Ralph-block: Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
   if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
     echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
@@ -189,7 +189,7 @@ fi
 
 When that sentinel prints, STOP and Read [optional-phases.md](optional-phases.md) before any further step — it owns the phase-ordering + flag-combination matrix, the deep-pass selection bash, the validator dispatch, and the walkthrough steps (per-finding loop detail in [walkthrough.md](walkthrough.md), pass prompt templates in [deep-passes.md](deep-passes.md)). All three phases are default-OFF: when no flag fires, run the primary review only and write no `validator` / `deep_passes` / `walkthrough` receipt keys.
 
-### Step 0.5: Trivial-diff triage (fn-29.6)
+### Step 0.5: Trivial-diff triage
 
 Before invoking the configured backend, run a fast pre-check that short-circuits
 lockfile-only, docs-only, release-chore, and generated-file diffs. On SKIP, the

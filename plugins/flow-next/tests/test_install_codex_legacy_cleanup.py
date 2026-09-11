@@ -236,12 +236,12 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             # installed skills tree resolves on disk...
             pipeline_page = (owned / "pipeline-variations.md").read_text(encoding="utf-8")
             self.assertIn(
-                "](../../skills/flow-next-guide/SKILL.md)",
+                "](../../skills/flow-next-flow/SKILL.md)",
                 pipeline_page,
-                "pipeline-variations.md lost the depth-rewritten guide-skill link",
+                "pipeline-variations.md lost the depth-rewritten flow-skill link",
             )
             self.assertTrue(
-                (owned / "../../skills/flow-next-guide/SKILL.md").resolve().is_file(),
+                (owned / "../../skills/flow-next-flow/SKILL.md").resolve().is_file(),
                 "docs-mirror ../../skills/ link dangles from installed docs/flow-next/",
             )
             # ...a reach page's up-link resolves within the owned docs tree...

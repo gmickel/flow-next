@@ -28,7 +28,7 @@ PLAN = "flow-next-plan"
 LIFECYCLE_SKILLS = [
     "flow-next-audit",
     "flow-next-capture",
-    "flow-next-interview",
+    "flow-next-refine",
     "flow-next-land",
     "flow-next-make-pr",
     "flow-next-map",

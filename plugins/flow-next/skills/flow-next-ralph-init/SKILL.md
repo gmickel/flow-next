@@ -85,7 +85,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    cp "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/ralphctl.py" scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
-   # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+   # Verify the tracker package post-copy - fail loudly here, never
    # later as an ImportError mid-run
    python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
    mkdir -p scripts/ralph/hooks
@@ -102,7 +102,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    cp -R "$PLUGIN_ROOT/skills/flow-next-ralph-init/templates/." scripts/ralph/
    cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
    rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
-   # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+   # Verify the tracker package post-copy - fail loudly here, never
    # later as an ImportError mid-run
    python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
    cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/

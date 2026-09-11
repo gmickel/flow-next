@@ -165,13 +165,19 @@ Use installation commands in your terminal or the host's plugin interface as sho
 ### The recommended happy path
 
 ```bash
+/flow-next:flow <anything>           # Say what you have and let flow pick the route
+```
+
+Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bug report, a how or why question about the code, a slowness to measure, a cleanup that keeps behaviour, a design fork to settle), picks the smallest sufficient route, runs it, and stops at the next decision that is yours. Describe the request without naming a skill and flow picks it up; a stage's pick is asked inline and the run continues. `/flow-next:flow --explain` shows the route without running it. The same path by hand:
+
+```bash
 /flow-next:capture                   # 1. Synthesize conversation → .flow/specs/<id>.md
 /flow-next:work <spec-id> --no-plan  # 2. Implement a ready cohesive spec through Flow-Next
 /flow-next:make-pr <spec-id>         # 3. Open a PR connecting requirements to evidence
 /flow-next:resolve-pr <PR#>          # 4. Fetch review threads → triage → resolve
 ```
 
-This is the recommended route for a ready cohesive spec and a capable coding agent. Use plan when dependencies, separate ownership, staged delivery or execution constraints benefit from tasks; multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with interview. An explicit plan-review can review the spec design without task files. Live QA is opt-in and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
+Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal: you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with `/flow-next:refine`; when the spec names a library or API the repo does not use yet, `refine --scope=research` reads the docs first. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto` for specs with a drivable surface) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
 
 ### After every update
 
@@ -185,6 +191,7 @@ Start with the established workflow, then shape it in plain language. Choose whi
 
 | Your situation | What to say |
 |---|---|
+| Anything at all, and you want the route chosen for you | "/flow-next:flow <anything>", or "/flow-next:flow --explain" to see the route first. |
 | A ready cohesive spec | "Run /flow-next:work fn-N --no-plan with the configured checks." |
 | A migration whose approach needs checking | "Review this spec design with another model family; plan tasks if staged delivery needs them." |
 | Ready work between your visits | "Work the ready backlog overnight; stop on unresolved product decisions." |
@@ -245,14 +252,15 @@ Use the skill name or describe what you want in the agent conversation. The [ski
 
 | Job | Skills |
 |---|---|
-| Shape intent | `capture`, `interview`; `chart` for an oversized unclear idea |
+| Shape intent | `capture`, `refine`; `chart` for an oversized unclear idea |
 | Plan and implement | `plan`, `work` |
 | Review and verify | `plan-review`, `impl-review`, `spec-completion-review`, `qa` |
 | Open and finish a PR | `make-pr`, `resolve-pr`, `land` |
+| Start anywhere | `flow` |
 | Keep work moving | `pilot` |
 | Maintain project knowledge | `audit`, `features`, `strategy`, `sync` |
 
-[Guide](plugins/flow-next/skills/flow-next-guide/SKILL.md) recommends a next step when you are unsure where to start. The optional `/flow-next:chart` stage resolves an oversized idea one decision at a time before capture. [Review findings](plugins/flow-next/docs/review-findings.md) keep a defect's identity and history across review rounds.
+[Flow](plugins/flow-next/skills/flow-next-flow/SKILL.md) picks the route from whatever you have; `--explain` shows the route without running it. The optional `/flow-next:chart` stage resolves an oversized idea one decision at a time before capture. [Review findings](plugins/flow-next/docs/review-findings.md) keep a defect's identity and history across review rounds.
 
 ## Adopting in a team
 

@@ -23,7 +23,7 @@ If `.flow/` does not exist, print `No .flow/ directory — this command runs ins
 
 **Goal:** every external dependency is resolved (gh installed + authed; spec id known; base ref valid; branch ahead of base; tasks done; no existing OPEN PR) before any rendering work starts. Phase 0 has the heaviest external-state dependencies; failing fast here keeps Phases 1-4 deterministic.
 
-**Fence discipline (fn-110):** on the happy path Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls. **Interactive-ask exemption:** a Bash fence cannot pause for `AskUserQuestion`. When the §0.2–0.4 fence prints a `NEED_INPUT:` line and exits, ask the user OUTSIDE the fence, then RE-RUN that same fence with the supplied `SPEC_ID` / `BASE_REF` preset — the re-run does not count against the three-fence happy path (Ralph/autonomous never reaches it; those contexts hard-error inside the fence instead).
+**Fence discipline:** on the happy path Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls. **Interactive-ask exemption:** a Bash fence cannot pause for `AskUserQuestion`. When the §0.2–0.4 fence prints a `NEED_INPUT:` line and exits, ask the user OUTSIDE the fence, then RE-RUN that same fence with the supplied `SPEC_ID` / `BASE_REF` preset — the re-run does not count against the three-fence happy path (Ralph/autonomous never reaches it; those contexts hard-error inside the fence instead).
 
 ### 0.0 — Detect Ralph / autonomous context
 
@@ -130,7 +130,7 @@ if [[ -z "$SPEC_ID" ]]; then
   exit 3
 fi
 
-# Spec existence is validated by §0.5's single `flowctl show` capture (fn-110) —
+# Spec existence is validated by §0.5's single `flowctl show` capture —
 # no separate validation-only `show >/dev/null` call here.
 
 # --- §0.3: base-branch detection cascade ---
@@ -191,7 +191,7 @@ fi
 
 ### 0.5 — Tasks-done validation
 
-Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table reports *evidenced* coverage from done tasks; criteria claimed by still-open tasks render as `⏳ claimed, not yet evidenced` (§2.3) rather than as gaps — a draft-early PR stays renderable. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (fn-110 — the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
+Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table reports *evidenced* coverage from done tasks; criteria claimed by still-open tasks render as `⏳ claimed, not yet evidenced` (§2.3) rather than as gaps — a draft-early PR stays renderable. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
 
 | Context | Behavior |
 |---------|----------|
@@ -329,8 +329,7 @@ coverage section ONLY when `tasks_summary.uncovered_r_ids` is empty (with any
 unevidenced or undeclared criterion that table renders beside the walkthrough;
 §2.0 item 4 / pr-cognitive-aid.md §4 own the rule) - and derive the summary
 coverage ratio from the artifact when the table is suppressed. The legacy
-fields are fallback-only for those claims. **Plan-gate status is not superseded (fn-180,
-#301):** the artifact's `rid` source refs bind R-IDs to commits, so by
+fields are fallback-only for those claims. **Plan-gate status is not superseded:** the artifact's `rid` source refs bind R-IDs to commits, so by
 construction it can only express *evidenced* coverage — it has no
 claimed-not-evidenced counterpart. The §2.7 coverage abort therefore runs on
 the export payload's `tasks_summary.undeclared_r_ids` before any artifact
@@ -390,7 +389,7 @@ The body sections appear in this exact order. Skip any section whose source cont
 1. **Title** + summary block (spec id link, branch / base, task counts, R-ID coverage ratio).
 2. **TL;DR** — 3-5 plain-language bullets covering the headline change.
 3. **Not in this PR (by design)** — the spec's scope boundaries (§2.2b), so scope objections don't become review threads. Only when `spec.spec_sections.boundaries[]` is non-empty.
-4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section ONLY when `tasks_summary.uncovered_r_ids` is empty — the artifact expresses evidenced coverage only, so whenever any criterion is unevidenced or undeclared this table renders alongside the artifact as the sole carrier of the per-criterion `⏳`/`⚠️` state (fn-180, PR #327 finding).
+4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section ONLY when `tasks_summary.uncovered_r_ids` is empty — the artifact expresses evidenced coverage only, so whenever any criterion is unevidenced or undeclared this table renders alongside the artifact as the sole carrier of the per-criterion `⏳`/`⚠️` state.
 5. **Verification** — per-task test evidence + the honest "no test changed alongside X" gap fact (§2.3b), so the reviewer sees what was actually checked. Only when any `tasks[].evidence.tests[]` is non-empty. On supported/current cognitive-aid output, omit this legacy section; the artifact renders its proof and provenance.
 6. **The change, top to bottom** — the contiguous deterministic v1 artifact rendering from Phase 1.5b when supported/current; omitted on labeled legacy fallback.
 7. **Critical changes** — ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible.
@@ -428,7 +427,7 @@ All four values come from the payload directly:
 - `<spec-id>` from `spec.id`
 - `<branch>` from `PHASE0_CONTEXT.branch`, `<base>` from `PHASE0_CONTEXT.base`
 - `<done>` / `<open>` from `tasks_summary.done` / `tasks_summary.open`
-- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. The ratio keeps its evidenced (done-task) semantics — merge-gate meaning unchanged. Append the two optional qualifier clauses so a plan gate reads honestly instead of as a false 0% (fn-180, #301): `<M>` = `len(uncovered_r_ids) - len(undeclared_r_ids)` (claimed by a task that is not done yet), `<N>` = `len(tasks_summary.undeclared_r_ids)`. Omit each clause when its count is zero — an all-done spec renders the bare `<covered>/<total> evidenced` as before, and a fully-declared all-todo spec renders `0/<total> evidenced, <total> claimed not yet evidenced` rather than an unqualified `0/<total>`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read (fn-179, #303); never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
+- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. The ratio keeps its evidenced (done-task) semantics — merge-gate meaning unchanged. Append the two optional qualifier clauses so a plan gate reads honestly instead of as a false 0%: `<M>` = `len(uncovered_r_ids) - len(undeclared_r_ids)` (claimed by a task that is not done yet), `<N>` = `len(tasks_summary.undeclared_r_ids)`. Omit each clause when its count is zero — an all-done spec renders the bare `<covered>/<total> evidenced` as before, and a fully-declared all-todo spec renders `0/<total> evidenced, <total> claimed not yet evidenced` rather than an unqualified `0/<total>`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read; never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
 
 A 2-line natural-language summary appears between the H1 and the blockquote, drawn from `spec.spec_sections.goal_and_context` first paragraph, truncated to ~240 characters with sentence-boundary respect. Never invent — if `goal_and_context` is empty the summary is omitted.
 
@@ -469,7 +468,7 @@ Render `## R-ID coverage` as a markdown table. Exact column order, exact header 
 | R7 | <…> | ⚠️ uncovered | — |
 ```
 
-**Three coverage states (declared vs evidenced — fn-180, #301).** A criterion is *evidenced* when a **done** task claims it (`tasks_summary.uncovered_r_ids` is the evidenced-gap set), *claimed but not yet evidenced* when only non-done tasks claim it, and *undeclared* when no task claims it at all (`tasks_summary.undeclared_r_ids`). The claimed-not-evidenced state is a plan gate, NOT a gap: render it honestly, never as `⚠️ uncovered` and never as 0%.
+**Three coverage states (declared vs evidenced).** A criterion is *evidenced* when a **done** task claims it (`tasks_summary.uncovered_r_ids` is the evidenced-gap set), *claimed but not yet evidenced* when only non-done tasks claim it, and *undeclared* when no task claims it at all (`tasks_summary.undeclared_r_ids`). The claimed-not-evidenced state is a plan gate, NOT a gap: render it honestly, never as `⚠️ uncovered` and never as 0%.
 
 | State | Payload test | Task column | Evidence column |
 |-------|--------------|-------------|-----------------|
@@ -483,7 +482,7 @@ Field rules:
 - **Acceptance criterion column** — `spec.spec_sections.acceptance_criteria[].text` truncated to 120 characters. If truncated, append `…` (single ellipsis character, not three dots). Never edit content; truncation is mechanical at byte boundary respecting word boundaries when feasible.
 - **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. Task status does NOT filter this column: a claiming task that is still `todo`/`in_progress` renders its link exactly like a done one (that is the plan-gate state above). Only when NO task claims the R-ID — it is in `tasks_summary.undeclared_r_ids` — does the cell render `⚠️ uncovered`.
 - **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. When every claiming task is non-done, emit `⏳ claimed, not yet evidenced` — never a commit link, never `—`, never `⚠️`. For undeclared R-IDs, emit a single `—`.
-- **Orphaned-SHA marking (fn-180, #302 / PR #327 finding).** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Use the warnings from any PARSEABLE validate JSON regardless of exit code - a structural error elsewhere in the spec must not discard the orphan set; only absent or unparseable output degrades to no orphan set, links rendering as before (the marking degrades, the body never blocks).
+- **Orphaned-SHA marking.** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Use the warnings from any PARSEABLE validate JSON regardless of exit code - a structural error elsewhere in the spec must not discard the orphan set; only absent or unparseable output degrades to no orphan set, links rendering as before (the marking degrades, the body never blocks).
 
 After the table, append at most two follow-up lines — the warning line only for the undeclared set:
 
@@ -494,7 +493,7 @@ After the table, append at most two follow-up lines — the warning line only fo
 
 Emit the `⚠️` line when `tasks_summary.undeclared_r_ids` is non-empty, and the `⏳` line when `uncovered_r_ids` minus `undeclared_r_ids` is non-empty; both may appear, either may be absent. This makes a real gap explicit without dressing planned-but-unbuilt work up as one — the reviewer's eye lands on `⚠️` only where a criterion is genuinely unclaimed.
 
-If `tasks_summary.undeclared_r_ids` length equals `len(acceptance_criteria)` (no task claims ANY spec R-ID) the body is unrenderable — abort with stderr `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` exit 1. See §2.7. **An all-todo, fully-declared spec is NOT this condition** — it renders with `⏳` rows (fn-180, #301); the abort catches a spec whose tasks never declared coverage, which `/flow-next:work` cannot fix.
+If `tasks_summary.undeclared_r_ids` length equals `len(acceptance_criteria)` (no task claims ANY spec R-ID) the body is unrenderable — abort with stderr `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` exit 1. See §2.7. **An all-todo, fully-declared spec is NOT this condition** — it renders with `⏳` rows; the abort catches a spec whose tasks never declared coverage, which `/flow-next:work` cannot fix.
 
 ### 2.3b — Verification section
 
@@ -658,7 +657,7 @@ Three buckets, rendered in this order, each an H3 with a churn-estimated percent
 - **`<path/area>`** — a code path from `diff_summary.files[]`, rendered as a commit-diff link per §2.4b (code under review → `commit/<sha>#<anchor>`). Never invented (§2.5 rule 1).
 - **WHY risky** — one clause tracing to a payload signal: high churn (`high_churn_files[]`), a public-interface change (`public_exports_changed[]`), a security-sensitive path (`security_sensitive_paths[]`), a new cross-module edge (`cross_module_changes[]`), or a user-facing surface (`commands/ routes/ pages/ app/ cli/ hooks/ bin/`). **No invented risk** — every WHY names the signal it came from (§2.5 rule 11).
 - **WHAT to check** — one concrete question the reviewer can answer *by reading that file* (e.g. "Does the new export stay backward-compatible with existing callers?", "Is the trust boundary preserved on this path?"). A question, not a label; ends with `?`. This is the old Where-to-look focus question, now anchored to the specific must-review file.
-- **symbol anchor** — the specific function/symbol to open so the reviewer lands on the exact code: from `public_exports_changed[].added` / `.removed`, or fn-86's `changed_symbols` field when present. When no symbol signal exists, name the file's most-churned area in words rather than invent a symbol — degrade gracefully (§2.5 rule 2 forbids fabricated symbol names).
+- **symbol anchor** — the specific function/symbol to open so the reviewer lands on the exact code: from `public_exports_changed[].added` / `.removed`, or the `changed_symbols` field when present. When no symbol signal exists, name the file's most-churned area in words rather than invent a symbol — degrade gracefully (§2.5 rule 2 forbids fabricated symbol names).
 
 **Focus budget (load-bearing).** Must-review targets **≤ ~30%** of changed lines. When the risk signals would push it past that, carve the mechanical subset OUT explicitly into Safe to skim and name what you moved and why (e.g. "the +400-line generated fixture is mechanical — moved to skim"). The budget is the discipline that keeps Must review meaning "worth your judgment", not "everything that changed" — a must-review bucket over ~30% with no explicit carve-out is the failure the eval caught.
 
@@ -668,7 +667,7 @@ Three buckets, rendered in this order, each an H3 with a churn-estimated percent
 - byte-identical dual copy (e.g. a vendored snapshot beside its source of truth) → "byte-identical copy, parity-tested — skim"
 - task-state / receipt files under `.flow/` → "task-state, not hand-written code — skim"
 
-fn-86 will classify these deterministically (`derived_files` / `derived` fields on `diff_summary.files[]`); consume those when present, and until then name the derivation from repo knowledge (CLAUDE.md / docs). A derived file with real churn is STILL Safe to skim — the derivation, not the line count, decides the bucket.
+When the export carries `derived_files` / `derived` fields on `diff_summary.files[]`, consume those; until then name the derivation from repo knowledge (CLAUDE.md / docs). A derived file with real churn is STILL Safe to skim — the derivation, not the line count, decides the bucket.
 
 **Spot-check + Safe-to-skim rendering** — GitHub task-list checkboxes (`- [ ]`) so the reviewer's progress persists. Prefix each bucket's list with its emoji + label once as the H3. On large diffs do NOT enumerate every safe-to-skim file — group with a count and the reason: `- [ ] ⚪ 12 docs/changelog files — mechanical`.
 
@@ -742,7 +741,7 @@ The skill aborts before producing a body when the content would be unrenderable:
 
 These are guard conditions, not warnings — a body with empty TL;DR or a coverage table no task even claims is the cognitive-aid equivalent of a blank PR description, and shipping it would defeat the skill's purpose.
 
-**The coverage abort is keyed on DECLARED coverage, never on evidenced coverage (fn-180, #301).** It exists to catch a spec whose tasks never wrote `satisfies` frontmatter — the one state where the table has nothing to render and the advice ("go declare coverage") is actionable. A plan-gate spec (every task `todo`, every criterion declared) has `uncovered_r_ids == every R-ID` and `undeclared_r_ids == []`: it RENDERS, with `⏳ claimed, not yet evidenced` rows (§2.3). Keying on `uncovered_r_ids` there aborted a renderable body with advice the user could not follow — `/flow-next:work` was already the next step, and running it was impossible while make-pr refused to open the draft.
+**The coverage abort is keyed on DECLARED coverage, never on evidenced coverage.** It exists to catch a spec whose tasks never wrote `satisfies` frontmatter — the one state where the table has nothing to render and the advice ("go declare coverage") is actionable. A plan-gate spec (every task `todo`, every criterion declared) has `uncovered_r_ids == every R-ID` and `undeclared_r_ids == []`: it RENDERS, with `⏳ claimed, not yet evidenced` rows (§2.3). Keying on `uncovered_r_ids` there aborted a renderable body with advice the user could not follow — `/flow-next:work` was already the next step, and running it was impossible while make-pr refused to open the draft.
 
 `acceptance_criteria` legitimately empty (zero R-IDs because the spec is intentionally minimal) is **not** an abort — the R-ID coverage table is omitted via §2.6 and the body proceeds with a TL;DR + Critical changes pair only. This is the small-spec escape hatch.
 
@@ -948,7 +947,7 @@ Bullets emit in source order: A (spec open questions) → B (deferred review fin
 - MUST NOT paraphrase question text. Open questions are already prose-shaped by the spec author; rephrasing introduces drift.
 - MUST NOT include findings the reviewer already accepted via `/flow-next:impl-review --interactive` "Acknowledge" — the interactive walkthrough records those separately and they don't appear in the deferred sink.
 
-### 2.11b — Live QA section (fn-72 — only when a `qa_verdict` receipt is present)
+### 2.11b — Live QA section (only when a `qa_verdict` receipt is present)
 
 Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipts/qa-<spec-id>.json` (the `/flow-next:qa` skill's default committed path; written when QA ran — via the opt-in pilot stage or a manual `/flow-next:qa` pass). With no receipt the section is omitted entirely (the §2.6 rule — most specs have no QA pass, so this is the common case and the body is byte-identical to today). This is the **R7 surfacing owner**: the QA stage advances even on `NEEDS_WORK`, so the findings reach a human only if make-pr renders them here.
 

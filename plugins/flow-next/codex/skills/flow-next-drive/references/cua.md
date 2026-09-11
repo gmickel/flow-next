@@ -513,7 +513,7 @@ QA's per-scenario evidence tuple `{driver_rung, target_url, viewport,
 screenshot_path, console_path}` accepts both **`cua-driver`** (local) and
 **`cua-sandbox`** (the headless/CI surface) as valid free-form `driver_rung`
 values with **no schema or code change** — the `/flow-next:qa` ↔ flow-next-drive
-(fn-51↔fn-53) read-and-drive seam and the universal flow are unchanged. On the
+read-and-drive seam and the universal flow are unchanged. On the
 local driver's **AX-only evidence** mode (Screen Recording absent), the AX tree
 is the captured live-state evidence and `screenshot_path` is reported as
 unavailable — QA decides whether that meets its bar. The **sandbox** captures a

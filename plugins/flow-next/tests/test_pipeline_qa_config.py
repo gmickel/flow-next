@@ -6,10 +6,12 @@
 
   * pipeline.qa → "off"  (opt-in; OFF by default)
 
-This is a STRING-ENUM knob (`off|on`), NOT a bool — the pilot gate read is
-the canonical 3-clause guard (`value != "off" && value != "null"`), so the
-activating value is the literal `"on"`; bool `true` is NOT recognized
-(memory docs-activation-command-for-string-enum). The default `"off"` keeps
+This is a STRING-ENUM knob (`off|on|auto`), NOT a bool — pilot's gate read
+is the strict literal-`on` check, so pilot's activating value is exactly
+`"on"`; bool `true` is NOT recognized (memory
+docs-activation-command-for-string-enum). fn-238 added `"auto"`: flowctl
+stores it like any other value and never interprets it (the attended
+conductor reads it; pilot treats it as off). The default `"off"` keeps
 pilot's stage set + behavior byte-for-byte unchanged.
 
 Unlike the `artifacts` block, `pipeline` is NOT in
@@ -122,6 +124,14 @@ class PipelineQaConfigTestCase(unittest.TestCase):
         self.assertEqual(set_out["value"], "on")
         get_out = self._run_config_get_cli("pipeline.qa")
         self.assertEqual(get_out["value"], "on")
+
+    def test_set_auto_round_trips(self) -> None:
+        # fn-238: `auto` is stored verbatim; flowctl has no value validation
+        # on this key and never interprets it.
+        set_out = self._run_config_set_cli("pipeline.qa", "auto")
+        self.assertEqual(set_out["value"], "auto")
+        self.assertEqual(self._run_config_get_cli("pipeline.qa")["value"], "auto")
+        self.assertEqual(self._read_config_file()["pipeline"]["qa"], "auto")
 
     def test_set_off_round_trips(self) -> None:
         self._run_config_set_cli("pipeline.qa", "on")

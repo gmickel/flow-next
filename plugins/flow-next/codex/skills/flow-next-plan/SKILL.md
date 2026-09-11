@@ -12,9 +12,9 @@ Follow this skill and linked workflows exactly. Deviations cause drift, bad gate
 
 **`.flow/` is the only task tracker.** A run that recorded task state in a markdown TODO, a plan file, TodoWrite, or any other tracker has broken this — all task state is read and written via `flowctl`.
 
-### Chart boundary (fn-135)
+### Chart boundary
 
-A **ready** (or already-captured) spec whose work is understood stays in plan - chart is too late. An unshaped oversized freeform idea with consequential unknowns is **not** plan input: recommend `/flow-next:chart` first (or `/flow-next:guide` when unsure). Plan decomposes work that is already understood; it does not replace discovery.
+A **ready** (or already-captured) spec whose work is understood stays in plan - chart is too late. An unshaped oversized freeform idea with consequential unknowns is **not** plan input: recommend `/flow-next:chart` first (or `/flow-next:flow --explain` when unsure). Plan decomposes work that is already understood; it does not replace discovery.
 
 ## Preamble
 
@@ -75,7 +75,7 @@ Accepts:
 - Feature/bug description in natural language
 - Flow spec ID `fn-N-slug` (e.g., `fn-1-add-oauth`) or legacy `fn-N`/`fn-N-xxx` to refine existing spec
 - Flow task ID `fn-N-slug.M` (e.g., `fn-1-add-oauth.2`) or legacy `fn-N.M`/`fn-N-xxx.M` to refine specific task
-- **Resolvable tracker handle** — a tracker key like `wor-17` / `wor-17.2` that `flowctl show` resolves to the linked spec/task (fn-52.10). Treated as the existing spec/task, **never** as a new idea (R16). See the handle-recognition rule in Step 1.
+- **Resolvable tracker handle** — a tracker key like `wor-17` / `wor-17.2` that `flowctl show` resolves to the linked spec/task. Treated as the existing spec/task, **never** as a new idea (R16). See the handle-recognition rule in Step 1.
 - Chained instructions like "then review with /flow-next:plan-review"
 
 Examples:
@@ -106,7 +106,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 **Review mode**:
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
-- `--review=host` or "review with host" or "host review" or "use host" → host-native fresh-context reviewer subagent (fn-123 R5; pins in AGENTS.md model-routing)
+- `--review=host` or "review with host" or "host review" or "use host" → host-native fresh-context reviewer subagent (pins in AGENTS.md model-routing)
 - `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 
@@ -155,7 +155,7 @@ When Route B mints a brand-new spec, **tracker-first is the recommended team def
 
 Read [steps.md](steps.md) and follow each step in order.
 
-**Step 1 readiness soft-check (fn-58)**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
+**Step 1 readiness soft-check**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
 
 **Optional paths**: `steps.md` gates the readiness warning, the Route A refine
 path, the tracker-first mint, tracker projection, selected review, the

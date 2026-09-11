@@ -10,7 +10,7 @@
 SKILL.md's option parsing records `NO_PLAN=1` from `--no-plan` or natural-language
 intent ("no plan", "skip planning", "work directly"). The spec's own `no_plan` field
 (`no_plan: true` in the `$FLOWCTL show <spec-id> --json` already read at Phase 1 —
-fn-214, set at capture time or via `flowctl spec set-no-plan`) also sets `NO_PLAN=1`:
+set at capture time or via `flowctl spec set-no-plan`) also sets `NO_PLAN=1`:
 it is the same explicit human instruction, carried by the item instead of the
 invocation. If `NO_PLAN=1`: skip the ask, go straight to Direct route. Contradictory
 signals (flag or field says direct, prose says plan first) → ask instead of guessing.
@@ -25,21 +25,16 @@ Under ANY autonomy marker (`FLOW_RALPH`, `FLOW_AUTONOMOUS`, `AUTONOMOUS=1` /
 fixed two-var list) WITHOUT an explicit no-plan instruction, stop with the typed
 report: `NEEDS_HUMAN: spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>`.
 Never ask, never fall through. An explicit no-plan instruction — the flag or stated
-intent in the dispatching invocation, or the spec's own `no_plan: true` field (fn-214;
-an explicit human write, which is how pilot's classification routes here) — is the
+intent in the dispatching invocation, or the spec's own `no_plan: true` field (an explicit human write, which is how pilot's classification routes here) — is the
 only thing that lets an autonomous run take the Direct route; a contradicted signal
 (flag or field says direct, prose says plan) is never an explicit no-plan instruction.
 A run that asked or continued under autonomy without that instruction has broken this.
 
 ## The ask (interactive only)
 
-Recommend `$flow-next-work <spec-id> --no-plan` for a ready cohesive spec when
-decomposition adds no coordination value. Plan when dependencies, separate owners,
-staged delivery, or execution constraints benefit from an explicit breakdown. Risk
-or multiple files alone do not require planning; use spec/design review for design
-risk and interview for material unresolved product or authority choices. Ordinary
-implementation decisions may remain with the worker. Unknown model identity does
-not require a detector or plain-text numbered prompt. State the recommendation and reason.
+Read [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) and
+judge this spec against it; print its `Recommended next:` line in that file's shape,
+with the reason. Ordinary implementation decisions may remain with the worker.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
@@ -67,7 +62,7 @@ re-invoking work. No backend or `--no-plan` choice bypasses that gate.
 
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
 worker could act on): hand back to the user with a pointer to `$flow-next-plan` or
-`$flow-next-interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
+`$flow-next-refine` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
 task, no further confirmation. First persist the accepted route, including flag-only
 and interactive choices. Stop on a failed write; never mint after one. This survives
 a crash before mint without fabricating a plan-review verdict.
@@ -99,7 +94,7 @@ has any task, checked under the same lock that allocates ids — so of two concu
 direct-route runs exactly one mints. The loser STOPS with a typed report naming that
 existing task — it never claims, resumes, or dispatches in the same invocation: the
 winner is live, and same-actor `flowctl start` cannot tell the two runs apart (per-run
-claim identity is fn-204's structural fix, not this route's). A LATER re-invocation —
+claim identity is a flowctl structural fix, not this route's). A LATER re-invocation —
 after the concurrent run finished or died — resumes the task through the normal path
 (task count is 1; a second mint is unreachable by construction): crash-resume stays
 legal, concurrent double-dispatch does not.
@@ -120,7 +115,7 @@ path-ban `FORBIDDEN:` for this task has broken this.
 
 Append the license below to the minted task's 3c dispatch prompt as extra prose.
 worker.md itself gains no subagent prose, and plan-full workers get no such
-license — judgment governs there (spec Decision Context, fn-209).
+license — judgment governs there (spec Decision Context).
 
 The worker prompt for the minted task carries a broad license: parallel implementation
 of independent surfaces, background research, scouting — the SHAPE is chosen by the

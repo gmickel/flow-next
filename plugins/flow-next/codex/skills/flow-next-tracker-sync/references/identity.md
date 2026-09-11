@@ -1,6 +1,6 @@
 # Hybrid identity / naming model (R16)
 
-How a synced spec is keyed. The two id schemes **coexist**; resolution is provided by fn-52.10's widened resolver (`is_spec_id` / `expand_bare_spec_id`), so the scaffold just calls flowctl and relies on it. **Ids NEVER change — there is no rename-on-push.**
+How a synced spec is keyed. The two id schemes **coexist**; resolution is provided by flowctl's widened resolver (`is_spec_id` / `expand_bare_spec_id`), so the scaffold just calls flowctl and relies on it. **Ids NEVER change — there is no rename-on-push.**
 
 ## The two origins
 
@@ -41,14 +41,14 @@ $FLOWCTL sync set-tracker-id "fn-42-foo" "$ISSUE_UUID" --identifier "WOR-99" --u
 
 Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a **`flow:fn-42-foo` label** — the *primary, linkify-safe* back-reference (label text is never auto-linkified). A `[fn-42-foo]` title prefix is an optional secondary; avoid it when the flow id carries a tracker key (e.g. a tracker-first `wor-21-slug`), since the tracker auto-linkifies the key substring in the title — see the "Linkify hazard" note in [comments-sync.md](comments-sync.md). Body-embedded back-references (HTML comments) suffer the same mangle; the label is the durable form.
 
-## Resolution (fn-52.10 — the scaffold calls it, never reimplements it)
+## Resolution (the scaffold calls it, never reimplements it)
 
 - The tracker key is a **first-class, resolvable handle**, not just a stored label: `work wor-17`, `plan wor-17`, `show wor-17`, tasks `wor-17.M` all resolve. flowctl widened `is_spec_id` / `expand_bare_spec_id` so every command inherits resolution.
 - **Case:** `tracker.identifier` stores the display form (`WOR-17`); the canonical id derives from the lowercase key (`wor-17-slug`); alias resolution is case-insensitive.
 - The native `fn-` prefix is reserved for the sequential scheme; tracker-key resolution is tried only after the `fn-` path misses. Enumeration sees tracker-key specs, but native `fn-N` allocation counts `fn-*` only — a `wor-9999` never bumps the next `fn`.
 - **One tracker team / workspace per repo** — the bridge assumes a single team key so a bare `wor-17` resolves unambiguously. Cross-workspace same-key collision (two teams both keyed `WOR`) is out of scope and not disambiguated.
 
-> The id-grammar widening had to cover the FULL command surface, not just the named lifecycle commands (memory: `id-grammar-widening-must-cover-the-full`). That work is fn-52.10's; the scaffold relies on it being complete and only calls `flowctl <cmd> wor-17`.
+> The id-grammar widening had to cover the FULL command surface, not just the named lifecycle commands (memory: `id-grammar-widening-must-cover-the-full`). That work is flowctl's; the scaffold relies on it being complete and only calls `flowctl <cmd> wor-17`.
 
 ## Create-first - issue exists before the local id (R19)
 

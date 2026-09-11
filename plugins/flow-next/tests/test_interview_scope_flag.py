@@ -1,4 +1,4 @@
-"""Unit tests for `flowctl scope` plumbing consumed by /flow-next:interview
+"""Unit tests for `flowctl scope` plumbing consumed by /flow-next:refine
 (fn-44.9, covers R1-R3, R6-R9, R23 — scope flag parsing + per-pass write
 policy contract).
 
@@ -44,7 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
-INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-interview"
+INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-refine"
 
 
 def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -183,7 +183,7 @@ class TestScopeResolveProductionInvocationForm(unittest.TestCase):
     """
 
     def test_two_token_raw_biz_alone(self) -> None:
-        """SKILL.md: `--raw "--biz"` (user typed `/flow-next:interview --biz`)
+        """SKILL.md: `--raw "--biz"` (user typed `/flow-next:refine --biz`)
         — single-flag value, no other args. Must work via two-token form."""
         result = _resolve("--biz", fused=False)
         self.assertEqual(result["_rc"], 0)

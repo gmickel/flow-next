@@ -182,11 +182,15 @@ TEMPLATE_HASHES = {
     # SPEC_SKELETON_TEMPLATE constant used to carry: a scaffold edit is a
     # deliberate bump with a rationale in the commit message, never silent.
     "plugins/flow-next/templates/spec.md":
-        "5032758a08e0d8180d062f3e4fe2c4a9309301cb5f932a9eb6549aae59a536f5",
+        # fn-238 R15/R16: auxiliary-section comments name the renamed refine
+        # writer and add the `## Resolved via Research` block (deliberate bump).
+        "b38c5aed8a7297dc318b2d51dc854ec105e72ccba5cc0e0a508a4fdea29ff791",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
-        "eb39e0d69df44a5696d32844baf920d6cfa0440d9f918db2628b79c1d03ecb27",
+        # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
+        "e95af5266a1a943423ca774b51a4d235fb205753b9615d12c051a78e4cc650e3",
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
-        "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
+        # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
+        "773f026e1e6bb9988225d3a6365869f17fae092af6bf441aa53038cd3d683579",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
         "461c1e1fbe62eb8da5a26bef9542d956a18347d75a79cf00552c9540e126da2d",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":

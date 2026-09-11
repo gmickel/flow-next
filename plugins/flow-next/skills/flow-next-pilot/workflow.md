@@ -276,7 +276,7 @@ Fall through to the existing terminal split **only when the pool is genuinely em
 **Optional force-gate (R5).** Read the sibling key `pilot.gateClasses` (an array — NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage — no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
-# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# Derived from the SKILL.md root snapshot — NOT a config get call. The
 # path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
 # Tolerate BOTH shapes: a JSON array (`["risky"]`) AND a scalar set through the
 # CLI — `flowctl config set pilot.gateClasses risky` persists the bare string
@@ -321,13 +321,13 @@ case "$REVIEW_BACKEND" in
 esac
 ```
 
-Resolve the optional QA-stage gate (fn-72). **Strict** string-enum knob (default `off`): the stage activates **only** on the literal `on` — any other value (`off`, `null`, a coerced bool `true`, or a typo like `maybe`) leaves it off. Read once here and reused by the all-done classification. The gate is fail-open on a probe/parse error (the reference gets read; the strict literal-`on` check still decides `QA_STAGE_ENABLED`):
+Resolve the optional QA-stage gate. **Strict** string-enum knob (default `off`): the stage activates **only** on the literal `on` — any other value (`off`, `null`, a coerced bool `true`, or a typo like `maybe`) leaves it off. Read once here and reused by the all-done classification. The gate is fail-open on a probe/parse error (the reference gets read; the strict literal-`on` check still decides `QA_STAGE_ENABLED`):
 
 ```bash
 QA_STAGE_ENABLED=0
 QA_GATE=""
 ACTIVE=0
-# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# Derived from the SKILL.md root snapshot — NOT a config get call. The
 # path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
 # A missing/unreadable snapshot (SKILL.md removes it on capture failure) makes the
 # jq read ERROR, which preserves the probe's fail-open contract (error ⇒ ACTIVE).
@@ -342,7 +342,7 @@ fi   # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe (R1b) to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the Phase 2 classification below. The classification rows and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
 
-Resolve the optional stage-chain gate (fn-219). Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot — **no** new `config get`. Unlike the QA probe this read is **fail-closed**: a snapshot/parse error resolves to off, because chaining is an accelerator and the safe degradation is today's one-stage tick (the QA gate fails open only because its error branch merely reads a receipt before deciding).
+Resolve the optional stage-chain gate. Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot — **no** new `config get`. Unlike the QA probe this read is **fail-closed**: a snapshot/parse error resolves to off, because chaining is an accelerator and the safe degradation is today's one-stage tick (the QA gate fails open only because its error branch merely reads a receipt before deciding).
 
 ```bash
 CHAIN_ENABLED=0
@@ -446,7 +446,7 @@ Matrix:
 | State | Action |
 |---|---|
 | branch exists and stage is `work` | `git checkout <branch_name>`, dispatch work with `--branch=current` |
-| branch absent and stage is first `work` tick | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name` (fn-59.2 contract), so later ticks find it |
+| branch absent and stage is first `work` tick | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name`, so later ticks find it |
 | stage is `qa` and branch exists | `git checkout <branch_name>`; QA drives the running app against this branch's build (never the default branch — the app under test is the spec's build). After checkout `HEAD` equals the branch head, so the Phase 5 post-dispatch freshness verify uses `HEAD`. |
 | stage is `qa` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` (all-done with no branch is the same inconsistency as the make-pr row; QA never silently skips) |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
@@ -496,7 +496,7 @@ Done when: exactly one stage skill has been invoked and has returned — a tick 
 
 Re-read state after dispatch. Judge advancement only on observed state, never sub-skill narration. Echo the before/after evidence block so a transcript-only driver can validate it.
 
-**Stage-outcome line (fn-178).** Every evidence echo additionally carries one
+**Stage-outcome line.** Every evidence echo additionally carries one
 outcome line for the stage this tick dispatched:
 `stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)`.
 A skipped stage is an event with a reason, never an absence — a stage with no

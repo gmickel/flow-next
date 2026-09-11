@@ -317,7 +317,7 @@ for attempt in 1 2 3; do
     break
   fi
 
-  # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
+  # Eventual-consistency error class — retry. Empirically validated:
   # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
   # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
   # while the GitHub API still propagates the push.
@@ -340,7 +340,7 @@ if [[ -z "$PR_URL" ]]; then
   exit 1
 fi
 
-# 4.6b — Post-create ref verify/repair (fn-57 R4). §4.6a appends the ref to the
+# 4.6b — Post-create ref verify/repair. §4.6a appends the ref to the
 # LOCAL body file before create — the guard exists to catch a hand-rolled
 # `gh pr create` (or a stale / absent local file) that bypassed it, opening the
 # PR without its issue link. Happy path asserts LOCALLY (cheap grep on
@@ -527,7 +527,7 @@ if [[ "$WRITE_MEMORY" == "1" && -z "$EXISTING_ENTRY" ]]; then
 fi
 ```
 
-**Failure mode handling:** if `flowctl memory add` fails (frontmatter validation failed, disk write error, unknown `--update` id), the failure is **non-fatal** — the PR is already open, and re-running with `--memory` later will retry. Print the error to stderr; do NOT exit non-zero. The user's primary deliverable (the PR) succeeded; the secondary deliverable (memory entry) didn't. Overlap scoring never rejects an add (fn-113: creates + emits `matches`; only explicit `--update` mutates).
+**Failure mode handling:** if `flowctl memory add` fails (frontmatter validation failed, disk write error, unknown `--update` id), the failure is **non-fatal** — the PR is already open, and re-running with `--memory` later will retry. Print the error to stderr; do NOT exit non-zero. The user's primary deliverable (the PR) succeeded; the secondary deliverable (memory entry) didn't. Overlap scoring never rejects an add (it creates and emits `matches`; only explicit `--update` mutates).
 
 `--applies-when` is the knowledge-track required field. The phrasing follows the existing `audit-sync-codexsh-during-planning-for-2026-04-30` example: forward-looking, anchored to a module the future searcher would query for.
 
@@ -564,7 +564,7 @@ R24 invariant: under Ralph the PR URL is the **sole stdout artefact** in machine
 
 **Runs whenever the tracker bridge is active, after `gh pr create` returned a `$PR_URL` in §4.6 (never under `--dry-run` — Phase 4.0 short-circuits before Phase 5).** No separate `makePr` opt-in — linking a PR to its issue is zero-/near-zero-cost hygiene and is the whole value (Linear Diffs). Links the PR to the tracker issue (R10), append-only and conflict-free (R8). **Not Ralph-blocked** (attaching a link is a confident, conflict-free op).
 
-**In Review status push rides this SAME unconditional bridge-active path (fn-66, R2).** Because an open PR for the branch is by definition the *In Review* lifecycle rung, moving the linked issue to `In Review` is part of the same PR↔issue linkage that powers Linear Diffs — it is **NOT gated behind `tracker.perEvent.makePr != off`** (that leaf gates only the optional breadcrumb comment, not the link/status that make the bridge useful). A just-created PR is `OPEN`, so the merge-evidence probe yields `open` and `reconcileStatus(spec, issue, open)` → `in-review` (status-sync.md row 4); the dispatch below reconciles the issue to that non-terminal rung (never terminal — a freshly-opened PR has no merge evidence). The dispatch uses the **`reconcile`** op (not `push`) precisely so this In Review nudge rides the body-preserving 3-way merge — a `push` would re-render and overwrite the issue body first (steps.md push() lines 134-136), clobbering human tracker-side edits.
+**In Review status push rides this SAME unconditional bridge-active path.** Because an open PR for the branch is by definition the *In Review* lifecycle rung, moving the linked issue to `In Review` is part of the same PR↔issue linkage that powers Linear Diffs — it is **NOT gated behind `tracker.perEvent.makePr != off`** (that leaf gates only the optional breadcrumb comment, not the link/status that make the bridge useful). A just-created PR is `OPEN`, so the merge-evidence probe yields `open` and `reconcileStatus(spec, issue, open)` → `in-review` (status-sync.md row 4); the dispatch below reconciles the issue to that non-terminal rung (never terminal — a freshly-opened PR has no merge evidence). The dispatch uses the **`reconcile`** op (not `push`) precisely so this In Review nudge rides the body-preserving 3-way merge — a `push` would re-render and overwrite the issue body first (steps.md push() lines 134-136), clobbering human tracker-side edits.
 
 The complete `tracker.perEvent.makePr` mapping is explicit even though the
 link/status path is unconditional: `off`, `pull`, `push`, `reconcile`, and
@@ -589,7 +589,7 @@ if [[ -n "$PR_URL" ]] \
   # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
   # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
   # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
-  # WHY `reconcile`, NOT `push` (fn-66 regression fix): `push` renders the COMPLETE
+  # WHY `reconcile`, NOT `push`: `push` renders the COMPLETE
   # spec body and writeIssue's it BEFORE setStatus (steps.md push() lines 134-136), so
   # opening a PR just to nudge In Review would CLOBBER any human tracker-side body edits
   # made since the last sync. `reconcile` runs the 3-way body merge (steps.md reconcile()
@@ -625,9 +625,9 @@ if [[ -n "$PR_URL" ]] \
 fi
 ```
 
-The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits. The `In Review` status push is non-terminal (`reconcileStatus(spec, issue, open) → in-review`, status-sync.md row 4) — an open PR is never `Done`. **`reconcile` (not `push`) is deliberate (fn-66):** the body-preserving 3-way merge means moving the issue to In Review on PR open can never overwrite human tracker-side body edits — the prior conflict-free guarantee of the old `link $PR_URL` path, now extended to the status nudge.
+The PR is already open before this step; a tracker failure surfaces as a stderr warning and never changes the exit code (same non-fatal discipline as the `--memory` write in §5.1). The skill emits its own receipt, event-tagged `--event makePr` — the tag §5.7's end-of-run `sync check` audits. The `In Review` status push is non-terminal (`reconcileStatus(spec, issue, open) → in-review`, status-sync.md row 4) — an open PR is never `Done`. **`reconcile` (not `push`) is deliberate:** the body-preserving 3-way merge means moving the issue to In Review on PR open can never overwrite human tracker-side body edits — the prior conflict-free guarantee of the old `link $PR_URL` path, now extended to the status nudge.
 
-### 5.7 — Tracker-sync end-of-run check — LAST action before exit (fn-57)
+### 5.7 — Tracker-sync end-of-run check — LAST action before exit
 
 Read-only audit: did the `makePr` touchpoint actually fire this run (receipt-backed)? It runs independently of §5.6, so a wholesale-skipped facade call is still caught. With no tracker configured, `sync check` exits silently in constant time; the summary slot then reads `n/a (bridge inactive)` and nothing else changes. (A disabled `tracker.perEvent.makePr` leaf is never MISSING; §5.6 still fires as bridge-active hygiene, but the audit only forces opted-in events.)
 

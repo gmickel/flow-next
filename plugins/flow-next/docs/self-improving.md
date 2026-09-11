@@ -15,9 +15,9 @@ The same continuity applies when you change sessions or coding agents. The next 
 | Surface | Seeded by | Grows through | Read by | Pruned by |
 |---------|-----------|---------------|---------|-----------|
 | **Memory** (`.flow/memory/`) | Project setup (on by default) | Worker auto-capture on NEEDS_WORK → SHIP; Ralph writes the same entries autonomously | `memory-scout` during planning; worker re-anchor before each task | `/flow-next:audit` - Keep / Update / Consolidate / Replace / Delete / Harden per entry |
-| **Glossary** (`GLOSSARY.md`) | `/flow-next:prime` - repo scan, read-back gated | `/flow-next:interview` + `/flow-next:capture` term adds when new vocabulary surfaces | Plan scouts, worker re-anchor, review prompts (task-relevant terms only) | `/flow-next:audit` Phase 0.5 - staleness + alias creep |
-| **Decision records** (`.flow/memory/knowledge/decisions/`) | - (accrete from work) | `/flow-next:capture --override-strategy` prompts a record; interview + review cycles capture load-bearing choices | `memory-scout` during planning | `/flow-next:audit` - supersede-not-delete (historical trail preserved) |
-| **Strategy** (`STRATEGY.md`) | `/flow-next:strategy` | Drift surfaced read-only by plan / capture / sync - updates stay human-confirmed | `/flow-next:prospect`, plan (`## Strategy Alignment`), interview, capture | `/flow-next:strategy` (the only writer) |
+| **Glossary** (`GLOSSARY.md`) | `/flow-next:prime` - repo scan, read-back gated | `/flow-next:refine` + `/flow-next:capture` term adds when new vocabulary surfaces | Plan scouts, worker re-anchor, review prompts (task-relevant terms only) | `/flow-next:audit` Phase 0.5 - staleness + alias creep |
+| **Decision records** (`.flow/memory/knowledge/decisions/`) | - (accrete from work) | `/flow-next:capture --override-strategy` prompts a record; refine + review cycles capture load-bearing choices | `memory-scout` during planning | `/flow-next:audit` - supersede-not-delete (historical trail preserved) |
+| **Strategy** (`STRATEGY.md`) | `/flow-next:strategy` | Drift surfaced read-only by plan / capture / sync - updates stay human-confirmed | `/flow-next:prospect`, plan (`## Strategy Alignment`), refine, capture | `/flow-next:strategy` (the only writer) |
 | **Feature map** (`.flow/features/`) | `/flow-next:features` (seed when the directory is absent) | Maintain pass: source readers + one live drive of every feature | `/flow-next:qa` and `flow-next-drive` (navigation, preconditions, gotchas) | `/flow-next:features` maintain - `clean` / `changed` / `blocked` |
 
 ## Memory
@@ -26,7 +26,7 @@ Opt-in categorized store (bug / knowledge tracks) that survives context compacti
 
 ## Glossary
 
-Wrong-meaning-of-a-normal-word errors get built into plans and code. The glossary loop closes that: `/flow-next:prime` seeds `GLOSSARY.md` from the repo's load-bearing nouns (evidence-backed, read-back before write - never unseen); `/flow-next:interview` and `/flow-next:capture` add terms as new vocabulary surfaces in conversation; plan scouts, the work worker's re-anchor, and review prompts read task-relevant terms (budget-capped - never the whole file); `/flow-next:audit` prunes stale terms and alias creep as part of its normal sweep. File shape + `flowctl glossary` subcommands: [`glossary.md`](glossary.md).
+Wrong-meaning-of-a-normal-word errors get built into plans and code. The glossary loop closes that: `/flow-next:prime` seeds `GLOSSARY.md` from the repo's load-bearing nouns (evidence-backed, read-back before write - never unseen); `/flow-next:refine` and `/flow-next:capture` add terms as new vocabulary surfaces in conversation (their drafts are ratified through the shared [read-back contract](read-back.md): a compact summary and one ask, the full draft on request); plan scouts, the work worker's re-anchor, and review prompts read task-relevant terms (budget-capped - never the whole file); `/flow-next:audit` prunes stale terms and alias creep as part of its normal sweep. File shape + `flowctl glossary` subcommands: [`glossary.md`](glossary.md).
 
 ## Decision records
 
@@ -34,7 +34,7 @@ Load-bearing architectural choices land in `knowledge/decisions/` at the moment 
 
 ## Strategy
 
-`STRATEGY.md` is read by the skills that need direction (prospect's candidate filter, plan's `## Strategy Alignment` section, interview/capture conflict surfacing) - and the same reads keep it honest: drift between the doc and what's actually being built is flagged read-only, never auto-superseded. The human stays the editor via `/flow-next:strategy`. File shape + consumers: [`strategy.md`](strategy.md).
+`STRATEGY.md` is read by the skills that need direction (prospect's candidate filter, plan's `## Strategy Alignment` section, refine/capture conflict surfacing) - and the same reads keep it honest: drift between the doc and what's actually being built is flagged read-only, never auto-superseded. The human stays the editor via `/flow-next:strategy`. File shape + consumers: [`strategy.md`](strategy.md).
 
 ## Feature map
 

@@ -83,7 +83,7 @@ it never creates another.
 After a successful remote create, immediately persist the returned identity
 with `sync create-first-put`. Keep that recovery record across any later
 failure. **After minting the local spec, record the claim with
-`sync create-first-put --spec-id <id> --if-absent` (fn-182, #310)** - the CAS
+`sync create-first-put --spec-id <id> --if-absent`** - the CAS
 form, so two promoters racing on the same candidate end with one recorded
 spec. On exit `10` with `subtype=spec_already_minted`, another promoter won:
 adopt `details.recordedSpecId` and retire the locally minted duplicate with
@@ -208,7 +208,7 @@ diagnostic prose, never a routing API.
 Backlog enumeration uses the deterministic `wire list-open` contract and the
 resolved ready lane. It returns normalized issues only. It does not create Flow
 specs by itself. On Linear with `tracker.readyState` unset, `list-open` refuses
-with an `unresolved`/`ready_state` error (fn-182, #311): treat that refusal as
+with an `unresolved`/`ready_state` error: treat that refusal as
 "no ready lane configured" and fall back to Flow-ready specs - it is not an
 empty board and not a transport failure.
 

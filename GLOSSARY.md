@@ -433,24 +433,11 @@ _Relates to_: Tier
 
 ## Emission point
 
-A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/interview/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
+A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/refine/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
 
 ## No-plan route
 
-Execution through `/flow-next:work <spec-id> --no-plan`, recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
-
-
-
-
-
-
-
-
-
-
-
-
-_Relates to_: Spec, Task, R-ID
+Execution through `/flow-next:work <spec-id> --no-plan`, the default route for a ready cohesive spec and a capable coding agent. Plan is chosen only on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model); risk, size, and file count never trigger it. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 _Avoid_: plan-less mode, skip-plan flag, zero-task execution
 
@@ -466,8 +453,46 @@ The one read-only health check a drive-capable run performs before driving an in
 
 ## Routing reference
 
-The set of six small reference files the flow conductor owns, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs. The files are the route matrix, the spec-count rule, the plan-versus-no-plan rule, review/QA/completion selection, prototype-before-ask, and the make-pr/resolve-pr tail. Each opens with a decision record.
+The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files.
+
+## Driver
+
+A skill that decides which stage runs next and dispatches it: `/flow-next:flow` (attended, stops at the next human decision), `/flow-next:pilot` (one ready spec, one stage per unattended tick), and Ralph (the repo-local unattended harness). Drivers are never nested; flow refuses to run under any autonomy marker, and pilot and land never dispatch flow.
+
+_Avoid_: mode, conductor mode, autopilot
+
+_Relates to_: Routing reference, Pilot
+
+## Variant
+
+One worked route through the pipeline menu, named by its driving signal in `docs/pipeline-variations.md` and matched by a row of the route matrix: epic, feature with known requirements, no-plan, small task, bug or defect, refactoring, performance, hill climb, investigation, prototype, and docs or chore. Every variant keeps the same evidence, gate, and receipt contract; they differ only in which unknown they pay to convert.
+
+_Avoid_: pipeline mode, preset, template pipeline
+
+_Relates to_: Routing reference, No-plan route
 
 ## Prototype-before-ask
 
 Classify a fork before asking the user. An answer observable by running something (behavior, output, timing, layout) is settled by a prototype or experiment. Only a product or preference call no experiment can settle becomes a question.
+
+## Refine
+
+The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release; `/flow-next:interview` forwards for one release). A deep question pass over a spec, task, or spec file under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
+
+_Avoid_: interview skill, interview command
+
+## Research pass
+
+`/flow-next:refine --scope=research`: asks nothing; runs the read-only docs, practice, docs-gap, and memory scouts (github when gated on) and writes one `## Resolved via Research` section with a sub-block per scout and a source on every line. Skipped, with the reason printed, when the section or plan's scout findings already exist; `--force` reruns. Plan writes the same section when its research scouts run, so the pass never runs twice.
+
+_Relates to_: Read-first signal, Refine
+
+## Read-first signal
+
+The positive signal on the route matrix's ready-spec row: the spec names a library or API the repo does not already use. It sends the spec through the research pass before work on either route and is satisfied by a `## Resolved via Research` section or a plan that ran the scouts.
+
+## Why-scout
+
+The read-only agent for rationale questions. It anchors on `git blame` and the PRs behind the commits, reads the tracker thread through access the session already has, then the bug and decision memory tracks, and tiers each finding `direct`, `supported`, `inferred`, or `unknown`; the caller may not rewrite a tier. Named by the route matrix's investigation row for why questions.
+
+_Relates to_: Thinking scout tier

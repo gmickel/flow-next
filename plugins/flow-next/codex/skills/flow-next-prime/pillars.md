@@ -234,7 +234,7 @@ Ladder tier-3 sub-signals (runs -> **observable** -> **drivable**). AO/DR/TO are
 3. a drivable surface (**DR3** curl-able API with health **OR DR5** browser harness)
 4. readable runtime evidence (**AO1** agent-readable logs **OR TO1** e2e failure artifacts)
 
-The report emits the QA-readiness line only from here: tier 3 + DR-core all-pass -> recommend `/flow-next:qa` / enabling `pipeline.qa`; anything less -> name the missing DR items ("QA stage would fail here: <missing>"); shape/tier-capped repos state "QA stage not applicable to this shape".
+The report emits the QA-readiness line only from here: tier 3 + DR-core all-pass -> recommend `/flow-next:qa` and enabling `pipeline.qa auto` (or `on`); `auto` runs the live pass only on specs whose acceptance is UI behaviour on this drivable surface and records a skip otherwise; anything less -> name the missing DR items ("QA stage would fail here: <missing>"); shape/tier-capped repos state "QA stage not applicable to this shape".
 
 ### Harness & Permissions (HP)
 

@@ -353,7 +353,7 @@ jobs:
 
 ---
 
-## Structural & consent-classed templates (fn-92)
+## Structural & consent-classed templates
 
 These are the artifacts the classification-driven playbooks (playbooks.md) offer. **Every one is
 explicit-consent-only - NEVER auto-applied under `--fix-all`** (they restructure the repo, touch

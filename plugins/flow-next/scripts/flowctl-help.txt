@@ -50,8 +50,8 @@ positional arguments:
                         flow-next removal. Read-only plumbing — the skill
                         writes the file.
     spec                Spec commands (canonical)
-    scope               Scope helpers for --scope=business|technical|both
-                        (parser + write policy)
+    scope               Scope helpers (business, technical, both, research):
+                        parser and write policy
     pr-cognitive-aid    Validate, persist, select, and render a v1 PR
                         cognitive-aid artifact
     task                Task commands

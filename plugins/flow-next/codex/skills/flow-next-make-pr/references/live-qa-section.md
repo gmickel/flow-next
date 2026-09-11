@@ -1,4 +1,4 @@
-# Live QA section — `## Live QA` (fn-72)
+# Live QA section — `## Live QA`
 
 Enabled-path reference for `workflow.md` §2.11b. Read this file only when the §2.11b
 gate printed its sentinel (a `qa_verdict` receipt exists for this spec, or the probe
@@ -77,7 +77,7 @@ Field rules:
 
 **What this section MUST NOT do:**
 
-- MUST NOT mark the PR blocked or change its draft/ready state on a `NEEDS_WORK` outcome — QA is advisory (fn-72 R7). It surfaces findings; merge stays the human's + land's decision.
+- MUST NOT mark the PR blocked or change its draft/ready state on a `NEEDS_WORK` outcome — QA is advisory. It surfaces findings; merge stays the human's + land's decision.
 - MUST NOT read `verdict` in place of `qa_outcome` — the projection collapses `BLOCKED` into `NEEDS_WORK`.
 - MUST NOT inline free-form receipt text into any shell-composed JSON — render it as markdown only (the receipt was written safely by the QA skill; make-pr only *reads* it).
 - MUST NOT fabricate a Live QA section when no receipt is present — absence of the receipt means QA never ran; the section is omitted (no sentinel line).

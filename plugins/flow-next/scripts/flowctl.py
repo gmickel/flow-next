@@ -1524,17 +1524,21 @@ def get_default_config() -> dict:
         "artifacts": {"html": {"enabled": False}},
         # fn-72.2 — optional QA pipeline stage gate, seeded so
         # `config get pipeline.qa` returns the enum string "off" (NOT null)
-        # on a fresh repo via the defaults MERGE. STRING-ENUM (off|on), NOT a
-        # bool: the pilot gate is a STRICT positive read — `[ "$value" = "on" ]`
-        # — so ONLY the literal "on" activates the stage; "off" / null / a coerced
-        # bool `true` / a typo all leave it OFF (memory
-        # docs-activation-command-for-string-enum). OFF by default: pilot's
-        # stage set + behavior are byte-for-byte unchanged with it off. This
-        # is NOT in _INIT_UNMATERIALIZED_BLOCKS — unlike the artifacts block
-        # there is no setup-ceremony include-only-if-unset question gated on a
-        # `--raw` null probe, so it materializes on init like work.*/land.*.
-        # flowctl only stores/serves the knob; the QA stage is host-agent
-        # skill wiring (no new subcommand/engine).
+        # on a fresh repo via the defaults MERGE. STRING-ENUM (off|on|auto),
+        # NOT a bool. The pilot gate is a STRICT positive read,
+        # `[ "$value" = "on" ]`, so ONLY the literal "on" activates pilot's
+        # stage; "off" / "auto" / null / a coerced bool `true` / a typo all
+        # leave pilot's stage OFF (memory docs-activation-command-for-string-
+        # enum). fn-238 added "auto": the attended conductor /flow-next:flow
+        # honours it (live QA only for a drivable spec with a startable
+        # target, otherwise skipped(reason)); flowctl stores the value and
+        # never interprets it. OFF by default: pilot's stage set + behavior
+        # are byte-for-byte unchanged with it off. This is NOT in
+        # _INIT_UNMATERIALIZED_BLOCKS - it materializes on init like
+        # work.*/land.*; setup's Live QA question therefore keys on a first
+        # setup run rather than a `--raw` null probe. flowctl only
+        # stores/serves the knob; the QA stage is host-agent skill wiring
+        # (no new subcommand/engine).
         # fn-219 — pipeline.chainStages: same STRING-ENUM (off|on) and same
         # STRICT positive read (ONLY the literal "on" activates; "off" /
         # null / bool `true` / a typo = OFF). With it on, a pilot tick that
@@ -21815,7 +21819,7 @@ def render_prospect_body(
     (R4): `### High leverage (1-3)`, `### Worth considering (4-7)`,
     `### If you have the time (8+)`. Each survivor gets a `#### <N>. <title>`
     block with `**Summary:**`, `**Leverage:**`, `**Size:**`, optional
-    body fields if present, and a hard-coded `**Next step:** /flow-next:interview`.
+    body fields if present, and a hard-coded `**Next step:** /flow-next:refine`.
     """
     out: list[str] = []
     out.append("## Focus")
@@ -21867,7 +21871,7 @@ def render_prospect_body(
             persona = entry.get("persona")
             if persona:
                 out.append(f"**Persona:** {persona}")
-            out.append("**Next step:** /flow-next:interview")
+            out.append("**Next step:** /flow-next:refine")
             out.append("")
 
     out.append("## Rejected")
@@ -25269,7 +25273,7 @@ def _render_epic_skeleton_from_prospect(
     follow-up) but
     pre-fills Overview, Leverage, Suggested size, and a `## Source` link
     that points back to the prospect artifact + idea position. Acceptance
-    is left as a placeholder pointing at `/flow-next:interview` /
+    is left as a placeholder pointing at `/flow-next:refine` /
     `/flow-next:plan` for next-step refinement.
     """
     summary = (survivor.get("summary") or "").strip() or "_(summary missing — see prospect artifact)_"
@@ -25312,7 +25316,7 @@ def _render_epic_skeleton_from_prospect(
         f"- Prospected: {date_text}\n"
         "\n"
         "## Acceptance\n"
-        "_(to be defined — run `/flow-next:interview <epic-id>` or `/flow-next:plan <epic-id>` next)_\n"
+        "_(to be defined — run `/flow-next:refine <epic-id>` or `/flow-next:plan <epic-id>` next)_\n"
         "\n"
         "## Quick commands\n"
         "<!-- Required: at least one smoke command for the repo -->\n"
@@ -25587,7 +25591,7 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     else:
         print(
             f"Promoted idea #{idea_n} (\"{epic_title}\") to {epic_id}. "
-            f"Next: /flow-next:interview {epic_id}"
+            f"Next: /flow-next:refine {epic_id}"
         )
         if artifact_warning:
             print(f"  WARNING: {artifact_warning}", file=sys.stderr)
@@ -26483,7 +26487,7 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
 
 # ─── fn-44.1: scope helpers + spec skeleton ─────────────────────────────────
 #
-# Five deterministic subcommands consumed by `/flow-next:interview` and
+# Five deterministic subcommands consumed by `/flow-next:refine` and
 # `/flow-next:capture` at runtime AND by R23 unit tests. Same code path —
 # no drift possible between skill behavior and test fixtures.
 #
@@ -26494,14 +26498,16 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
 # (fn-113: `scope suggest` deleted; R25 threshold lives in capture skill prose)
 
 # Valid scope values + the question-bank filename each maps to.
-_SCOPE_VALUES = ("business", "technical", "both")
+_SCOPE_VALUES = ("business", "technical", "both", "research")
 _SCOPE_BANK_FILES = {
     "business": "questions-business.md",
     "technical": "questions-technical.md",
     # `both` runs business first, then technical. Pick the broader file path
     # consumers care about for routing; both-mode skill code reads both banks.
     "both": "questions-technical.md",
+    # `research` (fn-238 R16) asks no questions: no bank.
 }
+_RESEARCH_SECTION = "Resolved via Research"
 
 # Section-write policy per scope.
 # - `writable`  — sections this scope MAY write/refine.
@@ -26557,6 +26563,27 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
     has_h3 = bool(current_sections.get("decision_context_has_h3", False))
     biz_pass_ran = bool(current_sections.get("biz_pass_ran", False))
     tech_content = current_sections.get("tech_sections_have_content", {}) or {}
+
+    if scope == "research":
+        # fn-238 R16: the research pass writes exactly one auxiliary section
+        # and preserves every canonical section byte-for-byte.
+        return {
+            "scope": scope,
+            "writable": [_RESEARCH_SECTION],
+            "preserved": list(_BIZ_SECTIONS)
+            + list(_TECH_SECTIONS)
+            + list(_BOTH_SECTIONS)
+            + ["Decision Context"],
+            "decision_context": {
+                "shape": "substructured" if has_h3 else "flat",
+                "writable_h3": [],
+                "preserved_h3": (
+                    ["Motivation", "Implementation Tradeoffs"] if has_h3 else []
+                ),
+                "promote_flat_to_implementation_tradeoffs": False,
+            },
+            "placeholder_write": [],
+        }
 
     if scope == "technical":
         writable = list(_TECH_SECTIONS) + list(_BOTH_SECTIONS)
@@ -26732,7 +26759,7 @@ def cmd_scope_resolve(args: argparse.Namespace) -> None:
             if value not in _SCOPE_VALUES:
                 msg = (
                     f"invalid --scope value: {value!r} "
-                    f"(must be one of: business, technical, both)"
+                    f"(must be one of: business, technical, both, research)"
                 )
                 if use_json:
                     json_output({"error": msg}, success=False)
@@ -26743,7 +26770,7 @@ def cmd_scope_resolve(args: argparse.Namespace) -> None:
             continue
         # Bare `--scope` without `=VALUE` is rejected — explicit only.
         if tok == "--scope":
-            msg = "--scope requires a value: --scope=business|technical|both"
+            msg = "--scope requires a value: --scope=business|technical|both|research"
             if use_json:
                 json_output({"error": msg}, success=False)
             else:
@@ -26797,7 +26824,7 @@ def cmd_scope_bank(args: argparse.Namespace) -> None:
     if scope not in _SCOPE_VALUES:
         msg = (
             f"invalid scope: {scope!r} "
-            f"(must be one of: business, technical, both)"
+            f"(must be one of: business, technical, both, research)"
         )
         if use_json:
             json_output({"error": msg}, success=False)
@@ -26805,8 +26832,15 @@ def cmd_scope_bank(args: argparse.Namespace) -> None:
             print(f"Error: {msg}", file=sys.stderr)
         sys.exit(2)
 
+    if scope == "research":
+        msg = "research scope asks no questions and has no question bank"
+        if use_json:
+            json_output({"error": msg}, success=False)
+        else:
+            print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(2)
     bank_filename = _SCOPE_BANK_FILES[scope]
-    skill_rel = Path("plugins") / "flow-next" / "skills" / "flow-next-interview"
+    skill_rel = Path("plugins") / "flow-next" / "skills" / "flow-next-refine"
 
     candidate: Optional[Path] = None
     # Repo-root resolution.
@@ -26826,7 +26860,7 @@ def cmd_scope_bank(args: argparse.Namespace) -> None:
             c = (
                 Path(root)
                 / "skills"
-                / "flow-next-interview"
+                / "flow-next-refine"
                 / bank_filename
             )
             if c.exists():
@@ -26872,7 +26906,7 @@ def cmd_scope_write_policy(args: argparse.Namespace) -> None:
     if scope not in _SCOPE_VALUES:
         msg = (
             f"invalid scope: {scope!r} "
-            f"(must be one of: business, technical, both)"
+            f"(must be one of: business, technical, both, research)"
         )
         json_output({"error": msg}, success=False)
         sys.exit(2)
@@ -54843,14 +54877,14 @@ def main() -> None:
     _add_spec_skeleton(spec_sub)
 
     # scope — fn-44.1 helper plumbing. Read-only token-safe parsers
-    # consumed by `/flow-next:interview` (T2) and `/flow-next:capture`
+    # consumed by `/flow-next:refine` (T2) and `/flow-next:capture`
     # (T5) at runtime AND by R23 unit tests. Skill never re-implements
     # parse/policy logic inline — it calls these subcommands.
     p_scope = subparsers.add_parser(
         "scope",
         help=(
-            "Scope helpers for --scope=business|technical|both "
-            "(parser + write policy)"
+            "Scope helpers (business, technical, both, research): "
+            "parser and write policy"
         ),
     )
     scope_sub = p_scope.add_subparsers(dest="scope_cmd", required=True)

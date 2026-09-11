@@ -682,10 +682,11 @@
       "additionalProperties": false,
       "properties": {
         "qa": {
-          "description": "Optional QA pipeline stage (fn-72). String-enum, NOT a bool: only the literal on activates; any other value, including bool true, is OFF. With it on, pilot inserts one live /flow-next:qa pass at the all-tasks-done juncture before make-pr. Optional: flow-next runs fully without it. It costs a live-app drive pass per spec plus a running deploy and a configured driver; enable it when nobody will exercise the app before merge, or invoke /flow-next:qa manually on the changes that deserve it. See docs/running-lean.md.",
+          "description": "Optional live QA stage (fn-72, fn-238). String-enum off | on | auto, NOT a bool; any other value, including bool true, is OFF. off: QA runs only when you invoke /flow-next:qa. on: one live /flow-next:qa pass at the all-tasks-done juncture before make-pr on every spec. auto: /flow-next:flow runs that pass only when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, otherwise it records skipped(reason) and advances. /flow-next:pilot activates on the literal on only. flowctl stores the value and never interprets it; drivability is the skill's judgment. Optional: flow-next runs fully without it. It costs a live-app drive pass per spec plus a running deploy and a configured driver. See docs/running-lean.md.",
           "enum": [
             "off",
-            "on"
+            "on",
+            "auto"
           ],
           "default": "off"
         },

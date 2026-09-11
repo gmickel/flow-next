@@ -85,7 +85,7 @@ def _body(survivors: bool = True, grounding: bool = True) -> str:
                 "**Summary:** Re-use scout JSON across runs",
                 "**Leverage:** Small-diff lever because scout cache key already exists; impact lands on every plan run.",
                 "**Size:** S",
-                "**Next step:** /flow-next:interview",
+                "**Next step:** /flow-next:refine",
                 "",
                 "### Worth considering (4-7)",
                 "",

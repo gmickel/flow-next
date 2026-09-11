@@ -16,11 +16,11 @@ SPECS_DIR="$REPO_ROOT/.flow/specs"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
 
-`jq` and `python3` (or `python`) must be on PATH. Mode + flags come from the SKILL.md mode-detection block (`MODE` = `interactive` | `autofix`, plus `REWRITE_TARGET`, `FROM_COMPACTED_OK`, `COMMIT_YES`).
+`jq` and `python3` (or `python`) must be on PATH. Mode + flags come from the SKILL.md mode-detection block (`MODE` = `interactive` | `autofix`, plus `REWRITE_TARGET`, `FROM_COMPACTED_OK`, `COMMIT_YES`, `NO_PLAN_OPT`, `FROM_FLOW`).
 
 If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\` first.` and exit cleanly. Capture has nothing to write into.
 
-**ONE root config snapshot for the whole capture run (fn-110)** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
+**ONE root config snapshot for the whole capture run** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
 
 ```bash
 CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json"   # literal path
@@ -140,7 +140,7 @@ If no compaction signal is detected, or signals exist but the relevant evidence 
 - **0-1 strong matches** and no prior-capture artifact id in the conversation → no branch; continue to 0.5b.
 - **≥2 strong matches AND `REWRITE_TARGET` empty** → GATE ACTIVE — STOP. Read [references/duplicate-branch.md](references/duplicate-branch.md) and run its §0.5 branch (interactive: `extend` / `supersede` / `proceed-anyway` / `abort`; autofix: exit 2) before continuing. It also owns the §0.6 prior-capture-artifact branch below. When unsure whether the matches are strong, treat the gate as ACTIVE.
 
-### 0.5b — Chart briefing gate (fn-135)
+### 0.5b — Chart briefing gate
 
 When the conversation or `$ARGUMENTS` references a chart briefing input — a path matching `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id whose sidecar lists briefings — GATE ACTIVE: STOP and Read [references/chart-briefing.md](references/chart-briefing.md) before drafting. It owns admission (draft/stale fail closed; explicit risk override naming the unresolved D-IDs), evidence extraction, the provenance-separation rule, and the `chart link-spec` handoff + retry rules for Phase 5.
 
@@ -221,7 +221,7 @@ Pure prose sections (Goal & Context narrative, Architecture overview) do not nee
 
 ### 2.2 — Apply the canonical spec template
 
-The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the single source of truth for the section sequence and per-section ownership annotations (per R17 — never re-embed the section list inline; cross-link the template). At runtime the template is resolved via the 3-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Walk the resolved template in its declared order and draft each section's body using the source-tag conventions below. Before any template section, prepend `## Conversation Evidence` (Phase 1 output verbatim); after the template, append `## Requirement coverage` (the R-ID → task mapping placeholder).
+The canonical section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) - the single source of truth for the section sequence and per-section ownership annotations (per R17 - never re-embed the section list inline; cross-link the template). At runtime the template is resolved via the 3-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Walk the resolved template in its declared order and draft each section's body using the source-tag conventions below. Before any template section, prepend `## Conversation Evidence` (Phase 1 output verbatim); after the template, append `## Requirement coverage` only on a planned route (rule below; §2.8 judges the route first).
 
 Source-tag application is per-tag, not per-section — and **only on content capture newly authors**:
 
@@ -238,7 +238,7 @@ Auxiliary section rules layered on the template:
 - **Sections without conversation signal stay absent.** Do NOT auto-populate a template section from agent assumptions just because the template has a slot for it. Empty-by-default beats fabricated-by-default.
 - **`## Decision Context`** substructure (FLAT vs `### Motivation` / `### Implementation Tradeoffs` per the template's "(A) FLAT" vs "(B) SUBSTRUCTURED" branches) is governed by §2.6 — capture only emits SUBSTRUCTURED when biz-context routing has content for `### Motivation`; otherwise stays FLAT.
 - **`## Acceptance Criteria`** R-IDs allocate sequentially from R1 — capture creates fresh specs, no renumber concern. Outcome-AC entries (user-facing "what success looks like") route via biz-context signal category 3 (§2.6); other criteria stay generic.
-- **`## Requirement coverage`** appended after the template body — table mapping each R-ID to `fn-N.M (TBD — populate via /flow-next:plan)` placeholders. Capture ships unbroken-down specs; `/flow-next:plan` does the breakdown later.
+- **`## Requirement coverage`** appended after the template body only when no direct route is recorded for this capture (`NO_PLAN_OPT=0`, and under `FROM_FLOW=1` the §2.8 judgment resolved to plan): a table mapping each R-ID to `fn-N.M (TBD - populate via /flow-next:plan)` placeholders for plan to fill. On the direct route (R6a) the section is omitted: the single implicit owner task work mints is the coverage, and make-pr builds its table from that task's `satisfies` list. Capture never writes tasks on either route.
 - **`## Parked unknowns`** (optional) — fog the conversation left genuinely open. One bullet per item, each naming what would resolve it, each passing the fog-or-ticket test: decidable now → decide it in the section that owns it; resolvable by scheduled work → it is a task for `/flow-next:plan`, not fog; genuinely unknown → park it. No fog → no section. This is the honest home for "we did not settle this", and it is not a dumping ground for everything the conversation did not spell out — `[inferred]` fill-in stays tagged fill-in.
 
 **Spec durability rule.** The drafted spec states **contracts** — types, signatures, behaviors, invariants — and **never file paths or line numbers**; coordinates rot on the first refactor and feed plan-sync churn downstream. One exception: a decision-rich snippet whose exact location IS the decision. When Phase 1.2 verified a user-named file or component, that verification upgrades the source tag; it does not license pasting the path into the spec body as a contract. **Tasks are exempt and unchanged** — `**Files:**` / `**Touches:**` are a task's job, and capture writes no tasks.
@@ -291,7 +291,7 @@ Rules:
 - **One signal can land in multiple destinations** (e.g., a success metric becomes both an outcome-AC R-ID and a `### Motivation` rationale entry) — that still counts as **one** SIGNAL CATEGORY for the R25 threshold. Counting is over R24's nine categories, not over markdown destinations.
 - **Categories 1, 2, 9 (target user / problem framing / UX) collapse into `Goal & Context` prose.** Per-line tags inside the narrative are not required, but the section-level tag breakdown (e.g., `<!-- Goal & Context: 80% [user], 20% [paraphrase] -->`) must reflect them.
 - **Category 4 ("MVP scope / not doing X yet") and Category 6 ("what NOT to build") both route to `Boundaries`** but stay counted separately for R25 (different signal-source patterns: "MVP is narrow" vs "definitely not X"). **Tie-break:** a single clause matching more than one category counts ONCE, in the most specific category it matches — never double-counted toward the R25 threshold.
-- **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:interview`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
+- **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:refine`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:refine --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
 - **Constraints / risks (categories 5, 8) pick one destination per signal** — `Goal & Context` when the constraint sets up framing, `### Motivation` when it's the reason behind a trade-off. Don't double-route to both for the same signal.
 
 After §2.2's section drafting completes, compute `BIZ_SIGNAL_CATEGORIES` — the count of distinct categories (out of nine) that received at least one `[user]` or `[paraphrase]` line. This count is Phase 6's input to the R25 fire/no-fire judgment (agent-owned; no flowctl helper):
@@ -338,6 +338,10 @@ fi   # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, read [references/glossary-terms.md](references/glossary-terms.md) and run its §2.7 scan (it also owns the Phase 4.2 `Glossary?` consent and the §5.8 write). When the gate is silent — no glossary, a `# Glossary` husk, or `total_terms == 0` — `GLOSSARY_PROPOSALS` stays empty and nothing downstream changes; seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
 
+### 2.8 - Route judgment (one read, one decision)
+
+Once the criteria are drafted, read [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md) and judge the drafted spec against it once; read [`route-matrix.md`](../flow-next-flow/references/route-matrix.md) as well when the spec is not a plain ready spec (unresolved product or authority questions, design risk wanting an independent assessment). Record the result in agent context as `ROUTE_DIRECT=1` (direct) or `ROUTE_DIRECT=0` (a positive plan signal, or interview / plan-review first). It feeds the §2.2 coverage rule, the Phase 4 `Recommended next:` summary line, §5.9b under `FROM_FLOW=1`, and the Phase 6 closer. Re-judge only when an edit cycle changes the criteria. The judgment is printed on every path; the field write in §5.9b depends on how the run was invoked.
+
 ### Done when
 
 - Every section is drafted with source tags applied.
@@ -347,6 +351,7 @@ When the sentinel prints, read [references/glossary-terms.md](references/glossar
 - Untestable acceptance candidates flagged for Phase 3 must-ask.
 - `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6 R25 dispatch.
 - `GLOSSARY_PROPOSALS` collected (≤5; empty when the glossary gate is closed).
+- `ROUTE_DIRECT` judged (§2.8); `## Requirement coverage` present only on a planned route.
 
 ---
 
@@ -393,15 +398,13 @@ The **draft file** contains the spec body (what `spec set-plan` consumes — it 
 2. Every section drafted in Phase 2, with source tags visible.
 3. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
 
-**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `AskUserQuestion` are unreadable. **A draft or diff shown for approval is printed once as ordinary markdown and only pointed at from the ask.** An ask body carrying the multi-paragraph draft, the diff, or the criteria list has broken this. The two steps:
+**Print-then-ask contract (interactive - R13; the shared shape is [docs/read-back.md](../../docs/read-back.md), read it at this step):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so nothing multi-paragraph rides inside `AskUserQuestion`. What the user sees before the ask is the **compact summary** below, printed as an ordinary message. The FULL draft stays in the §4.1 file and prints only when the user asks for it; a rewrite diff (`references/rewrite-mode.md`) and a split allocation (`references/split-proposal.md`) are printed as ordinary markdown because the user ratifies them. **Then** one short `AskUserQuestion` whose body is only: a pointer to the summary and the draft path, the recommendation, and the options. An ask body carrying the draft, a diff, or the criteria list has broken this.
 
-1. **Print the FULL draft markdown as an ordinary assistant message FIRST** (the user-visible read-back — real markdown, real newlines). When `REWRITE_TARGET` is set, also print the existing → proposed **diff** (unified style; changed sections in full) as ordinary markdown in the same message or a second message immediately after the draft — never only inside the ask.
-2. **Then** issue a **short** `AskUserQuestion` whose body is only: one-line pointer to the printed draft above + compact `[inferred]` tally / warnings + recommendation + options. **Never embed multi-paragraph drafts, diffs, or criteria lists in the ask body.**
+The **summary payload** (metadata about the draft - never a re-emission of it) is what prints before the ask (interactive) or to stdout (autofix), one line each:
 
-The **summary payload** (metadata about the draft — never a re-emission of it) is what rides in the short ask (interactive) or prints to stdout (autofix):
-
-1. `title` + candidate `branch_name`.
-2. **Source-tag tally** — compact one-liner. Format:
+1. `Title: <title>` (+ candidate `branch_name` when the user named one).
+2. `Criteria: <N>` - the R-ID count.
+3. **Source-tag tally** - compact one-liner. Format:
    ```
    Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
    ```
@@ -410,26 +413,27 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
    [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
    ```
    The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
-3. **Spec-count note** — only when §2.5's gate fired; its reference owns the wording and the full proposal block.
-4. **Related context** footnote (if Phase 0.3 found memory hits) — one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
-5. **Rewrite-mode pointer** — only when `REWRITE_TARGET` is set; `references/rewrite-mode.md` owns the diff contract and the pointer clause.
-6. **Glossary term-add proposals** — only when §2.7's gate fired and collected any; `references/glossary-terms.md` owns the one-liner format.
+4. **Split note** - only when §2.5's gate fired; its reference owns the wording and the full allocation block.
+5. `Recommended next:` - the §2.8 judgment in the plan-vs-no-plan shape; before the write the id slot reads `<new spec>`.
+6. `Draft: <literal draft path>`.
+7. **Related context** footnote (if Phase 0.3 found memory hits) - one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
+8. **Rewrite-mode pointer** - only when `REWRITE_TARGET` is set; `references/rewrite-mode.md` owns the diff contract and the pointer clause.
+9. **Glossary term-add proposals** - only when §2.7's gate fired and collected any; `references/glossary-terms.md` owns the one-liner format.
 
 ### 4.2 — Interactive read-back
 
-**Step A — print first.** Emit the full draft markdown (and rewrite diff when applicable) as an ordinary assistant message. Full criteria, source tags, and section bodies live here — never only inside the ask.
+**Step A - print first.** Emit the summary payload (plus the rewrite diff or split allocation when applicable) as an ordinary assistant message. The draft itself is not printed; it is in the file named on the `Draft:` line.
 
-**Step B — short ask.** Use `AskUserQuestion`:
+**Step B - one ask.** Use `AskUserQuestion`:
 
 - **header**: `Read-back`
-- **body** (SHORT — pointer + tally/warnings + recommendation only; no multi-paragraph content):
-  1. One-line pointer: `Full draft printed above.` (rewrite: `Full draft + rewrite diff printed above.`)
-  2. Compact summary payload from §4.1 (source-tag tally, 8+ note, related-memory footnote, rewrite pointer, glossary term names) — tallies and one-liners only.
-  3. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] in the draft above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
-- **options** (frozen — each description states its consequence in plain words, "Choose this if…"):
-  - `approve` — proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
+- **body** (SHORT - pointer + recommendation only; no multi-paragraph content):
+  1. One-line pointer: `Summary printed above; draft at <path>.` (rewrite: `Summary + rewrite diff printed above; draft at <path>.`)
+  2. **The recommendation - no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend `approve and write` - the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] (open in editor, or ask for the full draft) before choosing - approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve and write - <one-sentence rationale>. Confidence: [<tier>].`
+- **options** (frozen - each description states its consequence in plain words, "Choose this if…"); the built-in free-text answer is the edit request ("change X"):
+  - `approve and write` - proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
   - `split-as-proposed` (only when §2.5's gate fired and proposed N>1) — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges; "you get N linked specs exactly as printed above"
-  - `edit` — revise specific sections (loops back to Phase 2 for those sections)
+  - `open in editor` - the draft file opens in the user's editor ("edit the file directly; capture re-reads it when you are back")
   - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
 
 Confidence tier (attaches to whichever recommendation the rule above produced):
@@ -438,12 +442,12 @@ Confidence tier (attaches to whichever recommendation the rule above produced):
 - `[judgment-call]` — `[inferred]` count is moderate (3-6) or some `[inferred]` items are load-bearing (e.g. core acceptance criteria).
 - `[your-call]` — `[inferred]` count is high (7+) or rewrite-mode with substantive divergence from existing spec.
 
-**Never** put full criteria lists, section bodies, unified diffs, or multi-paragraph glossary definitions in the ask body — they render as collapsed plain text. The printed message is the ratification surface.
+**Never** put full criteria lists, section bodies, unified diffs, or multi-paragraph glossary definitions in the ask body - they render as collapsed plain text. The printed message and the draft file are the ratification surface.
 
 **Post-approve consent gates (interactive; each is a separate short ask — the read-back options above stay frozen):**
 
-- **`Glossary?`** — only when §2.7's gate fired AND `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`. Question shape lives in `references/glossary-terms.md`; the write is §5.8.
-- **`Mark ready?`** — probe only after `approve`, before any Phase 5 write changes the rewrite target's state:
+- **`Glossary?`** - only when §2.7's gate fired AND `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve and write`. Question shape lives in `references/glossary-terms.md`; the write is §5.8.
+- **`Mark ready?`** - probe only after `approve and write`, before any Phase 5 write changes the rewrite target's state:
 
   ```bash
   ACTIVE=0
@@ -461,17 +465,17 @@ Confidence tier (attaches to whichever recommendation the rule above produced):
 
 ### 4.3 — Edit branch
 
-If user picks `edit`:
+An edit cycle starts from a free-text answer ("change X") or from `open in editor`:
 
-- Ask which sections (offer multi-select if the platform supports it; otherwise serial single-select).
-- For each section, re-run Phase 2's drafting logic for that section only, with the user's correction context as additional input.
+- **Free-text edit:** re-run Phase 2's drafting logic for the sections the answer names, with the correction as additional input.
 - **Correction turns become evidence FIRST.** When the edit reply states a requirement, constraint, or rejection in the user's own words, append it verbatim to `## Conversation Evidence` as `> user (edit cycle <N>): "<verbatim text>"` before redrafting — the §4.1 findability check runs against the evidence block, and without the append it would retag the user's genuinely-stated words as `[paraphrase]`/`[inferred]`, corrupting exactly the provenance this check protects. The ~30-line cap still applies (truncate older lines, never the correction just given).
 - Apply the revisions to the §4.1 draft file via the **Edit tool** (deltas only — never rewrite the whole file via Write).
-- Re-tally `[inferred]` count.
-- **Print-then-ask again:** **Read the FULL draft file**, then **print the full revised draft as an ordinary assistant message** (one full emission per edit cycle — the Edit render shows only the delta and is NOT a full read-back). The full-file Read also satisfies the Edit tool's read-before-edit requirement for the next cycle.
-- Re-issue the short §4.2 ask (pointer + tally + options only). Loop until user picks `approve` or `abort`.
+- **`open in editor`:** hand the draft file to the user's editor (`$VISUAL`, `$EDITOR`, or a host open command - the agent's call) and wait for the user to return.
+- **After either round, Read the FULL draft file before asking again**, so the write consumes what the user saw (this also satisfies the Edit tool's read-before-edit requirement). Re-run the findability check and re-tally `[inferred]`; re-judge §2.8 when the criteria changed.
+- **Print only the diff** (unified style, changed sections in full) as an ordinary message - never reprint the full draft; the full draft prints only when the user asks for it.
+- Re-issue the §4.2 ask. Loop until the user picks `approve and write`, `split-as-proposed`, or `abort`.
 
-Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement — consider /flow-next:interview <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the current draft first if it changed).
+Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement - consider /flow-next:refine <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the diff first if the file changed).
 
 ### 4.4 — Autofix read-back
 
@@ -479,15 +483,15 @@ In autofix mode there is no user to ask: the §4.1 Write still materializes the 
 
 ### 4.5 — Forbidden in Phase 4
 
-- **Never silently skip the read-back.** Even if `[inferred]` count is 0, interactive mode prints the full draft then asks; autofix still materializes the draft file before any `.flow/` write. The user might still want to reject for reasons unrelated to inference.
+- **Never silently skip the read-back.** Even if `[inferred]` count is 0, interactive mode prints the summary then asks; autofix still materializes the draft file before any `.flow/` write. The user might still want to reject for reasons unrelated to inference.
 - **Never embed multi-paragraph drafts, diffs, or criteria lists in the `AskUserQuestion` body.** Print-then-ask only (R13).
-- **Never auto-split.** N specs are written only through the user picking `split-as-proposed`; `approve` writes exactly one spec, and autofix never splits.
+- **Never auto-split.** N specs are written only through the user picking `split-as-proposed`; `approve and write` writes exactly one spec, and autofix never splits.
 - **Never edit a `--rewrite` target without printing the diff** as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
 - **Never write glossary terms or readiness here.** Phase 4 collects consent only; the writes happen in §5.8 / §5.9, after the spec write.
 
 ### Done when
 
-- Interactive: full draft (and rewrite diff when applicable) printed as ordinary markdown, then user picked `approve` (proceed to Phase 5, one spec), `split-as-proposed` (proceed to Phase 5 via the split reference, N specs), `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles re-print the revised draft before each short ask. On approve or split, the glossary and mark-ready consents (when their gates fired) are recorded for §5.8/§5.9.
+- Interactive: summary (and rewrite diff or split allocation when applicable) printed as ordinary markdown, then user picked `approve and write` (proceed to Phase 5, one spec), `split-as-proposed` (proceed to Phase 5 via the split reference, N specs), `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles printed only the diff, and the file was re-read after every editor round. On approve or split, the glossary and mark-ready consents (when their gates fired) are recorded for §5.8/§5.9.
 - Autofix with `--yes`: draft Written, summary payload printed, proceeding to Phase 5.
 - Autofix without `--yes`: draft Written, summary payload printed, exit 0.
 
@@ -503,7 +507,7 @@ When Phase 0.3b's gate fired, run §5.0 from `references/strategy-alignment.md` 
 
 ### 5.1 — The spec body is the §4.1 draft file
 
-The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
+The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
 
 `spec set-plan` replaces the ENTIRE markdown file with the supplied body — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
 
@@ -606,9 +610,9 @@ Runs only when §4.2's `Glossary?` consent approved ≥1 term; the `flowctl glos
 
 Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl spec ready` call site and its best-effort contract live in `references/mark-ready.md` §5.9.
 
-### 5.9b — No-plan write (flag-gated; fn-214, R5)
+### 5.9b - No-plan write
 
-Runs only when SKILL.md's mode detection recorded `NO_PLAN_OPT=1` (`--no-plan` on the invocation — the explicit opt-in, in interactive AND autofix mode; capture NEVER sets the field from conversation content or its own judgment, and autofix has no other path to it). After the spec write:
+Runs on two paths and no other: `NO_PLAN_OPT=1` (`--no-plan` on the invocation - the explicit opt-in, in interactive AND autofix mode), or `FROM_FLOW=1` with the §2.8 judgment `ROUTE_DIRECT=1` (the plan-versus-no-plan rule, applied because flow dispatched the run). A user invocation without the flag never sets the field, whatever §2.8 judged: the recommendation prints, the write does not happen. After the spec write:
 
 ```bash
 # Capture raw first, rc-checked; parse separately (one normalized line either way —
@@ -647,7 +651,7 @@ When the sentinel prints, read [references/html-lens.md](references/html-lens.md
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
 - Mark-ready write applied iff consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
-- No-plan write applied iff `--no-plan` was passed (5.9b); skipped silently otherwise, with the refusal notice printed when the set was refused.
+- No-plan write applied iff `--no-plan` was passed, or `from:flow` with a direct judgment (5.9b); skipped silently otherwise, with the refusal notice printed when the set was refused.
 - HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the single config read.
 
 ---
@@ -691,45 +695,36 @@ Next:
   /flow-next:work <SPEC_ID> --no-plan → execute the cohesive spec
   /flow-next:plan-review <SPEC_ID> → assess the spec design
   /flow-next:plan <SPEC_ID>      → research + break into tasks
-  /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:refine <SPEC_ID> → refine via Q&A
   /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
-The `Recommended next:` line is MANDATORY every run. Apply the smallest-sufficient
-rule in [docs/pipeline-variations.md](../../docs/pipeline-variations.md) to the
-just-written spec. Recommend `/flow-next:work <SPEC_ID> --no-plan` for a ready
-cohesive spec when decomposition adds no coordination value. Material unresolved
-product or authority choices lean `/flow-next:interview`; useful dependency,
-ownership or delivery boundaries lean `/flow-next:plan`; independent design
-assessment leans `/flow-next:plan-review`, which can review a spec with zero tasks.
-Risk and multi-file scope alone do not require decomposition. Use `/flow-next:guide`
-when signals conflict; `chart` remains upstream of capture. This is an informational
-recommendation with a reason, never a readiness write or permission to execute.
+The `Recommended next:` line is MANDATORY every run. It prints the §2.8 judgment from [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md) in that file's shape, with the spec id filled in (re-judge only when an edit cycle changed the criteria). When signals conflict, recommend `/flow-next:flow --explain <SPEC_ID>`. This is an informational recommendation with a reason, never a readiness write or permission to execute.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired — `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `No-plan: field set (pilot/work take the direct route)` (§5.9b — or the refusal notice when the set was refused), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise — zero noise outside the consented / enabled path.
+Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired - `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `No-plan: field set (pilot/work take the direct route)` (§5.9b, on `--no-plan` or the rule under `from:flow` - or the refusal notice when the set was refused), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens - regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise - zero noise outside the consented / enabled path.
 
 The rewrite footer variant (prefix `Spec rewritten at …`, readiness-reset announcement, re-plan hint) lives in `references/rewrite-mode.md`; the split footer (one block per created spec + shared dependency-edge line) lives in `references/split-proposal.md`.
 
 ### Biz-suggestion footer (R25)
 
-When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
+When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:refine --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
 
 ```bash
-# R25 threshold is host-agent judgment (fn-113; former flowctl helper removed).
+# R25 threshold is host-agent judgment (former flowctl helper removed).
 # Fire when 1 <= BIZ_SIGNAL_CATEGORIES < 3; otherwise stay silent.
 if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; then
   cat <<EOF
 
 This conversation has business-requirements signals; consider
-\`/flow-next:interview --scope=business $SPEC_ID\` to deep-refine the
+\`/flow-next:refine --scope=business $SPEC_ID\` to deep-refine the
 business layer.
 EOF
 fi
 ```
 
-The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
+The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:refine --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
 
 If Phase 0.3 found memory hits, append the related-context footer:
 

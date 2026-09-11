@@ -1,4 +1,4 @@
-"""Maintained docs inventory for fn-135 chart + guide surfaces.
+"""Maintained docs inventory for fn-135 chart + fn-238 flow surfaces.
 
 Fails when chart is absent from pipeline/when-to-use routes, presented as
 mandatory, skill/command counts drift from registries, canonical skills or
@@ -37,6 +37,19 @@ CHART_MODE_REFS = (
     "briefing-and-reopen.md",  # Phase 4 + 6 briefing / reopen
     "re-entry.md",  # Phase 0.2 locator re-entry
     "tracker-projection.md",  # Phase 0.2b projection gate
+)
+
+# fn-238: the flow skill owns the shared routing reference; the route matrix
+# is the router surface the chart optionality assertions read.
+FLOW_SKILL_DIR = SKILLS / "flow-next-flow"
+FLOW_ROUTE_MATRIX = FLOW_SKILL_DIR / "references" / "route-matrix.md"
+FLOW_ROUTING_REFS = (
+    "route-matrix.md",
+    "spec-count.md",
+    "plan-vs-no-plan.md",
+    "gate-selection.md",
+    "prototype-before-ask.md",
+    "tail.md",
 )
 
 REGISTRY_COUNT_FILES = (
@@ -112,18 +125,18 @@ def _slash_command_skills() -> list[str]:
 
 
 class ChartDocsFilesExist(unittest.TestCase):
-    def test_canonical_chart_and_guide_skills_exist(self) -> None:
+    def test_canonical_chart_and_flow_skills_exist(self) -> None:
         for rel in (
             "skills/flow-next-chart/SKILL.md",
             "skills/flow-next-chart/workflow.md",
-            "skills/flow-next-guide/SKILL.md",
+            "skills/flow-next-flow/SKILL.md",
             "commands/chart.md",
-            "commands/guide.md",
+            "commands/flow.md",
         ):
             path = PLUGIN / rel
             self.assertTrue(path.is_file(), f"missing {path.relative_to(REPO_ROOT)}")
 
-    def test_codex_mirror_chart_and_guide_exist(self) -> None:
+    def test_codex_mirror_chart_and_flow_exist(self) -> None:
         """Host regenerates the mirror after docs land; assert unconditionally.
 
         The mirror carries skills only - command shims are Claude-side and
@@ -133,12 +146,15 @@ class ChartDocsFilesExist(unittest.TestCase):
         mirrored = [
             "skills/flow-next-chart/SKILL.md",
             "skills/flow-next-chart/workflow.md",
-            "skills/flow-next-guide/SKILL.md",
+            "skills/flow-next-flow/SKILL.md",
         ]
         # Mode references carry the branch-disclosed prose - the mirror is
         # useless without them.
         mirrored += [
             f"skills/flow-next-chart/references/{name}" for name in CHART_MODE_REFS
+        ]
+        mirrored += [
+            f"skills/flow-next-flow/references/{name}" for name in FLOW_ROUTING_REFS
         ]
         for rel in mirrored:
             path = CODEX / rel
@@ -177,7 +193,7 @@ class ChartPipelineSurfaces(unittest.TestCase):
                 f"{path.relative_to(REPO_ROOT)} must document chart",
             )
 
-    def test_guide_on_router_surfaces(self) -> None:
+    def test_flow_on_router_surfaces(self) -> None:
         for path in (
             REPO_ROOT / "README.md",
             DOCS / "skills.md",
@@ -187,8 +203,8 @@ class ChartPipelineSurfaces(unittest.TestCase):
             text = _read(path)
             self.assertRegex(
                 text,
-                r"(?i)flow-next:guide|/flow-next:guide|flow-next-guide",
-                f"{path.relative_to(REPO_ROOT)} must mention guide",
+                r"(?i)flow-next:flow|/flow-next:flow|flow-next-flow",
+                f"{path.relative_to(REPO_ROOT)} must mention flow",
             )
 
     def test_readme_pipeline_includes_optional_chart(self) -> None:
@@ -206,12 +222,12 @@ class ChartPipelineSurfaces(unittest.TestCase):
             "README must present chart as optional",
         )
 
-    def test_skills_catalog_lists_chart_and_guide(self) -> None:
+    def test_skills_catalog_lists_chart_and_flow(self) -> None:
         skills = _read(DOCS / "skills.md")
         self.assertIn("flow-next-chart", skills)
-        self.assertIn("flow-next-guide", skills)
+        self.assertIn("flow-next-flow", skills)
         self.assertIn("/flow-next:chart", skills)
-        self.assertIn("/flow-next:guide", skills)
+        self.assertIn("/flow-next:flow", skills)
         self.assertRegex(skills, r"(?i)optional")
 
     def test_no_mandatory_chart_wording(self) -> None:
@@ -222,7 +238,7 @@ class ChartPipelineSurfaces(unittest.TestCase):
             REPO_ROOT / "CHANGELOG.md",
             DOCS,
             SKILLS / "flow-next-chart",
-            SKILLS / "flow-next-guide",
+            SKILLS / "flow-next-flow",
             PLUGIN / "templates" / "usage.md",
         ]
         offenders: list[str] = []
@@ -280,18 +296,33 @@ class ChartRegistryCounts(unittest.TestCase):
         # graduated into work's default scheduler (fn-218), so the shipped
         # counts and the published phrases (32 skills / 27 slash-command)
         # agree again and must equal the docs/skills.md table row count.
-        self.assertEqual(len(skill_dirs), 32, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 28, f"commands: {commands}")
+        # fn-238 swapped guide out for flow, so the counts stay flat.
+        # fn-238 R15 renamed interview to refine and keeps `flow-next-interview`
+        # as a one-release forwarding alias stub (plus its command shim): the
+        # filesystem/registry inventory counts them (33 dirs / 29 shims, same
+        # carve-out as the experimental tier) while the published phrases stay
+        # at the stable 32 skills / 27 slash-command. Both drop back when the
+        # alias is removed the release after.
+        self.assertEqual(len(skill_dirs), 33, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(commands), 29, f"commands: {commands}")
+        self.assertIn("flow-next-refine", skill_dirs)
+        self.assertIn("flow-next-interview", skill_dirs)
+        self.assertIn("refine", commands)
+        self.assertIn("interview", commands)
         self.assertIn("flow-next-chart", skill_dirs)
-        self.assertIn("flow-next-guide", skill_dirs)
+        self.assertIn("flow-next-flow", skill_dirs)
+        self.assertNotIn("flow-next-guide", skill_dirs)
         self.assertIn("flow-next-features", skill_dirs)
         self.assertIn("chart", commands)
-        self.assertIn("guide", commands)
+        self.assertIn("flow", commands)
+        self.assertNotIn("guide", commands)
         self.assertIn("features", commands)
-        self.assertEqual(len(slash_skills), 27, f"slash skills: {slash_skills}")
+        # the alias stub has a matching shim, so it counts as a slash skill
+        # in the inventory (28) while the published phrase stays at 27.
+        self.assertEqual(len(slash_skills), 28, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "28 commands, 32 skills"
+        expected_snippet = "29 commands, 33 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(
@@ -656,21 +687,21 @@ class ChartChangelogEntry(unittest.TestCase):
         self.assertIn("Review sidecar write transaction", section)
 
 
-class ChartGuideOptionality(unittest.TestCase):
+class ChartFlowOptionality(unittest.TestCase):
     def test_destination_test_documented(self) -> None:
         """Chart's entry condition is destination-known/route-unknown.
 
         A theme or direction has no nameable end state, so no Outcome can be
         stated and no boundary can rule anything out of scope. Both the chart
-        skill and the guide matrix must name that refusal, and the chart skill
-        must carry the verdict a driver greps for.
+        skill and the flow route matrix must name that refusal, and the chart
+        skill must carry the verdict a driver greps for.
         """
         skill = _read(CHART_SKILL_DIR / "SKILL.md")
         workflow = _read(CHART_SKILL_DIR / "workflow.md")
         chart_mode = _read(CHART_REFERENCES / "chart-mode.md")
         chart = skill + "\n" + workflow
-        guide = _read(SKILLS / "flow-next-guide" / "SKILL.md")
-        for label, text in (("chart skill", chart), ("guide skill", guide)):
+        matrix = _read(FLOW_ROUTE_MATRIX)
+        for label, text in (("chart skill", chart), ("flow route matrix", matrix)):
             self.assertRegex(
                 text,
                 r"(?i)\bdestination\b",
@@ -692,8 +723,8 @@ class ChartGuideOptionality(unittest.TestCase):
         )
         self.assertIn("references/chart-mode.md", workflow)
 
-    def test_guide_skill_optional_chart(self) -> None:
-        text = _read(SKILLS / "flow-next-guide" / "SKILL.md")
+    def test_flow_route_matrix_optional_chart(self) -> None:
+        text = _read(FLOW_ROUTE_MATRIX)
         self.assertRegex(text, r"(?i)optional")
         self.assertRegex(text, r"(?i)never (?:a )?mandatory")
         lowered = text.lower()
@@ -701,7 +732,7 @@ class ChartGuideOptionality(unittest.TestCase):
             "signal absent" in lowered
             or "skip kind" in lowered
             or "despite unresolved risk" in lowered,
-            "guide must distinguish optional-because-signal-absent from skipped-despite-risk",
+            "the route matrix must distinguish optional-because-signal-absent from skipped-despite-risk",
         )
 
 

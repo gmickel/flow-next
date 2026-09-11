@@ -24,7 +24,7 @@ CAPTURE_WF = SKILLS / "flow-next-capture" / "workflow.md"
 CAPTURE_TRACKER_REF = (
     SKILLS / "flow-next-capture" / "references" / "tracker-integration.md"
 )
-INTERVIEW_WB = SKILLS / "flow-next-interview" / "references" / "write-back.md"
+REFINE_WB = SKILLS / "flow-next-refine" / "references" / "write-back.md"
 QA_BUG = SKILLS / "flow-next-qa" / "references" / "bug-filing.md"
 SETUP_WF = SKILLS / "flow-next-setup" / "workflow.md"
 
@@ -43,7 +43,7 @@ MINT_SITES = {
     "plan": PLAN_SITE,
     "work": WORK_SITE,
     "capture": CAPTURE_SITE,
-    "interview": INTERVIEW_WB,
+    "refine": REFINE_WB,
     "qa": QA_BUG,
 }
 
@@ -114,13 +114,13 @@ class SpecIdRoutingGate(unittest.TestCase):
                     f"{name}: must name the real CLI flag shipped by task .2",
                 )
 
-    def test_plan_work_capture_interview_own_the_gate(self) -> None:
+    def test_plan_work_capture_refine_own_the_gate(self) -> None:
         """These sites implement the gate (create-first + degrade), not only mention it."""
         for name, path in (
             ("plan", PLAN_SITE),
             ("work", WORK_SITE),
             ("capture", CAPTURE_SITE),
-            ("interview", INTERVIEW_WB),
+            ("refine", REFINE_WB),
         ):
             text = _read(path)
             with self.subTest(site=name):
@@ -168,7 +168,7 @@ class SpecIdRoutingGate(unittest.TestCase):
             ("plan", PLAN_SITE),
             ("work", WORK_SITE),
             ("capture", CAPTURE_SITE),
-            ("interview", INTERVIEW_WB),
+            ("refine", REFINE_WB),
             ("qa", QA_BUG),
         ):
             text = _read(path)
@@ -196,7 +196,7 @@ class SpecIdRoutingGate(unittest.TestCase):
             ("plan", PLAN_SITE),
             ("work", WORK_SITE),
             ("capture", CAPTURE_SITE),
-            ("interview", INTERVIEW_WB),
+            ("refine", REFINE_WB),
         ):
             text = _read(path)
             with self.subTest(site=name):
@@ -338,7 +338,7 @@ class NamedIssueMintMustAttach(unittest.TestCase):
     SITES = {
         "capture": CAPTURE_TRACKER_REF,
         "plan": PLAN_MINT_REF,
-        "interview": SKILLS / "flow-next-interview" / "references" / "write-back.md",
+        "refine": SKILLS / "flow-next-refine" / "references" / "write-back.md",
         # work was omitted from this list originally, which is exactly how the
         # attach requirement went missing there for a whole review wave.
         "work": SKILLS / "flow-next-work" / "references" / "spec-id-mint.md",

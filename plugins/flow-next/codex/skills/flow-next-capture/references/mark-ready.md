@@ -70,7 +70,7 @@ Runs only when Phase 4.2's mark-ready consent recorded `mark-ready` (which impli
 "$FLOWCTL" spec ready "$SPEC_ID" --json
 ```
 
-Idempotent plumbing (fn-58.1) — re-running is a silent no-op. Best-effort: a failed write prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Readiness: marked ready` for the Phase 6 footer; on `keep-draft` (or when the question never fired) report nothing — zero footer noise outside the consent path.
+Idempotent plumbing — re-running is a silent no-op. Best-effort: a failed write prints a warning and continues — never blocks the capture (the spec is already on disk). Report `Readiness: marked ready` for the Phase 6 footer; on `keep-draft` (or when the question never fired) report nothing — zero footer noise outside the consent path.
 
 ## Phase 6 — footer lines
 

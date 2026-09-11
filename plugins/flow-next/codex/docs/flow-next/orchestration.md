@@ -9,7 +9,7 @@ flow-next is an orchestration layer, not a single-agent workflow. The host agent
 
 | Axis | The question | Who decides | Where the decision shows |
 |---|---|---|---|
-| **A. Pipeline routing** | Which stages does this item run - interview, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Capture's `Recommended next:` line, the guide router, pilot's stage classifier, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
+| **A. Pipeline routing** | Which stages does this item run - refine, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Flow (the attended conductor), capture's `Recommended next:` line, pilot's stage classifier, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
 | **B. Model routing** | Which model runs this job - the implementer, the reviewer, a scout - and from which family? | The routing block in your instruction file, `review.backend`, per-task `review:` pins, the bridge recipes, a sentence in the moment | The review receipt's `model` field, the worker dispatch prompt, the PR body's verification block |
 
 Axis A is documented below under [Pipeline routing](#pipeline-routing-who-decides-the-shape); the rest of this page is axis B. A [field case](#field-case-one-paragraph-twenty-specs) shows both axes running unattended through 38 merged pull requests, and the [setup ladder](#setup-ladder-from-nothing-to-a-standing-policy) takes a repo from zero configuration to a standing policy in five copy-paste rungs.
@@ -346,7 +346,7 @@ bridge. Reviews come from codex either way.
 
 ```text
 /flow-next:plan fn-12 --depth=deep — focus the research on the migration path; I care about rollback
-/flow-next:interview fn-12 — push hard on failure modes and operational edges, skip UI polish
+/flow-next:refine fn-12 — push hard on failure modes and operational edges, skip UI polish
 /flow-next:work fn-12 — the UI tasks stay with you; send the API plumbing out to a codex bridge
 ```
 
@@ -370,18 +370,20 @@ Backends, reviewers, and bridged implementers are prompts plus plumbing - when a
 
 ## Pipeline routing: who decides the shape
 
-The host recommends `/flow-next:work <id> --no-plan` for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. Plan for dependencies, separate ownership, staged delivery or execution constraints; refine material choices and review design risk separately. Explicit plan-review can inspect a spec without task files. Six deciders read the item's state and instructions and print their reason.
+Direct execution through `/flow-next:work <id> --no-plan` is the default for a ready cohesive spec; plan is chosen on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model). Refine material choices and review design risk separately; explicit plan-review can inspect a spec without task files. The rules live in the flow skill's [routing reference](../../skills/flow-next-flow/SKILL.md), one file per rule, and the attended decider, capture's closer, and plan's menu all read the same files. Six deciders read the item's state and instructions and print their reason.
 
 | Decider | Reads | Decides | Prints | Lives in |
 |---|---|---|---|---|
-| **Capture's next step** | The spec it just wrote: readiness, open `[inferred]` criteria, parked unknowns, design risk | `/flow-next:interview`, `/flow-next:plan-review`, `/flow-next:plan`, `/flow-next:work <id> --no-plan`, or `/flow-next:guide` when signals conflict | `Recommended next: /flow-next:<stage> <id> - <reason>` on every run | [`flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) |
-| **The guide router** | A free-form description of where you are | The smallest sufficient workflow, with the safe-skip stated | One recommendation with a positive signal and a skip condition | [`flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md#smallest-sufficient-matrix-exact) |
+| **Flow, the attended conductor** | Whatever you gave it (nothing, a spec or task id, a branch, a path, a pasted report, a how or why question, a slowness, a cleanup, a design fork, free text) plus the `.flow/` state for it | The smallest sufficient route from the shared routing reference; runs it, re-evaluates after each hop, asks a stage's pick inline, stops at the next decision that ends the run. `--explain` prints the route and does nothing else | The route, its positive signal, the safe skip and its kind, why not the alternatives; one `stage:` line per stage reached | [`flow-next-flow/SKILL.md`](../../skills/flow-next-flow/SKILL.md), [`references/route-matrix.md`](../../skills/flow-next-flow/references/route-matrix.md) |
+| **Capture's next step** | The spec it just wrote: readiness, open `[inferred]` criteria, parked unknowns, design risk | `/flow-next:refine`, `/flow-next:plan-review`, `/flow-next:plan`, or `/flow-next:work <id> --no-plan`, derived from the same routing files flow reads | `Recommended next: /flow-next:<stage> <id> - <reason>` on every run | [`flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) |
 | **Pilot's stage classifier** | One ready spec's state: tasks, plan-review status, done tasks, the recorded direct route and owner, explicit review requests, an open PR | `plan`, `plan-review`, `work`, `qa` (opt-in), `make-pr`, or defer to land | `PILOT_VERDICT=<verdict> spec=<id> stage=<stage> reason="..."` | [`flow-next-pilot/workflow.md`](../../skills/flow-next-pilot/workflow.md#phase-2-classify-the-stage) |
 | **Work's Phase 3 route** | Whether the run was given a task id, `planSync.enabled`, the open task count, the dependency closure | Rolling frontier (default) or the wave loop; a zero-task spec forks to plan-first or work-directly | `Scheduling: rolling` or `Scheduling: wave (<reason>)` before the first claim | [`flow-next-work/phases.md`](../../skills/flow-next-work/phases.md#phase-3-task-scheduling) and [`references/no-plan-route.md`](../../skills/flow-next-work/references/no-plan-route.md) |
-| **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../../skills/flow-next-impl-review/SKILL.md#step-05-trivial-diff-triage-fn-296), [`flowctl triage-skip`](flowctl.md#triage-skip) |
+| **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../../skills/flow-next-impl-review/SKILL.md#step-05-trivial-diff-triage), [`flowctl triage-skip`](flowctl.md#triage-skip) |
 | **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round three-draw fan-out, fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
 
-Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [CI-fix budget and patience window](../../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to interview, an ambiguous diff gets the full review.
+Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Pilot's classifier is unchanged and adopts the routing reference in a later spec.
+
+Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [CI-fix budget and patience window](../../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to refine, an ambiguous diff gets the full review.
 
 **Overriding a decider** is one surface each: `--no-plan` or `flowctl spec set-no-plan` for the fork, a task id instead of a spec id for the wave route, `--no-triage` for the gate, `--review=<backend>` or `flowctl task set-backend` for the reviewer, and a sentence for anything else ("use 1 reviewer instead of 3").
 
@@ -425,7 +427,7 @@ The routing this repo runs, stated in [tier](#tiers--what-kind-of-model-a-job-wa
 
 | Stage | Tier | Why |
 |---|---|---|
-| Plan (capture / interview / plan / plan-review critique) | unset - the session model | Spec authoring is inline and judgment-heavy; this is the never-delegate-judgment default |
+| Plan (capture / refine / plan / plan-review critique) | unset - the session model | Spec authoring is inline and judgment-heavy; this is the never-delegate-judgment default |
 | Plan-review | reviewer, from a different family than the planner | Uncorrelated blind spots on the highest-leverage artifact |
 | Work (implementation) | implementer | Well-specified work runs correctly on a cheaper or faster tier; the saving is real only when the spec is clear |
 | Impl-review, first pass | reviewer, measured from the **writer** - not the host | A reviewer from the family that wrote the diff re-correlates the blind spots |
@@ -543,7 +545,7 @@ fast scout: <model>
 thinking scout: <model>
 ```
 
-Name the ids your harness serves. Unset tiers stay on the session model, which is where planning, capture, interview and every verdict belong. A model the harness cannot reach falls back to the session model with one note.
+Name the ids your harness serves. Unset tiers stay on the session model, which is where planning, capture, refine and every verdict belong. A model the harness cannot reach falls back to the session model with one note.
 
 **Rung 4 - per-item exceptions.**
 
@@ -560,7 +562,7 @@ Fields ride with the item, so pilot and land honour them at 3am too.
 ```text
 Work the ready specs. Decide per spec, from its Boundaries and the size of
 its Touches, whether to plan first or work directly; a spec with open
-[inferred] criteria goes to interview instead. Anything touching auth or the
+[inferred] criteria goes to refine instead. Anything touching auth or the
 migration you implement yourself on the session model; plain CRUD goes out
 to a codex exec bridge. Reviews come from codex either way; if a task's
 review comes back NEEDS_WORK twice, stop bridging it and implement it

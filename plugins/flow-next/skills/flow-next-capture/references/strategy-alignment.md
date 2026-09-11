@@ -74,7 +74,7 @@ In **interactive** mode, refuse with the message above (exit 2) — do NOT promp
 
 In **autofix** mode, refuse identically (exit 2). Autofix cannot resolve a strategy override.
 
-When `OVERRIDE_STRATEGY=1` AND the snapshot is populated, capture proceeds with the write **AND** prompts the user to record the override as a decision entry. Pattern (mirrors `/flow-next:interview` behavior (d) — three-criteria decision-record gate):
+When `OVERRIDE_STRATEGY=1` AND the snapshot is populated, capture proceeds with the write **AND** prompts the user to record the override as a decision entry. Pattern (mirrors `/flow-next:refine` behavior (d) — three-criteria decision-record gate):
 
 ```bash
 # Interactive only — autofix never reaches this branch (5.0 exits 2 above when OVERRIDE_STRATEGY=0,

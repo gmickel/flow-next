@@ -10,9 +10,9 @@ Path-specific lookups live one level deep in `references/*.md` and are loaded on
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using the canonical template |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict |
-| **4 — Read-back loop** | Print full draft as ordinary markdown, then short ask; obtain approval |
+| **4 - Read-back loop** | Print the compact summary, then one ask (shared contract in `docs/read-back.md`); obtain approval |
 | **5 — Write via flowctl** | Atomic write of new (or rewritten) spec |
-| **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints |
+| **6 - Suggested next step** | Print footer with the `Recommended next:` line from the shared routing reference |
 
 ---
 
@@ -63,7 +63,7 @@ The breakdown is informational at read-back. Phase 4's `[inferred]` tally counts
 - **`[inferred]`** is for content the user did not state but the agent decided was necessary for a complete spec. **Defaults are `[inferred]`** — error-format conventions, status code choices, retry policies, observability hooks. Surface them at read-back so the user can keep / edit / drop.
 - **`[strategy:<track>]`** is for content the agent imported from `STRATEGY.md` — verbatim or near-verbatim quote from the `approach` line or one of the `### <track-name>` H3 sub-blocks. The track name lives literally in the tag (e.g. `[strategy:Reliability]`). The criterion is treated as load-bearing for the strategy alignment surface; if the spec body contradicts a `[strategy:*]` line, capture refuses to write without `--override-strategy` (see SKILL.md).
 
-A spec with 0 `[inferred]` items is rare and probably means the conversation was unusually thorough. A spec with 30 `[inferred]` items is suspicious — the conversation was probably too thin for capture, and the user should pursue `/flow-next:interview` instead.
+A spec with 0 `[inferred]` items is rare and probably means the conversation was unusually thorough. A spec with 30 `[inferred]` items is suspicious — the conversation was probably too thin for capture, and the user should pursue `/flow-next:refine` instead.
 
 Chart D-ID evidence, chart facts, assets, and briefing membership are **never** source-tagged — the four-tag grammar applies only to acceptance criteria this capture pass newly authors. The full provenance-lane rule loads with the chart-briefing gate (workflow.md §0.5b).
 
@@ -134,11 +134,13 @@ Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
   any fired → gate → ask one at a time (interactive); exit 2 (autofix)
   none      → continue
 
-Read-back (print-then-ask): print FULL draft markdown (+ rewrite diff if any)
-  as ordinary assistant message, then SHORT ask (pointer + [inferred] tally +
-  8+ note + options only — never multi-paragraph content in the ask body).
-  interactive: approve / split-as-proposed (only when 2.5 proposed N>1) / edit / abort
-  edit cycles: reprint revised draft before each short re-ask
+Read-back (print-then-ask, docs/read-back.md): print the compact summary
+  (+ rewrite diff / split allocation if any) as ordinary assistant message,
+  then ONE short ask (pointer + recommendation + options only - never
+  multi-paragraph content in the ask body; the full draft prints only on request).
+  interactive: approve and write / split-as-proposed (only when 2.5 proposed N>1)
+               / open in editor / abort; free text = edit request
+  edit cycles: re-read the file, print only the diff, re-ask
   autofix --yes: print summary and proceed
   autofix without --yes: print summary and exit 0
 

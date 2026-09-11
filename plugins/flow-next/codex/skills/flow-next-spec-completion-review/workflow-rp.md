@@ -100,7 +100,7 @@ for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
   [[ -f "$task_spec" ]] && printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE" \
     && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
 done
-# Global acceptance criteria (fn-137): emits nothing when .flow/criteria.md absent.
+# Global acceptance criteria: emits nothing when .flow/criteria.md absent.
 # A nonzero exit is a validation error - fix .flow/criteria.md before re-running.
 printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE"
 $FLOWCTL criteria prompt-block >> "$REVIEW_INSTRUCTIONS_FILE" || exit 1
@@ -251,7 +251,7 @@ EOF
 # 3. Spec body — appended via redirection, never re-typed
 $FLOWCTL cat "$SPEC_ID" >> "$PROMPT_FILE"
 
-# 4. Global acceptance criteria (fn-137) — emits nothing when .flow/criteria.md absent.
+# 4. Global acceptance criteria — emits nothing when .flow/criteria.md absent.
 # A nonzero exit is a validation error - fix .flow/criteria.md before re-running.
 printf '\n\n' >> "$PROMPT_FILE"
 $FLOWCTL criteria prompt-block >> "$PROMPT_FILE" || exit 1
@@ -577,7 +577,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # Optional: capture suppression-gate tally (fn-29.3).
+  # Optional: capture suppression-gate tally.
   # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
   # Portable (BSD awk / mawk / gawk alike) — the 3-arg match(str,re,arr) form is
   # gawk-only and syntax-errors on stock macOS awk, and RP is macOS-gated, so it
@@ -590,7 +590,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
     | paste -sd, -)"
   SUPPRESSED_JSON="{${_SUPPRESSED_PAIRS}}"   # empty → {}, populated → {"50":3,...}
 
-  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Optional: capture introduced vs pre_existing classification tally.
   # Reviewer emits a line like "Classification counts: 1 introduced, 0 pre_existing."
   # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
   CLASSIFICATION_LINE="$(grep -iE '^[>*_` ]*classification counts[ *_`]*:' "$RESPONSE_FILE" \
@@ -613,7 +613,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
     fi
   fi
 
-  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Optional: capture unaddressed R-IDs.
   # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
   # Absent line => spec has no R-IDs — leave field off the receipt entirely.
   UNADDRESSED_JSON=""
@@ -801,7 +801,7 @@ If verdict is NEEDS_WORK:
 
    Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
 
-   **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch.
+   **Cap gate first** — increment before EVERY re-review dispatch.
    A delivered final-round `NEEDS_WORK` has already continued through the shared
    status write and exited, so this command is never used to discover that
    terminal one round late. Exit 4 here means no completion verdict was

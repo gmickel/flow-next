@@ -178,7 +178,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             root = _read(f"{skill}/SKILL.md")
             host = _section(
                 root,
-                "**For host backend (fn-123 R5 / fn-126):**",
+                "**For host backend:**",
                 "**For all backends:**",
             )
             self.assertIn("[workflow-host.md](workflow-host.md)", host)

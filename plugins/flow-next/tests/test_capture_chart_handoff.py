@@ -145,8 +145,8 @@ class CaptureChartHandoffContract(unittest.TestCase):
         phases = _read("phases.md")
         ref = _read_ref("chart-briefing.md")
         combined = "\n".join([skill, workflow, phases, ref])
-        self.assertIn("fn-148", combined)
-        self.assertIn("STOPPED", combined)
+        # Shipped prose carries no spec-id provenance; anchor on the phrase.
+        self.assertRegex(combined, r"(?i)verified/inferred")
         # Bracket tag form is only allowed as a prohibition (fn-148 non-preemption).
         for m in re.finditer(r"\[verified\]", combined):
             start = max(0, m.start() - 50)

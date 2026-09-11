@@ -108,7 +108,7 @@ fi
 ### Host filing skeleton (dedup fold + commit tracking)
 
 `workflow.md` §5.4 executes this on the host the moment a FAIL is confirmed. It wraps the
-`memory add` above with the fn-113.2 high-overlap fold and the `QA_FILED_MEMORY` tracking
+`memory add` above with the high-overlap fold and the `QA_FILED_MEMORY` tracking
 that §6.3b's narrow-pathspec commit depends on:
 
 ```bash
@@ -126,7 +126,7 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
     --symptoms "<observed actual>" \
     --root-cause "(observed via live QA — unconfirmed)" \
     --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
-  # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
+  # High-overlap match -> fold into the EXISTING entry and drop the
   # just-created duplicate, so autonomous QA never commits a near-copy.
   _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
   _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
@@ -148,7 +148,7 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
   [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
   # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
   # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
-  # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
+  # memory add always creates unless --update <id>. Read .matches (scored):
   # high score → surface "matches existing entry X"; re-run with --update <id> when
   # this is the same finding. Moderate → related_to cross-reference on the new entry.
 fi
@@ -173,7 +173,7 @@ When ambiguous, pick the most specific that fits. `--root-cause` for a live find
 
 **Every QA filing runs with overlap scoring on.** A `memory add` carrying `--no-overlap-check` has broken this — the `matches` signal the caller decides from would be empty.
 
-`memory add` always **creates** unless you pass explicit `--update <id>` (fn-113). Overlap scoring still runs and the JSON response always emits `matches` (with scores) as a retrieval signal (`docs/memory-schema.md`):
+`memory add` always **creates** unless you pass explicit `--update <id>`. Overlap scoring still runs and the JSON response always emits `matches` (with scores) as a retrieval signal (`docs/memory-schema.md`):
 
 - **high** (`score >= 3`): surface "matches existing entry X" in the run notes. If this is the same finding (re-run / known prior id), re-run with `--update <match-id>` to fold body/tags into the existing entry. Prefer passing `--update` on the first call when you already know the prior entry id from this run's notes.
 - **moderate** (`score == 2`): creates a new entry with `related_to: [existing-id]`.
@@ -183,7 +183,7 @@ When ambiguous, pick the most specific that fits. `--root-cause` for a live find
 
 A finding worth fixing is **promoted to a flow spec/task** — compose from `flowctl spec create` + `spec set-plan`, or `/flow-next:capture` from the finding body. That closes the loop: the QA finding becomes the intent for the fix, traceable back through its R-ID to the original spec. QA itself **does not fix product code** — it files, surfaces, and hands off (BRB's "test, document, file, hand off; don't fix unless asked").
 
-**Spec-id routing gate:** when promoting via `/flow-next:capture`, the mint gate is **owned by capture** (capture/workflow.md Phase 5.2) — do not re-implement it here. When composing with `flowctl spec create` directly, apply the same gate: read `tracker.specIds` from ONE root config snapshot (fn-110; no per-leaf get), and when value is `tracker` AND the bridge is active, mint from a named issue key or run create-first then `spec create --tracker-first --tracker-identifier <key>` (tracker-sync steps.md Phase 2d) — and in BOTH cases follow the mint with the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b), because minting stores `tracker.identifier` but NOT the durable `tracker.id`, and an unlinked spec makes a later touchpoint create a SECOND remote issue instead of linking the named one; bridge inactive / no transport degrades **silently** to flow-first; explicit override wins. Network cost is conditional (reorder when `tracker.perEvent.qa` / capture is on; earlier remote write when off). No runtime nag (withdrawn R10).
+**Spec-id routing gate:** when promoting via `/flow-next:capture`, the mint gate is **owned by capture** (capture/workflow.md Phase 5.2) — do not re-implement it here. When composing with `flowctl spec create` directly, apply the same gate: read `tracker.specIds` from ONE root config snapshot (no per-leaf get), and when value is `tracker` AND the bridge is active, mint from a named issue key or run create-first then `spec create --tracker-first --tracker-identifier <key>` (tracker-sync steps.md Phase 2d) — and in BOTH cases follow the mint with the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b), because minting stores `tracker.identifier` but NOT the durable `tracker.id`, and an unlinked spec makes a later touchpoint create a SECOND remote issue instead of linking the named one; bridge inactive / no transport degrades **silently** to flow-first; explicit override wins. Network cost is conditional (reorder when `tracker.perEvent.qa` / capture is on; earlier remote write when off). No runtime nag (withdrawn R10).
 
 ## Anti-patterns
 

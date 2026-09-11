@@ -172,7 +172,7 @@ class TestTemplateFrontmatter(unittest.TestCase):
         # not the template scaffold.
         for consumer in (
             "flow-next-capture",
-            "flow-next-interview",
+            "flow-next-refine",
             "flow-next-plan",
         ):
             self.assertIn(consumer, self.frontmatter)
@@ -361,7 +361,7 @@ class TestCodexMirrorShipsTemplate(unittest.TestCase):
             self.skipTest("codex mirror not regenerated")
         mirror_skills = PLUGIN_DIR / "codex" / "skills"
         candidates = [
-            mirror_skills / "flow-next-interview" / "SKILL.md",
+            mirror_skills / "flow-next-refine" / "SKILL.md",
             mirror_skills / "flow-next-capture" / "workflow.md",
             mirror_skills / "flow-next-plan" / "steps.md",
         ]

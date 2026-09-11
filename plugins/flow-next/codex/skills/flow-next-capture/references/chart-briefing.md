@@ -1,4 +1,4 @@
-# capture — chart-briefing ingestion (fn-135) (loaded on demand)
+# capture — chart-briefing ingestion (loaded on demand)
 
 > Loaded ONLY when the conversation or `$ARGUMENTS` references a chart briefing — a path under
 > `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id with a published
@@ -25,7 +25,7 @@ Capture treats an admitted briefing as **attributable evidence**, not as pre-tag
 4. **Provenance separation (load-bearing):**
    - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
    - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
-   - Do **not** introduce verified/inferred fact or decision grammar (fn-148 closed STOPPED — no verdict; it licenses nothing here).
+   - Do **not** introduce verified/inferred fact or decision grammar (nothing licenses it here).
 5. **Write order after approval:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
 6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where read-back confirms the target spec needs that guarantee.
 
@@ -91,7 +91,7 @@ Also check for an already-linked identity (retry recovery):
 
 ## 2.2 — Chart provenance separation
 
-**Chart provenance separation (fn-135 / R49):** chart decision provenance is structural (D-ID, answer gist, assets, briefing membership). Preserve those as evidence links in `## Decision Context` (and conversation-evidence footnotes). Never source-tag D-ID evidence. Never retag an existing criterion authored by an earlier pass. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]` — apply the four-tag grammar only to acceptance criteria this capture pass newly authors, judged against conversation + briefing context. Shared-context D-IDs do not become duplicated acceptance requirements across output specs unless each target's read-back independently confirms that guarantee. **No verified/inferred fact or decision grammar** (fn-148 closed STOPPED with no verdict — licenses nothing here).
+**Chart provenance separation:** chart decision provenance is structural (D-ID, answer gist, assets, briefing membership). Preserve those as evidence links in `## Decision Context` (and conversation-evidence footnotes). Never source-tag D-ID evidence. Never retag an existing criterion authored by an earlier pass. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]` — apply the four-tag grammar only to acceptance criteria this capture pass newly authors, judged against conversation + briefing context. Shared-context D-IDs do not become duplicated acceptance requirements across output specs unless each target's read-back independently confirms that guarantee. **No verified/inferred fact or decision grammar** (nothing licenses it here).
 
 ---
 
@@ -100,7 +100,7 @@ Also check for an already-linked identity (retry recovery):
 Runs inside the Phase 5 new-spec ceremony, immediately after `spec create` + `spec set-plan` succeeded:
 
 ```bash
-# Chart handoff (fn-135) — ONLY after successful create + set-plan.
+# Chart handoff — ONLY after successful create + set-plan.
 # Order is load-bearing: never link-spec before the spec body exists.
 # On retry: if produced_specs already has this B-ID+cluster identity, discover
 # that entry and link the existing spec instead of minting another (Phase 1.2b).
@@ -114,7 +114,7 @@ if [[ -n "$CHART_ID" && -n "$BRIEFING_ID" ]]; then
 fi
 ```
 
-**Chart handoff retry rules (fn-135 R50):**
+**Chart handoff retry rules:**
 
 - Capture decline / abort: call nothing; no `produced_specs[]` entry; chart stays resumable.
 - Partial multi-spec: record only successful `link-spec` calls; resume the failed cluster without duplicating the first.
@@ -128,7 +128,7 @@ Three provenance lanes must not collapse:
 
 1. **Chart decision provenance** — D-ID, type, answer/gist, assets, supersession, briefing membership. Briefings preserve links; capture copies them into evidence sections as references.
 2. **Acceptance-criterion author tags** — `[user]` | `[paraphrase]` | `[inferred]` | `[strategy:<track>]` only on criteria **this capture pass newly authors**. Never retag existing criteria. Never tag D-ID evidence or chart facts. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
-3. **Verified-versus-inferred technical facts** — fn-148 closed 2026-07-30 as STOPPED with **no verdict**. Capture adds **no** `[verified]` / verified-vs-inferred decision grammar. Do not invent one.
+3. **Verified-versus-inferred technical facts** — no such grammar was ever adopted. Capture adds **no** `[verified]` / verified-vs-inferred decision grammar. Do not invent one.
 
 Draft/stale briefings fail closed for ordinary capture; explicit risk override must name unresolved/invalidated D-IDs and read back the risk without promoting a forced draft to final. `link-spec` runs only after `spec create` + `spec set-plan`; retry discovers B-ID+cluster identity first.
 
@@ -141,4 +141,4 @@ Draft/stale briefings fail closed for ordinary capture; explicit risk override m
 | Treating a forced draft briefing as final, or silent draft/stale admission | Fail closed; override requires named D-IDs + risk read-back; never promotes draft to final. |
 | Source-tagging D-ID / chart evidence as `[user]` | Chart provenance is structural links; four-tag grammar is for newly authored criteria only. |
 | `chart link-spec` before `spec create` / `spec set-plan`, or minting a duplicate after interruption | Order: create → set-plan → link-spec; retry discovers B-ID+cluster identity first. |
-| Chart facts get no verified/inferred grammar | fn-148 stopped - no verdict. |
+| Chart facts get no verified/inferred grammar | No such grammar was adopted; do not invent one. |

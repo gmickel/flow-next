@@ -153,7 +153,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 | `/flow-next:plan-review` | Flow Plan Review | `$flow-next-plan-review` |
 | `/flow-next:spec-completion-review` | Flow Spec Completion Review | `$flow-next-spec-completion-review` |
 | `/flow-next:make-pr` | Flow Make PR | `$flow-next-make-pr` |
-| `/flow-next:interview` | Flow Interview | `$flow-next-interview` |
+| `/flow-next:refine` | Flow Refine | `$flow-next-refine` |
 | `/flow-next:prime` | Flow Prime | `$flow-next-prime` |
 | `/flow-next:setup` | Flow Setup | `$flow-next-setup` |
 
@@ -174,7 +174,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 | Tier | Codex Model | Reasoning | Agents |
 |------|-------------|-----------|--------|
 | Review-shaped | `$CODEX_MODEL_INTELLIGENT` | `high` | quality-auditor |
-| Scout / editorial | `$CODEX_MODEL_INTELLIGENT` | `medium` | flow-gap-analyst, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
+| Scout / editorial | `$CODEX_MODEL_INTELLIGENT` | `medium` | flow-gap-analyst, docs-scout, github-scout, practice-scout, repo-scout, why-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
 | Fast scouts | `$CODEX_MODEL_FAST` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
 | Worker (default) | *inherit (session model)* | *session default* | worker |
 | Inherited | parent model | parent | pr-comment-resolver |
@@ -337,7 +337,7 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 - **AGENTS.md routing block** from setup: the four tier lines, commented out, for you to fill with the model ids this host actually serves - ask the harness for its list rather than copying one (see [`reach/cursor.md`](reach/cursor.md)).
 - **`flowctl`** resolves from the plugin install: Cursor exposes no plugin-root env var, but it injects the loading skill's absolute `SKILL.md` path, and the preamble derives the plugin root two levels above it (probe-verified in a repo with no `.flow/bin`, CLI and desktop app).
 
-The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin, so the skill's portable-host clause applies - generic read-only dispatch, falling back to inline investigation if none is available.
+The refine skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin, so the skill's portable-host clause applies - generic read-only dispatch, falling back to inline investigation if none is available.
 
 ### Caveats / intentional limits
 

@@ -2,7 +2,7 @@
 
 Read this file only when the Phase 0.2b gate sentinel printed - bridge active AND `tracker.charts` is the literal `on`. When the gate is closed, flowctl still succeeds and `tracker_projection.skipped` names the reason (`tracker.charts_off` / `bridge_inactive`); nothing here applies.
 
-Chart projection rides the post-fn-141 lifecycle facade. Local chart
+Chart projection rides the lifecycle facade. Local chart
 mutations always commit first; remote projection never blocks them.
 
 Gate (both required): bridge active AND `tracker.charts` is the literal `on`.

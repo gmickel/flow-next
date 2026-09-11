@@ -1,4 +1,4 @@
-# Trivial-diff triage — rules, receipt shape, LLM judge (fn-29.6)
+# Trivial-diff triage — rules, receipt shape, LLM judge
 
 Read this only when a triage result needs explaining or auditing (a SKIP you
 want to justify, a misclassification you suspect, or an LLM-judge run). The

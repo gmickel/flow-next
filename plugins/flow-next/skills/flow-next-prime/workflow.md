@@ -618,7 +618,7 @@ When Phase 0.6 asks were SUPPRESSED (`--report-only`, `--classify-only`, or an a
 
 ### Freshness caveat + re-run cadence
 
-Close the report with a freshness caveat and a suggested re-run cadence - prime findings are a point-in-time snapshot, **never a durable badge** (the exact failure mode fn-92 exists to retire):
+Close the report with a freshness caveat and a suggested re-run cadence - prime findings are a point-in-time snapshot, **never a durable badge** (the exact failure mode prime exists to retire):
 
 > _Snapshot taken [timestamp] against commit [short-sha]. Readiness drifts as the repo changes - re-run `/flow-next:prime` after significant structural or tooling changes (new stack, major dependency bump, CI change), or on a periodic cadence (e.g. monthly) for actively developed repos. `--classify-only` is the cheap portfolio-triage sweep between full runs._
 

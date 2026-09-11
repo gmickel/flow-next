@@ -35,10 +35,10 @@ CAPTURE_SKILL = SKILLS / "flow-next-capture" / "SKILL.md"
 CAPTURE_WORKFLOW = SKILLS / "flow-next-capture" / "workflow.md"
 CAPTURE_PHASES = SKILLS / "flow-next-capture" / "phases.md"
 INTERVIEW_DOC_AWARE = (
-    SKILLS / "flow-next-interview" / "references" / "doc-aware.md"
+    SKILLS / "flow-next-refine" / "references" / "doc-aware.md"
 )
 INTERVIEW_WRITE_BACK = (
-    SKILLS / "flow-next-interview" / "references" / "write-back.md"
+    SKILLS / "flow-next-refine" / "references" / "write-back.md"
 )
 
 ALL_FILES = (
@@ -101,7 +101,7 @@ def _reachable(corpus: dict[str, str]) -> set[str]:
 
 CAPTURE_CORPUS = _corpus(SKILLS / "flow-next-capture")
 CAPTURE_REACHABLE = _reachable(CAPTURE_CORPUS)
-INTERVIEW_CORPUS = _corpus(SKILLS / "flow-next-interview")
+INTERVIEW_CORPUS = _corpus(SKILLS / "flow-next-refine")
 INTERVIEW_REACHABLE = _reachable(INTERVIEW_CORPUS)
 
 

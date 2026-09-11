@@ -156,7 +156,7 @@ PY
 }
 
 # Count progress (done/total tasks for scoped specs).
-# Scans .flow/specs/ (canonical post-1.0) AND .flow/epics/ (legacy 0.x); fn-43.2
+# Scans .flow/specs/ (canonical post-1.0) AND .flow/epics/ (legacy 0.x);
 # alias-mode keeps both layouts on disk for back-compat.
 get_progress() {
   "${FLOW_PY[@]}" - "$ROOT_DIR" "${SPECS_FILE:-}" <<'PY'
@@ -176,7 +176,7 @@ if specs_file:
     except:
         pass
 
-# fn-43.2: read from BOTH canonical specs/ (1.0+) and legacy epics/ (0.x repos
+# Read from BOTH canonical specs/ (1.0+) and legacy epics/ (0.x repos
 # in alias mode). Earlier hits win — canonical first, legacy fills gaps.
 specs_dirs = [d for d in (flow_dir / "specs", flow_dir / "epics") if d.exists()]
 tasks_dir = flow_dir / "tasks"
@@ -462,7 +462,7 @@ COMPLETION_REVIEW="${COMPLETION_REVIEW:-none}"
 PLAN_REVIEW_BACKEND="${PLAN_REVIEW%%:*}"
 WORK_REVIEW_BACKEND="${WORK_REVIEW%%:*}"
 COMPLETION_REVIEW_BACKEND="${COMPLETION_REVIEW%%:*}"
-# fn-123 R5: `host` review is a live-conductor arrangement (fresh host-native
+# `host` review is a live-conductor arrangement (fresh host-native
 # subagent) — the Ralph prompts and receipt gates do not implement it, so a
 # host-configured loop would silently skip review verification. Refuse early.
 for _rb in "$PLAN_REVIEW_BACKEND" "$WORK_REVIEW_BACKEND" "$COMPLETION_REVIEW_BACKEND"; do
@@ -644,7 +644,7 @@ write_specs_file() {
 import json, sys
 raw = sys.argv[1]
 parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
-# fn-43.2 / fn-43.9: dual-emit canonical "specs" + legacy "epics" key. flowctl
+# Dual-emit canonical "specs" + legacy "epics" key. flowctl
 # `cmd_next` prefers "specs" but falls back to "epics" — emitting both keeps
 # downstream consumers (older flowctl, third-party tooling) from breaking.
 print(json.dumps({"specs": parts, "epics": parts}, indent=2, sort_keys=True))
@@ -999,7 +999,7 @@ ensure_run_branch() {
 #   2. EPICS_FILE  (legacy env var — same alias permanence guarantee as flowctl T2)
 #   3. SPECS list  (config.env knob; we generate a JSON file under $RUN_DIR)
 #   4. (none)      (unscoped — selector walks every open spec)
-SPECS_FILE="${SPECS_FILE:-${EPICS_FILE:-}}"  # legacy fallback per fn-43.2
+SPECS_FILE="${SPECS_FILE:-${EPICS_FILE:-}}"  # legacy fallback
 if [[ -z "$SPECS_FILE" && -n "${SPECS// }" ]]; then
   SPECS_FILE="$RUN_DIR/run.json"
   write_specs_file "$SPECS" > "$SPECS_FILE"
@@ -1157,7 +1157,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   [[ "${FLOW_RALPH_CLAUDE_VERBOSE:-}" == "1" ]] && claude_args+=(--verbose)
 
   # Block Explore subagent auto-delegation - causes READ-ONLY failures in autonomous mode
-  # Worker frontmatter no longer denies Task (fn-209 tool-permission audit), so this
+  # Worker frontmatter no longer denies Task (tool-permission audit), so this
   # CLI-level deny is the sole layer blocking Explore auto-delegation in Ralph runs
   # See: https://code.claude.com/docs/en/sub-agents#disable-specific-subagents
   claude_args+=(--disallowedTools "Task(Explore)")

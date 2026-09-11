@@ -128,6 +128,6 @@ CHART_VERDICT=NO_WORK chart=<id> decision=- reason="status only; no mutations"
 
 - Citations under Notes; no fabricated D-IDs from imports.
 - No acceptance-criterion tags on chart facts/decisions.
-- No verified/inferred fact grammar (fn-148 STOPPED).
+- No verified/inferred fact grammar.
 - No literal destructive shell command strings or realistic secrets in artefacts or skill examples.
 - Parallelism = parallel invocations, never one tick claiming many D-IDs.

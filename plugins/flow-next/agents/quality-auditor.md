@@ -64,7 +64,7 @@ fi
 command errors), report `Audit FAILED: <reason>` and stop — a clean verdict is ONLY valid
 over a diff you actually saw. An empty diff from a broken base is not "no issues".
 
-## Confidence calibration (fn-29.3)
+## Confidence calibration
 
 Rate each finding on exactly one of these 5 discrete anchors. Do not use interpolated values (no 33, 80, 90).
 
@@ -97,7 +97,7 @@ Example:
 
 > Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0.
 
-## Protected artifacts (fn-29.5)
+## Protected artifacts
 
 The following paths are flow-next / project-pipeline artifacts. Never recommend their deletion, gitignore, or removal:
 

@@ -34,11 +34,11 @@ Contents:
 
 ## Phase 4 — rewrite read-back additions
 
-The print-then-ask contract (workflow.md §4.1/§4.2) gains one mandatory element in rewrite mode:
+The read-back contract (workflow.md §4.1/§4.2) gains one mandatory element in rewrite mode:
 
-- **Print the existing → proposed diff** (unified style; changed sections in full) as ordinary markdown in the same message as the full draft, or in a second message immediately after it — **never only inside the ask**.
-- The short ask's one-line pointer reads `Full draft + rewrite diff printed above.`
-- Summary-payload item 5 — **rewrite-mode pointer** — one short clause, e.g. `Rewrite diff printed above.` (the full diff is already in the ordinary message; never paste it into the ask).
+- **Print the existing → proposed diff** (unified style; changed sections in full) as ordinary markdown in the same message as the summary, or in a second message immediately after it - **never only inside the ask**. The diff is what the user ratifies on a rewrite; the full draft stays in the file and prints only on request.
+- The short ask's one-line pointer reads `Summary + rewrite diff printed above; draft at <path>.`
+- Summary-payload **rewrite-mode pointer** - one short clause, e.g. `Rewrite diff printed above.` (the full diff is already in the ordinary message; never paste it into the ask).
 - Confidence tier `[your-call]` covers rewrite-mode with substantive divergence from the existing spec.
 - **Forbidden:** never edit a `--rewrite` target without printing the diff as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
 
@@ -60,7 +60,7 @@ SPEC_ID="$REWRITE_TARGET"
 # Readiness reset — runs AFTER set-plan: a failed rewrite must not downgrade a
 # blessed spec (Codex review, PR #170 P2). A rewrite is a full re-authoring; any
 # prior blessing no longer applies once the new body lands. Unconditional call:
-# the toggle is idempotent (fn-58.1) — a never-ready spec is a silent no-op (no
+# the toggle is idempotent — a never-ready spec is a silent no-op (no
 # write, no updated_at bump), so this does NOT turn every rewritten draft into a
 # readiness-adopter. Announce, never confirm — --rewrite already carried the
 # consent.
@@ -93,14 +93,12 @@ Recommended next: /flow-next:<stage> <SPEC_ID> — <one-clause reason>; <named a
 Next:
   /flow-next:plan <SPEC_ID>      → re-plan tasks (existing tasks under the spec
                                     may need /flow-next:sync to align)
-  /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:refine <SPEC_ID> → refine via Q&A
   /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
 The `Recommended next:` line follows workflow.md Phase 6 and is mandatory here
-too. Apply [pipeline variations](../../../docs/pipeline-variations.md) to the rewritten spec: work --no-plan for
-a ready cohesive spec, plan for useful decomposition, interview for material gaps,
-plan-review for independent design assessment, or guide when signals conflict.
+too: the §2.8 judgment from [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) applied to the rewritten spec, or `/flow-next:flow --explain <SPEC_ID>` when signals conflict (the human-facing narrative is [pipeline variations](../../../docs/pipeline-variations.md)).
 This remains informational, never a readiness write or permission to execute.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.

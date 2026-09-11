@@ -446,8 +446,16 @@ class FixtureValidation(unittest.TestCase):
         self._invalid({"models": {"roles": {"review": {"codex": "m"}}}})
         self._invalid({"models": {"verifiedAt": "2026-07-19"}})
 
+    def test_valid_pipeline_qa_enum(self) -> None:
+        # fn-238: the third value `auto` validates; the generator's table is
+        # the source, so a hand-edited schema that drops it fails here.
+        for value in ("off", "on", "auto"):
+            with self.subTest(value=value):
+                self._valid({"pipeline": {"qa": value}})
+
     def test_invalid_enums(self) -> None:
         self._invalid({"pipeline": {"qa": "yes"}})
+        self._invalid({"pipeline": {"qa": True}})
         self._invalid({"tracker": {"conflictTiebreak": "flow"}})
 
     def test_invalid_backend_grammar(self) -> None:

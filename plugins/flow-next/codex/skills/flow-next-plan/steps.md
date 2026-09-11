@@ -77,7 +77,7 @@ cohesive work merely to manufacture a parallel wave.
 # Ensure .flow exists (FLOWCTL defined once in SKILL.md preamble)
 $FLOWCTL init --json
 
-# ONE root config snapshot for the whole run (fn-110): {"key":null,"value":{<merged config>}}.
+# ONE root config snapshot for the whole run: {"key":null,"value":{<merged config>}}.
 # Every later config lookup (readiness, memory/scout gates, tracker leaf, HTML lens)
 # derives from this file via jq — no further `config get` calls on the plan path.
 # Path-persistence rule: compose the literal path with an agent-chosen 4-char suffix
@@ -96,9 +96,9 @@ SHOW_JSON=$($FLOWCTL show <id> --json)   # ONE fetch — request context AND rea
 echo "$SHOW_JSON"                        # command substitution hides stdout — bring it into view once
 ```
 
-**Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` - flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
+**Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` - flowctl's widened resolver maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
 
-**Unshaped oversized freeform (fn-135):** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:guide`) instead of planning through the fog. Ready specs stay on Route A.
+**Unshaped oversized freeform:** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:flow --explain`) instead of planning through the fog. Ready specs stay on Route A.
 
 **Explicit planning choice:** inspect the existing spec's metadata (for task-ID
 input, fetch its parent with `$FLOWCTL show <spec-id> --json`). If `no_plan: true`
@@ -112,11 +112,11 @@ Otherwise, for a spec carrying `no_plan: true`, run
 The invocation chooses intentional planning; clearing the previous direct choice
 makes a restart before task creation resume that choice. Stop if the write fails.
 
-**Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and before the scout fan-out (warn before spending research tokens on a half-baked spec). It applies only when the input resolved to an existing spec (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
+**Readiness soft-check (adoption-gated; warn-not-block):** runs right after the spec resolves and before the scout fan-out (warn before spending research tokens on a half-baked spec). It applies only when the input resolved to an existing spec (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
 
 ```bash
 # Reuses $SHOW_JSON from the Step 1 fetch — SAME bash block (vars die across tool
-# calls); do NOT re-run `show --json` here. `ready` is an explicit boolean (fn-58.1).
+# calls); do NOT re-run `show --json` here. `ready` is an explicit boolean.
 SPEC_READY=$(jq -r '.ready // false' <<< "$SHOW_JSON")
 
 READINESS_WARN=false
@@ -178,6 +178,8 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 
 Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
+**Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When the research scouts do run, Step 5 writes their findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
+
 ---
 
 Run ALL of these scouts in parallel:
@@ -228,7 +230,7 @@ Before diving into gaps, identify who's affected:
 
 This shapes what the plan needs to cover. A pure backend refactor needs different detail than a user-facing feature.
 
-**Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:interview` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
+**Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:refine` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
 
 **An empirically answerable fork gets a throwaway probe, not a question.** When a fork the plan hinges on is something the running code can settle (a behavior, a timing, an output), run the probe and read the answer instead of parking it as an open question or asking the user — the ask is the slow path for a fact the machine already holds. Safety predicate: a probe runs automatically only when it is non-mutating (read-only observation) or fully disposable (a scratch copy, a throwaway environment); a fork whose answer requires a stateful or destructive command — a migration, a deployment, a write API, anything that touches live state — stays an open question or goes to the user.
 
@@ -324,7 +326,19 @@ Plan and task-spec prose follows the artifact prose contract in [docs/prose.md](
 
 **Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 
-**Efficiency note**: Author documents with the **Write tool**, revise them with **Edit** — never compose a document inside a bash heredoc or stdin pipe. A heredoc puts the whole document into the command string, so every revision (review fix loop, interview write-back) re-emits it in full; a Written file is revised span-by-span with Edit at a fraction of the tokens. Heredocs/stdin (`--file -`) stay acceptable only for short transient payloads (≲10 lines). Route B is the ceremony fast path (fn-163): `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
+**Efficiency note**: Author documents with the **Write tool**, revise them with **Edit** — never compose a document inside a bash heredoc or stdin pipe. A heredoc puts the whole document into the command string, so every revision (review fix loop, interview write-back) re-emits it in full; a Written file is revised span-by-span with Edit at a fraction of the tokens. Heredocs/stdin (`--file -`) stay acceptable only for short transient payloads (≲10 lines). Route B is the ceremony fast path: `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
+
+**Ratify before the first `.flow/` write (interactive only).** Both files this step writes - the plan body (Route B) and the task set JSON (both routes) - are composed with the Write tool before any flowctl call, so ratification costs no extra emission: the summary below is all the user reads, and the files are what the creation calls consume. Route on interactivity with the same gate shape as Step 8:
+
+```bash
+ACTIVE=0
+[ "${AUTONOMOUS:-0}" = "1" ] || [ -n "${FLOW_AUTONOMOUS:-}" ] || [ -n "${FLOW_RALPH:-}" ] || [ -n "${REVIEW_RECEIPT_PATH:-}" ] || ACTIVE=1
+if [ "$ACTIVE" = "1" ]; then
+  echo "READ-BACK ACTIVE — STOP. Read docs/read-back.md before the first .flow/ write."
+fi
+```
+
+When the sentinel prints, STOP and Read [docs/read-back.md](../../docs/flow-next/read-back.md) before the `spec create --plan-file` call (Route B) or the `task create --from-json` call (Route A), then follow it. Plan-specific mapping: the draft is both files (plan body and task set JSON); execution waves derive from the JSON `deps`; `Recommended next:` is judged from [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md), so a task set with no positive plan signal is named as `work --no-plan` material before anything is written; `approve and write` runs the creation calls below. Under autonomy the sentinel is silent: no ask, the creation calls run directly, as today. What this adds: ratification before plan's first `.flow/` write, at summary cost instead of a re-emitted plan.
 
 **Route A - Input was an existing Flow ID**: the spec-id and task-id edit paths
 live in [`references/route-a-refine.md`](references/route-a-refine.md) — read it
@@ -333,7 +347,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
 **Route B - Input was text (new idea)**:
 
-1. Compose the plan FIRST, then create spec + plan in ONE call — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins.
+1. Compose the plan FIRST, then create spec + plan in ONE call — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot — **no new `config get`**. Explicit user override in the invocation always wins.
 
    The plan markdown (step 2's scaffold) is fed to the creation call via `--plan-file` so create + set-plan collapse into one invocation (`--plan-file` validates before id allocation and composes unchanged with the tracker-first flags). **Author-as-file rule:** compose the plan with the **Write tool** at a literal agent-composed path — NOT inside a bash heredoc. Resolve `${TMPDIR:-/tmp}` yourself and type the RESOLVED literal path (e.g. `/tmp/flow-plan-body-ab12.md`) identically in the Write call and the Bash block — file tools do not expand shell variables; the path is literal in both prompt turns, so no shell variable crosses calls. If plan review or a fix loop demands revisions, revise this file with **Edit** (span edits) and re-run only the affected flowctl call — never re-emit the document. Delete the file only after the spec (and any revision loop) is finalized; the durable plan lives in `.flow/` via the create call.
 
@@ -396,6 +410,9 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    Acceptance Criteria, Early proof point, Requirement coverage, References.
    Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    ## Strategy drift flagged for review (when plan scope conflicts with an active track).
+   ## Resolved via Research (when the research scouts RAN in Step 1, in the section shape from
+   flow-next-refine/references/research-scope.md with `plan` as the provenance; when Step 1 skipped
+   them because the section was already present, it comes back byte-for-byte).
    Add mermaid diagram if data model or architecture changes.
    Write tool -> $PLAN_FILE (author-as-file rule — full scaffold below):
 
@@ -486,7 +503,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - fn-7-notify → fn-N-slug (Notifications): waits for the event system this plan adds   [reverse]
    ```
 
-4. Create ALL child tasks in ONE `task create --from-json` call (fn-163; all-or-nothing under one lock — zero follow-up `task set-spec` on the plan path). Compose the task set with the **Write tool** (author-as-file rule — revisable with Edit if the batch is rejected or the plan is revised, instead of re-emitting the array):
+4. Create ALL child tasks in ONE `task create --from-json` call (all-or-nothing under one lock — zero follow-up `task set-spec` on the plan path). Compose the task set with the **Write tool** (author-as-file rule — revisable with Edit if the batch is rejected or the plan is revised, instead of re-emitting the array):
    ```
    Write tool -> /tmp/flow-plan-tasks-<suffix>.json   (ONE bare JSON array; RESOLVED literal path — same string in the flowctl call below):
    [

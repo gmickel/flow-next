@@ -296,12 +296,12 @@ class TestCaptureDocumentsRoutingTable(unittest.TestCase):
 
     def test_suggestion_phrasing_matches_r25(self) -> None:
         """R25 spec verbatim: the suggestion text contains
-        `business-requirements signals` + `/flow-next:interview --scope=business`.
+        `business-requirements signals` + `/flow-next:refine --scope=business`.
         Both phrases stay pinned; either may live in any reachable capture
         file."""
         for phrase in (
             "business-requirements signals",
-            "/flow-next:interview --scope=business",
+            "/flow-next:refine --scope=business",
         ):
             with self.subTest(phrase=phrase):
                 assert_reachable_content(

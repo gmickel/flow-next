@@ -168,7 +168,7 @@ Any deviation (canonical `get` surfaces the legacy value, `init` mirrors `crossE
 
 Manual verification that the fn-46.2 cascade walker resolves `<repo_root>/SPEC.md` before the bundled `${PLUGIN_ROOT}/templates/spec.md`, and that `/flow-next:setup` emits the opt-in copy step (`Copy template / Skip / abort`) on fresh repos + the byte-compare gate (`Keep mine / Overwrite with canonical / abort`) on re-setup with customized content.
 
-Operator-level smoke: requires a real interactive run of `/flow-next:setup`, `/flow-next:capture`, or `/flow-next:interview` in a scratch repo — automation-only verification is insufficient because the consent prompts surface in the agent UI.
+Operator-level smoke: requires a real interactive run of `/flow-next:setup`, `/flow-next:capture`, or `/flow-next:refine` in a scratch repo — automation-only verification is insufficient because the consent prompts surface in the agent UI.
 
 **Opt-in copy on fresh repo:**
 
@@ -192,9 +192,9 @@ git init -q
 **Cascade hit from repo-root:**
 
 ```bash
-# With <repo_root>/SPEC.md present (any of the previous steps), run /flow-next:capture or /flow-next:interview on a NEW IDEA.
+# With <repo_root>/SPEC.md present (any of the previous steps), run /flow-next:capture or /flow-next:refine on a NEW IDEA.
 # Expected: the cascade walker resolves the repo-root file (tier-1 hit) before falling back to the bundled template.
-# Add a unique marker comment to SPEC.md (e.g. `<!-- smoke-marker -->`) and verify the spec emitted by capture / interview references the customized scaffold.
+# Add a unique marker comment to SPEC.md (e.g. `<!-- smoke-marker -->`) and verify the spec emitted by capture / refine references the customized scaffold.
 ```
 
 **Codex Desktop / CLI variant:** the cascade prose is plain markdown and the Codex mirror inherits the same workflow without platform-specific transforms — repeat the steps in Codex Desktop (Default mode) and Codex CLI. Behavior is uniform; the only mirror-specific check is that `/flow-next:setup` renders the consent prompts as the plain-text numbered-prompt fallback per fn-45 (see *Codex plain-text prompt smoke* above).
