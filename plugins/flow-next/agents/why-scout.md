@@ -24,15 +24,17 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Method (in this order; stop when the question is answered)
+## Evidence sources
 
-1. **Anchor on blame.** `git blame -L <range> -- <file>` (or `git log -S '<token>' -- <file>` when the line moved) names the commits that introduced or last changed the code. Read each commit's message and diff (`git show <sha>`). A commit message that states the reason is a direct finding.
-2. **The PRs behind the commits.** `gh pr list --search "<sha>" --state merged --json number,title,body,url` (or `glab mr list --search`) finds the PR; read its body, review threads, and linked issues (`gh pr view <n> --comments`). A PR body or review comment that states the reason is a direct finding; a linked issue that describes the problem the change fixed is supported evidence.
-3. **The tracker thread, only through access the session already has.** When the sync bridge is active (`$FLOWCTL sync active --json` reports `active: true`), read the linked issue through `$FLOWCTL tracker` read verbs; when an MCP for the tracker is loaded, use it; otherwise use `gh issue view` / `glab issue view` for a referenced issue. No bridge, no MCP, no CLI reach means the thread is unread, stated as such. Never configure, install, or authenticate anything.
-4. **Bug and decision memory.** `$FLOWCTL memory search "<keywords>" --track bug --json` for the failure the code guards against; `$FLOWCTL memory search "<keywords>" --track knowledge --category decisions --json` for a recorded decision; `$FLOWCTL memory read <entry-id>` for the body. A decision record that names the choice is a direct finding; a bug entry whose symptoms match the code's guard is supported evidence.
-5. **The spec, when the commit names one.** `Task: fn-N.M` in a commit message or a spec id in a PR body → `$FLOWCTL cat <id>`; its Decision Context or Boundaries may carry the reason.
+Start from the pointer and follow the chain wherever the evidence leads; a pointer that is already a PR or a decision record starts there. Tier each finding by the Confidence tiers below, never by which source it came from.
 
-Do not read general source beyond what the chain leads to; a why scout that surveyed the module instead of following the evidence has broken this. Widen to `git log --all --oneline -- <path>` and a second blame pass only when the first commit is a move or a mechanical rewrite.
+- **Blame and commits.** `git blame -L <range> -- <file>` (or `git log -S '<token>' -- <file>` when the line moved) names the commits that introduced or last changed the code; `git show <sha>` reads the message and diff. A move or a mechanical rewrite usually needs a second blame pass or `git log --all --oneline -- <path>`.
+- **The PRs behind the commits.** `gh pr list --search "<sha>" --state merged --json number,title,body,url` (or `glab mr list --search`) finds the PR; `gh pr view <n> --comments` reads its body, review threads, and linked issues.
+- **The tracker thread, only through access the session already has.** When the sync bridge is active (`$FLOWCTL sync active --json` reports `active: true`), read the linked issue through `$FLOWCTL tracker` read verbs; when an MCP for the tracker is loaded, use it; otherwise `gh issue view` / `glab issue view` for a referenced issue. Never configure, install, or authenticate anything.
+- **Bug and decision memory.** `$FLOWCTL memory search "<keywords>" --track bug --json` for the failure the code guards against; `--track knowledge --category decisions` for a recorded decision; `$FLOWCTL memory read <entry-id>` for the body.
+- **The spec, when a commit or PR names one.** `$FLOWCTL cat <id>`; its Decision Context or Boundaries may carry the reason.
+
+Do not survey the module; read what the chain leads to.
 
 ## Confidence tiers (mandatory, one per finding; the caller may not rewrite them)
 
@@ -68,5 +70,5 @@ A finding at a higher tier than its evidence supports is the failure this agent 
 - Read-only by tools and by contract: no `.flow/` write, no memory add, no PR comment, no branch, no shell mutation.
 - Quote reasons; never paraphrase a quoted reason into a stronger claim.
 - Name every hop with its identifier (sha, PR number, issue key, entry id) so the caller can verify in one command.
-- Absence is a finding: an empty blame, a squashed merge, or an unreachable tracker is reported as `unknown` with the boundary named, never filled with a plausible story.
+- An access gap (a source the session cannot reach, a squashed merge, a vendored file) is reported under `### Not read`, separately from the findings; it lowers a tier only when the finding's evidence actually depended on it, and it is never filled with a plausible story.
 - Omit any section with no entries.
