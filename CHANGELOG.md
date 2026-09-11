@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 5.0.0] - 2026-09-12
 
 Developers can hand Flow-Next whatever they have, from nothing to a pasted bug report to a spec with an open PR, and get the smallest sufficient route chosen, run, and stopped at the next decision that is theirs. The routing rules that capture, plan, and work already applied in their own words now live in one shared reference, so the recommendation you read and the route that runs are the same rule. Direct execution is the default for a ready spec; decomposition is the exception with a stated reason. Live QA can switch itself on only where a live surface is what the spec is about. This is a major release: two command names change, and the rest of this entry is written so a plugin user can migrate and use the new surface without opening the skill files.
 
