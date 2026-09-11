@@ -440,18 +440,6 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 Execution through `/flow-next:work <spec-id> --no-plan`, the default route for a ready cohesive spec and a capable coding agent. Plan is chosen only on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model); risk, size, and file count never trigger it. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 
-
-
-
-
-
-
-
-
-
-
-_Relates to_: Spec, Task, R-ID
-
 _Avoid_: plan-less mode, skip-plan flag, zero-task execution
 
 _Relates to_: Spec, Task, R-ID
