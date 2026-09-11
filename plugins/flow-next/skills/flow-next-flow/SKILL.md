@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Attended, intent-first conductor. Takes whatever the user has (nothing, a spec or task id, a tracker issue, a branch, a path, a prototype, a pasted bug report, free text, or the live conversation), picks the smallest sufficient route from the shared routing reference, runs the routed stage skill, re-evaluates after each hop, and stops at the next human decision. `--explain` prints the route and its reason without executing anything. Triggers on /flow-next:flow; never runs under pilot, Ralph, or any autonomy marker.
+description: Attended conductor for whatever the user has - an idea, a spec or task id, a tracker issue, a branch, a pasted bug report, a how or why question about the code, a measured slowness, or a structural change. Picks the smallest sufficient route, runs it, stops at the next human decision. Use when the user states a change, a question, or a complaint without naming a skill. `--explain` prints the route only. Never under pilot, Ralph, or an autonomy marker.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
