@@ -1,6 +1,6 @@
 """fn-147.1 — interview emits source tags, and cannot drift from capture's vocabulary.
 
-`/flow-next:interview` writes acceptance criteria with the same trailing-token
+`/flow-next:refine` writes acceptance criteria with the same trailing-token
 provenance tags `/flow-next:capture` writes (`[user]` / `[paraphrase]` /
 `[inferred]` / `[strategy:<track>]`). The vocabulary is deliberately REPEATED at
 each emission site rather than centralised (fn-84.2 relocated capture's tables as
@@ -30,17 +30,17 @@ CAPTURE_WORKFLOW = SKILLS / "flow-next-capture" / "workflow.md"
 # phases.md, and workflow.md is pinned to still route there.
 CAPTURE_PHASES = SKILLS / "flow-next-capture" / "phases.md"
 CAPTURE_TAXONOMY_LINK = "[phases.md](phases.md) §Source-tag taxonomy"
-INTERVIEW_SKILL = SKILLS / "flow-next-interview" / "SKILL.md"
+INTERVIEW_SKILL = SKILLS / "flow-next-refine" / "SKILL.md"
 INTERVIEW_WRITE_BACK = (
-    SKILLS / "flow-next-interview" / "references" / "write-back.md"
+    SKILLS / "flow-next-refine" / "references" / "write-back.md"
 )
 # The per-pass `[user]` semantics moved to the scope references the SKILL.md
 # scope switch loads.
 INTERVIEW_PASS_BUSINESS = (
-    SKILLS / "flow-next-interview" / "references" / "pass-business.md"
+    SKILLS / "flow-next-refine" / "references" / "pass-business.md"
 )
 INTERVIEW_PASS_TECHNICAL = (
-    SKILLS / "flow-next-interview" / "references" / "pass-technical.md"
+    SKILLS / "flow-next-refine" / "references" / "pass-technical.md"
 )
 FIXTURE_DIR = pathlib.Path(__file__).parent / "fixtures" / "interview_source_tags"
 

@@ -63,8 +63,8 @@ CURRENT_CALLER_FILES = {
         f"{SKILLS}/flow-next-capture/references/tracker-integration.md",
     ),
     "interview": (
-        f"{SKILLS}/flow-next-interview/SKILL.md",
-        f"{SKILLS}/flow-next-interview/references/post-write-back.md",
+        f"{SKILLS}/flow-next-refine/SKILL.md",
+        f"{SKILLS}/flow-next-refine/references/post-write-back.md",
     ),
     "plan": (
         f"{SKILLS}/flow-next-plan/steps.md",
@@ -88,7 +88,7 @@ _GATE_EDGES = (
         "references/tracker-integration.md",
     ),
     (
-        f"{SKILLS}/flow-next-interview/SKILL.md",
+        f"{SKILLS}/flow-next-refine/SKILL.md",
         "references/post-write-back.md",
     ),
     (f"{SKILLS}/flow-next-plan/steps.md", "references/tracker-projection.md"),
@@ -353,7 +353,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
                 "references/tracker-integration.md"
             ): ("evidence=<sha256-of-current-spec-file>",),
             (
-                "plugins/flow-next/skills/flow-next-interview/"
+                "plugins/flow-next/skills/flow-next-refine/"
                 "references/post-write-back.md"
             ): ("evidence=<sha256-of-current-spec-file>",),
             (

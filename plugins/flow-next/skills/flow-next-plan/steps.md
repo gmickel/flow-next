@@ -178,6 +178,8 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 
 Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
+**Research skip (fn-238 R16, symmetric with `/flow-next:refine --scope=research`).** Before dispatching `docs-scout`, `practice-scout`, `docs-gap-scout`, and `memory-scout` (and `github-scout` when gated on) on a Route A spec, check the spec body for `## Resolved via Research`. When the section is present, skip those scouts, print `research: docs-scout, practice-scout, docs-gap-scout, memory-scout - skipped(section present: ## Resolved via Research)`, and read the section as their findings; `repo-scout`, `spec-scout`, and Step 3's `flow-gap-analyst` still run (decomposition needs them), and every other row is unchanged. When those scouts do run, Step 5 writes their findings into `## Resolved via Research` on the spec (one sub-block per scout, a source on every line, provenance line naming the scouts; docs-gap-scout's findings read as "docs that must change") as well as into the task bodies, so refine's research pass and plan converge on one artifact and one skip rule: whichever ran first satisfies the read-first signal in `flow-next-flow/references/route-matrix.md`, and the other skips. Research lands in the spec when a human should see it before ratifying and when it must survive the route choice; what only the implementer needs stays in the task body.
+
 ---
 
 Run ALL of these scouts in parallel:
@@ -228,7 +230,7 @@ Before diving into gaps, identify who's affected:
 
 This shapes what the plan needs to cover. A pure backend refactor needs different detail than a user-facing feature.
 
-**Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:interview` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
+**Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:refine` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
 
 **An empirically answerable fork gets a throwaway probe, not a question.** When a fork the plan hinges on is something the running code can settle (a behavior, a timing, an output), run the probe and read the answer instead of parking it as an open question or asking the user — the ask is the slow path for a fact the machine already holds. Safety predicate: a probe runs automatically only when it is non-mutating (read-only observation) or fully disposable (a scratch copy, a throwaway environment); a fork whose answer requires a stateful or destructive command — a migration, a deployment, a write API, anything that touches live state — stays an open question or goes to the user.
 
@@ -408,6 +410,10 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    Acceptance Criteria, Early proof point, Requirement coverage, References.
    Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    ## Strategy drift flagged for review (when plan scope conflicts with an active track).
+   ## Resolved via Research (when the research scouts RAN in Step 1: one sub-block per scout, one
+   bullet per finding with its source, provenance line `plan (docs-scout, practice-scout,
+   docs-gap-scout, memory-scout) on <date>`; when Step 1 skipped them because the section was
+   already present, it comes back byte-for-byte).
    Add mermaid diagram if data model or architecture changes.
    Write tool -> $PLAN_FILE (author-as-file rule — full scaffold below):
 

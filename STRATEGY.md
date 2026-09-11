@@ -40,7 +40,7 @@ product intent; historical rollout detail is labeled separately from current
 mechanics. This clarification does not set a new roadmap.
 
 - **Smoke-test surface and parity.** Number of smoke suites × OS matrix (historical snapshot: 10 × Linux/macOS/Windows, plus Cursor-install, python-probe, and Windows-launcher jobs). Cross-platform parity across Codex / Droid / Cursor / Grok Build (and the OpenCode install path) is non-negotiable.
-- **Slash-command count and density.** Each command is a discrete handover. 23 commands / 28 skills / 21 subagents at 3.12.0; 28 commands / 32 skills / 20 subagents at the flow release (flow replaced guide, so the command count stayed flat); additions must justify a new handover, not a convenience alias (the retired `epic-review` alias was removed entirely in 3.3.1).
+- **Slash-command count and density.** Each command is a discrete handover. 23 commands / 28 skills / 21 subagents at 3.12.0; 28 commands / 32 skills / 20 subagents at the flow release (flow replaced guide, so the command count stayed flat; the registry inventory also carries the one-release `interview` alias stub and shim plus the why-scout, so it reads 21 subagents / 29 commands / 33 skills until the alias is removed); additions must justify a new handover, not a convenience alias (the retired `epic-review` alias was removed entirely in 3.3.1).
 - **OpenCode-path adoption.** The in-repo `install-opencode.sh` is the OpenCode adoption signal (the flow-next-opencode port is superseded and archived as a pointer); FlowFactory predates native first-class Droid support and is historical evidence, not the current Droid story.
 - **Spec-driven adoption signal.** Inbound traffic to `docs/teams.md` and the AI-x-SDLC-Starter-Kit cross-link as proxy for team adoption.
 - **Idea-to-merge wall-clock.** Time from `/flow-next:capture` to `/flow-next:make-pr` body landing on a draft PR. Worth measuring as the system matures.
@@ -82,7 +82,7 @@ First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor (3.3.0), xAI Gro
 
 ### Self-improving through normal work
 
-The system compounds as a side-effect of normal use — memory accretes from review fix-cycles, the glossary is seeded by prime and grows through interview/capture while plan/work/review read it back, decision records land when judgment calls happen, and strategy drift is surfaced by the skills that consume the doc. Never a manual compound/refresh ceremony: improvement that depends on remembering an extra command doesn't happen. Audit is the garbage collector, not the growth mechanism.
+The system compounds as a side-effect of normal use — memory accretes from review fix-cycles, the glossary is seeded by prime and grows through refine/capture while plan/work/review read it back, decision records land when judgment calls happen, and strategy drift is surfaced by the skills that consume the doc. Never a manual compound/refresh ceremony: improvement that depends on remembering an extra command doesn't happen. Audit is the garbage collector, not the growth mechanism.
 
 ## Milestones
 

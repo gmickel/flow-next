@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Bash
 
 # /flow-next:strategy — repo-root STRATEGY.md anchor
 
-`flow-next-strategy` produces and maintains `STRATEGY.md` — a short, durable anchor at the repo root (peer of `README.md` / `GLOSSARY.md`) that captures what the product is, who it serves, how it succeeds, and where the team is investing. Downstream skills (`/flow-next:prospect`, `/flow-next:plan`, `/flow-next:interview`, `/flow-next:capture`, `/flow-next:sync`) read it as grounding when `sections_filled >= 1`.
+`flow-next-strategy` produces and maintains `STRATEGY.md` — a short, durable anchor at the repo root (peer of `README.md` / `GLOSSARY.md`) that captures what the product is, who it serves, how it succeeds, and where the team is investing. Downstream skills (`/flow-next:prospect`, `/flow-next:plan`, `/flow-next:refine`, `/flow-next:capture`, `/flow-next:sync`) read it as grounding when `sections_filled >= 1`.
 
 The document is short and structured on purpose. Good answers to a handful of sharp questions produce a better strategy than any amount of prose. This skill asks those questions, pushes back on weak answers, and writes the doc.
 
@@ -162,7 +162,7 @@ Phase 0.2.
 After writing (first-run or update), surface the file's role to the user in one paragraph:
 
 - If `.flow/specs/` is empty (and any legacy `.flow/epics/` is also empty) AND `.flow/prospects/` is empty: `Strategy doc written. Next, /flow-next:prospect [optional focus] generates ranked candidate ideas grounded in the strategy you just captured.`
-- If `.flow/` is populated: `Strategy doc written. Downstream skills (/flow-next:prospect, /flow-next:plan, /flow-next:interview, /flow-next:capture, /flow-next:sync) will read STRATEGY.md as grounding on next invocation.`
+- If `.flow/` is populated: `Strategy doc written. Downstream skills (/flow-next:prospect, /flow-next:plan, /flow-next:refine, /flow-next:capture, /flow-next:sync) will read STRATEGY.md as grounding on next invocation.`
 
 One paragraph max. No follow-up questions.
 

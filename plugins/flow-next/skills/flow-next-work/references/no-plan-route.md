@@ -62,7 +62,7 @@ re-invoking work. No backend or `--no-plan` choice bypasses that gate.
 
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
 worker could act on): hand back to the user with a pointer to `/flow-next:plan` or
-`/flow-next:interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
+`/flow-next:refine` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
 task, no further confirmation. First persist the accepted route, including flag-only
 and interactive choices. Stop on a failed write; never mint after one. This survives
 a crash before mint without fabricating a plan-review verdict.

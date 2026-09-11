@@ -1,6 +1,6 @@
 # Frozen interview mini-transcript (fn-147 R5 discrimination fixture)
 
-Scenario: `/flow-next:interview --scope=business` on a NEW IDEA ("export saved searches").
+Scenario: `/flow-next:refine --scope=business` on a NEW IDEA ("export saved searches").
 Three questions were asked and answered; two criteria were never asked about and were
 drafted by the agent while filling the acceptance section. `STRATEGY.md` has one populated
 track, `### Self-serve`, whose body reads "every export path a user can reach in the product

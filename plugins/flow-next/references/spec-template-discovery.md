@@ -1,6 +1,6 @@
 # Spec-template discovery — 3-tier cascade + walker
 
-Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional) — this reference owns only the resolution mechanics. Consumers: `flow-next-interview` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
+Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional) — this reference owns only the resolution mechanics. Consumers: `flow-next-refine` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
 
 Resolve the template via the 3-tier discovery cascade — first match wins;
 do not read later tiers once a hit is found:

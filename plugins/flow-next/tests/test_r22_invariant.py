@@ -1,7 +1,7 @@
 """R22 backward-compat invariant — deterministic static checks (fn-44.9).
 
 R22 states: a user who never passes `--scope` experiences zero behavioral
-change across all flow-next surfaces. Because /flow-next:interview is
+change across all flow-next surfaces. Because /flow-next:refine is
 interactive (calls `AskUserQuestion`) and cannot be diff-tested against a
 fixture without a transcript harness, the invariant is enforced at the
 rule-engine level via deterministic unit tests on observable state.
@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
-INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-interview"
+INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-refine"
 CAPTURE_DIR = PLUGIN_DIR / "skills" / "flow-next-capture"
 
 
@@ -96,7 +96,7 @@ class TestR22A_ZeroFlagDefault(unittest.TestCase):
         self.assertEqual(payload["remaining_args"], [])
 
     def test_resolve_only_flow_id_returns_technical(self) -> None:
-        """A user invoking `/flow-next:interview fn-1` (no scope flag) lands
+        """A user invoking `/flow-next:refine fn-1` (no scope flag) lands
         on technical scope; the Flow ID stays in remaining_args."""
         proc = _run("scope", "resolve", "--json", "--raw=fn-1")
         self.assertEqual(proc.returncode, 0)

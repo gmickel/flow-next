@@ -182,7 +182,9 @@ TEMPLATE_HASHES = {
     # SPEC_SKELETON_TEMPLATE constant used to carry: a scaffold edit is a
     # deliberate bump with a rationale in the commit message, never silent.
     "plugins/flow-next/templates/spec.md":
-        "5032758a08e0d8180d062f3e4fe2c4a9309301cb5f932a9eb6549aae59a536f5",
+        # fn-238 R15/R16: auxiliary-section comments name the renamed refine
+        # writer and add the `## Resolved via Research` block (deliberate bump).
+        "b38c5aed8a7297dc318b2d51dc854ec105e72ccba5cc0e0a508a4fdea29ff791",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         "eb39e0d69df44a5696d32844baf920d6cfa0440d9f918db2628b79c1d03ecb27",
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":

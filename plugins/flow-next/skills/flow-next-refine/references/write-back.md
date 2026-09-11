@@ -217,7 +217,7 @@ $FLOWCTL cat <id>
   ```bash
   $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
   ```
-- Or suggest interviewing the spec instead: `/flow-next:interview <spec-id>`
+- Or suggest interviewing the spec instead: `/flow-next:refine <spec-id>`
 
 **If task is minimal** (just title, empty or stub description):
 - Update task with interview findings

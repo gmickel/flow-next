@@ -28,7 +28,7 @@ Recommendation logic:
 | 3+ | `extend <strongest-id>` | `[high]` |
 | 2 | `proceed-anyway` | `[judgment-call]` |
 
-If the user picks `extend`, exit 0 with: `Re-run with --rewrite <spec-id> to overwrite the existing spec, or invoke /flow-next:interview <spec-id> to refine via Q&A.`
+If the user picks `extend`, exit 0 with: `Re-run with --rewrite <spec-id> to overwrite the existing spec, or invoke /flow-next:refine <spec-id> to refine via Q&A.`
 
 If `supersede` or `proceed-anyway`, store the choice and continue to Phase 1. The branch outcome is process state recorded nowhere in the spec body.
 

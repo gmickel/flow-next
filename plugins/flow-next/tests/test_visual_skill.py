@@ -29,7 +29,7 @@ CAPTURE_SKILL = PLUGIN / "skills" / "flow-next-capture" / "SKILL.md"
 CAPTURE_WORKFLOW = PLUGIN / "skills" / "flow-next-capture" / "workflow.md"
 PLAN_SKILL = PLUGIN / "skills" / "flow-next-plan" / "SKILL.md"
 PLAN_STEPS = PLUGIN / "skills" / "flow-next-plan" / "steps.md"
-INTERVIEW_SKILL = PLUGIN / "skills" / "flow-next-interview" / "SKILL.md"
+INTERVIEW_SKILL = PLUGIN / "skills" / "flow-next-refine" / "SKILL.md"
 
 MAKE_PR_DIR = PLUGIN / "skills" / "flow-next-make-pr"
 MAKE_PR_WORKFLOW = MAKE_PR_DIR / "workflow.md"

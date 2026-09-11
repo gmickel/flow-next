@@ -370,7 +370,7 @@ later, on their own time, via the spec or the tracker.
 Backlog mode **does not author specs.** Spec authoring (`capture`,
 conversation→spec; `interview`, interactive Q&A) is human-gated and upstream. A
 ticket without a workable spec is **surfaced as a gap** — "run `/flow-next:capture`
-or `/flow-next:interview`" — **never auto-written**. An agent inventing scope from a
+or `/flow-next:refine`" — **never auto-written**. An agent inventing scope from a
 one-line ticket is exactly the slop the valve exists to prevent.
 
 The question is posted through tracker-sync's inline `question` wrapper. The skill
@@ -403,7 +403,7 @@ Where the question parks depends on whether a spec exists:
 - **Tracker-only** (`question <tracker-id>`, a promoted ticket with no flow spec) —
   there is no spec to anchor in, so the question lives in the **tracker comment
   ALONE**. The surfaced gap is always *"this promoted ticket has no flow spec — run
-  `/flow-next:capture` or `/flow-next:interview`"*. **Backlog mode never writes a
+  `/flow-next:capture` or `/flow-next:refine`"*. **Backlog mode never writes a
   spec stub** (that is the forbidden authoring). Its parked/answered state lives in
   the tracker (the `status=open` anchor + a matching `<!-- flow-next:answer id=… -->`,
   detected by scanning the issue comments) — **no spec import/flip happens until

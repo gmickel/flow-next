@@ -91,13 +91,13 @@ def _body() -> str:
         "**Size:** S\n"
         "**Affected areas:** plan-skill, scout-runtime\n"
         "**Risk notes:** stale cache could hide drift\n"
-        "**Next step:** /flow-next:interview\n"
+        "**Next step:** /flow-next:refine\n"
         "\n"
         "#### 2. Faster smoke\n"
         "**Summary:** Trim smoke runtime to <30s\n"
         "**Leverage:** Small-diff lever because most steps are sequential I/O; impact lands on every CI run.\n"
         "**Size:** M\n"
-        "**Next step:** /flow-next:interview\n"
+        "**Next step:** /flow-next:refine\n"
         "\n"
         "### Worth considering (4-7)\n"
         "\n"
@@ -350,7 +350,7 @@ class PromoteBasic(unittest.TestCase):
             self.assertEqual(code, 0, result)
             self.assertIn("Promoted idea #1", result["_text"])
             self.assertIn("Cache scout output", result["_text"])
-            self.assertIn("/flow-next:interview", result["_text"])
+            self.assertIn("/flow-next:refine", result["_text"])
 
 
 # ---------- Idempotency / --force ------------------------------------

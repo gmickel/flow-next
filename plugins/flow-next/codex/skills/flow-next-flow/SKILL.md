@@ -1,13 +1,13 @@
 ---
 name: flow-next-flow
-description: Attended conductor for an idea or change request, a spec or task id, a tracker issue, a branch or path, a bug report or console output, a how or why question, something slow, a behaviour-keeping cleanup, a design fork, or what to do next. Use when the user states any of these without naming a skill.
+description: Attended conductor for an idea, change request, spec or task id, tracker issue, branch or path, bug report, how or why question, slowness, cleanup, or design fork. Use when no skill is named.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:flow - attended conductor
 
-Flow chooses the next step so the user does not have to. It reads what it was given, routes from the shared routing reference, runs the routed stage skill, and continues until the next decision that belongs to a human. It re-implements no stage logic: capture, interview, plan, plan-review, work, qa, make-pr, and resolve-pr keep their own contracts, receipts, and gates.
+Flow chooses the next step so the user does not have to. It reads what it was given, routes from the shared routing reference, runs the routed stage skill, and continues until the next decision that belongs to a human. It re-implements no stage logic: capture, refine, plan, plan-review, work, qa, make-pr, and resolve-pr keep their own contracts, receipts, and gates.
 
 **Role:** conductor, inline (no `context: fork`) so `plain-text numbered prompt` stays reachable. On hosts without it, fall back to a plain-text numbered prompt with a final `Other - type your own answer` option.
 

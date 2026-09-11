@@ -52,12 +52,12 @@ CURRENT_CALLER_GATES = {
     },
     "interview": {
         "split_gate": (
-            SKILLS / "flow-next-interview/SKILL.md",
+            SKILLS / "flow-next-refine/SKILL.md",
             "TRACKER_GATE=0",
             "TRACKER-SYNC GATE ACTIVE",
         ),
         "fence": (
-            SKILLS / "flow-next-interview/references/post-write-back.md",
+            SKILLS / "flow-next-refine/references/post-write-back.md",
             ("tracker.perEvent.interview", "tracker sync"),
         ),
         "fired": '[ "$TRACKER_GATE" = "1" ]',

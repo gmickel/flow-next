@@ -433,7 +433,7 @@ _Relates to_: Tier
 
 ## Emission point
 
-A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/interview/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
+A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/refine/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
 
 ## No-plan route
 
@@ -471,3 +471,25 @@ The set of six small reference files the flow skill owns under `plugins/flow-nex
 ## Prototype-before-ask
 
 Classify a fork before asking the user. An answer observable by running something (behavior, output, timing, layout) is settled by a prototype or experiment. Only a product or preference call no experiment can settle becomes a question.
+
+## Refine
+
+The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release; `/flow-next:interview` forwards for one release). A deep question pass over a spec, task, or spec file under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
+
+_Avoid_: interview skill, interview command
+
+## Research pass
+
+`/flow-next:refine --scope=research`: asks nothing; runs the read-only docs, practice, docs-gap, and memory scouts (github when gated on) and writes one `## Resolved via Research` section with a sub-block per scout and a source on every line. Skipped, with the reason printed, when the section or plan's scout findings already exist; `--force` reruns. Plan writes the same section when its research scouts run, so the pass never runs twice.
+
+_Relates to_: Read-first signal, Refine
+
+## Read-first signal
+
+The positive signal on the route matrix's ready-spec row: the spec names a library or API the repo does not already use. It sends the spec through the research pass before work on either route and is satisfied by a `## Resolved via Research` section or a plan that ran the scouts.
+
+## Why-scout
+
+The read-only agent for rationale questions. It anchors on `git blame` and the PRs behind the commits, reads the tracker thread through access the session already has, then the bug and decision memory tracks, and tiers each finding `direct`, `supported`, `inferred`, or `unknown`; the caller may not rewrite a tier. Named by the route matrix's investigation row for why questions.
+
+_Relates to_: Thinking scout tier

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Refine"
+  short_description: "Refine a spec or task: deep Q&A, or a read-only external-docs research pass"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: true

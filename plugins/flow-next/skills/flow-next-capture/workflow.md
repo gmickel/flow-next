@@ -291,7 +291,7 @@ Rules:
 - **One signal can land in multiple destinations** (e.g., a success metric becomes both an outcome-AC R-ID and a `### Motivation` rationale entry) — that still counts as **one** SIGNAL CATEGORY for the R25 threshold. Counting is over R24's nine categories, not over markdown destinations.
 - **Categories 1, 2, 9 (target user / problem framing / UX) collapse into `Goal & Context` prose.** Per-line tags inside the narrative are not required, but the section-level tag breakdown (e.g., `<!-- Goal & Context: 80% [user], 20% [paraphrase] -->`) must reflect them.
 - **Category 4 ("MVP scope / not doing X yet") and Category 6 ("what NOT to build") both route to `Boundaries`** but stay counted separately for R25 (different signal-source patterns: "MVP is narrow" vs "definitely not X"). **Tie-break:** a single clause matching more than one category counts ONCE, in the most specific category it matches — never double-counted toward the R25 threshold.
-- **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:interview`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
+- **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:refine`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:refine --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
 - **Constraints / risks (categories 5, 8) pick one destination per signal** — `Goal & Context` when the constraint sets up framing, `### Motivation` when it's the reason behind a trade-off. Don't double-route to both for the same signal.
 
 After §2.2's section drafting completes, compute `BIZ_SIGNAL_CATEGORIES` — the count of distinct categories (out of nine) that received at least one `[user]` or `[paraphrase]` line. This count is Phase 6's input to the R25 fire/no-fire judgment (agent-owned; no flowctl helper):
@@ -475,7 +475,7 @@ An edit cycle starts from a free-text answer ("change X") or from `open in edito
 - **Print only the diff** (unified style, changed sections in full) as an ordinary message - never reprint the full draft; the full draft prints only when the user asks for it.
 - Re-issue the §4.2 ask. Loop until the user picks `approve and write`, `split-as-proposed`, or `abort`.
 
-Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement - consider /flow-next:interview <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the diff first if the file changed).
+Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement - consider /flow-next:refine <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the diff first if the file changed).
 
 ### 4.4 — Autofix read-back
 
@@ -507,7 +507,7 @@ When Phase 0.3b's gate fired, run §5.0 from `references/strategy-alignment.md` 
 
 ### 5.1 — The spec body is the §4.1 draft file
 
-The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
+The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
 
 `spec set-plan` replaces the ENTIRE markdown file with the supplied body — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
 
@@ -695,7 +695,7 @@ Next:
   /flow-next:work <SPEC_ID> --no-plan → execute the cohesive spec
   /flow-next:plan-review <SPEC_ID> → assess the spec design
   /flow-next:plan <SPEC_ID>      → research + break into tasks
-  /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:refine <SPEC_ID> → refine via Q&A
   /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
@@ -709,7 +709,7 @@ The rewrite footer variant (prefix `Spec rewritten at …`, readiness-reset anno
 
 ### Biz-suggestion footer (R25)
 
-When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:interview --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
+When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:refine --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
 
 ```bash
 # R25 threshold is host-agent judgment (fn-113; former flowctl helper removed).
@@ -718,13 +718,13 @@ if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; the
   cat <<EOF
 
 This conversation has business-requirements signals; consider
-\`/flow-next:interview --scope=business $SPEC_ID\` to deep-refine the
+\`/flow-next:refine --scope=business $SPEC_ID\` to deep-refine the
 business layer.
 EOF
 fi
 ```
 
-The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
+The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:refine --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
 
 If Phase 0.3 found memory hits, append the related-context footer:
 

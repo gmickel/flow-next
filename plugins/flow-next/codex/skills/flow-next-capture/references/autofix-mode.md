@@ -21,7 +21,7 @@ Autofix has no ask (no user to answer it). The §4.1 Write materializes the draf
 
 Autofix never offers `edit` — there's no user to ask. The Write + `--yes` pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
 
-**Autofix + split proposal:** autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:interview <id> or manual spec create + add-dep.`
+**Autofix + split proposal:** autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:refine <id> or manual spec create + add-dep.`
 
 **Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 

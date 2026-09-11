@@ -1,7 +1,7 @@
 # Emitted acceptance criteria (one business pass over `transcript.md`)
 
 Produced by running the write-back guidance in
-`skills/flow-next-interview/references/write-back.md` § "Source tags on acceptance criteria"
+`skills/flow-next-refine/references/write-back.md` § "Source tags on acceptance criteria"
 once over the frozen transcript. Recorded so R5 (tags discriminate) is checkable without
 re-running an interview: answered questions land on `[user]` / `[paraphrase]`, unasked
 gap-fills land on `[inferred]`, the strategy-derived line carries its track.

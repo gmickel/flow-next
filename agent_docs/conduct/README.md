@@ -14,7 +14,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`prospect.md`](prospect.md) — `/flow-next:prospect`, plural ranked ideas
 - [`chart.md`](chart.md) — `/flow-next:chart`, decision map and briefing package
 - [`capture.md`](capture.md) — `/flow-next:capture`, conversation to source-tagged spec
-- [`interview.md`](interview.md) — `/flow-next:interview`, question rounds and scoped write-back
+- [`refine.md`](refine.md) — `/flow-next:refine`, question rounds, scoped write-back, and the research pass
 - [`flow.md`](flow.md) - `/flow-next:flow`, attended conductor
 
 **Plan and review**
@@ -24,6 +24,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`impl-review.md`](impl-review.md) — `/flow-next:impl-review`, backend implementation review
 - [`spec-completion-review.md`](spec-completion-review.md) — `/flow-next:spec-completion-review`, combined-implementation verification
 - [`quality-auditor.md`](quality-auditor.md) — `quality-auditor`, single-axis in-host quality audit
+- [`why-scout.md`](why-scout.md) — `why-scout`, read-only rationale answers with evidence tiers
 - [`visual.md`](visual.md) — `/flow-next:visual`, compact markdown digest of a spec, task, diff, or topic
 - [`prose.md`](prose.md) — `/flow-next:prose`, prose-contract application to a substantial reply
 

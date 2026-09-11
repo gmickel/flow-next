@@ -18,7 +18,7 @@ Offer options under the spec summary Step 8 already printed:
 ```
 Next steps:
 1) Start work: `/flow-next:work fn-N-slug`
-2) Refine via interview: `/flow-next:interview fn-N-slug`
+2) Refine via interview: `/flow-next:refine fn-N-slug`
 3) Review the plan: `/flow-next:plan-review fn-N-slug`
 4) Go deeper on specific tasks (tell me which)
 5) Simplify (reduce detail level)

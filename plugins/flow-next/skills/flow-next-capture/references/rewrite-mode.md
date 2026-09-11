@@ -93,7 +93,7 @@ Recommended next: /flow-next:<stage> <SPEC_ID> — <one-clause reason>; <named a
 Next:
   /flow-next:plan <SPEC_ID>      → re-plan tasks (existing tasks under the spec
                                     may need /flow-next:sync to align)
-  /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:refine <SPEC_ID> → refine via Q&A
   /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 

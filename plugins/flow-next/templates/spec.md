@@ -2,7 +2,7 @@
 purpose: Canonical spec template — single source of truth for .flow/specs/<id>.md structure
 consumers:
   - flow-next-capture        # synthesizes a spec from conversation context
-  - flow-next-interview      # refines a spec via Q&A (--scope=business|technical|both)
+  - flow-next-refine         # refines a spec via Q&A (--scope=business|technical|both) or external docs (--scope=research)
   - flow-next-plan           # breaks a spec into tasks
   - CLAUDE.md                # "Creating a spec" guide cross-links here rather than embedding
 canonical_sections:
@@ -18,8 +18,9 @@ auxiliary_sections:
   - Strategy Conflicts       # written when STRATEGY.md has content
   - Glossary Conflicts       # written when doc-aware mode detects a vocabulary mismatch
   - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail)
-  - Resolved via Codebase    # written by /flow-next:interview --scope=technical
-  - Resolved via Project Docs  # written by /flow-next:interview --scope=business
+  - Resolved via Codebase    # written by /flow-next:refine --scope=technical
+  - Resolved via Project Docs  # written by /flow-next:refine --scope=business
+  - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
@@ -54,10 +55,10 @@ Discovery cascade (first match wins):
 Customizing: adding sections and rewriting the guidance prose under any heading is
 free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
 `## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
-the features that parse them (R-ID coverage, PR "Not in this PR", interview scope
+the features that parse them (R-ID coverage, PR "Not in this PR", refine scope
 routing, Decision Context shape detection).
 
-Full guide, incl. the known limitation for custom sections under an interview pass:
+Full guide, incl. the known limitation for custom sections under a refine pass:
 flow-next docs, "Customizing the scaffold for your project"
 (plugins/flow-next/docs/spec-template.md - https://flow-next.dev/guides/spec-scaffold/).
 -->
@@ -197,6 +198,21 @@ This section has TWO shapes. Pick exactly one:
 ---
 
 <!--
+OPTIONAL AUXILIARY SECTION — `## Resolved via Research`:
+Written by `/flow-next:refine --scope=research`, or by plan when its Step 1 ran
+the research scouts (docs-scout, practice-scout, docs-gap-scout, memory-scout;
+github-scout when gated on). One `###` sub-block per scout that ran, one bullet
+per finding (library version, changed API, gotcha, doc that must change, memory
+entry that applies), each ending in `Source: <url|path|entry-id>`; a provenance
+line under the heading names the writer and the scouts. Its presence is the skip
+signal for both writers, so neither runs the scouts twice. Research lands here
+when a human should see it before ratifying and when it must survive the route
+choice; what only the implementer needs stays with the worker. Preserved
+byte-for-byte by every other pass; only `refine --scope=research --force`
+replaces it.
+-->
+
+<!--
 OPTIONAL AUXILIARY SECTION — `## Parked unknowns`:
 Written only when the spec actually carries fog. One bullet per genuinely-unknown
 item, each passing the fog-or-ticket test: decidable now → decide it here and now,
@@ -204,7 +220,7 @@ so it never reaches this section; resolvable by scheduled work → make it a tas
 a ticket; genuinely unknown (needs a decision, an experiment, or an outside answer
 nobody has yet) → park it here, one line, naming what would resolve it.
 
-Graduate-on-resolution: the moment interview or plan resolves a parked item, its
+Graduate-on-resolution: the moment refine or plan resolves a parked item, its
 answer moves into the canonical section that owns it and the bullet is DELETED
 from here. A parked bullet that survives its own answer is stale fog and reads as
 an open question the spec has in fact closed. Empty section → omit it entirely.
@@ -228,5 +244,5 @@ Cross-links:
 - `plugins/flow-next/docs/teams.md` — "Symmetric interview" pattern (PO → tech-lead handover)
 - `CLAUDE.md` — "Creating a spec" guide (manual + automated paths)
 - `plugins/flow-next/skills/flow-next-capture/` — automated spec capture from conversation
-- `plugins/flow-next/skills/flow-next-interview/` — Q&A refinement (`--scope=business|technical|both`)
+- `plugins/flow-next/skills/flow-next-refine/` — Q&A refinement (`--scope=business|technical|both`) and the external-docs research pass (`--scope=research`, writes `## Resolved via Research`)
 -->

@@ -11,7 +11,7 @@ For a ready, cohesive spec and a capable coding agent, start with `/flow-next:wo
 
 Choose refinement, decomposition, and verification separately:
 
-1. **Refine material choices.** Use capture to preserve intent and interview to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
+1. **Refine material choices.** Use capture to preserve intent and refine to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
 2. **Plan coordination.** Direct execution is the default; plan needs a positive signal. The signals, and the things that never count as one, are stated once in [`plan-vs-no-plan.md`](../../skills/flow-next-flow/references/plan-vs-no-plan.md). Whether one intent is one spec or several is the [spec-count rule](../../skills/flow-next-flow/references/spec-count.md).
 3. **Verify the relevant risk.** An explicit `/flow-next:plan-review <id>` can review the spec's design before task files exist. Which review, QA, and completion gate applies, and from which config key or flag, is [`gate-selection.md`](../../skills/flow-next-flow/references/gate-selection.md); the gates apply independently of the planning choice. Neither review nor QA guarantees every regression will be caught.
 
@@ -27,7 +27,7 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → interview → plan → plan-review → work → [opt-in qa] → make-pr → land |
+| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → refine → plan → plan-review → work → [opt-in qa] → make-pr → land |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
@@ -45,10 +45,10 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 ```mermaid
 flowchart LR
-    E([Epic intent]) --> C[/capture/] --> I[/interview/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
+    E([Epic intent]) --> C[/capture/] --> I[/refine/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
 ```
 
-The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **interview sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
+The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
 
 ### Feature, requirements known
 
@@ -102,7 +102,7 @@ flowchart LR
     R([Bug report]) --> Repro[reproduce as failing test] --> W[/work/] --> Rev[/impl-review/]
 ```
 
-The sharpening tool for a defect is **reproduction, not conversation** - an interview is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+The sharpening tool for a defect is **reproduction, not conversation** - refine is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
 
 ### Refactoring
 

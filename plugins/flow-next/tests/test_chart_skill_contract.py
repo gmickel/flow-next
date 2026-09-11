@@ -492,7 +492,9 @@ class ChartRegistryEntries(unittest.TestCase):
         # flow-next-features (fn-211.4); the work-rolling beta graduated into
         # work's default scheduler (fn-218). Registry manifests count every
         # shipped dir.
-        expected_snippet = "28 commands, 32 skills"
+        # fn-238 R15: registry inventory carries the one-release interview alias
+        # stub + shim and the why-scout (see test_chart_docs_inventory).
+        expected_snippet = "29 commands, 33 skills"
         count_surfaces = (
             REPO_ROOT / ".claude-plugin" / "marketplace.json",
             PLUGIN / ".claude-plugin" / "plugin.json",

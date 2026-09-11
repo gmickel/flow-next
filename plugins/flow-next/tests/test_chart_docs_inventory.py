@@ -297,8 +297,18 @@ class ChartRegistryCounts(unittest.TestCase):
         # counts and the published phrases (32 skills / 27 slash-command)
         # agree again and must equal the docs/skills.md table row count.
         # fn-238 swapped guide out for flow, so the counts stay flat.
-        self.assertEqual(len(skill_dirs), 32, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 28, f"commands: {commands}")
+        # fn-238 R15 renamed interview to refine and keeps `flow-next-interview`
+        # as a one-release forwarding alias stub (plus its command shim): the
+        # filesystem/registry inventory counts them (33 dirs / 29 shims, same
+        # carve-out as the experimental tier) while the published phrases stay
+        # at the stable 32 skills / 27 slash-command. Both drop back when the
+        # alias is removed the release after.
+        self.assertEqual(len(skill_dirs), 33, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(commands), 29, f"commands: {commands}")
+        self.assertIn("flow-next-refine", skill_dirs)
+        self.assertIn("flow-next-interview", skill_dirs)
+        self.assertIn("refine", commands)
+        self.assertIn("interview", commands)
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-flow", skill_dirs)
         self.assertNotIn("flow-next-guide", skill_dirs)
@@ -307,10 +317,12 @@ class ChartRegistryCounts(unittest.TestCase):
         self.assertIn("flow", commands)
         self.assertNotIn("guide", commands)
         self.assertIn("features", commands)
-        self.assertEqual(len(slash_skills), 27, f"slash skills: {slash_skills}")
+        # the alias stub has a matching shim, so it counts as a slash skill
+        # in the inventory (28) while the published phrase stays at 27.
+        self.assertEqual(len(slash_skills), 28, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "28 commands, 32 skills"
+        expected_snippet = "29 commands, 33 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(

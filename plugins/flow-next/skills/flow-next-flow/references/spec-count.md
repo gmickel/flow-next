@@ -2,8 +2,8 @@
 
 **Decision record**
 
-- Source: capture's split-proposal reference, §2.5 spec-count heuristic, moved here unchanged; interview applies the same rule at its write-back.
-- Trigger: a capture, an interview write-back, or a flow run from intent has drafted acceptance criteria and must decide whether one intent is 1..n specs.
+- Source: capture's split-proposal reference, §2.5 spec-count heuristic, moved here unchanged; refine applies the same rule at its write-back.
+- Trigger: a capture, a refine write-back, or a flow run from intent has drafted acceptance criteria and must decide whether one intent is 1..n specs.
 - Purpose: one counting rule and one partition rule, so the split proposal capture prints and the split flow recommends cannot differ.
 - Evidence: one spec is one PR and one completion review judging every R-ID; oversized specs degrade review quality, and padded splits degrade handover.
 - Disposition: keep. The user still decides the split; nothing here auto-splits.

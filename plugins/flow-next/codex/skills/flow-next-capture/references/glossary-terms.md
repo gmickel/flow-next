@@ -7,7 +7,7 @@
 
 ## 2.7 — New-vocabulary scan (glossary term-add proposals)
 
-Capture joins `/flow-next:interview` as a glossary writer. Gate first — same husk-aware autodetect as interview's doc-aware mode (`total_terms`, never `[[ -f ]]` — a `# Glossary` husk must not open the gate):
+Capture joins `/flow-next:refine` as a glossary writer. Gate first — same husk-aware autodetect as interview's doc-aware mode (`total_terms`, never `[[ -f ]]` — a `# Glossary` husk must not open the gate):
 
 ```bash
 GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')

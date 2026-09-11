@@ -1,6 +1,6 @@
-# Conduct checklist — /flow-next:interview
+# Conduct checklist — /flow-next:refine
 
-A correct run extracts complete implementation details through deep questioning in rounds, then writes the refined spec, task, or file back under the resolved scope's write policy.
+A correct run extracts complete implementation details through deep questioning in rounds, then writes the refined spec, task, or file back under the resolved scope's write policy. Under `--scope=research` a correct run asks nothing and resolves the spec's external-library unknowns from docs into one section.
 
 - [ ] Every question goes through the blocking question tool, and each body carries a stakes sentence, a named recommendation with its rationale, and one confidence tier — `[high]`, `[judgment-call]`, or `[your-call]`. A transcript that prints "Question 1: ..." as plain narration has broken this.
 - [ ] Each round asks the whole current frontier and never pairs a question with its own prerequisite; when an answer prunes a sub-tree, the next round's opener names the abandoned branch.
@@ -10,3 +10,5 @@ A correct run extracts complete implementation details through deep questioning 
 - [ ] The completion summary reports the question count, the skip disposition when there were skips, which scope pass or passes ran, and which sections were written versus preserved.
 - [ ] Wildly divergent independent answers to one question (scouts, docs, probes) trigger a reframe-and-re-run of the question. A run that averaged divergent answers, or quietly picked a favorite, has broken this.
 - [ ] The next-step suggestion for a spec without tasks names both `/flow-next:plan fn-N` and the `/flow-next:work fn-N --no-plan` alternative for ready cohesive specs. A hint offering only the plan path has broken this.
+- [ ] Under `--scope=research`, exactly one of `research: skipped(...)`, `research: rerun(...)`, or `research: running(docs-scout, practice-scout, docs-gap-scout, memory-scout)` is printed before any scout dispatch, the skip is decided from a present `## Resolved via Research` section or plan's findings on the tasks, and a skip writes nothing. A run that dispatched a scout first, asked an interview question, or ran repo-scout, spec-scout, or flow-gap-analyst in this pass has broken this.
+- [ ] Every bullet the research pass writes under `## Resolved via Research` ends in a `Source:` link sits under its scout's `###` sub-block, and the section carries its provenance line naming the scouts; every other section comes back byte-for-byte.

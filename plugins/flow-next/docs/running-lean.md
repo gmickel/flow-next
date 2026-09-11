@@ -146,9 +146,9 @@ The worked recipes and the evidence behind the default live in [`orchestration.m
 
 ### Pre-capture discovery
 
-No config key - these are skills you invoke or do not. Details: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md), [`../skills/flow-next-prospect/SKILL.md`](../skills/flow-next-prospect/SKILL.md), [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md).
+No config key - these are skills you invoke or do not. Details: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md), [`../skills/flow-next-prospect/SKILL.md`](../skills/flow-next-prospect/SKILL.md), [`../skills/flow-next-refine/SKILL.md`](../skills/flow-next-refine/SKILL.md).
 
-- **Automates away:** finding out what to build - a ranked backlog (`prospect`), a decision map for one oversized unclear idea (`chart`), or structured requirement extraction on an existing spec (`interview`).
+- **Automates away:** finding out what to build - a ranked backlog (`prospect`), a decision map for one oversized unclear idea (`chart`), or structured requirement extraction on an existing spec (`refine`).
 - **Costs:** a discovery loop before any code exists. Chart in particular is an adaptive multi-invocation loop, one decision per tick.
 - **Earns its keep when:** you cannot yet state the outcome in a sentence. When you can, capture directly; discovery on an idea you already understand is ceremony.
 - **Lean invocation:** all three are already manual and none is ever a required stage. `/flow-next:flow --explain` names which, if any, your situation needs.

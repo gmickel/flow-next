@@ -60,7 +60,7 @@ After the stage returns, re-read state (`$FLOWCTL show <spec-id> --json`, the PR
 
 ## Step 5: Stop and report
 
-Two kinds of human decision reach this step. A **pick among options a stage produced** (prospect's ranked candidates, a chart briefing's capture-or-split question, interview's choices when it hands back) is asked inline under the one-question-per-hop invariant, and the run continues with the answer through Step 2. A **decision that ends the run** is not askable here: merge, a review verdict that needs a person, a `NEEDS_HUMAN` from a stage, or a product question no stage framed as options.
+Two kinds of human decision reach this step. A **pick among options a stage produced** (prospect's ranked candidates, a chart briefing's capture-or-split question, refine's choices when it hands back) is asked inline under the one-question-per-hop invariant, and the run continues with the answer through Step 2. A **decision that ends the run** is not askable here: merge, a review verdict that needs a person, a `NEEDS_HUMAN` from a stage, or a product question no stage framed as options.
 
 Stop at the first of: the PR exists (run from intent), merge is the only step left (open-PR run), a run-ending decision surfaced by a stage, or a plain-text numbered prompt this hop must ask that is not a pick. Print the report shape from SKILL.md with one `stage:` line per stage reached and each inline pick on the `Route taken` line, then the `Next:` line in the host's command form.
 

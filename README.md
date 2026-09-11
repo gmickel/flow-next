@@ -177,7 +177,7 @@ Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bu
 /flow-next:resolve-pr <PR#>          # 4. Fetch review threads → triage → resolve
 ```
 
-Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal: you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with interview. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto` for specs with a drivable surface) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
+Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal: you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with `/flow-next:refine`; when the spec names a library or API the repo does not use yet, `refine --scope=research` reads the docs first. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto` for specs with a drivable surface) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
 
 ### After every update
 
@@ -252,7 +252,7 @@ Use the skill name or describe what you want in the agent conversation. The [ski
 
 | Job | Skills |
 |---|---|
-| Shape intent | `capture`, `interview`; `chart` for an oversized unclear idea |
+| Shape intent | `capture`, `refine`; `chart` for an oversized unclear idea |
 | Plan and implement | `plan`, `work` |
 | Review and verify | `plan-review`, `impl-review`, `spec-completion-review`, `qa` |
 | Open and finish a PR | `make-pr`, `resolve-pr`, `land` |

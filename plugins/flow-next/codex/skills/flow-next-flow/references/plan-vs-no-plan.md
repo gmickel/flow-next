@@ -19,7 +19,7 @@ Plan is chosen only on a positive signal:
 3. Delivery is staged across several PRs.
 4. The implementer is routed out of the session model - an `implementer:` line in the project routing block that points at a bridge or a cheaper tier.
 
-Risk, size, and file count never trigger plan on their own. Design risk routes to `$flow-next-plan-review` (which reviews a spec with zero tasks). Unresolved product or authority choices route to `/flow-next:interview`. Unknown model identity creates no detector and no question.
+Risk, size, and file count never trigger plan on their own. Design risk routes to `$flow-next-plan-review` (which reviews a spec with zero tasks). Unresolved product or authority choices route to `/flow-next:refine`. Unknown model identity creates no detector and no question.
 
 ## What the direct route keeps
 

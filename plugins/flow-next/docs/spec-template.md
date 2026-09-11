@@ -26,7 +26,7 @@ The template is consumed by:
 | Consumer | Role |
 |----------|------|
 | `flow-next-capture` | synthesizes a spec from conversation context |
-| `flow-next-interview` | refines a spec via Q&A (`--scope=business|technical|both`) |
+| `flow-next-refine` | refines a spec via Q&A (`--scope=business|technical|both`) |
 | `flow-next-plan` | breaks a spec into tasks |
 | `CLAUDE.md` | "Creating a spec" guide cross-links the template rather than embedding |
 
@@ -109,11 +109,11 @@ Keep R-ID bullets in the canonical form - `- **R1:** <criterion>` - with optiona
 
 The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are technical-scope write targets. Removing them is survivable, but the technical interview pass will have fewer places to put what it learns.
 
-### Custom sections and the interview passes: use the scope marker
+### Custom sections and the refine passes: use the scope marker
 
 `flowctl scope write-policy` enumerates the seven canonical sections only, so a section you added appears in neither its `writable` nor its `preserved` list. Ownership of a project-added section therefore comes from **the section's own scope-owner marker in the spec body**, and the interview passes apply a three-way rule:
 
-| Marker on your section | What an interview pass does |
+| Marker on your section | What a refine pass does |
 |---|---|
 | names the pass's own scope (`<!-- scope: business -->` under `--scope=business`) | **writes it** - fills and refines it like a canonical section of that scope |
 | names the other scope | preserves it byte-for-byte |
@@ -232,13 +232,13 @@ The rules mirror R-IDs where they apply:
 - Ids must be unique; gaps are allowed (deleting G2 leaves G1, G3). **Never renumber** - G-IDs are stable identity across specs and receipts, exactly like R-ID numbers within a spec.
 - `flowctl criteria list --json` parses and validates the file; invalid content is a loud error, an absent file is a silent no-op everywhere.
 - The **spec is the unit of compliance**: spec completion review (not per-task impl review) judges each G-ID against the whole implementation and records `met` / `violated` / `n/a` per criterion in the review receipt's additive `criteria` array. Violations also surface as normal findings.
-- **G-IDs are never restated as R-IDs.** The spec-authoring skills (`plan`, `capture`, `interview`) do not copy standing criteria into a spec's `## Acceptance Criteria` - a copy drifts as `criteria.md` evolves and gets judged twice. A spec references a relevant G-ID in prose; an R-ID covers only what the spec adds beyond the standing rule.
+- **G-IDs are never restated as R-IDs.** The spec-authoring skills (`plan`, `capture`, `refine`) do not copy standing criteria into a spec's `## Acceptance Criteria` - a copy drifts as `criteria.md` evolves and gets judged twice. A spec references a relevant G-ID in prose; an R-ID covers only what the spec adds beyond the standing rule.
 
 `/flow-next:setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
 
 ### Source tags: what you said vs what the agent inferred
 
-`/flow-next:capture` **and** `/flow-next:interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
+`/flow-next:capture` **and** `/flow-next:refine` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
 
 ```markdown
 - **R1:** Root marketplace manifest exists and imports cleanly. [user]
@@ -270,10 +270,10 @@ Two details in that pipeline are load-bearing, and both exist because a track na
 - the character class is `[^]]+`, not `[a-z:]+` - a lowercase-only class silently drops every `[strategy:*]` criterion from the tally;
 - `sed` emits a **tab** and `awk` reads `-F'\t'` - with the default whitespace split, a track name containing a space lands in `$2` and the tally reports a phantom tag.
 
-Then interview only the uncertainty instead of re-litigating settled requirements:
+Then refine only the uncertainty instead of re-litigating settled requirements:
 
 ```text
-/flow-next:interview fn-14 - focus only on the [inferred] acceptance criteria
+/flow-next:refine fn-14 - focus only on the [inferred] acceptance criteria
 (R3, R4, R9, R11); the [user] and [paraphrase] ones are settled, leave them alone
 ```
 
@@ -350,5 +350,5 @@ All review receipts may carry these optional fields; existing consumers that rea
 
 - [`../templates/spec.md`](../templates/spec.md) - the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
-- [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) - 3-tier discovery cascade walker.
+- [`../skills/flow-next-refine/SKILL.md`](../skills/flow-next-refine/SKILL.md) - 3-tier discovery cascade walker.
 - [`flowctl.md`](flowctl.md) - `flowctl spec create / set-plan / export-cognitive-aid` reference.
