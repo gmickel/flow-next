@@ -29,6 +29,11 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
+| [Refactoring](#refactoring) | Structure changes, behaviour does not | pin the contract as the R-ID → work → review |
+| [Performance](#performance) | A measured slowness to move once | baseline as the R-ID → work → post-change measurement as evidence |
+| [Hill climb](#hill-climb) | One metric against a target, many attempts | frozen harness → one change, one measurement, keep or revert, inside work |
+| [Investigation](#investigation) | A read-only question | cited answer; no `.flow/` write, no PR |
+| [Prototype](#prototype) | A fork whose answer is observable | throwaway build → observed decision → capture or work |
 | [Docs or chore](#docs-or-chore) | Near-zero risk, fully known | direct change → triage-skip receipt → PR |
 
 ### Epic
@@ -95,6 +100,36 @@ flowchart LR
 ```
 
 The sharpening tool for a defect is **reproduction, not conversation** - an interview is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+
+### Refactoring
+
+**Signal:** the structure changes and the behaviour does not. The risk is a silent behaviour change hiding inside a cleanup.
+
+Pin the contract before anything moves: a characterization test, a snapshot, or an equivalence check over current behaviour becomes the R-ID. Work then reshapes under that pin, migrates every caller, and deletes the old shape in the same change. New behaviour named anywhere makes it a feature with cleanup inside; route it as one. What still holds: the pin stays green through review, receipts, evidence.
+
+### Performance
+
+**Signal:** a measured slowness, a trace, or a number the user wants moved once.
+
+Baseline on a real surface before any change; the baseline and its target are the R-ID. Work ships the change and the post-change measurement is the evidence. A fix motivated by reading source instead of a measurement is not evidence. No nameable metric or surface routes to an investigation first.
+
+### Hill climb
+
+**Signal:** one metric to improve against a target through repeated attempts, the loop rather than the one-off fix.
+
+Freeze a harness that reruns cheaply, then one change, one measurement, keep or revert, one commit per kept change, every attempt logged in the task evidence. The target is the R-ID. A plateau is a pivot; a dead end is a report; the target is never relaxed to meet it.
+
+### Investigation
+
+**Signal:** a read-only question. How does X work, why was Y built this way, are we sure about Z.
+
+The deliverable is a cited answer from the repo, git history, and the bug and decision memory. No `.flow/` write, no PR. Wide surfaces use the read-only scouts; a shape uses `/flow-next:visual`; a choice between alternatives carries a tradeoffs table. When the answer is a prerequisite for a change already asked for, route the change and let its stage do the reading.
+
+### Prototype
+
+**Signal:** a design or behaviour fork whose answer is observable by building something throwaway. [Prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) is the rule that sends a fork here instead of to a question.
+
+Build the throwaway in a scratch directory, with alternatives behind one switch when they compete, observe on the matching surface, and report the decision with its evidence. The output is a decision, not shippable code; the real build routes to capture or work. No decision means no prototype.
 
 ### Docs or chore
 
