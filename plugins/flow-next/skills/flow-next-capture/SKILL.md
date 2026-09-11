@@ -75,7 +75,7 @@ fi
 
 # --no-plan (fn-214, R5: explicit opt-in to set the spec-level no_plan field
 # in §5.9b after the spec write; on a user invocation the field is never set
-# without it) and from:flow (fn-238, R6: the run was dispatched by
+# without it) and from:flow (the run was dispatched by
 # /flow-next:flow, so §5.9b sets the field when the plan-versus-no-plan rule
 # resolves to direct). Both are EXACT-token matches, not substring tests:
 # durable state must not be set by lookalikes ("--no-planning",

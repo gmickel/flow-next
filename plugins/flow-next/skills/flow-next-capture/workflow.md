@@ -610,7 +610,7 @@ Runs only when §4.2's `Glossary?` consent approved ≥1 term; the `flowctl glos
 
 Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl spec ready` call site and its best-effort contract live in `references/mark-ready.md` §5.9.
 
-### 5.9b - No-plan write (fn-214 R5; fn-238 R6)
+### 5.9b - No-plan write
 
 Runs on two paths and no other: `NO_PLAN_OPT=1` (`--no-plan` on the invocation - the explicit opt-in, in interactive AND autofix mode), or `FROM_FLOW=1` with the §2.8 judgment `ROUTE_DIRECT=1` (the plan-versus-no-plan rule, applied because flow dispatched the run). A user invocation without the flag never sets the field, whatever §2.8 judged: the recommendation prints, the write does not happen. After the spec write:
 

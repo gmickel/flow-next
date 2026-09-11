@@ -178,7 +178,7 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 
 Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
-**Research skip (fn-238 R16).** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When the research scouts do run, Step 5 writes their findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
+**Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When the research scouts do run, Step 5 writes their findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
 
 ---
 
@@ -328,7 +328,7 @@ Plan and task-spec prose follows the artifact prose contract in [docs/prose.md](
 
 **Efficiency note**: Author documents with the **Write tool**, revise them with **Edit** — never compose a document inside a bash heredoc or stdin pipe. A heredoc puts the whole document into the command string, so every revision (review fix loop, interview write-back) re-emits it in full; a Written file is revised span-by-span with Edit at a fraction of the tokens. Heredocs/stdin (`--file -`) stay acceptable only for short transient payloads (≲10 lines). Route B is the ceremony fast path (fn-163): `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
 
-**Ratify before the first `.flow/` write (interactive only; fn-238 R7).** Both files this step writes - the plan body (Route B) and the task set JSON (both routes) - are composed with the Write tool before any flowctl call, so ratification costs no extra emission: the summary below is all the user reads, and the files are what the creation calls consume. Route on interactivity with the same gate shape as Step 8:
+**Ratify before the first `.flow/` write (interactive only).** Both files this step writes - the plan body (Route B) and the task set JSON (both routes) - are composed with the Write tool before any flowctl call, so ratification costs no extra emission: the summary below is all the user reads, and the files are what the creation calls consume. Route on interactivity with the same gate shape as Step 8:
 
 ```bash
 ACTIVE=0

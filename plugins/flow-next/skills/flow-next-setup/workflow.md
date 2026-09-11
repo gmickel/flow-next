@@ -329,7 +329,7 @@ CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.h
 # tracker configured AND this key unset so existing repos get asked on their next
 # setup run without re-prompting once either value is written.
 CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# pipeline.qa (fn-238) is MATERIALIZED by Step 1's init as the literal "off", so
+# pipeline.qa is MATERIALIZED by Step 1's init as the literal "off", so
 # this raw probe never reads null on a fresh repo and cannot by itself tell
 # "never asked" from "answered off". Decision: the Live QA question is asked when
 # the raw value is empty (hand-removed key) OR when it reads "off" on a FIRST
