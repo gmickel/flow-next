@@ -23,12 +23,7 @@ With no argument:
 
 ## Step 2: Route
 
-Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and record the route before anything else runs:
-
-```bash
-$FLOWCTL spec set-no-plan <spec-id> --json      # the rule resolved to direct
-$FLOWCTL spec clear-no-plan <spec-id> --json    # a positive plan signal was present
-```
+Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve the rule now; the route is recorded after the explain stop below, before any stage runs.
 
 A spec with an intentional plan (tasks beyond the sole implicit owner) runs the planned route unchanged. A spec whose tasks are all done reads [references/gate-selection.md](references/gate-selection.md) for the QA decision and then routes to make-pr. A spec with an open PR reads [references/tail.md](references/tail.md).
 
@@ -37,6 +32,13 @@ When the starting point is intent that has not been captured and the criteria yo
 When two routes would materially differ and the answer is not observable, read [references/prototype-before-ask.md](references/prototype-before-ask.md) before asking; ask at most one question per hop.
 
 **`EXPLAIN=1` ends here.** Print the recommendation shape from the route matrix (route, positive signal, safe skip and its kind, why not the alternatives) and stop. No `.flow/` write, no dispatch, no route recording.
+
+**Record the route.** Past the explain stop, when the match was a ready spec with no tasks and no recorded route, write the resolved route before anything else runs:
+
+```bash
+$FLOWCTL spec set-no-plan <spec-id> --json      # the rule resolved to direct
+$FLOWCTL spec clear-no-plan <spec-id> --json    # a positive plan signal was present
+```
 
 ## Step 3: Run the routed stage
 
