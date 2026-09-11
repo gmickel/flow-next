@@ -214,7 +214,7 @@ class FlowInvariantTokens(unittest.TestCase):
 
     def test_explain_token_documented(self) -> None:
         text = _read(FLOW_SKILL)
-        self.assertIn("--explain", _frontmatter(text), "the description must name --explain")
+        self.assertIn("--explain", text, "the skill body must document the --explain token")
         self.assertIn("EXPLAIN=1", text, "mode detection must bind the --explain token")
 
 
