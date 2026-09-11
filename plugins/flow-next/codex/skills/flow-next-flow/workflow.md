@@ -25,7 +25,7 @@ With no argument:
 
 ## Step 2: Route
 
-Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. First clear match wins. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and record the route before anything else runs:
+Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and record the route before anything else runs:
 
 ```bash
 $FLOWCTL spec set-no-plan <spec-id> --json      # the rule resolved to direct
