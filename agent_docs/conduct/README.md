@@ -15,7 +15,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`chart.md`](chart.md) — `/flow-next:chart`, decision map and briefing package
 - [`capture.md`](capture.md) — `/flow-next:capture`, conversation to source-tagged spec
 - [`interview.md`](interview.md) — `/flow-next:interview`, question rounds and scoped write-back
-- [`guide.md`](guide.md) — `/flow-next:guide`, read-only workflow router
+- [`flow.md`](flow.md) - `/flow-next:flow`, attended conductor
 
 **Plan and review**
 

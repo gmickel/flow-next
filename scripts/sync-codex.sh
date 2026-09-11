@@ -402,8 +402,8 @@ done
 # fn-205.5 (#364) widened the roster: make-pr's success footer, interview's
 # suggest-next block + write-back suggestions, prospect's promote menu +
 # reply-parsing suggestions, chart's capture handoff + shape-B/frontier
-# closers, audit's legacy-skip remediation lines, and guide's routing-matrix
-# route column are all copy-pasteable closer output and ride the same pass.
+# closers, and audit's legacy-skip remediation lines are all copy-pasteable
+# closer output and ride the same pass.
 # Each new pattern stays anchored to its surface's own text; a reworded
 # literal must move its anchor in the same change (the closer-roster guard
 # below fails the sync otherwise). Deliberate exclusion: prospect's
@@ -424,13 +424,21 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-chart/references/chart-mode.md" \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
-  "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-flow/references/route-matrix.md" \
+  "$CODEX_DIR/skills/flow-next-flow/references/plan-vs-no-plan.md" \
   "$CODEX_DIR/skills/flow-next-pilot/workflow.md" \
   "$CODEX_DIR/skills/flow-next-work/phases.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
     -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
+    -e 's|Recommended next: /flow-next:\([a-z-]*\) <spec-id>|Recommended next: $flow-next-\1 <spec-id>|g' \
+    -e 's|through `/flow-next:work <spec-id> --no-plan`|through `$flow-next-work <spec-id> --no-plan`|g' \
+    -e 's|then `/flow-next:make-pr <spec-id>`|then `$flow-next-make-pr <spec-id>`|g' \
+    -e 's|(`/flow-next:resolve-pr`, CI fixes|(`$flow-next-resolve-pr`, CI fixes|g' \
+    -e 's|or `/flow-next:plan` only on a positive signal|or `$flow-next-plan` only on a positive signal|g' \
+    -e 's|then `/flow-next:work` and review|then `$flow-next-work` and review|g' \
+    -e 's;| `/flow-next:work <spec-id>` on the planned route;| `$flow-next-work <spec-id>` on the planned route;g' \
     -e 's|^  /flow-next:\([a-z-]*\) <SPEC_ID>|  $flow-next-\1 <SPEC_ID>|' \
     -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
     -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
@@ -441,8 +449,6 @@ for nf in \
     -e 's|still leans `/flow-next:plan`|still leans `$flow-next-plan`|g' \
     -e 's|Legal targets are ONLY `/flow-next:interview`, `/flow-next:plan`|Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan`|g' \
     -e 's|Same legal targets (`/flow-next:interview`, `/flow-next:plan`|Same legal targets (`$flow-next-interview`, `$flow-next-plan`|g' \
-    -e 's|`/flow-next:guide` with a "signals conflict" reason|`$flow-next-guide` with a "signals conflict" reason|g' \
-    -e 's|`/flow-next:guide` on genuinely conflicting signals|`$flow-next-guide` on genuinely conflicting signals|g' \
     -e 's|(routing to `/flow-next:work`)|(routing to `$flow-next-work`)|g' \
     -e 's|recommend `/flow-next:plan-review`|recommend `$flow-next-plan-review`|g' \
     -e 's|; /flow-next:interview <id> can still split later|; $flow-next-interview <id> can still split later|g' \
@@ -481,7 +487,6 @@ for nf in \
     -e 's|Recommend `/flow-next:work <spec-id> --no-plan`|Recommend `$flow-next-work <spec-id> --no-plan`|g' \
     -e 's|use `/flow-next:plan-review fn-N`|use `$flow-next-plan-review fn-N`|g' \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
-    -e 's|Use `/flow-next:guide`|Use `$flow-next-guide`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
     -e 's|- `plan`: `/flow-next:plan |- `plan`: `$flow-next-plan |g' \
     -e 's|- `plan-review`: `/flow-next:plan-review |- `plan-review`: `$flow-next-plan-review |g' \
@@ -493,6 +498,7 @@ for nf in \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
     -e 's|`/flow-next:interview` — never mint an empty task|`$flow-next-interview` — never mint an empty task|g' \
+    -e 's|`/flow-next:flow --explain|`$flow-next-flow --explain|g' \
     -e 's@| `/flow-next:\([a-z-]*\)`@| `$flow-next-\1`@g' \
     "$nf"
   rm -f "${nf}.bak"
@@ -1699,7 +1705,7 @@ generate_openai_yaml "flow-next-interview" "Flow Interview" "Deep Q&A to refine 
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" true "What should we build next? "
 generate_openai_yaml "flow-next-chart"     "Flow Chart"     "Decision-map discovery for one oversized unclear idea before capture" "#3B82F6" true "Chart out: "
-generate_openai_yaml "flow-next-guide"     "Flow Guide"     "Prompt-first router for the smallest sufficient flow-next workflow"   "#3B82F6" true
+generate_openai_yaml "flow-next-flow"      "Flow"           "Attended conductor - route from any starting point, run the stage, stop at the next human decision" "#3B82F6" true "Flow: "
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
@@ -1781,7 +1787,7 @@ DIET = {
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
     "flow-next-chart": "Decision-map discovery for one oversized unclear idea before capture. Resolve one decision per invocation, brief for capture. Use when asked to chart an idea or work a chart decision.",
-    "flow-next-guide": "Recommend the smallest sufficient flow-next workflow from the starting state. Stateless router. Use when unsure which command or stage applies next.",
+    "flow-next-flow": "Attended conductor. Routes any starting point, runs the routed stage, re-evaluates, stops at the next human decision. --explain prints the route only. Use when asked what to do next.",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
     "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
     "flow-next-features": "Seed or maintain the committed user-POV drive map at .flow/features/ so QA and drive reuse how a user reaches each feature.",
@@ -1858,6 +1864,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-deps"
   "flow-next-prose"
   "flow-next-features"
+  "flow-next-flow"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
@@ -2335,8 +2342,6 @@ while IFS="$(printf '\t')" read -r rel pat expect; do
     closer_literal_fails=$((closer_literal_fails + 1))
   fi
 done <<'CLOSER_ROSTER'
-flow-next-capture/workflow.md	choices lean `/flow-next:interview`	choices lean `$flow-next-interview`
-flow-next-capture/workflow.md	boundaries lean `/flow-next:plan`	boundaries lean `$flow-next-plan`
 flow-next-capture/workflow.md	  /flow-next:plan <SPEC_ID>	  $flow-next-plan <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:interview <SPEC_ID>	  $flow-next-interview <SPEC_ID>
 flow-next-capture/workflow.md	  /flow-next:visual <SPEC_ID>	  $flow-next-visual <SPEC_ID>
@@ -2361,8 +2366,6 @@ flow-next-interview/SKILL.md	→ `/flow-next:plan <file>`	→ `$flow-next-plan <
 flow-next-interview/SKILL.md	`/flow-next:visual fn-N` for a spec input	`$flow-next-visual fn-N` for a spec input
 flow-next-interview/SKILL.md	`/flow-next:visual fn-N.M` for a task input	`$flow-next-visual fn-N.M` for a task input
 flow-next-interview/SKILL.md	`/flow-next:visual <file-path>` for the file input	`$flow-next-visual <file-path>` for the file input
-flow-next-interview/references/write-back.md	recommend `/flow-next:work fn-N --no-plan`	recommend `$flow-next-work fn-N --no-plan`
-flow-next-interview/references/write-back.md	Use `/flow-next:plan-review fn-N`	Use `$flow-next-plan-review fn-N`
 flow-next-interview/references/write-back.md	instead: `/flow-next:interview <spec-id>`	instead: `$flow-next-interview <spec-id>`
 flow-next-interview/references/write-back.md	suggest `/flow-next:plan <file>` to create spec + tasks	suggest `$flow-next-plan <file>` to create spec + tasks
 flow-next-prospect/workflow.md	(ask /flow-next:interview what to refine)	(ask $flow-next-interview what to refine)
@@ -2374,25 +2377,18 @@ flow-next-chart/references/chart-mode.md	separate `/flow-next:chart <id>` (or pi
 flow-next-audit/SKILL.md	recommends `/flow-next:memory-migrate` first	recommends `$flow-next-memory-migrate` first
 flow-next-audit/SKILL.md	`/flow-next:memory-migrate` first to make these auditable	`$flow-next-memory-migrate` first to make these auditable
 flow-next-audit/workflow.md	`/flow-next:memory-migrate` first to make these auditable	`$flow-next-memory-migrate` first to make these auditable
-flow-next-guide/SKILL.md	| `/flow-next:strategy`	| `$flow-next-strategy`
-flow-next-guide/SKILL.md	| `/flow-next:prospect`	| `$flow-next-prospect`
-flow-next-guide/SKILL.md	| `/flow-next:chart`	| `$flow-next-chart`
-flow-next-guide/SKILL.md	| `/flow-next:capture`	| `$flow-next-capture`
-flow-next-guide/SKILL.md	| `/flow-next:interview`	| `$flow-next-interview`
-flow-next-guide/SKILL.md	| `/flow-next:plan`	| `$flow-next-plan`
-flow-next-guide/SKILL.md	| `/flow-next:work`	| `$flow-next-work`
-flow-next-guide/SKILL.md	| `/flow-next:visual`	| `$flow-next-visual`
-flow-next-capture/workflow.md	Recommend `/flow-next:work <SPEC_ID> --no-plan`	Recommend `$flow-next-work <SPEC_ID> --no-plan`
-flow-next-capture/workflow.md	`/flow-next:plan-review`	`$flow-next-plan-review`
+flow-next-flow/references/route-matrix.md	| `/flow-next:strategy`	| `$flow-next-strategy`
+flow-next-flow/references/route-matrix.md	| `/flow-next:capture`	| `$flow-next-capture`
+flow-next-flow/references/route-matrix.md	| `/flow-next:work <spec-id> --no-plan`	| `$flow-next-work <spec-id> --no-plan`
+flow-next-flow/references/route-matrix.md	then `/flow-next:make-pr <spec-id>`	then `$flow-next-make-pr <spec-id>`
+flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:work <spec-id> --no-plan	Recommended next: $flow-next-work <spec-id> --no-plan
+flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:plan <spec-id>	Recommended next: $flow-next-plan <spec-id>
 flow-next-interview/SKILL.md	recommend `/flow-next:work fn-N --no-plan`	recommend `$flow-next-work fn-N --no-plan`
-flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan`	| `$flow-next-work <spec-id> --no-plan`
-flow-next-guide/SKILL.md	| `/flow-next:plan-review <spec-id>`	| `$flow-next-plan-review <spec-id>`
 flow-next-work/references/no-plan-route.md	spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>	spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-route.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
 flow-next-work/references/no-plan-route.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
 flow-next-work/references/no-plan-route.md	`/flow-next:interview` — never mint an empty task	`$flow-next-interview` — never mint an empty task
-flow-next-work/references/no-plan-route.md	Recommend `/flow-next:work <spec-id> --no-plan`	Recommend `$flow-next-work <spec-id> --no-plan`
 flow-next-work/references/no-plan-route.md	`/flow-next:plan-review`	`$flow-next-plan-review`
 flow-next-work/phases.md	`/flow-next:plan-review`	`$flow-next-plan-review`
 flow-next-pilot/workflow.md	`plan`: `/flow-next:plan 	`plan`: `$flow-next-plan
@@ -2401,8 +2397,11 @@ flow-next-pilot/workflow.md	`work`: `/flow-next:work 	`work`: `$flow-next-work
 flow-next-pilot/workflow.md	`qa`: `/flow-next:qa 	`qa`: `$flow-next-qa
 flow-next-pilot/workflow.md	`make-pr`: `/flow-next:make-pr 	`make-pr`: `$flow-next-make-pr
 flow-next-interview/SKILL.md	use `/flow-next:plan-review fn-N`	use `$flow-next-plan-review fn-N`
-flow-next-interview/references/write-back.md	suggest `/flow-next:plan fn-N`	suggest `$flow-next-plan fn-N`
-flow-next-capture/workflow.md	Use `/flow-next:guide`	Use `$flow-next-guide`
+flow-next-capture/workflow.md	`/flow-next:flow --explain <SPEC_ID>`	`$flow-next-flow --explain <SPEC_ID>`
+flow-next-capture/references/rewrite-mode.md	`/flow-next:flow --explain <SPEC_ID>`	`$flow-next-flow --explain <SPEC_ID>`
+flow-next-plan/references/next-steps-menu.md	`/flow-next:flow --explain fn-N-slug`	`$flow-next-flow --explain fn-N-slug`
+flow-next-interview/SKILL.md	`/flow-next:flow --explain`	`$flow-next-flow --explain`
+flow-next-interview/references/write-back.md	`/flow-next:flow --explain fn-N`	`$flow-next-flow --explain fn-N`
 CLOSER_ROSTER
 if [ "$closer_literal_fails" != "0" ]; then
   echo -e "  ${RED}✗${NC} $closer_literal_fails un-rewritten closer literal(s) — a transform anchor no longer matches its canonical text"

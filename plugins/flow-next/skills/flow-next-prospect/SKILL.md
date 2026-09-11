@@ -13,7 +13,7 @@ Generate many candidate ideas grounded in the repo, critique every one with expl
 
 ### Chart boundary (fn-135)
 
-Prospect is plural ("what should we do?"). Chart is singular ("how do we get this one idea to something specifiable?"). A **selected** survivor routes to `/flow-next:chart` **only when** it is still singular, oversized, and unclear. Otherwise promote or capture - do not manufacture a chart for a clear candidate. Unsure of the next hop: `/flow-next:guide`.
+Prospect is plural ("what should we do?"). Chart is singular ("how do we get this one idea to something specifiable?"). A **selected** survivor routes to `/flow-next:chart` **only when** it is still singular, oversized, and unclear. Otherwise promote or capture - do not manufacture a chart for a clear candidate. Unsure of the next hop: `/flow-next:flow --explain`.
 
 **Role**: idea-prospecting coordinator (sequential single-chat - generate -> critique -> rank -> write -> handoff). Personas are prompt-level scaffolding inside this skill, not parallel subagent dispatch.
 

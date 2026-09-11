@@ -98,7 +98,7 @@ echo "$SHOW_JSON"                        # command substitution hides stdout —
 
 **Handle-recognition rule (R16):** do NOT gate the Flow-ID branch on a hard "must start with `fn-`" check. Before treating a single-token arg as a freeform idea, route it through `$FLOWCTL show <arg> --json` - flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task. If it resolves (rc 0), use the canonical id from the JSON and take the existing-Flow-ID path (Route A in Step 5); only a non-resolving token becomes a new idea (Route B). So `plan wor-17` refines the linked spec, never creating a duplicate.
 
-**Unshaped oversized freeform (fn-135):** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:guide`) instead of planning through the fog. Ready specs stay on Route A.
+**Unshaped oversized freeform (fn-135):** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:flow --explain`) instead of planning through the fog. Ready specs stay on Route A.
 
 **Explicit planning choice:** inspect the existing spec's metadata (for task-ID
 input, fetch its parent with `$FLOWCTL show <spec-id> --json`). If `no_plan: true`
@@ -325,6 +325,20 @@ Plan and task-spec prose follows the artifact prose contract in [docs/prose.md](
 **Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 
 **Efficiency note**: Author documents with the **Write tool**, revise them with **Edit** — never compose a document inside a bash heredoc or stdin pipe. A heredoc puts the whole document into the command string, so every revision (review fix loop, interview write-back) re-emits it in full; a Written file is revised span-by-span with Edit at a fraction of the tokens. Heredocs/stdin (`--file -`) stay acceptable only for short transient payloads (≲10 lines). Route B is the ceremony fast path (fn-163): `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
+
+**Ratify before the first `.flow/` write (interactive only; fn-238 R7).** Both files this step writes - the plan body (Route B) and the task set JSON (both routes) - are composed with the Write tool before any flowctl call, so ratification costs no extra emission: the summary below is all the user reads, and the files are what the creation calls consume. Route on interactivity with the same gate shape as Step 8:
+
+```bash
+ACTIVE=0
+[ "${AUTONOMOUS:-0}" = "1" ] || [ -n "${FLOW_AUTONOMOUS:-}" ] || [ -n "${FLOW_RALPH:-}" ] || [ -n "${REVIEW_RECEIPT_PATH:-}" ] || ACTIVE=1
+if [ "$ACTIVE" = "1" ]; then
+  echo "READ-BACK ACTIVE — STOP. Read docs/read-back.md before the first .flow/ write."
+fi
+```
+
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+When the sentinel prints, STOP and Read [docs/read-back.md](../../docs/flow-next/read-back.md) before the `spec create --plan-file` call (Route B) or the `task create --from-json` call (Route A), then follow it: print the compact summary as an ordinary message (title, task count and sizes, execution waves derived from the JSON `deps`, R-ID coverage tally `<covered>/<total>`, `Recommended next:` judged from [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md) (a task set with no positive plan signal is named here as `work --no-plan` material before anything is written), and both file paths), then ONE `plain-text numbered prompt` with `approve and write` / `open in editor` / `abort` plus the built-in free-text answer for "change X". After an editor round re-read both files before asking again; an edit cycle prints only the diff; the full files print only on request. `approve and write` runs the creation calls below; `abort` writes nothing and leaves the files for inspection. Under autonomy the sentinel is silent: no ask, the creation calls run directly, as today. What this adds: ratification before plan's first `.flow/` write, at summary cost instead of a re-emitted plan.
 
 **Route A - Input was an existing Flow ID**: the spec-id and task-id edit paths
 live in [`references/route-a-refine.md`](references/route-a-refine.md) — read it

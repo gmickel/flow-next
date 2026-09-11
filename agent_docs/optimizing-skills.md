@@ -164,7 +164,7 @@ can hand-edit `spec.md` at any time — **it is the source of truth, not the ski
 for these must measure *fidelity + respect-for-override*, never "is the skill's spec correct":
 
 - **Generators (`capture` / `interview`):** all sections required by the resolved current spec template present? every acceptance
-  criterion source-tagged (`[user]`/`[paraphrase]`/`[inferred]`)? **read-back shown before write?**
+  criterion source-tagged (`[user]`/`[paraphrase]`/`[inferred]`)? **read-back summary and ask shown before write** (the shared contract in [`plugins/flow-next/docs/read-back.md`](../plugins/flow-next/docs/read-back.md): compact summary, one ask, full draft on request)?
   **does it refuse to silently overwrite a user-edited spec** (`--rewrite`-gated, no clobber)?
   conversation evidence preserved? → faithful synthesis + the user stays in control.
 - **Consumers (`plan` / `*-review`):** the frozen input must be a **real, possibly hand-edited**

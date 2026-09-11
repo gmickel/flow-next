@@ -249,7 +249,7 @@ Three rules matter when reading a tagged spec:
 
 - **A pass tags only the criteria it authors**, and never retags an existing bullet - provenance is frozen exactly like the R-ID number. So on a spec that went through a business pass then a technical pass, each criterion's tag reflects the pass that wrote it.
 - **Untagged means unknown provenance, never `[user]`.** Criteria written before this shipped, or by hand, carry no tag. Defaulting them to "a human said this" is wrong in the dangerous direction.
-- **The tags are load-bearing, not decoration**: the read-back refuses to recommend `approve` while unverified `[inferred]` items remain (the no-self-blessing rule). In interview that is narrowed to `[inferred]` criteria no question covered, since an answered question has already done the verifying.
+- **The tags are load-bearing, not decoration**: the read-back (a compact summary with the source tally plus one ask, per [`read-back.md`](read-back.md); the full draft prints only on request) refuses to recommend `approve and write` while unverified `[inferred]` items remain (the no-self-blessing rule). In interview that is narrowed to `[inferred]` criteria no question covered, since an answered question has already done the verifying.
 
 They are also the cheapest review filter available, because reading them is a grep rather than a model judgment. Tally which criteria are grounded and which are guesswork:
 

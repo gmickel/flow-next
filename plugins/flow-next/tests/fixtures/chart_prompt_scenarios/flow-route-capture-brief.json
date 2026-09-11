@@ -1,10 +1,10 @@
 {
-  "id": "guide-route-capture-structured-brief",
-  "family": "guide_routing",
-  "description": "Guide: existing structured brief with resolved choices - capture the brief; narrow interview only after read-back.",
+  "id": "flow-route-capture-structured-brief",
+  "family": "flow_routing",
+  "description": "Flow (--explain): existing structured brief with resolved choices - capture the brief; narrow interview only after read-back.",
   "user_prompt": "We finished the chart briefing at .flow/charts/fn-140-briefing.md - capture it into a spec.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": "fn-140",
     "decision_pin": null,
@@ -16,7 +16,7 @@
     }
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "route_capture",

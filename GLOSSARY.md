@@ -437,7 +437,7 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 
 ## No-plan route
 
-Execution through `/flow-next:work <spec-id> --no-plan`, recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
+Execution through `/flow-next:work <spec-id> --no-plan`, the default route for a ready cohesive spec and a capable coding agent. Plan is chosen only on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model); risk, size, and file count never trigger it. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 
 
@@ -466,7 +466,7 @@ The one read-only health check a drive-capable run performs before driving an in
 
 ## Routing reference
 
-The set of six small reference files the flow conductor owns, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs. The files are the route matrix, the spec-count rule, the plan-versus-no-plan rule, review/QA/completion selection, prototype-before-ask, and the make-pr/resolve-pr tail. Each opens with a decision record.
+The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files.
 
 ## Prototype-before-ask
 

@@ -33,13 +33,9 @@ A run that asked or continued under autonomy without that instruction has broken
 
 ## The ask (interactive only)
 
-Recommend `$flow-next-work <spec-id> --no-plan` for a ready cohesive spec when
-decomposition adds no coordination value. Plan when dependencies, separate owners,
-staged delivery, or execution constraints benefit from an explicit breakdown. Risk
-or multiple files alone do not require planning; use spec/design review for design
-risk and interview for material unresolved product or authority choices. Ordinary
-implementation decisions may remain with the worker. Unknown model identity does
-not require a detector or plain-text numbered prompt. State the recommendation and reason.
+Read [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) and
+judge this spec against it; print its `Recommended next:` line in that file's shape,
+with the reason. Ordinary implementation decisions may remain with the worker.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 

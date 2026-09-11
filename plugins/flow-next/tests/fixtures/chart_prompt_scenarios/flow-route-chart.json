@@ -1,10 +1,10 @@
 {
-  "id": "guide-route-chart-oversized-unclear",
-  "family": "guide_routing",
-  "description": "Guide: one large idea with unclear boundaries and several consequential unknowns - recommend chart then briefing then capture.",
+  "id": "flow-route-chart-oversized-unclear",
+  "family": "flow_routing",
+  "description": "Flow (--explain): one large idea with unclear boundaries and several consequential unknowns - recommend chart then briefing then capture.",
   "user_prompt": "Chart multi-tenant billing: pricing model unknown, migration path unknown, and we do not know whether tenants share a database.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": null,
     "decision_pin": null,
@@ -12,7 +12,7 @@
     "prior_state": {}
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "route_chart",
@@ -33,7 +33,7 @@
     "verdict": null,
     "notes": [
       "Next: chart this effort - resolve one decision at a time",
-      "Guide itself never creates a chart"
+      "flow --explain itself never creates a chart"
     ]
   },
   "skill_contract_tokens": [

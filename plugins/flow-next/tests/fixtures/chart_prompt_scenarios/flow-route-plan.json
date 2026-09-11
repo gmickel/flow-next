@@ -1,10 +1,10 @@
 {
-  "id": "guide-route-plan-ready-spec",
-  "family": "guide_routing",
-  "description": "Guide: ready spec whose work is understood - plan; chart is too late.",
+  "id": "flow-route-plan-ready-spec",
+  "family": "flow_routing",
+  "description": "Flow (--explain): ready spec where the user asks for a task breakdown (positive plan signal) - plan; chart is too late.",
   "user_prompt": "fn-12 is ready and the approach is clear - break it into tasks.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": null,
     "decision_pin": null,
@@ -17,7 +17,7 @@
     }
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "route_plan",
@@ -39,7 +39,8 @@
     "verdict": null,
     "notes": [
       "Next: plan the ready spec",
-      "Unshaped oversized ideas would have routed to chart first - not this case"
+      "Unshaped oversized ideas would have routed to chart first - not this case",
+      "Plan only on a positive signal - here the user asked for a plan"
     ]
   },
   "skill_contract_tokens": [
@@ -47,6 +48,7 @@
     "ready spec",
     "too late",
     "natural-language next prompt",
-    "chart"
+    "chart",
+    "asked for a plan"
   ]
 }

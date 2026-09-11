@@ -1524,17 +1524,21 @@ def get_default_config() -> dict:
         "artifacts": {"html": {"enabled": False}},
         # fn-72.2 — optional QA pipeline stage gate, seeded so
         # `config get pipeline.qa` returns the enum string "off" (NOT null)
-        # on a fresh repo via the defaults MERGE. STRING-ENUM (off|on), NOT a
-        # bool: the pilot gate is a STRICT positive read — `[ "$value" = "on" ]`
-        # — so ONLY the literal "on" activates the stage; "off" / null / a coerced
-        # bool `true` / a typo all leave it OFF (memory
-        # docs-activation-command-for-string-enum). OFF by default: pilot's
-        # stage set + behavior are byte-for-byte unchanged with it off. This
-        # is NOT in _INIT_UNMATERIALIZED_BLOCKS — unlike the artifacts block
-        # there is no setup-ceremony include-only-if-unset question gated on a
-        # `--raw` null probe, so it materializes on init like work.*/land.*.
-        # flowctl only stores/serves the knob; the QA stage is host-agent
-        # skill wiring (no new subcommand/engine).
+        # on a fresh repo via the defaults MERGE. STRING-ENUM (off|on|auto),
+        # NOT a bool. The pilot gate is a STRICT positive read,
+        # `[ "$value" = "on" ]`, so ONLY the literal "on" activates pilot's
+        # stage; "off" / "auto" / null / a coerced bool `true` / a typo all
+        # leave pilot's stage OFF (memory docs-activation-command-for-string-
+        # enum). fn-238 added "auto": the attended conductor /flow-next:flow
+        # honours it (live QA only for a drivable spec with a startable
+        # target, otherwise skipped(reason)); flowctl stores the value and
+        # never interprets it. OFF by default: pilot's stage set + behavior
+        # are byte-for-byte unchanged with it off. This is NOT in
+        # _INIT_UNMATERIALIZED_BLOCKS - it materializes on init like
+        # work.*/land.*; setup's Live QA question therefore keys on a first
+        # setup run rather than a `--raw` null probe. flowctl only
+        # stores/serves the knob; the QA stage is host-agent skill wiring
+        # (no new subcommand/engine).
         # fn-219 — pipeline.chainStages: same STRING-ENUM (off|on) and same
         # STRICT positive read (ONLY the literal "on" activates; "off" /
         # null / bool `true` / a typo = OFF). With it on, a pilot tick that

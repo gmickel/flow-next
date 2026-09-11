@@ -12,7 +12,7 @@ Conduct an extremely thorough interview about a task/spec and write refined deta
 
 ### Chart boundary (fn-135)
 
-Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `/flow-next:guide`.
+Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `/flow-next:flow --explain`.
 
 ## Preamble
 
@@ -370,7 +370,7 @@ When the user declines a feature or scope **as product judgment** — we could b
 
 ## Spec-count check (split proposal)
 
-Interviews grow specs — and an epic-shaped input sometimes turns out to be more than one spec. Before the write-back, when the refined criteria set crosses **8+ acceptance criteria** (counting business and technical requirements only — standing G-IDs and process requirements like "tests green" never count), or an answer reveals a second **independently shippable outcome** (a stakeholder would accept it on its own; disjoint surfaces; a dependency seam where one cluster needs infrastructure another builds), propose a split. A large-but-cohesive set is one spec — say so and move on; never pad the count.
+Interviews grow specs - and an epic-shaped input sometimes turns out to be more than one spec. Before the write-back, when the refined criteria set trips the spec-count tripwire, read [`spec-count.md`](../flow-next-flow/references/spec-count.md) (it owns the tripwire, what counts, and the independence partition) and propose a split only when its partition yields more than one spec.
 
 Present the concrete allocation as ordinary printed markdown (per-spec titles, allocated criteria, dependency edges), then one short `AskUserQuestion`: `keep-single` (default) / `split-as-proposed` / `adjust`. On split: create each sibling via `spec create` + `spec set-plan` (self-contained body; allocated criteria renumbered from R1 in the NEW spec), remove the moved criteria from the source spec's write-back, and record edges via `spec add-dep`. **Renumbering guard:** criteria a review cycle has already judged are never moved or renumbered — for those, keep them in place and record the proposal in `## Decision Context` instead. Autonomous/receipt-driven runs never split — record the proposal in `## Decision Context` as `### Split proposal (unactioned)`.
 

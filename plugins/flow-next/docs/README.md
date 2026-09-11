@@ -16,7 +16,8 @@ The offline-resilient reference for flow-next. Every file here is self-contained
 | What's every flag on every command? | [`flowctl.md`](flowctl.md) |
 | Something is stuck. | [`troubleshooting.md`](troubleshooting.md) |
 | This idea is too big to capture yet. | [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md) |
-| I don't know which stage to run. | [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) |
+| I don't know which stage to run. | [`../skills/flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md) (`/flow-next:flow --explain`) |
+| Which route does a starting state take? | the flow skill's [`references/route-matrix.md`](../skills/flow-next-flow/references/route-matrix.md) |
 
 The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabulary, with the synonyms to avoid, is [`GLOSSARY.md`](../../../GLOSSARY.md); it is a dictionary rather than an encyclopedia, and the concepts are explained on the pages below. The retired long-form version is archived at [`agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
 
@@ -58,6 +59,7 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 | [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The portable PR cognitive-aid contract, its fixture, and how downstream renderers pin it |
 | [`memory-schema.md`](memory-schema.md) | The memory tree, its frontmatter, and the audit lifecycle |
 | [`glossary.md`](glossary.md) | How the repo-root `GLOSSARY.md` is shaped and resolved |
+| [`read-back.md`](read-back.md) | The shared ratification shape for capture, interview, and plan: one draft file, a compact summary, one ask |
 | [`strategy.md`](strategy.md) | How the repo-root `STRATEGY.md` is shaped and who reads it |
 
 ## Fixing and contributing
@@ -73,6 +75,8 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 **Deep links worth knowing:** [tiers](orchestration.md#tiers-what-kind-of-model-a-job-wants) · [review backends](orchestration.md#review-backends-cross-model-review) · [the bridge route](orchestration.md#implementation-offload-the-bridge-route) · [turning the review dial down](running-lean.md#turning-the-dial-none-and-host) · [finding identity and lineage](review-findings.md#identity-and-lineage) · [review bookkeeping authority](architecture.md#review-bookkeeping-authority-and-write-ordering) · [chart projection](tracker-sync.md#chart-lifecycle-projection) · [OpenCode install](platforms.md#opencode) · [backlog mode](../skills/flow-next-pilot/references/backlog-mode.md) · [chart workflow](../skills/flow-next-chart/workflow.md) · [land workflow](../skills/flow-next-land/workflow.md) · [make-pr create and finalize](../skills/flow-next-make-pr/create-and-finalize.md) · [prime](../skills/flow-next-prime/SKILL.md) · [drive](../skills/flow-next-drive/SKILL.md) (consumes `.flow/features/` when present) · [chart resolve](flowctl.md#chart-resolve)
 
 ## Notable updates
+
+- **Flow, the attended conductor (next release)** - `/flow-next:flow <anything>` reads what you have, picks the smallest sufficient route from the shared routing reference, runs it, and stops at the next decision that is yours; `--explain` prints the route without running it and replaces the retired guide router. Direct execution is the default for a ready spec and plan needs a positive signal; `pipeline.qa` gains `auto`. Details: [pipeline variations](pipeline-variations.md), [the flow skill](../skills/flow-next-flow/SKILL.md).
 
 - **Optional task decomposition (4.18.0)** - a ready cohesive spec can run through Flow-Next work with its full acceptance contract and configured verification. Use `/flow-next:work <id> --no-plan`; add planning when dependencies, owners or delivery constraints justify a task graph. Details: [pipeline variations](pipeline-variations.md#no-plan-route).
 

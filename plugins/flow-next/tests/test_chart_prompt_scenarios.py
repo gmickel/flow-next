@@ -29,7 +29,15 @@ PLUGIN = HERE.parent
 REPO_ROOT = PLUGIN.parent.parent
 FIXTURES_DIR = HERE / "fixtures" / "chart_prompt_scenarios"
 SKILL_DIR = PLUGIN / "skills" / "flow-next-chart"
-GUIDE_SKILL_MD = PLUGIN / "skills" / "flow-next-guide" / "SKILL.md"
+FLOW_SKILL_DIR = PLUGIN / "skills" / "flow-next-flow"
+FLOW_ROUTING_REFS = (
+    "route-matrix.md",
+    "spec-count.md",
+    "plan-vs-no-plan.md",
+    "gate-selection.md",
+    "prototype-before-ask.md",
+    "tail.md",
+)
 
 SKILL_MD = SKILL_DIR / "SKILL.md"
 WORKFLOW_MD = SKILL_DIR / "workflow.md"
@@ -144,7 +152,7 @@ VALID_MODES = frozenset(
         "re-enter",
         "status_or_work_disambiguate",
         "ambiguous",
-        "guide",
+        "flow",
     }
 )
 
@@ -169,10 +177,11 @@ def _skill_prose() -> str:
     return "\n".join(parts)
 
 
-def _guide_prose() -> str:
-    if not GUIDE_SKILL_MD.is_file():
-        return ""
-    return GUIDE_SKILL_MD.read_text(encoding="utf-8")
+def _flow_prose() -> str:
+    """The flow skill's reachable prose: SKILL.md, workflow.md, all six references."""
+    paths = [FLOW_SKILL_DIR / "SKILL.md", FLOW_SKILL_DIR / "workflow.md"]
+    paths += [FLOW_SKILL_DIR / "references" / name for name in FLOW_ROUTING_REFS]
+    return "\n".join(p.read_text(encoding="utf-8") for p in paths if p.is_file())
 
 
 def _is_flowctl_like(token: str) -> bool:
@@ -421,8 +430,8 @@ class ChartPromptSkillContractCrossCheck(unittest.TestCase):
 
     Mirrors test_prime_eval's oracle style: fixture rows are data; the test
     asserts the contracts those rows depend on still exist in the skill.
-    Guide-routing fixtures (family guide_routing) check the guide skill;
-    all other families check the chart skill.
+    Flow-routing fixtures (family flow_routing) check the flow skill's
+    reachable prose; all other families check the chart skill.
     """
 
     @classmethod
@@ -431,16 +440,16 @@ class ChartPromptSkillContractCrossCheck(unittest.TestCase):
         cls.prose = _skill_prose()
         cls.prose_cf = cls.prose  # case-sensitive primary
         cls.prose_lower = cls.prose.lower()
-        cls.guide_prose = _guide_prose()
-        cls.guide_lower = cls.guide_prose.lower()
+        cls.flow_prose = _flow_prose()
+        cls.flow_lower = cls.flow_prose.lower()
 
     def test_contract_tokens_present_in_skill_prose(self) -> None:
         for path, data in self.fixtures:
             with self.subTest(fixture=path.name):
-                if data.get("family") == "guide_routing":
-                    prose_cf = self.guide_prose
-                    prose_lower = self.guide_lower
-                    label = "guide skill"
+                if data.get("family") == "flow_routing":
+                    prose_cf = self.flow_prose
+                    prose_lower = self.flow_lower
+                    label = "flow skill"
                 else:
                     prose_cf = self.prose_cf
                     prose_lower = self.prose_lower

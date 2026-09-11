@@ -33,13 +33,9 @@ A run that asked or continued under autonomy without that instruction has broken
 
 ## The ask (interactive only)
 
-Recommend `/flow-next:work <spec-id> --no-plan` for a ready cohesive spec when
-decomposition adds no coordination value. Plan when dependencies, separate owners,
-staged delivery, or execution constraints benefit from an explicit breakdown. Risk
-or multiple files alone do not require planning; use spec/design review for design
-risk and interview for material unresolved product or authority choices. Ordinary
-implementation decisions may remain with the worker. Unknown model identity does
-not require a detector or blocking question. State the recommendation and reason.
+Read [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) and
+judge this spec against it; print its `Recommended next:` line in that file's shape,
+with the reason. Ordinary implementation decisions may remain with the worker.
 
 Then ask via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first
 if its schema isn't loaded) — question "This spec has no tasks. How should this run

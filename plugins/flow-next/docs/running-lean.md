@@ -54,7 +54,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | Layer | Config key | Default | Lean invocation |
 |---|---|---|---|
 | [Tracker sync](#tracker-sync) | `tracker.enabled` | off | `/flow-next:tracker-sync` |
-| [Live QA stage](#live-qa-stage) | `pipeline.qa` | off | `/flow-next:qa <spec>` |
+| [Live QA stage](#live-qa-stage) | `pipeline.qa` (`off \| on \| auto`) | off | `/flow-next:qa <spec>` |
 | [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `/flow-next:impl-review` (draw topology is prose-steered, not a knob) |
 | [HTML render lenses](#html-render-lenses) | `artifacts.html.enabled` | off | ask for a render in conversation |
 | [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
@@ -75,7 +75,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 ### Live QA stage
 
-`pipeline.qa` - **off by default** as a pilot stage; the skill is always available. Details: [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md).
+`pipeline.qa` - **off by default**; the skill is always available. `flowctl config set pipeline.qa on` runs one live pass on every spec before make-pr (pilot and flow); `flowctl config set pipeline.qa auto` makes `/flow-next:flow` run it only for a drivable spec with a startable target and record `skipped(reason)` otherwise (pilot activates on the literal `on` only). Details: [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md).
 
 - **Automates away:** driving the running app like a real user against the spec's acceptance criteria, and filing evidence-backed findings before a human opens the PR.
 - **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a pilot stage it sits between all-tasks-done and make-pr, so every spec pays it.
@@ -151,7 +151,7 @@ No config key - these are skills you invoke or do not. Details: [`../skills/flow
 - **Automates away:** finding out what to build - a ranked backlog (`prospect`), a decision map for one oversized unclear idea (`chart`), or structured requirement extraction on an existing spec (`interview`).
 - **Costs:** a discovery loop before any code exists. Chart in particular is an adaptive multi-invocation loop, one decision per tick.
 - **Earns its keep when:** you cannot yet state the outcome in a sentence. When you can, capture directly; discovery on an idea you already understand is ceremony.
-- **Lean invocation:** all three are already manual and none is ever a required stage. `/flow-next:guide` will tell you which, if any, your situation needs.
+- **Lean invocation:** all three are already manual and none is ever a required stage. `/flow-next:flow --explain` names which, if any, your situation needs.
 
 ### Autonomous loops
 
@@ -196,6 +196,6 @@ That is what makes a deliberate layer set auditable later: the difference betwee
 - [`../../../README.md`](../../../README.md) - the happy path and the 5-command quick start.
 - [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: six worked routes through the menu, selected by risk and unknowns.
 - [`orchestration.md`](orchestration.md) - which model does what, and how to change it. The routing counterpart to this page: same doctrine, applied to models rather than layers.
-- [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
+- [`../skills/flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md) - `/flow-next:flow`, the attended conductor that picks the smallest sufficient route for one specific situation and runs it; `--explain` shows the route only.
 - [`teams.md`](teams.md) - what changes when several humans and several agents share one repo.
 - [`architecture.md`](architecture.md) - what `.flow/` holds regardless of which layers you run.

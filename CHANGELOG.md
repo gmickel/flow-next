@@ -4,6 +4,26 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Developers can hand Flow-Next whatever they have, from nothing to a pasted bug report to a spec with an open PR, and get the smallest sufficient route chosen, run, and stopped at the next decision that is theirs. The routing rules that capture, plan, and work already applied in their own words now live in one shared reference, so the recommendation you read and the route that runs are the same rule. Direct execution is the default for a ready spec; decomposition is the exception with a stated reason. Live QA can switch itself on only where a live surface is what the spec is about.
+
+### Added
+
+- **`/flow-next:flow`, the attended conductor.** `/flow-next:flow <anything>` reads what it was given (nothing, a spec or task id, a tracker issue, a branch, a path, a prototype, a pasted report, free text, or the live conversation), routes on content and context, runs the routed stage skill, re-evaluates after each hop, and stops at the next human decision with a self-contained report. A run from intent ends when the PR exists; a run on an open PR converges it and stops when merge is the only step left. It never merges, never runs under pilot, Ralph, or any autonomy marker, and never fabricates a review, QA, or completion verdict. `/flow-next:flow --explain` prints the chosen route, its positive signal, the safe skip and its kind, and why not the alternatives, with no `.flow/` write and no stage dispatch.
+- **Six routing reference files owned by the flow skill**, one per rule and each opening with a decision record: the route matrix, the spec-count rule, plan versus no-plan, review/QA/completion gate selection, prototype-before-ask, and the tail rule. Flow, capture's closer, plan's next-steps menu, and work's zero-task ask read only the file their current step needs.
+- **`pipeline.qa auto`.** Alongside `off` and `on`, `auto` runs the live QA stage when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, and records `skipped(reason)` otherwise. `off` and `on` are unchanged; pilot still activates the stage only on `on`. Any other value is treated as `off`.
+- **Setup asks the QA question once** (`off`, `on`, or `auto`) and recommends `/flow-next:features` when the answer is `on` or `auto`.
+
+### Changed
+
+- **Direct execution is the default; plan needs a positive signal.** For a ready spec with no tasks, the route is `/flow-next:work <id> --no-plan` unless the user asked for a plan, separate human owners will implement, delivery is staged across several PRs, or the implementer is routed out of the session model. Risk, size, and file count never trigger plan on their own; design risk routes to plan-review and unresolved product choices route to interview. Capture's and plan's `Recommended next` closers print this rule's result on both the manual and the flow path.
+- **Capture under flow records the route.** When flow invokes capture, capture applies the plan-versus-no-plan rule, sets `no_plan` when it resolves to direct, and writes no placeholder requirement-coverage table on that route. User-invoked capture keeps the explicit `--no-plan` opt-in and never sets the field on its own judgment.
+- **One read-back shape for capture, interview write-back, and plan's task read-back.** The draft is written once to a temporary file; you see a compact summary (title, criteria count, source tally, split proposal, recommended route) and one ask with approve and write, open in editor, abort, plus free text for edits. Edit cycles print only the diff, and the full draft prints only on request, instead of three full copies per cycle. Ratification before any write and the autofix `--yes` gate are unchanged.
+- **Capture's closer and plan's next-steps menu read the shared routing reference** instead of carrying their own copy of the rule, so explanation, closer, and execution cannot diverge. The pipeline-variations page is now the narrative that links the routing files.
+
+### Removed
+
+- **`/flow-next:guide`.** Its matrix moved into the shared route matrix and `/flow-next:flow --explain` is its replacement; every pointer in the docs, skills index, and README now names flow. The command count stays at 28.
+
 ## [flow-next 4.18.1] - 2026-09-10
 
 ### Fixed

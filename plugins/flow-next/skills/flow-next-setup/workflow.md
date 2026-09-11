@@ -111,7 +111,7 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
   - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
-**If no `setup_version`:** continue (first-time setup)
+**If no `setup_version`:** continue (first-time setup). Remember this outcome as `SETUP_FIRST_RUN=1` (any existing `setup_version`, same or older, is `SETUP_FIRST_RUN=0`); Step 6d's Live QA question reads it, and Step 5 overwrites the stamp before 6a runs.
 
 Old `setup_mode` / `setup_version` stamps from pre-copy-less installs are inert metadata — read them if you like, never act on them.
 
@@ -329,6 +329,15 @@ CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.h
 # tracker configured AND this key unset so existing repos get asked on their next
 # setup run without re-prompting once either value is written.
 CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
+# pipeline.qa (fn-238) is MATERIALIZED by Step 1's init as the literal "off", so
+# this raw probe never reads null on a fresh repo and cannot by itself tell
+# "never asked" from "answered off". Decision: the Live QA question is asked when
+# the raw value is empty (hand-removed key) OR when it reads "off" on a FIRST
+# setup run (Step 2 found no setup_version). A same-version or upgrade re-run
+# treats a persisted "off" as the answer and skips the question; `flowctl config
+# set pipeline.qa <off|on|auto>` changes it, and the Step 8 Notes line names all
+# three values.
+CURRENT_QA=$("${PLUGIN_ROOT}/scripts/flowctl" config get pipeline.qa --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 # Global criteria scaffold gate (fn-137): the question is offered only while
 # .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
 # customized - is user content and is never re-asked about, never touched.
@@ -385,13 +394,14 @@ Current configuration:
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
+- Live QA: <off|on|auto> (change with: flowctl config set pipeline.qa <off|on|auto>)
 ```
 
-Only include lines for config values that are set. If no config is set, skip this notice. (Spec ids line only when `CURRENT_SPEC_IDS` is non-empty — an unset key is not "set".)
+Only include lines for config values that are set. If no config is set, skip this notice. (Spec ids line only when `CURRENT_SPEC_IDS` is non-empty — an unset key is not "set". Live QA line only when the 6d Live QA question is skipped: on a first run the materialized `off` is not yet an answer.)
 
 ### 6d: Build questions list
 
-Build the questions array dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`.** A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
+Build the questions array dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`** (one exception: `pipeline.qa` materializes as `off` on init, so the Live QA question also treats that default as unanswered on a first setup run and never on a re-run). A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
 Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1` and Global criteria while `.flow/criteria.md` is still absent. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
 
@@ -472,6 +482,20 @@ Available questions (include only if corresponding config is unset):
   "options": [
     {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown (one extra render step per capture, plan, and make-pr)"},
     {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
+  ],
+  "multiSelect": false
+}
+```
+
+**Live QA question** (include if CURRENT_QA is empty, OR if CURRENT_QA is "off" AND `SETUP_FIRST_RUN=1` - the key materializes as `off` on init, so a first run treats that default as unanswered; a re-run treats a persisted value as the answer and never re-asks):
+```json
+{
+  "header": "Live QA",
+  "question": "Run a live QA pass before the PR? /flow-next:qa drives the running app like a real user against the spec's acceptance criteria and files evidence-backed findings. It needs a startable target (dev server, deploy URL, or running instance) and a browser driver. Rule: skills/flow-next-flow/references/gate-selection.md",
+  "options": [
+    {"label": "off (Recommended when nothing runs in a browser yet)", "description": "QA runs only when you invoke /flow-next:qa <spec> yourself. Enable later: flowctl config set pipeline.qa on|auto"},
+    {"label": "on", "description": "Every spec gets one live pass at all-tasks-done, before make-pr (pilot and flow)"},
+    {"label": "auto", "description": "/flow-next:flow runs the live pass only for specs whose acceptance is UI behaviour on a drivable surface with a startable target; every other spec records skipped(reason) and advances. /flow-next:pilot activates on the literal on only"}
   ],
   "multiSelect": false
 }
@@ -739,6 +763,13 @@ Only process answers for questions that were asked (config values that were unse
      flow-next never auto-installs lavish-axi.
      ```
 
+**Live QA** (if question was asked; match on the label's leading value):
+- If "off"*: `"${PLUGIN_ROOT}/scripts/flowctl" config set pipeline.qa off --json`
+- If "on": `"${PLUGIN_ROOT}/scripts/flowctl" config set pipeline.qa on --json`
+- If "auto": `"${PLUGIN_ROOT}/scripts/flowctl" config set pipeline.qa auto --json`
+- Any other answer: leave the persisted value alone (it stays the materialized `off`) and say so in the summary.
+- When the persisted value is `on` or `auto`, Step 8 prints the one-line `/flow-next:features` recommendation.
+
 **Global criteria** (if question was asked):
 - If "Scaffold": copy the bundled template (resolved from the plugin install - the file is user content from this moment on, so no re-run ever refreshes or compares it):
 
@@ -927,6 +958,7 @@ Configuration (use flowctl config set to change):
 - GitHub scout: <enabled|disabled>
 - HTML artifacts: <enabled|disabled>
 - Spec ids: <flow|tracker|unset>   # only meaningful when a tracker is configured; tracker is the team default
+- Live QA: <off|on|auto>
 - Review backend: <host|codex|rp|copilot|cursor|claude|none>
 
 Documentation updated:
@@ -938,7 +970,7 @@ Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "s
 Notes:
 - Plugin updates need no per-repo action, on any host — nothing was copied, so nothing goes stale. Re-run /flow-next:setup only when setup says the snippet schema bumped, or to change configuration / seed files.
 - Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor, Grok, and OpenCode — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
-- Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:pilot run one live /flow-next:qa pass over the finished build before make-pr (needs a running app plus a browser driver)
+- Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:pilot and /flow-next:flow run one live /flow-next:qa pass over the finished build before make-pr on every spec; `flowctl config set pipeline.qa auto` makes /flow-next:flow run it only for specs whose acceptance is UI behaviour on a drivable surface with a startable target and record skipped(reason) otherwise (pilot activates on the literal on only). Needs a running app plus a browser driver
 - Pilot stage chaining: off by default. `flowctl config set pipeline.chainStages on` makes /flow-next:pilot run make-pr in the same tick as a fresh terminal qa verdict (only does anything with pipeline.qa on; every other transition stays one stage per tick)
 - Land patience after review: off by default. `flowctl config set land.patienceMinutesAfterReview <minutes>` makes /flow-next:land's silence gate measure its patience window from the head-current automated review instead of the last push (silence signal only; null and 0 keep today's push-anchored wait)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
@@ -952,5 +984,11 @@ Optional next step — connect a tracker:
   If your team lives in Linear, GitHub Issues, GitLab, or Jira, run  /flow-next:tracker-sync  to set up the
   two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
   Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
+```
+
+**Feature-map recommendation (only when the persisted `pipeline.qa` is `on` or `auto`).** Print one line after the tracker proposal so the live pass can reuse how a user reaches each feature:
+
+```
+Recommended next step: run /flow-next:features to seed .flow/features/ - live QA reads it to navigate the app.
 ```
 

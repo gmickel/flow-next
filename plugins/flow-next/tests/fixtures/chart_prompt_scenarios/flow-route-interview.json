@@ -1,10 +1,10 @@
 {
-  "id": "guide-route-interview-valid-spec",
-  "family": "guide_routing",
-  "description": "Guide: valid spec with unresolved judgment questions - interview; do not reopen chart unless effort is not specifiable.",
+  "id": "flow-route-interview-valid-spec",
+  "family": "flow_routing",
+  "description": "Flow (--explain): valid spec with unresolved judgment questions - interview; do not reopen chart unless effort is not specifiable.",
   "user_prompt": "Spec fn-12 exists but the product tradeoffs in Decision Context are still open - help me nail them down.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": null,
     "decision_pin": null,
@@ -17,7 +17,7 @@
     }
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "route_interview",

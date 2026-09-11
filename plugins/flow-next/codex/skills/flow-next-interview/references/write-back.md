@@ -14,16 +14,16 @@ Spec prose written back here follows the artifact prose contract in [docs/prose.
 
 **Single-emission write pattern (all branches below):** compose the body and Write it ONCE via the **Write tool** to a **literal unique path** (the file is what flowctl `--file` consumes; Write is plumbing). Path-persistence rule: bash vars do NOT survive across prompt turns, and that applies to the draft path itself — compose the path in agent context (`${TMPDIR:-/tmp}/flow-interview-<kind>-<id>-<agent-chosen 4-char suffix>.md`) and type it verbatim in the Write call AND the flowctl `--file <path>` call; never a shell variable across prompt turns (`mktemp` only for paths created and consumed within one bash block).
 
-**Print-then-ask approval (R13 — same contract as capture Phase 4):** before handing the draft to flowctl, obtain write-back approval:
+**Print-then-ask approval (R13; the shared read-back contract in [docs/read-back.md](../../../docs/flow-next/read-back.md), read it here):** before handing the draft to flowctl, obtain write-back approval:
 
+1. **Print the compact summary first** as an ordinary assistant message, never the draft: title, criteria count, the existing → proposed **diff** for an existing spec (unified style; changed sections in full - the diff is what the user ratifies), the source-tag tally **when this pass wrote spec `## Acceptance Criteria` bullets** (the NEW IDEA and EXISTING SPEC branches): `Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L`, any compact warnings (e.g. open-questions count), the `Recommended next:` line, and the draft path. **Omit the tally entirely for a Flow Task or File Path target** - those branches carry no source tags by design, so a tally there would read as an all-zero "nothing classified" and mislead. The full draft stays in the file and prints only when the user asks for it.
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-1. **Print first:** emit the FULL draft markdown as an ordinary assistant message (the user-visible read-back — real markdown, real newlines). Never embed multi-paragraph drafts/diffs/criteria lists in the `plain-text numbered prompt` body (they render as collapsed plain text).
-2. **Then short ask** via `plain-text numbered prompt`: one-line pointer (`Full write-back draft printed above.`) + the source-tag tally **when this pass wrote spec `## Acceptance Criteria` bullets** (the NEW IDEA and EXISTING SPEC branches): `Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L`. **Omit the tally entirely for a Flow Task or File Path target** — those branches carry no source tags by design, so a tally there would read as an all-zero "nothing classified" and mislead. Then any compact warnings (e.g. open-questions count) + options only — e.g. `approve` / `edit` / `abort`. No multi-paragraph content in the ask.
+2. **Then one short ask** via `plain-text numbered prompt`: one-line pointer (`Summary printed above; draft at <path>.`) + the recommendation + options `approve and write` / `open in editor` / `abort`; the built-in free-text answer is the edit request. Never embed multi-paragraph drafts/diffs/criteria lists in the ask body (they render as collapsed plain text).
 
-**Edit-cycle rule:** if the user picks `edit`, apply revisions via the Edit tool (deltas only), then **Read the FULL draft file**, **reprint the full revised draft as ordinary markdown**, and re-issue the short approval ask. The full-file Read also satisfies Edit's read-before-edit for the next cycle. Loop until `approve` or `abort`.
+**Edit-cycle rule:** a free-text answer is applied via the Edit tool (deltas only); `open in editor` hands the draft file to the user's editor (`$VISUAL`, `$EDITOR`, or a host open command). After either round **Read the FULL draft file before asking again** (the write consumes what the user saw; the Read also satisfies Edit's read-before-edit for the next cycle), **print only the diff** as ordinary markdown - never reprint the full draft - and re-issue the short ask. Loop until `approve and write` or `abort`.
 
-Done when: exactly one input-type branch below has run; the body was Written once to its literal path, printed in full, and approved; flowctl consumed that same literal path; and every section the write-policy listed as preserved is byte-identical to the copy read at Detect Input Type.
+Done when: exactly one input-type branch below has run; the body was Written once to its literal path, summarized, and approved; flowctl consumed that same literal path; and every section the write-policy listed as preserved is byte-identical to the copy read at Detect Input Type.
 
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
@@ -156,7 +156,7 @@ Then hand flowctl the draft file — the literal path typed verbatim (never a sh
 $FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
 ```
 
-Then recommend `$flow-next-work fn-N --no-plan` for a ready cohesive spec; suggest `$flow-next-plan fn-N` when dependencies, ownership, stages, or execution constraints benefit from decomposition. Use `$flow-next-plan-review fn-N` for an independent spec/design review, including without tasks.
+Then print the `Recommended next:` line judged from [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) (read it when judging; `/flow-next:plan-review fn-N` when design risk wants an independent assessment, which works without tasks; `$flow-next-flow --explain fn-N` when signals conflict).
 
 ### For EXISTING SPEC (fn-N that already has tasks)
 
@@ -167,7 +167,7 @@ $FLOWCTL tasks --spec <id> --json
 
 **If tasks exist:** Only update the spec (add edge cases, clarify requirements). **Do NOT touch task specs** — plan already created them.
 
-**If no tasks:** Update the spec and use the same next-step judgment above. Risk or multiple files alone do not require decomposition; unresolved material choices need refinement.
+**If no tasks:** Update the spec and use the same next-step judgment above.
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 

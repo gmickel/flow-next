@@ -14,7 +14,7 @@ Follow this skill and linked workflows exactly. Deviations cause drift, bad gate
 
 ### Chart boundary (fn-135)
 
-A **ready** (or already-captured) spec whose work is understood stays in plan - chart is too late. An unshaped oversized freeform idea with consequential unknowns is **not** plan input: recommend `/flow-next:chart` first (or `/flow-next:guide` when unsure). Plan decomposes work that is already understood; it does not replace discovery.
+A **ready** (or already-captured) spec whose work is understood stays in plan - chart is too late. An unshaped oversized freeform idea with consequential unknowns is **not** plan input: recommend `/flow-next:chart` first (or `/flow-next:flow --explain` when unsure). Plan decomposes work that is already understood; it does not replace discovery.
 
 ## Preamble
 

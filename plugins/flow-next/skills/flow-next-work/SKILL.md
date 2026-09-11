@@ -118,7 +118,7 @@ configured/overridden backend — codex, copilot, cursor, claude, rp, or host �
 - The spec's own `no_plan` field (`no_plan: true` in `$FLOWCTL show <spec-id> --json`, set at capture time or via `flowctl spec set-no-plan` — fn-214) counts the same as the flag: it is an explicit human instruction carried by the item, read at Phase 1's fork, never inferred
 - Contradictory signals (the flag or field says direct, the prose asks to plan first) → the fork asks instead of guessing
 - Existing intentional tasks govern despite a stale direct signal. A sole `implicit_owner` task under `no_plan: true` retains the direct route on resume; Phase 1 resolves the distinction.
-- Recommend this route for ready cohesive specs when decomposition adds no coordination value; implementation review, coverage, completion policy and opt-in QA remain unchanged.
+- The fork's recommendation comes from the shared rule in [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md), read only when the fork fires; implementation review, coverage, completion policy and opt-in QA remain unchanged on this route.
 - The fork's semantics (ask, autonomous refusal, durable choice, implicit-task mint) live in phases.md Phase 1's gated [references/no-plan-route.md](references/no-plan-route.md), read only when the fork fires
 
 **Autonomous mode**:

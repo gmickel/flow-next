@@ -1,10 +1,10 @@
 {
-  "id": "guide-skip-chart-clear-idea",
-  "family": "guide_routing",
-  "description": "Guide: one meaningful idea with intent and boundaries already stateable - recommend capture, skip chart (signal absent).",
+  "id": "flow-skip-chart-clear-idea",
+  "family": "flow_routing",
+  "description": "Flow (--explain): one meaningful idea with intent and boundaries already stateable - recommend capture, skip chart (signal absent).",
   "user_prompt": "Capture this: add a --json flag to the list command. Intent is clear, boundaries are the existing CLI surface.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": null,
     "decision_pin": null,
@@ -14,7 +14,7 @@
     "prior_state": {}
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "route_capture",

@@ -1,10 +1,10 @@
 {
-  "id": "guide-ambiguous-blocking-question",
-  "family": "guide_routing",
-  "description": "Guide: starting state could be clear-capture or oversized-chart; two routes materially differ so guide asks exactly one blocking question before recommending.",
+  "id": "flow-ambiguous-blocking-question",
+  "family": "flow_routing",
+  "description": "Flow (--explain): starting state could be clear-capture or oversized-chart; two routes materially differ so flow asks exactly one blocking question before recommending.",
   "user_prompt": "We want multi-tenant billing. I have some notes but I'm not sure if we know enough to write a spec yet.",
   "context": {
-    "mode_hint": "guide",
+    "mode_hint": "flow",
     "driver": "attended",
     "chart_id": null,
     "decision_pin": null,
@@ -15,7 +15,7 @@
     }
   },
   "expected": {
-    "mode": "guide",
+    "mode": "flow",
     "inferred_operations": [
       "match_matrix",
       "disambiguate_capture_vs_chart",
@@ -37,7 +37,7 @@
     },
     "verdict": null,
     "notes": [
-      "Guide is pure routing - no flowctl mutation",
+      "flow --explain writes nothing under .flow/ and dispatches no stage",
       "Ask a blocking question only when two routes would materially differ",
       "Lead with a natural-language next prompt after the answer"
     ]

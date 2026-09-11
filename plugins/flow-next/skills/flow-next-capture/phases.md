@@ -10,9 +10,9 @@ Path-specific lookups live one level deep in `references/*.md` and are loaded on
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using the canonical template |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict |
-| **4 — Read-back loop** | Print full draft as ordinary markdown, then short ask; obtain approval |
+| **4 - Read-back loop** | Print the compact summary, then one ask (shared contract in `docs/read-back.md`); obtain approval |
 | **5 — Write via flowctl** | Atomic write of new (or rewritten) spec |
-| **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints |
+| **6 - Suggested next step** | Print footer with the `Recommended next:` line from the shared routing reference |
 
 ---
 
@@ -134,11 +134,13 @@ Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
   any fired → gate → ask one at a time (interactive); exit 2 (autofix)
   none      → continue
 
-Read-back (print-then-ask): print FULL draft markdown (+ rewrite diff if any)
-  as ordinary assistant message, then SHORT ask (pointer + [inferred] tally +
-  8+ note + options only — never multi-paragraph content in the ask body).
-  interactive: approve / split-as-proposed (only when 2.5 proposed N>1) / edit / abort
-  edit cycles: reprint revised draft before each short re-ask
+Read-back (print-then-ask, docs/read-back.md): print the compact summary
+  (+ rewrite diff / split allocation if any) as ordinary assistant message,
+  then ONE short ask (pointer + recommendation + options only - never
+  multi-paragraph content in the ask body; the full draft prints only on request).
+  interactive: approve and write / split-as-proposed (only when 2.5 proposed N>1)
+               / open in editor / abort; free text = edit request
+  edit cycles: re-read the file, print only the diff, re-ask
   autofix --yes: print summary and proceed
   autofix without --yes: print summary and exit 0
 
