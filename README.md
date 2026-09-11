@@ -168,7 +168,7 @@ Use installation commands in your terminal or the host's plugin interface as sho
 /flow-next:flow <anything>           # Say what you have and let flow pick the route
 ```
 
-Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bug report), picks the smallest sufficient route, runs it, and stops at the next decision that is yours. `/flow-next:flow --explain` shows the route without running it. The same path by hand:
+Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bug report, a how or why question about the code, a slowness to measure, a cleanup that keeps behaviour, a design fork to settle), picks the smallest sufficient route, runs it, and stops at the next decision that is yours. Describe the request without naming a skill and flow picks it up; a stage's pick is asked inline and the run continues. `/flow-next:flow --explain` shows the route without running it. The same path by hand:
 
 ```bash
 /flow-next:capture                   # 1. Synthesize conversation → .flow/specs/<id>.md

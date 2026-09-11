@@ -59,7 +59,7 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 | [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The portable PR cognitive-aid contract, its fixture, and how downstream renderers pin it |
 | [`memory-schema.md`](memory-schema.md) | The memory tree, its frontmatter, and the audit lifecycle |
 | [`glossary.md`](glossary.md) | How the repo-root `GLOSSARY.md` is shaped and resolved |
-| [`read-back.md`](read-back.md) | The shared ratification shape for capture, interview, and plan: one draft file, a compact summary, one ask |
+| [`read-back.md`](read-back.md) | The shared ratification shape for capture, refine, and plan: one draft file, a compact summary, one ask |
 | [`strategy.md`](strategy.md) | How the repo-root `STRATEGY.md` is shaped and who reads it |
 
 ## Fixing and contributing
@@ -76,7 +76,7 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 
 ## Notable updates
 
-- **Flow, the attended conductor (next release)** - `/flow-next:flow <anything>` reads what you have, picks the smallest sufficient route from the shared routing reference, runs it, and stops at the next decision that is yours; `--explain` prints the route without running it and replaces the retired guide router. Direct execution is the default for a ready spec and plan needs a positive signal; `pipeline.qa` gains `auto`. Details: [pipeline variations](pipeline-variations.md), [the flow skill](../skills/flow-next-flow/SKILL.md).
+- **Flow, the attended conductor (next release)** - `/flow-next:flow <anything>` reads what you have, picks the smallest sufficient route from the shared routing reference, runs it, and stops at the next decision that is yours; `--explain` prints the route without running it and replaces the retired guide router. Describe the request without naming a skill and flow picks it up: the route matrix covers eleven worked variants, including refactoring, performance, hill climb, investigation, and prototype; a stage's pick (a prospect candidate, a chart briefing's split) is asked inline and the run continues, stopping only on a decision that ends it. Direct execution is the default for a ready spec and plan needs a positive signal; `pipeline.qa` gains `auto`; capture, refine, and plan share one read-back shape. `/flow-next:interview` is renamed `/flow-next:refine` (the alias forwards for one release), `refine --scope=research` reads the docs first and writes `## Resolved via Research`, and the read-only `why-scout` answers why questions from the investigation row. Details: [pipeline variations](pipeline-variations.md), [the flow skill](../skills/flow-next-flow/SKILL.md), [read-back](read-back.md).
 
 - **Optional task decomposition (4.18.0)** - a ready cohesive spec can run through Flow-Next work with its full acceptance contract and configured verification. Use `/flow-next:work <id> --no-plan`; add planning when dependencies, owners or delivery constraints justify a task graph. Details: [pipeline variations](pipeline-variations.md#no-plan-route).
 

@@ -468,6 +468,22 @@ The one read-only health check a drive-capable run performs before driving an in
 
 The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files.
 
+## Driver
+
+A skill that decides which stage runs next and dispatches it: `/flow-next:flow` (attended, stops at the next human decision), `/flow-next:pilot` (one ready spec, one stage per unattended tick), and Ralph (the repo-local unattended harness). Drivers are never nested; flow refuses to run under any autonomy marker, and pilot and land never dispatch flow.
+
+_Avoid_: mode, conductor mode, autopilot
+
+_Relates to_: Routing reference, Pilot
+
+## Variant
+
+One worked route through the pipeline menu, named by its driving signal in `docs/pipeline-variations.md` and matched by a row of the route matrix: epic, feature with known requirements, no-plan, small task, bug or defect, refactoring, performance, hill climb, investigation, prototype, and docs or chore. Every variant keeps the same evidence, gate, and receipt contract; they differ only in which unknown they pay to convert.
+
+_Avoid_: pipeline mode, preset, template pipeline
+
+_Relates to_: Routing reference, No-plan route
+
 ## Prototype-before-ask
 
 Classify a fork before asking the user. An answer observable by running something (behavior, output, timing, layout) is settled by a prototype or experiment. Only a product or preference call no experiment can settle becomes a question.
