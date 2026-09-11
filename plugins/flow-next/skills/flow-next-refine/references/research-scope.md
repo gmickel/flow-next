@@ -30,16 +30,16 @@ ARGUMENTS="$(printf '%s' "$ARGUMENTS" | sed -E 's/(^| )--force( |$)/ /g' | xargs
 
 Then Detect Input Type exactly as SKILL.md states it. A file-path target is out of scope for this pass: print `research: skipped(policy: research writes a spec or task section; give a spec or task id)` and stop.
 
-## Skip rule (observable, printed before any dispatch)
+## Skip rule (observable)
 
-Decide from what already exists, in this order:
+Decide from what already exists, and say which case applied in the summary:
 
-1. **The section is present.** The target body carries `## Resolved via Research` → print `research: skipped(section present: ## Resolved via Research)` and stop. Nothing is written.
-2. **Plan already ran the scouts.** A spec target whose tasks (`$FLOWCTL tasks --spec <id> --json`, then `$FLOWCTL cat <task-id>`) carry plan's scout findings (a `## Resolved via Research` section, or docs-scout / practice-scout findings under the task's research or references block) → print `research: skipped(plan findings present on <task-id>)` and stop.
-3. **Delta rerun.** When rule 1 or 2 would skip but the spec now names a library or API that neither the section nor the task findings mention (compare the spec's named libraries against the sources already cited), run the pass scoped to that delta only and print `research: rerun(delta: <library list>)`. The new bullets append under their scout's sub-block; existing bullets come back byte-for-byte.
-4. **`--force`.** `FORCE=1` reruns the whole pass and replaces the section; print `research: rerun(--force)`.
+- **The section is present.** The target body carries `## Resolved via Research`: skip, write nothing, and name the section as the reason.
+- **Plan already ran the scouts.** A spec target whose tasks (`$FLOWCTL tasks --spec <id> --json`, then `$FLOWCTL cat <task-id>`) carry plan's scout findings: skip, write nothing, and name the task that holds them.
+- **Delta rerun.** When either case above would skip but the spec now names a library or API that neither the section nor the task findings mention, run the pass for that delta only. New bullets append under their scout's sub-block; existing bullets come back byte-for-byte.
+- **`--force`.** Rerun the whole pass and replace the section.
 
-Otherwise print `research: running(docs-scout, practice-scout, docs-gap-scout, memory-scout)` (append `, github-scout` when `scouts.github` is on) and continue. A run that dispatched a scout before printing one of these lines has broken this.
+Otherwise run the pass and say which scouts are being dispatched.
 
 ## Dispatch
 
@@ -70,4 +70,4 @@ One sub-block per scout that ran (omit a scout's block when it returned nothing,
 
 Compute the write policy with `scope write-policy research` (it lists every canonical section as preserved and only this section as writable), then follow `write-back.md`'s single-emission write pattern and the print-then-ask approval in [docs/read-back.md](../../../docs/read-back.md): summary first (target, bullet count per scout, sources, the skip or rerun line), then one ask with approve and write, open in editor, abort. The section is appended after the last auxiliary section for a spec (`flowctl spec set-plan --file`) or the task body (`flowctl task set-spec --file`); every other section comes back byte-for-byte. Under `--force` the old section is replaced in full; under a delta rerun, new bullets append below the existing ones in their scout's sub-block.
 
-Done when: exactly one of the skip, rerun, or running lines was printed before any dispatch; either nothing was written (skip) or the target carries one `## Resolved via Research` section with one sub-block per scout that returned findings, a source on every bullet, and every other section byte-identical to the copy read at Detect Input Type; and the Completion summary reports the bullet count per scout or the skip reason.
+Done when: either nothing was written and the summary names the skip reason, or the target carries one `## Resolved via Research` section with one sub-block per scout that returned findings, a source on every bullet, every other section byte-identical to the copy read at Detect Input Type, and the summary reports the bullet count per scout.

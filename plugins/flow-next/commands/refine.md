@@ -27,7 +27,7 @@ Conflicting flags (`--biz --tech`, `--scope=business --tech`, `--scope=foo`) err
 
 ### Doc-aware (existing)
 
-- `--docs` — force doc-aware mode on. The interview reads the nearest-ancestor `GLOSSARY.md` and `.flow/memory/knowledge/decisions/`, surfaces glossary conflicts, sharpens overloaded terms via `flowctl glossary add`, and writes decision entries via `flowctl memory add --track knowledge --category decisions ...` when the three-criteria gate passes. If no `GLOSSARY.md` exists yet, the first resolved term lazy-creates one at the repo root.
+- `--docs` — force doc-aware mode on. The pass reads the nearest-ancestor `GLOSSARY.md` and `.flow/memory/knowledge/decisions/`, surfaces glossary conflicts, sharpens overloaded terms via `flowctl glossary add`, and writes decision entries via `flowctl memory add --track knowledge --category decisions ...` when the three-criteria gate passes. If no `GLOSSARY.md` exists yet, the first resolved term lazy-creates one at the repo root.
 - `--no-docs` — force doc-aware mode off, even when `GLOSSARY.md` or decision entries exist.
 - `--strategy` / `--no-strategy` — force the strategy-aware gate independently of `--docs` / `--no-docs`. Without an explicit flag, `--docs` / `--no-docs` cascades to strategy.
 

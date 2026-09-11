@@ -69,7 +69,7 @@ ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
 
 **Scope parsing, write policy, and bank selection come from `flowctl scope resolve` / `scope write-policy` / `scope bank`.** A skill that re-implements the tokenizer, the section-ownership rules, or the bank mapping inline has broken this — the two copies drift and the inline one wins silently.
 
-**`SCOPE == research` asks no questions.** Skip the doc-aware autodetect, the scope question, the question banks, and the interview rounds: run Detect Input Type below, then STOP and read [`references/research-scope.md`](references/research-scope.md) - it owns the skip rule (`## Resolved via Research` already present, or plan's scout findings already on the tasks), the scout set (docs, practice, docs-gap, memory; github when gated on), the section shape, the `--force` rerun, and the write-back through the shared read-back contract. Research lands in the spec when a human should see it before ratifying and when it must survive the route choice; what only the implementer needs stays with the worker. A bare or business/technical/both invocation never reads it.
+**`SCOPE == research` asks no questions.** Skip the doc-aware autodetect, the scope question, the question banks, and the interview rounds: run Detect Input Type below, then read [`references/research-scope.md`](references/research-scope.md) and follow it. A business, technical, or both invocation never reads it.
 
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 

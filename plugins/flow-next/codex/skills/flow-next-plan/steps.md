@@ -178,7 +178,7 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 
 Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
-**Research skip (fn-238 R16, symmetric with `/flow-next:refine --scope=research`).** Before dispatching `docs-scout`, `practice-scout`, `docs-gap-scout`, and `memory-scout` (and `github-scout` when gated on) on a Route A spec, check the spec body for `## Resolved via Research`. When the section is present, skip those scouts, print `research: docs-scout, practice-scout, docs-gap-scout, memory-scout - skipped(section present: ## Resolved via Research)`, and read the section as their findings; `repo-scout`, `spec-scout`, and Step 3's `flow-gap-analyst` still run (decomposition needs them), and every other row is unchanged. When those scouts do run, Step 5 writes their findings into `## Resolved via Research` on the spec (one sub-block per scout, a source on every line, provenance line naming the scouts; docs-gap-scout's findings read as "docs that must change") as well as into the task bodies, so refine's research pass and plan converge on one artifact and one skip rule: whichever ran first satisfies the read-first signal in `flow-next-flow/references/route-matrix.md`, and the other skips. Research lands in the spec when a human should see it before ratifying and when it must survive the route choice; what only the implementer needs stays in the task body.
+**Research skip (fn-238 R16).** On a Route A spec that already carries `## Resolved via Research`, skip `docs-scout`, `practice-scout`, `docs-gap-scout`, and `memory-scout` (and `github-scout` when gated on), read the section as their findings, and record the skip with its reason; `repo-scout`, `spec-scout`, and Step 3's `flow-gap-analyst` still run because decomposition needs them. When those scouts do run, Step 5 writes their findings into that section on the spec as well as into the task bodies. The section shape and the skip rule are owned by [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md); plan and refine share them so research is gathered once on either route.
 
 ---
 
@@ -410,10 +410,9 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    Acceptance Criteria, Early proof point, Requirement coverage, References.
    Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    ## Strategy drift flagged for review (when plan scope conflicts with an active track).
-   ## Resolved via Research (when the research scouts RAN in Step 1: one sub-block per scout, one
-   bullet per finding with its source, provenance line `plan (docs-scout, practice-scout,
-   docs-gap-scout, memory-scout) on <date>`; when Step 1 skipped them because the section was
-   already present, it comes back byte-for-byte).
+   ## Resolved via Research (when the research scouts RAN in Step 1, in the section shape from
+   flow-next-refine/references/research-scope.md with `plan` as the provenance; when Step 1 skipped
+   them because the section was already present, it comes back byte-for-byte).
    Add mermaid diagram if data model or architecture changes.
    Write tool -> $PLAN_FILE (author-as-file rule — full scaffold below):
 
