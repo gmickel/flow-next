@@ -59,7 +59,7 @@ Parse `$ARGUMENTS` as exact tokens (never substrings): `--explain` sets `EXPLAIN
 
 ```
 Flow stopped at: <the human decision, or "PR exists">
-Route taken: <hop 1> -> <hop 2> -> ...
+Route taken: <hop 1> -> <hop 2> -> ...   (an inline pick reads `prospect [picked: <candidate>]`)
 stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)   (one line per stage reached)
 Next: <natural-language prompt or slash command, or the decision the user must make>
 ```
