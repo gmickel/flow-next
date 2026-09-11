@@ -103,33 +103,23 @@ The sharpening tool for a defect is **reproduction, not conversation** - an inte
 
 ### Refactoring
 
-**Signal:** the structure changes and the behaviour does not. The risk is a silent behaviour change hiding inside a cleanup.
-
-Pin the contract before anything moves: a characterization test, a snapshot, or an equivalence check over current behaviour becomes the R-ID. Work then reshapes under that pin, migrates every caller, and deletes the old shape in the same change. New behaviour named anywhere makes it a feature with cleanup inside; route it as one. What still holds: the pin stays green through review, receipts, evidence.
+**Signal:** the structure changes and the behaviour does not. The pinned contract is the R-ID; the row in the [route matrix](../skills/flow-next-flow/references/route-matrix.md) names the pin and the skip.
 
 ### Performance
 
-**Signal:** a measured slowness, a trace, or a number the user wants moved once.
-
-Baseline on a real surface before any change; the baseline and its target are the R-ID. Work ships the change and the post-change measurement is the evidence. A fix motivated by reading source instead of a measurement is not evidence. No nameable metric or surface routes to an investigation first.
+**Signal:** a measured slowness to move once. The baseline and its target are the R-ID and the post-change measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names what counts as a measurement.
 
 ### Hill climb
 
-**Signal:** one metric to improve against a target through repeated attempts, the loop rather than the one-off fix.
-
-Freeze a harness that reruns cheaply, then one change, one measurement, keep or revert, one commit per kept change, every attempt logged in the task evidence. The target is the R-ID. A plateau is a pivot; a dead end is a report; the target is never relaxed to meet it.
+**Signal:** one metric against a target through many attempts. The target is the R-ID and each attempt's comparable measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row separates it from the one-off fix.
 
 ### Investigation
 
-**Signal:** a read-only question. How does X work, why was Y built this way, are we sure about Z.
-
-The deliverable is a cited answer from the repo, git history, and the bug and decision memory. No `.flow/` write, no PR. Wide surfaces use the read-only scouts; a shape uses `/flow-next:visual`; a choice between alternatives carries a tradeoffs table. When the answer is a prerequisite for a change already asked for, route the change and let its stage do the reading.
+**Signal:** a read-only question. The deliverable is a cited answer with no `.flow/` write and no PR; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names the sources and when a question routes as a change instead.
 
 ### Prototype
 
-**Signal:** a design or behaviour fork whose answer is observable by building something throwaway. [Prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) is the rule that sends a fork here instead of to a question.
-
-Build the throwaway in a scratch directory, with alternatives behind one switch when they compete, observe on the matching surface, and report the decision with its evidence. The output is a decision, not shippable code; the real build routes to capture or work. No decision means no prototype.
+**Signal:** a fork whose answer is observable. [Prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) settles it and the observed decision routes the real build to capture or work.
 
 ### Docs or chore
 
