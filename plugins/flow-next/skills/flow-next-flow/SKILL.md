@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Attended conductor for whatever the user has - an idea, a spec or task id, a tracker issue, a branch, a pasted bug report, a how or why question about the code, a measured slowness, or a structural change. Picks the smallest sufficient route, runs it, stops at the next human decision. Use when the user states a change, a question, or a complaint without naming a skill. `--explain` prints the route only. Never under pilot, Ralph, or an autonomy marker.
+description: Attended conductor for whatever the user has - an idea or a request for a change, a spec or task id, a tracker issue, a branch or a path, a pasted bug report or console output, a how or why question about the code, something slow to speed up, a cleanup that keeps behaviour, a design fork to settle, or "what should I do next". Use when the user states any of these without naming a skill. `--explain` prints the route only. Not under pilot, Ralph, or an autonomy marker.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---

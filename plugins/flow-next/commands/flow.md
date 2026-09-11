@@ -1,6 +1,6 @@
 ---
 name: flow
-description: Attended conductor - an idea, a spec or task id, a tracker issue, a bug report, a how or why question, a measured slowness, or a structural change; picks the smallest sufficient route, runs it, stops at the next human decision; --explain prints the route only
+description: Attended conductor - an idea or change request, a spec or task id, a tracker issue, a branch or path, a bug report, a how or why question, something slow, a behaviour-keeping cleanup, a design fork, or "what next"; --explain prints the route only
 argument-hint: "[<anything>] [--explain] [--review=<backend>]"
 ---
 
