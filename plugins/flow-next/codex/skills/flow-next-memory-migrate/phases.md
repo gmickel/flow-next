@@ -109,7 +109,7 @@ The presence of `_migrated/<filename>.bak` is the canonical signal. Cheaper than
 
 ### Mid-migration (Phase 2)
 
-`flowctl memory add` always creates unless `--update <id>` is passed (fn-113). Overlap scoring still runs and the JSON response emits `matches` (with scores). If a high-overlap match already exists (e.g. someone manually migrated one entry already, then re-ran the skill), re-run with `--update <match-id>` to fold into the existing entry rather than accepting a sibling create.
+`flowctl memory add` always creates unless `--update <id>` is passed. Overlap scoring still runs and the JSON response emits `matches` (with scores). If a high-overlap match already exists (e.g. someone manually migrated one entry already, then re-ran the skill), re-run with `--update <match-id>` to fold into the existing entry rather than accepting a sibling create.
 
 ### Post-migration (Phase 4)
 
@@ -166,7 +166,7 @@ For each legacy entry:
 
 ## Rationale for the mechanical-default-first stance
 
-The temptation in an LLM-driven migration is to "use AI to classify each entry intelligently" — but most legacy entries are pre-fn-30 ad-hoc memos, often without strong category signal. The mechanical default works:
+The temptation in an LLM-driven migration is to "use AI to classify each entry intelligently" — but most legacy entries are pre-schema ad-hoc memos, often without strong category signal. The mechanical default works:
 
 - `pitfalls.md` was originally a build-failure / gotcha bucket → `bug/build-errors` is the median fit.
 - `conventions.md` was a coding-style bucket → `knowledge/conventions` is the median fit.

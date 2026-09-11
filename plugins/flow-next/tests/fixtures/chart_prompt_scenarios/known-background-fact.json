@@ -46,14 +46,14 @@
     "notes": [
       "Cited background is not a D-ID",
       "No acceptance-criterion source tags on chart facts",
-      "fn-148 verified/inferred grammar is out of scope"
+      "Verified/inferred fact grammar is out of scope"
     ]
   },
   "skill_contract_tokens": [
     "cited background",
     "not a D-ID",
     "acceptance-criterion",
-    "fn-148",
+    "verified/inferred",
     "Notes"
   ]
 }

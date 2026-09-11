@@ -11,7 +11,7 @@ allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 
 Generate many candidate ideas grounded in the repo, critique every one with explicit rejection reasons, and surface only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that feeds promote / capture / chart / interview - never a fixed conveyor.
 
-### Chart boundary (fn-135)
+### Chart boundary
 
 Prospect is plural ("what should we do?"). Chart is singular ("how do we get this one idea to something specifiable?"). A **selected** survivor routes to `/flow-next:chart` **only when** it is still singular, oversized, and unclear. Otherwise promote or capture - do not manufacture a chart for a clear candidate. Unsure of the next hop: `/flow-next:flow --explain`.
 

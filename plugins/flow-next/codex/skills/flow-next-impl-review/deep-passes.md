@@ -1,4 +1,4 @@
-# Deep-pass prompts (fn-32.2 --deep)
+# Deep-pass prompts (--deep)
 
 Three specialized passes that layer on top of the primary Carmack-level review.
 All three run in the **same backend session** as the primary review — the model

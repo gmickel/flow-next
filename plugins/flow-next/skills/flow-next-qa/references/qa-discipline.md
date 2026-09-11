@@ -3,7 +3,7 @@
 This reference carries the QA discipline `/flow-next:qa` borrows from Ray Fernando's
 `running-bug-review-board` (BRB) skill. It is deliberately **lean** — flow-next already
 owns most of the surrounding machinery (the spec as intent, the bug memory track,
-receipts, the make-pr R-ID table, fn-52 tracker-sync), so this is the discipline, not
+receipts, the make-pr R-ID table, tracker-sync), so this is the discipline, not
 the 18-reference port.
 
 > The session-hygiene rules, persona-suffix discipline, write-path-first /
@@ -21,19 +21,19 @@ the 18-reference port.
 | Write-path-first / one-tab-per-shard caution (a paragraph, not a coordinator) | — |
 | YES/NO verdict + paste-ready handoff discipline | Receipt write: `workflow.md` §6.3 |
 | P0/P1/P2 taxonomy + tie-break, evidence rules, reproduce-twice | **[bug-filing.md](bug-filing.md)** |
-| Driver commands (viewport, screenshot, storage clear, auth) | fn-51 `flow-next-drive/references/` |
+| Driver commands (viewport, screenshot, storage clear, auth) | `flow-next-drive/references/` |
 
-**Driving is fn-51's job, not this reference's.** QA never re-implements driving — it
-reads fn-51's workflow + references and executes the universal flow itself. The concrete
+**Driving is flow-next-drive's job, not this reference's.** QA never re-implements driving — it
+reads flow-next-drive's workflow + references and executes the universal flow itself. The concrete
 commands referenced below (`set viewport`, `screenshot`, storage clear, `state save/load`)
-all live in fn-51:
+all live in flow-next-drive:
 
 - `agent-browser set viewport W H`, `agent-browser screenshot …` — `flow-next-drive/references/commands.md`
 - The universal flow per rung — `flow-next-drive/references/agent-browser.md`
 - Auth / state persistence — `flow-next-drive/references/auth.md`
 - Per-session isolation (`--session`) — `flow-next-drive/references/session-management.md`
 
-This reference says *what discipline to apply*; fn-51 says *how to drive*.
+This reference says *what discipline to apply*; flow-next-drive says *how to drive*.
 
 ---
 
@@ -51,7 +51,7 @@ highest-dividend borrow. Apply it religiously.
    `localStorage` and `sessionStorage` outlive a logout and silently poison the next run.
 2. **One browser tab (session) per agent.** Two agents on a shared tab cause auth-provider
    rate-limits, session bleed, and false failures. With agent-browser, isolate via
-   `--session <name>` (see fn-51 `session-management.md`); if your tooling cannot guarantee
+   `--session <name>` (see flow-next-drive `session-management.md`); if your tooling cannot guarantee
    isolation, run scenarios **sequentially**, not in parallel.
 3. **Cool-down between auth attempts.** Auth providers throttle. ~30s between sign-ups is a
    safe default (e.g. Clerk dev keys); check the provider's docs. On a 429 / "too many
@@ -157,7 +157,7 @@ reference carries the *discipline* that the verdict must obey.
 |---------|-------|--------------|
 | **SHIP** (YES) | Every derived scenario passed on the live app, **zero** open P0/P1, R-ID coverage complete for every UI-observable criterion | Requires captured live-app evidence per passing scenario — no evidence ⇒ not SHIP |
 | **NEEDS_WORK** (NO) | Any open P0 or P1, **or** an uncovered UI-observable R-ID (`⚠️ no live scenario`) | A single open P0 = NO; **never** downgrade a P0 to keep it green (see bug-filing.md tie-break) |
-| **BLOCKED** | No live deploy reachable, or no driver (incl. fn-51 degraded to the terminal manual rung) | **BLOCKED ≠ FAIL** — "no ship *claim* on a QA basis", not "the app is broken" |
+| **BLOCKED** | No live deploy reachable, or no driver (incl. flow-next-drive degraded to the terminal manual rung) | **BLOCKED ≠ FAIL** — "no ship *claim* on a QA basis", not "the app is broken" |
 | **NA** | The spec has no driveable user-visible AC (all backend / CLI / non-UI) | Live QA raises no objection — record *why* in `na_reason`; never invent a fake UI path |
 
 Load-bearing honesty rules (these are *the* reason the verdict is trustworthy):

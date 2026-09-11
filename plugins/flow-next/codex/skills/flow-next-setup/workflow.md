@@ -34,7 +34,7 @@ PLATFORM="codex"
 - **Positive discriminator:** the Claude plugin manifest `.claude-plugin/plugin.json` must exist at the resolved `PLUGIN_ROOT`. That is present in every Claude-format install and **absent** from a Codex install root (`$CODEX_HOME`, whose manifest is a top-level `plugin.json`), so a `codex exec` child that inherited `CLAUDECODE` from its Claude parent still classifies `codex`.
 - **Position: after Droid / Cursor / Grok / OpenCode, before the `codex` fallback.** Each of those hosts proves itself with a signal set by its OWN process or install (`DROID_PLUGIN_ROOT`, `CURSOR_AGENT` + a `~/.cursor/` install, `GROK_AGENT`, the OpenCode ownership manifest), and all of them read the canonical Claude plugin format - so a Cursor or Grok agent launched **from** a Claude Code shell inherits `CLAUDECODE` and would be misclassified `claude-code` by a higher rung. Ordering is what keeps an inherited marker from outranking a host's own signal. This is a deliberate precedence change from the pre-#306 cascade, where the Claude rung sat second: that position only ever protected the `CLAUDE_PLUGIN_ROOT` reading, which on Claude Code is never there.
 
-**Grok ordering matters (fn-126).** Grok Build (xAI's `grok` CLI) reads the canonical Claude plugin format AS-IS and drives with `/flow-next-*` / `/flow-next:` slash commands — not the Codex `$flow-next-` mirror. Without a positive signal it fell through to `else → codex` and setup wrote Codex-shaped `$flow-next-` snippets into AGENTS.md (dogfood 2026-07-22). **Probe-verified signal:** `GROK_AGENT=1` is set BY grok in its agent shell (absent from a plain-shell control on the same machine). **Rejected non-signals:** `~/.grok/` exists on the machine regardless (install dir), and `~/.grok/bin` on `PATH` is profile-level — neither distinguishes a grok session. The `GROK_AGENT` branch MUST come after Droid / Cursor (so a real Cursor/Droid host that merely inherited `GROK_AGENT` from a parent grok shell still classifies by its own higher-precedence signal), BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
+**Grok ordering matters.** Grok Build (xAI's `grok` CLI) reads the canonical Claude plugin format AS-IS and drives with `/flow-next-*` / `/flow-next:` slash commands — not the Codex `$flow-next-` mirror. Without a positive signal it fell through to `else → codex` and setup wrote Codex-shaped `$flow-next-` snippets into AGENTS.md (dogfood 2026-07-22). **Probe-verified signal:** `GROK_AGENT=1` is set BY grok in its agent shell (absent from a plain-shell control on the same machine). **Rejected non-signals:** `~/.grok/` exists on the machine regardless (install dir), and `~/.grok/bin` on `PATH` is profile-level — neither distinguishes a grok session. The `GROK_AGENT` branch MUST come after Droid / Cursor (so a real Cursor/Droid host that merely inherited `GROK_AGENT` from a parent grok shell still classifies by its own higher-precedence signal), BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
 
 **OpenCode ordering matters.** OpenCode has no plugin-root env var and no host-process marker. Without a positive signal it fell through to `else → codex` and setup would write Codex-shaped `$flow-next-` snippets — wrong, because OpenCode command stubs are the flat `/flow-next-<name>` form (filenames, not `/flow-next:<name>`). **We-control signal:** `scripts/install-opencode.sh` writes `.flow-next-opencode-manifest` at the config root, which IS the plugin root two levels above SKILL.md. After `PLUGIN_ROOT` is derived, `[ -f "${PLUGIN_ROOT}/.flow-next-opencode-manifest" ]` → `PLATFORM=opencode`. Never an env var, never an absence signal. The OpenCode rung MUST come after Grok, BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
 
@@ -279,7 +279,7 @@ HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 # The HAVE_* values feed the Review question's "(detected)" annotations only.
 # Nothing here gates the routing block: setup never probes for routing, never
 # asks a routing question, and never writes a model id into the block it
-# proposes (fn-195 R5 — config that claims what is installed becomes config
+# proposes (config that claims what is installed becomes config
 # that lies).
 
 # Read current config values if they exist.
@@ -303,7 +303,7 @@ CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github
 # so this raw probe reads null until the user explicitly decides — here in 6e
 # or via `flowctl config set`. Merged reads still return the seeded default.
 CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# tracker.specIds is UNMATERIALIZED at init (fn-134 / R9) — raw null means "never
+# tracker.specIds is UNMATERIALIZED at init — raw null means "never
 # asked", distinct from an explicit `flow` answer. Gate the Spec ids question on
 # tracker configured AND this key unset so existing repos get asked on their next
 # setup run without re-prompting once either value is written.
@@ -317,7 +317,7 @@ CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds -
 # set pipeline.qa <off|on|auto>` changes it, and the Step 8 Notes line names all
 # three values.
 CURRENT_QA=$("${PLUGIN_ROOT}/scripts/flowctl" config get pipeline.qa --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# Global criteria scaffold gate (fn-137): the question is offered only while
+# Global criteria scaffold gate: the question is offered only while
 # .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
 # customized - is user content and is never re-asked about, never touched.
 CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } && echo 1 || echo 0)   # -e||-L: a dangling symlink or non-regular path COUNTS as existing (never re-ask/overwrite; a broken path is a validation error to surface, not a scaffold target)
@@ -495,7 +495,7 @@ Available questions (include only if corresponding config is unset):
 
 **Review question** (include if CURRENT_BACKEND is empty):
 
-**When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor (fn-123 R6):
+**When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor:
 ```json
 {
   "header": "Review",
@@ -513,7 +513,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**When `PLATFORM=grok`** (fn-126) — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM=grok`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
   "header": "Review",
@@ -549,13 +549,13 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (claude, or copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
+When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset. On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (claude, or copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
 
 Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `claude` / `rp` / `none`). Power users can also write a full spec like `codex:<model>:high`, `copilot:<model>:xhigh`, `cursor:<model>` (cursor takes a model only — no `:effort`), or `claude:<model>:<effort>` via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
 
 **No Model Routing question exists.** Setup never asks which models to route to,
 never probes a CLI for slugs, and never proposes a pin. Step 7 writes one
-commented example block and says so — that is the whole ceremony (fn-195 R5/R6).
+commented example block and says so — that is the whole ceremony.
 
 **Docs question** (always include — adjust default based on platform):
 
@@ -677,7 +677,7 @@ Print the prompt content built above and stop for the user's reply.
 ### Done when
 
 - One grouped `plain-text numbered prompt` call carried the questions array, and that array holds only the still-unanswered keys plus Docs / Star (and Ralph, Global criteria when their own gates passed).
-- **No routing question was asked, no CLI was probed for model ids, and no pin was proposed or stamped.** Setup asking which model to route to, or writing a model id anywhere, has broken this (fn-195 R5/R6).
+- **No routing question was asked, no CLI was probed for model ids, and no pin was proposed or stamped.** Setup asking which model to route to, or writing a model id anywhere, has broken this.
 - **Under any autonomy marker (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS`, `mode:autonomous`) the Ralph ceremony was skipped silently** — no reference read, no question, no summary noise. A run that blocked on it under an autonomy marker has broken this.
 
 ## Step 7: Process Answers
@@ -787,7 +787,7 @@ Use the correct template based on **target file** and **platform**:
 
 **Resolve the target file set:** an explicit Docs-question answer is authoritative - if the user is asked and selects specific files (or declines one), honor exactly that; never touch a file the user just deselected. The one addition is a backfill for the SKIPPED case: when the Docs question is omitted entirely because the block is already current (per the Note above), still run `apply` on each already-marker-bearing file. Rationale (R8): a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". `apply` on a current block is cheap and idempotent - it returns `unchanged` and records the missing hash. So: resolve targets = files chosen by the Docs question when it was asked; OR, when the Docs question was skipped, the files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker. Run the helper once per resolved file.
 
-For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-`(path, id)` pristine-hash tracking in `.flow/meta.json` `setup.block_hashes` - a nested `{<path>: {<id>: <hash>}}` map since fn-171; these call sites pass no `--id`, so they always read/write the default `FLOW-NEXT` id) are deterministic flowctl plumbing; this step owns only the ask:
+For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-`(path, id)` pristine-hash tracking in `.flow/meta.json` `setup.block_hashes` - a nested `{<path>: {<id>: <hash>}}` map; these call sites pass no `--id`, so they always read/write the default `FLOW-NEXT` id) are deterministic flowctl plumbing; this step owns only the ask:
 
 1. Run the helper (repeat per resolved file, substituting the snippet template selected above):
 
@@ -840,7 +840,7 @@ Per target, in order:
   `kept (yours)`. A block the user edited (or emptied) is theirs from the
   moment it exists - and setup may be re-run at any time (snippet bump, config
   change), so it must stay safe against every future run. Rewriting one has broken
-  this (fn-195 R5).
+  this.
 - **Unmarked routing prose.** A target already carrying a user-authored
   routing-shaped heading (a heading line containing `model routing` or
   `model-routing`, case-insensitive, without our markers) is theirs too: skip

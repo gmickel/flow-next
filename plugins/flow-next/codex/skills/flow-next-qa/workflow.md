@@ -287,7 +287,7 @@ Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one
 
 **Goal:** make the live app driveable before Phase 4 touches it — resolve the **target URL / app**, **test accounts**, **session hygiene**, and the **device matrix** (one desktop + one mobile viewport). The QA discipline this phase applies (the five hygiene rules, persona suffixing, the write-path-first / one-tab-per-shard caution) is the lean BRB borrow in **[references/qa-discipline.md](references/qa-discipline.md)** — read it before preparing. When `NO_PROMPT=0`, ask the user (`plain-text numbered prompt`, info-only — never a confirm gate) when the URL or accounts are undocumented (R7). When `NO_PROMPT=1` (autonomous / Ralph — the Autonomous-mode gate), an undocumented URL / accounts is a hard limitation → BLOCKED (§6.3) + clean exit, never a prompt.
 
-**Driving stays fn-51's job.** This phase resolves *what to drive and as whom*; the concrete commands (set viewport, clear storage, save/load auth state) live in fn-51's references — point at them, never duplicate the prose:
+**Driving stays flow-next-drive's job.** This phase resolves *what to drive and as whom*; the concrete commands (set viewport, clear storage, save/load auth state) live in flow-next-drive's references — point at them, never duplicate the prose:
 
 - Viewport + screenshot: `flow-next-drive/references/commands.md` (`agent-browser set viewport W H`, `agent-browser screenshot …`)
 - Per-session isolation (`--session`): `flow-next-drive/references/session-management.md`
@@ -312,17 +312,17 @@ The where-to-look list, the persona-suffix generator, and the secret-handling ru
 
 ### 3.3 — Session hygiene (the fresh-user contract)
 
-Apply the **five hygiene rules** and the **pre-scenario hygiene checklist** from [references/qa-discipline.md](references/qa-discipline.md) — fresh storage (not just cookies), one isolated session per agent, auth cool-down, a unique persona per scenario, and a full reset between role changes. They are the highest-dividend borrow; read them before driving a fresh-user scenario. The exact storage-clear / auth commands are fn-51's (`auth.md`, `session-management.md`). If, with perfect hygiene, behavior still depends on unpredictable prior session state, **that is the bug** — file it (typically P1), capturing the storage snapshot before clearing as evidence.
+Apply the **five hygiene rules** and the **pre-scenario hygiene checklist** from [references/qa-discipline.md](references/qa-discipline.md) — fresh storage (not just cookies), one isolated session per agent, auth cool-down, a unique persona per scenario, and a full reset between role changes. They are the highest-dividend borrow; read them before driving a fresh-user scenario. The exact storage-clear / auth commands are flow-next-drive's (`auth.md`, `session-management.md`). If, with perfect hygiene, behavior still depends on unpredictable prior session state, **that is the bug** — file it (typically P1), capturing the storage snapshot before clearing as evidence.
 
 ### 3.4 — Device matrix (v1 = viewport emulation only)
 
-v1 covers **one desktop + one mobile viewport** via fn-51's web ladder — viewport **emulation**, not real-device / cross-device testing. Record the chosen viewports against each scenario so Phase 4 drives at the right size and the evidence tuple's `viewport` field is accurate. The viewport choice is a soft default, not a blocking fact — it never gates the run (unlike an undocumented target URL / accounts, which BLOCK). The reference viewports, the primary-target selection rule (incl. the `NO_PROMPT=1` inference + assumption note), and the both-breakpoints caution are in **[references/prepare-surface.md](references/prepare-surface.md)** §2 — read it on a web-surface run before Phase 4.
+v1 covers **one desktop + one mobile viewport** via flow-next-drive's web ladder — viewport **emulation**, not real-device / cross-device testing. Record the chosen viewports against each scenario so Phase 4 drives at the right size and the evidence tuple's `viewport` field is accurate. The viewport choice is a soft default, not a blocking fact — it never gates the run (unlike an undocumented target URL / accounts, which BLOCK). The reference viewports, the primary-target selection rule (incl. the `NO_PROMPT=1` inference + assumption note), and the both-breakpoints caution are in **[references/prepare-surface.md](references/prepare-surface.md)** §2 — read it on a web-surface run before Phase 4.
 
 ### 3.5 — Write-path-first ordering
 
 When a later scenario reads data an earlier scenario creates (a group, org, workspace, invite), order the **write path first** so the artifact exists before any scenario that reads it; record the created IDs / invite URLs in the run notes for reuse (the caution in [references/qa-discipline.md](references/qa-discipline.md); v1 runs scenarios sequentially with one host agent, so it is an ordering rule, not a parallel coordinator). For any write path, Phase 4 must verify the **server / DB row or API response** (the write-side-effect evidence in [references/bug-filing.md](references/bug-filing.md)) — never trust the optimistic UI render.
 
-After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), its fresh-vs-returning storage requirement, and the resolved target URL — everything Phase 4 needs to drive it via the fn-51 read-and-drive contract.
+After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), its fresh-vs-returning storage requirement, and the resolved target URL — everything Phase 4 needs to drive it via the flow-next-drive read-and-drive contract.
 
 ### Done when
 
@@ -335,15 +335,15 @@ After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), i
 
 ## Phase 4: execute
 
-**Goal:** drive each scenario against the live app via the **fn-51 read-and-drive contract** (the host reads fn-51's workflow + references and executes `observe → snapshot → act → verify → capture` itself — QA never re-implements driving). Record the evidence tuple per scenario: `{driver_rung, target_url, viewport, screenshot_path, console_path}`; transient evidence (screenshots, console dumps) lands under `.flow/tmp/` (gitignored), referenced by path, never inlined.
+**Goal:** drive each scenario against the live app via the **flow-next-drive read-and-drive contract** (the host reads its workflow + references and executes `observe → snapshot → act → verify → capture` itself — QA never re-implements driving). Record the evidence tuple per scenario: `{driver_rung, target_url, viewport, screenshot_path, console_path}`; transient evidence (screenshots, console dumps) lands under `.flow/tmp/` (gitignored), referenced by path, never inlined.
 
-### 4.1 — The fn-51 read-and-drive contract
+### 4.1 — The flow-next-drive read-and-drive contract
 
 Execute the contract per scenario:
 
-1. **Read fn-51's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this.
+1. **Read flow-next-drive's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this.
 2. **Resolve a target.** A live deploy URL or a localhost app. If none is reachable, jump to the BLOCKED routing (§4.2) — the R13 graceful-surface path.
-3. **Drive the scenario** via fn-51's universal flow (`observe → snapshot fresh refs → act → verify → capture`), using whatever driver rung the environment resolves (agent-browser is the only assumed-present driver; everything else is probe-and-degrade).
+3. **Drive the scenario** via flow-next-drive's universal flow (`observe → snapshot fresh refs → act → verify → capture`), using whatever driver rung the environment resolves (agent-browser is the only assumed-present driver; everything else is probe-and-degrade).
 4. **Capture evidence.** Screenshot + console at the moment of interest to `.flow/tmp/qa-<spec-id>/`, and record the evidence tuple.
 
 ### 4.2 — BLOCKED routing (R13 path — no live target)
@@ -402,7 +402,7 @@ Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, ne
 
 ### 5.4 — File the finding to bug memory (immediately; host owns update-vs-create)
 
-On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left on** — a filing carrying `--no-overlap-check` has broken this. STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the fn-113.2 high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
+On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left on** — a filing carrying `--no-overlap-check` has broken this. STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. When memory is disabled the filing is a clean no-op — **still record the finding in the run notes** so Phase 6 counts it toward the verdict. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
@@ -422,7 +422,7 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
 Expected: <mapped route / command>
 Observed: <what the live app did>
 EOF
-  # Deterministic find-or-create (fn-212): exact title-within-track match, so
+  # Deterministic find-or-create: exact title-within-track match, so
   # a prior entry for EXACTLY this feature+route is UPDATED, never siblinged
   # (scored search tokenizes and can return a different route of the same
   # feature - upsert never guesses; 2+ same-titled entries fail closed).
@@ -461,7 +461,7 @@ When memory is disabled — or the upsert fails closed on an ambiguous 2+ same-t
 
 QA has **four** distinct outcomes. Pick exactly one, in this precedence order:
 
-1. **BLOCKED** — no live deploy reachable OR no driver available (incl. fn-51 degraded to the terminal manual rung). Could not verify. **BLOCKED ≠ FAIL** — it is "no ship *claim* on a QA basis," not "the app is broken." Set `blocked_reason`.
+1. **BLOCKED** — no live deploy reachable OR no driver available (incl. flow-next-drive degraded to the terminal manual rung). Could not verify. **BLOCKED ≠ FAIL** — it is "no ship *claim* on a QA basis," not "the app is broken." Set `blocked_reason`.
 2. **NA** — the spec has **no driveable user-visible AC** (all backend/CLI/non-UI — like most of flow-next's own specs). Live QA raises no objection because there is nothing to drive. Set `na_reason`.
 3. **NEEDS_WORK** — any open P0 or P1 finding, **OR** a `⚠️ no live scenario` gap on a UI-observable R-ID (an honest gap is a NO, never a confident PASS). A `subtracted` row (§2.0 — a deterministic re-runnable check already covers it) is **not** a gap. This is the NO outcome.
 4. **SHIP** — all derived scenarios pass on the live app, **zero** open P0/P1, and the R-ID coverage spine is complete for every UI-observable criterion (every such R-ID is `live`-covered; `subtracted` rows count as covered, `backend/CLI` rows are out of live scope). The YES outcome.
@@ -734,11 +734,11 @@ Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids +
 
 ### A.2 — Graceful degradation (R13)
 
-No live deploy reachable, OR no driver available (incl. fn-51 degraded to its terminal manual rung per [flow-next-drive/SKILL.md](../flow-next-drive/SKILL.md) "Driver detection & graceful degradation") → surface the limitation as a **BLOCKED** verdict (Phase 6.1 / the §4.2 BLOCKED routing), add **nothing** to the base flow, exit clean. Inherit fn-51's degradation table — do not re-derive it. BLOCKED ≠ FAIL: it is "no ship *claim* on a QA basis," never a fabricated PASS and never a hard error.
+No live deploy reachable, OR no driver available (incl. flow-next-drive degraded to its terminal manual rung per [flow-next-drive/SKILL.md](../flow-next-drive/SKILL.md) "Driver detection & graceful degradation") → surface the limitation as a **BLOCKED** verdict (Phase 6.1 / the §4.2 BLOCKED routing), add **nothing** to the base flow, exit clean. Inherit flow-next-drive's degradation table — do not re-derive it. BLOCKED ≠ FAIL: it is "no ship *claim* on a QA basis," never a fabricated PASS and never a hard error.
 
 ### A.3 — Opt-in tracker verdict post (`tracker.perEvent.qa`, R9)
 
-After the Phase 6 verdict is written, optionally post it as a structured tracker comment — gated identically to every other lifecycle touchpoint (fn-52 pattern; see [flow-next-work/SKILL.md](../flow-next-work/SKILL.md) "Shared gating predicate"). Runs ONLY when the leaf is opted in AND the bridge is active; **default `off`**, so on the default path this is a silent no-op. **Best-effort** — a tracker failure never blocks the verdict (which is already written at §6.3 and is never rolled back):
+After the Phase 6 verdict is written, optionally post it as a structured tracker comment — gated identically to every other lifecycle touchpoint (see [flow-next-work/SKILL.md](../flow-next-work/SKILL.md) "Shared gating predicate"). Runs ONLY when the leaf is opted in AND the bridge is active; **default `off`**, so on the default path this is a silent no-op. **Best-effort** — a tracker failure never blocks the verdict (which is already written at §6.3 and is never rolled back):
 
 ```bash
 ACTIVE=0

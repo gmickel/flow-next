@@ -61,7 +61,7 @@ attended_unattended_cost:
 - Missing, inaccessible, conflicting, stale, secret-bearing, ignored, symlink-escaping, or outside-repo material remains **uncertainty** - never becomes a fact by inference.
 - Imported background stays under proposed `## Notes` with citations. **No imported fact becomes a D-ID.**
 - Do not apply acceptance-criterion trailing tags to chart facts.
-- Do not invent verified/inferred fact grammar (fn-148 closed STOPPED - no product claim).
+- Do not invent verified/inferred fact grammar (no such product claim exists).
 - Ask only questions not already answered by approved evidence.
 
 Compose blocks with graceful degradation (`scanned: none (<reason>)` when a source is absent), matching prospect's style for strategy/specs/memory/git signals as relevant to the idea.

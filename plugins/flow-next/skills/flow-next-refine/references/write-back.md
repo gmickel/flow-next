@@ -63,15 +63,15 @@ Hard rules:
 
 Create spec with interview output. **This branch writes a spec and zero tasks** — task creation belongs to plan or work's direct route. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). Since fn-220 `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
-**Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot (fn-110). Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
+**Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot. Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-# ONE root snapshot for this mint (fn-110). Literal path.
+# ONE root snapshot for this mint. Literal path.
 INTERVIEW_CFG="${TMPDIR:-/tmp}/flow-interview-config-<suffix>.json"
 $FLOWCTL config get --json > "$INTERVIEW_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$INTERVIEW_CFG"
 SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$INTERVIEW_CFG" 2>/dev/null)
@@ -101,7 +101,7 @@ fi
 
 # Build the spec body in-memory:
 #   1. Seed from the canonical template FILE (`flowctl spec skeleton` renders
-#      the same file through the same cascade since fn-220; the walker is used
+#      the same file through the same cascade; the walker is used
 #      here because TEMPLATE_PATH is needed for the scope-owner markers).
 #
 #      Resolve the template via the 3-tier discovery cascade. The full walker

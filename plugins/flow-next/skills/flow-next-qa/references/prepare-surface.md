@@ -7,7 +7,7 @@ viewports. A run whose scenarios are all public and single-surface reaches neith
 The session-hygiene rules themselves (fresh storage, one session per agent, auth cool-down,
 unique persona, reset between role changes) live in `qa-discipline.md`, which `workflow.md`
 §3.3 links directly — do not duplicate them here. The driving commands
-(`set viewport`, `screenshot`, storage clear, `state save/load`) are fn-51's
+(`set viewport`, `screenshot`, storage clear, `state save/load`) are flow-next-drive's
 (`flow-next-drive/references/`).
 
 ## 1. Test accounts + personas
@@ -25,11 +25,11 @@ every retry).
 
 ## 2. Device matrix (v1 = viewport emulation only)
 
-v1 covers **one desktop + one mobile viewport** via fn-51's web ladder — viewport
+v1 covers **one desktop + one mobile viewport** via flow-next-drive's web ladder — viewport
 **emulation**, not real-device / cross-device testing (the spec's planning decision; true
-device coverage inherits fn-51's surface support later):
+device coverage inherits flow-next-drive's surface support later):
 
-| Mode | Reference viewport | Set via (fn-51) |
+| Mode | Reference viewport | Set via (flow-next-drive) |
 |------|--------------------|-----------------|
 | Desktop | `1280 × 800` | `agent-browser set viewport 1280 800` |
 | Mobile | `375 × 812` | `agent-browser set viewport 375 812` |

@@ -1,15 +1,15 @@
 # Wave join, integrate, and verify (gated reference)
 
 > **Loaded only when this run dispatched a parallel wave** (phases.md 3a
-> `Dispatch count` > 1) **or a reviewer-overlap one-task wave** (fn-176). A run whose
+> `Dispatch count` > 1) **or a reviewer-overlap one-task wave**. A run whose
 > waves are all single, non-overlapped workers never reads this file — phases.md 3d's
 > inline single-worker verify + failure rules cover it.
 
 Contents:
 
 - [Join and integrate](#join-and-integrate) — wait for every worker, report outcomes, bring commits onto the target
-- [Join collision handling](#join-collision-handling) — fn-176: never auto-resolve; serial re-run of the losing task
-- [Reviewer overlap](#reviewer-overlap) — fn-176: the schedule point, its preconditions, and the plan-sync barrier
+- [Join collision handling](#join-collision-handling) — never auto-resolve; serial re-run of the losing task
+- [Reviewer overlap](#reviewer-overlap) — the schedule point, its preconditions, and the plan-sync barrier
 - [Per-task review, integrated verify, completion](#per-task-review-integrated-verify-completion) — the six ordered steps
 - [Partial failures](#partial-failures) — diagnose inside the assigned workspace before classifying
 
@@ -40,18 +40,18 @@ integration was complete is how finished work disappears without a trace.
 
 ## Join collision handling
 
-**Join collision handling (fn-176 — never auto-resolve).** A merge conflict at
+**Join collision handling (never auto-resolve).** A merge conflict at
 the join means the wave dispatch rule's declared `**Touches:**` sets were
 wrong. Never resolve conflict hunks by hand and never drop the losing commits:
 abort the conflicted integration, keep the clean side joined, then SERIALLY
 re-run the losing task from the joined state (fresh worker, current tree).
-Record the collision in the receipt surface — a stage-outcome line per fn-178:
+Record the collision in the receipt surface — a stage-outcome line:
 `stage: wave-join - failed(collision: <task-ids> on <paths>)` — so plan review
 sees which `**Touches:**` declarations were wrong.
 
 ## Reviewer overlap
 
-**Reviewer overlap (fn-176).** review(N) may run concurrently with
+**Reviewer overlap.** review(N) may run concurrently with
 implement(N+1) **only when both hold**: N+1 is dep-independent of N (transitive,
 same walk as the dispatch rule), and `planSync.enabled` is not true — Phase
 3e's actual target set is every remaining `todo` task, so with plan-sync on,

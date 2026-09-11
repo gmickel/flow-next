@@ -69,7 +69,7 @@ If `VERDICT=NEEDS_WORK`:
 Receipt is written automatically by `flowctl copilot impl-review` when `--receipt` provided.
 Format: `{"type":"impl_review","id":"<id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
 
-The `spec` field is the canonical round-trippable form (added in fn-28.3). `model` + `effort` remain for backward compatibility.
+The `spec` field is the canonical round-trippable form. `model` + `effort` remain for backward compatibility.
 
 Session resume guard: re-review only resumes the copilot session when the existing receipt at `$RECEIPT_PATH` has `mode == "copilot"`. A cross-backend switch (e.g., codex receipt at the same path) starts a fresh session.
 

@@ -27,7 +27,7 @@ Detect input type in this order (first match wins):
 
 1. **Flow task ID** `fn-N-slug.M` (e.g., fn-1-add-oauth.3) or legacy `fn-N.M`/`fn-N-xxx.M` → **SINGLE_TASK_MODE**
 2. **Flow spec ID** `fn-N-slug` (e.g., fn-1-add-oauth) or legacy `fn-N`/`fn-N-xxx` → **SPEC_MODE**
-3. **Resolvable handle** — any single-token arg that `$FLOWCTL show <arg> --json` resolves (including a tracker key like `wor-17` / `wor-17.1`, which flowctl's widened resolver maps to the linked spec/task — fn-52.10/.16). A `.`-containing handle is a task (SINGLE_TASK_MODE); otherwise a spec (SPEC_MODE).
+3. **Resolvable handle** — any single-token arg that `$FLOWCTL show <arg> --json` resolves (including a tracker key like `wor-17` / `wor-17.1`, which flowctl's widened resolver maps to the linked spec/task). A `.`-containing handle is a task (SINGLE_TASK_MODE); otherwise a spec (SPEC_MODE).
 4. **Spec file** `.md` path that exists on disk → **SPEC_MODE**
 5. **Idea text** everything else → **SPEC_MODE**
 
@@ -95,7 +95,7 @@ and carry the admitted owner to 3a.
 1. Check file exists: `test -f "<path>"` — if not, treat as idea text
 2. Initialize: `$FLOWCTL init --json`
 3. Read file and extract title from first `# Heading` or use filename
-4. Create spec — mint gate (tracker-first vs flow-first): [references/spec-id-mint.md](references/spec-id-mint.md), read only when minting. Take the ONE root config snapshot the gate reads (fn-110 — one config read, never a per-leaf `config get tracker.specIds`; re-type the literal path, bash vars die across prompt turns):
+4. Create spec — mint gate (tracker-first vs flow-first): [references/spec-id-mint.md](references/spec-id-mint.md), read only when minting. Take the ONE root config snapshot the gate reads (one config read, never a per-leaf `config get tracker.specIds`; re-type the literal path, bash vars die across prompt turns):
 
    ```bash
    WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
@@ -205,7 +205,7 @@ and 3g completion-review policy when the frontier is empty.
 For every non-resume selection, an empty ready frontier proceeds to 3g as usual.
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
-(fail-closed — fn-176)**. **Concurrent dispatch requires all five conditions
+(fail-closed)**. **Concurrent dispatch requires all five conditions
 together; any one unmet sends the wave serial.** A wave dispatched with a missing
 or overlapping `**Touches:**` declaration has broken this.
 
@@ -225,7 +225,7 @@ The error paths are the rule: a task with no `**Touches:**` declaration →
 serial; any intersection → serial; any doubt about a glob, a hidden coupling
 (shared fixtures, services), or host capacity → serial. The failure mode is
 today's behavior — sequential dispatch — never a risky wave. This replaces
-judgment with declared intent: the same trust model as `deps` (fn-83's
+judgment with declared intent: the same trust model as `deps` (its
 decision record untouched; no semantic prediction anywhere). Safety is
 structural, not the check — workers run in isolated worktrees, so a wrong
 dispatch surfaces at the join as a merge conflict (3d), costing one serial
@@ -374,7 +374,7 @@ ran review). Content lives in those files — read them, never a restatement.
 ### 3d. Join, Integrate, and Verify
 
 **Parallel wave or reviewer-overlap dispatch** (3a `Dispatch count` > 1, or an
-fn-176 overlapped one-task wave): read
+overlapped one-task wave): read
 [references/wave-join.md](references/wave-join.md) and execute it — it owns the
 join report, integration, collision handling (never auto-resolve), the
 reviewer-overlap schedule point and its plan-sync barrier, the per-task review
@@ -464,7 +464,7 @@ Its skip and failure branches (`skipped(empty: ...)`, `failed(EXTRACT_FAILED: ..
 feed those same lines. The conductor derives one line per completed task from
 the batched report's per-task sections.
 
-**Stage-outcome line (mandatory — fn-178).** Whatever happened above, record ONE
+**Stage-outcome line (mandatory).** Whatever happened above, record ONE
 outcome line for the plan-sync stage in **each** completed task's done evidence
 (the task .md `## Done summary` the run already writes, via a small append or
 the next `flowctl done` summary when the wave is still resolving). A single
@@ -575,7 +575,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
      `completion_review_status` through its backend-aware shared owner
 
 2. After skill returns with SHIP:
-   - **Tracker sync (opt-in) — SHIP posts a verdict comment, never a terminal `Done` (fn-66):** runs only when the tracker bridge is active and `completionReview` is opted in. With no tracker configured this is a no-op:
+   - **Tracker sync (opt-in) — SHIP posts a verdict comment, never a terminal `Done`:** runs only when the tracker bridge is active and `completionReview` is opted in. With no tracker configured this is a no-op:
 
      ```bash
      ACTIVE=0
@@ -600,7 +600,7 @@ Work's single sanctioned write is the 3g policy-skip CAS
 (`--status not_required --if-current unknown`); work never writes a verdict status. After
 the skill returns SHIP, Work only posts the opt-in verdict / R-ID-coverage
 comment to the linked tracker issue here. **That comment never flips the
-issue to `Done`/`verified`** (fn-66: that is gated on a `MERGED` PR and driven
+issue to `Done`/`verified`** (that is gated on a `MERGED` PR and driven
 solely by `land.merged`).
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
@@ -755,7 +755,7 @@ that read all-done-no-PR as finished has broken this.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-**Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
+**Stage-outcome lines (binding on every stage this run orchestrated).**
 Each optional stage the run reached (plan-sync, impl-review, completion
 review, QA, a wave dispatch) records exactly one line in the receipt surface it
 already writes — the task's `## Done summary` for task-scoped stages, this

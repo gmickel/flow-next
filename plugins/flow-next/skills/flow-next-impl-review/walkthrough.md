@@ -1,4 +1,4 @@
-# Interactive walkthrough (fn-32.3 --interactive)
+# Interactive walkthrough (--interactive)
 
 Per-finding walkthrough flow that lets a **human user** decide what happens to
 each review finding on a NEEDS_WORK verdict. Active only when:
@@ -220,7 +220,7 @@ Walkthrough never flips the verdict itself. The verdict was set by the
 primary review (or validator); walkthrough only sorts findings into buckets
 and records decisions.
 
-## Acceptance criteria coverage (R-IDs from fn-32 epic)
+## Acceptance criteria coverage
 
 - **R8:** Per-finding blocking question with five options ✓ (§ "Per-finding flow")
 - **R9:** Ralph env detection hard-errors with clear message ✓ (SKILL.md Step 0 parse fence)

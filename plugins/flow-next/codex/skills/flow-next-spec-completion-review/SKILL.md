@@ -65,7 +65,7 @@ The per-backend summary (models, env vars, `--spec` forms) and the `backend[:mod
 
 Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-claude.md`, `workflow-rp.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
 
-**For host backend (fn-123 R5 / fn-126):**
+**For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
 The review must use a fresh, tool-enforced read-only reviewer from a different
 model family and fail closed when no cross-family pin is available.

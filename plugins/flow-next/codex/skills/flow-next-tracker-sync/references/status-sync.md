@@ -129,7 +129,7 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 > (flow-next-make-pr/workflow.md:1685-1690) instead of leaving it at In Progress.
 
 **Terminal (`done`/`verified`) is impossible without a `MERGED` probe result.** The
-old map (pre-fn-66) mapped `spec done + completion ship → verified` and `spec done,
+old map mapped `spec done + completion ship → verified` and `spec done,
 no review → done` with NO merge check, so a locally-completed spec auto-closed its
 tracker issue before the PR merged. The merge-evidence gate fixes that at the root,
 upstream of the who-wins ladder (which is unchanged). A `closed-unmerged` /
@@ -139,7 +139,7 @@ non-terminal rung) and surfaces NEEDS_HUMAN for the closed-unmerged case (R6).
 `deferred` / `wontfix` have no native flow status — they only ever arrive **from**
 the tracker side and are **surfaced, never auto-applied** (see the who-wins table).
 `blocked` tasks do not change the spec-level normalized status (the issue stays
-`in-progress`); a blocked note can ride along as a comment (fn-52.5
+`in-progress`); a blocked note can ride along as a comment (see
 [comments-sync.md](comments-sync.md)), not a status change.
 
 ## The who-wins table — per field, NOT one global rule (R7)
@@ -286,7 +286,7 @@ Resolution falls back to the **R1 `conflictTiebreak` default**
 
 "Ask the human" resolves to "**queue** for the human" in autonomous mode (the
 deferred-decisions sink) — same policy, surface-dependent delivery, mirroring
-fn-51's surface-aware ladder and the body-merge `always-ask × Ralph` rule.
+flow-next-drive's surface-aware ladder and the body-merge `always-ask × Ralph` rule.
 
 ```bash
 # Ralph deadlock under always-ask — queue, write no status, advance no state:
@@ -364,7 +364,7 @@ $FLOWCTL sync defer "$SPEC_ID" \
   --reason "unmapped-state"
 ```
 
-## Readiness projection — `tracker.readyState` → local `ready` flag (fn-58, R3)
+## Readiness projection — `tracker.readyState` → local `ready` flag
 
 **One-way, pull-side only.** When `tracker.readyState` is configured (the ceremony
 question, steps.md Phase 1 step 5), every operation that reads the issue (`pull` /
@@ -406,7 +406,7 @@ warn `noop` receipt + flag untouched + **skip the toggle entirely**. Only a
 confirmed-resolving config may clear the flag. (`desired = true` resolves by
 construction — no extra call, straight to the toggle.)
 
-**Apply via the idempotent fn-58.1 toggles** — they no-op (no write, no
+**Apply via the idempotent toggles** — they no-op (no write, no
 `updated_at` bump) when the flag already matches, and report whether anything
 changed:
 
@@ -667,7 +667,7 @@ terminal.
 
 **Oracle:** exactly one `setStatus(in-review)`; the issue is **In Review** (NOT left
 at In Progress). PASS iff an all-tasks-done OPEN spec with an open PR projects to In
-Review — the pre-fn-66 row order returned `in-progress` here and the make-pr push
+Review — the old row order returned `in-progress` here and the make-pr push
 never advanced the issue. Regression guard for Thread A.
 
 ### Fixture S-L — merged ungated / `unknown`-completion spec → terminal Done (row-order, Thread B)
@@ -685,7 +685,7 @@ repo). `setStatus(trackerId, done)` → Linear `completed`-type Done / GitHub
 trap the spec in `in-review`.
 
 **Oracle:** exactly one terminal `setStatus(done)` (issue closed/Done). PASS iff a
-merged ungated/`unknown`-completion spec reaches terminal Done — the pre-fn-66 row
+merged ungated/`unknown`-completion spec reaches terminal Done — the old row
 order let row 3 (not-satisfied → in-review) catch `unknown` first, so `land.merged` never
 wrote Done for ungated projects. Regression guard for Thread B.
 
@@ -710,9 +710,9 @@ policy-excused spec reaches terminal Done without borrowing the verified claim.
 ## Boundaries
 
 - **This is the status/metadata layer, not the body merge or the transport.** The
-  3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); the transport
+  3-way body merge is [body-merge.md](body-merge.md); the transport
   (`setStatus`/`readStatus` wire detail) is [linear-ladder.md](linear-ladder.md)
-  (fn-52.3) / the GitHub adapter (fn-52.7). This file consumes the normalized
+  / the GitHub adapter. This file consumes the normalized
   `status` struct and applies the per-field policy.
 - **Per-field who-wins — never one global rule.** Terminal → tracker; in-progress →
   flow; priority + `deferred`/`wontfix` + unmapped → surface, never auto-change.
@@ -724,5 +724,5 @@ policy-excused spec reaches terminal Done without borrowing the verified claim.
   terminal `status:*` label cannot override the provider's open state. An
   ambiguous multi-label namespace still fails closed.
 - **Readiness projection is one-way pull** (`tracker.readyState` → local `ready`
-  flag, fn-58): change-only receipts, stale config warns + leaves the flag
+  flag): change-only receipts, stale config warns + leaves the flag
   untouched, and readiness is never written back to the tracker.

@@ -13,7 +13,7 @@ This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extrac
 
 flowctl provides thin spec plumbing (`spec create`, `spec set-plan`, optional `spec set-branch`, `memory search` for duplicate detection) plus the chart handoff callback (`chart link-spec`) after a successful chart-briefing capture. Capture never writes chart files and never mutates a chart's `ready` flag; chart never writes `.flow/specs`.
 
-### Routing boundary (fn-135 / route matrix)
+### Routing boundary (route matrix)
 
 Clear meaningful ideas and finished chart briefings route **here** - to capture (or direct spec authoring). Capture does **not** manufacture a chart for clear work. When intent and boundaries are already stateable, skip chart (`signal absent`). After a structured brief lands, narrow or skip interview only once read-back proves no material gaps - never pre-skip interview on hope. Unsure: `/flow-next:flow --explain`.
 
@@ -73,7 +73,7 @@ if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
   RAW_ARGS="${RAW_ARGS//--override-strategy/}"
 fi
 
-# --no-plan (fn-214, R5: explicit opt-in to set the spec-level no_plan field
+# --no-plan (explicit opt-in to set the spec-level no_plan field
 # in §5.9b after the spec write; on a user invocation the field is never set
 # without it) and from:flow (the run was dispatched by
 # /flow-next:flow, so §5.9b sets the field when the plan-versus-no-plan rule

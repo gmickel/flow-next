@@ -30,7 +30,7 @@ Use the flowctl helper as the single source of truth:
 GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null || echo '{"groups":[],"file_count":0,"total_terms":0}')"
 ```
 
-JSON shape (fn-38 task 2):
+JSON shape:
 
 ```json
 {
@@ -92,7 +92,7 @@ For each `(group, entry)` where `count > 0`:
 
 ### 0.5.3 — Stale-marking via Edit tool
 
-There is no `flowctl glossary mark-stale` subcommand. fn-38 task 2 shipped only `add / list / read / remove`; stale-marking is an Edit-tool operation on the glossary file directly.
+There is no `flowctl glossary mark-stale` subcommand. flowctl ships only `add / list / read / remove`; stale-marking is an Edit-tool operation on the glossary file directly.
 
 The Edit appends an HTML comment immediately after the term heading line (preserves the body untouched, never deletes the entry). The comment lives between the heading and the definition paragraph so a casual reader sees it and `flowctl glossary list` still parses cleanly:
 
@@ -117,11 +117,11 @@ Stale comment added; consider `flowctl glossary remove <term>` if the concept is
 
 ### 0.5.4 — Husk awareness
 
-A glossary file with `count: 0` (the file is `# Glossary` H1 followed by no term entries — left intact after the last term was removed; see fn-38 task 2 R18) skips the per-term walk. Surface a single Phase 5 advisory per husk:
+A glossary file with `count: 0` (the file is `# Glossary` H1 followed by no term entries — left intact after the last term was removed) skips the per-term walk. Surface a single Phase 5 advisory per husk:
 
 ```
 GLOSSARY.md at <relative path> is an empty husk (no terms defined).
-flow-next keeps it as project state per fn-38 R18 — remove it manually if no
+flow-next keeps it as project state — remove it manually if no
 longer needed.
 ```
 

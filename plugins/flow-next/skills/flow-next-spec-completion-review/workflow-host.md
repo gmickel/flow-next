@@ -2,7 +2,7 @@
 
 Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and `SPEC_ID`.
 
-**fn-123 R5:** `host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
+`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
 
 ## Critical rules
 
@@ -14,7 +14,7 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; the CLI backends exist for exactly that, and the user chose `host` to avoid them. Dispatch through the harness's own subagent primitive with the model named in the dispatch; an unhonored model request degrades to the session model, and then rule 5 decides — never a CLI fallback
 
 
-**fn-169 — host is the documented always-inject exception.** The `codex` backend
+**Host is the documented always-inject exception.** The `codex` backend
 resumes the reviewer's own session on a re-review and therefore sends the
 shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
 keep injecting unconditionally until their resume semantics are measured the way

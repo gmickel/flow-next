@@ -46,7 +46,7 @@ flowctl + the transport:
 
 Why both base forms: 3-way merge needs the ancestor in a form **comparable to each
 side**. `mergeBaseFlow` is diffed against the live flow body; `mergeBaseTracker` is
-diffed against the pulled issue body. fn-52.1 stores both (and their hashes) and
+diffed against the pulled issue body. flowctl stores both (and their hashes) and
 enforces the **paired-snapshot invariant** — `sync set-merge-base` requires BOTH
 `--flow*` AND `--tracker*` together; never write one half alone (memory:
 `paired-snapshot-setter-must-write-both`).
@@ -57,7 +57,7 @@ STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)
 # .tracker.mergeBaseFlow / .mergeBaseTracker / .baseHashFlow / .baseHashTracker
 ```
 
-## Step 0.5 — Flow-owned fenced regions: the *tracker-body-for-merge* transform (fn-64, R10)
+## Step 0.5 — Flow-owned fenced regions: the *tracker-body-for-merge* transform
 
 Some regions of the tracker body are **flow's, not the spec's** — flow writes them, flow owns them, and they must NEVER round-trip back into the spec or be re-litigated as tracker divergence. That is the dependency block flow writes:
 
@@ -106,7 +106,7 @@ Per side, compare against the base **in that side's form**:
 | **Only tracker changed** | flow == `mergeBaseFlow`, tracker != `mergeBaseTracker` (and not an echo) | fast-forward **tracker → flow**: fold tracker free-text into flow sections, write spec, snapshot. No conflict possible. |
 | **Both changed** | flow != `mergeBaseFlow` AND tracker != `mergeBaseTracker` (not an echo) | → **Step 2** (the agent's real job). |
 
-The echo check uses the stored `baseHashTracker` content hash (fn-52.1's
+The echo check uses the stored `baseHashTracker` content hash (flowctl's
 `_content_hash`) — computed over the **`trackerBodyForMerge`-stripped** body (Step
 0.5), so flow's own `<!-- flow:deps -->` block never registers as a tracker-side
 change: a post-push pull whose stripped body hash matches what flow pushed is
@@ -240,7 +240,7 @@ Confident merges (Steps 1–3 with no Step 4 contradiction) proceed unattended. 
 genuine contradiction — **including the `always-ask` tiebreak default** — does NOT
 prompt and does NOT block: it **queues** to the deferred sink. "Ask the human"
 resolves to "queue for the human" in autonomous mode (same policy, surface-dependent
-delivery — mirrors fn-51's surface-aware ladder).
+delivery — mirrors flow-next-drive's surface-aware ladder).
 
 ```bash
 # Ralph (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set): queue the scoped conflict, write
@@ -301,7 +301,7 @@ catches per-item; this file's contract is "never advance state on a non-success"
 
 ### Merge-log record shape (`--merges-file`)
 
-`sync receipt --merges-file` takes a JSON **list** of merge records (fn-52.1 stores
+`sync receipt --merges-file` takes a JSON **list** of merge records (flowctl stores
 them verbatim on the receipt for audit/rollback). Each record documents one
 reconcile for traceability — minimum useful shape:
 
@@ -478,7 +478,7 @@ $FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:
 
 PASS iff the matching-hash pull is a `noop` and state is unchanged.
 
-### Fixture E — flow-owned `<!-- flow:deps -->` block excluded from divergence (fn-64, R10)
+### Fixture E — flow-owned `<!-- flow:deps -->` block excluded from divergence
 
 The GitHub adapter's fenced dependency block is flow's own write. A pull that
 returns it MUST NOT register as a tracker-side edit, and a reconcile MUST NOT fold
@@ -524,8 +524,8 @@ the dep block causes neither a phantom divergence nor a spec edit.
 ## Boundaries
 
 - **This is the merge, not the transport or the status/comment layer.** Transports
-  (`fetchIssue`/`writeIssue`) live in [linear-ladder.md](linear-ladder.md) (fn-52.3)
-  / the GitHub adapter (fn-52.7); status who-wins + comment append are fn-52.5. This
+  (`fetchIssue`/`writeIssue`) live in [linear-ladder.md](linear-ladder.md)
+  / the GitHub adapter; status who-wins + comment append are [status-sync.md](status-sync.md) / [comments-sync.md](comments-sync.md). This
   file consumes the normalized `issue.body` and produces a merged body.
 - **No deterministic fallback merge engine.** The pre-reduction and the structural
   gate are the only mechanical steps — equality and invariants, not a text merge.

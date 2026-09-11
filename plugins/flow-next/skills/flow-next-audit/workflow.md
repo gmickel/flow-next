@@ -45,7 +45,7 @@ If the entry's `status` is `stale` already, surface it in the report under "Alre
 
 If the entry's `status` is `hardened`, capture its `hardened_into` value into the entry record. Hardened entries are **not** dropped from the walk: they get the cheap gate-liveness check in §0.75, never a full re-investigation. Note that `flowctl memory list` excludes hardened entries by default (same treatment as stale) — the audit's own Glob walk in §0.1 sees them regardless, which is why the walk, not `memory list`, is the source of truth here.
 
-**Decisions are auto-walked.** `MEMORY_CATEGORIES["knowledge"]` includes `decisions` (fn-38 schema extension), so the glob in §0.1 picks up `.flow/memory/knowledge/decisions/*.md` automatically — no separate phase. Decision entries get a calibrated judging question and a different `Replace` shape; see [phases.md](phases.md) §Decision-entry calibration. Decision-specific frontmatter (`decision_status`, `superseded_by`, `alternatives_considered`) is captured into the entry record for Phase 1 to use; entries with `decision_status: superseded` are surfaced as historical record and skipped (the audit target is the successor, not the superseded entry).
+**Decisions are auto-walked.** `MEMORY_CATEGORIES["knowledge"]` includes `decisions`, so the glob in §0.1 picks up `.flow/memory/knowledge/decisions/*.md` automatically — no separate phase. Decision entries get a calibrated judging question and a different `Replace` shape; see [phases.md](phases.md) §Decision-entry calibration. Decision-specific frontmatter (`decision_status`, `superseded_by`, `alternatives_considered`) is captured into the entry record for Phase 1 to use; entries with `decision_status: superseded` are surfaced as historical record and skipped (the audit target is the successor, not the superseded entry).
 
 ### 0.2 — Detect legacy flat files
 
@@ -112,7 +112,7 @@ When `TOTAL >= 9`, read [references/scope-narrowing.md](references/scope-narrowi
 
 **Goal:** for every glossary file on the ancestor chain, verify each term has at least one usage in tracked code (term itself or any `_Avoid_` alias). Mark stale on absence; surface alias-creep as a Phase 3 signal.
 
-This phase runs in parallel concept to the memory walk — same audit invocation, separate scope. Glossary files are project state (not flow-next bookkeeping; see fn-38 R18). Skip the phase entirely when `flowctl glossary list --json` reports zero files.
+This phase runs in parallel concept to the memory walk — same audit invocation, separate scope. Glossary files are project state (not flow-next bookkeeping). Skip the phase entirely when `flowctl glossary list --json` reports zero files.
 
 ```bash
 ACTIVE=0
@@ -799,7 +799,7 @@ If step 6.4 produced an instruction-file edit AND Phase 5 already committed audi
 
 The skill itself is markdown — there's no unit-test surface. The validation is invoking `/flow-next:audit` in a real session. Expected behavior:
 
-- Phase 0 walks `.flow/memory/`, lists per-cluster counts, reports legacy skip count if `pitfalls.md` etc. exist. Decision entries (`knowledge/decisions/`) are picked up automatically once the schema extension lands (fn-38 task 1).
+- Phase 0 walks `.flow/memory/`, lists per-cluster counts, reports legacy skip count if `pitfalls.md` etc. exist. Decision entries (`knowledge/decisions/`) are picked up automatically by the categorized schema.
 - Phase 0.5 walks every `GLOSSARY.md` on the ancestor chain via `flowctl glossary list --json`, greps tracked code per-term + per-`_Avoid_` alias, marks zero-hit terms stale via Edit tool with `<!-- stale: ... -->`, surfaces alias-creep, advises on husks.
 - Phase 0.75 pre-scans recurrence artifacts BEFORE auto-Keep, so a recurrence-qualified entry with an unchanged module still reaches Phase 1; hardened entries get the gate-liveness check only.
 - Phase 1 produces evidence per entry. For 3+ entries, parallel investigation subagents run.

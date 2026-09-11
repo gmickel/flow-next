@@ -15,13 +15,13 @@ Loop internally until SHIP or the iteration cap:
      run each selected pass via
      `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
    - Passes merge into receipt via fingerprint dedup + cross-pass promotion
-     (autonomy markers only; interactive returns host_judges JSON, receipt untouched - fn-113).
+     (autonomy markers only; interactive returns host_judges JSON, receipt untouched).
    - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
      it never downgrades `NEEDS_WORK → SHIP`.
 1. **Validator pass (only if `VALIDATE=true`)** — see [../optional-phases.md](../optional-phases.md) § Validator Pass.
    - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
    - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop;
-     autonomy markers only - interactive returns host_judges JSON and you judge survivors, fn-113)
+     autonomy markers only - interactive returns host_judges JSON and you judge survivors)
    - Else → only surviving (kept) findings enter the fix loop in step 2
 2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [../walkthrough.md](../walkthrough.md).
    - For each surviving finding, ask user via platform blocking question tool: Apply / Defer / Skip / Acknowledge / LFG-rest.

@@ -38,7 +38,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-**No env-var opt-in.** Ralph cannot decide what a repo should build next — that's a human judgement call. Pattern matches fn-32 `--interactive`. The block runs before `mkdir`, before any user prompt, before any scan; the artifact directory is not created and no question is surfaced.
+**No env-var opt-in.** Ralph cannot decide what a repo should build next — that's a human judgement call. Pattern matches impl-review `--interactive`. The block runs before `mkdir`, before any user prompt, before any scan; the artifact directory is not created and no question is surfaced.
 
 ---
 
@@ -186,7 +186,7 @@ fi
 
 Title + tags only. Never paste memory bodies — that's exactly the kind of grounding bloat to avoid. The response-shape check (`.success`) handles the "enabled but not yet initialised" case where `memory search --json` returns an error JSON and a non-zero exit; treating both signals as authoritative keeps the snapshot clean.
 
-#### Memory audit stale entries (optional, present iff fn-34 has run)
+#### Memory audit stale entries (optional, present iff `/flow-next:audit` has run)
 
 ```bash
 AUDIT_DIR="$REPO_ROOT/.flow/memory/_audit"
@@ -764,7 +764,7 @@ Each survivor block:
 **Next step:** /flow-next:refine
 ```
 
-`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It always points at `/flow-next:refine` because the user's first move on a survivor is almost always to refine it before promoting. Chart routing is a handoff-time judgment (Phase 6 + the fn-135 boundary in SKILL.md), never a per-candidate artifact field.
+`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It always points at `/flow-next:refine` because the user's first move on a survivor is almost always to refine it before promoting. Chart routing is a handoff-time judgment (Phase 6 + the chart boundary in SKILL.md), never a per-candidate artifact field.
 
 Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 

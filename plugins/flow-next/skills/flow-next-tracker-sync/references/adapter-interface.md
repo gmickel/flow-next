@@ -71,7 +71,7 @@ normalization, and deduplication.
 | `comment-delete` | locator, comment id | deletion result | none |
 | `label` | locator, add/remove names | normalized labels | none |
 | `assign` | locator, add/remove ids | normalized assignees | none |
-| `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board; fn-182 #311) |
+| `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board) |
 | `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` (Jira: scoped to the resolved `issueTypeId`, matching `statusIds`) | none (read-only; linear/jira; never local state) |
 | `attach` | locator, file | attachment metadata | none |
 | `attach-get` | attachment id, output path | retrieved metadata | output file only |
@@ -99,7 +99,7 @@ write one receipt:
 - Chart projection reuses the same facade with subject kind `chart` /
   `decision` (see Chart subjects below).
 
-## Chart subjects (fn-135)
+## Chart subjects
 
 Optional when `tracker.charts` is the literal `on` and the bridge is active.
 `.flow/charts/` remains canonical; remote state is an idempotent projection.

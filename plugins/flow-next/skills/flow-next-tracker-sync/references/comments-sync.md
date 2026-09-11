@@ -48,7 +48,7 @@ Comment wording follows the artifact prose contract in [docs/prose.md](../../../
 
 ### Which lifecycle events post a comment (R8 / R10)
 
-The R10 lifecycle touchpoints (wired into the 7 skills in fn-52.6) that produce a
+The R10 lifecycle touchpoints (wired into the 7 lifecycle skills) that produce a
 **comment** here:
 
 | Event (`tracker.perEvent` key) | Comment posted to the issue |
@@ -64,8 +64,8 @@ The R10 lifecycle touchpoints (wired into the 7 skills in fn-52.6) that produce 
 `interview` / `plan` primarily sync the **body** ([body-merge.md](body-merge.md));
 they post a comment only when explicitly opted into `comment`.
 
-The actual wiring (calling this reconcile from each skill's lifecycle hook) is
-**fn-52.6**; this file defines the comment shape + dedup the wiring relies on.
+The actual wiring (calling this reconcile from each skill's lifecycle hook) lives
+in the lifecycle skills; this file defines the comment shape + dedup the wiring relies on.
 
 ## Dedup — the whole problem (R8)
 
@@ -104,7 +104,7 @@ parse may still have LANDED (body-escaping bugs corrupt the response read, not t
 write). Before retrying a `postComment`, re-run the Layer-1 marker check
 (`listComments`) and skip the retry if the marker is already present. Never retry
 blind: the dedup layers protect across runs, but a blind within-run retry is the
-one path that can still double-post (fn-89.4 live-proof finding — one runner,
+one path that can still double-post (live-proof finding — one runner,
 three identical posts from two parse-failed retries).
 
 > **Marker reconciliation.** The adapter ([linear-ladder.md](linear-ladder.md),
@@ -134,7 +134,7 @@ marker is present) is **flow's own echo** → do **not** import it into the sync
 comment with the **same `issue` + `evt` + `evidence`** marker already exists → if so,
 **skip the post** (already synced). This is the exact-match fence.
 
-> **Linkify hazard (verified against live Linear, fn-52 smoke).** Linear (and
+> **Linkify hazard (verified against live Linear).** Linear (and
 > GitHub) **auto-linkify any issue-key substring** (`WOR-17`, case-insensitive)
 > that appears in body / comment markdown — **even inside an HTML comment** —
 > rewriting it to mention markup like
@@ -258,7 +258,7 @@ The `evidence=a1b2c3d` in the marker is the per-evidence dedup key: re-running
 `work.done` for the same commit finds the existing marker (Layer 1) and **skips** —
 no duplicate evidence comment.
 
-## The async question-valve markers (fn-68 R15)
+## The async question-valve markers
 
 Backlog mode's `ask` stage posts a **question-valve comment** through this same
 `postComment` channel, behind a **distinct marker family** that rides the Layer-1
@@ -409,7 +409,7 @@ append comment is created by the rolling refresh.
 place is confined to the single rolling marker and the append fence holds for
 everything else.
 
-### Fixture C-F — question-valve is idempotent by `id` (fn-68 R15)
+### Fixture C-F — question-valve is idempotent by `id`
 
 **Setup:** the `ask` stage posted a `flow-next:question id=H1 status=open` comment for
 a blocked subject. A later tick re-triages the same subject (same `subjectId` +
@@ -428,7 +428,7 @@ round with the same id. A subsequent retry sees that newer question and skips.
 **Oracle:** exactly one `flow-next:question id=H1` comment; the re-triage is a
 `noop`. PASS iff rephrasing never spawns a second anchor.
 
-### Fixture C-G — answer round-trips by `id` on a FLAT tracker (fn-68 R15)
+### Fixture C-G — answer round-trips by `id` on a FLAT tracker
 
 **Setup:** a `flow-next:question id=H2 status=open` comment exists on a **GitHub**
 issue (flat — no threading). A human posts a reply comment carrying
@@ -450,15 +450,15 @@ threaded one.
 ## Boundaries
 
 - **This is the comments/evidence layer, not the body merge, status, or transport.**
-  The 3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); status who-wins
+  The 3-way body merge is [body-merge.md](body-merge.md); status who-wins
   is [status-sync.md](status-sync.md); the `postComment`/`listComments` wire detail
-  is [linear-ladder.md](linear-ladder.md) (fn-52.3) / the GitHub adapter (fn-52.7).
+  is [linear-ladder.md](linear-ladder.md) / the GitHub adapter.
 - **Append-only is the default and the contract** — the rolling status comment is the
   SOLE edit-in-place exception, opt-in and droppable; it never weakens append-only
   for evidence / lifecycle / user comments.
 - **Dedup is three independent layers** — marker (exact), stored id (durable),
   normalized-text hash (catches the human paste). Any hit ⇒ skip.
-- **The question-valve markers (fn-68 R15)** — `flow-next:question id=<hash>` /
+- **The question-valve markers** — `flow-next:question id=<hash>` /
   `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
   (free prose outside the hash, never a bare tracker key). The authoring + answer
   round-trip live in [steps.md](../steps.md) Phase 7; this file owns their dedup +
@@ -467,7 +467,7 @@ threaded one.
   authoring act (interview/plan), not a sync act. The bridge projects.
 - **State advances only on a real reconcile** — a run that dedups to a no-op does not
   advance `lastSyncedAt`.
-- **Lifecycle wiring is fn-52.6** — this file defines the comment shape + dedup; the
+- **Lifecycle wiring lives in the lifecycle skills** — this file defines the comment shape + dedup; the
   per-skill hooks that call it land there.
-- **Codex mirror** (sync-codex.sh) is regenerated in fn-52.9 — keep this file
+- **Codex mirror** (sync-codex.sh) is regenerated by `scripts/sync-codex.sh` — keep this file
   Claude-native; no Codex-specific edits here.

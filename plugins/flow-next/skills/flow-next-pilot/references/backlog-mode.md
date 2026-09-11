@@ -1,11 +1,11 @@
-# Backlog mode — the agentic floor scheduler (fn-68)
+# Backlog mode — the agentic floor scheduler
 
 > **Loaded only when backlog mode is active.** `SKILL.md` / `workflow.md` read this
 > file ONLY after `pilot.autonomy` resolves to `backlog` (config `pilot.autonomy`
 > > per-run `--backlog` / `--auto`; default `ready` ⇒ this file is never read and
 > pilot's behavior is byte-identical to today — R1). The wiring that resolves the
 > mode, threads the verdict grammar, and enforces the never-merge / never-author
-> invariants lives in `SKILL.md` + `workflow.md` (fn-68.4); **this file is the
+> invariants lives in `SKILL.md` + `workflow.md`; **this file is the
 > workflow those hooks execute** — the wide dep-ordered selection, the agentic
 > triage read, and the spec-first floor.
 
@@ -24,7 +24,7 @@ exists to avoid.
 enumerates the full open set, dep-orders it, triages the top item, and resolves to
 exactly one state-changing terminal. It is **NOT** a daemon, a polling loop, a
 trigger handler, a webhook, a cron, or a parallel-worktree fan-out — that standing
-control-plane role is mergefoundry / flow-swarm's (fn-94/99), not flow-next's. The
+control-plane role is mergefoundry / flow-swarm's, not flow-next's. The
 host `/loop` (Claude Code) or `/goal` (Claude Code / Codex) owns repetition; one
 invocation advances one item by one stage (with `pipeline.chainStages` on, `make-pr` after a
 fresh `qa` verdict is the only admissible second dispatch in that invocation). The autonomous span runs only from a
@@ -71,7 +71,7 @@ Stage values add `triage` / `ask` to the common set.
 ## How this extends pilot's ready-only tick
 
 Ready-only pilot (`workflow.md` Phase 1 SELECT) two-pass-filters on `status==open`
-+ the fn-58 `ready` flag + `depends_on_epics` satisfaction, and emits `NO_WORK`
++ the `ready` flag + `depends_on_epics` satisfaction, and emits `NO_WORK`
 when none qualify. Backlog mode reuses that wholesale and adds exactly three things,
 nothing more:
 
@@ -111,8 +111,7 @@ any other:
   — the reconcile returns a `noop` receipt and selection proceeds on the flow facts
   alone (R17 spec-first floor). Never a block, never a ceremony mid-loop.
 - **Autonomous-safe (R14).** The reconcile runs under the autonomy gate
-  (tracker-sync Phase 0 recognizes `FLOW_AUTONOMOUS` / `mode:autonomous` after
-  fn-68.2): no path reaches `AskUserQuestion`; a genuine conflict / id collision /
+  (tracker-sync Phase 0 recognizes `FLOW_AUTONOMOUS` / `mode:autonomous`): no path reaches `AskUserQuestion`; a genuine conflict / id collision /
   readyState-label failure resolves to `sync defer` (queued for the human), never a
   prompt that would stall the loop.
 
@@ -125,9 +124,9 @@ READY_ALL_JSON="$($FLOWCTL ready --all --json)"
 `ready --all` returns the flow-side open specs with **deterministic eligibility
 facts only** — `{id, ready, noPlan, readySignal, blockedBy, hasSpec}` (R8):
 
-- `ready` — the local fn-58 `ready` boolean (after 1a's projection, a
+- `ready` — the local `ready` boolean (after 1a's projection, a
   tracker-promoted spec reads `true`).
-- `noPlan` — the fn-214 spec-level `no_plan` boolean (absent-on-disk reads
+- `noPlan` — the spec-level `no_plan` boolean (absent-on-disk reads
   `false`); Phase 1.6 CLASSIFY consumes it for the zero-task work row. Human-set
   only, never tracker-projected.
 - `readySignal ∈ {local, none}` — whether the local flag is set. flowctl stores no
@@ -310,7 +309,7 @@ regex grader, no second model. Classify by the **explicit readiness signal FIRST
 then by your reading of whether the spec is actually workable.
 
 **Unready items are skipped silently.** An item with **no** explicit readiness signal
-(neither the fn-58 flow `ready` flag set, nor the tracker status at the exact
+(neither the flow `ready` flag set, nor the tracker status at the exact
 `tracker.readyState`) is **never worked, never asked, never nagged**. The human
 promotes it by setting ready / dragging the ticket out of Backlog — promoting *is*
 the consent act. Backlog mode does not gatekeep raw ideas and does not nag every
@@ -350,7 +349,7 @@ A **live** triage always resolves to a **state-changing** terminal — `ADVANCED
 ends on a no-op `TRIAGED` line in a live tick, so an item can never re-select
 forever. (`TRIAGED <id> <class>` is diagnostic / dry-run only — emitted under a
 triage-only inspection, never as a live terminal. The verdict grammar itself is
-owned by fn-68.4.)
+owned by `SKILL.md` + `workflow.md`.)
 
 The `dep-unsatisfied` → `BLOCKED` terminal is a **dep-wait surface, NOT a strike**:
 it records no strike, never unreadies the spec, and emits its own `blocked`
@@ -425,7 +424,7 @@ trackers configured — the mirror auto-lights per detected transport.
 
 The terminal for a parked item is `ASKED <id> (<n>)` — a **durable** park that set
 the `status=open` anchor so Phase 1d skips it next tick (the verdict grammar +
-durable-park semantics are owned by fn-68.4).
+durable-park semantics are owned by `SKILL.md` + `workflow.md`).
 
 ---
 
@@ -445,7 +444,7 @@ it to `ask` (Phase 3) instead of advancing — even when it is otherwise workabl
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
-# Derived from the SKILL.md root snapshot (fn-110) — NOT a config get call. The
+# Derived from the SKILL.md root snapshot — NOT a config get call. The
 # path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
 # Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI —
 # `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
@@ -482,7 +481,7 @@ The executable mapping is fixed:
   stable identity flags and one secure body file.
 
 - **Ships on Linear, GitHub, GitLab + Jira** — the four adapters that implement
-  `listOpenIssues` / `listIssueRelations` / the comment ops (fn-68.2 / fn-64 / fn-69 / fn-70).
+  `listOpenIssues` / `listIssueRelations` / the comment ops.
   On **GitLab** the adapter derives the project-local `iid` its issue API paths require
   from the issue's normalized **`identifier`** (`<project>#<iid>`) — never the global
   id (gitlab.md § identity / fetchIssue). On **Jira** the `{issueIdOrKey}` path accepts
@@ -498,7 +497,7 @@ The executable mapping is fixed:
 - **Zero-setup (R17).** Tracker-sync's one-time discovery ceremony resolves and
   persists the destination, available capabilities, and existing auth
   (`gh`/`glab` CLI session, a registered Linear MCP, or a CI/REST env token — Jira
-  is REST-token only, **no MCP**: fn-70's transport decision). Runtime operations
+  is REST-token only, **no MCP**). Runtime operations
   consume that resolved state through `flowctl tracker`. No flow-next-specific
   provisioning, OAuth app, webhook, or special config is required. The spec-first floor
   guarantees the loop works with **zero** trackers configured.
@@ -510,7 +509,7 @@ The executable mapping is fixed:
 - **No daemon / polling loop / trigger / webhook / cron / parallel-worktree.** One
   smarter tick — the host `/loop` · `/goal` owns repetition. The standing
   control-plane role (scheduler, cloud environments, triggers, multi-agent at
-  scale) is mergefoundry / flow-swarm's (fn-94/99), not flow-next's. If this file
+  scale) is mergefoundry / flow-swarm's, not flow-next's. If this file
   ever starts describing a standing process, that is drift — remove it.
 - **Never authors a spec.** `capture`/`interview` are human-gated; a needs-spec gap
   is surfaced, never auto-written (may augment an obvious blank in an *existing*

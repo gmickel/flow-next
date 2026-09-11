@@ -44,7 +44,7 @@ fi
 
 ## Mark-ready offer
 
-Applies ONLY when the input was a flow spec (Detect Input Type patterns 1/3) — task ids and file paths carry no spec readiness. Same consent shape and visibility predicate as capture's read-back follow-up (fn-58). Runs after the write-back and the tracker-sync block.
+Applies ONLY when the input was a flow spec (Detect Input Type patterns 1/3) — task ids and file paths carry no spec readiness. Same consent shape and visibility predicate as capture's read-back follow-up. Runs after the write-back and the tracker-sync block.
 
 The gate probe in SKILL.md already computed `READY_STATE` and `READY_ADOPTED`. Both must hold (probe failures degrade to "don't offer" for the predicate itself; the gate fails open to reading this file, so re-check here before asking):
 

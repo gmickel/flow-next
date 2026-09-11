@@ -1,13 +1,13 @@
 ---
 name: flow-next-memory-migrate
-description: Migrate pre-fn-30 legacy flat memory files (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`) into the categorized YAML schema. Triggers on /flow-next:memory-migrate, "migrate memory", "convert legacy memory", "lift pitfalls into categorized schema", "convert old memory format". Optional `mode:autofix` token in arguments runs without questions and accepts mechanical defaults for ambiguous classifications. Optional scope hint after the mode token narrows the migration to a specific legacy file (e.g. `pitfalls.md`).
+description: Migrate legacy flat memory files (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`) into the categorized YAML schema. Triggers on /flow-next:memory-migrate, "migrate memory", "convert legacy memory", "lift pitfalls into categorized schema", "convert old memory format". Optional `mode:autofix` token in arguments runs without questions and accepts mechanical defaults for ambiguous classifications. Optional scope hint after the mode token narrows the migration to a specific legacy file (e.g. `pitfalls.md`).
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 
 # /flow-next:memory-migrate — agent-native legacy migration
 
-Pre-fn-30 flow-next stored memory as three flat markdown files: `.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`. Each was a sequence of `---`-delimited segments with ad-hoc headings and no schema. fn-30 introduced the categorized schema (track / category / module / tags / status frontmatter, one entry per file). Existing flat files persisted but became invisible to `memory list`, `memory search`, and `flow-next-audit` because there's no frontmatter to scope or stale-flag.
+Older flow-next versions stored memory as three flat markdown files: `.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`. Each was a sequence of `---`-delimited segments with ad-hoc headings and no schema. The categorized schema (track / category / module / tags / status frontmatter, one entry per file). Existing flat files persisted but became invisible to `memory list`, `memory search`, and `flow-next-audit` because there's no frontmatter to scope or stale-flag.
 
 This skill IS the migration. The host agent (Claude Code / Codex / Droid) reads each legacy entry, applies the mechanical default `(track, category)` from the source filename, overrides only when the entry's content warrants, and writes a categorized entry via `flowctl memory add`. Optional autofix mode accepts every mechanical default and marks ambiguous entries as `needs-review` in the report.
 

@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 
 # /flow-next:memory-migrate — agent-native legacy migration
 
-Pre-fn-30 flow-next stored memory as three flat markdown files: `.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`. Each was a sequence of `---`-delimited segments with ad-hoc headings and no schema. fn-30 introduced the categorized schema (track / category / module / tags / status frontmatter, one entry per file). Existing flat files persisted but became invisible to `memory list`, `memory search`, and `flow-next-audit` because there's no frontmatter to scope or stale-flag.
+Older flow-next versions stored memory as three flat markdown files: `.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md`. Each was a sequence of `---`-delimited segments with ad-hoc headings and no schema. The categorized schema (track / category / module / tags / status frontmatter, one entry per file). Existing flat files persisted but became invisible to `memory list`, `memory search`, and `flow-next-audit` because there's no frontmatter to scope or stale-flag.
 
 This skill IS the migration. The host agent (Claude Code / Codex / Droid) reads each legacy entry, applies the mechanical default `(track, category)` from the source filename, overrides only when the entry's content warrants, and writes a categorized entry via `flowctl memory add`. Optional autofix mode accepts every mechanical default and marks ambiguous entries as `needs-review` in the report.
 

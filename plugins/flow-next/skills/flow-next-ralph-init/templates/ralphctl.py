@@ -5,7 +5,7 @@ Commands: pause, resume, stop, status. Operates on scripts/ralph/runs/
 sentinels (PAUSE / STOP) and progress.txt.
 
 Installed under scripts/ralph/ by /flow-next:ralph-init. Not part of
-flowctl core (fn-114 extraction). flowctl status soft-probes the runs
+flowctl core. flowctl status soft-probes the runs
 directory for display only; control lives here.
 
 Usage:

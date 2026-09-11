@@ -20,7 +20,7 @@ TODAY="$(date -u +%Y-%m-%d)"
 
 If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\` first.` and exit cleanly. Capture has nothing to write into.
 
-**ONE root config snapshot for the whole capture run (fn-110)** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
+**ONE root config snapshot for the whole capture run** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
 
 ```bash
 CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json"   # literal path
@@ -140,7 +140,7 @@ If no compaction signal is detected, or signals exist but the relevant evidence 
 - **0-1 strong matches** and no prior-capture artifact id in the conversation → no branch; continue to 0.5b.
 - **≥2 strong matches AND `REWRITE_TARGET` empty** → GATE ACTIVE — STOP. Read [references/duplicate-branch.md](references/duplicate-branch.md) and run its §0.5 branch (interactive: `extend` / `supersede` / `proceed-anyway` / `abort`; autofix: exit 2) before continuing. It also owns the §0.6 prior-capture-artifact branch below. When unsure whether the matches are strong, treat the gate as ACTIVE.
 
-### 0.5b — Chart briefing gate (fn-135)
+### 0.5b — Chart briefing gate
 
 When the conversation or `$ARGUMENTS` references a chart briefing input — a path matching `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id whose sidecar lists briefings — GATE ACTIVE: STOP and Read [references/chart-briefing.md](references/chart-briefing.md) before drafting. It owns admission (draft/stale fail closed; explicit risk override naming the unresolved D-IDs), evidence extraction, the provenance-separation rule, and the `chart link-spec` handoff + retry rules for Phase 5.
 
@@ -714,7 +714,7 @@ The rewrite footer variant (prefix `Spec rewritten at …`, readiness-reset anno
 When the conversation has business-context signals but the business layer is sparse, append a one-line suggestion to refine via `/flow-next:refine --scope=business`. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. Input is `$BIZ_SIGNAL_CATEGORIES` — the count computed in [§2.6](#26--biz-context-signal-routing-r24--signal-category-count-for-r25) over the nine SIGNAL CATEGORIES from R24 (target user / problem framing / success metric / MVP boundary / business constraints / what-not-to-build / prioritization rationale / business risks / UX expectations). The count is over categories, not over markdown destinations. R22: `BIZ_SIGNAL_CATEGORIES=0` → no-fire (solo-dev silence). Count `>= 3` → no-fire (biz layer adequately filled).
 
 ```bash
-# R25 threshold is host-agent judgment (fn-113; former flowctl helper removed).
+# R25 threshold is host-agent judgment (former flowctl helper removed).
 # Fire when 1 <= BIZ_SIGNAL_CATEGORIES < 3; otherwise stay silent.
 if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; then
   cat <<EOF

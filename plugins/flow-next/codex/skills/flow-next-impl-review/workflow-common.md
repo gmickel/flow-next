@@ -46,7 +46,7 @@ fi
 # Substitute the ACTUAL review-target id from $ARGUMENTS here (the `fn-N.M` task / `fn-N`
 # spec being reviewed) — a literal value you fill in, e.g. REVIEW_ID="fn-12-auth.3". Do NOT
 # leave the bash positional `${1}`: a Bash-prompt turn does not populate `$1`, so it would be
-# empty and the per-task `review:` override (fn-74) would silently fall back to the project
+# empty and the per-task `review:` override would silently fall back to the project
 # default. Empty ONLY for a genuine standalone no-spec diff review.
 REVIEW_ID="<fn-N.M task or fn-N spec id from \$ARGUMENTS, or empty for a standalone diff>"
 # Text output is bare backend name for back-compat grep. The same command in --json mode returns
@@ -96,11 +96,11 @@ Per-task `review` (set via `flowctl task set-backend`) overrides env. Per-backen
 
 **Then branch to the backend-specific workflow file** named in SKILL.md's routing table for `$BACKEND`. Only the file for the active backend should enter context. Do not read the other backend files.
 
-**Foreground rule — review CLI calls are blocking.** Run every `flowctl <backend> …` review command (`impl-review` / `plan-review` / `completion-review` / `validate` / `deep-pass`) as a single **foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). **Never** launch one with `run_in_background` + a monitor/poll — a background completion does not reliably resume a subagent context (observed in the fn-78 dogfood: a worker idled on an already-finished cursor review until manually poked), and the call is bounded, so blocking is safe and simpler. (An ad-hoc bridge call that writes its output to a file and is polled in foreground calls is a different pattern; this rule binds review commands.)
+**Foreground rule — review CLI calls are blocking.** Run every `flowctl <backend> …` review command (`impl-review` / `plan-review` / `completion-review` / `validate` / `deep-pass`) as a single **foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). **Never** launch one with `run_in_background` + a monitor/poll — a background completion does not reliably resume a subagent context (observed in dogfood: a worker idled on an already-finished cursor review until manually poked), and the call is bounded, so blocking is safe and simpler. (An ad-hoc bridge call that writes its output to a file and is polled in foreground calls is a different pattern; this rule binds review commands.)
 
 ---
 
-## Phase 0.5: Trivial-diff triage (fn-29.6)
+## Phase 0.5: Trivial-diff triage
 
 A cheap pre-check that short-circuits lockfile-only, docs-only, release-chore,
 and generated-file diffs. Runs before the configured backend — when it returns

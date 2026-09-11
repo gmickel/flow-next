@@ -15,7 +15,7 @@ Memory-entry body prose authored by the Update / Replace / Harden outcomes follo
 
 For **autofix mode** ambiguity: mark as stale via `flowctl memory mark-stale` instead of guessing.
 
-The 6 outcomes apply to every categorized entry, including the `knowledge/decisions/` category (fn-38 schema extension). Decision entries reuse the same classifier with a tighter judging question and a different shape for `Replace` — see the [Decision-entry calibration](#decision-entry-calibration) section below.
+The 6 outcomes apply to every categorized entry, including the `knowledge/decisions/` category. Decision entries reuse the same classifier with a tighter judging question and a different shape for `Replace` — see the [Decision-entry calibration](#decision-entry-calibration) section below.
 
 **Outcome precedence** when an entry qualifies for more than one — the [decision tree](#decision-tree-quick-reference) encodes this order:
 
@@ -323,7 +323,7 @@ A textual hit is never sufficient evidence of enforcement.
 
 ## Decision-entry calibration
 
-Entries under `knowledge/decisions/` (fn-38 schema) document forward-looking choices: the project picked approach X, considered Y and Z, and committed to a constraint. The 6 outcomes still apply, but the per-entry judging question changes — and `Replace` means **supersede**, not rewrite-in-place.
+Entries under `knowledge/decisions/` document forward-looking choices: the project picked approach X, considered Y and Z, and committed to a constraint. The 6 outcomes still apply, but the per-entry judging question changes — and `Replace` means **supersede**, not rewrite-in-place.
 
 ### Per-entry judging question
 
@@ -392,7 +392,7 @@ A glossary file with `count: 0` from `flowctl glossary list --json` is a husk �
 ```
 GLOSSARY.md at <path> is an empty husk (no terms defined).
 Remove the file manually if it's no longer needed; flow-next keeps it as
-project state per fn-38 R18.
+project state.
 ```
 
 The audit never deletes the file. Removing it is a project decision, not a memory-audit decision.

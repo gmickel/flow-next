@@ -10,7 +10,7 @@ Refine a task/spec: conduct an extremely thorough interview and write the refine
 
 **`.flow/` is the only task tracker.** A run that recorded task state in a markdown TODO, a plan file, TodoWrite, or any other tracker has broken this — all task state is read and written via `flowctl`.
 
-### Chart boundary (fn-135)
+### Chart boundary
 
 Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `$flow-next-flow --explain`.
 
@@ -44,7 +44,7 @@ If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1
 
 ## Setup
 
-### Parse `--scope=business|technical|both|research` (fn-44.1 plumbing)
+### Parse `--scope=business|technical|both|research`
 
 Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope resolve` — never re-implement inline. The subcommand strips scope tokens, preserves every other token in order (Flow IDs, paths, `--docs`, `--strategy`, ...), and emits the resolved scope plus a `defaulted` flag. The resolver's fallback when no scope flag is passed is `technical` (1.0.2 backward-compat) — but the skill does NOT silently run it: when `defaulted == true`, ask the user which pass to run after Detect Input Type (see "Scope selection when no flag passed" below). `technical` applies only when that question cannot be asked.
 
@@ -134,7 +134,7 @@ When the sentinel prints, STOP and **read [`references/doc-aware.md`](references
 
 ## Detect Input Type
 
-**Handle-recognition rule (R16):** do NOT gate on a hard "must start with `fn-`" check. Before treating a single-token arg as a file path or freeform, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new idea. Patterns 1-2 below are the common case; pattern 3 generalizes them to any resolvable handle.
+**Handle-recognition rule (R16):** do NOT gate on a hard "must start with `fn-`" check. Before treating a single-token arg as a file path or freeform, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new idea. Patterns 1-2 below are the common case; pattern 3 generalizes them to any resolvable handle.
 
 1. **Flow spec ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
    - Fetch: `$FLOWCTL show <id> --json`
@@ -192,7 +192,7 @@ Pattern:
 - `question.body`: "<stakes>. <options summary>. Recommended: <X> — <one-sentence rationale>. Confidence: [high | judgment-call | your-call]."
 - `question.options`: neutral labels (no "(recommended)" markers — recommendation goes in the body; neutral options reduce anchoring)
 
-### Plain-language question contract (fn-90-adjacent field feedback, eval-validated)
+### Plain-language question contract (field feedback, eval-validated)
 
 Applies to EVERY question, both scopes. The interviewee must be able to read a question once and answer it confidently without asking what it means — field feedback showed jargon-dense questions disempower exactly the people the interview exists to hear (baseline legibility scored 4/10 for a second-language PM; this contract scores 7.5+ at ~30% fewer tokens).
 
@@ -312,7 +312,7 @@ The interview runs in one of three scoped modes resolved by `flowctl scope resol
 
 ### Compute the write policy
 
-Before writing anything back, build the current-sections-state JSON from the existing spec markdown (or an empty object for new specs) and call `scope write-policy`. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the fn-44 spec Edge Cases merge contract), plus how to handle the `## Decision Context` substructure conditional. It enumerates **canonical sections only** - a section the project added via its own repo-root `SPEC.md` scaffold appears in neither list, and its absence is never permission to drop it; ownership comes from the section's own scope-owner marker (see the project-added-section rule in [`references/write-back.md`](references/write-back.md)).
+Before writing anything back, build the current-sections-state JSON from the existing spec markdown (or an empty object for new specs) and call `scope write-policy`. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the Edge Cases merge contract), plus how to handle the `## Decision Context` substructure conditional. It enumerates **canonical sections only** - a section the project added via its own repo-root `SPEC.md` scaffold appears in neither list, and its absence is never permission to drop it; ownership comes from the section's own scope-owner marker (see the project-added-section rule in [`references/write-back.md`](references/write-back.md)).
 
 ```bash
 # Build CURRENT_SECTIONS by inspecting the existing spec markdown:
@@ -362,7 +362,7 @@ When the user declines a feature or scope **as product judgment** — we could b
 
 ### Acceptance-criteria rule (applies to every pass)
 
-`## Acceptance Criteria` R-IDs are **append-only** across passes per fn-29 rules — never renumber, never replace; take the next unused number. Source-tag each criterion this pass appends (`[user]` = the human answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
+`## Acceptance Criteria` R-IDs are **append-only** across passes — never renumber, never replace; take the next unused number. Source-tag each criterion this pass appends (`[user]` = the human answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
 
 ## Spec-count check (split proposal)
 

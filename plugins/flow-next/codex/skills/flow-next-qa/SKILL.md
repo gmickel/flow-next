@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 
 # /flow-next:qa — live-app real-user QA pass
 
-flow-next's review surface today is all static: `impl-review`, `spec-completion-review`, `quality-auditor`, `code-review`. Nothing drives the *running* app like an unforgiving real user. `/flow-next:qa` fills that gap — it drives the deployed app (via **fn-51 flow-next-drive**), files structured P0/P1/P2 findings with evidence, and ends with a YES/NO ship verdict emitted as a proof-of-work receipt.
+flow-next's review surface today is all static: `impl-review`, `spec-completion-review`, `quality-auditor`, `code-review`. Nothing drives the *running* app like an unforgiving real user. `/flow-next:qa` fills that gap — it drives the deployed app (via **flow-next-drive**), files structured P0/P1/P2 findings with evidence, and ends with a YES/NO ship verdict emitted as a proof-of-work receipt.
 
 **Augments, never replaces.** QA is the cheap *first* live pass — the app already runs on the dev's machine during `work`, so run an initial agentic pass over the complete build before a human opens the PR. Like everything in flow-next it **reduces human work agentically and surfaces problems to humans**; it does **not** stand in for CI/staging QA or manual QA, which still happen downstream. Findings are advisory: they ride the draft PR + the bug-memory track, and the human reviewer + the land gate decide.
 
@@ -86,19 +86,19 @@ Under `QA_AUTONOMOUS=1`:
 
 Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). Ralph independently suppresses prompts too (Phase A), so a Ralph run is implicitly autonomous; `QA_AUTONOMOUS` covers the non-Ralph autonomous caller (the pilot stage).
 
-## fn-51 consumption — a read-and-drive contract, not a callable API
+## flow-next-drive consumption — a read-and-drive contract, not a callable API
 
-A skill is not a function. **The host agent reads fn-51's workflow + references and executes the universal driving flow itself** — `observe → snapshot fresh refs → act → verify → capture`. A transcript that "calls" flow-next-drive as if it were an API has broken this. fn-51 owns the driver ladder and all actuation prose; QA owns scenario authoring, evidence capture, and the verdict. **CDP / agent-browser / Computer-Use prose stays in fn-51's references** — a copy of it in this skill has broken this too. Point at them:
+A skill is not a function. **The host agent reads flow-next-drive's workflow + references and executes the universal driving flow itself** — `observe → snapshot fresh refs → act → verify → capture`. A transcript that "calls" flow-next-drive as if it were an API has broken this. flow-next-drive owns the driver ladder and all actuation prose; QA owns scenario authoring, evidence capture, and the verdict. **CDP / agent-browser / Computer-Use prose stays in flow-next-drive's references** — a copy of it in this skill has broken this too. Point at them:
 
 - Surface detection + universal flow + the web/native ladder: `plugins/flow-next/skills/flow-next-drive/SKILL.md`
 - Driver command detail (per rung): `plugins/flow-next/skills/flow-next-drive/references/` (`agent-browser.md`, `chrome-devtools-mcp.md`, `playwright.md`, `computer-use.md`, …)
 
-Per scenario, record an **evidence tuple**: `{driver_rung, target_url, viewport, screenshot_path, console_path}`. fn-51's SKILL.md (`:83`) explicitly defers the QA workflow — scenario authoring, bug filing, verdict — downstream to this skill; the seam is designed, QA orchestrates and fn-51 actuates.
+Per scenario, record an **evidence tuple**: `{driver_rung, target_url, viewport, screenshot_path, console_path}`. flow-next-drive's SKILL.md explicitly defers the QA workflow — scenario authoring, bug filing, verdict — downstream to this skill; the seam is designed, QA orchestrates and flow-next-drive actuates.
 
 ## Forbidden
 
 - **Marking PASS / SHIP from source inspection.** See "The hard rule" above. PASS requires captured live-app evidence; no live app → BLOCKED, never PASS.
-- **Re-implementing driving.** QA consumes fn-51 via the read-and-drive contract; it never reimplements CDP / agent-browser / Computer Use, and never duplicates fn-51's ladder prose.
+- **Re-implementing driving.** QA consumes flow-next-drive via the read-and-drive contract; it never reimplements CDP / agent-browser / Computer Use, and never duplicates flow-next-drive's ladder prose.
 - **Inventing findings or evidence.** Every finding cites real captured evidence (screenshot / console / URL). No "I think this might be broken" without a reproduction.
 - **Ralph-blocking the skill.** QA is aware of Ralph but is not a hard Ralph-block (R11). A `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill has broken this.
 
@@ -109,6 +109,6 @@ Execute the phases in [workflow.md](workflow.md) in order:
 1. **discover** — resolve the spec id (arg / branch-match / info prompt); pull the cognitive-aid payload.
 2. **derive** — AC → scenarios, R-IDs → coverage spine, boundaries → exclusions, decision context → expected behavior.
 3. **prepare** — target URL, test accounts, session hygiene, device matrix.
-4. **execute** — drive the live app via the fn-51 read-and-drive contract; capture the evidence tuple per scenario.
+4. **execute** — drive the live app via the flow-next-drive read-and-drive contract; capture the evidence tuple per scenario.
 5. **file** — structured P0/P1/P2 findings with evidence; feed the bug memory track.
 6. **verdict** — YES/NO ship verdict + open P0/P1 list; emit the `qa_verdict` receipt.

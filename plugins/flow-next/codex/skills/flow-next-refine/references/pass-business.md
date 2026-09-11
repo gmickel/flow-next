@@ -24,7 +24,7 @@ Per-section write behavior (per the write-policy):
 - **`## Decision Context`** (per `decision_context` shape):
   - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
   - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
-- **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number). Source-tag each criterion you append (`[user]` = the PO answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `write-back.md` § Source tags on acceptance criteria.
+- **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes — never renumber, never replace; take the next unused number). Source-tag each criterion you append (`[user]` = the PO answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `write-back.md` § Source tags on acceptance criteria.
 - **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule in SKILL.md; biz pass adds `Resolved via Project Docs` only.
 
 ## Investigate Project Docs Before Asking (R26)

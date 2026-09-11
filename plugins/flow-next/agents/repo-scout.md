@@ -25,7 +25,7 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
      # Subagents may not inherit CLAUDE_PLUGIN_ROOT/DROID_PLUGIN_ROOT, which
      # would resolve FLOWCTL to a broken `/scripts/flowctl`. Fall back to the
      # plugin root derived from this skill's own path, then to a legacy
-     # `.flow/bin/flowctl` left over from a pre-fn-197 install. If none
+     # `.flow/bin/flowctl` left over from an older install. If none
      # resolves, skip Step 0 and grep-degrade — never hard-fail here.
      FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
      [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally

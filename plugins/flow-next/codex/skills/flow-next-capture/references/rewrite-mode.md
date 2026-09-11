@@ -60,7 +60,7 @@ SPEC_ID="$REWRITE_TARGET"
 # Readiness reset — runs AFTER set-plan: a failed rewrite must not downgrade a
 # blessed spec (Codex review, PR #170 P2). A rewrite is a full re-authoring; any
 # prior blessing no longer applies once the new body lands. Unconditional call:
-# the toggle is idempotent (fn-58.1) — a never-ready spec is a silent no-op (no
+# the toggle is idempotent — a never-ready spec is a silent no-op (no
 # write, no updated_at bump), so this does NOT turn every rewritten draft into a
 # readiness-adopter. Announce, never confirm — --rewrite already carried the
 # consent.

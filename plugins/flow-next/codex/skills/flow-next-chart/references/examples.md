@@ -47,7 +47,7 @@ If grounding finds nothing consequential: create nothing; `CHART_VERDICT=NO_WORK
 |---|---|
 | **Inferred operation** | Chart or work re-anchor: fold storage choice into `## Notes` with citation; recompute which proposed frontier items or parked unknowns collapse; do **not** call `chart resolve` to invent history |
 | **Read-back point** | Show Notes line with evidence reference; list uncertainties removed vs still open; if map changes require create/wire, read back before persist |
-| **Evidence/consent boundary** | Cited background is not a D-ID and not `[user]`/`[paraphrase]`/`[inferred]`/`[strategy:*]`. fn-148 verified/inferred grammar is out of scope (STOPPED). No fake ledger line |
+| **Evidence/consent boundary** | Cited background is not a D-ID and not `[user]`/`[paraphrase]`/`[inferred]`/`[strategy:*]`. Verified/inferred fact grammar is out of scope. No fake ledger line |
 | **Terminal verdict** | Chart mode: `CHART_VERDICT=NO_WORK chart=<id> decision=- reason="storage noted as cited background; frontier narrowed without fabricated resolve"`. Work mode after real resolve of a different D-ID only if one was claimed: `CHART_VERDICT=RESOLVED chart=<id> decision=<D> reason="..."` |
 
 ---

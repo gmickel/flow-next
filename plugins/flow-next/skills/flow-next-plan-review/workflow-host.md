@@ -24,7 +24,7 @@ subcommand and accepts no model/effort suffix.
    cross-family check decides — never a CLI fallback.
 
 
-**fn-169 — host is the documented always-inject exception.** The `codex` backend
+**Host is the documented always-inject exception.** The `codex` backend
 resumes the reviewer's own session on a re-review and therefore sends the
 shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
 keep injecting unconditionally until their resume semantics are measured the way
@@ -108,7 +108,7 @@ Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
 Give it the repo-relative PATHS to the current spec and every task spec — not
-their contents (fn-169: the subagent has the same checkout you do, and a plan
+their contents (the subagent has the same checkout you do, and a plan
 review is judged against the spec on disk, so a pasted copy can only go stale).
 On re-review give it the receipt's
 structured `findings.items` (ordinal, severity, classification, status, title,

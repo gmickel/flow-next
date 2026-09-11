@@ -16,7 +16,7 @@
 - **Four scouts, plus one gated.** `docs-scout` (official docs, version anchored on the repo's manifest scan), `practice-scout` (current best practices and pitfalls), `docs-gap-scout` (the repo's own docs that must change), and `memory-scout` (the bug and knowledge entries that apply). `github-scout` joins only when `scouts.github` is on, as in plan. Not `repo-scout` (the technical pass's fact scouts and plan's decomposition already cover repo patterns), not `spec-scout`, not `flow-gap-analyst`.
 - **The section is the artifact.** `## Resolved via Research` on the spec (or the task body for a task target): one sub-block per scout that ran, one bullet per finding, a source on every line. Plan writes the same section when its Step 1 runs the same scouts, so the two never produce two copies.
 - **Where research lands.** Research lands in the spec when a human should see it before ratifying and when it must survive the route choice (direct or planned); what only the implementer needs stays with the worker, in the task body or the worker's own investigation.
-- **Never by default.** Flow routes here only on the read-first signal from `route-matrix.md`; the manual user names the scope. `flow --auto` (fn-239) never runs it.
+- **Never by default.** Flow routes here only on the read-first signal from `route-matrix.md`; the manual user names the scope. `flow --auto` never runs it.
 
 ## Setup
 

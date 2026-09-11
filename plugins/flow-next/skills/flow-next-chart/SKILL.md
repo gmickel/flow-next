@@ -92,7 +92,7 @@ Attendance is stored and validated by flowctl for five types; `task` requires `-
 - **No nameable destination -> STOP.** Chart's premise is *destination known, route unknown*. A theme or direction ("make X more Y") has no end state to state as an Outcome and no boundary to rule anything out of scope. Offer narrowing to one effort with a stateable end state, or `/flow-next:prospect` when the real ask is which effort to pick; create nothing.
 - **No consequential unknowns -> STOP.** Recommend `/flow-next:capture` or the smaller direct route; create nothing.
 - **Over `chart.maxDecisions` (default 12).** Offer narrow Outcome or split first. Pass `--force-size --reason` only after explicit warning + consent read-back.
-- **Provenance lanes stay separate.** Grounding facts get citations under `## Notes` and never become D-IDs or acceptance-criterion trailing tags (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:*]`). fn-148 closed STOPPED with no verdict - **include NO verified/inferred fact grammar**.
+- **Provenance lanes stay separate.** Grounding facts get citations under `## Notes` and never become D-IDs or acceptance-criterion trailing tags (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:*]`). **Include NO verified/inferred fact grammar.**
 - **Unsafe evidence by reference.** Never embed secrets or literal destructive shell command strings in chart artefacts; store a safe redacted summary + approved path/HTTPS reference. Describe such operations in prose only.
 - **Context discipline.** Status/frontier navigation loads compact metadata only. Full decision bodies and assets load only for the selected D-ID or briefing.
 - **Skill never edits Open Questions, edges, or sharpened decisions directly.** Use park/remove/wire/resolve `--sharpen-file` / create `--initial-map-file`.
@@ -117,7 +117,7 @@ Execute [workflow.md](workflow.md):
 - Writing under `.flow/specs/` or mutating a spec's `ready` flag.
 - Answering attended decisions without the human side of the exchange.
 - Turning imported background into fabricated resolved D-IDs or acceptance-criterion tags.
-- Shipping verified/inferred fact grammar (fn-148 did not land guidance).
+- Shipping verified/inferred fact grammar (not a shipped feature).
 - Precomputing a complete discovery route or treating adaptive traces as mandatory phases.
 - Embedding literal destructive shell command strings or realistic secrets in chart bodies, answers, briefings, or this skill's examples.
 - Silent claim expiry, silent supersession cascade, or silent prototype-to-implementation promotion.

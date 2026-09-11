@@ -75,9 +75,9 @@ exits without a receipt under Ralph except the genuine spec-id error.
 
 ## 3. Graceful degradation (R13)
 
-No live deploy reachable, OR no driver available (including fn-51 degraded to its
+No live deploy reachable, OR no driver available (including flow-next-drive degraded to its
 **terminal manual rung**), → surface a **BLOCKED** verdict and add **nothing** to the
-base flow. Inherit fn-51's degradation table — do **not** re-derive it. See
+base flow. Inherit flow-next-drive's degradation table — do **not** re-derive it. See
 [flow-next-drive/SKILL.md](../../flow-next-drive/SKILL.md) "Driver detection & graceful
 degradation (all surfaces)":
 
@@ -96,7 +96,7 @@ absent evidence, the outcome is BLOCKED, never SHIP.
 
 A **new, additive** `perEvent` leaf (`get_default_tracker_config()`, default `off`).
 When opted in AND the bridge is active, post the Phase 6 verdict as a structured
-tracker **comment** — gated identically to every fn-52 lifecycle touchpoint
+tracker **comment** — gated identically to every lifecycle touchpoint
 ([flow-next-work/SKILL.md](../../flow-next-work/SKILL.md) "Shared gating predicate").
 
 `workflow.md` §A.3's gate already read the leaf and printed the sentinel. Confirm the bridge
@@ -132,7 +132,7 @@ the only meaningful tracker operation is posting it as a comment. `push` / `pull
 the skill treats **any non-`off` value as `comment`** (it never dispatches a
 body/status op from a misconfigured QA leaf). The activation predicate
 (`tracker_sync_active`) and `TRACKER_PER_EVENT_LEAVES` are unchanged — `comment` was
-already a recognised leaf verb (fn-52); this task only adds the `qa` *key* defaulting
+already a recognised leaf verb; this task only adds the `qa` *key* defaulting
 `off`.
 
 ### Best-effort + no-op safety

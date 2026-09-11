@@ -379,7 +379,9 @@ class ChartPortableHostAndAsk(unittest.TestCase):
 class ChartProvenanceAndSafety(unittest.TestCase):
     def test_no_verified_inferred_grammar(self) -> None:
         combined = _combined_skill_prose()
-        self.assertIn("fn-148", combined)
+        # The prohibition must be present (shipped prose carries no spec-id
+        # provenance, so anchor on the phrase itself).
+        self.assertRegex(combined, r"(?i)verified/inferred")
         # Chart must not invent a verified/inferred *fact* grammar (fn-148
         # STOPPED). Mentions of the phrase / [verified] must be prohibitions.
         # Bare `[inferred]` as part of the capture AC four-tag list

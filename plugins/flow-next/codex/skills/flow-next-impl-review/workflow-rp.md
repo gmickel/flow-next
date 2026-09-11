@@ -348,7 +348,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # Optional: capture suppression-gate tally (fn-29.3).
+  # Optional: capture suppression-gate tally.
   # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
   SUPPRESSED_JSON="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
     | head -n 1 \
@@ -367,7 +367,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
       }
       END { printf "}" }')"
 
-  # Optional: capture introduced vs pre_existing classification tally (fn-29.4).
+  # Optional: capture introduced vs pre_existing classification tally.
   # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
   # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
   CLASSIFICATION_LINE="$(grep -iE '^[>*_` ]*classification counts[ *_`]*:' "$RESPONSE_FILE" \
@@ -391,7 +391,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
     fi
   fi
 
-  # Optional: capture unaddressed R-IDs (fn-29.2).
+  # Optional: capture unaddressed R-IDs.
   # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
   # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
   UNADDRESSED_JSON=""
@@ -418,7 +418,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
     fi
   fi
 
-  # Build receipt; inject optional fn-29.2/fn-29.3/fn-29.4 signals only when present
+  # Build receipt; inject the optional signals only when present
   EXTRA_FIELDS=""
   if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
     EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
@@ -569,7 +569,7 @@ If verdict is NEEDS_WORK:
 
    Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
 
-   **fn-90 R5 cap gate first** — increment before EVERY re-review dispatch (task-scoped only); exit 4 = cap reached → do NOT dispatch, surface the ESCALATE message and stop (never retry):
+   **Cap gate first** — increment before EVERY re-review dispatch (task-scoped only); exit 4 = cap reached → do NOT dispatch, surface the ESCALATE message and stop (never retry):
 
    Recompute the post-fix snapshot **first**, in this same block: the fence must
    hash the fixed tree, never the pre-fix HEAD.
