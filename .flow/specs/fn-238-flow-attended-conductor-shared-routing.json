@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-238-flow-attended-conductor-shared-routing",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-09-11T11:56:08.573989Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-238-flow-attended-conductor-shared-routing",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-238-flow-attended-conductor-shared-routing.md",
+  "status": "open",
+  "title": "flow: attended conductor, shared routing reference, opinionated defaults",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-11T11:56:25.205680Z"
+}

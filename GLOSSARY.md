@@ -9,6 +9,16 @@ The unit of intent: `.flow/specs/<id>.md` (body) + `.flow/specs/<id>.json` (meta
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Task, R-ID, Chart
 
 _Avoid_: epic, ticket, story, PRD, requirements doc
@@ -18,6 +28,16 @@ _Relates to_: Task, R-ID, Chart
 ## Task
 
 An execution unit under a spec (`fn-N.M`), sized to one `/flow-next:work` iteration (~100k tokens of fresh context). Declares `requires:` dependencies and optionally the R-IDs it `satisfies:`. Implemented by a worker subagent, never by the conductor directly.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -39,6 +59,16 @@ A numbered acceptance criterion in a spec, written `**R1:** ...`. Renumber-forbi
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: AC-1, requirement #1, renumbering, req id
@@ -48,6 +78,16 @@ _Relates to_: Spec, Task
 ## Wave
 
 A set of tasks whose dependencies are all satisfied at the same point — the parallel candidates `/flow-next:plan` reports. A wave is a scheduling fact derived from the dependency graph, not a time box and not a mandate to share one checkout: parallel workers get isolated workspaces and the conductor joins the wave before review.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -69,6 +109,16 @@ Optional pre-capture decision mapping (`/flow-next:chart`) for one idea too larg
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: discovery doc, RFC, design doc, plan, prospect
@@ -78,6 +128,16 @@ _Relates to_: Spec, Task
 ## Receipt
 
 A JSON artefact on disk that proves a step happened and gates the next one — review receipts under `.flow/review-receipts/`, green receipts under `.flow/tmp/green-receipts/`, QA verdict receipts. A receipt is a file; a verdict is the terminal line a loop skill prints into the transcript for its driver (`PILOT_VERDICT=`, `LAND_VERDICT=`). Never use one word for the other.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -99,6 +159,16 @@ A pass/fail check the workflow refuses to proceed past — the repo's full local
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Receipt
 
 _Avoid_: check, hook, CI, guardrail
@@ -108,6 +178,16 @@ _Relates to_: Receipt
 ## Anchor
 
 Re-reading the spec, the task, and git state before work continues, so long sessions do not drift. `flowctl anchor <task-id>` is the per-task bundle a worker reads every iteration; `flowctl brief` is the cold-session equivalent. Not `/flow-next:prime`, which assesses whether a repo is ready for agents at all.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -129,6 +209,16 @@ _Relates to_: Task, Spec
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: sync, tracker-sync, resync
@@ -144,6 +234,16 @@ The engine that performs a cross-model review: `rp` (RepoPrompt), `codex`, `copi
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Receipt
 
 _Avoid_: judge, provider, model
@@ -153,6 +253,16 @@ _Relates to_: Receipt
 ## Memory
 
 Categorized durable learnings under `.flow/memory/` — `bug/<category>/` and `knowledge/<category>/` entries with YAML frontmatter, searched via `flowctl memory search`. Memory is audited, superseded, and graduated into gates; it is not a scratchpad and not a substitute for docs or code comments.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -180,6 +290,16 @@ What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinki
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Reach, Review backend
 
 _Avoid_: pin, model tier, capability level, role map
@@ -189,6 +309,16 @@ _Relates to_: Reach, Review backend
 ## Reach
 
 How the active harness obtains a model for a tier: the in-session model, an in-host subagent, shelling out to another CLI, or not available. Documented once per harness under [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md) and never inside a skill — a skill asks for a tier and names no spawn primitive, CLI flag, or vendor path. An undetectable harness resolves to the generic page and says so.
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -210,6 +340,16 @@ The tier for anything grading work someone else produced. The only tier carrying
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Tier, Review backend
 
 _Avoid_: grader, review model, critic
@@ -219,6 +359,16 @@ _Relates to_: Tier, Review backend
 ## Implementer tier
 
 The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -240,6 +390,16 @@ The tier for mechanical inventory scanning, where the cheapest model is the corr
 
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Tier
 
 _Avoid_: cheap tier, scanner model, fast model, low tier
@@ -249,6 +409,16 @@ _Relates to_: Tier
 ## Thinking scout tier
 
 The tier for analysis that degrades badly on a fast model — requirement analysis and pattern judgment, not scans. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -270,6 +440,16 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 Execution through `/flow-next:work <spec-id> --no-plan`, recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 
+
+
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task, R-ID
 
 _Avoid_: plan-less mode, skip-plan flag, zero-task execution
@@ -283,3 +463,11 @@ The committed user-POV directory (`.flow/features/`) recording how a user reache
 ## Doctor
 
 The one read-only health check a drive-capable run performs before driving an instance (right build, owned port, valid auth), answering "is this instance worth driving".
+
+## Routing reference
+
+The set of six small reference files the flow conductor owns, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs. The files are the route matrix, the spec-count rule, the plan-versus-no-plan rule, review/QA/completion selection, prototype-before-ask, and the make-pr/resolve-pr tail. Each opens with a decision record.
+
+## Prototype-before-ask
+
+Classify a fork before asking the user. An answer observable by running something (behavior, output, timing, layout) is settled by a prototype or experiment. Only a product or preference call no experiment can settle becomes a question.

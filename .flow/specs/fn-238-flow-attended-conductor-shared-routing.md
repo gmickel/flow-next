@@ -1,0 +1,147 @@
+# flow: attended conductor, shared routing reference, opinionated defaults
+
+<!-- Written from a maintainer design conversation on 2026-09-11. The conversation evidence block was omitted at the maintainer's instruction; source tags reflect that conversation. A fresh agent needs nothing from it: this file is the complete brief. -->
+
+## Goal & Context
+<!-- Goal & Context: 60% [user], 30% [paraphrase], 10% [inferred] -->
+
+Flow-Next users start from an intent and today choose the route themselves. The routing knowledge sits in five places: the guide matrix, capture's closer, plan's next-steps menu, the pipeline-variations page, and the no-plan ask inside work. A user who runs stages by hand reads one of them; an agent that should choose the next step has no single source to read. `/flow-next:pilot` chooses only after a human marked a spec ready, and it classifies from state, never from intent.
+
+This spec adds `/flow-next:flow`, an attended, intent-first conductor that takes whatever the user has (for example nothing, an id, a branch, a path, a prototype, a long description, or the live conversation; the agent decides what it is), picks the smallest sufficient route, runs it, and continues until the next decision that belongs to a human. It is opinionated by design. The routing rules it applies move into one shared reference so the manual stages and the conductor read the same rules and stay efficient under progressive disclosure. Two defaults change with it. Task decomposition becomes the exception that needs a positive signal. Live QA gains an `auto` setting that runs it only where a live surface is what the spec is about.
+
+Two follow-ups are deliberately sequenced after this spec and are out of scope here. fn-239 makes pilot a consumer of the same routing reference and then retires it into `flow --auto`, a single long-horizon run over pilot's rails, with tick mode kept as the portable floor for hosts with flaky session or wake boundaries. fn-240 adds harness and model autorouting on the existing discovery (review-backend ladder, routing block, usage recipes) once flow exists. Stated direction: the router is the smallest new piece; everything it routes to already exists and already proves its work. A per-harness "current model" probe was tested and dropped. Only one harness exposes its live model and effort reliably, so the probe would be advisory at best and is not worth shipping.
+
+## Architecture & Data Models
+<!-- Architecture & Data Models: 40% [user], 40% [paraphrase], 20% [inferred] -->
+
+**Routing reference.** Six small reference files owned by the flow skill, progressively disclosed, one per rule, each self-contained and each opening with a short decision record (source, trigger, purpose, evidence, disposition) so a reviewer can see why the rule earns its place. One file per rule because a Read loads the whole file: an anchor tells the agent where to look, it does not reduce what enters context. The files:
+
+1. Route matrix (starting state, route, positive signal, safe skip or narrow, skip kind). The matrix routes on content and context, never on input kind. A tracker issue, a pasted bug report, a console dump, a prototype, and a sentence of intent all become text first. A reported defect routes to the existing defect variant (reproduce first, the failing test is the R-ID, then work and review). Every variant carries the no-plan bias on both the manual and the flow path.
+2. Spec-count rule (when one intent becomes 1..n specs). Moved unchanged from capture's split-proposal reference: the tripwire, the counting rule that excludes standing criteria and process items, and the independence partition. The user still decides the split.
+3. Plan-versus-no-plan rule (below).
+4. Review, QA, and completion-review selection (which gate applies, from which config key or prompt).
+5. Prototype-before-ask rule (classify a fork before asking; an observable answer is settled by running something, a product or preference call is asked).
+6. Tail rule. A flow run from intent ends when the PR exists. A run on a spec with an open PR converges it (resolve-pr, CI fixes, re-review) and stops when merge is the only step left. Merge and spec close happen only on explicit instruction inside flow, or through land.
+
+Each rule lives in its own small file and is progressively disclosed: the always-loaded skill text carries a one-line conditional pointer tied to the step that needs the rule ("when deciding whether to decompose, read the plan-versus-no-plan file"), and the agent reads the files the current step needs and none it does not. Referenced files cost nothing until read, so the always-loaded cost for any consumer is its pointer lines plus the files the step takes. The repository's forcing-sentinel gate is used only where a deterministic probe exists (the QA enum), never for a judgment about which rule applies. Each file stays small enough that loading it is cheap and none needs a table of contents. Other skills link to the flow skill's references one level deep, the same way capture's closer reaches the pipeline-variations doc today; the human-facing pipeline-variations page becomes the narrative that links to these files instead of restating them. Consumers in this spec: flow, capture's closer, plan's next-steps menu, work's zero-task ask. Guide's matrix is retired into file 1. Pilot is not a consumer yet.
+
+**Plan-versus-no-plan rule.** Direct execution through Flow-Next work is the default for a ready spec. Plan is chosen only on a positive signal: the user asked for a plan, separate human owners will implement, delivery is staged across several PRs, or the implementer is routed out of the session model (an `implementer:` line in the project routing block that points at a bridge or a cheaper tier). Risk, size, and file count never trigger plan on their own. Design risk routes to plan-review. Unresolved product or authority choices route to interview. Unknown model identity creates no detector and no question.
+
+**Flow skill.** Inline skill (blocking question tool reachable). State is the existing `.flow/` state plus the spec's `no_plan` field. Flow owns routing, dispatch of existing stage skills, re-evaluation after each hop, and the recorded `ran` / `skipped(reason)` trail every stage already writes. It re-implements no stage logic. `flow --explain` prints the route and its reason without executing anything and replaces `/flow-next:guide`.
+
+**QA gate.** `pipeline.qa` becomes a three-value string enum `off | on | auto`. `off` and `on` keep their exact current semantics. `auto` runs the QA stage when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, and records `skipped(reason)` otherwise. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven, deterministic re-runnable tests subtract.
+
+**Read-back contract.** One shape shared by capture, interview write-back, and plan's task read-back. The draft is written to a temporary file once. The user sees a compact summary (title, criteria count, inferred tally, split proposal when one exists, recommended route) and one ask with the options approve and write, open in editor, abort, plus the built-in free-text answer for "change X". Open in editor hands the draft file to the user's editor; how it is found is the agent's call. After an editor round the skill re-reads the file before asking again, so the write consumes what the user saw. Edit cycles print only the diff. The full draft prints only on request.
+
+**Suggested build order.** Routing files first (they are the contract everything else reads). Then the consumers that already exist: capture's closer, plan's menu, work's zero-task ask, pipeline-variations as narrative. Then the flow skill with `--explain`, and the guide removal. Then the QA enum, the QA and setup skills, and prime's readiness line. Then the read-back contract across capture, interview, and plan. Then tests, Codex mirrors, repository docs, guide and vault surfaces (R13). Then the routing-accuracy study (R12). R14 last, after the release is cut.
+
+## API Contracts
+<!-- API Contracts: 50% [user], 30% [paraphrase], 20% [inferred] -->
+
+- `/flow-next:flow [<anything>] [--explain] [--review=<backend>]`. The argument is any starting point (spec id, task id, tracker issue, branch, path, prototype, pasted report, free text, or nothing); the agent determines what it is. A tracker issue id or URL is read through whatever access the session already has (the sync bridge, an MCP, or a CLI such as `gh` or `glab`); flow adds no input adapter and no resolution mechanics. Pasted bug reports and console output are free text. With no argument in a fresh conversation it asks once what to work on. With no argument in a conversation that carries intent it first asks whether to capture that conversation into 1..n specs; a "no" falls through to the fresh-conversation ask. The question tool is used where the host supports it, with the plain-text numbered fallback elsewhere.
+- Flow on a spec with no tasks and no recorded route applies the plan-versus-no-plan rule and records the route (`no_plan` set or cleared) before mint. Flow on a spec with an intentional plan runs the planned route unchanged. Flow on a spec whose tasks are all done runs QA per the gate, then make-pr, and the run ends there. Flow on a spec with an open PR converges it (resolve-pr, CI fixes, re-review), stops when merge is the only step left, and asks before any merge.
+- Capture invoked by flow applies the plan-versus-no-plan rule and sets `no_plan` itself when the rule resolves to direct. Capture invoked by the user keeps the explicit `--no-plan` opt-in and never sets the field on its own judgment. Both paths print the rule's recommendation in the closer.
+- `flowctl config set pipeline.qa auto` is accepted; any value outside `off | on | auto` is treated as `off` (fail closed, same as today).
+- Setup asks the QA question once (off, on, auto) and, when the answer is on or auto, recommends `/flow-next:features` as the next step.
+- `/flow-next:guide` is removed; `flow --explain` is its replacement. The command count stays flat.
+- Host command form follows the existing rule: flow prints copy-pasteable commands in the spelling the host invokes (the flat `/flow-next-<name>` form on an OpenCode install, otherwise as written here).
+
+## Edge Cases & Constraints
+<!-- Edge Cases & Constraints: 30% [user], 40% [paraphrase], 30% [inferred] -->
+
+- Flow never runs under pilot, Ralph, or any autonomy marker. Under a marker it stops with the typed `NEEDS_HUMAN` report the no-plan route already uses. Pilot, Ralph, and flow are three drivers and are never nested.
+- Flow asks a blocking question only when two routes would materially differ and the answer is not observable. A fork whose answer is observable is settled by a prototype or an experiment, never by a question.
+- Flow never fabricates a review, QA, or completion verdict to pass a gate. Every stage it skips is recorded with its reason in the receipts.
+- The single-task completion-review skip stays as is. With one minted task whose acceptance is the whole spec, the per-task implementation review is the integration check, so the completion review is redundant on the direct route and still runs on multi-task plans.
+- The no-plan worker keeps its broad parallel license (parallel implementation of independent surfaces, join barrier before commit). Planned specs keep the rolling scheduler with wave as fallback. Nothing in this spec changes scheduling.
+- The read-back diet must not remove ratification. The user still approves before any `.flow/` write, and autofix still requires `--yes`. The full draft remains available in the temporary file and on request.
+- A `pipeline.qa` value of `auto` in a repo with no drivable surface records `skipped(no drivable surface)` and advances. QA never hard-blocks the loop.
+- Source-tag findability in capture currently keys on the evidence block. When the user drops that block, tags still reflect the conversation and the read-back says so.
+- Repo-public specs may carry vault pointers as `gno://` URIs. They never carry the pointed-at text.
+
+## Acceptance Criteria
+
+- **R1:** Six routing reference files exist, one per rule above, each opening with a decision record and each small enough to load cheaply, reached through step-scoped conditional pointers so that flow, capture's closer, plan's next-steps menu, and work's zero-task ask read only the files their current step needs. The guide matrix, the capture closer prose, the plan menu prose, and the pipeline-variations rule text no longer carry their own copies. Router staleness stays a defect: adding or removing a skill updates the route matrix in the same change. [paraphrase]
+- **R2:** The plan-versus-no-plan rule reads exactly as the Architecture section states it: direct execution by default, plan only on an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model. Risk, size, and file count never trigger plan. Capture's closer and plan's menu print this recommendation on both the manual and the flow path. [user]
+- **R3:** `/flow-next:flow` accepts any starting point. Examples, not a closed list: nothing, a spec id, a task id, a tracker issue id or URL, a branch, a path, a prototype, a pasted bug report or console output, free text. The agent reads what it was given and decides the next step; flow adds no input classifier. It routes on content and context, never on input kind, and a reported defect lands on the defect variant with the failing repro as its R-ID. In a fresh conversation with no argument it asks once what to work on. In a conversation that carries intent it asks first whether to capture it into 1..n specs, then falls through. It routes from the reference, runs the routed stage skill, re-evaluates after each hop, and stops at the next human decision with a self-contained report. [user]
+- **R4:** A flow run from intent ends when the PR exists. On a spec with an open PR, flow converges it (resolve-pr, CI fixes, re-review) and stops when merge is the only step left, asking before any merge. Flow never merges on its own, never runs under an autonomy marker, and never dispatches a second driver. [user]
+- **R5:** `flow --explain` prints the chosen route, the positive signal, the safe skip and its kind, and why not the alternatives, without any `.flow/` write or stage dispatch. Capture's and plan's `Recommended next` closers derive from the same routing files, so explanation, closer, and execution cannot diverge. `/flow-next:guide` is removed and every pointer to it (docs, skills index, README, changelog) is updated. [user]
+- **R6:** Capture invoked by flow applies the plan-versus-no-plan rule and sets `no_plan` when it resolves to direct. User-invoked capture keeps the explicit opt-in. Existing protections stay: no auto-split, atomic single mint, intentional plans and explicit review requests remain authoritative. [user]
+- **R6a:** A capture that records the direct route (flag, or the rule under flow) writes no placeholder requirement-coverage table. The single implicit owner task is the coverage, and the make-pr coverage table is built from that task's `satisfies` list as today. Planned specs keep the table for plan to fill. [user]
+- **R7:** The read-back contract is shared by capture, interview write-back, and plan's task read-back. The draft is written once to a temporary file, the user sees a compact summary and one ask with approve and write, open in editor, abort, plus free text for edits. Edit cycles print only the diff. The full draft prints only on request. Ratification before any write and the autofix `--yes` gate are unchanged. [user]
+- **R8:** `pipeline.qa` accepts `off | on | auto`. `off` and `on` are byte-for-byte unchanged. Under `auto`, flow runs QA when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, and records `skipped(reason)` otherwise. Setup asks the QA question once and recommends `/flow-next:features` when the answer is on or auto. QA's evidence-aware subtraction is unchanged. [user]
+- **R9:** Before asking a "which approach" or "what should this do" question, flow and the routed skills classify the fork. An answer observable by running something is settled by a prototype or an experiment; only a product or preference call becomes a question. The rule lives in routing file 5 and is cited from flow's always-loaded prose. [user]
+- **R10:** Implementation review runs per `review.backend` or the invocation flag, the single-task completion-review policy is unchanged, the no-plan worker's parallel license and the rolling scheduler are unchanged, and every routed or skipped stage leaves a `ran` / `skipped(reason)` receipt readable through the existing usage command. [paraphrase]
+- **R11:** All skill and reference prose written or moved by this spec follows the repository's gated-reference contract and the vault's instruction criteria: descriptions state the exact operation and its discriminating trigger, always-loaded text carries only invariants and routing, substantial procedures sit behind conditional pointers (or a gate where a deterministic probe exists), and no ceremonial scaffolding is added to short skills. Each change that grows an always-loaded surface states what the prose buys (G1). Flow gets a conduct checklist. [user]
+- **R12:** A routing-accuracy study runs in the maintainer's eval harness (the agent-evals repository named in the maintainer's global instructions; read its methodology file and reuse its evalkit) as its own task: a frozen model and harness, a prompt set of starting states with expected routes, pre-registered success rules, and retained negative results. Moving text behind a link is not accepted as behavioral equivalence without it. [paraphrase]
+- **R13:** Tests assert behavior or contract only (G2): the `pipeline.qa` enum validation, the flow-path `no_plan` write, the read-back summary payload shape, and every consumer's pointer naming a reference file that exists. Codex mirrors regenerate twice with no diff. Every repository, guide, and vault surface in the Downstream section below is updated in the same workstream, each property verified with its own build or check, and publication state is reported separately from source completion. [user]
+- **R14 (last step, after every other criterion is verified):** The flow-next.dev design and content work. A designed major-release callout on the home page for the auto router, one new page that explains flow and the road ahead (fn-239, fn-240), the skill page swap with both navigation sources, the page revisions listed under Downstream, and the docs-site changelog beat. This criterion starts only when R1 to R13 are complete and the release itself is cut, so the copy describes shipped behaviour. Design goes through the site's design pass with the frontend-design skill briefed on the claim hierarchy. Copy follows the artifact prose contract and the messaging discipline: positive formulations, proof-backed claims, role labels over model ids. The site build passes. [user]
+
+## Boundaries
+<!-- Boundaries: 70% [user], 30% [paraphrase] -->
+
+- No per-harness model or effort probe. No harness or model autorouting. Both are later specs. [user]
+- No change to pilot's selection or classification beyond leaving it byte-for-byte unchanged. Pilot adopting the routing reference is the next spec. [user]
+- No sticky mode, no per-turn reminder, no emulation of a mode primitive through prose. [paraphrase]
+- No new machinery. This spec is skill prose and reference files. The only Python change is the `pipeline.qa` enum: the config schema generator's value list gains `auto` and its description text updates, then the schema regenerates. flowctl stores the value and never interprets it; whether a spec is drivable is judgment and stays in the skill. No new flowctl subcommand, no classifier, no routing engine, no state beyond the existing `no_plan` field and stage receipts. [user]
+- No input adapters or tracker-resolution mechanics for flow's inputs. The agent reads an issue through the access it already has. [user]
+- No automatic merge anywhere in flow. Land keeps the unattended tail. [user]
+- No fabricated verdicts, no lowered review or QA gates, no change to `review.maxIterations` semantics. [paraphrase]
+- No attribution of the routing rules to any external system in the spec, the reference, the docs, or the changelog. [user]
+
+## Downstream
+
+Tallied 2026-09-11 against the live properties. Every item is part of this spec's scope. Prose on every public surface follows the artifact prose contract and the maintainer's messaging discipline: positive formulations, proof-backed claims, one story beat per release, role labels over model ids. The release is a major beat and gets a designed home-page callout.
+
+### Repository (GitHub)
+
+- **Skill removal.** The guide skill directory, its command shim, its conduct checklist and the conduct index row, its routing test, and its entries in the Codex sync script and the legacy-cleanup install test. The skill-authoring guide's router-staleness rule moves with the matrix. The chart docs-inventory and prompt-scenario tests reference guide and need re-pointing.
+- **New skill.** Flow skill (SKILL, workflow, six routing reference files), command shim, conduct checklist and index row, plugin and marketplace manifests on all three hosts, Codex mirror regenerated twice with no diff, config schema regenerated for the `pipeline.qa` enum.
+- **Skills touched.** Capture (closer, read-back contract, flow-path `no_plan`), interview (write-back contract), plan (next-steps menu, task read-back), work (zero-task ask reads the plan-versus-no-plan file), QA (auto semantics), setup (QA question and features recommendation), prime (QA-readiness line names `auto`), and the guide mentions in prospect, chart, and interview.
+- **Docs.** Root README (recommended happy path, compose the pipeline, commands), docs index, skills index, pipeline-variations (narrative that links the routing files), orchestration (pipeline routing section), running-lean, teams, flowctl (config row), ralph (QA mention), release-history, glossary, changelog, strategy (command-count metric, QA mention), and the read-back mentions in the self-improving, spec-template, and skill-optimization notes.
+- **Tests.** Behavior or contract only: QA enum validation, flow-path `no_plan` write, read-back summary payload, routing pointers resolve, pilot's QA gate unchanged under `auto`, plus the existing land and artifacts config tests that enumerate `pipeline` values.
+
+### flow-next.dev (R14, last step)
+
+- **Home page.** A designed major-release callout for the auto router, linking to the new flow page. The commands section leads with flow, the capabilities grid gains a flow cell, and the "start where you are" paths route through flow. Design work uses the site's design pass, on brand, positive register.
+- **New page.** Flow: what it does, `flow --explain`, the routing files, the no-plan default, QA auto, and the stated direction toward `flow --auto` and autorouting (fn-239, fn-240) framed as the road ahead.
+- **Skill pages.** Guide page removed, flow page added, both navigation sources updated (site nav groups and the Starlight sidebar), skills index and the llms export follow automatically from the collection.
+- **Pages to revise.** Choosing your route (becomes the `flow --explain` walkthrough), first 30 minutes, introduction, install, understand pipeline, compose the pipeline, what each layer costs, discovery, model routing, cookbook, live QA (auto), capture, interview, plan, work, pilot and QA skill pages, flowctl configuration (QA enum), glossary, compatibility.
+- **Release.** Docs-site changelog entry as the story beat, site version constant and package version bumped. Note: the site is on a docs branch and its version constant lags the repo by two releases; reconcile before this lands.
+- **Gate.** Site build passes. This whole block is R14 and starts only after R1 to R13 are verified and the release is cut.
+
+### AI x SDLC guide
+
+- The flow-next guide page: pipeline section, menu section, autonomous delivery section. Getting started, methodology, factory and multi-agent, model routing, plugins, production grade, and the per-harness pages (Claude Code, Codex, Cursor, Gemini CLI, coding assistants) where they name the entry command. README command mentions.
+
+### Vault
+
+- Skills Catalog (guide row retired, flow row added), Release Timeline beat, Vocabulary and Concepts (routing reference, prototype-before-ask), Autonomy note (direction toward fn-239), Messaging Library (menu and router claims), Lifecycle and Handover Objects, Strategy and Positioning. Reindex and verify retrieval.
+
+### Not affected
+
+- The client microsites and the AI x SDLC bundled onboarding copy describe measurement, not routing. The maintainer's blog has no flow-next post to update.
+
+## Decision Context
+
+### Motivation
+
+- The product direction is an opinionated, best-in-class default path. Users increasingly expect the tool to choose the next step. Flow is the attended half of that; pilot becomes the same judgment unattended in a later spec. [user]
+- Direct execution beat task decomposition in the maintainer's internal benchmarking because the owner model sees the whole task. The public claim stays the one already in the changelog for the optional-decomposition release: the direct route can produce higher-scoring implementations with capable frontier models, with no benchmark details and no model-wide superiority claim. [paraphrase]
+- The bitter-lesson principle in the strategy applies: scaffolding around a model's current weakness rots into cost. Decomposition becomes an exception with a stated reason, not a default. [strategy:Design principles]
+- The read-back today writes the draft to a temporary file, prints it in full, then re-reads and re-prints it on every edit cycle. Three copies of the spec per cycle is measurable waste in tokens and wall-clock. The new contract keeps ratification and removes the copies. [user]
+- Live QA and the worker's own driving do not collide. QA re-drives every UI-observable criterion regardless of what the worker narrated, by design, so `auto` adds no overlap that `on` does not already have. [paraphrase]
+- The single-task completion-review skip is correct. Its purpose is integration across tasks; with one task whose acceptance is the whole spec, the per-task review is that check. [paraphrase]
+
+### Implementation Tradeoffs
+
+- Guide folds into `flow --explain`. Once the matrix moves into the shared reference, guide would be a thin wrapper with a rule that forbids doing the work, which flow inverts by design. Folding keeps the command count flat and removes a router that could drift from its inventory. [inferred]
+- Under flow, capture sets `no_plan` itself. This reverses the "never inferred" rule of the spec-level no-plan field for one path only. The spec states it so the design review accepts it as intent, not drift. Manual capture is unchanged. [user]
+- `pipeline.qa auto` is a third enum value rather than a new key or a bool, so `off` and `on` semantics, the fail-closed read, and the pilot gate stay untouched. [paraphrase]
+- The model probe was smoke-tested on all three harnesses. One exposes a reliable live model and effort, one exposes only the configured default, one exposes nothing. That result is why the probe is dropped rather than shipped as advisory. [user]
+- The prototype-before-ask rule replaces a class of questions with an experiment. It is cheap to state and cheap to follow, and it removes the most common unnecessary blocking question. [user]
+- Implementation guidance during the build. Before editing any always-loaded skill text, read `gno://ai/Context Layer/Agent Instruction Audit and Optimization Prompt.md`, its criteria worksheet `gno://ai/Context Layer/Context Layer - Instruction Audit Criteria (Astra and Fable).md`, and the progressive-disclosure synthesis `gno://ai/Context Layer/Context Layer - Astra and Fable Instruction Design (Sep 2026).md`, together with the repository's skill-authoring guide and its gated-reference contract. Apply the skill rows of the keep-versus-question table, the per-rule decision record, and the closing deletion pass. GNO is available on the maintainer's hosts. [user]
+
+## Requirement coverage
+
+Direct route: one implicit owner task satisfies R1 to R14. R14 runs last.
