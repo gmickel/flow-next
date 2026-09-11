@@ -54883,8 +54883,8 @@ def main() -> None:
     p_scope = subparsers.add_parser(
         "scope",
         help=(
-            "Scope helpers for --scope=business|technical|both|research "
-            "(parser + write policy)"
+            "Scope helpers (business, technical, both, research): "
+            "parser and write policy"
         ),
     )
     scope_sub = p_scope.add_subparsers(dest="scope_cmd", required=True)
