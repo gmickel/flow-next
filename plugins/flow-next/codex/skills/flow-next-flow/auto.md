@@ -160,7 +160,7 @@ Driver condition examples (the default recipe is one `flow --auto` per item; the
 ## Forbidden
 
 - Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. In backlog mode, ambiguity that needs a person is surfaced **async** via the `ask` stage (`ASKED`), never an interactive `plain-text numbered prompt`. `references/prototype-before-ask.md` licenses no plain-text numbered prompt here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr}`, with `qa` only when `references/gate-selection.md` selected it for this hop. **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `/flow-next:tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops**, read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), never a pipeline stage, and only on the backlog path. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR). **`qa` under its gate and `tracker-sync` under backlog mode set no precedent for any of those**; a run that dispatched one of them by analogy has broken this.
+- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr}`, with `qa` only when `references/gate-selection.md` selected it for this hop. **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `/flow-next:tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops**, read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), never a pipeline stage, and only on the backlog path. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. The one exception is `--tick` under `pipeline.chainStages==on`: `make-pr` after this tick's `qa` verified a fresh terminal verdict (Phase 5, Chained stage), which is the `qa+make-pr` tick the deprecated key still buys for one release.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring plus answer round-trip live in tracker-sync; backlog mode invokes them, never re-implements them.
 - **Never merging / never invoking land.** In either mode the terminus is `make-pr` (draft). Merge stays human-gated. Backlog mode never calls `/flow-next:land`, `gh pr merge`, or any merge path. The run never dispatches a second driver.
@@ -233,8 +233,6 @@ else
   }
 fi
 ```
-
-**Ready mode is byte-for-byte unchanged**: the gate-off branch is a bare `:` no-op. No backlog block below runs, `references/backlog-mode.md` is never loaded, `FLOW_AUTONOMOUS` is never exported, and the verdict grammar and stage set match the ready-mode contract exactly.
 
 ## Phase 1 - SELECT (two-pass)
 
@@ -394,7 +392,7 @@ GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" th
 
 An empty/unset `gateClasses` (the default) gates nothing; full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
 
-**The completeness read may only withhold, never force**: a promoted-but-thin item is kicked back with a question, never built into a slop PR, but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes. A read that started work the human had not promoted has broken this.
+**The completeness read may only withhold, never force.** When a promoted item lacks required information, park it with a question. The completeness check never grants readiness or promotes an item. A read that started work the human had not promoted has broken this.
 
 **A live triage always resolves to a state-changing terminal**: `ADVANCED` / `ASKED` / `BLOCKED` / `NEEDS_HUMAN`. It never ends on a bare `TRIAGED` no-op line; `TRIAGED <id> <class>` is diagnostic / explain only. Append the matching decision-log row at the resolving terminal (Phase 6).
 
@@ -564,7 +562,7 @@ if [ "${PILOT_AUTONOMY:-ready}" = "backlog" ]; then
 fi
 ```
 
-workflow.md Step 3 runs here. Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
+Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
 - `plan`: `$flow-next-plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `$flow-next-plan-review <spec-id> --review=<backend>`
@@ -578,7 +576,7 @@ Done when: exactly one stage skill has been invoked and has returned; a hop that
 
 ## Phase 5 - VERIFY + evidence echo (workflow.md Step 4)
 
-workflow.md Step 4 runs here. Echo each hop's observed evidence for the transcript-only driver, decide `advanced` from the receipt and PR re-reads below, and run the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
+Echo each hop's observed evidence for the transcript-only driver, decide `advanced` from the receipt and PR re-reads below, and run the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 
 **Stage-outcome line.** Every evidence echo additionally carries the one `stage:` line `references/gate-selection.md` (Receipts) defines for the stage this hop dispatched; a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip. Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one). Record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
 
