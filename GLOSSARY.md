@@ -437,7 +437,7 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 
 ## No-plan route
 
-Execution through `/flow-next:work <spec-id> --no-plan`, the default route for a ready cohesive spec and a capable coding agent. Plan is chosen only on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model); risk, size, and file count never trigger it. Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and pilot continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
+Execution through `/flow-next:work <spec-id> --no-plan`, the default route for a ready cohesive spec and a capable coding agent. Plan is chosen only on a positive signal; the signals and the exclusions are in [`plan-vs-no-plan.md`](plugins/flow-next/skills/flow-next-flow/references/plan-vs-no-plan.md). Work records the accepted choice and creates one implicit owner task covering every spec R-ID. Resume and `flow --auto` continuation retain that route. Separate task planning and its automatic plan review are omitted; explicit spec/design review, configured implementation review, coverage, completion-review policy and opt-in QA retain their contracts.
 
 _Avoid_: plan-less mode, skip-plan flag, zero-task execution
 
@@ -453,15 +453,55 @@ The one read-only health check a drive-capable run performs before driving an in
 
 ## Routing reference
 
-The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files.
+The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, `flow --auto`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files. The same directory also holds two gated auto-only references (`backlog-mode.md`, `qa-stage.md`) that `auto.md` reads under `--backlog` and the QA gate; they are workflow, not routing rules, and carry no decision record.
 
 ## Driver
 
-A skill that decides which stage runs next and dispatches it: `/flow-next:flow` (attended, stops at the next human decision), `/flow-next:pilot` (one ready spec, one stage per unattended tick), and Ralph (the repo-local unattended harness). Drivers are never nested; flow refuses to run under any autonomy marker, and pilot and land never dispatch flow.
+The thing that invokes the unattended conductor and owns repetition: a human running `/flow-next:flow --auto` once per item, a host loop primitive (`/loop`, `/goal`, `cron`) running `flow --auto --tick`, or Ralph (the deprecated repo-local hardened harness). Attended `/flow-next:flow` stops at the next human decision; `flow --auto` stops at the next decision that needs a human and reports it as a verdict. Drivers are never nested. Attended flow refuses under any autonomy marker, `flow --auto` refuses under Ralph, and `flow --auto` and land never dispatch a second driver.
 
 _Avoid_: mode, conductor mode, autopilot
 
-_Relates to_: Routing reference, Pilot
+_Relates to_: Routing reference, Hop, Tick, Long-horizon run, Pilot
+
+## Hop
+
+One route-run-re-evaluate cycle of `/flow-next:flow`: classify the item from the routing reference, run the routed stage, verify from observed state, record the outcome. Under `--auto` every hop ends with committed receipts, one evidence echo, one `stage: <name> - ran | skipped(<reason>) | failed(<reason>)` line, and a ledger write, so a run that dies mid-way resumes from disk on the next invocation; nothing is resumed from transcript. The hop is the handover unit between the driver and the pipeline.
+
+_Avoid_: step, iteration, turn
+
+_Relates to_: Driver, Tick, Long-horizon run
+
+## Tick
+
+Exactly one hop of `flow --auto`, selected with `--tick`. The run classifies, dispatches one stage, verifies, records, and stops with the verdict line. The portable floor for hosts without stable long sessions, run under the host's loop primitive (`/loop 30m /flow-next:flow --auto --tick`). What a `/flow-next:pilot` invocation was.
+
+_Avoid_: pilot tick, single-stage run
+
+_Relates to_: Hop, Long-horizon run, Driver, Pilot
+
+## Long-horizon run
+
+The default shape of `flow --auto`: one invocation drives one ready item hop after hop until a terminal (a PR exists, deferred to land, asked, blocked, needs human, no work). The verdict line names every dispatched stage in order joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict. One item per run; the next invocation selects the next item.
+
+_Avoid_: multi-stage tick, chained tick, autopilot run
+
+_Relates to_: Hop, Tick, Verdict line
+
+## Verdict line
+
+The terminal line every `flow --auto` run and every `/flow-next:land` tick prints last, for the driver to read: `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"` and `LAND_VERDICT=...`. The `PILOT_VERDICT` name is kept unchanged across the pilot retirement so existing drivers keep parsing; `TRIAGED` appears under `--explain` and `--dry-run` only.
+
+_Avoid_: exit status, summary line, result banner
+
+_Relates to_: Driver, Long-horizon run, Tick
+
+## Pilot
+
+The deprecated one-release alias `/flow-next:pilot` for `/flow-next:flow --auto --tick`: it maps `--spec <id>` to the positional id, passes `--backlog`, `--dry-run`, `--review`, `--research`, `--depth` through, prints one deprecation line to stderr, and behaves byte-for-byte as the tick. The spelling survives in config keys (`pilot.autonomy`, `pilot.gateClasses`), flowctl verbs (`flowctl pilot strikes`, `flowctl pilot-log`), the ledger and decision-log paths (`.flow/pilot-runs/`), and the `PILOT_VERDICT` name; those are not renamed.
+
+_Avoid_: the pilot skill, pilot loop, build-loop conductor
+
+_Relates to_: Tick, Driver, Verdict line
 
 ## Variant
 

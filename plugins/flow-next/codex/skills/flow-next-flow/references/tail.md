@@ -19,4 +19,4 @@ After the last stage passes its gates and QA has run or recorded its skip, flow 
 3. Re-review through the configured backend when the fix loop changed code.
 4. Re-evaluate: more threads or a new red repeat the cycle; a green, converged PR stops the run.
 
-Flow stops when merge is the only step left and asks before any merge. It never merges on its own, never closes the spec, and never dispatches `/flow-next:land` or `/flow-next:pilot`. Merge and spec close happen only on an explicit instruction inside the run, or through land.
+Flow stops when merge is the only step left and asks before any merge. It never merges on its own, never closes the spec, and never dispatches `/flow-next:land` or a second driver (`/flow-next:flow --auto`). Merge and spec close happen only on an explicit instruction inside the run, or through land.

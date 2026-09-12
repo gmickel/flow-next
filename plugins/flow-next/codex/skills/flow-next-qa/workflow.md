@@ -46,7 +46,7 @@ fi   # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, STOP and Read [references/autonomy.md](references/autonomy.md) (§0, the per-fact routing table) before any further step. When the gate is silent (`NO_PROMPT=0`, interactive), continue — every prompt path below asks the user as written.
 
-`QA_AUTONOMOUS` (autonomy ≠ Ralph) gates **question suppression only** — it activates no ralph-guard hook and no receipt-path gate. The pilot QA stage passes it so the build loop never hangs on a prompt; the BLOCKED-and-advance contract (R6) keeps an environment without a local app from wedging the pipeline.
+`QA_AUTONOMOUS` (autonomy ≠ Ralph) gates **question suppression only** — it activates no ralph-guard hook and no receipt-path gate. The `flow --auto` QA stage passes it so the build loop never hangs on a prompt; the BLOCKED-and-advance contract (R6) keeps an environment without a local app from wedging the pipeline.
 
 ---
 
@@ -351,9 +351,9 @@ Execute the contract per scenario:
 When no live deploy + driver is reachable, **set `QA_OUTCOME=BLOCKED` and fall through to §6.3 to write the committed `qa_verdict`** — do **not** stop here:
 
 ```bash
-# Route to §6.3 — the committed qa_verdict is what the pilot stage advances on (R6
+# Route to §6.3 - the committed qa_verdict is what the flow --auto QA stage advances on (R6
 # BLOCKED→advance). Writing no .flow/review-receipts/qa-<spec>.json leaves the
-# pilot stage with no fresh receipt → it strikes/unreadies the spec instead of
+# driver with no fresh receipt → it strikes/unreadies the spec instead of
 # moving on to make-pr. NEVER stop here.
 QA_OUTCOME="BLOCKED"
 BLOCKED_REASON="<no live deploy reachable | no driver available>"
@@ -365,7 +365,7 @@ A missing live target is an expected, surfaced limitation — never a fabricated
 ### Done when
 
 - Every scenario that ran has an evidence tuple `{driver_rung, target_url, viewport, screenshot_path, console_path}`, with the artifacts on disk under `.flow/tmp/qa-<spec-id>/` and referenced by path.
-- **No live target or no available driver set `QA_OUTCOME=BLOCKED` and fell through to §6.3.** A run that stopped in Phase 4 without writing a receipt has broken this — the pilot stage then finds no fresh receipt and strikes the spec.
+- **No live target or no available driver set `QA_OUTCOME=BLOCKED` and fell through to §6.3.** A run that stopped in Phase 4 without writing a receipt has broken this - `flow --auto` then finds no fresh receipt and strikes the spec.
 
 ---
 
@@ -504,11 +504,11 @@ QA never emits `MAJOR_RETHINK` — it is a valid enum member the guard accepts, 
 
 QA has **no review-backend subprocess**, so the receipt is written **directly** (the make-pr / impl-review-RP precedent — write the JSON yourself, **not** via a `flowctl <backend> validate --receipt` path). Resolve the path from the caller (`--receipt` flag or `REVIEW_RECEIPT_PATH`) else default to the committed `.flow/review-receipts/qa-<spec-id>.json`; `mkdir -p` the parent first.
 
-The receipt is the **only committed persisted output** (no new artifact, no new receipt file). Beyond the four base fields it carries the lean additive fields the **pilot stage + make-pr** read from the persisted receipt:
+The receipt is the **only committed persisted output** (no new artifact, no new receipt file). Beyond the four base fields it carries the lean additive fields the **`flow --auto` QA stage + make-pr** read from the persisted receipt:
 
 | Field | Type | Why |
 |-------|------|-----|
-| `head_sha` | string (`git rev-parse HEAD`) | the **freshness key** the pilot idempotence gate (R1b / task .2) reads — a receipt is fresh iff `receipt.id == <spec-id>` AND `receipt.head_sha == HEAD`. |
+| `head_sha` | string (`git rev-parse HEAD`) | the **freshness key** the driver's idempotence gate (R1b / task .2) reads — a receipt is fresh iff `receipt.id == <spec-id>` AND `receipt.head_sha == HEAD`. |
 | `branch` | string (current branch) | which branch the pass ran against (orientation for make-pr / a human). |
 | `rid_coverage` | object `{covered, total, rids: [{id, coverage}]}` | the §2.2 coverage spine, persisted so make-pr surfaces coverage without re-deriving. `coverage ∈ {live, subtracted, no_live_scenario, backend_cli}`. `covered` counts the non-gap rows (`live` + `subtracted` + `backend_cli`); a `no_live_scenario` row on a UI R-ID is the only uncovered kind. |
 | `open_p0p1` | array of **objects** `{id, severity, confidence, classification, reason, file}` | Open P0/P1 findings with lossless v1 enums; severity is P0/P1, confidence is a discrete anchor, and classification is introduced/pre_existing. |
@@ -544,7 +544,7 @@ else
 fi
 
 # Freshness key (R1b) + orientation. HEAD is resolved at QA time; a detached/empty
-# HEAD yields "" (the pilot gate treats a missing/empty head_sha as never-fresh).
+# HEAD yields "" (the driver's gate treats a missing/empty head_sha as never-fresh).
 HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
 BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 
@@ -576,7 +576,7 @@ import datetime, json, os, sys
 r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
      "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
      "qa_outcome": os.environ["QA_OUTCOME"],
-     "head_sha": os.environ.get("HEAD_SHA", ""),     # R1b freshness key (pilot/.2 reads this)
+     "head_sha": os.environ.get("HEAD_SHA", ""),     # R1b freshness key (the flow --auto QA stage reads this)
      "branch": os.environ.get("BRANCH", ""),
      "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
      "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
@@ -688,7 +688,7 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 ### 6.3b — Commit QA's own handoff (autonomous mode only)
 
-When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the memory entries tracked in `QA_FILED_MEMORY` at §5.4 / §5.5), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits, so this whole step does not exist on the interactive path. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
+When `QA_AUTONOMOUS=1` (the `flow --auto` QA stage dispatched this pass - autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. QA knows exactly which files it produced (the receipt above, plus the memory entries tracked in `QA_FILED_MEMORY` at §5.4 / §5.5), so it commits those and the driver never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. User-invoked QA leaves commits to the user. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then
@@ -703,7 +703,7 @@ if [ "$QA_AUTONOMOUS" = "1" ]; then
 fi
 ```
 
-The `chore(flow): qa verdict` subject is what the pilot + make-pr freshness gates peel to find the code head; `head_sha` was recorded at QA time (the code head, before this commit), so they still resolve freshness correctly. A no-op when nothing changed.
+The `chore(flow): qa verdict` subject is what the `flow --auto` + make-pr freshness gates peel to find the code head; `head_sha` was recorded at QA time (the code head, before this commit), so they still resolve freshness correctly. A no-op when nothing changed.
 
 **There is NO generic `flowctl receipt write` helper** — compose the JSON as above. `qa-*.json` is not a path the Ralph guard's `parse_receipt_path` recognizes, so it validates via the plain verdict-enum check only (the planning decision: QA is **not** a hard Ralph receipt-gate in v1 — no `ralph-guard.py` change).
 

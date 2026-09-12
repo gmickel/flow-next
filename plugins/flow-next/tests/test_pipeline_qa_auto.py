@@ -1,12 +1,14 @@
-"""fn-238 - `pipeline.qa` gains `auto`; pilot's gate stays literal-`on`.
+"""`pipeline.qa` is the enum `off | on | auto`; the unattended driver reads all
+three.
 
 Contract pins only (G2): the smallest distinctive tokens plus one executable
-run of pilot's QA-gate fence. The `auto` semantics themselves are judgment in
-the flow skill's routing reference; nothing here asserts prose.
+run of the driver's QA-gate fence. The `auto` semantics themselves are
+judgment in the flow skill's routing reference; nothing here asserts prose.
 
-* pilot's QA gate (`plugins/flow-next/skills/flow-next-pilot/workflow.md`)
-  still activates on the literal `on` only - the fence, run against a
-  snapshot whose `pipeline.qa` is `auto`, resolves `QA_STAGE_ENABLED=0`;
+* the `flow --auto` QA gate (`skills/flow-next-flow/auto.md`, formerly
+  pilot's) resolves two flags from the root snapshot: the literal `on` sets
+  `QA_STAGE_ENABLED=1`, the literal `auto` sets `QA_STAGE_AUTO=1`, anything
+  else leaves both 0 - proven by running the fence against each value;
 * the setup ceremony's Live QA question names the three literal values and
   the ceremony recommends `/flow-next:features` once the stage is on or auto;
 * the QA and prime skills route the `auto` rule to the flow skill's
@@ -25,7 +27,7 @@ import unittest
 from pathlib import Path
 
 PLUGIN_DIR = Path(__file__).resolve().parent.parent
-PILOT_WORKFLOW = PLUGIN_DIR / "skills" / "flow-next-pilot" / "workflow.md"
+AUTO_MD = PLUGIN_DIR / "skills" / "flow-next-flow" / "auto.md"
 SETUP_WORKFLOW = PLUGIN_DIR / "skills" / "flow-next-setup" / "workflow.md"
 QA_SKILL = PLUGIN_DIR / "skills" / "flow-next-qa" / "SKILL.md"
 PRIME_PILLARS = PLUGIN_DIR / "skills" / "flow-next-prime" / "pillars.md"
@@ -33,7 +35,6 @@ GATE_SELECTION = (
     PLUGIN_DIR / "skills" / "flow-next-flow" / "references" / "gate-selection.md"
 )
 
-QA_GATE_TOKEN = '[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1'
 SNAPSHOT_LINE = (
     'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-'
     "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\""
@@ -53,38 +54,50 @@ def _read(path: Path) -> str:
 
 def _qa_gate_fence(workflow: str) -> str:
     start = workflow.find("QA_STAGE_ENABLED=0\n")
-    assert start != -1, "pilot QA gate fence not found"
+    assert start != -1, "flow --auto QA gate fence not found"
     end = workflow.find("```", start)
     return workflow[start:end]
 
 
-class PilotQaGateUnchangedUnderAuto(unittest.TestCase):
-    def test_gate_token_present_and_fence_has_no_auto_literal(self) -> None:
-        wf = _read(PILOT_WORKFLOW)
-        self.assertIn(QA_GATE_TOKEN, wf)
-        fence = _qa_gate_fence(wf)
-        self.assertNotIn("auto", fence)
+class AutoQaGateReadsEveryValue(unittest.TestCase):
+    def test_fence_derives_from_the_snapshot(self) -> None:
+        # Derived from the root snapshot, never a second config call.
+        fence = _qa_gate_fence(_read(AUTO_MD))
+        self.assertNotRegex(fence, r'\$FLOWCTL"?\s+config get')
 
     @_POSIX_BASH
-    def test_fence_resolves_auto_to_off_and_on_to_on(self) -> None:
-        fence = _qa_gate_fence(_read(PILOT_WORKFLOW))
+    def test_fence_resolves_each_literal_to_its_flag(self) -> None:
+        fence = _qa_gate_fence(_read(AUTO_MD))
         self.assertIn(SNAPSHOT_LINE, fence, "snapshot path line drifted")
-        for value, want in (("auto", "0"), ("on", "1"), ("off", "0")):
-            with tempfile.TemporaryDirectory() as td:
+        # value -> (QA_STAGE_ENABLED, QA_STAGE_AUTO)
+        cases = (
+            ("auto", "0", "1"),
+            ("on", "1", "0"),
+            ("off", "0", "0"),
+            ("maybe", "0", "0"),
+            (True, "0", "0"),
+        )
+        for value, enabled, auto in cases:
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as td:
                 snap = Path(td) / "snap.json"
                 snap.write_text(
                     json.dumps({"key": None, "value": {"pipeline": {"qa": value}}})
                 )
                 script = fence.replace(
                     SNAPSHOT_LINE, f'PILOT_CFG_SNAPSHOT="{snap}"'
-                ) + '\nprintf "QA_STAGE_ENABLED=%s" "$QA_STAGE_ENABLED"'
+                ) + '\nprintf "\\nENABLED=%s AUTO=%s" "$QA_STAGE_ENABLED" "$QA_STAGE_AUTO"'
                 res = subprocess.run(
                     ["bash", "-c", script], capture_output=True, text=True
                 )
                 self.assertEqual(res.returncode, 0, f"{value}: {res.stderr}")
                 self.assertTrue(
-                    res.stdout.endswith(f"QA_STAGE_ENABLED={want}"),
+                    res.stdout.endswith(f"ENABLED={enabled} AUTO={auto}"),
                     f"{value}: {res.stdout!r}",
+                )
+                # `on` and `auto` both activate the freshness-probe sentinel;
+                # every other value leaves the reference unread.
+                self.assertEqual(
+                    "GATE ACTIVE" in res.stdout, value in ("on", "auto"), res.stdout
                 )
 
 

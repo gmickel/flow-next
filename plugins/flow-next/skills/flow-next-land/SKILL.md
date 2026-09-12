@@ -9,7 +9,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 
 A tick is one invocation of `/flow-next:land`: discover the open PRs the build loop authored, walk each through the gate tree (CI tri-state → patience window → review-thread resolution → review signal → merge gates), take at most ONE action class per PR, and end with one terminal `LAND_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code owns the cadence (babysitting waits on external events — CI, reviewers — over hours).
 
-Land is the ship loop to pilot's build loop: pilot (`/goal`-shaped) drains ready specs into draft PRs; land (`/loop`-shaped) wakes on a cadence, acts on those PRs, sleeps. Land never authors PRs and never touches in-flight specs — it only babysits PRs whose authoring spec has ALL tasks done (the pilot-concurrency interlock).
+Land is the ship loop to the build loop of `/flow-next:flow --auto`, which drains ready specs into draft PRs; land (`/loop`-shaped) wakes on a cadence, acts on those PRs, sleeps. Land never authors PRs and never touches in-flight specs - it only babysits PRs whose authoring spec has ALL tasks done (the build-loop concurrency interlock).
 
 Land and Ralph are alternative autonomous drivers. Never nest them, and never reuse Ralph harness state inside land.
 
@@ -91,7 +91,7 @@ Driver condition examples:
 ## Forbidden
 
 - Asking the user anything in the tick path. Land is autonomous; ambiguity maps to `NEEDS_HUMAN`.
-- Authoring PRs, choosing/planning/implementing specs — that is the build loop (pilot). Land only babysits existing PRs.
+- Authoring PRs, choosing/planning/implementing specs - that is the build loop (`flow --auto`). Land only babysits existing PRs.
 - Acting on a PR without both authorship signals (branch matches a spec's `branch_name` **and** the structural authorship probe — the make-pr machine marker in footer position, with the anchored dated-footer fallback for pre-marker PRs; workflow.md Phase 1). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
 - `gh pr merge --auto`, merge-queue enrollment, or any merge without `--match-head-commit`.
 - Hand-resolving merge-conflict hunks. The conflict path is server-side catch-up only (`gh pr update-branch`); GitHub refusing the base merge → `BLOCKED`. Land never rebases and never force-pushes.

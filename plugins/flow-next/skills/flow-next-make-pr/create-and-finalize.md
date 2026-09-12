@@ -59,7 +59,7 @@ if [[ "$DRAFT_FORCE" == "draft" ]]; then
 fi
 
 # Layer 4: Explicit --ready force overrides everything except Ralph/autonomous.
-# Layer 1 is a hard invariant — autonomous loops (Ralph or pilot) MUST NOT open ready PRs even with --ready in args.
+# Layer 1 is a hard invariant - autonomous loops (Ralph or flow --auto) MUST NOT open ready PRs even with --ready in args.
 if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" && "$AUTONOMOUS" != "1" ]]; then
   DRAFT_FLAG=""
 fi
@@ -533,7 +533,7 @@ fi
 
 ### 5.4 — Ralph stdout shape
 
-Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness expects the PR URL on stdout in a parseable form, with all human-readable framing routed through stderr. This contract is keyed on `RALPH` ALONE — `AUTONOMOUS=1` without Ralph uses the interactive footer; autonomous drivers (pilot) confirm the PR via `gh`, not by scraping `PR_URL=`.
+Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness expects the PR URL on stdout in a parseable form, with all human-readable framing routed through stderr. This contract is keyed on `RALPH` ALONE — `AUTONOMOUS=1` without Ralph uses the interactive footer; autonomous drivers (`flow --auto`) confirm the PR via `gh`, not by scraping `PR_URL=`.
 
 ```bash
 if [[ "$RALPH" == "1" ]]; then

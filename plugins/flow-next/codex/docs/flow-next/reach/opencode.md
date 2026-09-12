@@ -47,3 +47,7 @@ No pinned agent for the tier's model → the subagent inherits the session model
 ## Models observed (2026-09-05)
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the CLI route for a Claude-family verdict from here - it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), cross-family when the session model is another family. It is its own backend, never a subprocess inside a `host` review.
+
+## Driving unattended
+
+Run `/flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. There is no host loop primitive. An external scheduler that cuts sessions short runs `/flow-next-flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. `/flow-next-pilot` is the one-release alias for the tick shape.

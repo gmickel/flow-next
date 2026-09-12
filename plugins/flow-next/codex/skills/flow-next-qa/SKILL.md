@@ -11,7 +11,7 @@ flow-next's review surface today is all static: `impl-review`, `spec-completion-
 
 **Augments, never replaces.** QA is the cheap *first* live pass — the app already runs on the dev's machine during `work`, so run an initial agentic pass over the complete build before a human opens the PR. Like everything in flow-next it **reduces human work agentically and surfaces problems to humans**; it does **not** stand in for CI/staging QA or manual QA, which still happen downstream. Findings are advisory: they ride the draft PR + the bug-memory track, and the human reviewer + the land gate decide.
 
-**Two entry points, one skill.** Run it user-invoked (you remember to), or wire it into the build loop as the **optional `pipeline.qa` stage**, a string enum `off | on | auto` (default **off**; `flowctl config set pipeline.qa on` or `flowctl config set pipeline.qa auto`). With `on`, [`/flow-next:pilot`](../flow-next-pilot/SKILL.md) and [`/flow-next:flow`](../flow-next-flow/SKILL.md) insert a `qa` stage at the **all-tasks-done** juncture — one live pass over the complete build, just before make-pr (`plan → plan-review → work → qa → make-pr`). With `auto`, `/flow-next:flow` runs that stage only for a drivable spec with a startable target and otherwise records `skipped(reason)` and advances; pilot keeps its literal-`on` gate and treats `auto` as off. The rule and the skip reasons live in [gate-selection.md](../flow-next-flow/references/gate-selection.md). The stage is evidence-aware (it leans on what `work` already verified) and autonomy-safe (`SHIP`/`NA`/`BLOCKED` advance; `NEEDS_WORK` still advances to the draft PR and surfaces its findings — QA never hard-blocks the loop). See [`docs/ralph.md`](../../docs/flow-next/ralph.md) and [`flowctl.md`](../../docs/flow-next/flowctl.md) (`pipeline.qa` config row).
+**Two entry points, one skill.** Run it user-invoked, or as the optional `pipeline.qa` stage (`off | on | auto`, default `off`) that `/flow-next:flow` runs at the all-tasks-done juncture before make-pr in both its shapes. When setting or reading that key, read [gate-selection.md](../flow-next-flow/references/gate-selection.md); it owns what each value does and the skip line a skipped stage records. See [`flowctl.md`](../../docs/flow-next/flowctl.md) for the config row.
 
 **Prerequisite - `/flow-next:prime` gates the recommendation.** Prime's QA-readiness line is the upstream signal for setting `pipeline.qa` to `auto` or `on`: it recommends enabling this stage ONLY when the repo reaches operability tier 3 AND the DR-core prerequisites pass (seeded data, documented dev login, a drivable surface, readable runtime evidence). If prime reports "QA stage would fail here" or "not applicable to this shape", the app cannot be driven yet - fix the named prerequisites (or leave the stage off) rather than wiring in a stage that BLOCKs every run.
 
@@ -68,7 +68,7 @@ for ARG in $RAW_ARGS; do
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored)" >&2
 # Secondary autonomy signal: the FLOW_AUTONOMOUS=1 env var (process-level drivers
-# like the pilot stage). Either signal flips QA_AUTONOMOUS on.
+# like the flow --auto QA stage). Either signal flips QA_AUTONOMOUS on.
 [[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && QA_AUTONOMOUS=1
 export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF QA_AUTONOMOUS   # carry the resolved overrides + autonomy into workflow.md (Phases 3.1 / 6.3 / §1.2 + the preamble)
 ```
@@ -77,14 +77,14 @@ When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by
 
 ## Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
 
-`QA_AUTONOMOUS=1` (set above from the literal `mode:autonomous` token — stripped, same shape as plan's autonomous branch — or the `FLOW_AUTONOMOUS=1` env var) means **the run asks nothing**. This is the signal the pilot QA stage passes so the build loop can't hang on an `plain-text numbered prompt`. The workflow honors it **at the preamble, before any prompt path** (workflow.md "Autonomous-mode gate") — not in the post-verdict preflight, because the early phases (1.1 spec id, 1.2 base, 3.1 target, 3.2 accounts) all prompt.
+`QA_AUTONOMOUS=1` (set above from the literal `mode:autonomous` token — stripped, same shape as plan's autonomous branch — or the `FLOW_AUTONOMOUS=1` env var) means **the run asks nothing**. This is the signal the `flow --auto` QA stage passes so the build loop can't hang on an `plain-text numbered prompt`. The workflow honors it **at the preamble, before any prompt path** (workflow.md "Autonomous-mode gate") — not in the post-verdict preflight, because the early phases (1.1 spec id, 1.2 base, 3.1 target, 3.2 accounts) all prompt.
 
 Under `QA_AUTONOMOUS=1`:
 - **The run asks nothing.** Every `plain-text numbered prompt` info-prompt path becomes a deterministic branch: resolve from spec / config / env, else surface a limitation. A prompt anywhere on this path has broken it.
 - **Undocumented target URL / required accounts / no reachable local app / undetermined spec id ⇒ emit a `BLOCKED` `qa_verdict` + clean exit** (the §6.3 writer), never an interactive prompt and never a hang.
-- **Autonomy ≠ Ralph.** Neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt-path gate — they gate **question suppression** only. Ralph (`FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`) is the separate, additive signal detected in Phase A; the two compose (a pilot run may be autonomous-but-not-Ralph).
+- **Autonomy ≠ Ralph.** Neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt-path gate — they gate **question suppression** only. Ralph (`FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`) is the separate, additive signal detected in Phase A; the two compose (a `flow --auto` run may be autonomous-but-not-Ralph).
 
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). Ralph independently suppresses prompts too (Phase A), so a Ralph run is implicitly autonomous; `QA_AUTONOMOUS` covers the non-Ralph autonomous caller (the pilot stage).
+Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). Ralph independently suppresses prompts too (Phase A), so a Ralph run is implicitly autonomous; `QA_AUTONOMOUS` covers the non-Ralph autonomous caller (the `flow --auto` QA stage).
 
 ## flow-next-drive consumption — a read-and-drive contract, not a callable API
 

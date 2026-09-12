@@ -57,6 +57,7 @@
   "discards": [],
   "notes": [
     "Deterministic source characters only; no backend token, cache, or wall-time claim.",
-    "Codex mirror regeneration is conductor-owned after parallel-wave integration."
+    "Codex mirror regeneration is conductor-owned after parallel-wave integration.",
+    "The pilot skill retired into flow --auto: auto.md replaced pilot SKILL.md + workflow.md and the two references moved to skills/flow-next-flow/references/. The hashes above are the recorded pilot-era measurement and are not re-frozen."
   ]
 }

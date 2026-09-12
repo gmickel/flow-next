@@ -427,7 +427,7 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-flow/references/route-matrix.md" \
   "$CODEX_DIR/skills/flow-next-flow/references/plan-vs-no-plan.md" \
-  "$CODEX_DIR/skills/flow-next-pilot/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-flow/auto.md" \
   "$CODEX_DIR/skills/flow-next-work/phases.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
@@ -1710,7 +1710,7 @@ generate_openai_yaml "flow-next-interview" "Flow Interview (deprecated alias)" "
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" true "What should we build next? "
 generate_openai_yaml "flow-next-chart"     "Flow Chart"     "Decision-map discovery for one oversized unclear idea before capture" "#3B82F6" true "Chart out: "
-generate_openai_yaml "flow-next-flow"      "Flow"           "Attended conductor - route from any starting point, run the stage, stop at the next human decision" "#3B82F6" true "Flow: "
+generate_openai_yaml "flow-next-flow"      "Flow"           "Conductor - route from any starting point, run the stage, stop at the next human decision; --auto runs the same route unattended to a terminal PILOT_VERDICT line" "#3B82F6" true "Flow: "
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
@@ -1719,7 +1719,10 @@ generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate l
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
-generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec (or --backlog/--auto triage), one stage per tick (pipeline.chainStages on chains qa into make-pr), terminal PILOT_VERDICT line" "#3B82F6" true
+# fn-239 R4: one-release deprecated alias. Catalog flag OFF so prose never resolves it;
+# the stub forwards to flow-next-flow --auto --tick. Remove this line, the stub dir, and
+# the commands/pilot.md shim in the release after flow --auto ships.
+generate_openai_yaml "flow-next-pilot" "Flow Pilot (deprecated alias)" "Deprecated alias for flow-next-flow --auto --tick; invoke the flow skill with --auto instead" "#3B82F6" false
 generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" true
 
 # Review skills (red, implicit)
@@ -1783,7 +1786,7 @@ codex_dir = pathlib.Path(sys.argv[1])
 DIET = {
     "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
     "flow-next-work": "Execute a flow-next spec or task end-to-end with worker subagents, gates, and commits. Use when asked to work on, implement, or execute fn-N.",
-    "flow-next-pilot": "Single-tick autonomous build-loop conductor. One spec or the backlog, one stage per tick (pipeline.chainStages chains qa into make-pr), emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.",
+    "flow-next-pilot": "Deprecated alias for flow-next-flow --auto --tick (one hop, PILOT_VERDICT line); removed next release. Invoke the flow skill with --auto instead.",
     "flow-next-land": "Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
@@ -1792,7 +1795,7 @@ DIET = {
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
     "flow-next-chart": "Decision-map discovery for one oversized unclear idea before capture. Resolve one decision per invocation, brief for capture. Use when asked to chart an idea or work a chart decision.",
-    "flow-next-flow": "Attended conductor for an idea, change request, spec or task id, tracker issue, branch or path, bug report, how or why question, slowness, cleanup, or design fork. Use when no skill is named.",
+    "flow-next-flow": "Conductor for an idea, spec or task id, tracker issue, branch, bug report, or question; --auto runs a ready spec unattended and emits PILOT_VERDICT. Use when no skill is named or to pilot a spec.",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
     "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
     "flow-next-features": "Seed or maintain the committed user-POV drive map at .flow/features/ so QA and drive reuse how a user reaches each feature.",
@@ -1852,7 +1855,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-make-pr"
   "flow-next-tracker-sync"
   "flow-next-qa"
-  "flow-next-pilot"
+  "flow-next-pilot"   # fn-239 R4 deprecated alias (catalog flag off); drop next release
   "flow-next-land"
   "flow-next-impl-review"
   "flow-next-plan-review"
@@ -2397,11 +2400,11 @@ flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` o
 flow-next-work/references/no-plan-route.md	`/flow-next:refine` — never mint an empty task	`$flow-next-refine` — never mint an empty task
 flow-next-work/references/no-plan-route.md	`/flow-next:plan-review`	`$flow-next-plan-review`
 flow-next-work/phases.md	`/flow-next:plan-review`	`$flow-next-plan-review`
-flow-next-pilot/workflow.md	`plan`: `/flow-next:plan 	`plan`: `$flow-next-plan
-flow-next-pilot/workflow.md	`plan-review`: `/flow-next:plan-review 	`plan-review`: `$flow-next-plan-review
-flow-next-pilot/workflow.md	`work`: `/flow-next:work 	`work`: `$flow-next-work
-flow-next-pilot/workflow.md	`qa`: `/flow-next:qa 	`qa`: `$flow-next-qa
-flow-next-pilot/workflow.md	`make-pr`: `/flow-next:make-pr 	`make-pr`: `$flow-next-make-pr
+flow-next-flow/auto.md	`plan`: `/flow-next:plan 	`plan`: `$flow-next-plan
+flow-next-flow/auto.md	`plan-review`: `/flow-next:plan-review 	`plan-review`: `$flow-next-plan-review
+flow-next-flow/auto.md	`work`: `/flow-next:work 	`work`: `$flow-next-work
+flow-next-flow/auto.md	`qa`: `/flow-next:qa 	`qa`: `$flow-next-qa
+flow-next-flow/auto.md	`make-pr`: `/flow-next:make-pr 	`make-pr`: `$flow-next-make-pr
 flow-next-refine/SKILL.md	use `/flow-next:plan-review fn-N`	use `$flow-next-plan-review fn-N`
 flow-next-capture/workflow.md	`/flow-next:flow --explain <SPEC_ID>`	`$flow-next-flow --explain <SPEC_ID>`
 flow-next-capture/references/rewrite-mode.md	`/flow-next:flow --explain <SPEC_ID>`	`$flow-next-flow --explain <SPEC_ID>`

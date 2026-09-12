@@ -176,7 +176,7 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 | **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
 | **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
 
-Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
+Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; `flow --auto` defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 **Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When the research scouts do run, Step 5 writes their findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
 
@@ -491,7 +491,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
    # (b) REVERSE — an existing spec depends on the new plan (spec-scout "Reverse Dependencies").
    #     MUST record these too: the edge belongs on the OTHER spec (it can't start until the new
-   #     plan lands). Dropping it leaves that spec falsely ready → pilot/backlog picks it up and
+   #     plan lands). Dropping it leaves that spec falsely ready → `flow --auto` picks it up and
    #     builds against infrastructure this plan hasn't shipped yet (silent, worst in autonomous mode).
    $FLOWCTL spec add-dep <other-spec-id> <new-spec-id> --json
    ```
@@ -640,7 +640,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
    Use `dep add` when you need to add dependencies to existing tasks or fix missed dependencies.
 
-   **The spec is never re-fetched after writing** (no post-write `show`/`cat` — you just authored this state; Step 6 validates it, and pilot judges the plan stage from flowctl state, not this skill's stdout). A post-write `show`/`cat` outside the Step 7 fix-loop re-anchor — the one deliberate exception — has broken this.
+   **The spec is never re-fetched after writing** (no post-write `show`/`cat` — you just authored this state; Step 6 validates it, and `flow --auto` judges the plan stage from flowctl state, not this skill's stdout). A post-write `show`/`cat` outside the Step 7 fix-loop re-anchor — the one deliberate exception — has broken this.
 
 **Done when:** the spec exists in `.flow/` with its plan body, every task was created in the one `task create --from-json` call, dependencies are recorded in both directions, and no plan artifact was written outside `.flow/`.
 

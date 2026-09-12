@@ -84,7 +84,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a pilot stage. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. `/flow-next:flow` runs this map for you. Say what you have and it picks the smallest sufficient route, runs it, and stops at the next decision that is yours; `/flow-next:flow --explain` shows the route without running it. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:refine` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict reports an open P0/P1 confirmed against the running app. In an attended run those findings guide fixes; pilot can carry findings or an inability to verify into a draft PR. QA defaults off (`pipeline.qa` is `off | on | auto`; `auto` runs it only when the acceptance criteria are UI-observable, the surface is drivable, and a target can be started, and records `skipped(reason)` when any of the three is absent) and grants no merge approval. The flow run ends at the draft PR; `/flow-next:resolve-pr` and CI convergence are later invocations, and merge is the human's decision, made by hand or handed to `/flow-next:land`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. The diagram includes the direct route and optional coordination and verification stages. Plan runs only on a positive signal, where a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier. Dependencies, execution constraints, size, and risk alone do not trigger planning. Review and QA do not guarantee every regression will be caught. See [`pipeline-variations.md`](pipeline-variations.md) for six worked examples and the risk-and-unknowns reasoning that selects between them.
+The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a stage of `flow --auto`. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. `/flow-next:flow` runs this map for you. Say what you have and it picks the smallest sufficient route, runs it, and stops at the next decision that is yours; `/flow-next:flow --explain` shows the route without running it. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:refine` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict reports an open P0/P1 confirmed against the running app. In an attended run those findings guide fixes; `flow --auto` can carry findings or an inability to verify into a draft PR. QA defaults off (`pipeline.qa` is `off | on | auto`; what each value does is in [`gate-selection.md`](../../skills/flow-next-flow/references/gate-selection.md)) and grants no merge approval. The flow run ends at the draft PR; `/flow-next:resolve-pr` and CI convergence are later invocations, and merge is the human's decision, made by hand or handed to `/flow-next:land`. Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. The diagram includes the direct route and optional coordination and verification stages. Plan runs only on a positive signal; the signals and the exclusions are in [`plan-vs-no-plan.md`](../../skills/flow-next-flow/references/plan-vs-no-plan.md). Review and QA do not guarantee every regression will be caught. See [`pipeline-variations.md`](pipeline-variations.md) for six worked examples and the risk-and-unknowns reasoning that selects between them.
 
 ---
 
@@ -464,11 +464,11 @@ What `.flow/` looks like with N developers in parallel:
 
 ## Autonomous work in a team
 
-Use pilot to advance ready specs toward draft PRs and land to handle CI, review convergence, and the merge policy the team authorized. Your host loop or scheduler drives repeated invocations. Keep overlapping runs in separate clones or isolated workspaces and give each a clear scope.
+Use `/flow-next:flow --auto` to drive one ready spec at a time to its draft PR and land to handle CI, review convergence, and the merge policy the team authorized. Repeat the invocation per item, or run `flow --auto --tick` under a host loop where sessions are short. Keep overlapping runs in separate clones or isolated workspaces and give each a clear scope.
 
 Humans approve the intent and the conditions for merging. The spec and PR remain the handover surfaces whether the run is supervised or unattended. Use the [orchestration guide](orchestration.md#chaining-the-loops) for driver recipes.
 
-Ralph is deprecated. Existing installations retain their [reference](ralph.md); new team setups should use pilot and land.
+Ralph is deprecated. Existing installations retain their [reference](ralph.md); new team setups should use `flow --auto` and land.
 
 ## Tracker sync & Linear Diffs
 
@@ -515,7 +515,7 @@ The collaboration doesn't disappear. The *ceremony tax* does. Standups, refineme
 
 ## Adoption ladder
 
-Don't try to roll out all 28 commands at once. Layer them in.
+Don't try to roll out all 27 commands at once. Layer them in.
 
 ### Week 1: Prove it works
 
@@ -548,7 +548,7 @@ Add the patterns that scale across multiple in-flight specs + multiple developer
 - Start writing **decision records** under `knowledge/decisions/` for load-bearing choices. The PR body's Decisions section gets richer; review velocity goes up.
 - Schedule periodic `/flow-next:audit` runs against `.flow/memory/`. Once a month is plenty for most teams.
 - **If the team lives in Linear, GitHub Issues, GitLab, or Jira, turn on `/flow-next:tracker-sync`.** Run the discovery ceremony - on confirmation it activates the **whole pipeline by default** (`tracker.perEvent.*`); you opt out of any event (`flowctl config set tracker.perEvent.<event> off`) rather than opt in. The spec stays the source of truth; the tracker becomes a co-editable mirror for stakeholder visibility. **Projection, not coordination** - see [`tracker-sync.md`](tracker-sync.md). (Don't confuse it with `/flow-next:sync` plan-sync.)
-- Pilot **Ralph** on a single mechanical spec (test backfill, lint migration, dependency bump). Watch the morning review. Decide whether to expand.
+- Trial **Ralph** on a single mechanical spec (test backfill, lint migration, dependency bump). Watch the morning review. Decide whether to expand.
 
 By the end of quarter 1, the team has crossed from *using a tool* to *running a methodology*.
 

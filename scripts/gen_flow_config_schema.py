@@ -397,28 +397,22 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "pipeline": "Pilot pipeline stage gates.",
     "pipeline.qa": (
-        "Optional live QA stage (fn-72, fn-238). String-enum off | on | "
-        "auto, NOT a bool; any other value, including bool true, is OFF. "
-        "off: QA runs only when you invoke /flow-next:qa. on: one live "
-        "/flow-next:qa pass at the all-tasks-done juncture before make-pr on "
-        "every spec. auto: /flow-next:flow runs that pass only when the "
-        "spec's acceptance describes UI behaviour on a drivable surface and "
-        "a target can be started, otherwise it records skipped(reason) and "
-        "advances. /flow-next:pilot activates on the literal on only. "
-        "flowctl stores the value and never interprets it; drivability is "
-        "the skill's judgment. Optional: flow-next runs fully without it. "
-        "It costs a live-app drive pass per spec plus a running deploy and "
-        "a configured driver. See docs/running-lean.md."
+        "Optional live QA stage. String-enum off | on | auto, NOT a bool; "
+        "any other value, including bool true, is OFF. Default off. What "
+        "each value does is defined by the flow skill's gate-selection "
+        "reference (skills/flow-next-flow/references/gate-selection.md); "
+        "flowctl stores the value and never interprets it. See "
+        "docs/running-lean.md."
     ),
     "pipeline.chainStages": (
-        "Opt-in pilot stage chaining (fn-219). String-enum, NOT a bool: only "
-        "the literal on activates; any other value, including bool true, is "
-        "OFF. With it on, a pilot tick that completed the qa stage with a "
-        "fresh terminal verdict runs make-pr in the same tick instead of "
-        "waiting for the next driver tick - the one closed chain pair "
-        "(qa -> make-pr); no other transition chains. OFF keeps the "
-        "one-stage-per-tick contract byte-for-byte. It removes one idle loop "
-        "interval per spec and only earns its keep with pipeline.qa on. See "
+        "Deprecated; removed with the /flow-next:pilot alias in the next "
+        "release. String-enum, NOT a bool: only the literal on activates; "
+        "any other value, including bool true, is OFF. It is honoured only "
+        "under flow --auto --tick (and the pilot alias), where a tick that "
+        "completed the qa stage with a fresh terminal verdict runs make-pr "
+        "in the same tick - the one closed chain pair (qa -> make-pr). A "
+        "long-horizon flow --auto run ignores it with one stderr notice, "
+        "because the hop loop already runs make-pr as the next hop. See "
         "docs/running-lean.md."
     ),
     "chart": (
@@ -435,9 +429,9 @@ DESCRIPTIONS: dict[str, str] = {
         "release-claim --break-stale --reason is allowed only after a claim "
         "is at least this old; always audited (actor, prior owner, age, reason)."
     ),
-    "pilot": "/flow-next:pilot settings.",
+    "pilot": "/flow-next:flow --auto settings (the pilot key name is kept).",
     "pilot.autonomy": (
-        "Pilot backlog mode (fn-68). Scalar string-enum (ready | backlog), "
+        "Backlog mode for flow --auto (--backlog forces it per run). Scalar string-enum (ready | backlog), "
         "NOT a bool. ready = select only already-ready specs. Only the "
         "literal backlog widens selection to the whole open backlog; any "
         "other value stays ready. Backlog mode never authors a spec, never "

@@ -24,6 +24,10 @@ This harness serves GPT-6 Astra (`gpt-6-astra`), released 2026-09-05 and strong 
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the packaged Claude-family verdict from this harness: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), with the same receipt, ladder and fix loop as the `codex` backend - a cross-family review whenever the session model that wrote the diff is another family (this harness's own models are), same-family if a Claude model wrote it.
 
+## Driving unattended
+
+Run `$flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under `/goal` (opt-in `[features] goals = true`, CLI >= 0.128.0, no `$skill-in-goal` syntax), write a plain-text objective that runs `flow --auto --tick` once per turn and stops on `PILOT_VERDICT=NO_WORK`. The parent sandbox must allow the stages' subprocesses and network. `$flow-next-pilot` is the one-release alias for the tick shape.
+
 ## Discover, then invoke
 
 Ask the CLI which models it offers immediately before invoking one, rather than trusting a value stored earlier - that habit is what makes an unreachable identifier a one-line correction instead of a failed run.

@@ -2,6 +2,29 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Teams that run Flow-Next unattended get one driver instead of two. `/flow-next:flow --auto` drives a ready spec through its whole route in one invocation, hop after hop, reading the same routing references the attended conductor reads. The one-stage-per-invocation discipline that pilot enforced is still available as `--tick` for hosts without stable long sessions, and every rail pilot had (the strikes ledger, the dirty-tree refusal, the all-done PR probe, the never-merge boundary, the decision log) moves across unchanged. `/flow-next:pilot` stays for this release as an alias and is removed in the next one.
+
+### Changed
+
+- **One unattended invocation now carries a spec from ready to draft PR.** Before: a driver looped `/flow-next:pilot` and paid a full re-anchor (skill re-read, config snapshot, selection, classification, branch resolution) plus the loop interval at every stage boundary, and only `qa` into `make-pr` could chain. After: `/flow-next:flow --auto [<spec-id>]` classifies, dispatches the stage with `mode:autonomous`, verifies from observed state, records the hop, and re-classifies until a terminal (the PR exists, deferred to land, asked, blocked, needs human, no work). Every hop ends with the same receipts, evidence echo, and ledger write a tick ended with, so a run that dies at hour six resumes from disk on the next invocation; nothing is resumed from transcript. `--tick` runs exactly one hop and stops, which is what a pilot tick was. Both shapes end with the one `PILOT_VERDICT` line drivers already parse; a long-horizon run names every dispatched stage joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict.
+- **Unattended classification reads the routing reference.** Pilot's private stage table is gone. `--auto` reads `route-matrix.md` for the spec-state rows, `plan-vs-no-plan.md` for a ready spec with no tasks and no recorded route (it records the route with `spec set-no-plan` or `spec clear-no-plan` before any mint and echoes the deciding signal), and `gate-selection.md` for the review, QA, and completion-review gates. What stays in the unattended workflow (`skills/flow-next-flow/auto.md`, read only when `--auto` is parsed) is what the reference cannot carry: the ready-flag consent boundary, selection order, the collision and re-bless checks, the PR probe, the branch matrix, the evidence echo, and the ledger. `--explain` under `--auto` prints the selected spec, the classified stage with its routing row and gate, the consulted fields, the PR probe, and would-clear ledger entries, with no write, no checkout, and no dispatch.
+- **`pipeline.qa=auto` now takes effect unattended.** `flow --auto` reads the key through the same gate-selection reference attended flow reads; a skipped QA hop records `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` and advances to make-pr. `on` and `off` are byte-for-byte unchanged.
+- **The attended refusal is inverted for `--auto`.** Attended `flow` still refuses under every autonomy marker; its line now reads `NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs`. `--auto` refuses only under Ralph (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`) with pilot's exact terminal line, because it sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. Flow, `flow --auto`, and Ralph are three drivers and are never nested; `--auto` never dispatches land or a second driver. Land is unchanged and `DEFERRED_TO_LAND` keeps its meaning.
+- **Backlog mode is `flow --auto --backlog`.** `references/backlog-mode.md` moved under the flow skill; `pilot.autonomy=backlog` still enables it; every safety invariant stays enforcing bash at its site. In long-horizon mode a backlog run drives one selected item to its terminal and stops; the next invocation selects the next item.
+
+### Deprecated
+
+- **`/flow-next:pilot` is an alias for `/flow-next:flow --auto --tick` for this release only.** The command shim and the `skills/flow-next-pilot/` stub rewrite the arguments (`--spec <id>` becomes the positional id; `--backlog`, `--dry-run`, `--review`, `--research`, `--depth` pass through), print `pilot is now flow --auto --tick; this alias is removed in the next release` to stderr, and behave byte-for-byte as a pilot tick. The next release removes the shim, the stub, the command entry, the conduct page, the Codex mirror, and the sync-roster rows. Update `/loop`, `/goal`, and Ralph recipes now: the default recipe is one `flow --auto` invocation per item; the loop recipe is `/loop 30m /flow-next:flow --auto --tick`.
+- **`pipeline.chainStages` is deprecated and removed with the alias.** It is honoured under `--tick` (the `qa+make-pr` tick it was built for) and ignored with one stderr notice in long-horizon mode, where the hop loop already runs make-pr as the next hop.
+
+### Under the hood
+
+- Config keys (`pilot.autonomy`, `pilot.gateClasses`, `pipeline.qa`, `pipeline.chainStages`), flowctl verbs (`flowctl pilot strikes list|clear`, `flowctl pilot-log`), the ledger path under the git common dir, the decision-log path `.flow/pilot-runs/`, and the `PILOT_VERDICT` name are not renamed; a rename is a separate, deliberate break for a later major.
+- Published counts drop by one skill and one command (pilot moves to the alias tier); registry manifests count shipped directories and are unchanged.
+- Terminal-parity and wall-clock results for long-horizon versus tick execution are pending.
+
 ## [flow-next 5.0.1] - 2026-09-12
 
 A patch on 5.0.0; read the 5.0.0 entry below for the release itself.

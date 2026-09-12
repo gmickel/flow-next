@@ -2,7 +2,7 @@
 
 **Decision record**
 
-- Source: the review-backend grammar (`docs/flowctl.md`), the `pipeline.qa` gate, work's completion-review policy, pilot's QA stage reference.
+- Source: the review-backend grammar (`docs/flowctl.md`), the `pipeline.qa` gate, work's completion-review policy, the QA freshness probe the unattended driver reads (`qa-stage.md`).
 - Trigger: a route reaches a gate - after implementation (review), at all-tasks-done (QA, completion review), before a PR (make-pr's coverage).
 - Purpose: one place naming which gate applies and from which config key or flag it is read, so flow and the stage skills agree.
 - Evidence: gate policy scattered across skills is the enumeration-site drift class; every routed or skipped stage must leave a `ran` / `skipped(reason)` line.
@@ -24,7 +24,7 @@ Runs per `review.backend` or the invocation's `--review=<backend>` flag; `/flow-
 - `on`: QA runs at all-tasks-done, before make-pr, on every spec.
 - `auto`: QA runs at all-tasks-done when the spec's acceptance describes UI behaviour on a drivable surface **and** a target can be started (a documented dev server, a deploy URL, or a running instance the QA skill can reach). Otherwise the stage records `skipped(config: pipeline.qa=auto: <no UI-observable criteria | no drivable surface | no startable target>)` and the route advances.
 
-Whether a spec is drivable is judgment, read from the acceptance criteria and the repo (`.flow/features/`, the prime QA-readiness line, a documented start command). QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to the draft PR with their findings. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven; deterministic re-runnable tests subtract. Pilot's gate is unchanged and activates only on the literal `on`.
+Whether a spec is drivable is judgment, read from the acceptance criteria and the repo (`.flow/features/`, the prime QA-readiness line, a documented start command). QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to the draft PR with their findings. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven; deterministic re-runnable tests subtract.
 
 ## Completion review
 

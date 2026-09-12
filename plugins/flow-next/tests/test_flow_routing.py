@@ -1,11 +1,13 @@
-"""Contract checks for /flow-next:flow and its shared routing reference (fn-238).
+"""Contract checks for /flow-next:flow and its shared routing reference.
 
-Behavior and contract only (G2): the skill, shim, and six reference files
-exist; every reference opens with a decision record; every reference link from
-the always-loaded files resolves and every reference is reachable; every
-consumer pointer names a reference file that exists; the retired guide skill
-is named nowhere on a canonical surface; the autonomy refusal line and the
---explain token are present.
+Behavior and contract only (G2): the skill, shim, six routing reference files
+and the two gated auto-only reference files exist and nothing else sits in
+references/; every routing reference opens with a decision record; every
+reference link from the always-loaded files resolves, every routing reference
+is reachable from them, and the two auto-only files are reachable from auto.md
+only; every consumer pointer names a reference file that exists; the retired
+guide skill is named nowhere on a canonical surface; the attended refusal
+line and the mode-detection tokens (--explain, --auto, --tick) are present.
 
 Run:
     cd plugins/flow-next/tests && python3 -m unittest test_flow_routing -q
@@ -25,6 +27,7 @@ REPO_ROOT = PLUGIN.parent.parent
 FLOW_DIR = PLUGIN / "skills" / "flow-next-flow"
 FLOW_SKILL = FLOW_DIR / "SKILL.md"
 FLOW_WORKFLOW = FLOW_DIR / "workflow.md"
+FLOW_AUTO = FLOW_DIR / "auto.md"
 FLOW_REFERENCES = FLOW_DIR / "references"
 FLOW_SHIM = PLUGIN / "commands" / "flow.md"
 
@@ -36,6 +39,10 @@ REFERENCE_NAMES = (
     "prototype-before-ask.md",
     "tail.md",
 )
+
+# Gated references read only under `--auto` (moved from the pilot skill). They
+# carry no routing rule and no decision record; auto.md reaches them.
+AUTO_ONLY_REFERENCE_NAMES = ("backlog-mode.md", "qa-stage.md")
 
 DECISION_RECORD_ITEMS = ("Source", "Trigger", "Purpose", "Evidence", "Disposition")
 
@@ -88,16 +95,16 @@ def _frontmatter(text: str) -> str:
 
 class FlowSurfaceExists(unittest.TestCase):
     def test_skill_workflow_shim_and_references_exist(self) -> None:
-        for path in (FLOW_SKILL, FLOW_WORKFLOW, FLOW_SHIM):
+        for path in (FLOW_SKILL, FLOW_WORKFLOW, FLOW_AUTO, FLOW_SHIM):
             self.assertTrue(path.is_file(), f"missing {path.relative_to(REPO_ROOT)}")
-        for name in REFERENCE_NAMES:
+        for name in (*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES):
             path = FLOW_REFERENCES / name
             self.assertTrue(path.is_file(), f"missing {path.relative_to(REPO_ROOT)}")
-        extra = sorted(p.name for p in FLOW_REFERENCES.glob("*.md"))
+        on_disk = sorted(p.name for p in FLOW_REFERENCES.glob("*.md"))
         self.assertEqual(
-            extra,
-            sorted(REFERENCE_NAMES),
-            "the routing reference is exactly six files, one per rule",
+            on_disk,
+            sorted((*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES)),
+            "references/ holds the six routing files plus the two auto-only files, nothing else",
         )
 
     def test_shim_frontmatter(self) -> None:
@@ -157,8 +164,29 @@ class FlowReferenceReachability(unittest.TestCase):
                     mentioned,
                     f"references/{name} is not reachable from SKILL.md or workflow.md",
                 )
+        # The auto-only files are gated behind `--auto`: the attended prose
+        # never names them, so an attended run never loads them.
         unknown = mentioned - set(REFERENCE_NAMES)
         self.assertEqual(unknown, set(), f"always-loaded prose names unknown references: {sorted(unknown)}")
+
+    def test_auto_md_links_the_auto_only_references_one_level_deep(self) -> None:
+        text = _read(FLOW_AUTO)
+        linked = set(LOCAL_REF_LINK_RE.findall(text))
+        for name in AUTO_ONLY_REFERENCE_NAMES:
+            with self.subTest(reference=name):
+                self.assertIn(
+                    f"references/{name}",
+                    linked,
+                    f"auto.md must link references/{name} directly",
+                )
+        for rel in linked:
+            with self.subTest(link=rel):
+                self.assertTrue((FLOW_DIR / rel).is_file(), f"auto.md links {rel} which does not exist")
+        unknown = set(LOCAL_REF_MENTION_RE.findall(text)) - set(REFERENCE_NAMES) - set(AUTO_ONLY_REFERENCE_NAMES)
+        self.assertEqual(unknown, set(), f"auto.md names unknown references: {sorted(unknown)}")
+
+    def test_skill_links_auto_md_one_level_deep(self) -> None:
+        self.assertRegex(_read(FLOW_SKILL), r"\]\(auto\.md\)", "SKILL.md must link auto.md one level deep")
 
 
 class ConsumerPointersResolve(unittest.TestCase):
@@ -209,13 +237,20 @@ class GuideRetired(unittest.TestCase):
 
 
 class FlowInvariantTokens(unittest.TestCase):
-    def test_autonomy_refusal_line_present(self) -> None:
+    def test_attended_refusal_line_present(self) -> None:
         self.assertIn("NEEDS_HUMAN:", _read(FLOW_SKILL))
 
-    def test_explain_token_documented(self) -> None:
+    def test_mode_detection_tokens_documented(self) -> None:
         text = _read(FLOW_SKILL)
-        self.assertIn("--explain", text, "the skill body must document the --explain token")
-        self.assertIn("EXPLAIN=1", text, "mode detection must bind the --explain token")
+        # token -> the variable mode detection binds it to
+        for token, binding in (
+            ("--explain", "EXPLAIN=1"),
+            ("--auto", "AUTO=1"),
+            ("--tick", "AUTO_TICK=1"),
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, text, f"the skill body must document the {token} token")
+                self.assertIn(binding, text, f"mode detection must bind {token} to {binding}")
 
 
 if __name__ == "__main__":

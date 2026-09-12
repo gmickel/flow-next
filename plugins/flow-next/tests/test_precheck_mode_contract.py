@@ -33,7 +33,7 @@ LIFECYCLE_SKILLS = [
     "flow-next-make-pr",
     "flow-next-map",
     "flow-next-memory-migrate",
-    "flow-next-pilot",
+    "flow-next-pilot",  # one-release deprecation stub onto flow --auto --tick
     PLAN,
     "flow-next-prime",
     "flow-next-prospect",
@@ -86,12 +86,19 @@ class PrecheckModeContractTest(unittest.TestCase):
                 self.assertIn("LEGACY_COPY_ARTIFACTS", text)
 
     def test_pilot_and_land_no_longer_carry_verdict_stash(self) -> None:
-        for name in ("flow-next-pilot", "flow-next-land"):
-            for filename in ("SKILL.md", "workflow.md"):
-                with self.subTest(skill=name, file=filename):
-                    text = (SKILLS / name / filename).read_text(encoding="utf-8")
-                    self.assertNotIn("setup_stale", text)
-                    self.assertNotIn("SETUP_STALE", text)
+        # The pilot stub has no workflow.md any more; its driver body is the
+        # flow skill's auto.md.
+        surfaces = (
+            ("flow-next-pilot", "SKILL.md"),
+            ("flow-next-flow", "auto.md"),
+            ("flow-next-land", "SKILL.md"),
+            ("flow-next-land", "workflow.md"),
+        )
+        for name, filename in surfaces:
+            with self.subTest(skill=name, file=filename):
+                text = (SKILLS / name / filename).read_text(encoding="utf-8")
+                self.assertNotIn("setup_stale", text)
+                self.assertNotIn("SETUP_STALE", text)
 
     def test_codex_installer_ships_the_plugin_manifest(self) -> None:
         installer = CODEX_INSTALLER.read_text(encoding="utf-8")

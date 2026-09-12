@@ -42,7 +42,9 @@ FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 # The exact canonical command surface after the fn-124 flatten (+ chart from
 # fn-135.4, + features from fn-211.4, + flow from fn-238 replacing guide,
 # + refine from fn-238 R15 renaming interview (the `interview` shim stays for
-# ONE release as a forwarding alias and is removed the release after);
+# ONE release as a forwarding alias and is removed the release after; the
+# `pilot` shim likewise stays ONE release as a redirect onto
+# `flow --auto --tick`);
 # epic-review retired; work-rolling graduated into work's default scheduler,
 # fn-218).
 # Pinned so a silent delete-one-add-one swap fails CI: adding or removing a

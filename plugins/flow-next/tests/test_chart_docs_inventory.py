@@ -295,20 +295,26 @@ class ChartRegistryCounts(unittest.TestCase):
         # flow-next-features (fn-211.4); the experimental work-rolling beta
         # graduated into work's default scheduler (fn-218), so the shipped
         # counts and the published phrases (32 skills / 27 slash-command)
-        # agree again and must equal the docs/skills.md table row count.
+        # agreed again and must equal the docs/skills.md table row count.
         # fn-238 swapped guide out for flow, so the counts stay flat.
         # fn-238 R15 renamed interview to refine and keeps `flow-next-interview`
         # as a one-release forwarding alias stub (plus its command shim): the
         # filesystem/registry inventory counts them (33 dirs / 29 shims, same
-        # carve-out as the experimental tier) while the published phrases stay
-        # at the stable 32 skills / 27 slash-command. Both drop back when the
-        # alias is removed the release after.
+        # carve-out as the experimental tier) while the published phrases
+        # exclude the alias. fn-239 folded pilot into `flow --auto` and keeps
+        # `flow-next-pilot` as a second one-release alias stub (plus its
+        # command shim), so the filesystem/registry inventory stays at
+        # 33 dirs / 29 shims while the published phrases drop to the stable
+        # 31 skills / 26 slash-command. Both aliases drop out of the
+        # inventory when they are removed the release after.
         self.assertEqual(len(skill_dirs), 33, f"skills dirs: {skill_dirs}")
         self.assertEqual(len(commands), 29, f"commands: {commands}")
         self.assertIn("flow-next-refine", skill_dirs)
         self.assertIn("flow-next-interview", skill_dirs)
+        self.assertIn("flow-next-pilot", skill_dirs)
         self.assertIn("refine", commands)
         self.assertIn("interview", commands)
+        self.assertIn("pilot", commands)
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-flow", skill_dirs)
         self.assertNotIn("flow-next-guide", skill_dirs)
@@ -317,8 +323,8 @@ class ChartRegistryCounts(unittest.TestCase):
         self.assertIn("flow", commands)
         self.assertNotIn("guide", commands)
         self.assertIn("features", commands)
-        # the alias stub has a matching shim, so it counts as a slash skill
-        # in the inventory (28) while the published phrase stays at 27.
+        # each alias stub has a matching shim, so both count as slash skills
+        # in the inventory (28) while the published phrase stays at 26.
         self.assertEqual(len(slash_skills), 28, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
@@ -333,11 +339,11 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("32 skills", "27 slash-command", "5 phrase")),
-            (DOCS / "README.md", ("32 skills",)),
-            (REPO_ROOT / "README.md", ("32 skills",)),
-            (PLUGIN / "README.md", ("32 skills",)),
-            (DOCS / "teams.md", ("all 28 commands",)),
+            (DOCS / "skills.md", ("31 skills", "26 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("31 skills",)),
+            (REPO_ROOT / "README.md", ("31 skills",)),
+            (PLUGIN / "README.md", ("31 skills",)),
+            (DOCS / "teams.md", ("all 27 commands",)),
         ):
             text = _read(path)
             for n in needles:
@@ -637,13 +643,8 @@ class ChartInvariantPhrases(unittest.TestCase):
 
     def test_orchestration_not_pilot_stage(self) -> None:
         text = _read(DOCS / "orchestration.md")
-        self.assertRegex(text, r"(?i)not a pilot stage")
         self.assertIn("CHART_VERDICT", text)
         self.assertIn("/flow-next:chart", text)
-
-    def test_ralph_not_pilot_stage(self) -> None:
-        text = _read(DOCS / "ralph.md")
-        self.assertRegex(text, r"(?i)never a pilot stage|Chart is never a pilot stage")
 
 
 class ChartUsageParity(unittest.TestCase):

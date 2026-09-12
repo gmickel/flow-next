@@ -1,6 +1,6 @@
 ---
 name: flow-next-features
-description: 'Seed or maintain the committed user-POV feature map at `.flow/features/` so QA and drive reuse how a user reaches each feature. Two state-resolved modes: no `.flow/features/` (or explicit init intent) seeds it; a present map maintains it. Triggers on /flow-next:features, "seed the feature map", "maintain the feature map", "feature map", "init features". Never dispatched by pilot, land, Ralph, or any autonomous driver.'
+description: 'Seed or maintain the committed user-POV feature map at `.flow/features/` so QA and drive reuse how a user reaches each feature. Two state-resolved modes: no `.flow/features/` (or explicit init intent) seeds it; a present map maintains it. Triggers on /flow-next:features, "seed the feature map", "maintain the feature map", "feature map", "init features". Never dispatched by `flow --auto`, land, Ralph, or any autonomous driver.'
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
@@ -29,7 +29,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Autonomy refusal
 
-`/flow-next:features` is user-invoked (or a host loop the human started). Pilot, land, Ralph, and every other autonomous driver must not dispatch it. Scan the autonomy-marker **namespace**, never a fixed two-var list. Any hit refuses with the typed one-line report and stops.
+`/flow-next:features` is user-invoked (or a host loop the human started). `flow --auto`, land, Ralph, and every other autonomous driver must not dispatch it. Scan the autonomy-marker **namespace**, never a fixed two-var list. Any hit refuses with the typed one-line report and stops.
 
 ```bash
 REFUSE=0
@@ -84,7 +84,7 @@ printf 'MODE=%s\n' "$MODE"
 
 ## Forbidden
 
-- **Dispatch by an autonomous driver.** Pilot, land, Ralph, or any autonomy-marker hit: refuse. Cadence belongs to the human or their host loop.
+- **Dispatch by an autonomous driver.** `flow --auto`, land, Ralph, or any autonomy-marker hit: refuse. Cadence belongs to the human or their host loop.
 - **Editing product code in maintain.** Maintain's edit scope is `.flow/features/` plus harness scripts the map owns. Product bugs are reported and kept out of the PR.
 - **Merging.** Never `gh pr merge`, never `/flow-next:land`. A `changed` maintain PR stays open for the human or land.
 - **Driving an instance this run did not start.** Doctor names the owner. An orphaned port from a crashed prior run ends `BLOCKED`; reclaim is left to the human. Never kill by process name - kill what this run started.

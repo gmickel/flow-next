@@ -1,13 +1,22 @@
 {
   "branch_name": "fn-239-flow-auto-pilot-adopts-the-routing",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-09-11T13:01:10.690718Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-238-flow-attended-conductor-shared-routing"
   ],
   "id": "fn-239-flow-auto-pilot-adopts-the-routing",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-239-flow-auto-pilot-adopts-the-routing.md",
   "status": "open",
   "title": "flow --auto: pilot adopts the routing reference and runs long-horizon over the same rails",
@@ -22,5 +31,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-11T17:04:50.946227Z"
+  "updated_at": "2026-09-12T13:45:13.949932Z"
 }

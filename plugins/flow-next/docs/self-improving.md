@@ -46,7 +46,7 @@ A committed user-POV drive directory (`.flow/features/`, beside `.flow/memory/`)
 
 **Read by** `/flow-next:qa` and `flow-next-drive` when the directory exists (existence check only; no config key). Absent map: both behave as they do today. A QA run that finds a stale route files it as a `feature-map-drift` memory tag for the next maintain pass; it never edits the map mid-run.
 
-**Pruned by** that same maintain pass. Outcomes are `clean` (no branch, no PR), `changed` (one PR of proven map/harness corrections only), or `blocked` (names what blocked). Cadence belongs to the human or their host loop - never a pilot stage, land tail, or Ralph iteration.
+**Pruned by** that same maintain pass. Outcomes are `clean` (no branch, no PR), `changed` (one PR of proven map/harness corrections only), or `blocked` (names what blocked). Cadence belongs to the human or their host loop - never a stage of `flow --auto`, a land tail, or a Ralph iteration.
 
 This is a user-POV drive map. The code-POV `/flow-next:map` index is a different layer; both stay. Skill: [`../skills/flow-next-features/SKILL.md`](../skills/flow-next-features/SKILL.md).
 

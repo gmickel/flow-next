@@ -22,7 +22,7 @@ An extra reviewer adds a review pass. A fix adds implementation and re-review. L
 | Who is watching | You are, at the keyboard | Nobody, until morning |
 | What the layers do | Give you a capability on demand | Stand in for the judgment you are not there to apply |
 | Default posture | Run lean; add a layer when the work asks for it | Run gated; the gates are what make the run trustworthy |
-| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:pilot` + `/flow-next:land` under a host loop |
+| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:flow --auto` + `/flow-next:land`, repeated by a human, a host loop, or a scheduler |
 
 **Neither is the real mode.** They are two answers to one question: *who applies judgment at each handover?* When you are present, you are the reviewer, the tracker, and the QA - a review backend, a bidirectional tracker sync, and a live QA stage are then buying you convenience, not safety, and you should switch each one on only where the convenience is worth its cost. When nobody is present, those same layers stop being convenience: they are the only thing standing between an unattended loop and an unreviewed merge, and running without them is the actual risk.
 
@@ -63,7 +63,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
 | [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
 | [Pre-capture discovery](#pre-capture-discovery) | none | manual | `/flow-next:chart`, `/flow-next:prospect` |
-| [Autonomous loops](#autonomous-loops) | none to enable; `pipeline.chainStages`, `land.patienceMinutesAfterReview` tune the loops | manual (both tuners off) | `/flow-next:pilot`, `/flow-next:land` |
+| [Autonomous loops](#autonomous-loops) | none to enable; `land.patienceMinutesAfterReview` tunes the ship loop (`pipeline.chainStages` is deprecated) | manual (tuner off) | `/flow-next:flow --auto`, `/flow-next:land` |
 | [GitHub scouts](#github-scouts) | `scouts.github` | off | ask a scout in conversation |
 | [Ralph](#ralph-deprecated) | none | off, **deprecated** | see below |
 
@@ -78,10 +78,10 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 ### Live QA stage
 
-`pipeline.qa` - **off by default**; the skill is always available. `flowctl config set pipeline.qa on` runs one live pass on every spec before make-pr (pilot and flow); `flowctl config set pipeline.qa auto` makes `/flow-next:flow` run it only for a drivable spec with a startable target and record `skipped(reason)` otherwise (pilot activates on the literal `on` only). Details: [`../skills/flow-next-qa/SKILL.md`](../../skills/flow-next-qa/SKILL.md).
+`pipeline.qa` - **off by default**; the skill is always available. Set it with `flowctl config set pipeline.qa <off|on|auto>`; what each value does is in [`gate-selection.md`](../../skills/flow-next-flow/references/gate-selection.md). Details: [`../skills/flow-next-qa/SKILL.md`](../../skills/flow-next-qa/SKILL.md).
 
 - **Automates away:** driving the running app like a real user against the spec's acceptance criteria, and filing evidence-backed findings before a human opens the PR.
-- **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a pilot stage it sits between all-tasks-done and make-pr, so every spec pays it.
+- **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a stage of `flow --auto` it sits between all-tasks-done and make-pr, so with `on` every spec pays it.
 - **Earns its keep when:** nobody will exercise the app before merge - the autonomous profile's usual case - or when the change is UI/runtime-shaped and tests cannot see the failure mode.
 - **Lean invocation:** `/flow-next:qa <spec>` when a change deserves it. If the app is already up on your machine because you just built the feature, you are the live QA pass; the skill is for when you want the findings written down as evidence instead of noticed and forgotten.
 
@@ -98,7 +98,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 The costs above are wall-clock costs in disguise. Each review round is a serial pass the whole pipeline waits on, and the fix-and-re-review loop repeats that wait per round. If you read every diff yourself anyway, the wait buys you little, and the backend has two cheaper settings for exactly that case.
 
-**`none`** switches the review gates off instead of routing them anywhere. Every backend-driven review exits cleanly: the per-task worker review, impl-review, plan-review, and spec-completion-review all skip, and pilot skips its plan-review and completion-review gates rather than deadlocking on them. What still runs is the deterministic spine (Quick commands, full gates, plan-sync) and the in-host quality audit that work dispatches when a change is large or risky. Notice what that leaves out: nothing verifies R-ID coverage at the end of a spec, and a small spec ships on gates alone. Sensible when you are the reviewer; the wrong setting for an unattended loop.
+**`none`** switches the review gates off instead of routing them anywhere. Every backend-driven review exits cleanly: the per-task worker review, impl-review, plan-review, and spec-completion-review all skip, and `flow --auto` skips its plan-review and completion-review gates rather than deadlocking on them. What still runs is the deterministic spine (Quick commands, full gates, plan-sync) and the in-host quality audit that work dispatches when a change is large or risky. Notice what that leaves out: nothing verifies R-ID coverage at the end of a spec, and a small spec ships on gates alone. Sensible when you are the reviewer; the wrong setting for an unattended loop.
 
 **`host`** keeps every gate alive and runs the reviewer as a host-native fresh-context subagent instead of a second CLI: nothing to install or authenticate, no subprocess. Configuring it takes two lines:
 
@@ -160,11 +160,11 @@ No config key - these are skills you invoke or do not. Details: [`../skills/flow
 
 No config key to enable; `pilot.autonomy` (`ready` by default) only widens what pilot selects. Details: [`../skills/flow-next-pilot/SKILL.md`](../../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../../skills/flow-next-land/SKILL.md).
 
-- **Automates away:** the repetition - pilot advances one ready spec by one stage per tick, land babysits the resulting PRs to merged.
+- **Automates away:** the repetition - `flow --auto` drives one ready spec hop after hop to its draft PR in one invocation (`--tick` runs one hop for hosts that loop), land babysits the resulting PRs to merged.
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
 - **Earns its keep when:** there is a queue of blessed, fully specified work and nobody who wants to sit through it.
 - **Lean invocation:** `/flow-next:work` is the human-driven equivalent and needs no loop primitive at all.
-- **Optional idle removal (both off by default, both independent):** `pipeline.chainStages` runs `make-pr` in the same pilot tick as a fresh terminal `qa` verdict - it trades one driver re-anchor (a loop interval plus a cold classify) for one longer tick, and only does anything on repos with `pipeline.qa` on; every other transition stays one stage per tick. `land.patienceMinutesAfterReview` measures land's `silence` window from the head-current review event instead of the last push - it trades push-anchored grace for review-anchored grace, replacing the push window rather than taking the shorter of the two, so an early review shortens today's wait and a late review lengthens it. Neither changes a gate, a verdict, or the merge license. Patience-after-review stays opt-in because the push window is the human-objection grace period: how much of that grace a repo keeps after the reviewer has spoken is its call, not a default.
+- **Optional idle removal:** a long-horizon `flow --auto` run removes every driver re-anchor between stages by construction, so `pipeline.chainStages` is deprecated; for this release it still runs `make-pr` in the same tick as a fresh terminal `qa` verdict under `--tick` (and the pilot alias), is ignored with one notice in long-horizon mode, and is removed with the alias next release. `land.patienceMinutesAfterReview` (off by default) measures land's `silence` window from the head-current review event instead of the last push - it trades push-anchored grace for review-anchored grace, replacing the push window rather than taking the shorter of the two, so an early review shortens today's wait and a late review lengthens it. Neither changes a gate, a verdict, or the merge license. Patience-after-review stays opt-in because the push window is the human-objection grace period: how much of that grace a repo keeps after the reviewer has spoken is its call, not a default.
 
 ### GitHub scouts
 
@@ -177,7 +177,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 ### Ralph (deprecated)
 
-**Deprecated.** A shell script that calls the orchestration primitives - `/flow-next:pilot` to build and `/flow-next:land` to ship, driven by a host loop or `cron` - does what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for pilot + land. Details and the full comparison: [`ralph.md`](ralph.md).
+**Deprecated.** `/flow-next:flow --auto` to build and `/flow-next:land` to ship, repeated by a host loop or `cron`, do what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for `flow --auto` + land. Details and the full comparison: [`ralph.md`](ralph.md).
 
 ### Implementation offload (no layer to enable)
 

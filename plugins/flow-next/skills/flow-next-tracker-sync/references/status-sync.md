@@ -51,7 +51,7 @@ shipped completion review is still only `in-review` on the tracker until a
 merge-confirmed work.
 
 **`prEvidence`** is the result of the merge-evidence probe for the spec branch
-(reuse verbatim from land `workflow.md:99-104` / pilot `:126-132`):
+(reuse verbatim from land `workflow.md:99-104` / the flow skill's `auto.md` PR probe):
 
 ```bash
 BRANCH_NAME=$($FLOWCTL show "$SPEC_ID" --json | jq -r .branch_name)
@@ -112,7 +112,7 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 
 > **Why row 3 catches `unknown`.** flowctl normalizes a missing completion-review
 > field to `unknown` (the `completion_review_status` fallback in `flowctl.py`), and for repos without a
-> completion-review backend pilot skips the gate entirely. Row 3 is the `merged` +
+> completion-review backend `flow --auto` skips the gate entirely. Row 3 is the `merged` +
 > not-satisfied rung **only when a completion review is
 > actually configured** — when no completion-review backend is configured at all,
 > row 1 fires first (a spec with no review gate has nothing to wait on, so a merge is
@@ -674,7 +674,7 @@ never advanced the issue. Regression guard for Thread A.
 
 **Flow:** spec `done`, **`completion_review_status == unknown`** (no completion-review
 backend configured — flowctl normalizes the missing field to `unknown`,
-the `completion_review_status` fallback in flowctl.py; pilot skips the gate when no backend is configured — see the stage-classification route table, flow-next-pilot/workflow.md:345-358).
+the `completion_review_status` fallback in flowctl.py; `flow --auto` skips the gate when no backend is configured - see the flow skill's `references/gate-selection.md`).
 **`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
 **Tracker:** `status.normalized = "in-review"`.
 

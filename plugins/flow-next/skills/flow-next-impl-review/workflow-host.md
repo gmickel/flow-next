@@ -397,7 +397,7 @@ The command reads the prior receipt before atomically replacing it. Unsupported
 or legacy prose preserves the base receipt without a `findings` field; no extra
 reviewer, model, or network call occurs.
 
-Do **not** invent a `session_id` for resume — host re-reviews always spawn a new subagent. Shape stays compatible with convergence/cap/pilot/land consumers (`mode`, `verdict`, `model`, `timestamp`).
+Host re-reviews always spawn a new subagent. Do not invent a `session_id` for resume. Shape stays compatible with convergence/cap/flow --auto/land consumers (`mode`, `verdict`, `model`, `timestamp`).
 
 ## Step 4: Optional phases
 
