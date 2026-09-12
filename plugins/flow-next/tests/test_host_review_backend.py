@@ -226,7 +226,6 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         work = _read("flow-next-work/phases.md")
-        pilot = _read("flow-next-flow/auto.md")
         command = "$FLOWCTL spec set-completion-review-status"
         self.assertEqual(root.count(command), 1, "recovery owner must issue one status write")
         self.assertIn("--status-target completion", host)
@@ -254,9 +253,9 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertIn("needs_human", host)
         self.assertIn("NEEDS_HUMAN", rp)
         self.assertIn(
-            "the spec-completion-review skill writes terminal "
-            "`completion_review_status` through its backend-aware shared owner",
-            pilot,
+            "through its backend-aware shared owner",
+            work,
+            "work's 3g gate names the shared status owner completion review writes through",
         )
         self.assertIn("ESCALATE: reviewer requested human review", host)
 

@@ -1,10 +1,6 @@
 # /flow-next:flow --auto - the unattended driver
 
-Read only when SKILL.md parsed the exact `--auto` token. Attended runs never load this file. One run selects one ready item and drives it hop after hop (classify, dispatch the routed stage, verify from observed state, record the hop, re-classify) until a terminal: the PR exists, the item is deferred to land, asked, blocked, needs a human, or there is no work. `--tick` runs exactly one hop and ends; that is the tick a driver such as `/loop` or `/goal` repeats on a host without stable long sessions. Both shapes end with one terminal `PILOT_VERDICT` line. The run is intentionally not a scheduler: it drives one item per invocation and never fans out.
-
-`--auto` is the same judgment behind a second entry shape: no questions, ready-flag selection instead of intent, and a terminal verdict line instead of a report; the next decision that needs a human ends the run as a verdict. This file owns the remaining arguments (the positional spec id, `--backlog`, the research and depth passthroughs, `--explain` and its `--dry-run` alias). `flow --auto`, Ralph, and attended `flow` are three drivers. Never nest them, and never reuse Ralph harness state inside a run. Human judgment lives before the run: the spec content, `depends_on_epics`, and the `ready` gate are the consent boundary. The run executes the mechanical pipeline with ambiguity reported as `NEEDS_HUMAN`.
-
-**What this file owns and what it reads.** This file carries what the routing reference cannot: the ready-flag consent boundary, selection order, the collision and re-bless checks, the all-done PR probe, the branch matrix, the evidence echo, the strikes ledger, and the decision log. The stage decision itself is read from the routing reference at Phase 2: `references/route-matrix.md` for the spec-state rows, `references/plan-vs-no-plan.md` for a ready spec with no tasks and no recorded route, and `references/gate-selection.md` for review, QA, and completion review. This file carries no second copy of those rules.
+Read only when SKILL.md parsed the exact `--auto` token: one run selects one ready spec and drives it through `workflow.md`'s hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`, and ends with one `PILOT_VERDICT` line.
 
 ### Chart is outside the build loop
 
@@ -492,20 +488,14 @@ fi
 
 `CHAIN_ENABLED` is consumed by the explain report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert.
 
-### Read the reference
+### Route (workflow.md Step 2 runs here)
 
-Classify from `SPEC_JSON`, `TASKS_JSON`, the authoritative task details fetched at SELECT, and current-invocation design-review intent retained under Arguments. Read [references/route-matrix.md](references/route-matrix.md) and match the spec-state row (a ready spec with no tasks and no recorded route; a spec with an intentional plan; a spec whose tasks are all done and no PR exists; a spec with an open PR; a spec whose design needs an independent assessment). Read [references/gate-selection.md](references/gate-selection.md) for the design-review, completion-review, and live-QA gates, each read from the config key or flag that section names. Echo the row and the gate section the stage came from.
+Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. What this run adds:
 
-Three reads the reference states as judgment are resolved here from state, because the run cannot ask:
-
-- **The route for a ready spec with no tasks.** `no_plan == true` in `SPEC_JSON` is the recorded direct route: `work`, dispatched with `--no-plan`. Otherwise read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve its rule from the spec body, the spec fields, and the project routing block. Direct: `work` with `--no-plan`, recorded before mint with `$FLOWCTL spec set-no-plan <id> --json`. Plan: `plan`, recorded with `$FLOWCTL spec clear-no-plan <id> --json`. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the write is reported as would-record and nothing is written.
-- **The direct owner.** A direct owner requires `SPEC_JSON.tasks` to contain exactly one task in total, that sole task to have `implicit_owner == true`, and `SPEC_JSON.no_plan == true`; the minimal `TASKS_JSON` listing omits provenance. Only that shape continues the direct route; ordinary or added tasks retain the planned route. The route excuses automatic decomposition review, never an explicit design-review request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` write.
-- **The gates the reference leaves to a backend.** With `REVIEW_CONFIGURED=0` and no explicit design-review request or recorded `needs_work` / `needs_human`, the design-review and completion-review gates are skipped exactly as `references/gate-selection.md` states for `none`; a persisted `not_required` is the configured-backend analogue (policy excused the completion review, the requirement is satisfied without one). With a request or a recorded `needs_work` / `needs_human` and no backend, the run cannot satisfy the gate: `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. With a backend, that state is `plan-review` (spec-only review is supported, a zero-task spec qualifies). An all-done spec whose `completion_review_status` is outside the satisfying set (`ship`, `not_required`) with a backend configured is `work` (work's Phase 3g reaches completion review; this run never dispatches it directly). Stage routing decides through the satisfying set, never a bare `== ship` check.
-
-Consent and collision outcomes the reference cannot carry, evaluated before the row match:
-
-- The sole direct owner is `in_progress`, its assignee matches this resolved actor, and positive evidence proves its prior run ended: `work`, resuming that owner through spec-level work. Retain the task ID and the evidence identifying the ended prior invocation: a terminal host session/process record or an explicit user confirmation of that run's termination. A claim's age, an empty ready list, missing output, or an unassigned claim is not proof. With absent or ambiguous proof, keep `NEEDS_HUMAN`; never infer termination or steal a claim. Pass the evidence reference to work in the chained host context, identifying the owner, actor/claim, and prior invocation it proves ended. Use a resolvable record path or a specific user-message reference; if work cannot access it, keep `NEEDS_HUMAN`. Keep the spec ID as the target so completion review remains reachable. Work rechecks ownership and selects the owner outside the ready list. Re-read `$FLOWCTL show <owner-id> --json` before admitting a resume and compare its current assignee with the resolved actor.
-- The only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) and no resume proof exists: `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it`. A spec whose only remaining tasks are `blocked` still classifies as `work` (the matrix's planned-route row); if work cannot advance it, the healthy-no-advance strike path handles it.
+- **Route recording.** When Step 2 resolved plan-vs-no-plan.md, record the route before any mint: direct is `work` with `--no-plan` after `$FLOWCTL spec set-no-plan <id> --json`; plan is `plan` after `$FLOWCTL spec clear-no-plan <id> --json`. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>`. Under `--explain` the write is reported as would-record and nothing is written.
+- **Refusal when a selected gate needs a backend the run lacks.** A design review the reference selects (an explicit request, or a recorded `needs_work` / `needs_human` plan review) with `REVIEW_CONFIGURED=0` is `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. The run never lowers a gate.
+- **Resume consent.** The spec's sole direct owner (exactly one task, `implicit_owner == true`, `no_plan == true`) is `in_progress`, its assignee matches this resolved actor (re-read `$FLOWCTL show <owner-id> --json` before admitting), and positive evidence proves its prior run ended (a terminal host session/process record, or an explicit user confirmation of that run's termination): `work`, resuming that owner through spec-level work, with the owner ID and the evidence reference passed as dispatch context. A claim's age, an empty ready list, missing output, or an unassigned claim is not proof; with absent or ambiguous proof keep `NEEDS_HUMAN`, never infer termination or steal a claim.
+- **Stale claim.** The only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) and no resume proof exists: `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it`.
 
 ### The all-done PR probe
 
@@ -593,15 +583,13 @@ if [ "${PILOT_AUTONOMY:-ready}" = "backlog" ]; then
 fi
 ```
 
-Dispatch exactly one existing stage skill (slash-command invocation), with `mode:autonomous` and `FLOW_AUTONOMOUS=1` semantics for any process-level work it starts:
+workflow.md Step 3 runs here. What this run adds is `mode:autonomous` (and `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) plus the passthroughs on each invocation:
 
 - `plan`: `$flow-next-plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `$flow-next-plan-review <spec-id> --review=<backend>`
 - `work`: `$flow-next-work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`. Work re-anchors the owner without minting or automatic plan-review; additional or intentional tasks follow the planned route.
-- `qa`: `$flow-next-qa <spec-id> mode:autonomous`; the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. The run dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
+- `qa`: `$flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
 - `make-pr`: `$flow-next-make-pr <spec-id> mode:autonomous`
-
-Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and this run only re-reads the field. Completion review is reached through work's Phase 3g; the spec-completion-review skill writes terminal `completion_review_status` through its backend-aware shared owner, and Work only handles its caller-owned tracker projection afterward. The run must not dispatch completion review directly.
 
 If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 
@@ -609,7 +597,7 @@ Done when: exactly one stage skill has been invoked and has returned; a hop that
 
 ## Phase 5 - VERIFY + evidence echo (workflow.md Step 4)
 
-Re-read state after dispatch. Judge advancement only on observed state, never sub-skill narration. Echo the before/after evidence block so a transcript-only driver can validate it. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
+workflow.md Step 4 runs here. What this run adds is the evidence echo a transcript-only driver validates from, the receipt and PR re-reads that decide `advanced` for each stage, and the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 
 **Stage-outcome line.** Every evidence echo additionally carries one outcome line for the stage this hop dispatched:
 `stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)`.

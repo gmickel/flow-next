@@ -226,8 +226,6 @@ class PilotSnapshotTestCase(unittest.TestCase):
                    "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
         for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
-            self.assertIn("Explain snapshot cleanup.", text,
-                          f"{path}: verdict-contract cleanup rule missing")
             self.assertGreaterEqual(
                 text.count(rm_expr), 3,
                 f"{path}: explain terminals must remove the config snapshot")
@@ -397,15 +395,7 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
         for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
             self.assertIn("read [references/backlog-mode.md]", text)
-            self.assertIn(
-                "execute its backlog-only setup, then continue with Phase 1",
-                text,
-            )
-            self.assertIn(
-                "read and execute references/qa-stage.md#qa-stage-freshness-probe, "
-                "then continue with Phase 2 classification",
-                text,
-            )
+            self.assertIn("references/qa-stage.md#qa-stage-freshness-probe", text)
         for path in both_copies("flow-next-work/phases.md"):
             text = read(path)
             # flow-98 deleted the delegation Phase 1.5 (-> Phase 2) and 3d.2

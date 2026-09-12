@@ -9,16 +9,7 @@
 > workflow those hooks execute**: the wide dep-ordered selection, the agentic
 > triage read, and the spec-first floor.
 
-This is the **agentic heart** of backlog mode. Everything below is **prose the host
-agent executes** with its own judgment — it is **NOT a deterministic engine**. The
-triage classification (workable / ready-but-thin / needs-spec / blocked /
-needs-human) is the **host agent's READ of the spec**, never a flowctl-computed
-field, never a completeness scorer, never a regex spec-grader, never a weighted
-score, never a second LLM spawned to judge. flowctl supplies **facts**
-(`ready --all` eligibility, the decision-log row); the agent supplies the
-**judgment**. If you find yourself reaching for a scoring algorithm or a
-`triageClass` field, stop — that is the deterministic mistake this whole feature
-exists to avoid.
+The host classifies backlog items using `ready --all` eligibility facts and spec content; flowctl stores eligibility facts and decision-log rows.
 
 Backlog mode selects one dependency-ordered item, triages it, and drives it through the hop loop. The next invocation selects the next item.
 

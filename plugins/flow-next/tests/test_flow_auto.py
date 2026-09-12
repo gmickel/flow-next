@@ -165,29 +165,12 @@ class ClassificationPointers(unittest.TestCase):
         self.assertNotIn(PILOT_STAGE_TABLE_HEADER, _read(AUTO_MD))
 
 
-class ChainStagesTickOnly(unittest.TestCase):
-    """(4) `pipeline.chainStages` is honoured under `--tick` only.
-
-    The executable run of the gate fence (off/on, AUTO_TICK 1/0, stderr
-    notice) lives in test_pilot_chain_stages; this pins the gate tokens.
-    """
-
-    def test_chain_gate_requires_auto_tick(self) -> None:
-        fence = _fence_from(_read(AUTO_MD), "CHAIN_ENABLED=0\n")
-        self.assertIn('if [ "${AUTO_TICK:-0}" = "1" ]; then', fence)
-        self.assertIn("CHAIN_ENABLED=1", fence)
-        self.assertIn(">&2", fence, "long-horizon mode prints the deprecation notice to stderr")
-
-
 class QaAutoUnderAuto(unittest.TestCase):
     """(5) `pipeline.qa=auto` takes effect under `--auto`."""
 
     def test_auto_flag_and_skip_line_token(self) -> None:
         text = _read(AUTO_MD)
-        self.assertIn("QA_STAGE_AUTO", text)
-        self.assertIn('[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1', text)
         self.assertIn(QA_AUTO_SKIP_TOKEN, text)
-        self.assertIn("qa_gate=<off|on|auto>", text)
 
 
 class ZeroTaskRouteRecording(unittest.TestCase):
