@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-241-optional-merge-destination-for-flow.md",
-  "status": "open",
+  "status": "done",
   "title": "Optional merge destination for flow",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-12T22:01:10.883461Z"
+  "updated_at": "2026-09-12T23:49:51.593592Z"
 }
