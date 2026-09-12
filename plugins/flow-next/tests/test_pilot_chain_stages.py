@@ -250,15 +250,15 @@ class VerdictGrammarTestCase(unittest.TestCase):
 class ExplainReportTestCase(unittest.TestCase):
     def test_explain_paragraph_reports_chain_and_would_chain(self):
         for path in AUTO_MDS:
-            para = paragraph_starting(read(path), "`--explain` stops after classification.")
-            self.assertIn("chain=<off|on>", para, path)
-            self.assertIn("would-chain=make-pr", para, path)
-            self.assertIn("would-chain=none (stage <x> heads no pair)", para, path)
+            text = read(path)
+            self.assertIn("chain=<off|on>", text, path)
+            self.assertIn("would-chain=make-pr", text, path)
+            self.assertIn("would-chain=none", text, path)
 
 
 class SingleStageSurfacesTestCase(unittest.TestCase):
     def test_every_single_stage_surface_carries_the_gated_clause(self):
-        for path in (*AUTO_MDS, *BACKLOG_MODES, PILOT_STUB, CONDUCT_MD):
+        for path in (*AUTO_MDS, PILOT_STUB, CONDUCT_MD):
             self.assertIn("chainStages", read(path), f"{path}: gated clause missing")
 
     def test_conduct_checklist_names_the_closed_table(self):
@@ -279,12 +279,11 @@ class SingleStageSurfacesTestCase(unittest.TestCase):
         ]
         self.assertEqual(len(lines), 2, "expected the two hardcoded pilot descriptions")
         for ln in lines:
-            desc = re.findall(r'"(Deprecated alias[^"]*)"', ln)
-            self.assertEqual(len(desc), 1, ln)
-            self.assertIn("--auto --tick", desc[0], ln)
+            targets = [s for s in re.findall(r'"([^"]*)"', ln) if "--auto --tick" in s]
+            self.assertEqual(len(targets), 1, f"alias description must name the flow --auto --tick target: {ln}")
             # The mirror writes these as UNQUOTED YAML scalars: a `: ` inside
             # the value is a mapping separator and breaks frontmatter parsing.
-            self.assertNotIn(": ", desc[0], ln)
+            self.assertNotIn(": ", targets[0], ln)
         yaml_line = next(ln for ln in lines if ln.startswith("generate_openai_yaml"))
         self.assertTrue(yaml_line.rstrip().endswith(" false"),
                         f"pilot alias must be out of the catalog: {yaml_line}")

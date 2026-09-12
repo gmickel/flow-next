@@ -24,7 +24,7 @@ Runs per `review.backend` or the invocation's `--review=<backend>` flag; `/flow-
 - `on`: QA runs at all-tasks-done, before make-pr, on every spec.
 - `auto`: QA runs at all-tasks-done when the spec's acceptance describes UI behaviour on a drivable surface **and** a target can be started (a documented dev server, a deploy URL, or a running instance the QA skill can reach). Otherwise the stage records `skipped(config: pipeline.qa=auto: <no UI-observable criteria | no drivable surface | no startable target>)` and the route advances.
 
-Whether a spec is drivable is judgment, read from the acceptance criteria and the repo (`.flow/features/`, the prime QA-readiness line, a documented start command). QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to the draft PR with their findings. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven; deterministic re-runnable tests subtract. Under `flow --auto` the same three values apply at the all-done juncture: `on` runs QA, `auto` runs it on the drivability read above and otherwise records the skip and advances, `off` goes to make-pr.
+Whether a spec is drivable is judgment, read from the acceptance criteria and the repo (`.flow/features/`, the prime QA-readiness line, a documented start command). QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to the draft PR with their findings. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven; deterministic re-runnable tests subtract.
 
 ## Completion review
 

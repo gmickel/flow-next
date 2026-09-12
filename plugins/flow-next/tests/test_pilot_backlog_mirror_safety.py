@@ -226,11 +226,15 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         # test_prompt_text_pinned.py.) The QA classification tokens stay
         # pinned on the all-done probe: auto.md owns the decision, the
         # reference only computes freshness.
-        start = self.pilot_workflow.index("### The all-done PR probe")
-        probe = self.pilot_workflow[start:self.pilot_workflow.index("### Explain stop", start)]
-        for token in ("QA_STAGE_ENABLED=1", "QA_STAGE_AUTO=1", "QA_FRESH=0"):
+        start = self.pilot_workflow.index("## Phase 2 - CLASSIFY")
+        phase2 = self.pilot_workflow[start:self.pilot_workflow.index("## Phase 3", start)]
+        probe = phase2[phase2.index("### The all-done PR probe"):phase2.index("### Explain stop")]
+        for token in ("QA_STAGE_ENABLED=1", "QA_STAGE_AUTO=1"):
             with self.subTest(token=token):
-                self.assertIn(token, probe, "auto.md must own the QA-stage classification decision")
+                self.assertIn(token, phase2, "auto.md must resolve the QA gate flags")
+        for token in ("QA_FRESH=1", "gate-selection.md"):
+            with self.subTest(token=token):
+                self.assertIn(token, probe, "the all-done probe consumes freshness and the gate reference")
         # The reference computes freshness only: it assigns QA_FRESH and never
         # assigns the gate flags auto.md resolved.
         self.assertIn("QA_FRESH=1", self.pilot_qa)

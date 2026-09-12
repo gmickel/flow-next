@@ -68,7 +68,7 @@ Retain an explicit request in the current user message to review the selected sp
 
 Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. `--auto` never accepts intent, a path, a branch, or free text: the ready flag is the consent boundary and there is no capture upstream of it. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
-The loop handles both `--flag=value` and space-separated `--flag value` forms directly via a `PREV` token holder. It deliberately avoids bash positional parameters (`shift`-based parsing): the host's argument interpolation rewrites positional tokens inside skill code blocks, which corrupts a `case`-on-positionals parse (observed live in the 1.13.0 dogfood).
+Use `PREV` because host argument interpolation rewrites positional tokens inside skill code blocks.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -519,7 +519,7 @@ Outcomes for the all-done branch (evaluate in order, first match wins). The all-
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: the matrix's open-PR row belongs to land under autonomy (the tail rule's convergence is attended work), so this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
-- No PR exists: the live-QA gate decides per `references/gate-selection.md`. `QA_STAGE_ENABLED=1` and `QA_FRESH=0`: `qa`. `QA_STAGE_AUTO=1` and `QA_FRESH=0`: apply the `auto` read in `references/gate-selection.md`; `qa` when it selects QA, otherwise record the `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` line it names in this hop's evidence and classify `make-pr`. Gate off, or a fresh receipt: `make-pr`. This is the all-done, no-PR case (make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
+- No PR exists: `QA_FRESH=1` or the gate `off` is `make-pr`; otherwise `references/gate-selection.md` decides `qa` or `make-pr` from the gate value, and a skip records `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` in this hop's evidence. This is the all-done, no-PR case (make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
 - MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads, `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Heads equal: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
 - CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and the run never silently reopens human-rejected work.
 
@@ -769,11 +769,7 @@ tmp="$LEDGER.tmp.$$"
 jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
 ```
 
-Then, when the hop loop continues (long-horizon mode, an `ADVANCED` stage other than `make-pr`), echo one hop line and return to Phase 2:
-
-```text
-hop <n>: ADVANCED stage=<stage> - <what advanced>; re-classifying
-```
+Then, when the hop loop continues (long-horizon mode, an `ADVANCED` stage other than `make-pr`), return to Phase 2.
 
 When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome:
 
