@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 
 # /flow-next:flow - the conductor
 
-Flow chooses the next step so the user does not have to. It reads what it was given, routes from the shared routing reference, runs the routed stage skill, and continues until the next decision that belongs to a human. It re-implements no stage logic: capture, refine, plan, plan-review, work, qa, make-pr, and resolve-pr keep their own contracts, receipts, and gates. `--auto` is the same judgment behind a second entry shape: no questions, ready-flag selection instead of intent, and a terminal verdict line instead of a report; the next decision that needs a human ends the run as a verdict.
+Flow chooses the next step so the user does not have to. It reads what it was given, routes from the shared routing reference, runs the routed stage skill, and continues until the next decision that belongs to a human. It re-implements no stage logic: capture, refine, plan, plan-review, work, qa, make-pr, and resolve-pr keep their own contracts, receipts, and gates.
 
 **Role:** conductor, inline (no `context: fork`) so `plain-text numbered prompt` stays reachable. On hosts without it, fall back to a plain-text numbered prompt with a final `Other - type your own answer` option.
 
@@ -27,7 +27,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. Everything else is the starting point, verbatim - flow adds no input classifier. A tracker issue id or URL is read through the access the session already has (the sync bridge, an MCP, `gh`, `glab`); flow adds no input adapter.
 
-**`AUTO=1`: read [auto.md](auto.md) and follow it instead of the hop loop below.** It owns the remaining arguments (the positional spec id, `--backlog`, the research and depth passthroughs; `--explain` and `--dry-run` alike), the unattended guards and rails, selection from the ready flag, the routing-reference reads, and the terminal `PILOT_VERDICT` line. Attended runs never load it.
+**`AUTO=1`: read [auto.md](auto.md) and follow it.** Attended runs never load it.
 
 ## Autonomy refusal - runs right after the token parse
 

@@ -20,16 +20,7 @@ score, never a second LLM spawned to judge. flowctl supplies **facts**
 `triageClass` field, stop — that is the deterministic mistake this whole feature
 exists to avoid.
 
-**One smarter selection, not a runner.** Backlog mode is a *wider* selection in front of
-the same hop loop: it enumerates the full open set, dep-orders it, triages the top
-item, and drives that one item (to a terminal in long-horizon mode, by one stage
-under `--tick`) before resolving to exactly one state-changing terminal. It is
-**NOT** a daemon, a polling loop, a trigger handler, a webhook, a cron, or a
-parallel-worktree fan-out; that standing control-plane role is mergefoundry /
-flow-swarm's, not flow-next's. Repetition across items is the next invocation's
-(a human, a host `/loop` or `/goal`); one invocation selects one item. The
-autonomous span runs only from a **workable spec → draft PR (`make-pr`)**, never
-authoring upstream, never merging downstream (land owns the merge).
+Backlog mode selects one dependency-ordered item, triages it, and drives it through the hop loop. The next invocation selects the next item.
 
 ---
 

@@ -465,12 +465,7 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
             self.assertIn("<promise>RETRY</promise>` and stops", text)
             self.assertIn("stop with `BLOCKED: DESIGN_CONFLICT`", text)
         for path in both_copies("flow-next-flow/auto.md"):
-            text = read(path)
-            self.assertIn(
-                "Every run ends with exactly one terminal line, the last line",
-                text,
-            )
-            self.assertIn("PILOT_VERDICT=<ADVANCED|NO_WORK|", text)
+            self.assertIn("PILOT_VERDICT=<ADVANCED|NO_WORK|", read(path))
         for path in both_copies("flow-next-land/SKILL.md"):
             text = read(path)
             self.assertIn(

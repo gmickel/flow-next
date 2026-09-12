@@ -4,7 +4,7 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Teams that run Flow-Next unattended get one driver instead of two. `/flow-next:flow --auto` drives a ready spec through its whole route in one invocation, hop after hop, using the same routing reference the attended conductor reads, so the stage an unattended run picks and the stage `flow --explain` recommends can no longer drift apart. The one-stage-per-invocation discipline that pilot enforced is still available as `--tick` for hosts without stable long sessions, and every rail pilot had (the strikes ledger, the dirty-tree refusal, the all-done PR probe, the never-merge boundary, the decision log) moves across unchanged. `/flow-next:pilot` stays for this release as an alias and is removed in the next one.
+Teams that run Flow-Next unattended get one driver instead of two. `/flow-next:flow --auto` drives a ready spec through its whole route in one invocation, hop after hop, reading the same routing references the attended conductor reads. The one-stage-per-invocation discipline that pilot enforced is still available as `--tick` for hosts without stable long sessions, and every rail pilot had (the strikes ledger, the dirty-tree refusal, the all-done PR probe, the never-merge boundary, the decision log) moves across unchanged. `/flow-next:pilot` stays for this release as an alias and is removed in the next one.
 
 ### Changed
 

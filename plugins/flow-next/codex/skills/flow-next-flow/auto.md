@@ -2,7 +2,7 @@
 
 Read only when SKILL.md parsed the exact `--auto` token. Attended runs never load this file. One run selects one ready item and drives it hop after hop (classify, dispatch the routed stage, verify from observed state, record the hop, re-classify) until a terminal: the PR exists, the item is deferred to land, asked, blocked, needs a human, or there is no work. `--tick` runs exactly one hop and ends; that is the tick a driver such as `/loop` or `/goal` repeats on a host without stable long sessions. Both shapes end with one terminal `PILOT_VERDICT` line. The run is intentionally not a scheduler: it drives one item per invocation and never fans out.
 
-`flow --auto`, Ralph, and attended `flow` are three drivers. Never nest them, and never reuse Ralph harness state inside a run. Human judgment lives before the run: the spec content, `depends_on_epics`, and the `ready` gate are the consent boundary. The run executes the mechanical pipeline with ambiguity reported as `NEEDS_HUMAN`.
+`--auto` is the same judgment behind a second entry shape: no questions, ready-flag selection instead of intent, and a terminal verdict line instead of a report; the next decision that needs a human ends the run as a verdict. This file owns the remaining arguments (the positional spec id, `--backlog`, the research and depth passthroughs, `--explain` and its `--dry-run` alias). `flow --auto`, Ralph, and attended `flow` are three drivers. Never nest them, and never reuse Ralph harness state inside a run. Human judgment lives before the run: the spec content, `depends_on_epics`, and the `ready` gate are the consent boundary. The run executes the mechanical pipeline with ambiguity reported as `NEEDS_HUMAN`.
 
 **What this file owns and what it reads.** This file carries what the routing reference cannot: the ready-flag consent boundary, selection order, the collision and re-bless checks, the all-done PR probe, the branch matrix, the evidence echo, the strikes ledger, and the decision log. The stage decision itself is read from the routing reference at Phase 2: `references/route-matrix.md` for the spec-state rows, `references/plan-vs-no-plan.md` for a ready spec with no tasks and no recorded route, and `references/gate-selection.md` for review, QA, and completion review. This file carries no second copy of those rules.
 
@@ -87,7 +87,6 @@ AUTO_TICK=0                  # 1 = one hop then stop; 0 = hop until a terminal
 PREV=""
 for ARG in $RAW_ARGS; do
   case "$PREV" in
-    --spec)     PILOT_SPEC="$ARG"; PREV=""; continue ;;
     --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
     --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;
     --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
@@ -95,8 +94,7 @@ for ARG in $RAW_ARGS; do
   case "$ARG" in
     --auto)       : ;;                         # consumed by SKILL.md mode detection
     --tick)       AUTO_TICK=1 ;;
-    --spec|--review|--research|--depth) PREV="$ARG" ;;
-    --spec=*)     PILOT_SPEC="${ARG#--spec=}" ;;   # the pilot shim's spelling; the positional id is the flow spelling
+    --review|--research|--depth) PREV="$ARG" ;;
     --explain|--dry-run) PILOT_DRY_RUN=1 ;;
     --backlog)    PILOT_BACKLOG_OVERRIDE=1 ;;
     --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
@@ -191,22 +189,14 @@ When a delegated plan, implementation, or completion review exits `1` with `NOT_
 
 ## The hop loop
 
-Execute the phases in order. Selection (Phase 1) runs once per run; the selected item is the run's scope. Phases 2 to 6 are one hop. After Phase 6:
+The hop is the one `workflow.md` defines: Step 2 routes from the routing reference, Step 3 runs the routed stage skill, Step 4 re-evaluates from observed state. Selection (Phase 1) runs once per run and fixes the item; each hop is then Phases 2 to 6 below, which wrap those three steps with what an unattended run adds: the consent, collision, and resume outcomes and the all-done PR probe around the route (Phase 2), the branch matrix before the dispatch (Phase 3), `mode:autonomous` and the passthroughs on the dispatch (Phase 4), the evidence echo and the post-hop dirty-tree guard on the re-evaluation (Phase 5), and the ledger, the decision log, and the verdict (Phase 6). After Phase 6:
 
 - `AUTO_TICK=1`: print the terminal line and stop.
-- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, reload `LEDGER_JSON`, and return to Phase 2 for the same spec. Each hop matches the routing reference afresh; there is no fixed conveyor.
+- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, reload `LEDGER_JSON`, and return to Phase 2 for the same spec.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with `make-pr`: the PR exists; print the terminal line and stop.
 - Any other outcome (`NEEDS_HUMAN`, `ASKED`, `BLOCKED`, `DEFERRED_TO_LAND`, `NO_WORK`) ends the run; only `ADVANCED` continues.
 
-The two-strike rule bounds a spec that advances nothing; the finite stage set bounds a spec that advances (plan, plan-review, work, qa, make-pr, then a PR exists). A run that dies mid-way (crash, kill, session limit) leaves exactly what a dead tick leaves: committed receipts, a ledger entry, a branch. The next invocation classifies from disk; nothing is resumed from transcript.
-
-1. **Phase 0 - guards.** Done when: both hard guards have passed and `LEDGER_JSON` is loaded without a write.
-2. **Phase 1 - select.** Done when: exactly one spec is selected, or the pool is empty and the terminal split has been chosen.
-3. **Phase 2 - classify.** Done when: exactly one stage from the allowed set is named from the routing reference, with the row and gate it came from and the consulted status fields echoed.
-4. **Phase 3 - branch.** Done when: the worktree sits on the branch the matrix row names, or the run has stopped `NEEDS_HUMAN` on a failed checkout.
-5. **Phase 4 - dispatch.** Done when: the classified stage skill has been invoked with `mode:autonomous` plus the review/research/depth passthroughs and has returned; no second stage was dispatched in the hop (the gated `--tick` chain excepted).
-6. **Phase 5 - verify.** Done when: the dispatched stage has its before/after evidence block plus stage-outcome line in the transcript, `advanced` was decided from observed state, and the post-hop dirty-tree guard passed.
-7. **Phase 6 - report.** Done when: the ledger reflects this hop, the decision-log row (backlog mode) is appended, and either the next hop starts or the terminal `PILOT_VERDICT` line is the last line of the response.
+The two-strike rule bounds a spec that advances nothing; the finite stage set bounds a spec that advances. A run that dies mid-way (crash, kill, session limit) leaves exactly what a dead tick leaves: committed receipts, a ledger entry, a branch. The next invocation classifies from disk; nothing is resumed from transcript.
 
 ## Phase 0.5 - Autonomy mode + backlog safety invariants
 
@@ -445,7 +435,7 @@ fi
 
 When NOT explaining, route by class: **workable** sets `SELECTED_SPEC="$SUBJECT_ID"` and continues into Phase 2 CLASSIFY (the existing pipeline; the hop loop then drives this one item); every other class skips Phases 2 to 5 and resolves in Phase 3.5 (ask) or directly at Phase 6 (`BLOCKED`). A live run never emits `TRIAGED` (it always lands on a state-changing terminal).
 
-## Phase 2 - CLASSIFY from the routing reference
+## Phase 2 - CLASSIFY from the routing reference (workflow.md Step 2)
 
 Resolve the review backend before classification:
 
@@ -508,7 +498,7 @@ Classify from `SPEC_JSON`, `TASKS_JSON`, the authoritative task details fetched 
 
 Three reads the reference states as judgment are resolved here from state, because the run cannot ask:
 
-- **The route for a ready spec with no tasks.** `no_plan == true` in `SPEC_JSON` is the recorded direct route: `work`, dispatched with `--no-plan`. Otherwise read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve its rule from the spec body, the spec fields, and the project routing block (the four positive signals; risk, size, and file count never trigger plan). Direct: `work` with `--no-plan`, recorded before mint with `$FLOWCTL spec set-no-plan <id> --json`. Plan: `plan`, recorded with `$FLOWCTL spec clear-no-plan <id> --json`. Echo `route: direct - <signal absent>` or `route: plan - <asked | separate owners | staged PRs | routed implementer>` so a transcript-only driver sees what decided it. Under `--explain` the write is reported as would-record and nothing is written.
+- **The route for a ready spec with no tasks.** `no_plan == true` in `SPEC_JSON` is the recorded direct route: `work`, dispatched with `--no-plan`. Otherwise read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve its rule from the spec body, the spec fields, and the project routing block. Direct: `work` with `--no-plan`, recorded before mint with `$FLOWCTL spec set-no-plan <id> --json`. Plan: `plan`, recorded with `$FLOWCTL spec clear-no-plan <id> --json`. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the write is reported as would-record and nothing is written.
 - **The direct owner.** A direct owner requires `SPEC_JSON.tasks` to contain exactly one task in total, that sole task to have `implicit_owner == true`, and `SPEC_JSON.no_plan == true`; the minimal `TASKS_JSON` listing omits provenance. Only that shape continues the direct route; ordinary or added tasks retain the planned route. The route excuses automatic decomposition review, never an explicit design-review request or a recorded `needs_work` / `needs_human` review. No synthetic `ship` write.
 - **The gates the reference leaves to a backend.** With `REVIEW_CONFIGURED=0` and no explicit design-review request or recorded `needs_work` / `needs_human`, the design-review and completion-review gates are skipped exactly as `references/gate-selection.md` states for `none`; a persisted `not_required` is the configured-backend analogue (policy excused the completion review, the requirement is satisfied without one). With a request or a recorded `needs_work` / `needs_human` and no backend, the run cannot satisfy the gate: `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. With a backend, that state is `plan-review` (spec-only review is supported, a zero-task spec qualifies). An all-done spec whose `completion_review_status` is outside the satisfying set (`ship`, `not_required`) with a backend configured is `work` (work's Phase 3g reaches completion review; this run never dispatches it directly). Stage routing decides through the satisfying set, never a bare `== ship` check.
 
@@ -539,7 +529,7 @@ Outcomes for the all-done branch (evaluate in order, first match wins). The all-
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: the matrix's open-PR row belongs to land under autonomy (the tail rule's convergence is attended work), so this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
-- No PR exists: the live-QA gate decides per `references/gate-selection.md`. `QA_STAGE_ENABLED=1` and `QA_FRESH=0`: `qa`. `QA_STAGE_AUTO=1` and `QA_FRESH=0`: judge drivability from the acceptance criteria and the repo (`.flow/features/`, the prime QA-readiness line, a documented start command); drivable with a startable target: `qa`; otherwise record `stage: qa - skipped(config: pipeline.qa=auto: <no UI-observable criteria | no drivable surface | no startable target>)` in this hop's evidence and classify `make-pr`. Gate off, or a fresh receipt: `make-pr`. This is the all-done, no-PR case (make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
+- No PR exists: the live-QA gate decides per `references/gate-selection.md`. `QA_STAGE_ENABLED=1` and `QA_FRESH=0`: `qa`. `QA_STAGE_AUTO=1` and `QA_FRESH=0`: apply the `auto` read in `references/gate-selection.md`; `qa` when it selects QA, otherwise record the `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` line it names in this hop's evidence and classify `make-pr`. Gate off, or a fresh receipt: `make-pr`. This is the all-done, no-PR case (make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
 - MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads, `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Heads equal: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
 - CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and the run never silently reopens human-rejected work.
 
@@ -584,7 +574,7 @@ If an attempted checkout fails (any attempted checkout in the matrix, including 
 
 Done when: the worktree is on the branch this stage's matrix row names (or the plan/plan-review stay-put outcome applied), or the run has already terminated `NEEDS_HUMAN` without dispatching.
 
-## Phase 4 - DISPATCH exactly one sub-skill
+## Phase 4 - DISPATCH exactly one sub-skill (workflow.md Step 3)
 
 Record the pre-dispatch evidence snapshot before invoking the stage skill:
 
@@ -617,7 +607,7 @@ If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity t
 
 Done when: exactly one stage skill has been invoked and has returned; a hop that dispatched a second stage has broken the contract, with one gated exception: under `--tick` with `pipeline.chainStages` on, Phase 5's Chained stage dispatches `make-pr` after this tick's `qa` stage verified `QA_ADVANCED=true`; any other second dispatch still breaks it.
 
-## Phase 5 - VERIFY + evidence echo
+## Phase 5 - VERIFY + evidence echo (workflow.md Step 4)
 
 Re-read state after dispatch. Judge advancement only on observed state, never sub-skill narration. Echo the before/after evidence block so a transcript-only driver can validate it. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 

@@ -178,9 +178,6 @@ class ChainStagesTickOnly(unittest.TestCase):
         self.assertIn("CHAIN_ENABLED=1", fence)
         self.assertIn(">&2", fence, "long-horizon mode prints the deprecation notice to stderr")
 
-    def test_chained_stage_section_is_tick_only(self) -> None:
-        self.assertIn("### Chained stage (`pipeline.chainStages`, `--tick` only)", _read(AUTO_MD))
-
 
 class QaAutoUnderAuto(unittest.TestCase):
     """(5) `pipeline.qa=auto` takes effect under `--auto`."""
@@ -311,8 +308,7 @@ class ArgumentParseFence(unittest.TestCase):
                     "PILOT_DEPTH": "long",
                 },
             ),
-            ("--spec fn-9 --dry-run", {"PILOT_SPEC": "fn-9", "PILOT_DRY_RUN": "1"}),
-            ("--spec=fn-3", {"PILOT_SPEC": "fn-3"}),
+            ("fn-9 --dry-run", {"PILOT_SPEC": "fn-9", "PILOT_DRY_RUN": "1"}),
             ("--auto fn-4 --tick", {"PILOT_SPEC": "fn-4", "AUTO_TICK": "1"}),
             ("--review codex --depth long --research=rp", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "rp"}),
             ("", {}),
@@ -326,15 +322,15 @@ class ArgumentParseFence(unittest.TestCase):
     def test_lookalike_flags_do_not_set_the_flags(self) -> None:
         # Exact tokens only: a prefix or suffix lookalike is an unknown flag,
         # warned to stderr and ignored.
-        for arguments in ("--ticket", "--auto-x", "--explainer", "--backlogs", "--spec-x"):
+        for arguments in ("--ticket", "--auto-x", "--explainer", "--backlogs", "--spec"):
             with self.subTest(arguments=arguments):
                 parsed, stderr = self._parse(arguments)
                 self.assertEqual(parsed, self.DEFAULTS)
                 self.assertIn(arguments, stderr)
 
     @_POSIX_BASH
-    def test_positional_id_and_spec_flag_do_not_double_assign(self) -> None:
-        parsed, stderr = self._parse("--spec fn-9 fn-10")
+    def test_second_positional_id_does_not_double_assign(self) -> None:
+        parsed, stderr = self._parse("fn-9 fn-10")
         self.assertEqual(parsed["PILOT_SPEC"], "fn-9")
         self.assertIn("fn-10", stderr)
 
