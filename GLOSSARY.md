@@ -457,7 +457,7 @@ The set of six small reference files the flow skill owns under `plugins/flow-nex
 
 ## Driver
 
-The thing that invokes the unattended conductor and owns repetition: a human running `/flow-next:flow --auto` once per item, a host loop primitive (`/loop`, `/goal`, `cron`) running `flow --auto --tick`, or Ralph (the deprecated repo-local hardened harness). Attended `/flow-next:flow` stops at the next human decision; `flow --auto` stops at the next decision that needs a human and reports it as a verdict. Drivers are never nested: attended flow refuses under any autonomy marker, `flow --auto` refuses under Ralph, and `flow --auto` and land never dispatch a second driver.
+The thing that invokes the unattended conductor and owns repetition: a human running `/flow-next:flow --auto` once per item, a host loop primitive (`/loop`, `/goal`, `cron`) running `flow --auto --tick`, or Ralph (the deprecated repo-local hardened harness). Attended `/flow-next:flow` stops at the next human decision; `flow --auto` stops at the next decision that needs a human and reports it as a verdict. Drivers are never nested. Attended flow refuses under any autonomy marker, `flow --auto` refuses under Ralph, and `flow --auto` and land never dispatch a second driver.
 
 _Avoid_: mode, conductor mode, autopilot
 

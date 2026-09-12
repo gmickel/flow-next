@@ -17,7 +17,7 @@ TODAY="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 Cold session or run start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
 
-**Re-read this file at every run start.** A long `/loop` run executing from a stale in-context copy drifts from the file the repo ships; the file on disk is the contract, the remembered copy is not.
+**Re-read auto.md at every run start so repeated invocations use the current instructions.**
 
 **Check an idle dispatched agent through its commits, receipts, and status fields.** Sending it a resume message restarts it, so a merely slow agent becomes two runs.
 
@@ -444,7 +444,7 @@ QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACT
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1     # flag for the literal `on` (meaning: gate-selection.md)
 [ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1      # flag for the literal `auto` (meaning: gate-selection.md)
 if [ "$ACTIVE" = "1" ]; then
-  echo "GATE ACTIVE — read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
+  echo "GATE ACTIVE - read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
 fi   # default branch: bare no-op - NO link, NO read path
 ```
 

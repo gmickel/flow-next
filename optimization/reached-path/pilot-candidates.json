@@ -1,11 +1,6 @@
 {
   "schema_version": 1,
   "cluster": "pilot",
-  "routed_files": [
-    "plugins/flow-next/skills/flow-next-flow/auto.md",
-    "plugins/flow-next/skills/flow-next-flow/references/backlog-mode.md",
-    "plugins/flow-next/skills/flow-next-flow/references/qa-stage.md"
-  ],
   "lineage": {
     "baseline": "B1",
     "baseline_commit": "8ed71a73ccc593a8a018dcdb805a86f396dcf76f",
@@ -63,6 +58,6 @@
   "notes": [
     "Deterministic source characters only; no backend token, cache, or wall-time claim.",
     "Codex mirror regeneration is conductor-owned after parallel-wave integration.",
-    "The pilot skill retired into flow --auto: auto.md replaced pilot SKILL.md + workflow.md and the two references moved to skills/flow-next-flow/references/. routed_files names the live files; the hashes above are the recorded pilot-era measurement and are not re-frozen."
+    "The pilot skill retired into flow --auto: auto.md replaced pilot SKILL.md + workflow.md and the two references moved to skills/flow-next-flow/references/. The hashes above are the recorded pilot-era measurement and are not re-frozen."
   ]
 }

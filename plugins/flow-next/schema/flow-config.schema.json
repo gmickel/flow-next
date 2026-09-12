@@ -682,7 +682,7 @@
       "additionalProperties": false,
       "properties": {
         "qa": {
-          "description": "Optional live QA stage (fn-72, fn-238). String-enum off | on | auto, NOT a bool; any other value, including bool true, is OFF. off: QA runs only when you invoke /flow-next:qa. on: one live /flow-next:qa pass at the all-tasks-done juncture before make-pr on every spec. auto: /flow-next:flow runs that pass only when the spec's acceptance describes UI behaviour on a drivable surface and a target can be started, otherwise it records skipped(reason) and advances. Under /flow-next:flow --auto all three values take effect the same way. flowctl stores the value and never interprets it; drivability is the skill's judgment. Optional: flow-next runs fully without it. It costs a live-app drive pass per spec plus a running deploy and a configured driver. See docs/running-lean.md.",
+          "description": "Optional live QA stage. String-enum off | on | auto, NOT a bool; any other value, including bool true, is OFF. Default off. What each value does is defined by the flow skill's gate-selection reference (skills/flow-next-flow/references/gate-selection.md); flowctl stores the value and never interprets it. See docs/running-lean.md.",
           "enum": [
             "off",
             "on",

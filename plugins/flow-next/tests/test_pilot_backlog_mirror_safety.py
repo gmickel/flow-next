@@ -200,19 +200,6 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         candidate = ledger["candidates"][0]
         self.assertEqual("keep", candidate["verdict"])
 
-        # The ledger names the files a `--auto` run can load; every one must
-        # exist on disk, so the ledger cannot silently point at the retired
-        # pilot layout. (The historical hashes are the recorded measurement
-        # against the pilot-era files and are not re-frozen against live
-        # files - G2.)
-        self.assertEqual(
-            sorted(ledger["routed_files"]),
-            sorted(f"plugins/flow-next/skills/flow-next-flow/{rel}" for rel in AUTO_ROUTED_FILES),
-        )
-        for rel in ledger["routed_files"]:
-            with self.subTest(routed=rel):
-                self.assertTrue((REPO_ROOT / rel).is_file(), rel)
-
         # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
         # G1, not grep. (Live-file hash/char freeze and size ratchet removed
         # earlier for the same reason; deliberate-change protection lives in

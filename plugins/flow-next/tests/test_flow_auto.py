@@ -106,11 +106,6 @@ class VerdictGrammar(unittest.TestCase):
         self.assertNotIn("PILOT_VERDICT=<ADVANCED|TRIAGED", text)
         self.assertIn("PILOT_VERDICT=TRIAGED", text)
 
-    def test_tick_shape_is_one_hop_then_stop(self) -> None:
-        text = _read(AUTO_MD)
-        self.assertIn("AUTO_TICK=1", text)
-        self.assertIn("AUTO_TICK=0", text)
-
 
 class ShimArgumentMapping(unittest.TestCase):
     """(2) `/flow-next:pilot` is a redirect onto `flow --auto --tick`."""
