@@ -18,7 +18,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-239-flow-auto-pilot-adopts-the-routing.md",
-  "status": "open",
+  "status": "done",
   "title": "flow --auto: pilot adopts the routing reference and runs long-horizon over the same rails",
   "tracker": {
     "baseHashFlow": null,
@@ -31,5 +31,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-12T13:45:13.949932Z"
+  "updated_at": "2026-09-12T18:58:54.940534Z"
 }
