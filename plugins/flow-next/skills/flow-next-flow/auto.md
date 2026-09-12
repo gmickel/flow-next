@@ -4,13 +4,7 @@ Read only when SKILL.md parsed the exact `--auto` token. One run selects one rea
 
 ## Preamble
 
-**CRITICAL: flowctl is BUNDLED - NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`. Subagents that run in fresh context fall back to the repo-local copy:
-
-```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-```
+`$FLOWCTL` is the value SKILL.md's preamble established; this file defines no second copy.
 
 Shared shell context for the run:
 
@@ -595,9 +589,7 @@ Done when: exactly one stage skill has been invoked and has returned; a hop that
 
 workflow.md Step 4 runs here. What this run adds is the evidence echo a transcript-only driver validates from, the receipt and PR re-reads that decide `advanced` for each stage, and the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 
-**Stage-outcome line.** Every evidence echo additionally carries one outcome line for the stage this hop dispatched:
-`stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)`.
-A skipped stage is an event with a reason, never an absence; a stage with no line is treated by review as failed (a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip). Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one): record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
+**Stage-outcome line.** Every evidence echo additionally carries the one `stage:` line `references/gate-selection.md` (Receipts) defines for the stage this hop dispatched; a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip. Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one). Record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
 
 For `plan`, advancement means tasks now exist:
 

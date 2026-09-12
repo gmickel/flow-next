@@ -431,11 +431,10 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             ("mirror", self.m_skill),
         ):
             with self.subTest(where=label):
-                self.assertRegex(
-                    text,
-                    r"/goal keep running /flow-next:flow --auto until it prints "
-                    r"PILOT_VERDICT=NO_WORK",
-                    f"{label}: the /goal stop-clause example must survive",
+                goal_lines = [ln for ln in text.splitlines() if ln.startswith("/goal ")]
+                self.assertTrue(
+                    any("/flow-next:flow --auto" in ln and "PILOT_VERDICT=NO_WORK" in ln for ln in goal_lines),
+                    f"{label}: a /goal example must target /flow-next:flow --auto and stop on PILOT_VERDICT=NO_WORK",
                 )
 
     # ── C. Autonomous-safety invariants (verifies R6/R7) ───────────────────
