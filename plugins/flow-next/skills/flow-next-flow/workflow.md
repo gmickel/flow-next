@@ -16,10 +16,13 @@ If `.flow/` does not exist, print `No .flow/ directory - run \`$FLOWCTL init\` f
 
 Read what was given and decide what it is. Examples, never a closed list: nothing, a spec id, a task id, a tracker issue id or URL, a branch, a path, a prototype directory, a pasted bug report or console output, a sentence of intent. Read a spec or task through `$FLOWCTL show <id> --json` and `$FLOWCTL cat <id>`; a branch through `git log` and the spec whose `branch_name` matches; a tracker issue through the access this session already has; a path or prototype through the files. The result is text plus context: what exists in `.flow/` for it, what the repo shows, what the user said.
 
-With no argument:
+With no argument, resolve the item from the most recent thing Flow can see, first match wins, then route it as if its id had been given:
 
-- In a fresh conversation, ask once what to work on (`AskUserQuestion`, or the plain-text fallback).
-- In a conversation that already carries intent, ask first whether to capture that conversation into 1..n specs. A "yes" routes to `/flow-next:capture from:flow`; a "no" falls through to the fresh-conversation ask.
+1. The item this conversation last touched: the spec capture wrote, the task work closed, the PR make-pr opened. Capture's `Recommended next:` line names the step.
+2. The spec whose `branch_name` matches the current branch.
+3. Intent in the conversation that no spec captures yet. Ask whether to capture it into 1..n specs; a "yes" routes to `/flow-next:capture from:flow`, a "no" continues down the ladder.
+4. The next open spec in `.flow`, by your judgement of readiness, order, and dependencies; `$FLOWCTL next` and the `ready` flag are hints. Several equally plausible candidates are an inline pick, never a guess.
+5. Ask once what to work on (`AskUserQuestion`, or the plain-text fallback).
 
 ## Step 2: Route
 
