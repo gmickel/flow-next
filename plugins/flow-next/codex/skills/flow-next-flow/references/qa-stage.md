@@ -10,7 +10,7 @@
 
 ## QA-stage freshness probe (only when the gate printed its sentinel)
 
-When the gate selects QA, the all-done juncture classifies `qa` **only when no *fresh* `qa_verdict` receipt exists** for the spec. Every hop re-classifies from disk: without this idempotence gate the run would re-classify `qa` forever and never reach make-pr. The receipt lives at the committed path `.flow/review-receipts/qa-<spec-id>.json` (the QA skill's default). A receipt is **fresh** iff all three hold:
+When the gate selects QA, the all-done juncture classifies `qa` **only when no *fresh* `qa_verdict` receipt exists** for the spec. Every hop re-classifies from disk. The freshness check prevents repeated QA from blocking make-pr. The receipt lives at the committed path `.flow/review-receipts/qa-<spec-id>.json` (the QA skill's default). A receipt is **fresh** iff all three hold:
 
 1. `receipt.id == <spec-id>` (the receipt's existing spec-id field is `id`, not `spec`).
 2. `receipt.head_sha` matches the spec **branch** head **with the `chore(flow): {qa verdict, pr artifact}` bookkeeping commits peeled off**. The receipt records the CODE head. The QA skill commits the receipt above it, and make-pr commits the pr.html artifact above that, so a raw `rev-parse "$BRANCH_NAME"` would never match and QA would re-run forever. Compute against the branch, never `HEAD`, because a resumed or manual run may sit on another branch. The post-dispatch verify runs before the receipt commit and still uses `HEAD` directly.
