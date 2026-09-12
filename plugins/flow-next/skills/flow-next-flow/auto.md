@@ -50,7 +50,7 @@ LEDGER="$LEDGER_DIR/pilot-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. Ownership is shared: flowctl owns READ and CLEAR (`flowctl pilot strikes list`, `flowctl pilot strikes clear <spec-id>`, `clear --all`) so a human has a deterministic recovery that does not mean hand-editing a file under `.git/`; this file keeps the write sites that RECORD strikes. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. flowctl reads and clears the ledger (`flowctl pilot strikes list`, `flowctl pilot strikes clear <spec-id>`, `clear --all`), so recovery never means hand-editing a file under `.git/`. auto.md records strikes. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Arguments
 
@@ -480,7 +480,7 @@ Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details
 
 ### The all-done PR probe
 
-The all-done row of the matrix (tasks done, completion satisfied or ungated) routes to QA per the gate, then make-pr. Before that route runs, the run probes PR state, because an open PR belongs to land and a merged or closed PR changes the answer. This is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
+Before the all-done row of `references/route-matrix.md` runs, the run probes PR state, because an open PR belongs to land and a merged or closed PR changes the answer. This is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
 ```bash
 BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
@@ -821,7 +821,7 @@ Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 ```
 
-An all-done spec with an **open** PR is *not* crash-class; it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged-with-no-merged-PR, missing-branch, and merged-with-nothing-new (branch head equals the newest merged PR head) all-done states are `NEEDS_HUMAN`; merged plus commits beyond that head classifies `make-pr` even when older closed PRs share the branch. An all-done spec with **no** PR is never terminal at all; it classifies `qa` or `make-pr` and dispatches.
+An all-done spec with an **open** PR is *not* crash-class; it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged-with-no-merged-PR, missing-branch, and merged-with-nothing-new (branch head equals the newest merged PR head) all-done states are `NEEDS_HUMAN`; merged plus commits beyond that head classifies `make-pr` even when older closed PRs share the branch. An all-done spec with **no** PR is never terminal at all; `references/route-matrix.md` names what it dispatches.
 
 Terminal verdict when no spec was dispatched, split by why. **The two cases stay distinct**; a run that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
 

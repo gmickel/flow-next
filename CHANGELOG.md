@@ -23,7 +23,7 @@ Teams that run Flow-Next unattended get one driver instead of two. `/flow-next:f
 
 - Config keys (`pilot.autonomy`, `pilot.gateClasses`, `pipeline.qa`, `pipeline.chainStages`), flowctl verbs (`flowctl pilot strikes list|clear`, `flowctl pilot-log`), the ledger path under the git common dir, the decision-log path `.flow/pilot-runs/`, and the `PILOT_VERDICT` name are not renamed; a rename is a separate, deliberate break for a later major.
 - Published counts drop by one skill and one command (pilot moves to the alias tier); registry manifests count shipped directories and are unchanged.
-- A long-horizon parity study (`flow --auto` versus `flow --auto --tick` under a host loop on a frozen spec set, terminal parity first and wall-clock second) is scaffolded in the maintainer's eval harness; its draws are a separate run and no wall-clock claim is made here.
+- Terminal-parity and wall-clock results for long-horizon versus tick execution are pending.
 
 ## [flow-next 5.0.1] - 2026-09-12
 

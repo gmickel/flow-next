@@ -136,8 +136,10 @@ class ChainTableTestCase(unittest.TestCase):
     def test_block_targets_make_pr_only(self):
         for path, block in self.blocks():
             self.assertIn("/flow-next:make-pr <spec-id> mode:autonomous", block, path)
-            self.assertNotIn("plan-review", block,
-                             f"{path}: plan-review is never a chain target (dissolved: plan embeds its review)")
+            rows = [ln for ln in block.splitlines() if ln.startswith("| `")]
+            targets = [ln.split("|")[2].strip() for ln in rows]
+            self.assertEqual(targets, ["`make-pr`"],
+                             f"{path}: the chain table's only target is make-pr, got {targets}")
             self.assertNotRegex(block, r"(→|->)\s*`?work`?",
                                 f"{path}: work is never chained into")
 

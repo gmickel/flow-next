@@ -50,7 +50,7 @@ With `--auto`, the refusal is Ralph-only (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, i
 
 ## Forbidden
 
-- Running attended under any autonomy marker, or dispatching `/flow-next:land` or a second driver (`/flow-next:flow --auto`, its one-release `/flow-next:pilot` alias, Ralph) from inside a run.
+- Running attended under any autonomy marker, or dispatching `/flow-next:land` or a second driver from inside a run.
 - Merging, closing a spec, or force-pushing.
 - Re-implementing a stage's logic inline instead of invoking its skill.
 - A blocking question whose answer a prototype or experiment could have observed.
