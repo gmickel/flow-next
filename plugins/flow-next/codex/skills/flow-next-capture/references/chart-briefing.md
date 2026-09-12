@@ -59,7 +59,9 @@ To proceed anyway, re-run with an explicit risk override that names those D-IDs;
 capture will read back the risk and still leave the briefing draft/stale in provenance.
 ```
 
-**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. The agent reads back the exact risk (print-then-ask) before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. Read back the exact risk, then use `plain-text numbered prompt` before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
 
 **Decline** (user aborts): record nothing in `produced_specs[]`; the chart remains resumable.
 

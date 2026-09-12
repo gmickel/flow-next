@@ -59,7 +59,7 @@ To proceed anyway, re-run with an explicit risk override that names those D-IDs;
 capture will read back the risk and still leave the briefing draft/stale in provenance.
 ```
 
-**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. The agent reads back the exact risk (print-then-ask) before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
+**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. Read back the exact risk, then use `AskUserQuestion` before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
 
 **Decline** (user aborts): record nothing in `produced_specs[]`; the chart remains resumable.
 

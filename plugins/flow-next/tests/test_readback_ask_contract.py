@@ -237,7 +237,29 @@ class CaptureSavedSpecContract(unittest.TestCase):
         self.assertNotIn("`approve and write`", saved_review)
 
 
-class CodexEditorQuestionPlacement(unittest.TestCase):
+class CodexQuestionPlacement(unittest.TestCase):
+    def test_prewrite_choices_block_before_mutation(self) -> None:
+        cases = (
+            (
+                "split-proposal.md", "## Phase 4", "## 5.2b",
+                ("`split-as-proposed`", "`keep-one-spec`", "`abort`"),
+            ),
+            ("chart-briefing.md", "## 0.5b", "## 1.2b", ("D-IDs",)),
+        )
+        for root, tokens in (
+            (SKILLS, ("`AskUserQuestion`",)),
+            (
+                PLUGIN / "codex" / "skills",
+                ("`plain-text numbered prompt`", "**stop and wait"),
+            ),
+        ):
+            for name, start, end, options in cases:
+                with self.subTest(root=root, reference=name):
+                    text = _read(root / "flow-next-capture" / "references" / name)
+                    choice = text.split(start, 1)[1].split(end, 1)[0]
+                    for token in (*tokens, *options):
+                        self.assertIn(token, choice)
+
     def test_negative_footer_is_not_an_ask_anchor(self) -> None:
         source = _read(REPO_ROOT / "scripts" / "sync-codex.sh")
         function = "def is_negative_context(line):" + source.split(
