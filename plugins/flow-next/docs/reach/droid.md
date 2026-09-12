@@ -24,7 +24,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) shell
 
 ## Driving unattended
 
-A session here holds a whole route, so the default shape is `/flow-next:flow --auto`: one invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. There is no host loop primitive; an external scheduler that cuts sessions short runs `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. `/flow-next:pilot` is the one-release alias for the tick shape.
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. There is no host loop primitive. An external scheduler that cuts sessions short runs `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. `/flow-next:pilot` is the one-release alias for the tick shape.
 
 ## Discover, then invoke
 

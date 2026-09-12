@@ -29,7 +29,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) shell
 
 ## Driving unattended
 
-Sessions here are long enough to hold a whole route, so the default shape is `/flow-next:flow --auto`: one invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days). `/flow-next:pilot` is the one-release alias for the tick shape.
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days). `/flow-next:pilot` is the one-release alias for the tick shape.
 
 ## Discover, then invoke
 

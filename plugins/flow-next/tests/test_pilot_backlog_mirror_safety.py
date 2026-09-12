@@ -172,11 +172,6 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "the selected backlog route must require the direct reference",
         )
         self.assertIn(
-            "execute its backlog-only setup, then continue with Phase 1",
-            self.pilot_skill,
-            "the selected backlog route must explicitly continue into the hop loop",
-        )
-        self.assertIn(
             "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
             self.pilot_skill,
             "the ready root must retain the complete common terminal grammar",

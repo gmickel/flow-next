@@ -27,7 +27,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is on
 
 ## Driving unattended
 
-A session here holds a whole route, so the default shape is `/flow-next:flow --auto`: one invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under a `/loop`-style primitive where present, run one hop per interval with `/flow-next:flow --auto --tick`. An unattended run stops with `NEEDS_HUMAN` when the reviewer tier cannot be satisfied cross-family. `/flow-next:pilot` is the one-release alias for the tick shape.
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under a `/loop`-style primitive where present, run one hop per interval with `/flow-next:flow --auto --tick`. An unattended run stops with `NEEDS_HUMAN` when the reviewer tier cannot be satisfied cross-family. `/flow-next:pilot` is the one-release alias for the tick shape.
 
 ## Discover, then invoke
 

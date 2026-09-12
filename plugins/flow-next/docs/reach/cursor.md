@@ -26,7 +26,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is a 
 
 ## Driving unattended
 
-An attended session here holds a whole route, so `/flow-next:flow --auto` (or the hyphen form) drives one ready item hop after hop to its draft PR. There is no host loop primitive, so repetition is a person or an external scheduler re-invoking it; where a scheduler cuts sessions short, run `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. Unattended QA under `--auto` needs the browser tool's Auto-run allow-list (`../../skills/flow-next-drive/references/cursor-ide-browser.md`). `/flow-next:pilot` is the one-release alias for the tick shape.
+Run `/flow-next:flow --auto` (or the hyphen form) by default. One invocation drives one ready item hop after hop to its draft PR. There is no host loop primitive, so repetition is a person or an external scheduler re-invoking it. Where a scheduler cuts sessions short, run `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. Unattended QA under `--auto` needs the browser tool's Auto-run allow-list (`../../skills/flow-next-drive/references/cursor-ide-browser.md`). `/flow-next:pilot` is the one-release alias for the tick shape.
 
 ## Discover, then invoke
 

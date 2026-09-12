@@ -26,7 +26,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) needs
 
 ## Driving unattended
 
-Until the harness is observed holding a session through a full route, run `/flow-next:flow --auto --tick` per invocation: each hop lands its receipts, evidence echo, and ledger entry before the run ends, so the next invocation classifies from disk. Once a long session is observed working, `/flow-next:flow --auto` drives one ready item hop after hop to its draft PR in one invocation. `/flow-next:pilot` is the one-release alias for the tick shape.
+Run `/flow-next:flow --auto` by default once the harness is observed holding a session through a full route. One invocation then drives one ready item hop after hop to its draft PR. Until that is observed, run `/flow-next:flow --auto --tick` per invocation. Each hop lands its receipts, evidence echo, and ledger entry before the run ends, so the next invocation classifies from disk. `/flow-next:pilot` is the one-release alias for the tick shape.
 
 ## Discover, then invoke
 

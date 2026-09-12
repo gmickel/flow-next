@@ -43,4 +43,4 @@ if [ -f "$QA_RECEIPT" ] && [ -n "$BRANCH_NAME" ]; then
 fi
 ```
 
-`QA_FRESH` feeds the **no-PR branch** of the all-done PR probe below; the `qa` decision is made *there*, never before it. Classify `qa` only when that probe finds **no PR** AND `QA_FRESH=0` AND the gate selects it (`QA_STAGE_ENABLED=1`, or `QA_STAGE_AUTO=1` when the `auto` read in `gate-selection.md` selects QA). Any existing PR takes priority over (re-)running QA (open → defer-to-land; closed/merged/probe-failed → `NEEDS_HUMAN`), and the probe **fails closed** on a `gh` error, so a transient API failure never misroutes to `qa`. A fresh receipt (`QA_FRESH=1`) or the gate off means `make-pr`. (Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report so a transcript-only driver sees why the juncture chose `qa` vs `make-pr`.)
+`QA_FRESH` is the result `auto.md`'s all-done PR probe consumes.

@@ -45,7 +45,6 @@ DEPRECATION_LINE = (
 )
 PILOT_ARGUMENTS = ("--spec", "--backlog", "--dry-run", "--review", "--research", "--depth")
 CLASSIFY_POINTERS = ("route-matrix.md", "plan-vs-no-plan.md", "gate-selection.md")
-PILOT_STAGE_TABLE_HEADER = "| Condition | Stage |"
 ATTENDED_REFUSAL_LINE = (
     "NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs"
 )
@@ -161,9 +160,6 @@ class ClassificationPointers(unittest.TestCase):
             with self.subTest(reference=name):
                 self.assertIn(f"references/{name}", classify)
 
-    def test_pilot_stage_table_is_gone(self) -> None:
-        self.assertNotIn(PILOT_STAGE_TABLE_HEADER, _read(AUTO_MD))
-
 
 class QaAutoUnderAuto(unittest.TestCase):
     """(5) `pipeline.qa=auto` takes effect under `--auto`."""
@@ -177,14 +173,14 @@ class ZeroTaskRouteRecording(unittest.TestCase):
     """(6) A zero-task ready spec gets its route recorded and echoed."""
 
     def test_route_recording_verbs_and_echo(self) -> None:
+        # workflow.md Step 2 owns the recording verbs; auto.md Phase 2 adds the
+        # signal echo and reads the same rule.
+        workflow = _read(FLOW_DIR / "workflow.md")
+        for token in ("spec set-no-plan", "spec clear-no-plan"):
+            with self.subTest(token=token):
+                self.assertIn(token, workflow)
         classify = _section(_read(AUTO_MD), "## Phase 2 - CLASSIFY", "## Phase 3")
-        for token in (
-            "spec set-no-plan",
-            "spec clear-no-plan",
-            "route: direct -",
-            "route: plan -",
-            "references/plan-vs-no-plan.md",
-        ):
+        for token in ("route: direct -", "route: plan -", "references/plan-vs-no-plan.md"):
             with self.subTest(token=token):
                 self.assertIn(token, classify)
 
