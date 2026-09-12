@@ -435,7 +435,7 @@ DESCRIPTIONS: dict[str, str] = {
         "NOT a bool. ready = select only already-ready specs. Only the "
         "literal backlog widens selection to the whole open backlog; any "
         "other value stays ready. Backlog mode never authors a spec, never "
-        "sets ready, never merges."
+        "sets ready, and grants no merge authority."
     ),
     "pilot.gateClasses": (
         "Backlog-mode force-gate: class names (e.g. risky, prod-config) that "

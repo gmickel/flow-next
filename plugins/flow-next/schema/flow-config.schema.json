@@ -723,7 +723,7 @@
       "additionalProperties": false,
       "properties": {
         "autonomy": {
-          "description": "Backlog mode for flow --auto (--backlog forces it per run). Scalar string-enum (ready | backlog), NOT a bool. ready = select only already-ready specs. Only the literal backlog widens selection to the whole open backlog; any other value stays ready. Backlog mode never authors a spec, never sets ready, never merges.",
+          "description": "Backlog mode for flow --auto (--backlog forces it per run). Scalar string-enum (ready | backlog), NOT a bool. ready = select only already-ready specs. Only the literal backlog widens selection to the whole open backlog; any other value stays ready. Backlog mode never authors a spec, never sets ready, and grants no merge authority.",
           "enum": [
             "ready",
             "backlog"

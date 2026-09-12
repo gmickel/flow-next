@@ -4,7 +4,13 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+You can now carry a selected spec through PR convergence and merge in one flow run, while retaining the choice to stop before merge.
+
+### Added
+- **Continue a selected spec through gated landing.** Use `flow <spec> --until=merge` or `flow --auto <spec> --until=merge`; interaction mode and destination are independent. Flow invokes the existing land stage, which owns CI and review convergence, merge gates, spec close, and persistence. Tick mode performs at most one landing tick; longer runs can continue across external waits without consuming pilot strikes. Release and tracker actions retain their existing authorization and configuration.
+
 ### Changed
+- **An attended rerun with an existing PR offers landing.** Flow asks once unless the current item already has explicit landing authorization. Declining or leaving the question unanswered causes no landing mutation; default unattended flow still stops before merge. Consent stays scoped to the selected spec and PR across active retries, and a fresh session needs the flag again or current explicit authority. Recovery observes an already merged PR and resumes only its remaining authorized tail. Existing verdict names and standalone land behavior remain unchanged.
 - **Capture saves the spec before offering review.** An interactive capture request now writes the source-tagged spec, shows its summary, and offers the saved file in the editor. The redundant approve-and-write checkpoint is removed, including the second approval after choosing a split. Duplicate/rewrite choices, material questions, chart-risk overrides, glossary and readiness consent remain; plan/refine approval and autofix's `--yes` write gate are unchanged.
 
 ## [flow-next 5.1.1] - 2026-09-12

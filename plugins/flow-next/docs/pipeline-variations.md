@@ -14,6 +14,21 @@ Choose refinement, decomposition, and verification separately:
 
 Which starting state takes which route, with the positive signal and the safe skip for each, is the [route matrix](../skills/flow-next-flow/references/route-matrix.md). Before a fork becomes a question, [prototype-before-ask](../skills/flow-next-flow/references/prototype-before-ask.md) decides whether running something settles it. Where an attended run ends, and what converging an open PR means, is the [tail rule](../skills/flow-next-flow/references/tail.md).
 
+## Choose where flow stops
+
+Choose the destination independently of whether the run is attended:
+
+```text
+/flow-next:flow fn-N --until=merge
+/flow-next:flow --auto fn-N --until=merge
+```
+
+Both carry the selected spec through its build route and invoke land for PR convergence, gated merge, spec close, and persistence. Plain unattended flow keeps its pre-merge stop. Rerunning plain attended flow on a spec with an existing PR offers landing and asks once unless you have already explicitly authorized that item. Declining or leaving the question unanswered causes no landing mutation; readiness and PR existence are not consent.
+
+Consent covers the selected spec and PR during active retries and waits. A fresh session needs `--until=merge` again or current explicit authority; a historical transcript or receipt does not supply it. Land retains every review, QA, CI, branch-protection, dependency, and repair gate. Release and tracker actions require their existing authorization and configuration.
+
+Flow consumes land's workflow one tick at a time. `--auto --tick` runs at most one landing tick; a longer invocation can wait and continue at land's cadence without spending pilot strikes on external waits. An unrelated eligible PR never replaces the selected target. An ambiguous target, lost authority, ownership conflict, or unusable landing workspace stops the route. A merged PR resumes only its remaining authorized tail, and completion evidence distinguishes merge success from unfinished post-merge work. See the [tail contract](../skills/flow-next-flow/references/tail.md) for the handoff and recovery rules. Standalone `/flow-next:land` remains available for scheduled babysitting and recovery.
+
 ## Before the pipeline: discovery is upstream, often already done
 
 [`/flow-next:prospect`](../skills/flow-next-prospect/SKILL.md) (ranked candidates) and [`/flow-next:chart`](../skills/flow-next-chart/SKILL.md) (decision-map discovery for one oversized, unclear idea) are **upstream of every variant, not stages of any of them**. In most organizations their work already happened under another name: a roadmap, a product brief, a groomed backlog item *is* prospect/chart output. Reach for them only when no shaped intent exists yet - when you cannot state the outcome in a sentence.
@@ -24,7 +39,7 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Material choices plus a plan signal (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier) | capture → refine → plan → plan-review → work → [qa when `on` or qualifying `auto`] → make-pr, ending at the draft PR; later runs converge it and a human merges |
+| [Epic](#epic) | Material choices plus a plan signal (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier) | capture → refine → plan → plan-review → work → [qa when `on` or qualifying `auto`] → make-pr, draft PR by default; optional authorized land stage through merge |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
@@ -45,11 +60,11 @@ flowchart LR
     E([Epic intent]) --> C[/capture/] --> I[/refine/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/]
     W -->|qa on, or auto qualifying| Q[/qa/] --> M[/make-pr/]
     W -->|qa off, or auto skip recorded| M
-    M --> D([Draft PR, Flow stops here])
-    D -.human decision.-> L[/land/]
+    M --> D([Draft PR, default stop])
+    D -.scoped consent or --until=merge.-> L[/land/]
 ```
 
-The pattern that works in practice is to **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, QA drives the live app when `pipeline.qa` is `on` or a qualifying `auto`, and make-pr opens the draft PR where the flow run ends. Converging that PR (`/flow-next:resolve-pr`, CI fixes) is a later invocation, and merge is the human's decision, made by hand or handed to `/flow-next:land` as a separate driver. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
+The pattern that works in practice is to **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, QA drives the live app when `pipeline.qa` is `on` or a qualifying `auto`, and make-pr opens the draft PR. Flow stops there by default; an explicit merge destination continues through land's convergence and gated merge. You can also invoke `/flow-next:resolve-pr` or `/flow-next:land` directly. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
 
 ### Feature, requirements known
 

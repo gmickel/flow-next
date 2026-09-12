@@ -42,8 +42,8 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 | [`flowctl.md`](flowctl.md) | The full CLI: every command, flag, JSON shape, and exit code |
 | [`orchestration.md`](orchestration.md) | Two routing axes: the pipeline shape per item (six deciders, each printing its reason) and the model per job (four tiers, the routing block, review backends, the bridge route); an unattended field case with 38 landed PRs and a five-rung setup ladder |
 | [`reach/README.md`](reach/README.md) | What each harness can actually reach, and how it degrades when it cannot |
-| [`../skills/flow-next-flow/auto.md`](../skills/flow-next-flow/auto.md) | The build loop, `flow --auto`: one ready spec, hop after hop to a draft PR (or one hop under `--tick`), one verdict line |
-| [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md) | The ship loop: CI, review convergence, the gated merge, the release tail |
+| [`../skills/flow-next-flow/auto.md`](../skills/flow-next-flow/auto.md) | `flow --auto` through a draft PR by default, or gated landing with `--until=merge`; one hop under `--tick` |
+| [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md) | Land, standalone or invoked by flow: CI, review convergence, gated merge, and the authorized post-merge tail |
 | [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md) | The live-app pass (consumes `.flow/features/` navigation when present), and why it may never mark PASS by reading source |
 | [`../skills/flow-next-features/SKILL.md`](../skills/flow-next-features/SKILL.md) | Seed or maintain the committed user-POV drive map that QA and drive reuse for navigation |
 | [`ralph.md`](ralph.md) | The deprecated hardened harness, still supported and still documented |

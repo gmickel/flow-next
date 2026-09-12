@@ -457,7 +457,7 @@ The set of six small reference files the flow skill owns under `plugins/flow-nex
 
 ## Driver
 
-The thing that invokes the unattended conductor and owns repetition: a human running `/flow-next:flow --auto` once per item, a host loop primitive (`/loop`, `/goal`, `cron`) running `flow --auto --tick`, or Ralph (the deprecated repo-local hardened harness). Attended `/flow-next:flow` stops at the next human decision; `flow --auto` stops at the next decision that needs a human and reports it as a verdict. Drivers are never nested. Attended flow refuses under any autonomy marker, `flow --auto` refuses under Ralph, and `flow --auto` and land never dispatch a second driver.
+The thing that invokes the unattended conductor and owns repetition: a human running `/flow-next:flow --auto` once per item, a host loop primitive (`/loop`, `/goal`, `cron`) running `flow --auto --tick`, or Ralph (the deprecated repo-local hardened harness). Attended `/flow-next:flow` stops at the next human decision; `flow --auto` stops at the next decision that needs a human and reports it as a verdict. Drivers are never recursively nested. The confined composition exception is flow invoking one land tick as its authorized landing stage for the selected spec and PR. Attended flow refuses under any autonomy marker, `flow --auto` refuses under Ralph, and land never dispatches a second driver.
 
 _Avoid_: mode, conductor mode, autopilot
 
@@ -473,7 +473,7 @@ _Relates to_: Driver, Tick, Long-horizon run
 
 ## Tick
 
-Exactly one hop of `flow --auto`, selected with `--tick`. The run classifies, dispatches one stage, verifies, records, and stops with the verdict line. The portable floor for hosts without stable long sessions, run under the host's loop primitive (`/loop 30m /flow-next:flow --auto --tick`). What a `/flow-next:pilot` invocation was.
+Exactly one hop of `flow --auto`, selected with `--tick`. The run classifies, dispatches one stage, verifies, records, and stops with the verdict line. A landing hop consumes at most one land tick. The portable floor for hosts without stable long sessions, run under the host's loop primitive (`/loop 30m /flow-next:flow --auto --tick`). What a `/flow-next:pilot` invocation was.
 
 _Avoid_: pilot tick, single-stage run
 
@@ -481,7 +481,7 @@ _Relates to_: Hop, Long-horizon run, Driver, Pilot
 
 ## Long-horizon run
 
-The default shape of `flow --auto`: one invocation drives one ready item hop after hop until a terminal (a PR exists, deferred to land, asked, blocked, needs human, no work). The verdict line names every dispatched stage in order joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict. One item per run; the next invocation selects the next item.
+The default shape of `flow --auto`: one invocation drives one ready item hop after hop until a terminal (a PR exists, deferred to land, asked, blocked, needs human, no work). With `--until=merge`, it can continue through land ticks and external waits until the selected PR is confirmed merged and its required tail is complete, or an existing stop condition applies. The verdict line names every dispatched stage in order joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict. One item per run; the next invocation selects the next item.
 
 _Avoid_: multi-stage tick, chained tick, autopilot run
 
@@ -489,7 +489,7 @@ _Relates to_: Hop, Tick, Verdict line
 
 ## Verdict line
 
-The terminal line every `flow --auto` run and every `/flow-next:land` tick prints last, for the driver to read: `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"` and `LAND_VERDICT=...`. The `PILOT_VERDICT` name is kept unchanged across the pilot retirement so existing drivers keep parsing; `TRIAGED` appears under `--explain` and `--dry-run` only.
+The terminal line every `flow --auto` run and every `/flow-next:land` tick prints last, for the driver to read: `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"` and `LAND_VERDICT=...`. The `PILOT_VERDICT` name is kept unchanged across the pilot retirement so existing drivers keep parsing; `TRIAGED` appears under `--explain` and `--dry-run` only. Under a merge destination, the reason and observed evidence distinguish landing progress, external waiting, blockage, confirmed merge, and remaining tail work; the original `LAND_VERDICT` is retained in the evidence.
 
 _Avoid_: exit status, summary line, result banner
 

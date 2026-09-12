@@ -53,6 +53,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -1115,14 +1116,12 @@ class PostMergeTailOrderStaticTestCase(unittest.TestCase):
         self.assertLess(tracker, persist)
 
     def test_the_only_tail_push_comes_after_release_and_tracker(self) -> None:
-        push = self.tail.index("git push || { git pull --rebase && git push; }")
-        self.assertLess(self.tail.index("2. **Release-follow**"), push)
-        self.assertLess(self.tail.index("3. **Tracker touchpoint"), push)
-        # Exactly one push line in the tail (`git push || { ... && git push; }`)
-        # - the close and the sync state ride it together.
-        # 3 mentions: the persist push, the pull-rebase retry, and the
-        # release-instructions ride-along note (PR #350 review).
-        self.assertEqual(self.tail.count("git push"), 3)
+        pushes = list(re.finditer(r"^\s*git push[^\n]*", self.tail, re.M))
+        self.assertEqual(len(pushes), 2)  # scoped push and standalone retry branch
+        for push in pushes:
+            self.assertLess(self.tail.index("2. **Release-follow**"), push.start())
+            self.assertLess(self.tail.index("3. **Tracker touchpoint"), push.start())
+            self.assertLess(self.tail.index("4. **Persist —"), push.start())
 
     def test_close_step_commits_without_pushing(self) -> None:
         close = self.tail[

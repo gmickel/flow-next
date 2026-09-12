@@ -1,6 +1,6 @@
 # /flow-next:flow workflow - the hop loop
 
-Mode, `EXPLAIN`, and `REVIEW_OVERRIDE` come from SKILL.md. `$FLOWCTL` is the SKILL.md preamble value.
+Mode, `FLOW_UNTIL`, `EXPLAIN`, and `REVIEW_OVERRIDE` come from SKILL.md. `$FLOWCTL` is the SKILL.md preamble value.
 
 ## Preamble
 
@@ -28,7 +28,7 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 
 Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve the rule now; the route is recorded after the explain stop below, before any stage runs.
 
-A spec with an intentional plan (tasks beyond the sole implicit owner) runs the planned route unchanged. A spec whose tasks are all done reads [references/gate-selection.md](references/gate-selection.md) for the QA decision and then routes to make-pr. A spec with an open PR reads [references/tail.md](references/tail.md).
+A spec with an intentional plan (tasks beyond the sole implicit owner) runs the planned route unchanged. A spec whose tasks are all done reads [references/gate-selection.md](references/gate-selection.md) for the QA decision and then routes to make-pr. A spec with an existing PR, including a merged PR with unfinished tail work, reads [references/tail.md](references/tail.md).
 
 When the starting point is intent that has not been captured and the criteria you would draft trip the tripwire, read [references/spec-count.md](references/spec-count.md); capture applies the same file at its split-choice step, so the count is decided once.
 
@@ -50,8 +50,8 @@ Invoke the stage skill by name with its normal arguments; pass `--review=<backen
 - **Capture under flow** is invoked with the exact token `from:flow`. Capture then applies `references/plan-vs-no-plan.md` itself, sets `no_plan` when the rule resolves to direct, and writes no placeholder requirement-coverage table on that route. The capture request authorizes saving the spec; capture then offers the saved file for review. Honor a request to capture or review only: neither saving nor editor continuation authorizes work. A previously authorized implementation route may continue after the capture follow-up.
 - **Work** runs `/flow-next:work <spec-id>`; with `no_plan` recorded the fork is pre-answered and never asks.
 - **QA** runs per `references/gate-selection.md`. Under `pipeline.qa=auto`, judge drivability from the acceptance criteria and the repo before dispatching; a skip is recorded, never silent.
-- **Make-pr** ends a run from intent.
-- **Resolve-pr, CI fixes, re-review** converge an open PR per `references/tail.md`.
+- **Make-pr** ends a run from intent unless the selected merge destination or current explicit scoped consent authorizes continuation.
+- **Existing PR / land** follows `references/tail.md`: obtain current consent when required, bind one spec/PR, invoke one land tick, and observe its result. Explicit review-only convergence remains available without landing consent.
 
 If a stage stops with `NEEDS_HUMAN`, a review verdict that needs a person, or an unresolved product question, flow stops with the same report; it never answers on the user's behalf.
 
@@ -61,8 +61,8 @@ After the stage returns, re-read state (`$FLOWCTL show <spec-id> --json`, the PR
 
 ## Step 5: Stop and report
 
-Two kinds of human decision reach this step. A **pick among options a stage produced** (prospect's ranked candidates, a chart briefing's capture-or-split question, refine's choices when it hands back) is asked inline under the one-question-per-hop invariant, and the run continues with the answer through Step 2. A **decision that ends the run** is not askable here: merge, a review verdict that needs a person, a `NEEDS_HUMAN` from a stage, or a product question no stage framed as options.
+Two kinds of human decision reach this step. A **pick among options a stage produced** (prospect's ranked candidates, a chart briefing's capture-or-split question, refine's choices when it hands back) is asked inline under the one-question-per-hop invariant, and the run continues with the answer through Step 2. A **decision that ends the run** is not askable here: a review verdict that needs a person, a `NEEDS_HUMAN` from a stage, or a product question no stage framed as options.
 
-Stop at the first of: the PR exists (run from intent), merge is the only step left (open-PR run), a run-ending decision surfaced by a stage, or a blocking question this hop must ask that is not a pick. Print the report shape from SKILL.md with one `stage:` line per stage reached and each inline pick on the `Route taken` line, then the `Next:` line in the host's command form.
+Apply `references/tail.md` at the PR boundary: offer landing on a plain attended existing-PR run, continue an authorized merge destination through land, and stop on decline, unanswered consent, a landing blocker, or confirmed merge plus required tail completion. Otherwise stop at the first of: the PR exists (run from intent without landing authority), a run-ending decision surfaced by a stage, or a blocking question this hop must ask that is not a pick. Print the report shape from SKILL.md with one `stage:` line per stage reached and each inline pick on the `Route taken` line, then the `Next:` line in the host's command form.
 
-Done when: every hop matched one matrix row, every dispatched or skipped stage carries a `stage:` line with its reason, every inline pick is on the `Route taken` line, no merge or spec close happened, and the report names the decision that ended the run.
+Done when: every hop matched one matrix row, every dispatched or skipped stage carries a `stage:` line with its reason, every inline pick is on the `Route taken` line, any merge or spec close was land-owned and currently authorized, and the report names the decision that ended the run.
