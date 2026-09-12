@@ -9627,9 +9627,11 @@ Conduct a John Carmack-level review of this plan.
 
 You are reviewing:
 1. **Epic spec** in `<spec>` - The high-level plan
-2. **Task specs** in `<task_specs>` - Individual task breakdowns (if provided)
+2. **Task specs** in `<task_specs>` - Individual task breakdowns, when the plan carries any
 
-**CRITICAL**: Check for consistency between epic and tasks. Flag if:
+Task count, task decomposition, and dispatch shape are the owner's and the orchestrator's decisions, never a finding. A spec with zero tasks or one owner task is the default route. Review the spec's content, and review the task specs only for consistency with it when they are supplied.
+
+**CRITICAL** when task specs are supplied: check for consistency between epic and tasks. Flag if:
 - Task specs contradict or miss epic requirements
 - Task acceptance criteria don't align with epic acceptance criteria
 - Task approaches would need to change based on epic design decisions
@@ -9642,9 +9644,9 @@ You are reviewing:
 3. **Clarity** - Specs unambiguous? Acceptance criteria testable?
 4. **Architecture** - Right abstractions? Clean boundaries?
 5. **Risks** - Blockers identified? Security gaps? Mitigation?
-6. **Scope** - Right-sized? Over/under-engineering? Overengineering is a FINDING, not a taste note: flag (a) any task or surface not traceable to a stated requirement (extra commands, export/import paths, detection hooks, config knobs "for later"); (b) risk-management machinery (trust/consent layers, caps, scanners, secondary state stores) where the risk could be eliminated structurally (closed schema, inert format, capability not exposed); (c) N-way generality where the request names one concrete case. Scope-minimality never trims rigor: error/negative-case enumeration per AC must stay complete — flag the plan if minimality was achieved by dropping error handling or by dropping filesystem-identity, permission, or concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state).
+6. **Scope** - Is the requirement right-sized? Over/under-engineering? Overengineering is a FINDING, not a taste note: flag (a) any task or surface not traceable to a stated requirement (extra commands, export/import paths, detection hooks, config knobs "for later"); (b) risk-management machinery (trust/consent layers, caps, scanners, secondary state stores) where the risk could be eliminated structurally (closed schema, inert format, capability not exposed); (c) N-way generality where the request names one concrete case. Scope-minimality never trims rigor: error/negative-case enumeration per AC must stay complete — flag the plan if minimality was achieved by dropping error handling or by dropping filesystem-identity, permission, or concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state).
 7. **Testability** - How will we verify this works?
-8. **Consistency** - Do task specs align with epic spec? Are `**Touches:**` declarations plausible against each task's Files/Approach, and do any two dep-independent tasks' Touches sets overlap (overlaps force serial dispatch - flag the pair)? On a multi-task spec, a dep-independent task missing its `**Touches:**` line is a finding to flag (omission silently forces serial dispatch; the plan skill mandates the line on every task — uncertain → declare WIDER, never omit).
+8. **Consistency** (only when task specs are supplied) - Do task specs align with epic spec? Are `**Touches:**` declarations plausible against each task's Files/Approach, and do any two dep-independent tasks' Touches sets overlap (overlaps force serial dispatch - flag the pair)? On a multi-task spec, a dep-independent task missing its `**Touches:**` line is a finding to flag (omission silently forces serial dispatch; the plan skill mandates the line on every task — uncertain → declare WIDER, never omit).
 
 ## Verdict Scope
 
@@ -9652,7 +9654,9 @@ Explore the codebase to understand context, but your VERDICT must only consider:
 - Issues **within this plan** that block implementation
 - Feasibility problems given the **current codebase state**
 - Missing requirements that are **part of the stated goal**
-- Inconsistencies between epic and task specs
+- Inconsistencies between epic and task specs, when task specs are supplied
+
+A missing approach order or test sequence is a spec-content finding. Whether that gap changes the task split is the owner's call; do not prescribe a split.
 
 Do NOT mark NEEDS_WORK for:
 - Pre-existing codebase issues unrelated to this plan

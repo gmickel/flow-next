@@ -2,6 +2,13 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 5.1.1] - 2026-09-12
+
+Plan review no longer asks for a task split. A spec with zero tasks or one owner task is the default route, so the reviewer's job is the spec's content and, when task specs exist, their consistency with it.
+
+### Changed
+- **Plan review treats task decomposition as the owner's decision.** The shared review prompt and the RepoPrompt prompt state that task count, decomposition, and dispatch shape are never a finding; the consistency and `Touches` checks apply only when task specs are supplied; a missing approach order or test sequence stays a spec-content finding that the owner resolves without a prescribed split.
+
 ## [flow-next 5.1.0] - 2026-09-12
 
 Teams that run Flow-Next unattended get one driver instead of two. One `/flow-next:flow --auto` invocation carries a ready spec to a draft PR, hop after hop, classifying each hop from the same routing references the attended conductor reads, so the route you see in `--explain` is the route the unattended run takes. Pilot users keep working through the alias for one release. `/flow-next:pilot` is retired in 5.1.0, forwards to `flow --auto --tick` with one deprecation line, and the release after 5.1.0 removes it.
