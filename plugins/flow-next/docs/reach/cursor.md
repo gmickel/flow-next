@@ -24,6 +24,10 @@ Cursor does not serve GPT-6 Astra, and it will not serve later OpenAI models eit
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) is a third CLI route to a reviewer from inside Cursor: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), with the same receipt, ladder and fix loop as the other CLI backends - cross-family when the session model that wrote the diff is another family, same-family when it is a Claude model (the receipt records the model either way).
 
+## Driving unattended
+
+An attended session here holds a whole route, so `/flow-next:flow --auto` (or the hyphen form) drives one ready item hop after hop to its draft PR. There is no host loop primitive, so repetition is a person or an external scheduler re-invoking it; where a scheduler cuts sessions short, run `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. Unattended QA under `--auto` needs the browser tool's Auto-run allow-list (`../../skills/flow-next-drive/references/cursor-ide-browser.md`). `/flow-next:pilot` is the one-release alias for the tick shape.
+
 ## Discover, then invoke
 
 This harness's CLI lists the models it can reach, and that list moves - ask it immediately before pinning one in a dispatch rather than copying an identifier from a document.

@@ -22,8 +22,10 @@ ADAPTER = (SKILL_ROOT / "references/adapter-interface.md").read_text(
     encoding="utf-8"
 )
 COMMENTS = (SKILL_ROOT / "references/comments-sync.md").read_text(encoding="utf-8")
-PILOT_ROOT = REPO_ROOT / "plugins/flow-next/skills/flow-next-pilot"
-PILOT_WORKFLOW = (PILOT_ROOT / "workflow.md").read_text(encoding="utf-8")
+# The backlog driver is `flow --auto --backlog`: auto.md carries the enforcing
+# guards, references/backlog-mode.md the SELECT/TRIAGE/ASK workflow.
+PILOT_ROOT = REPO_ROOT / "plugins/flow-next/skills/flow-next-flow"
+PILOT_WORKFLOW = (PILOT_ROOT / "auto.md").read_text(encoding="utf-8")
 PILOT_BACKLOG = (
     PILOT_ROOT / "references/backlog-mode.md"
 ).read_text(encoding="utf-8")

@@ -1,11 +1,18 @@
-"""Cross-platform parity + autonomous-safety contract for fn-68.5 (R12; verifies R6/R7).
+"""Cross-platform parity + autonomous-safety contract for the unattended driver
+(`flow --auto`, formerly pilot; originally fn-68.5, R12; verifies R6/R7).
 
-fn-68.5 is its OWN task because regenerating the Codex mirror exposes latent
+fn-68.5 was its OWN task because regenerating the Codex mirror exposes latent
 canonical issues — memory ``mirror-regen-exposes-latent-canonical`` (fn-60 took
 FOUR NEEDS_WORK rounds from one mirror regen). The mirror is the **rewrite** of
 the Claude-native canonical; this test locks the load-bearing invariants of that
-rewrite so a later edit to ``sync-codex.sh`` or the canonical pilot/tracker-sync
+rewrite so a later edit to ``sync-codex.sh`` or the canonical flow/tracker-sync
 skills can't silently regress them.
+
+The driver now lives in ``skills/flow-next-flow/auto.md`` (the single
+always-loaded-under---auto file that replaced pilot's SKILL.md + workflow.md)
+with ``references/backlog-mode.md`` and ``references/qa-stage.md`` beside it;
+``skills/flow-next-pilot/SKILL.md`` is a one-release deprecation stub. Where
+this file distinguished SKILL.md from workflow.md, both resolve to auto.md.
 
 Three families, all **prose contract** (the host agent IS the runtime — there is
 no Python engine to unit-test; backlog mode is skill prose the agent executes):
@@ -51,22 +58,27 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 
-# Canonical (Claude-native) pilot skill files.
-PILOT = PLUGIN / "skills" / "flow-next-pilot"
-PILOT_SKILL = PILOT / "SKILL.md"
-PILOT_WORKFLOW = PILOT / "workflow.md"
-PILOT_BACKLOG = PILOT / "references" / "backlog-mode.md"
-PILOT_QA = PILOT / "references" / "qa-stage.md"
+# Canonical (Claude-native) driver files: auto.md plus its two gated references.
+FLOW = PLUGIN / "skills" / "flow-next-flow"
+PILOT_SKILL = FLOW / "auto.md"
+PILOT_WORKFLOW = FLOW / "auto.md"
+PILOT_BACKLOG = FLOW / "references" / "backlog-mode.md"
+PILOT_QA = FLOW / "references" / "qa-stage.md"
+PILOT_STUB = PLUGIN / "skills" / "flow-next-pilot" / "SKILL.md"
 PILOT_LEDGER = REPO_ROOT / "optimization" / "reached-path" / "pilot-candidates.json"
+# The files a `--auto` run can load, relative to the flow skill dir; every one
+# needs a mirror counterpart.
+AUTO_ROUTED_FILES = ("auto.md", "references/backlog-mode.md", "references/qa-stage.md")
 
 # Canonical tracker-sync (carries the R14 Phase-0 fix from fn-68.2).
 TS_STEPS = PLUGIN / "skills" / "flow-next-tracker-sync" / "steps.md"
 
 # The regenerated Codex mirror — the rewrite this task locks.
-MIRROR = PLUGIN / "codex" / "skills" / "flow-next-pilot"
-MIRROR_SKILL = MIRROR / "SKILL.md"
-MIRROR_WORKFLOW = MIRROR / "workflow.md"
+MIRROR = PLUGIN / "codex" / "skills" / "flow-next-flow"
+MIRROR_SKILL = MIRROR / "auto.md"
+MIRROR_WORKFLOW = MIRROR / "auto.md"
 MIRROR_BACKLOG = MIRROR / "references" / "backlog-mode.md"
+MIRROR_STUB = PLUGIN / "codex" / "skills" / "flow-next-pilot" / "SKILL.md"
 MIRROR_TS_STEPS = (
     PLUGIN / "codex" / "skills" / "flow-next-tracker-sync" / "steps.md"
 )
@@ -90,11 +102,13 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             PILOT_WORKFLOW,
             PILOT_BACKLOG,
             PILOT_QA,
+            PILOT_STUB,
             PILOT_LEDGER,
             TS_STEPS,
             MIRROR_SKILL,
             MIRROR_WORKFLOW,
             MIRROR_BACKLOG,
+            MIRROR_STUB,
             MIRROR_TS_STEPS,
         ]
         for p in required:
@@ -109,7 +123,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         cls.m_workflow = _read(MIRROR_WORKFLOW)
         cls.m_backlog = _read(MIRROR_BACKLOG)
         cls.m_ts_steps = _read(MIRROR_TS_STEPS)
-        cls.m_pilot_files = (cls.m_skill, cls.m_workflow, cls.m_backlog)
+        cls.m_pilot_files = (cls.m_skill, cls.m_backlog)
 
     # ── A. Cross-platform mirror parity (R12) ──────────────────────────────
 
@@ -118,7 +132,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         SELECT/TRIAGE/ASK workflow) — it is loaded only in backlog mode."""
         self.assertTrue(
             MIRROR_BACKLOG.exists(),
-            "backlog-mode.md must be mirrored into the Codex pilot skill",
+            "backlog-mode.md must be mirrored into the Codex flow skill",
         )
 
     def test_mirror_carries_triage_and_ask_stages(self) -> None:
@@ -130,8 +144,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         self.assertIn("Phase 3.5", self.m_workflow)
         self.assertRegex(
             self.m_workflow,
-            r"Phase 3\.5 — ASK",
-            "the mirror workflow must carry the Phase 3.5 ASK valve",
+            r"Phase 3\.5 [—-] ASK",
+            "the mirror auto.md must carry the Phase 3.5 ASK valve",
         )
 
     def test_mirror_carries_asked_verdict_and_grammar(self) -> None:
@@ -150,7 +164,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         self.assertNotIn(
             "### Backlog-mode verdict grammar",
             self.pilot_skill,
-            "backlog-only grammar must not stay always-loaded in SKILL.md",
+            "backlog-only grammar must not stay always-loaded in auto.md",
         )
         self.assertIn(
             "read [references/backlog-mode.md]",
@@ -158,9 +172,9 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "the selected backlog route must require the direct reference",
         )
         self.assertIn(
-            "execute its backlog-only setup, then continue with `workflow.md` Phase 1",
+            "execute its backlog-only setup, then continue with Phase 1",
             self.pilot_skill,
-            "the selected backlog route must explicitly continue into the workflow",
+            "the selected backlog route must explicitly continue into the hop loop",
         )
         self.assertIn(
             "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>",
@@ -193,17 +207,35 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         candidate = ledger["candidates"][0]
         self.assertEqual("keep", candidate["verdict"])
 
+        # The ledger names the files a `--auto` run can load; every one must
+        # exist on disk, so the ledger cannot silently point at the retired
+        # pilot layout. (The historical hashes are the recorded measurement
+        # against the pilot-era files and are not re-frozen against live
+        # files - G2.)
+        self.assertEqual(
+            sorted(ledger["routed_files"]),
+            sorted(f"plugins/flow-next/skills/flow-next-flow/{rel}" for rel in AUTO_ROUTED_FILES),
+        )
+        for rel in ledger["routed_files"]:
+            with self.subTest(routed=rel):
+                self.assertTrue((REPO_ROOT / rel).is_file(), rel)
+
         # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
         # G1, not grep. (Live-file hash/char freeze and size ratchet removed
         # earlier for the same reason; deliberate-change protection lives in
-        # test_prompt_text_pinned.py.) The QA classification grammar tokens
-        # stay pinned:
-        self.assertIn(
-            "No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` "
-            "**and** `QA_FRESH=0`",
-            self.pilot_workflow,
-            "workflow.md must still own the QA-stage classification decision",
-        )
+        # test_prompt_text_pinned.py.) The QA classification tokens stay
+        # pinned on the all-done probe: auto.md owns the decision, the
+        # reference only computes freshness.
+        start = self.pilot_workflow.index("### The all-done PR probe")
+        probe = self.pilot_workflow[start:self.pilot_workflow.index("### Explain stop", start)]
+        for token in ("QA_STAGE_ENABLED=1", "QA_STAGE_AUTO=1", "QA_FRESH=0"):
+            with self.subTest(token=token):
+                self.assertIn(token, probe, "auto.md must own the QA-stage classification decision")
+        # The reference computes freshness only: it assigns QA_FRESH and never
+        # assigns the gate flags auto.md resolved.
+        self.assertIn("QA_FRESH=1", self.pilot_qa)
+        self.assertNotRegex(self.pilot_qa, r"(?m)^\s*QA_STAGE_(ENABLED|AUTO)=",
+                            "the freshness reference must not re-decide the gate")
 
     def test_mirror_carries_tracker_sync_r14_phase0_fix(self) -> None:
         """The R14 Phase-0 autonomy-marker fix (fn-68.2) survives in the
@@ -274,8 +306,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "request_user_input",
         )
         for fname, text in (
-            ("SKILL.md", self.m_skill),
-            ("workflow.md", self.m_workflow),
+            ("auto.md", self.m_skill),
             ("backlog-mode.md", self.m_backlog),
         ):
             for tok in forbidden:
@@ -287,17 +318,17 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                     )
 
     def test_mirror_rewrites_ask_to_numbered_prompt(self) -> None:
-        """Where canonical pilot says `AskUserQuestion`, the mirror says the
+        """Where canonical auto.md says `AskUserQuestion`, the mirror says the
         plain-text numbered-prompt form (the fn-45 rewrite)."""
         self.assertIn("plain-text numbered prompt", self.m_skill)
-        self.assertIn("plain-text numbered prompt", self.m_workflow)
+        self.assertIn("plain-text numbered prompt", self.m_backlog)
 
     def test_historical_maintainer_breadcrumb_is_absent(self) -> None:
         """The fn-68.5 mirror breadcrumb was task-local and is now stale."""
         for fname, text in (
-            ("canonical pilot/backlog-mode.md", self.pilot_backlog),
+            ("canonical flow/backlog-mode.md", self.pilot_backlog),
             ("canonical tracker-sync/steps.md", self.ts_steps),
-            ("pilot/backlog-mode.md", self.m_backlog),
+            ("flow/backlog-mode.md", self.m_backlog),
             ("tracker-sync/steps.md", self.m_ts_steps),
         ):
             with self.subTest(file=fname):
@@ -320,34 +351,28 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         pilot's Forbidden section / Phase-3.5 async valve directly contradicts
         the autonomous, surface-don't-block contract (R14)."""
         for fname, text in (
-            ("SKILL.md", self.m_skill),
-            ("workflow.md", self.m_workflow),
+            ("auto.md", self.m_skill),
             ("backlog-mode.md", self.m_backlog),
+            ("pilot stub SKILL.md", _read(MIRROR_STUB)),
         ):
             with self.subTest(file=fname):
                 self.assertNotIn(
                     R2_INSTRUCTION_SENTINEL,
                     text,
                     f"{fname}: the R2 ask-instruction block must NOT be injected "
-                    "into a pilot mirror file (pilot never asks — it negates)",
+                    "into a driver mirror file (--auto never asks — it negates)",
                 )
 
     def test_mirror_is_present_for_every_canonical_pilot_file(self) -> None:
-        """Structural parity: every canonical pilot markdown file has a mirror
-        counterpart (no silently-dropped file)."""
-        canon = {
-            p.relative_to(PILOT)
-            for p in PILOT.rglob("*.md")
-        }
-        mirror = {
-            p.relative_to(MIRROR)
-            for p in MIRROR.rglob("*.md")
-        }
-        missing = canon - mirror
+        """Structural parity: every file a `--auto` run can load, plus the
+        pilot deprecation stub, has a mirror counterpart (no silently-dropped
+        file)."""
+        missing = [rel for rel in AUTO_ROUTED_FILES if not (MIRROR / rel).is_file()]
         self.assertFalse(
             missing,
-            f"canonical pilot files with no mirror: {sorted(map(str, missing))}",
+            f"canonical --auto files with no mirror: {missing}",
         )
+        self.assertTrue(MIRROR_STUB.is_file(), "pilot stub has no mirror")
 
     # ── B. /goal (Codex) driver parity ─────────────────────────────────────
 
@@ -356,8 +381,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         hand-off verbs — present VERBATIM in both canonical and mirror so a
         transcript-blind /goal or /loop driver can key on them."""
         for label, text in (
-            ("canonical SKILL", self.pilot_skill),
-            ("mirror SKILL", self.m_skill),
+            ("canonical auto.md", self.pilot_skill),
+            ("mirror auto.md", self.m_skill),
         ):
             for verb in ("NO_WORK", "DEFERRED_TO_LAND"):
                 with self.subTest(where=label, verb=verb):
@@ -409,7 +434,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             with self.subTest(where=label):
                 self.assertRegex(
                     text,
-                    r"/goal keep running /flow-next:pilot until it prints "
+                    r"/goal keep running /flow-next:flow --auto until it prints "
                     r"PILOT_VERDICT=NO_WORK",
                     f"{label}: the /goal stop-clause example must survive",
                 )
@@ -418,9 +443,9 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
 
     def test_every_ask_mention_in_pilot_canonical_is_a_negation(self) -> None:
         """No-prompt invariant at the SOURCE: every AskUserQuestion mention in
-        the pilot canonical files is a NEGATION (never reached / forbidden /
-        never interactive / no path reaches) — pilot genuinely never asks. (The
-        one non-prose mention allowed is the maintainer breadcrumb's
+        the driver's canonical files is a NEGATION (never reached / forbidden /
+        never interactive / no path reaches) — `--auto` genuinely never asks.
+        (The one non-prose mention allowed is the maintainer breadcrumb's
         'keep this file Claude-native (`AskUserQuestion`, `Task`)'.)"""
         # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
         # G1, not grep: the cue list is reduced to minimal negation tokens
@@ -431,8 +456,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             re.IGNORECASE,
         )
         for fname, text in (
-            ("SKILL.md", self.pilot_skill),
-            ("workflow.md", self.pilot_workflow),
+            ("auto.md", self.pilot_skill),
             ("backlog-mode.md", self.pilot_backlog),
         ):
             for ln in text.splitlines():
@@ -442,7 +466,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                     self.assertTrue(
                         negation_cue.search(ln),
                         f"{fname}: a non-negation AskUserQuestion mention would "
-                        f"mean pilot asks interactively — line: {ln.strip()!r}",
+                        f"mean --auto asks interactively — line: {ln.strip()!r}",
                     )
 
     def test_mirror_preserves_the_never_prompt_negation(self) -> None:
@@ -455,8 +479,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             re.IGNORECASE,
         )
         for fname, text in (
-            ("SKILL.md", self.m_skill),
-            ("workflow.md", self.m_workflow),
+            ("auto.md", self.m_skill),
+            ("backlog-mode.md", self.m_backlog),
         ):
             for ln in text.splitlines():
                 if "plain-text numbered prompt" not in ln:
@@ -464,7 +488,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                 with self.subTest(file=fname, line=ln.strip()[:70]):
                     self.assertTrue(
                         negation_cue.search(ln),
-                        f"{fname}: non-negation prompt mention — pilot must "
+                        f"{fname}: non-negation prompt mention — --auto must "
                         f"never ask — line: {ln.strip()!r}",
                     )
 

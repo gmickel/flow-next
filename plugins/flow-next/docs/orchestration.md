@@ -6,7 +6,7 @@ flow-next is an orchestration layer, not a single-agent workflow. The host agent
 
 | Axis | The question | Who decides | Where the decision shows |
 |---|---|---|---|
-| **A. Pipeline routing** | Which stages does this item run - refine, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Flow (the attended conductor), capture's `Recommended next:` line, pilot's stage classifier, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
+| **A. Pipeline routing** | Which stages does this item run - refine, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Flow (attended, or unattended under `--auto`), capture's `Recommended next:` line, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
 | **B. Model routing** | Which model runs this job - the implementer, the reviewer, a scout - and from which family? | The routing block in your instruction file, `review.backend`, per-task `review:` pins, the bridge recipes, a sentence in the moment | The review receipt's `model` field, the worker dispatch prompt, the PR body's verification block |
 
 Axis A is documented below under [Pipeline routing](#pipeline-routing-who-decides-the-shape); the rest of this page is axis B. A [field case](#field-case-one-paragraph-twenty-specs) shows both axes running unattended through 38 merged pull requests, and the [setup ladder](#setup-ladder-from-nothing-to-a-standing-policy) takes a repo from zero configuration to a standing policy in five copy-paste rungs.
@@ -29,7 +29,7 @@ The pattern this page serves: use your smartest model to orchestrate and judge, 
 - [Setup ladder: from nothing to a standing policy](#setup-ladder-from-nothing-to-a-standing-policy)
 - [Durable routing: the routing block in your instruction file](#durable-routing-the-routing-block-in-your-instruction-file)
 - [Chaining the loops](#chaining-the-loops)
-- [Unattended chart driving (not a pilot stage)](#unattended-chart-driving-not-a-pilot-stage)
+- [Unattended chart driving (outside the build loop)](#unattended-chart-driving-outside-the-build-loop)
 - [In your repo](#in-your-repo)
 - [What stays fixed](#what-stays-fixed)
 - [See also](#see-also)
@@ -110,9 +110,9 @@ The two compose: parameters set the floor, prompting steers above it. And either
 The table above is really two layers with a clean seam, and knowing which layer you are talking to answers most "will this override that?" questions:
 
 - **Session steering** - your prompts and per-task pins. Top of the precedence chain, ephemeral, done the moment the task is done. Naming a model for a tier in the moment - *"implement via that CLI and review with the other family"* - just works: the agent runs the bridge for the draft and pins the named reviewer, and **nothing persists afterward** - pins and defaults resume untouched. Your `CLAUDE.md` routing prose lives in this layer too: deterministic plumbing never reads prose, but the *agent* reads it every turn and feeds explicit values downward, so a `CLAUDE.md` pipeline dominates everything the agent orchestrates by occupying the higher-precedence rung - not by editing config.
-- **Machinery steering** - config resolved by deterministic plumbing that never reads prose: `review.backend` and the per-spec/per-task backend fields. This is what autonomous loops (pilot, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
+- **Machinery steering** - config resolved by deterministic plumbing that never reads prose: `review.backend` and the per-spec/per-task backend fields. This is what unattended runs (`flow --auto`, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
 
-For the models that execute stages, the chain is the one stated above: **routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** The review backend resolves separately, through its own configuration grammar - see [Review backends](#review-backends--cross-model-review) for that chain; the tiers above never touch it. One consequence worth spelling out: a prompt can steer only the session it is typed in - if you want pilot ticks at 3am to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
+For the models that execute stages, the chain is the one stated above: **routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** The review backend resolves separately, through its own configuration grammar - see [Review backends](#review-backends--cross-model-review) for that chain; the tiers above never touch it. One consequence worth spelling out: a prompt can steer only the session it is typed in - if you want a 3am `flow --auto` run to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
 
 ## Deterministic routing: the parameter surfaces
 
@@ -139,7 +139,7 @@ The Codex mirror maps these groups to that host's own tiers at sync time (`scrip
 
 ### Review backends: cross-model review
 
-> **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds; turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. Two cheaper standing settings exist: `none` switches the review gates off entirely (each review skill exits cleanly, and pilot skips its plan-review and completion-review gates), while `host` keeps every gate and runs the reviewer as a host-native fresh-context subagent with a cross-family `reviewer:` pin from [the routing block](#the-routing-block) - no second CLI. The trade is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
+> **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds; turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. Two cheaper standing settings exist: `none` switches the review gates off entirely (each review skill exits cleanly, and `flow --auto` skips its plan-review and completion-review gates), while `host` keeps every gate and runs the reviewer as a host-native fresh-context subagent with a cross-family `reviewer:` pin from [the routing block](#the-routing-block) - no second CLI. The trade is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
 The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
@@ -372,13 +372,13 @@ Direct execution through `/flow-next:work <id> --no-plan` is the default for a r
 | Decider | Reads | Decides | Prints | Lives in |
 |---|---|---|---|---|
 | **Flow, the attended conductor** | Whatever you gave it (nothing, a spec or task id, a branch, a path, a pasted report, a how or why question, a slowness, a cleanup, a design fork, free text) plus the `.flow/` state for it | The smallest sufficient route from the shared routing reference; runs it, re-evaluates after each hop, asks a stage's pick inline, stops at the next decision that ends the run. `--explain` prints the route and does nothing else | The route, its positive signal, the safe skip and its kind, why not the alternatives; one `stage:` line per stage reached | [`flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md), [`references/route-matrix.md`](../skills/flow-next-flow/references/route-matrix.md) |
+| **Flow under `--auto`, the unattended driver** | One ready spec's state (the ready flag as the consent boundary; tasks, plan-review status, done tasks, the recorded direct route and owner, explicit review requests, an open PR) | The same routing files (`route-matrix`, `plan-vs-no-plan`, `gate-selection`) classify `plan`, `plan-review`, `work`, `qa`, `make-pr`, or defer to land; hop after hop to a terminal, or one hop under `--tick` | `PILOT_VERDICT=<verdict> spec=<id> stage=<stage> reason="..."` as the last line, one evidence block and one `stage:` line per hop | [`flow-next-flow/auto.md`](../skills/flow-next-flow/auto.md) |
 | **Capture's next step** | The spec it just wrote: readiness, open `[inferred]` criteria, parked unknowns, design risk | `/flow-next:refine`, `/flow-next:plan-review`, `/flow-next:plan`, or `/flow-next:work <id> --no-plan`, derived from the same routing files flow reads | `Recommended next: /flow-next:<stage> <id> - <reason>` on every run | [`flow-next-capture/workflow.md`](../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) |
-| **Pilot's stage classifier** | One ready spec's state: tasks, plan-review status, done tasks, the recorded direct route and owner, explicit review requests, an open PR | `plan`, `plan-review`, `work`, `qa` (opt-in), `make-pr`, or defer to land | `PILOT_VERDICT=<verdict> spec=<id> stage=<stage> reason="..."` | [`flow-next-pilot/workflow.md`](../skills/flow-next-pilot/workflow.md#phase-2-classify-the-stage) |
 | **Work's Phase 3 route** | Whether the run was given a task id, `planSync.enabled`, the open task count, the dependency closure | Rolling frontier (default) or the wave loop; a zero-task spec forks to plan-first or work-directly | `Scheduling: rolling` or `Scheduling: wave (<reason>)` before the first claim | [`flow-next-work/phases.md`](../skills/flow-next-work/phases.md#phase-3-task-scheduling) and [`references/no-plan-route.md`](../skills/flow-next-work/references/no-plan-route.md) |
 | **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../skills/flow-next-impl-review/SKILL.md#step-05-trivial-diff-triage), [`flowctl triage-skip`](flowctl.md#triage-skip) |
 | **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round three-draw fan-out, fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
 
-Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Pilot's classifier is unchanged and adopts the routing reference in a later spec.
+Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. `flow --auto` classifies from those same files, so the attended and unattended shapes cannot drift apart; `/flow-next:pilot` is its one-release alias for `flow --auto --tick`.
 
 Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [CI-fix budget and patience window](../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to refine, an ambiguous diff gets the full review.
 
@@ -390,7 +390,7 @@ Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tier
 
 One unattended run building a Linux desktop app in a private repo landed **38 pull requests**, steered by a single paragraph of standing policy with nobody in the loop. Each item was planned or worked directly by judgment, reviewed by another model family, QA'd in the running app, CI-green, and merged with a receipt.
 
-The policy steered both routing axes. The host chose the pipeline shape per item and the model per job; pilot advanced the work toward pull requests, and land handled CI and review convergence through merge.
+The policy steered both routing axes. The host chose the pipeline shape per item and the model per job; the build driver (pilot ticks then; `flow --auto` now) advanced the work toward pull requests, and land handled CI and review convergence through merge.
 
 | Run outcome, as of 5 September 2026 | Result |
 |---|---|
@@ -437,7 +437,7 @@ Notes that keep this honest:
 - **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
 - **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
-**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; pilot and land dispatch plain `/flow-next:work` and inherit it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../skills/flow-next-work/references/rolling-scheduler.md).
+**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; `flow --auto` and land dispatch plain `/flow-next:work` and inherit it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../skills/flow-next-work/references/rolling-scheduler.md).
 
 ### The wrapper pattern: self-healing bridges for unattended loops
 
@@ -469,38 +469,50 @@ The grammar and the tier meanings are [above](#the-routing-block); the block is 
 
 ## Chaining the loops
 
-Pilot and land end every tick with machine-readable verdict lines precisely so a host driver can compose them. Pilot never merges and never invokes land (consent boundary); the *driver* routes between them:
+`flow --auto` and land end every run with machine-readable verdict lines precisely so a driver can compose them. `flow --auto` never merges and never invokes land (consent boundary); the *driver* routes between them. The default recipe is one `flow --auto` invocation per item, on a host that holds a long session:
 
 ```text
-/loop 30m — one tick: run /flow-next:pilot --review=codex.
-  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
-  Stop when pilot prints NO_WORK and land prints LAND_VERDICT=NO_WORK, or on any NEEDS_HUMAN.
+Run /flow-next:flow --auto --review=codex.
+  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land.
+  Repeat until flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK, or on any NEEDS_HUMAN.
 ```
 
-`DEFERRED_TO_LAND` exists exactly for this hand-off - every remaining spec has an open PR that land, not pilot, owns. Compose model routing into the same driver and you have a multi-model spec-to-merged-PR pipeline in one prompt:
+On a host without stable long sessions, run one hop per loop interval with `--tick` under the host's loop primitive:
 
 ```text
-/loop 30m — one tick: run /flow-next:pilot --review=codex --depth=deep.
+/loop 30m - one tick: run /flow-next:flow --auto --tick --review=codex.
+  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
+  Stop when flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK, or on any NEEDS_HUMAN.
+```
+
+`DEFERRED_TO_LAND` exists exactly for this hand-off - every remaining spec has an open PR that land owns. Compose model routing into the same driver and you have a multi-model spec-to-merged-PR pipeline in one prompt:
+
+```text
+/loop 30m - one tick: run /flow-next:flow --auto --tick --review=codex --depth=deep.
   If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
   Send implementation tasks to the implementer tier,
   keep UI tasks on the session model, reviews come from codex.
-  Stop when pilot prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
+  Stop when flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
   or on any NEEDS_HUMAN.
 ```
 
-### Within one pilot invocation vs across driver invocations
+`/flow-next:pilot` in an existing driver prompt keeps working for one release as an alias for `flow --auto --tick`; it prints one deprecation line to stderr and the verdict grammar is unchanged, so no driver needs rewriting on the day of the upgrade.
 
-The driver composition above composes pilot *into* land inside one driver tick; successive pilot stages still land on successive driver invocations - by default every pilot invocation advances one stage, and the loop interval is the seam between stages. `pipeline.chainStages` (`off` by default) chains *within one pilot invocation*, for the one transition whose outcome is already decided when the stage ends: a `qa` stage that verified a fresh terminal `qa_outcome` runs `make-pr` in the same tick, so the driver no longer pays an interval plus a full re-anchor to open a draft PR it was always going to open. The table is closed - `qa → make-pr` only. `plan → plan-review` is not a row because the plan dispatch already embeds its review loop (a successful plan tick already classifies `work` next); `plan-review → work` and `work → qa`/`make-pr` are not rows because those transitions cross a stage that can fail into human territory. The verdict grammar stays driver-readable: `stage=qa+make-pr`, the verdict is make-pr's, and a driver grepping `PILOT_VERDICT=ADVANCED` keeps working. With `pipeline.qa` off there is nothing to chain, so the switch matters only on repos running the QA stage. Config-table entry: [`flowctl.md`](flowctl.md#config).
+### Within one invocation vs across driver invocations
+
+A long-horizon `flow --auto` run advances the item hop after hop inside one invocation (route, run the routed stage, re-evaluate) until it reaches a terminal: a PR exists, the item is deferred to land, a question is parked, or a human is needed. Every hop ends with receipts, an evidence echo, and a ledger write, so a run cut mid-way resumes from disk on the next invocation; nothing is resumed from transcript. `--tick` runs exactly one hop and stops, and the loop interval becomes the seam between stages; the verdict line names every dispatched stage joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict, so a driver grepping `PILOT_VERDICT=ADVANCED` keeps working in both shapes.
+
+`pipeline.chainStages` is deprecated because its one row (`qa → make-pr` in one tick) is what every hop boundary now does. For this release the key is honoured in tick mode and ignored with one stderr notice in long-horizon mode; it is removed together with the pilot alias in the next release. Config-table entry: [`flowctl.md`](flowctl.md#config).
 
 On the land side, `land.patienceMinutesAfterReview` (`null` by default) lets the repo choose a review-anchored objection window instead of the push-anchored one: under the default `silence` signal, once the latest automated review is head-current with zero unresolved threads, the patience window is measured from that review event with this key's limit instead of from the last push with `land.patienceMinutes`. It replaces the push window rather than taking the shorter of the two, so relative to today's wait an early review shortens it and a late review lengthens it. It stays opt-in because the push-anchored window is the human-objection grace period - time for a person to read what the bot said and object - and each repo decides how much of that grace it wants once the reviewer has spoken. It refines only the silence gate: the `approve`/`<login>` signals, every other window consumer, and the merge license are unchanged, and a fix push falls back to the push anchor until the bot re-reviews.
 
-Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
+Loop internals: [`../skills/flow-next-flow/auto.md`](../skills/flow-next-flow/auto.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the deprecated hardened harness.
 
 ## Unattended chart driving (outside the build loop)
 
-`/flow-next:chart` is **optional pre-capture discovery**, never a stage in the pilot pipeline (`[optional plan/design review] → work → [opt-in qa] → make-pr`). Pilot does not select charts, advance D-IDs, or emit chart briefings.
+`/flow-next:chart` is **optional pre-capture discovery**, not a stage of `flow --auto` (`[optional plan/design review] → work → [opt-in qa] → make-pr`). `flow --auto` does not select charts, advance D-IDs, or emit chart briefings.
 
-Drive unattended evidence the same way you drive pilot ticks - host `/loop` or `/goal` on the chart skill itself:
+Drive unattended evidence the same way you drive `flow --auto --tick` - host `/loop` or `/goal` on the chart skill itself:
 
 ```text
 /loop 15m - one tick: run /flow-next:chart <chart-id>.
@@ -523,7 +535,7 @@ Plain-language steering still works for humans; the exact flags and `flowctl cha
 
 Each rung is one copy-paste and one sentence on what it buys. Stop at any rung; the rungs below it keep working.
 
-**Rung 1 - nothing.** Axis A runs with zero configuration: capture prints its next step, pilot classifies, work picks rolling or wave, triage skips trivial diffs. The session model does every job.
+**Rung 1 - nothing.** Axis A runs with zero configuration: capture prints its next step, `flow --auto` classifies, work picks rolling or wave, triage skips trivial diffs. The session model does every job.
 
 **Rung 2 - a cross-family reviewer.**
 
@@ -531,7 +543,7 @@ Each rung is one copy-paste and one sentence on what it buys. Stop at any rung; 
 flowctl config set review.backend codex     # or copilot | cursor | claude | host
 ```
 
-Every plan and implementation review now comes from a model that did not write the diff, and the verdict lands as a receipt on disk. Unattended ticks read this key; a prompt cannot reach a 3am pilot tick.
+Every plan and implementation review now comes from a model that did not write the diff, and the verdict lands as a receipt on disk. Unattended runs read this key; a prompt cannot reach a 3am `flow --auto` run.
 
 **Rung 3 - the routing block.** In `CLAUDE.md` or `AGENTS.md` (`/flow-next:setup` scaffolds it commented out):
 
@@ -552,7 +564,7 @@ flowctl spec set-no-plan fn-14                             # this spec skips pla
 /flow-next:work fn-12 --review=host                        # this run's reviewer
 ```
 
-Fields ride with the item, so pilot and land honour them at 3am too.
+Fields ride with the item, so `flow --auto` and land honour them at 3am too.
 
 **Rung 5 - a standing policy paragraph.** In the same instruction file:
 

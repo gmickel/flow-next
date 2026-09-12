@@ -14,7 +14,7 @@
 
 Flow-Next is a workflow plugin that runs inside your coding agent. Give it the change you want and the rules your project follows. It turns that intent into specs, implementation, review, and pull requests with evidence. Your specs, decisions, and task state live in your repository.
 
-<img src="assets/flow-next-pipeline.gif" alt="A real pipeline run: pilot plans the spec, cross-model plan review catches a gap and ships, the worker implements with tests, impl review ships, ending on the task receipt" width="860">
+<img src="assets/flow-next-pipeline.gif" alt="A real pipeline run: the unattended driver plans the spec, cross-model plan review catches a gap and ships, the worker implements with tests, impl review ships, ending on the task receipt" width="860">
 
 *A real recorded run: plan, then cross-model plan review (catches a missing guard, fix, SHIP), then implement plus tests, then impl review SHIP, ending on the receipt. Nothing staged; every frame is live output.*
 
@@ -214,7 +214,15 @@ The optional [HTML views](plugins/flow-next/docs/html-artifacts.md) present the 
 
 ## Going autonomous
 
-Pilot advances ready specs toward draft pull requests. Land handles CI, review convergence, and the merge policy you authorized. Your host loop or scheduler calls them repeatedly. The same skills you use interactively do the work.
+`/flow-next:flow --auto` drives one ready spec to a draft pull request in one invocation, routing every hop from the same reference the attended conductor reads and stopping only where a human is needed. Land handles CI, review convergence, and the merge policy you authorized. Run `flow --auto` once per item, or `flow --auto --tick` under your host's loop primitive where sessions are short. The same skills you use interactively do the work.
+
+```text
+/flow-next:flow --auto                      # one item, hop after hop, to its draft PR
+/loop 30m /flow-next:flow --auto --tick     # one hop per interval on a host that loops
+/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK
+```
+
+`/flow-next:pilot` keeps working for one release as an alias for `flow --auto --tick`.
 
 ```text
 Work the ready specs overnight. Plan changes with unresolved design risk,
@@ -225,7 +233,7 @@ to make. Use land under this repository's merge policy.
 
 [Drive a loop](https://flow-next.dev/autonomy/driving-a-loop/) for your host, or read [unattended operation](https://flow-next.dev/autonomy/unattended-operation/) for isolation, readiness, and stop conditions. [The field case](plugins/flow-next/docs/orchestration.md#field-case-one-paragraph-38-prs-landed) describes a run that landed 38 PRs under one paragraph of policy.
 
-**Existing Ralph installation?** Ralph is deprecated; its [reference](plugins/flow-next/docs/ralph.md) remains available. New setups should use pilot and land.
+**Existing Ralph installation?** Ralph is deprecated; its [reference](plugins/flow-next/docs/ralph.md) remains available. New setups should use `flow --auto` and land.
 
 ## Why it works
 
@@ -248,7 +256,7 @@ Humans own product decisions, risk tolerance, and production responsibility. The
 
 ## Commands
 
-Use the skill name or describe what you want in the agent conversation. The [skills catalog](plugins/flow-next/docs/skills.md) covers all 32 skills and their invocation forms; the [CLI reference](plugins/flow-next/docs/flowctl.md) covers scripting and state inspection.
+Use the skill name or describe what you want in the agent conversation. The [skills catalog](plugins/flow-next/docs/skills.md) covers all 31 skills and their invocation forms; the [CLI reference](plugins/flow-next/docs/flowctl.md) covers scripting and state inspection.
 
 | Job | Skills |
 |---|---|
@@ -257,7 +265,7 @@ Use the skill name or describe what you want in the agent conversation. The [ski
 | Review and verify | `plan-review`, `impl-review`, `spec-completion-review`, `qa` |
 | Open and finish a PR | `make-pr`, `resolve-pr`, `land` |
 | Start anywhere | `flow` |
-| Keep work moving | `pilot` |
+| Keep work moving | `flow --auto`; `pilot` is its deprecated alias for one release |
 | Maintain project knowledge | `audit`, `features`, `strategy`, `sync` |
 
 [Flow](plugins/flow-next/skills/flow-next-flow/SKILL.md) picks the route from whatever you have; `--explain` shows the route without running it. The optional `/flow-next:chart` stage resolves an oversized idea one decision at a time before capture. [Review findings](plugins/flow-next/docs/review-findings.md) keep a defect's identity and history across review rounds.

@@ -11,7 +11,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 - [Clean up `.flow/` safely](#clean-up-flow-safely)
 - [Debug Ralph runs](#debug-ralph-runs)
 - [Receipt validation failing](#receipt-validation-failing)
-- [Pilot keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)](#pilot-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger-fn-184325)
+- [`flow --auto` keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)](#flow---auto-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger-fn-184325)
 - [Review loop stalls, repeats unchanged work, or runs away (fn-90/fn-159)](#review-loop-stalls-repeats-unchanged-work-or-runs-away-fn-90fn-159)
 - [flowctl says my config carries removed keys, or my routing block is ignored (fn-195)](#flowctl-says-my-config-carries-removed-keys-or-my-routing-block-is-ignored-fn-195)
 - [Review reports a model downgrade / floor (fn-76 resolution ladder)](#review-reports-a-model-downgrade-floor-fn-76-resolution-ladder)
@@ -95,11 +95,13 @@ cat scripts/ralph/runs/*/receipts/impl-fn-1.1.json
 
 Ralph reads receipts to decide whether to advance, retry, or block. A missing or malformed receipt freezes the loop. The bundled `flowctl validate --all` checks state-file shape; receipt-shape errors usually mean a backend wrote the file mid-iteration and the loop crashed.
 
-## Pilot keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)
+<a id="pilot-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger-fn-184325"></a>
 
-**Symptom:** `/flow-next:pilot` printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier tick, and now every tick skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
+## `flow --auto` keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)
 
-**Why:** pilot records a **strike** for each healthy no-advance tick in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike** (fn-87 R7): the echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while pilot keeps it struck.
+**Symptom:** `/flow-next:flow --auto` (or its one-release alias `/flow-next:pilot`) printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier run, and now every run skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
+
+**Why:** the driver records a **strike** for each healthy no-advance hop in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike** (fn-87 R7): the echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while `flow --auto` keeps it struck.
 
 **Inspect and recover:**
 
@@ -122,7 +124,7 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 **Symptoms:** a plan/impl/completion review loops far more than the ~3-round cap - the field report was **~11×** on a large ticket before the reviewer and implementer converged. Most common on the **Cursor** review backend, but the underlying causes were backend-agnostic.
 
 **What was happening (root causes, now bounded):**
-- **The cap was prose-only and reset every invocation.** `MAX_REVIEW_ITERATIONS` (then default 4; now 8) was an instruction to the host LLM to keep an in-context counter - but it reset to 0 on every *fresh* review invocation (a new Ralph iteration, a new pilot tick, a human retry). The runaway was ≈ 5-6 fresh invocations × ~3 in-agent rounds. Now flowctl owns a **cumulative counter on spec state** that survives fresh invocations and **refuses at the cap** (exit `4` + `ESCALATE:`).
+- **The cap was prose-only and reset every invocation.** `MAX_REVIEW_ITERATIONS` (then default 4; now 8) was an instruction to the host LLM to keep an in-context counter - but it reset to 0 on every *fresh* review invocation (a new Ralph iteration, a new `flow --auto` hop, a human retry). The runaway was ≈ 5-6 fresh invocations × ~3 in-agent rounds. Now flowctl owns a **cumulative counter on spec state** that survives fresh invocations and **refuses at the cap** (exit `4` + `ESCALATE:`).
 - **Every re-review was a fresh blind review** (a churn lottery - two identical fresh Cursor reviews overlapped on only ~50% of findings, so SHIP was statistically near-unreachable within the cap). The **convergence ratchet** now renders the validated `findings.items` records (severity, classification, and status) with labeled legacy prose only as a fallback. Its shrink-only contract remains: verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ MUST SHIP.
 - **Codex/copilot verdicts could be poisoned** by a verdict literal echoed in tool output (e.g. a grep of `smoke_test.sh`'s assertions), making flowctl report SHIP while the reviewer said NEEDS_WORK - a false SHIP *or* a false NEEDS_WORK that kept a loop alive. The parse now isolates the final agent message (last-match).
 - **The ratchet asked for prior-finding resolutions without stating the machine grammar**, so a compliant-sounding reviewer answered in prose and the parser recorded nothing: every prior carried forward at `open`, the open set looked inflated, and a trend-based stall rule escalated three healthy converging loops in a row at round 2 of 8. The prompt now states the exact line grammar (and an aggregate all-clear), the parser accepts every token it advertises, and **the trend rules are gone** - see the note below on what a runaway looks like now.

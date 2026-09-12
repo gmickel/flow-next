@@ -22,6 +22,10 @@ A tier this harness cannot honor runs on the session model and says so once. If 
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only). Droid runs the canonical Claude-first plugin, so check the session model's family before treating that verdict as independent: cross-family when the writer is another family, same-family otherwise (the receipt records the model either way).
 
+## Driving unattended
+
+A session here holds a whole route, so the default shape is `/flow-next:flow --auto`: one invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. There is no host loop primitive; an external scheduler that cuts sessions short runs `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. `/flow-next:pilot` is the one-release alias for the tick shape.
+
 ## Discover, then invoke
 
 Ask the harness and each installed CLI what they currently offer, at the moment of use. A stored answer is the thing that goes stale.

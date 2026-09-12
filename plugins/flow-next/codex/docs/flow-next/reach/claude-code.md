@@ -27,6 +27,10 @@ This harness serves Fable 5.1 (`claude-fable-5-1`) as the session model, and thi
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` from here too, stepping the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only) - but from this harness it is **same-family**: the receipt records `mode: "claude"` and the model, and the review skills say so once. For the reviewer tier's independent verdict prefer `codex`, or `host` with a cross-family `reviewer:` pin.
 
+## Driving unattended
+
+Sessions here are long enough to hold a whole route, so the default shape is `/flow-next:flow --auto`: one invocation drives one ready item hop after hop to its draft PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days). `/flow-next:pilot` is the one-release alias for the tick shape.
+
 ## Discover, then invoke
 
 Ask, don't assume. The harness lists the models it can run, and each installed CLI lists its own; read that list at the moment of use rather than trusting a value stored earlier. One command beats a stored fact that goes stale.

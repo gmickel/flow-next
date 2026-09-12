@@ -154,14 +154,14 @@ Ralph receipt-gate (the planning decision); no `ralph-guard.py` change.
 
 ## 5. Autonomous self-commit (`QA_AUTONOMOUS=1`)
 
-The commit itself is `workflow.md` §6.3b (it runs only when `QA_AUTONOMOUS=1` — the pilot
-stage dispatched the pass; autonomy ≠ Ralph). This section carries the precondition that
+The commit itself is `workflow.md` §6.3b (it runs only when `QA_AUTONOMOUS=1` - the `flow --auto`
+QA stage dispatched the pass; autonomy ≠ Ralph). This section carries the precondition that
 governs it.
 
 **Precondition (autonomous mode):** the loop operates on **committed state** — the worker
 commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it
 filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit
 edit to a bug entry that QA then `--update`s — that edit would ride this commit. The
-autonomous pilot loop never carries such state (it operates on committed trees); a human
+autonomous `flow --auto` loop never carries such state (it operates on committed trees); a human
 running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits
 first.

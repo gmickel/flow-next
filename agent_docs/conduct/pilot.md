@@ -1,5 +1,7 @@
 # Conduct checklist — /flow-next:pilot
 
+> Retired with the `/flow-next:pilot` alias next release. `/flow-next:pilot` now runs `/flow-next:flow --auto --tick`; the auto rows live in [`flow.md`](flow.md). The rows below describe the tick shape the alias still runs this release.
+
 A correct tick selects one ready spec, classifies one pipeline stage, dispatches exactly one stage skill (with `pipeline.chainStages` on, `make-pr` after a fresh `qa` verdict is the only admissible second dispatch), verifies state advanced, and ends with one terminal `PILOT_VERDICT` line.
 
 - [ ] The response ends with exactly one `PILOT_VERDICT` line and nothing after it. A tick that advances two stages outside the gated `qa`→`make-pr` chain, or that prints prose below the verdict, has broken this.

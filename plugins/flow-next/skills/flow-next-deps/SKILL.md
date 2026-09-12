@@ -162,7 +162,7 @@ Render from the jq result's `.phases`:
 **This section renders exactly when `.deadlocked` is non-empty** — and when it does, it is the
 most important part of the report. Each entry is an open spec that could not be placed in
 any phase: a dependency **cycle**, a dep on a **missing/closed** spec, or a chain deeper
-than 10. These are invisible to `ready`/pilot (they just never become ready) — this is the
+than 10. These are invisible to `ready`/`flow --auto` (they just never become ready) — this is the
 one place the graph surfaces them.
 
 | Spec | Status | Unresolved deps | Likely cause |

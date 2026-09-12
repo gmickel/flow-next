@@ -1,7 +1,7 @@
 # Phase 3: Ask (gated reference — interactive mode only)
 
 > **Loaded only when `MODE` is `interactive`.** An autofix run (`mode:autofix`,
-> and therefore every pilot / Ralph invocation) skips Phase 3 entirely and never
+> and therefore every `flow --auto` / Ralph invocation) skips Phase 3 entirely and never
 > reads this file: it asks nothing, marks genuinely ambiguous classifications
 > stale, and reports Harden candidates and un-graduation proposals under
 > Recommended without applying them. The autofix rules themselves stay inline in

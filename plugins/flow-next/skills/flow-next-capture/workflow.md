@@ -703,7 +703,7 @@ The `Recommended next:` line is MANDATORY every run. It prints the §2.8 judgmen
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired - `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `No-plan: field set (pilot/work take the direct route)` (§5.9b, on `--no-plan` or the rule under `from:flow` - or the refusal notice when the set was refused), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens - regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise - zero noise outside the consented / enabled path.
+Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired - `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `No-plan: field set (flow --auto/work take the direct route)` (§5.9b, on `--no-plan` or the rule under `from:flow` - or the refusal notice when the set was refused), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens - regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise - zero noise outside the consented / enabled path.
 
 The rewrite footer variant (prefix `Spec rewritten at …`, readiness-reset announcement, re-plan hint) lives in `references/rewrite-mode.md`; the split footer (one block per created spec + shared dependency-edge line) lives in `references/split-proposal.md`.
 

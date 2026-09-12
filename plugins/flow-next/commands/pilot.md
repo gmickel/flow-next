@@ -1,13 +1,17 @@
 ---
 name: pilot
-description: Single-tick autonomous build-loop conductor (one item, one stage per invocation; pipeline.chainStages==on chains make-pr after a fresh qa verdict); --backlog/--auto widens it to triage the whole open backlog
-argument-hint: "[--backlog|--auto] [--spec <fn-N>] [--dry-run] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]"
+description: Deprecated alias for /flow-next:flow --auto --tick (removed next release)
+argument-hint: "[--backlog] [--spec <fn-N>] [--dry-run] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]"
 ---
 
-# IMPORTANT: This command MUST invoke the skill `flow-next-pilot`
+# `/flow-next:pilot` is now `/flow-next:flow --auto --tick`
 
-The ONLY purpose of this command is to call the `flow-next-pilot` skill. You MUST use that skill now.
+This command MUST invoke the skill `flow-next-flow`. Print one line to stderr first, then pass the arguments rewritten onto `--auto --tick`:
+
+```bash
+echo "pilot is now flow --auto --tick; this alias is removed in the next release" >&2
+```
 
 **Arguments:** $ARGUMENTS
 
-Pass the arguments to the skill. The skill handles spec selection, stage classification, sub-skill dispatch, advancement verification, and the terminal PILOT_VERDICT line.
+Rewrite: `--spec <id>` (or `--spec=<id>`) becomes the positional `<id>`; `--backlog` and pilot's `--auto` become `--backlog`; `--dry-run` becomes `--explain`; `--review`, `--research`, and `--depth` pass through unchanged. The result is `/flow-next:flow --auto --tick [<id>] [--backlog] [--explain] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]`, one hop with the same terminal `PILOT_VERDICT` line a pilot tick printed.

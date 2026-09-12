@@ -8,9 +8,10 @@ Pins the round-trip diet so future edits cannot silently regress it:
     Route B create path contains no `spec set-branch` and no `task set-spec`
     invocation (R4), plus the committed before/after invocation-count fixture
     showing >=40% fewer flowctl calls on a 4-task all-frontmatter plan.
-  * pilot: exactly ONE `config get` across SKILL.md + workflow.md +
-    references/backlog-mode.md, located in SKILL.md; the other two files
-    (and references/qa-stage.md) carry ZERO flowctl config calls (R5).
+  * flow --auto (formerly pilot): exactly ONE `config get` across auto.md +
+    references/backlog-mode.md + references/qa-stage.md, located in auto.md
+    (the single always-loaded-under---auto file); the two references carry
+    ZERO flowctl config calls (R5).
   * make-pr workflow Phase 0: exactly THREE bash fences (R6).
   * impl-review SKILL.md: exactly ONE `for arg in $(printf ...)` parse fence (R6;
     the portable form — an unquoted `$ARGUMENTS` does not word-split under zsh).
@@ -198,54 +199,54 @@ class PlanDietTestCase(unittest.TestCase):
 
 
 class PilotSnapshotTestCase(unittest.TestCase):
-    def test_exactly_one_config_call_located_in_skill_md(self):
+    """The unattended driver (`flow --auto`, formerly pilot). `auto.md` is the
+    single always-loaded-under---auto file, so the ONE root config snapshot
+    call lives there; the gated references derive every later read via jq."""
+
+    def test_exactly_one_config_call_located_in_auto_md(self):
         counts = {}
-        for rel in ("SKILL.md", "workflow.md", "references/backlog-mode.md",
+        for rel in ("auto.md", "references/backlog-mode.md",
                     "references/qa-stage.md"):
-            for path in both_copies(f"flow-next-pilot/{rel}"):
+            for path in both_copies(f"flow-next-flow/{rel}"):
                 key = (rel, "mirror" if MIRROR_SKILLS in path.parents else "canonical")
                 counts[key] = len(CONFIG_GET.findall(read(path)))
         for variant in ("canonical", "mirror"):
-            self.assertEqual(counts[("SKILL.md", variant)], 1,
-                             f"pilot SKILL.md ({variant}) must own the ONE config call")
-            for rel in ("workflow.md", "references/backlog-mode.md",
-                        "references/qa-stage.md"):
+            self.assertEqual(counts[("auto.md", variant)], 1,
+                             f"flow auto.md ({variant}) must own the ONE config call")
+            for rel in ("references/backlog-mode.md", "references/qa-stage.md"):
                 self.assertEqual(counts[(rel, variant)], 0,
-                                 f"pilot {rel} ({variant}) must make zero config calls")
+                                 f"flow {rel} ({variant}) must make zero config calls")
 
-    def test_dry_run_terminals_remove_the_snapshot(self):
-        # Dry-run leaves no persistent scratch state. The CENTRAL rule lives in
-        # SKILL.md's verdict contract (EVERY dry-run terminal removes the
-        # snapshot — same "at every terminal" pattern as SETUP_STALE), and the
-        # two fenced/inline dry-run terminals in workflow.md carry it verbatim.
+    def test_explain_terminals_remove_the_snapshot(self):
+        # Explain (dry-run) leaves no persistent scratch state. The CENTRAL
+        # rule lives in auto.md's verdict contract (EVERY explain terminal
+        # removes the snapshot), and the fenced/inline explain terminals carry
+        # the rm line verbatim (the contract rule plus at least two terminals).
         rm_expr = ('rm -f "${TMPDIR:-/tmp}/flow-pilot-config-'
                    "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
-        for path in both_copies("flow-next-pilot/SKILL.md"):
+        for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
-            self.assertIn("Dry-run snapshot cleanup.", text,
+            self.assertIn("Explain snapshot cleanup.", text,
                           f"{path}: verdict-contract cleanup rule missing")
-            self.assertIn(rm_expr, text,
-                          f"{path}: verdict-contract rule must carry the rm line")
-        for path in both_copies("flow-next-pilot/workflow.md"):
             self.assertGreaterEqual(
-                read(path).count(rm_expr), 2,
-                f"{path}: dry-run terminals must remove the config snapshot")
+                text.count(rm_expr), 3,
+                f"{path}: explain terminals must remove the config snapshot")
 
     def test_backlog_mode_has_zero_flowctl_config_calls(self):
-        for path in both_copies("flow-next-pilot/references/backlog-mode.md"):
+        for path in both_copies("flow-next-flow/references/backlog-mode.md"):
             self.assertNotRegex(read(path), r'\$FLOWCTL"?\s+config\b',
                                 f"{path}: backlog-mode.md must be config-call-free")
 
     def test_snapshot_consumers_recompute_the_deterministic_path(self):
         # The snapshot lives under ${TMPDIR} (never repo-controlled .flow/tmp —
-        # autonomous symlink safety + dry-run mutates nothing in the repo) at a
+        # autonomous symlink safety + explain mutates nothing in the repo) at a
         # deterministic repo-hash-keyed path each fence recomputes identically.
         snapshot_expr = (
             'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-'
             '$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d\' \' -f1).json"'
         )
-        for rel in ("SKILL.md", "workflow.md", "references/backlog-mode.md"):
-            for path in both_copies(f"flow-next-pilot/{rel}"):
+        for rel in ("auto.md", "references/backlog-mode.md"):
+            for path in both_copies(f"flow-next-flow/{rel}"):
                 text = read(path)
                 self.assertIn(snapshot_expr, text,
                               f"{path}: must recompute the deterministic snapshot path")
@@ -354,9 +355,9 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
     """Inline reference/backend seams must continue; real terminals must remain."""
 
     ROUTED_FILES = (
-        "flow-next-pilot/SKILL.md",
-        "flow-next-pilot/workflow.md",
-        "flow-next-pilot/references/qa-stage.md",
+        "flow-next-flow/auto.md",
+        "flow-next-flow/references/backlog-mode.md",
+        "flow-next-flow/references/qa-stage.md",
         "flow-next-work/SKILL.md",
         "flow-next-work/phases.md",
         "flow-next-work/references/tracker-touchpoints.md",
@@ -393,15 +394,13 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
                     )
 
     def test_active_routes_name_read_execute_and_next_phase(self):
-        for path in both_copies("flow-next-pilot/SKILL.md"):
+        for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
             self.assertIn("read [references/backlog-mode.md]", text)
             self.assertIn(
-                "execute its backlog-only setup, then continue with `workflow.md` Phase 1",
+                "execute its backlog-only setup, then continue with Phase 1",
                 text,
             )
-        for path in both_copies("flow-next-pilot/workflow.md"):
-            text = read(path)
             self.assertIn(
                 "read and execute references/qa-stage.md#qa-stage-freshness-probe, "
                 "then continue with Phase 2 classification",
@@ -428,10 +427,14 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
                 )
 
     def test_default_off_probes_and_genuine_terminals_remain(self):
-        for path in both_copies("flow-next-pilot/workflow.md"):
+        for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
             self.assertIn(
                 '[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1',
+                text,
+            )
+            self.assertIn(
+                '[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1',
                 text,
             )
         for path in both_copies("flow-next-work/phases.md"):
@@ -461,10 +464,10 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
             text = read(path)
             self.assertIn("<promise>RETRY</promise>` and stops", text)
             self.assertIn("stop with `BLOCKED: DESIGN_CONFLICT`", text)
-        for path in both_copies("flow-next-pilot/SKILL.md"):
+        for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
             self.assertIn(
-                "Every tick ends with exactly one terminal line, the last line",
+                "Every run ends with exactly one terminal line, the last line",
                 text,
             )
             self.assertIn("PILOT_VERDICT=<ADVANCED|NO_WORK|", text)

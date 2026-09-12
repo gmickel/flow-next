@@ -76,12 +76,12 @@ flowchart LR
 
 ```bash
 /flow-next:work fn-N --no-plan
-flowctl spec set-no-plan fn-N      # record the choice before a pilot run
+flowctl spec set-no-plan fn-N      # record the choice before a flow --auto run
 ```
 
-The flag, recorded spec choice, or explicit natural-language instruction selects the route. An interactive zero-task run without a choice offers the fork with a recommendation; unattended work without that choice stops with a typed report. Pilot consumes the recorded route; pilot itself takes no `--no-plan` flag.
+The flag, recorded spec choice, or explicit natural-language instruction selects the route. An interactive zero-task run without a choice offers the fork with a recommendation; unattended work without that choice stops with a typed report. `flow --auto` consumes the recorded route, and for a zero-task ready spec with no recorded route it applies the same rule, records the route, and echoes the deciding signal; it takes no `--no-plan` flag.
 
-Work creates one implicit owner task whose `satisfies` covers every spec R-ID. That task inherits the complete spec contract and can use bounded delegation during implementation. The accepted choice survives mint, restart, claim, and pilot continuation, so the implicit task's existence does not create a new automatic plan-review requirement. An intentional plan, conflicting signals, or an explicit design-review request retains its authority. Added tasks follow the planned route. Added requirements remain part of the full spec contract: refresh the owner's coverage declaration and run the applicable implementation and completion gates.
+Work creates one implicit owner task whose `satisfies` covers every spec R-ID. That task inherits the complete spec contract and can use bounded delegation during implementation. The accepted choice survives mint, restart, claim, and `flow --auto` continuation, so the implicit task's existence does not create a new automatic plan-review requirement. An intentional plan, conflicting signals, or an explicit design-review request retains its authority. Added tasks follow the planned route. Added requirements remain part of the full spec contract: refresh the owner's coverage declaration and run the applicable implementation and completion gates.
 
 The direct route omits separate decomposition and its automatic plan review. It retains configured implementation review, coverage, evidence, completion-review policy, approvals, and opted-in QA. No synthetic SHIP verdict substitutes for a skipped stage. The single owner uses work's wave route. Read the [CLI reference](flowctl.md#spec-set-no-plan-spec-clear-no-plan) for route state and [next](flowctl.md#next) for spec-level selection before mint.
 

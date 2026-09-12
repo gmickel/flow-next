@@ -40,7 +40,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`make-pr.md`](make-pr.md) — `/flow-next:make-pr`, cognitive-aid PR body
 - [`resolve-pr.md`](resolve-pr.md) — `/flow-next:resolve-pr`, PR feedback resolution
 - [`land.md`](land.md) — `/flow-next:land`, cadence-tick ship loop
-- [`pilot.md`](pilot.md) — `/flow-next:pilot`, single-tick build-loop conductor
+- [`pilot.md`](pilot.md) — `/flow-next:pilot`, deprecated alias for `/flow-next:flow --auto --tick` (retired with the alias next release; the auto rows live in [`flow.md`](flow.md))
 
 **Repo and state**
 

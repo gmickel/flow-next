@@ -24,6 +24,10 @@ Every tier runs on the session model, and the degradation is stated once. That i
 
 The `claude` review backend (`review.backend claude`, observed 2026-09-05) needs only the shell-out mechanism plus the `claude` CLI installed and authenticated: it steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only) and records the model in the receipt. Whether the verdict is cross-family depends on the family of whatever is executing this page.
 
+## Driving unattended
+
+Until the harness is observed holding a session through a full route, run `/flow-next:flow --auto --tick` per invocation: each hop lands its receipts, evidence echo, and ledger entry before the run ends, so the next invocation classifies from disk. Once a long session is observed working, `/flow-next:flow --auto` drives one ready item hop after hop to its draft PR in one invocation. `/flow-next:pilot` is the one-release alias for the tick shape.
+
 ## Discover, then invoke
 
 Before concluding a mechanism is missing, try the cheapest discovery available: ask the harness what it offers, ask any CLI on the machine for its own models. One command turns an assumption into a fact - and if the harness turns out to be a supported one, use its page in [`README.md`](README.md) instead of this one.

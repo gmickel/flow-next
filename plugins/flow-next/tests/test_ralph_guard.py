@@ -1208,7 +1208,8 @@ class UnchangedArtifactDriverTerminalTestCase(unittest.TestCase):
             self.assertIn(phrase, common + skill)
 
     def test_pilot_land_and_ralph_driver_map_marker_to_human_terminal(self) -> None:
-        pilot = (PLUGIN_DIR / "skills" / "flow-next-pilot" / "workflow.md").read_text(encoding="utf-8")
+        # The unattended driver is `flow --auto` (auto.md); pilot is a stub.
+        pilot = (PLUGIN_DIR / "skills" / "flow-next-flow" / "auto.md").read_text(encoding="utf-8")
         land = (PLUGIN_DIR / "skills" / "flow-next-land" / "workflow.md").read_text(encoding="utf-8")
         ralph = (PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh").read_text(encoding="utf-8")
         for text in (pilot, land, ralph):

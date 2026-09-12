@@ -226,7 +226,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         work = _read("flow-next-work/phases.md")
-        pilot = _read("flow-next-pilot/workflow.md")
+        pilot = _read("flow-next-flow/auto.md")
         command = "$FLOWCTL spec set-completion-review-status"
         self.assertEqual(root.count(command), 1, "recovery owner must issue one status write")
         self.assertIn("--status-target completion", host)

@@ -1,6 +1,6 @@
 interface:
   display_name: "Flow"
-  short_description: "Attended conductor - route from any starting point, run the stage, stop at the next human decision"
+  short_description: "Conductor - route from any starting point, run the stage, stop at the next human decision; --auto runs the same route unattended to a terminal PILOT_VERDICT line"
   brand_color: "#3B82F6"
   default_prompt: "Flow: "
 policy:

@@ -88,7 +88,7 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │       └── <digest>.json  # Immutable structured-finding generations
 ├── receipts/              # (auto-gitignored) Ralph/runtime receipt scratch
 ├── sync-runs/             # (auto-gitignored) tracker-sync run receipts
-├── pilot-runs/            # (auto-gitignored) pilot backlog decision-log rows
+├── pilot-runs/            # (auto-gitignored) backlog-mode decision-log rows of flow --auto
 ├── locks/                 # (auto-gitignored) setup-block serialization locks
 ├── tmp/                   # (auto-gitignored) scratch (green receipts, codex-*)
 └── .cache/                # (auto-gitignored) CLI model-resolution cache
@@ -143,7 +143,7 @@ The auto-managed `.flow/.gitignore` (written by `flowctl init`) excludes per-run
 
 Two kinds of per-run state deliberately live **outside** the working tree, so `git add -A`, branch switches, and worker test hygiene can never sweep or destroy them:
 
-- **Runtime state dir** - task claims and lifecycle state live in the git common dir at `.git/flow-state/`, which every worktree of a repo shares. `FLOW_STATE_DIR` is the documented per-process override for concurrent same-repo pipelines; an orchestrator-set state dir must itself sit outside the repo tree. See [`flowctl.md`](flowctl.md) (Worktree sharing). Pilot's strikes ledger sits beside it at `<git-common-dir>/flow-next/`.
+- **Runtime state dir** - task claims and lifecycle state live in the git common dir at `.git/flow-state/`, which every worktree of a repo shares. `FLOW_STATE_DIR` is the documented per-process override for concurrent same-repo pipelines; an orchestrator-set state dir must itself sit outside the repo tree. See [`flowctl.md`](flowctl.md) (Worktree sharing). The strikes ledger of `flow --auto` sits beside it at `<git-common-dir>/flow-next/`.
 - **Run-notes dir** - `/flow-next:work` on its default rolling route ([`references/rolling-scheduler.md`](../../skills/flow-next-work/references/rolling-scheduler.md)) creates one shared notes directory per run at `<state-root>/flow-notes/<spec-id>-<run-id>/`, where `<state-root>` is `FLOW_STATE_DIR`'s parent when set, else the git common dir. Scouts and workers write markdown notes there (exploration findings, integration warnings); every consumer reads it **by pointer** - its content is never embedded into a dispatch prompt. The conductor deletes it on clean run completion; a dir abandoned by an interrupted run is inert prose and safe to remove by hand. Advisory surface: creation failure degrades the run to no notes surface, never blocks it.
 
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.

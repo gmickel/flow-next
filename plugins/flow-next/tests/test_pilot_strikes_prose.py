@@ -2,7 +2,8 @@
 
 What is pinned, and why only this much:
 
-* The armed-`tracker.readyState` escape clause in the pilot skill must name a
+* The armed-`tracker.readyState` escape clause in the unattended driver
+  (`flow --auto`, `skills/flow-next-flow/auto.md`; formerly pilot) must name a
   recovery a human can actually perform. Before fn-184 it named "an explicit
   re-ready made after the failure is understood (not a projection echo)" -
   unimplementable, because a deliberate board move and a projection echo are
@@ -28,10 +29,14 @@ from pathlib import Path
 PLUGIN_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
 
-PILOT_SKILL = PLUGIN_DIR / "skills" / "flow-next-pilot"
-PILOT_MIRROR = PLUGIN_DIR / "codex" / "skills" / "flow-next-pilot"
-WORKFLOW = PILOT_SKILL / "workflow.md"
-BACKLOG_MODE = PILOT_SKILL / "references" / "backlog-mode.md"
+# The unattended driver moved into the flow skill: `auto.md` replaces pilot's
+# SKILL.md + workflow.md as the single always-loaded-under---auto file, and the
+# backlog reference moved with it. The pilot dir is a deprecation stub.
+FLOW_SKILL = PLUGIN_DIR / "skills" / "flow-next-flow"
+FLOW_MIRROR = PLUGIN_DIR / "codex" / "skills" / "flow-next-flow"
+PILOT_STUB = PLUGIN_DIR / "skills" / "flow-next-pilot"
+WORKFLOW = FLOW_SKILL / "auto.md"
+BACKLOG_MODE = FLOW_SKILL / "references" / "backlog-mode.md"
 TRACKER_SYNC_MD = PLUGIN_DIR / "docs" / "tracker-sync.md"
 
 CLEAR_VERB = "flowctl pilot strikes clear"
@@ -104,7 +109,8 @@ class PilotStrikesProseTests(unittest.TestCase):
         """No pilot surface may still promise a recovery keyed on a board
         re-ready - flowctl stores no readiness provenance, so the skill cannot
         tell a deliberate re-ready from a projection echo."""
-        for path in sorted(PILOT_SKILL.rglob("*.md")):
+        surfaces = [WORKFLOW, BACKLOG_MODE, *sorted(PILOT_STUB.rglob("*.md"))]
+        for path in surfaces:
             with self.subTest(surface=path.name):
                 text = _read(path)
                 self.assertNotIn("non-projection re-ready", text)
@@ -127,13 +133,13 @@ class PilotStrikesProseTests(unittest.TestCase):
         """The strikeout verdict is the one terminal a human must undo by
         hand; the reason string carries the command."""
         block = _paragraph_with(_read(WORKFLOW), "strike 2/2, spec unreadied")
-        self.assertTrue(block, "workflow.md: strike 2/2 terminal line gone")
+        self.assertTrue(block, "auto.md: strike 2/2 terminal line gone")
         self.assertIn(CLEAR_VERB, block)
 
     def test_ledger_ownership_is_the_shared_contract(self) -> None:
         """flowctl owns read + clear; the skill keeps its record write sites."""
         block = _paragraph_with(_read(WORKFLOW), "Ledger schema:")
-        self.assertTrue(block, "workflow.md: ledger schema paragraph gone")
+        self.assertTrue(block, "auto.md: ledger schema paragraph gone")
         self.assertNotIn("no flowctl plumbing", block)
         self.assertIn(LIST_VERB, block)
         self.assertIn(CLEAR_VERB, block)
@@ -156,9 +162,9 @@ class PilotStrikesProseTests(unittest.TestCase):
                 )
 
     def test_codex_mirror_carries_the_same_recovery(self) -> None:
-        for rel in ("workflow.md", "references/backlog-mode.md"):
+        for rel in ("auto.md", "references/backlog-mode.md"):
             with self.subTest(mirror=rel):
-                self.assertIn(CLEAR_VERB, _read(PILOT_MIRROR / rel))
+                self.assertIn(CLEAR_VERB, _read(FLOW_MIRROR / rel))
 
 
 if __name__ == "__main__":

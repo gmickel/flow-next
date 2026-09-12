@@ -4,7 +4,7 @@ Enabled-path reference for `workflow.md` §2.11b. Read this file only when the �
 gate printed its sentinel (a `qa_verdict` receipt exists for this spec, or the probe
 errored). With no receipt the section is omitted entirely and this file is never read.
 
-Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipts/qa-<spec-id>.json` (the `/flow-next:qa` skill's default committed path; written when QA ran — via the opt-in pilot stage or a manual `/flow-next:qa` pass). With no receipt the section is omitted entirely (the §2.6 rule — most specs have no QA pass, so this is the common case and the body is byte-identical to today). This is the **R7 surfacing owner**: the QA stage advances even on `NEEDS_WORK`, so the findings reach a human only if make-pr renders them here.
+Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipts/qa-<spec-id>.json` (the `/flow-next:qa` skill's default committed path; written when QA ran - via the opt-in QA stage of `flow --auto` or a manual `/flow-next:qa` pass). With no receipt the section is omitted entirely (the §2.6 rule — most specs have no QA pass, so this is the common case and the body is byte-identical to today). This is the **R7 surfacing owner**: the QA stage advances even on `NEEDS_WORK`, so the findings reach a human only if make-pr renders them here.
 
 **Read the receipt (guarded — a malformed/absent file omits the section, never aborts the body):**
 
@@ -26,7 +26,7 @@ fi
 # which advanced HEAD — so compare against the PRE-ARTIFACT head (HEAD^ when HEAD is the
 # artifact commit), never the post-artifact HEAD, or a fresh pass reads as stale.
 # The receipt's head_sha is the head AT QA TIME. Bookkeeping commits land ABOVE the code
-# head AFTER QA — pilot's `chore(flow): qa verdict <spec>` receipt commit, then Phase 1.5's
+# head AFTER QA - the driver's `chore(flow): qa verdict <spec>` receipt commit, then Phase 1.5's
 # `chore(flow): pr artifact <spec>`. So the branch tip is NOT the code head. Accept the
 # receipt if its head_sha matches the tip OR any commit reached by peeling those leading
 # bookkeeping commits (the code head and everything above it). Fail CLOSED on empty.

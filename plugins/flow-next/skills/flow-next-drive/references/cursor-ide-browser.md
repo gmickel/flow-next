@@ -23,7 +23,7 @@ Live passes (2026-08-13, interactive Cursor on macOS): a flowmeter dashboard at 
 
 On a Cursor host, **probe the server by exact id `cursor-ide-browser` at least once** (call any tool — typically `browser_tabs {action:"list"}`). The MCP catalog **can omit** it even when it is usable; a name-probe can return the full 16-tool surface right after a listing showed it missing. Catalog omission is not a negative. There is no install step.
 
-**If the probe fails in an attended session** (not `$CI`, not `FLOW_AUTONOMOUS=1`, not unattended QA/pilot) and this pass has not already driven the pane: the MCP is often unregistered until a Browser session has started. Ask **once** via `AskUserQuestion` (on portable hosts without that tool, a numbered prompt with a final `Other — type your own answer` option):
+**If the probe fails in an attended session** (not `$CI`, not `FLOW_AUTONOMOUS=1`, not unattended QA or `flow --auto`) and this pass has not already driven the pane: the MCP is often unregistered until a Browser session has started. Ask **once** via `AskUserQuestion` (on portable hosts without that tool, a numbered prompt with a final `Other — type your own answer` option):
 
 1. Type `@Browser` in chat (no space), **or** open the Browser pane until it shows connected.
 2. Confirm Settings → Tools & MCP → **Browser Automation** is Browser Tab.
@@ -72,7 +72,7 @@ Consequence: rung 4 **cannot** satisfy the drive `verify` contract (clean consol
 
 ## Operator precondition (approval)
 
-Default **Manual approval** (Settings → Agents → Auto-Run) blocks every browser action on a human click — an unattended `/flow-next:qa` or pilot pass on this rung stalls. Allow-listed actions or Auto-run are required for unattended use. Upstream warns against Auto-run on untrusted code or unfamiliar sites (prompt-injection). Enterprise **Browser Origin Allowlist (v2.1+)**: `browser_navigate` and MCP tools are origin-gated; documented bypasses are link clicks, redirects, and JavaScript navigation from an allowed origin (<https://cursor.com/docs/agent/tools/browser>, 2026-08-13).
+Default **Manual approval** (Settings → Agents → Auto-Run) blocks every browser action on a human click — an unattended `/flow-next:qa` or `flow --auto` pass on this rung stalls. Allow-listed actions or Auto-run are required for unattended use. Upstream warns against Auto-run on untrusted code or unfamiliar sites (prompt-injection). Enterprise **Browser Origin Allowlist (v2.1+)**: `browser_navigate` and MCP tools are origin-gated; documented bypasses are link clicks, redirects, and JavaScript navigation from an allowed origin (<https://cursor.com/docs/agent/tools/browser>, 2026-08-13).
 
 ## Host limits
 

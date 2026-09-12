@@ -52,8 +52,8 @@ The shared tracker gate must hold, then the branch-specific gate applies:
 When `READY_OFFER=true`, one follow-up question via `AskUserQuestion` — the §4.2 read-back options stay frozen; this is a separate ask (same shape as the glossary consent):
 
 - **header**: `Mark ready?`
-- **body, new capture**: `Make this new spec eligible for Pilot or another autonomous driver once written? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
-- **body, rewrite**: `Rewriting <REWRITE_TARGET> resets its readiness. Mark it ready again after writing the approved revision so Pilot or another autonomous driver may select it? Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
+- **body, new capture**: `Make this new spec eligible for `flow --auto` or another autonomous driver once written? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
+- **body, rewrite**: `Rewriting <REWRITE_TARGET> resets its readiness. Mark it ready again after writing the approved revision so `flow --auto` or another autonomous driver may select it? Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
 - **options** (frozen): `mark-ready` (Phase 5.9 runs `spec ready` after the write), `keep-draft` (default — no readiness write)
 
 Record the answer for Phase 5.9. `keep-draft` → no readiness write; the spec write proceeds regardless of this answer.
