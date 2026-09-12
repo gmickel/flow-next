@@ -19,31 +19,31 @@ GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_ter
   2. **Project-specific** — a coined noun / flow / distinction, not generic English ("receipt gate" yes; "function" no).
   3. **Absent from the glossary** — no existing entry matches on `term` or `avoid` aliases (case-insensitive, whitespace-collapsed — the `_glossary_term_matches` contract; do not reinvent matching logic).
 
-Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Definition prose follows the artifact prose contract in [docs/prose.md](../../../docs/flow-next/prose.md); proceed without it when the doc is absent. Proposals surface at Phase 4 read-back; writes happen only in Phase 5.8 after consent.
+Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Definition prose follows the artifact prose contract in [docs/prose.md](../../../docs/flow-next/prose.md); proceed without it when the doc is absent. Proposals surface in the saved-spec summary; writes happen only in Phase 5.8 after consent.
 
-## Phase 4 — read-back surface + consent
+## Saved-spec summary and separate consent
 
-**Summary-payload item 6 — glossary term-add proposals** (only when §2.7 collected any) — compact one-liner of term names; full definitions live in the printed draft message (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
+**Summary-payload item 6 — glossary term-add proposals** (only when §2.7 collected any) — compact one-liner of term names; full definitions live in the printed glossary proposal (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
 
 ```
-New glossary terms proposed: <term>, <term> (definitions in draft above).
+New glossary terms proposed: <term>, <term> (definitions above).
 ```
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-**Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`).** One follow-up question via `plain-text numbered prompt` — the §4.2 read-back options stay frozen; this is a separate ask (short — definitions already printed above if present):
+**Glossary term-add consent (only when `GLOSSARY_PROPOSALS` is non-empty).** At §5.8, after the spec is saved, ask separately through `plain-text numbered prompt` unless the user already answered. Print definitions above the short question.
 
 - **header**: `Glossary?`
-- **body**: `Add <N> new term(s) to GLOSSARY.md? <comma-separated terms>. Definitions in the draft printed above. Recommended: add — they surfaced repeatedly in this conversation. Confidence: [judgment-call].`
+- **body**: `Add <N> new term(s) to GLOSSARY.md? <comma-separated terms>. Definitions printed above. Recommended: add — they surfaced repeatedly in this conversation. Confidence: [judgment-call].`
 - **options**: `add-all`, `pick` (follow-up multi-select / serial yes-no per term), `skip`
 
-Record the approved subset for Phase 5.8. `skip` → no glossary writes; the spec write proceeds regardless of this answer.
+Record the approved subset for Phase 5.8. `skip` → no glossary writes; the saved spec remains available regardless of this answer.
 
-**Forbidden in Phase 4:** never write glossary terms there. Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
+Never infer glossary consent from capturing or editing the spec. The separate question and consented writes happen in §5.8.
 
 ## 5.8 — Glossary term-adds (consent-gated; interactive only)
 
-Runs only when Phase 4.2's glossary consent approved ≥1 term (which implies `GLOSSARY_TERMS > 0` — the §2.7 gate — and interactive mode; autofix never reaches here). For each approved term:
+Runs only when the separate glossary question approved ≥1 term (which implies `GLOSSARY_TERMS > 0` — the §2.7 gate — and interactive mode; autofix never reaches here). For each approved term:
 
 ```bash
 "$FLOWCTL" glossary add "<term>" --definition-file - --json <<EOF
@@ -61,4 +61,4 @@ When Phase 5.8 wrote terms, append one line after `Tracker sync:`: `Glossary: ad
 
 | Forbidden | Why |
 |-----------|-----|
-| Glossary term-adds without read-back consent, or in autofix | Consent lives in Phase 4.2's `Glossary?` question; autofix prints suggestions only. Husk-aware gate (`total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job. |
+| Glossary term-adds without read-back consent, or in autofix | Consent lives in the separate `Glossary?` question; autofix prints suggestions only. Husk-aware gate (`total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job. |

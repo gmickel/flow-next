@@ -5,9 +5,9 @@
 > here — readiness is a one-way tracker→local pull there — and never reads this file.
 > The full target-aware predicate below still decides whether the question is asked at all.
 
-## 4.2 — Mark-ready consent (interactive; only after `approve`)
+## 4.2 — Snapshot the readiness predicate
 
-Probe only after `approve`, before any Phase 5 write changes the rewrite target's state:
+Probe before any Phase 5 write changes the rewrite target's state. Retain the result for §5.9; do not ask here:
 
 ```bash
 READY_STATE=""
@@ -51,20 +51,20 @@ The shared tracker gate must hold, then the branch-specific gate applies:
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-When `READY_OFFER=true`, one follow-up question via `plain-text numbered prompt` — the §4.2 read-back options stay frozen; this is a separate ask (same shape as the glossary consent):
+At §5.9, when `READY_OFFER=true`, ask separately via `plain-text numbered prompt` after the spec is saved and the editor follow-up returns, unless the user already answered. Use the §4.2 snapshot, including pre-rewrite readiness:
 
 - **header**: `Mark ready?`
-- **body, new capture**: `Make this new spec eligible for `flow --auto` or another autonomous driver once written? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
-- **body, rewrite**: `Rewriting <REWRITE_TARGET> resets its readiness. Mark it ready again after writing the approved revision so `flow --auto` or another autonomous driver may select it? Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
+- **body, new capture**: `Make this new spec eligible for `flow --auto` or another autonomous driver now? Readiness is adopted in this repo (<READY_ADOPTED> ready spec(s)). Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
+- **body, rewrite**: `Rewriting <REWRITE_TARGET> reset its readiness. Mark the saved revision ready again so `flow --auto` or another autonomous driver may select it? Recommended: keep-draft — choose mark-ready only when you want autonomous execution eligibility now. Confidence: [judgment-call].`
 - **options** (frozen): `mark-ready` (Phase 5.9 runs `spec ready` after the write), `keep-draft` (default — no readiness write)
 
-Record the answer for Phase 5.9. `keep-draft` → no readiness write; the spec write proceeds regardless of this answer.
+Record the answer in Phase 5.9. `keep-draft` → no readiness write; the saved spec remains available for review.
 
-**Forbidden in Phase 4:** never write readiness there. Phase 4 collects the mark-ready consent only; the write happens in Phase 5.9, after the spec write. Never offer the question outside the target-aware predicate: no `tracker.readyState`, plus adopted local readiness for a new capture or an already-ready target for a rewrite.
+**Forbidden in Phase 4:** never ask or write readiness there. Phase 4 snapshots eligibility only; the separate question and consented write happen in Phase 5.9. Never offer the question outside the target-aware predicate: no `tracker.readyState`, plus adopted local readiness for a new capture or an already-ready target for a rewrite.
 
 ## 5.9 — Mark-ready write (consent-gated; interactive only)
 
-Runs only when Phase 4.2's mark-ready consent recorded `mark-ready` (which implies the target-aware predicate held — adopted local readiness for a new capture or a ready rewrite target, no `tracker.readyState` — and interactive mode; autofix never reaches here):
+Runs only when the separate question recorded `mark-ready` (which implies the target-aware predicate held — adopted local readiness for a new capture or a ready rewrite target, no `tracker.readyState` — and interactive mode; autofix never reaches here):
 
 ```bash
 "$FLOWCTL" spec ready "$SPEC_ID" --json
@@ -82,4 +82,4 @@ Autofix only: when the target-aware predicate yields `READY_OFFER=true` and the 
 
 | Forbidden | Why |
 |-----------|-----|
-| Marking a spec ready without consent, in autofix, or outside the target-aware predicate | Consent lives in Phase 4.2's `Mark ready?` question (new capture: adopted local readiness; rewrite: target itself was ready; both: no `tracker.readyState`); the write is Phase 5.9, interactive-only. An unrelated ready spec never prompts on a draft rewrite. Readiness is the human's gate — capture never infers it. Autofix prints the footer suggestion only. |
+| Marking a spec ready without consent, in autofix, or outside the target-aware predicate | Consent lives in Phase 5.9's `Mark ready?` question (new capture: adopted local readiness; rewrite: target itself was ready; both: no `tracker.readyState`); the write is Phase 5.9, interactive-only. An unrelated ready spec never prompts on a draft rewrite. Readiness is the human's gate — capture never infers it. Autofix prints the footer suggestion only. |

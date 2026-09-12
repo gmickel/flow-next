@@ -3,7 +3,7 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-One ratification shape shared by capture (spec draft), refine (write-back), and plan (task set). Each skill cites this file at its read-back step and follows it there; the file is read at that moment, never on every run.
+Refine (write-back) and plan (task set) use the pre-write ratification shape below. Interactive capture uses the saved-spec review at the end of this page: the capture request already authorizes saving. Each skill reads this file at its review step, never on every run.
 
 ## The shape
 
@@ -17,10 +17,10 @@ One ratification shape shared by capture (spec draft), refine (write-back), and 
 
 ## What stays unchanged
 
-- Ratification precedes every `.flow/` write. Autofix still requires `--yes`; a run without it writes the draft and stops.
+- Ratification precedes plan/refine write-back. Capture's noninteractive autofix mode still requires `--yes`; without it only the temporary draft is written.
 - The no-self-blessing rule: while unverified `[inferred]` items remain, the ask never recommends `approve and write`.
 - Question bodies stay short and pointer-shaped; a draft, diff, or criteria list never rides inside the ask body.
-- Each skill keeps its own post-approve consent gates (glossary, mark-ready, tracker) and its own edit-cycle cap.
+- Each skill keeps its separate consent gates (glossary, mark-ready, tracker). Plan/refine keep their own edit-cycle caps.
 
 ## Summary payload
 
@@ -34,3 +34,11 @@ Split: <proposal one-liner>                                            (only whe
 Recommended next: /flow-next:<stage> <id> - <one-clause reason>
 Draft: <path>
 ```
+
+## Capture: saved-spec review
+
+Interactive capture resolves material questions and any explicit split choice, writes the spec through flowctl, then prints the summary above with `Spec:` and the saved path in place of `Draft:`. Inferred content remains labeled for review. A rewrite also shows its diff. The full body prints only on request.
+
+Offer `open in editor` or `continue` through a short `AskUserQuestion`, with free text for corrections. The question concerns editing the saved spec, not permission to write it. Skip an already-answered editor offer. An editor round opens the saved file and re-reads it before any further operation; corrections preserve user edits and print only their diff. There is no approve-and-write or re-approval loop, and stopping review never deletes the saved spec.
+
+Capture retains its duplicate/rewrite checks, explicit split choice, chart-risk overrides, and separate glossary/readiness questions. Saving or continuing past the editor offer grants no implementation or external-write authority. Previously authorized work and configured tracker behavior keep their own scope.

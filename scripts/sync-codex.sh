@@ -1517,6 +1517,9 @@ def is_negative_context(line):
         return True
     if re.search(r'without (?:a |an |any )?(?:`?plain-text numbered prompt`?|prompt) call', line):
         return True
+    # Informational footers are not live questions.
+    if re.search(r'\bnever (?:a|an) `?plain-text numbered prompt`?', line, re.IGNORECASE):
+        return True
     # Reference-style "It is not / X is not ..." bullets. These describe
     # what the prompt isn't — not a live ask site.
     if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:
@@ -1791,7 +1794,7 @@ DIET = {
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
     "flow-next-refine": "Refine a spec or task before building: deep Q&A (business, technical, both) or a read-only research pass over external docs. Use to refine or interrogate requirements or read up on a new library.",
-    "flow-next-capture": "Synthesize the current conversation into a flow-next spec with read-back gating. Use when asked to capture this as a spec.",
+    "flow-next-capture": "Save the current conversation as a source-tagged flow-next spec, then offer review or editing. Use when asked to capture this as a spec.",
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",
     "flow-next-chart": "Decision-map discovery for one oversized unclear idea before capture. Resolve one decision per invocation, brief for capture. Use when asked to chart an idea or work a chart decision.",

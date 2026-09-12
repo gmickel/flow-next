@@ -28,19 +28,19 @@ Contents:
   ```
 
 - If the target is missing or is a task, exit 2 with the appropriate error message above.
-- Read the existing spec. Phase 4 read-back will show a diff (existing → proposed) before write.
+- Read the existing spec. Retain the original body for the saved-spec diff. Re-read the target immediately before replacement; preserve intervening user edits, and ask only if reconciling them requires a material choice.
 
 ---
 
 ## Phase 4 — rewrite read-back additions
 
-The read-back contract (workflow.md §4.1/§4.2) gains one mandatory element in rewrite mode:
+The saved-spec review (workflow.md §5.6a) gains a mandatory rewrite diff:
 
-- **Print the existing → proposed diff** (unified style; changed sections in full) as ordinary markdown in the same message as the summary, or in a second message immediately after it - **never only inside the ask**. The diff is what the user ratifies on a rewrite; the full draft stays in the file and prints only on request.
-- The short ask's one-line pointer reads `Summary + rewrite diff printed above; draft at <path>.`
+- **Print the existing → proposed diff** (unified style; changed sections in full) as ordinary markdown alongside the saved-spec summary, never only inside the editor question. `--rewrite` already authorizes replacement of this target; the diff exposes what changed, without a second generic approval.
+- The short ask's one-line pointer reads `Summary + rewrite diff printed above; saved spec at <path>.`
 - Summary-payload **rewrite-mode pointer** - one short clause, e.g. `Rewrite diff printed above.` (the full diff is already in the ordinary message; never paste it into the ask).
 - Confidence tier `[your-call]` covers rewrite-mode with substantive divergence from the existing spec.
-- **Forbidden:** never edit a `--rewrite` target without printing the diff as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
+- **Forbidden:** never silently overwrite intervening user edits or omit the rewrite diff. Editor follow-ups open the saved spec and never restore the temporary draft over it.
 
 Mark-ready consent on a rewrite is target-aware — see `references/mark-ready.md` when that gate fires (a rewrite offers the question only when the target itself was ready before the rewrite; an unrelated ready spec never prompts on a draft rewrite).
 

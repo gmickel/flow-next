@@ -162,7 +162,7 @@ Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `
 
 ### [2] Spec, business-layer complete: Handover #1
 
-`/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). The mandatory read-back loop shows a compact summary (title, criteria count, source tally, recommended route) and one ask before writing, per the shared [read-back contract](read-back.md); the full draft sits in a temporary file and prints on request. The `[inferred]` count tells the user how much of the spec the agent invented, and they can reject it.
+`/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). Capture writes the spec, then shows a compact summary (title, criteria count, source tally, recommended route) and offers the saved file in the editor, per the [read-back contract](read-back.md). The full body prints on request. The `[inferred]` count identifies assumptions the user can edit or reject. Saving alone does not mark the spec ready or authorize implementation.
 
 For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --scope=business` instead. The interview focuses on **business requirements** at this stage - problem framing, target user, success metrics, MVP boundary, what-NOT-to-build, business constraints. The codebase is read-only context, not the subject of questions.
 

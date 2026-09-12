@@ -62,7 +62,7 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 | [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The portable PR cognitive-aid contract, its fixture, and how downstream renderers pin it |
 | [`memory-schema.md`](memory-schema.md) | The memory tree, its frontmatter, and the audit lifecycle |
 | [`glossary.md`](glossary.md) | How the repo-root `GLOSSARY.md` is shaped and resolved |
-| [`read-back.md`](read-back.md) | The shared ratification shape for capture, refine, and plan: one draft file, a compact summary, one ask |
+| [`read-back.md`](read-back.md) | Plan/refine ratification and capture saved-spec review: compact summaries and editor follow-up |
 | [`strategy.md`](strategy.md) | How the repo-root `STRATEGY.md` is shaped and who reads it |
 
 ## Fixing and contributing

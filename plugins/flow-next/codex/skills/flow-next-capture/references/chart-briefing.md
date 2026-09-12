@@ -26,8 +26,8 @@ Capture treats an admitted briefing as **attributable evidence**, not as pre-tag
    - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
    - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
    - Do **not** introduce verified/inferred fact or decision grammar (nothing licenses it here).
-5. **Write order after approval:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
-6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where read-back confirms the target spec needs that guarantee.
+5. **Write order after admission and any split choice:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
+6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where source evidence establishes that the target spec needs that guarantee.
 
 Done when: the briefing was admitted or refused on its own `status` (no forced draft treated as final, no stale B-ID admitted without a read-back naming every unresolved D-ID); its chart id, B-ID, cluster key, D-ID links, and approved assets all appear in the evidence surface as untagged links; and every spec this run created carries exactly one matching `chart link-spec` call, made after its own successful `spec create` + `spec set-plan`.
 
@@ -59,7 +59,9 @@ To proceed anyway, re-run with an explicit risk override that names those D-IDs;
 capture will read back the risk and still leave the briefing draft/stale in provenance.
 ```
 
-**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. The agent reads back the exact risk (print-then-ask) before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+**Explicit risk override:** the user must name the unresolved or invalidated D-IDs. Read back the exact risk, then use `plain-text numbered prompt` before any write. The override never rewrites the briefing status to final and never erases the draft/stale flag from evidence recorded in the spec.
 
 **Decline** (user aborts): record nothing in `produced_specs[]`; the chart remains resumable.
 
@@ -91,7 +93,7 @@ Also check for an already-linked identity (retry recovery):
 
 ## 2.2 — Chart provenance separation
 
-**Chart provenance separation:** chart decision provenance is structural (D-ID, answer gist, assets, briefing membership). Preserve those as evidence links in `## Decision Context` (and conversation-evidence footnotes). Never source-tag D-ID evidence. Never retag an existing criterion authored by an earlier pass. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]` — apply the four-tag grammar only to acceptance criteria this capture pass newly authors, judged against conversation + briefing context. Shared-context D-IDs do not become duplicated acceptance requirements across output specs unless each target's read-back independently confirms that guarantee. **No verified/inferred fact or decision grammar** (nothing licenses it here).
+**Chart provenance separation:** chart decision provenance is structural (D-ID, answer gist, assets, briefing membership). Preserve those as evidence links in `## Decision Context` (and conversation-evidence footnotes). Never source-tag D-ID evidence. Never retag an existing criterion authored by an earlier pass. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]` — apply the four-tag grammar only to acceptance criteria this capture pass newly authors, judged against conversation + briefing context. Shared-context D-IDs do not become duplicated acceptance requirements across output specs unless the source evidence establishes that each target needs that guarantee. **No verified/inferred fact or decision grammar** (nothing licenses it here).
 
 ---
 

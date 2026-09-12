@@ -8,18 +8,18 @@
 - **No user questions.** Never call the plain-text numbered prompt.
 - **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; relevant capture evidence is missing / truncated / summary-only after compaction → exit 2 unless `--from-compacted-ok` was passed. A historical compaction marker or system-summary block alone is advisory and does not block.
 - **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
-- **Phase 4 single emission, no `.flow/` write.** Full draft Written once to the §4.1 draft file (all sections + R-IDs); summary payload (`[inferred]` tally + 8+ acceptance suggestion if applicable) printed to stdout. Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write. (Autofix has no interactive print-then-ask; `--yes` is the consent substitute.)
-- **Phase 5 commits identically to interactive once it runs.**
+- **Phase 4 single emission, no `.flow/` write.** Full draft Written once to the §4.1 draft file (all sections + R-IDs); summary payload (`[inferred]` tally + 8+ acceptance suggestion if applicable) printed to stdout. Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write. (Autofix has no interactive print-then-ask; `--yes` is the noninteractive write gate.)
+- **Phase 5 writes through the same plumbing once it runs; no git commit.**
 - **Readiness never written.** The mark-ready write (workflow.md §5.9) is interactive-consent-only; autofix prints a footer suggestion at most (and only when readiness is adopted, no `tracker.readyState`, and the spec was written). The `--rewrite` readiness reset (§5.3) still runs — it is idempotent plumbing, not a consent question.
 
 ## 4.4 — Autofix read-back
 
-Autofix has no ask (no user to answer it). The §4.1 Write materializes the draft file; print the **summary payload** (the §4.1 items: title, criteria count, tally, split note, `Recommended next:`, draft path, related memory, rewrite diff, glossary suggestions) to stdout. Then:
+Autofix has no ask (no user to answer it). The §4.1 Write materializes the draft file; print the **summary payload** (the read-back contract items: title, criteria count, tally, split note, `Recommended next:`, draft path, related memory, rewrite diff, glossary suggestions) to stdout. Then:
 
-- If `COMMIT_YES=0`, exit 0 with: `Draft written to <literal draft path> (content in the Write render above). Re-run with --yes to commit (in autofix mode, --yes substitutes for the interactive read-back approval).`
+- If `COMMIT_YES=0`, exit 0 with: `Draft written to <literal draft path> (content in the Write render above). Re-run with --yes to write the spec (the noninteractive write gate).`
 - If `COMMIT_YES=1`, proceed to Phase 5.
 
-Autofix never offers `edit` — there's no user to ask. The Write + `--yes` pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
+Autofix never offers `edit` — there's no user to ask. The existing Write + `--yes` gate stays confined to autofix; interactive capture needs no generic write approval.
 
 **Autofix + split proposal:** autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:refine <id> or manual spec create + add-dep.`
 
@@ -34,4 +34,4 @@ Autofix never offers `edit` — there's no user to ask. The Write + `--yes` patt
 In autofix mode, every "ask" branch becomes "exit 2". Capture cannot guess on must-ask cases. Glossary term-adds are never written in autofix — proposals print as suggestions only.
 
 In autofix without `--yes`, the draft is Written and the skill exits 0 — no `.flow/` write, no spec allocated.
-In autofix with `--yes`, the §4.1 Write + `--yes` substitutes for the interactive print-then-ask approval before Phase 5 writes.
+In autofix with `--yes`, the §4.1 Write + `--yes` authorizes the Phase 5 spec write.

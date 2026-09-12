@@ -10,8 +10,8 @@ Path-specific lookups live one level deep in `references/*.md` and are loaded on
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using the canonical template |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict |
-| **4 - Read-back loop** | Print the compact summary, then one ask (shared contract in `docs/read-back.md`); obtain approval |
-| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec |
+| **4 - Prepare the write** | Check source tags, resolve any split choice, snapshot readiness |
+| **5 — Write via flowctl** | Save the spec, then offer the editor and separate consented follow-ups |
 | **6 - Suggested next step** | Print footer with the `Recommended next:` line from the shared routing reference |
 
 ---
@@ -24,7 +24,7 @@ Every acceptance criterion line, every decision-context line, every scope-boundi
 |-----|---------|-----------------|
 | `[user]` | Verbatim from conversation evidence — the tagged content is FINDABLE in the `## Conversation Evidence` block (quote-level fidelity; trimming/ellipsis fine, rewording not) | Point at a specific evidence line containing these words; a close restatement is `[paraphrase]`, never `[user]`. |
 | `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced). A close restatement of user wording belongs here, never under `[user]`. | The user expressed this idea, but agent rephrased to match spec conventions. Same content, cleaner wording. |
-| `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) | Agent decided this; user did not state it explicitly. May be a reasonable default, may be wrong. |
+| `[inferred]` | Agent fill-in (most-scrutinized; visible in the saved-spec summary) | Agent decided this; user did not state it explicitly. May be a reasonable default, may be wrong. |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim quote of approach / track body) | The criterion follows directly from a populated section in `STRATEGY.md` — the track name appears literal in the tag. Activates only when Phase 0 strategy snapshot is present. |
 
 ### Biz-context signal routing (R24)
@@ -54,7 +54,7 @@ client can drive 10+ requests/sec... [the rest of the prose; tag breakdown above
 tells the reader what's verbatim vs synthesized]
 ```
 
-The breakdown is informational at read-back. Phase 4's `[inferred]` tally counts both per-line tags and section-level inferred percentages.
+The breakdown is informational at read-back. The summary's `[inferred]` tally counts both per-line tags and section-level inferred percentages.
 
 ### When to use which
 
@@ -71,7 +71,7 @@ Chart D-ID evidence, chart facts, assets, and briefing membership are **never** 
 
 ## Confidence tiers
 
-Used in Phase 3 (must-ask) and Phase 4 (read-back) recommendation bodies. The body carries the confidence; option labels stay neutral so the user isn't anchored on the tier itself.
+Used in substantive-choice and follow-up recommendation bodies. The body carries the confidence; option labels stay neutral so the user isn't anchored on the tier itself.
 
 | Tier | When to use | Example body |
 |------|-------------|--------------|
@@ -111,7 +111,7 @@ Ralph mode? (FLOW_RALPH=1 or REVIEW_RECEIPT_PATH set)
 Compaction signal detected?
   no  → continue
   yes → evidence needed for this capture missing / truncated / summary-only?
-          no  → continue; note prior compaction in Phase 4 warnings
+          no  → continue; note prior compaction in the summary warnings
           yes → --from-compacted-ok set?
                   no  → refuse with override hint (interactive); exit 2 (autofix)
                   yes → continue
@@ -134,19 +134,17 @@ Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
   any fired → gate → ask one at a time (interactive); exit 2 (autofix)
   none      → continue
 
-Read-back (print-then-ask, docs/read-back.md): print the compact summary
-  (+ rewrite diff / split allocation if any) as ordinary assistant message,
-  then ONE short ask (pointer + recommendation + options only - never
-  multi-paragraph content in the ask body; the full draft prints only on request).
-  interactive: approve and write / split-as-proposed (only when 2.5 proposed N>1)
-               / open in editor / abort; free text = edit request
-  edit cycles: re-read the file, print only the diff, re-ask
-  autofix --yes: print summary and proceed
-  autofix without --yes: print summary and exit 0
+Materialize and source-check the draft.
+  interactive: resolve an explicit split choice only when N>1 is proposed, then write
+  autofix --yes: print summary and write
+  autofix without --yes: print summary and exit 0 without allocating a spec
 
-Approved? Write via flowctl spec create + spec set-plan.
+Write via flowctl spec create + spec set-plan.
+Interactive: summarize saved spec(s), offer open in editor / continue.
+  corrections: re-read the saved file, preserve user edits, print only the diff
+  no generic approval or re-approval question
 
-Glossary proposals approved at read-back? (interactive only; gate: total_terms > 0)
+Glossary proposals separately approved? (interactive only; gate: total_terms > 0)
   yes → write each via flowctl glossary add (best-effort, never blocks)
   no  → continue
 
