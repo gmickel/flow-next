@@ -938,7 +938,7 @@ flowctl done fn-1.2 --summary "short summary" --evidence '{"commits":["abc"],"te
 ```
 
 - `--summary-file` / `--summary` - done-summary markdown (file or inline text). One of the pair is required.
-- `--evidence-json` / `--evidence` - evidence JSON (file or inline string). One of the pair is required.
+- `--evidence-json` / `--evidence` - evidence JSON (file or inline string). With neither flag the CLI records empty commit, test, and PR lists; the work and review contracts, and the Ralph guard, require evidence.
 - `--force` - skip the `in_progress` status check.
 
 Evidence JSON format:
