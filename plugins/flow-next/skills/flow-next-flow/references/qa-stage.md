@@ -29,8 +29,8 @@ if [ -f "$QA_RECEIPT" ] && [ -n "$BRANCH_NAME" ]; then
   case "$R_OUT" in SHIP|NEEDS_WORK|NA|BLOCKED) : ;; *) R_SHA="" ;; esac   # invalid outcome → never fresh
   # The receipt's head_sha is the CODE head; the QA skill's own `chore(flow): qa verdict` commit
   # (and a later `pr artifact` commit) sit ABOVE it on the branch, so the branch tip is not
-  # the code head. Walk from the tip peeling those bookkeeping commits and accept a match
-  # anywhere in the chain — else a successful QA pass reads as never-fresh and re-runs forever.
+  # the code head. Walk from the tip peeling those bookkeeping commits. Accept a match
+  # anywhere in the chain. Otherwise a successful QA pass appears stale and runs again.
   if [ "$R_ID" = "$SELECTED_SPEC" ] && [ -n "$R_SHA" ]; then
     _s="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" 2>/dev/null || echo "")"
     while [ -n "$_s" ]; do

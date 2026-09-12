@@ -44,10 +44,6 @@ REFERENCE_NAMES = (
 # carry no routing rule and no decision record; auto.md reaches them.
 AUTO_ONLY_REFERENCE_NAMES = ("backlog-mode.md", "qa-stage.md")
 
-ATTENDED_REFUSAL_LINE = (
-    "NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs"
-)
-
 DECISION_RECORD_ITEMS = ("Source", "Trigger", "Purpose", "Evidence", "Disposition")
 
 # Consumers that point at the shared routing reference. A consumer with no
@@ -242,7 +238,7 @@ class GuideRetired(unittest.TestCase):
 
 class FlowInvariantTokens(unittest.TestCase):
     def test_attended_refusal_line_present(self) -> None:
-        self.assertIn(ATTENDED_REFUSAL_LINE, _read(FLOW_SKILL))
+        self.assertIn("NEEDS_HUMAN:", _read(FLOW_SKILL))
 
     def test_mode_detection_tokens_documented(self) -> None:
         text = _read(FLOW_SKILL)

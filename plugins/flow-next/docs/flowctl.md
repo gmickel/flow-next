@@ -1376,7 +1376,7 @@ Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <rea
 
 Deterministic store for optional pre-capture decision maps (fn-135). The `/flow-next:chart` skill is **prompt-first** (natural language is the primary control surface); the subcommands below are the exact automation/scripting contract. Onboarding and guide lead with plain language; flags are complete here for drivers.
 
-**Not a stage of `flow --auto`.** Chart is never advanced by `/flow-next:flow --auto`. Unattended discovery is driven by host `/loop` on `/flow-next:chart` itself (one D-ID per invocation).
+Run unattended chart discovery through a host loop invoking `/flow-next:chart`, one D-ID per invocation.
 
 **Files:** `.flow/charts/<id>.md` + `.json` (map), `.flow/charts/<id>/<n>.md` + `.json` (decisions), `.flow/charts/<id>-briefing*.md` (immutable handoffs), `.flow/charts/.transactions/` (WAL). Chart ids share the native `fn-N` domain with specs.
 

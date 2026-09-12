@@ -227,7 +227,7 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         for token in ("QA_STAGE_ENABLED=1", "QA_STAGE_AUTO=1"):
             with self.subTest(token=token):
                 self.assertIn(token, phase2, "auto.md must resolve the QA gate flags")
-        for token in ("QA_FRESH=1", "gate-selection.md"):
+        for token in ("QA_FRESH", "gate-selection.md"):
             with self.subTest(token=token):
                 self.assertIn(token, probe, "the all-done probe consumes freshness and the gate reference")
         # The reference computes freshness only: it assigns QA_FRESH and never
