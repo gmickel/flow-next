@@ -1,6 +1,6 @@
 ---
 name: capture
-description: Synthesize the current conversation into a flow-next spec at `.flow/specs/<spec-id>.md` — source-tagged, mandatory read-back, no silent overwrite
+description: Synthesize the current conversation into a flow-next spec at `.flow/specs/<spec-id>.md` — source-tagged, saved-spec review, no silent overwrite
 argument-hint: "[mode:autofix] [--rewrite <spec-id>] [--from-compacted-ok] [--yes]"
 ---
 
@@ -10,4 +10,4 @@ The ONLY purpose of this command is to call the `flow-next-capture` skill. You M
 
 **Arguments:** $ARGUMENTS
 
-Pass the arguments to the skill verbatim. The skill handles mode detection (`mode:autofix` token + `--rewrite <id>` + `--from-compacted-ok` + `--yes`), pre-flight checks (duplicate / relevant evidence completeness after compaction / idempotency), conversation evidence extraction, source-tagged synthesis, must-ask cases, mandatory read-back loop, and the flowctl `spec create` + `spec set-plan` write.
+Pass the arguments to the skill verbatim. The skill handles mode detection (`mode:autofix` token + `--rewrite <id>` + `--from-compacted-ok` + `--yes`), pre-flight checks (duplicate / relevant evidence completeness after compaction / idempotency), conversation evidence extraction, source-tagged synthesis, must-ask cases, saved-spec review loop, and the flowctl `spec create` + `spec set-plan` write.

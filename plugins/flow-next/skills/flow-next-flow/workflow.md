@@ -30,7 +30,7 @@ Read [references/route-matrix.md](references/route-matrix.md) and match the star
 
 A spec with an intentional plan (tasks beyond the sole implicit owner) runs the planned route unchanged. A spec whose tasks are all done reads [references/gate-selection.md](references/gate-selection.md) for the QA decision and then routes to make-pr. A spec with an open PR reads [references/tail.md](references/tail.md).
 
-When the starting point is intent that has not been captured and the criteria you would draft trip the tripwire, read [references/spec-count.md](references/spec-count.md); capture applies the same file at its own read-back, so the count is decided once.
+When the starting point is intent that has not been captured and the criteria you would draft trip the tripwire, read [references/spec-count.md](references/spec-count.md); capture applies the same file at its split-choice step, so the count is decided once.
 
 When two routes would materially differ and the answer is not observable, read [references/prototype-before-ask.md](references/prototype-before-ask.md) before asking; ask at most one question per hop.
 
@@ -47,7 +47,7 @@ $FLOWCTL spec clear-no-plan <spec-id> --json    # a positive plan signal was pre
 
 Invoke the stage skill by name with its normal arguments; pass `--review=<backend>` through when `REVIEW_OVERRIDE` is set. Flow never copies a stage's steps inline. Stage-specific notes:
 
-- **Capture under flow** is invoked with the exact token `from:flow`. Capture then applies `references/plan-vs-no-plan.md` itself, sets `no_plan` when the rule resolves to direct, and writes no placeholder requirement-coverage table on that route. The user still ratifies the draft before any write.
+- **Capture under flow** is invoked with the exact token `from:flow`. Capture then applies `references/plan-vs-no-plan.md` itself, sets `no_plan` when the rule resolves to direct, and writes no placeholder requirement-coverage table on that route. The capture request authorizes saving the spec; capture then offers the saved file for review. Honor a request to capture or review only: neither saving nor editor continuation authorizes work. A previously authorized implementation route may continue after the capture follow-up.
 - **Work** runs `/flow-next:work <spec-id>`; with `no_plan` recorded the fork is pre-answered and never asks.
 - **QA** runs per `references/gate-selection.md`. Under `pipeline.qa=auto`, judge drivability from the acceptance criteria and the repo before dispatching; a skip is recorded, never silent.
 - **Make-pr** ends a run from intent.

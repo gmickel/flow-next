@@ -22,30 +22,21 @@ Read [`spec-count.md`](../../flow-next-flow/references/spec-count.md) and apply 
 
 ## Phase 4 — split option at read-back
 
-- **Summary-payload split note** - one short clause, e.g. `Split: 11 criteria across 2 independent outcomes - split proposed, allocation printed above.` or `Split: 12 criteria, one cohesive outcome - single spec recommended.` When `SPLIT_PROPOSAL` has N>1, the printed read-back message (Step A) includes the full proposal block after the summary: per-spec titles, allocated criteria, dependency edges. The allocation prints in full because the user ratifies it; the draft bodies do not.
-- **Extra option** (only when §2.5 proposed N>1), added to the frozen §4.2 list: `split-as-proposed` — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges (§5.2b); "you get N linked specs exactly as printed above".
-- **Recommendation precedence:** when a `SPLIT_PROPOSAL` with N>1 exists, the recommendation leads with `split-as-proposed` - it takes precedence over a zero-`[inferred]` `Recommended: approve and write` (proposing structure is not self-blessing content; the no-self-blessing rule still governs `[inferred]` content): `Recommended: split-as-proposed - <N> independently shippable outcomes (allocation printed above). Confidence: [<tier>].`
-- **Forbidden:** never auto-split. N specs are written only through the user picking `split-as-proposed`; `approve and write` writes exactly one spec, and autofix never splits (see `references/autofix-mode.md` §4.4 when that mode is active).
-
----
+Print the allocation in full (per-spec titles, criteria, dependency edges), then ask the substantive choice once: `split-as-proposed`, `keep-one-spec`, or `abort`. Recommend the proposed split on its independent outcomes, not on inferred content. A cohesive single spec needs no question. This choice occurs before any spec is allocated; abort leaves the temporary draft only.
 
 ## 5.2b — Split branch (interactive `split-as-proposed` only)
 
-**Compose first, summarize, then write.** The user ratified an allocation table, not the N bodies - so before any flowctl write:
-
-1. Compose every spec body (rules below), each at its own literal draft path — `${TMPDIR:-/tmp}/flow-capture-draft-<that-spec's-title-slug>-<same suffix as §4.1>.md` (per-spec slug, shared suffix).
-2. **Print one compact summary per body** as an ordinary assistant message (title, criteria count, source tally, `Recommended next:` per §2.8 judged per spec, draft path - the read-back contract's payload; a full body prints only on request), then ONE short `AskUserQuestion` - header `Write N specs?`, body: one-line pointer + per-spec title list; options: `approve and write` (proceed), `open in editor` (hand the N draft files to the editor; re-read each before asking again), `back` (return to the §4.2 read-back with the proposal still on offer); free text edits one body, diff printed. Content ratified in the combined draft needs no re-scrutiny prose - this ask exists because the slicing (renumbering, evidence slices, sibling notes) is new authored text the user has not seen.
-3. On `approve and write`, run the §5.2 new-spec ceremony once per spec, in dependency order (dependencies first).
+After the split choice, compose each complete body at its own literal draft path and source-check it. Run the §5.2 create ceremony once per spec in dependency order. There is no second approval of the composed bodies. After all bodies and dependency edges exist, print one saved-spec summary per body and make the §5.6a editor offer once for the set. The user can edit the actual saved specs.
 
 Body composition rules:
 
 - **Each spec gets its own complete body**: its allocated criteria renumbered from R1, the Phase 2 sections that serve those criteria, a per-spec slice of `## Conversation Evidence`, and a short `## Decision Context` note naming the sibling specs and the shared origin. Specs are handover objects — never write "see the other spec" in place of content a worker needs.
-- **Per-slice `[user]` findability (before the step-2 ask):** re-run the §4.1 findability check against each composed body's OWN evidence slice — the combined-draft check does not cover the slicing. A `[user]` line whose supporting quote landed in a sibling's slice gets that quote copied into this spec's slice (evidence lines, like cross-cutting requirements, may appear in every slice they support); only a quote that exists in no slice retags the line. A split body written with a `[user]` line its own slice cannot support has broken this.
+- **Per-slice `[user]` findability (before each write):** re-run the §4.1 findability check against each composed body's OWN evidence slice — the combined-draft check does not cover the slicing. A `[user]` line whose supporting quote landed in a sibling's slice gets that quote copied into this spec's slice (evidence lines, like cross-cutting requirements, may appear in every slice they support); only a quote that exists in no slice retags the line. A split body written with a `[user]` line its own slice cannot support has broken this.
 - **Cross-cutting requirements** (one constraint governing several specs, e.g. shared middleware) are duplicated into every spec they constrain — never allocated to a single spec, which would create an implicit dependency.
 - **User-stated process requirements** (tests green, docs updated) are honored per spec — carried in each spec's body prose or Quick commands, not as counted R-IDs (they were excluded from the §2.5 count for the same reason). When the repo has `.flow/criteria.md`, note that a recurring process statement is standing-criterion material.
 - `BIZ_SIGNAL_CATEGORIES` (§2.6) is conversation-level: reuse the single computed value for every spec's Phase 6 judgment — never recompute per spec slice.
 - **After all creates, record the edges**: `"$FLOWCTL" spec add-dep <dependent-id> <dependency-id> --json` per proposed edge.
-- §5.4–§5.10 (branch name, tracker sync, glossary, readiness, HTML lens) run per created spec exactly as for a single create; the Phase 4 mark-ready answer applies to all created specs or none.
+- §5.4–§5.10 follow after all creates and edges: one editor offer for the set, then the remaining follow-ups per spec. The readiness question may cover the set explicitly; one answer applies to all named specs or none, never to an unnamed sibling.
 - Phase 6 lists every created id plus the dependency edges.
 
 Autofix never reaches this branch (it records the proposal instead).
@@ -60,7 +51,7 @@ Each per-spec footer block also carries its own mandatory `Recommended next:` li
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-If §2.5 proposed N>1 AND the user picked `approve and write` (declining the split), append:
+If §2.5 proposed N>1 AND the user picked `keep-one-spec` (declining the split), append:
 
 ```text
 Note: a <N>-spec split was proposed and declined — the allocation is preserved

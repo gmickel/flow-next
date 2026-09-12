@@ -78,7 +78,7 @@ If `flowctl memory list --json` reports memory is initialized, run a cross-check
 "$FLOWCTL" memory search "<keyword-3>" --json --limit 5 2>/dev/null
 ```
 
-Memory hits are advisory — they signal "you may have prior art on this topic" without blocking. Aggregate hit ids + titles for the Phase 4 read-back's "Related context" footnote (when ≥1 hits land). They do **not** trigger the duplicate-detection branch on their own; only spec-title overlap (0.2) does.
+Memory hits are advisory — they signal "you may have prior art on this topic" without blocking. Aggregate hit ids + titles for the capture summary's "Related context" footnote (when ≥1 hits land). They do **not** trigger the duplicate-detection branch on their own; only spec-title overlap (0.2) does.
 
 If memory is not initialized (`memory list` returns the `Memory not initialized` error), skip this step silently. Memory search is a quality-of-life signal; absence is not blocking.
 
@@ -112,7 +112,7 @@ These signals are **advisory, not an automatic refusal**. A conversation may hav
 
 For each signal, judge whether it removed evidence **relevant to this capture**:
 
-- **Proceed normally** when the requested feature / decision is fully stated or fully restated in visible user turns, including when those turns occur after the latest compaction. Record `Prior compaction detected; relevant capture evidence remains visible.` in the Phase 4 read-back warnings.
+- **Proceed normally** when the requested feature / decision is fully stated or fully restated in visible user turns, including when those turns occur after the latest compaction. Record `Prior compaction detected; relevant capture evidence remains visible.` in the capture summary warnings.
 - **Treat evidence as incomplete** when a relevant requirement exists only in a system summary, a relevant user turn or tool result is truncated / missing, later turns depend on a relevant unavailable result, or the evidence block cannot support the draft without guessing what disappeared.
 - When uncertain whether a gap is relevant, treat the evidence as incomplete. `--from-compacted-ok` is the explicit user override for that uncertainty.
 
@@ -186,7 +186,7 @@ Rules:
 - **No repo-file / module references in the conversation** (or only 1-2, investigated on the main thread) → skip; read nothing.
 - **The conversation references repo files or modules whose state matters for the spec** ("the auth module needs X", "we already have a rate limiter at...") → GATE ACTIVE — STOP. Read [references/codebase-verification.md](references/codebase-verification.md) and run its read-only investigation-subagent dispatch before drafting.
 
-Whichever path ran, the orchestrator (this skill, on the main thread) merges results into Phase 2's `[inferred]` confidence — verified references can be tagged `[paraphrase]`; unverified or missing files stay `[inferred]` and surface in Phase 4 read-back for explicit user confirmation.
+Whichever path ran, the orchestrator (this skill, on the main thread) merges results into Phase 2's `[inferred]` confidence — verified references can be tagged `[paraphrase]`; unverified or missing files stay `[inferred]` and surface in saved-spec summary for user review.
 
 ### 1.3 — Initial title extraction
 
@@ -209,7 +209,7 @@ The title may be `[inferred]` if the conversation never named one explicitly. Ph
 
 ## Phase 2: Source-tagged synthesis (R4, R14, R15)
 
-**Goal:** draft the spec body using the CLAUDE.md richer template, with **per-line source tags** so hallucinated content is visible at Phase 4 read-back.
+**Goal:** draft the spec body using the CLAUDE.md richer template, with **per-line source tags** so hallucinated content is visible in the capture summary.
 
 Spec prose follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
 
@@ -217,7 +217,7 @@ Spec prose follows the artifact prose contract in [docs/prose.md](../../docs/pro
 
 Every acceptance criterion line, every decision-context line, and every scope-bounding line in the spec carries one tag: `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`. The four-tag table — meanings, acceptance tests, worked examples, when-to-use-which — is the single copy in [phases.md](phases.md) §Source-tag taxonomy.
 
-Pure prose sections (Goal & Context narrative, Architecture overview) do not need per-line tags — but the **whole section** carries a section-level tag in a frontmatter-style note: e.g. `<!-- Goal & Context: 70% [user], 30% [inferred] -->`. Phase 4 read-back surfaces this.
+Pure prose sections (Goal & Context narrative, Architecture overview) do not need per-line tags — but the **whole section** carries a section-level tag in a frontmatter-style note: e.g. `<!-- Goal & Context: 70% [user], 30% [inferred] -->`. saved-spec summary surfaces this.
 
 ### 2.2 — Apply the canonical spec template
 
@@ -260,7 +260,7 @@ Every acceptance criterion must be testable in principle. As you draft each one,
 
 If a candidate criterion fails the test (e.g. "make it fast", "improve UX"), it triggers Phase 3 must-ask case (b). Either the user clarifies (interactive), or autofix exits 2.
 
-Track `[inferred]` count across all sections (especially in `## Acceptance Criteria` and `## Boundaries`). The count surfaces at Phase 4 read-back.
+Track `[inferred]` count across all sections (especially in `## Acceptance Criteria` and `## Boundaries`). The count surfaces in the capture summary.
 
 ### 2.5 — Spec-count gate (R11)
 
@@ -336,11 +336,11 @@ if [ "$ACTIVE" = "1" ]; then
 fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, read [references/glossary-terms.md](references/glossary-terms.md) and run its §2.7 scan (it also owns the Phase 4.2 `Glossary?` consent and the §5.8 write). When the gate is silent — no glossary, a `# Glossary` husk, or `total_terms == 0` — `GLOSSARY_PROPOSALS` stays empty and nothing downstream changes; seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
+When the sentinel prints, read [references/glossary-terms.md](references/glossary-terms.md) and run its §2.7 scan (it also owns the §5.8 `Glossary?` consent and the §5.8 write). When the gate is silent — no glossary, a `# Glossary` husk, or `total_terms == 0` — `GLOSSARY_PROPOSALS` stays empty and nothing downstream changes; seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
 
 ### 2.8 - Route judgment (one read, one decision)
 
-Once the criteria are drafted, read [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md) and judge the drafted spec against it once; read [`route-matrix.md`](../flow-next-flow/references/route-matrix.md) as well when the spec is not a plain ready spec (unresolved product or authority questions, design risk wanting an independent assessment). Record the result in agent context as `ROUTE_DIRECT=1` (direct) or `ROUTE_DIRECT=0` (a positive plan signal, or interview / plan-review first). It feeds the §2.2 coverage rule, the Phase 4 `Recommended next:` summary line, §5.9b under `FROM_FLOW=1`, and the Phase 6 closer. Re-judge only when an edit cycle changes the criteria. The judgment is printed on every path; the field write in §5.9b depends on how the run was invoked.
+Once the criteria are drafted, read [`plan-vs-no-plan.md`](../flow-next-flow/references/plan-vs-no-plan.md) and judge the drafted spec against it once; read [`route-matrix.md`](../flow-next-flow/references/route-matrix.md) as well when the spec is not a plain ready spec (unresolved product or authority questions, design risk wanting an independent assessment). Record the result in agent context as `ROUTE_DIRECT=1` (direct) or `ROUTE_DIRECT=0` (a positive plan signal, or interview / plan-review first). It feeds the §2.2 coverage rule, the saved-spec `Recommended next:` summary line, §5.9b under `FROM_FLOW=1`, and the Phase 6 closer. Re-judge only when an edit cycle changes the criteria. The judgment is printed on every path; the field write in §5.9b depends on how the run was invoked.
 
 ### Done when
 
@@ -369,7 +369,7 @@ Once the criteria are drafted, read [`plan-vs-no-plan.md`](../flow-next-flow/ref
 
 ### 3.1 — Optional ambiguities (not must-ask)
 
-For optional ambiguities — the spec has `[inferred]` content the user might want to scrutinize but it's not blocking — do NOT ask in Phase 3. Surface them in the Phase 4 read-back's `[inferred]` tally; the user can pick `edit` if they want to revise.
+For optional ambiguities — the spec has `[inferred]` content the user might want to scrutinize but it's not blocking — do NOT ask in Phase 3. Surface them in the capture summary's `[inferred]` tally; the user can pick `edit` if they want to revise.
 
 Phase 3 only fires for the three hard-error cases. Asking too many questions defeats capture's purpose.
 
@@ -380,120 +380,53 @@ Phase 3 only fires for the three hard-error cases. Asking too many questions def
 
 ---
 
-## Phase 4: Read-back loop (R7, R11) — MANDATORY
+## Phase 4: Prepare the write
 
-**Goal:** show the user the full draft before write. Even in autofix mode (`--yes` is the read-back substitute).
+The interactive capture request authorizes saving the spec after pre-flight and material questions are resolved. Do not ask for generic approval to write. Autofix keeps its separate `--yes` gate.
 
-### 4.1 — Materialize the draft + print-then-ask emission
+### 4.1 — Materialize and check the body
 
-**Path-persistence rule:** bash vars do NOT survive across tool calls — and that applies to the draft path itself. Compose a **literal unique path in agent context** — `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<agent-chosen 4-char suffix>.md` — and use that literal path verbatim in the Write call here AND in Phase 5's `spec set-plan <id> --file <path>` call. Never carry the path in a shell variable across tool calls; `mktemp` is reserved for paths created and consumed within a single bash block. (No spec id exists yet on the new-spec branch — the working-title slug keeps the path readable; uniqueness comes from the suffix.)
+Write the complete body once to a literal unique path, `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<4-char suffix>.md`. Use that exact path in Phase 5's `spec set-plan --file`; never re-author the body in a heredoc. The body opens with `# <title>`, followed by `## Conversation Evidence` and the template sections.
 
-Write the full draft to that path via the **Write tool** — exactly once (the file is what Phase 5 hands to `spec set-plan --file`; do NOT re-author it into a Phase-5 heredoc). The Write is plumbing, not the user-facing read-back.
+Before any write, every per-line `[user]` tag must be findable in the verbatim user evidence. Retag a close restatement as `[paraphrase]`, an unsupported inference as `[inferred]`, and recompute the tally. Section-level breakdown notes remain informational. Material unknowns use Phase 3's questions; inferred content never becomes user-approved merely because it is saved.
 
-**`[user]` findability (before every ask, including §4.3 re-asks):** every **per-line** `[user]` tag in the draft — criterion, decision-context, and scope-bounding lines — is findable in the `## Conversation Evidence` block. A miss retags the line (`[paraphrase]` or `[inferred]`) and re-counts the inferred tally. Section-level breakdown notes (`<!-- Goal & Context: 70% [user], ... -->`) are exempt from the line check — they are informational sourcing summaries, never a `[user]` stamp on any sentence: a narrative claim needing user authority gets a per-line tag or stays at the authority its evidence supports. A draft presented with an unverifiable per-line `[user]` tag has broken this.
+If the split rule proposed N>1, resolve the explicit choice per [references/split-proposal.md](references/split-proposal.md). One spec needs no split question. A requested `--rewrite` uses [references/rewrite-mode.md](references/rewrite-mode.md), including the diff and protection of intervening user edits.
 
-The **draft file** contains the spec body (what `spec set-plan` consumes — it OPENS with a single `# <title>` heading, per §5.1: set-plan replaces the whole file, so a body without one ships a heading-less spec):
+### 4.2 — Snapshot readiness before writing
 
-1. The `## Conversation Evidence` block (Phase 1).
-2. Every section drafted in Phase 2, with source tags visible.
-3. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
+Readiness is a separate follow-up after the spec exists. Capture the target-aware predicate now, before a rewrite resets the old ready flag. This step asks nothing and writes nothing:
 
-**Print-then-ask contract (interactive - R13; the shared shape is [docs/read-back.md](../../docs/read-back.md), read it at this step):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so nothing multi-paragraph rides inside `AskUserQuestion`. What the user sees before the ask is the **compact summary** below, printed as an ordinary message. The FULL draft stays in the §4.1 file and prints only when the user asks for it; a rewrite diff (`references/rewrite-mode.md`) and a split allocation (`references/split-proposal.md`) are printed as ordinary markdown because the user ratifies them. **Then** one short `AskUserQuestion` whose body is only: a pointer to the summary and the draft path, the recommendation, and the options. An ask body carrying the draft, a diff, or the criteria list has broken this.
+```bash
+ACTIVE=0
+RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || ACTIVE=1
+if [ "$ACTIVE" = "0" ]; then
+  VAL="$(printf '%s' "$RAW" | jq -r '.value // empty' 2>/dev/null)" || ACTIVE=1
+  [ -z "$VAL" ] && ACTIVE=1
+fi
+if [ "$ACTIVE" = "1" ]; then
+  echo "GATE ACTIVE — STOP. Read references/mark-ready.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
+```
 
-The **summary payload** (metadata about the draft - never a re-emission of it) is what prints before the ask (interactive) or to stdout (autofix), one line each:
+When the sentinel prints, read [references/mark-ready.md](references/mark-ready.md) and compute its §4.2 predicate only. Retain that snapshot for §5.9; do not probe the rewritten target as if it were its pre-write state. When the gate is silent, `tracker.readyState` is configured: no local readiness offer or write.
 
-1. `Title: <title>` (+ candidate `branch_name` when the user named one).
-2. `Criteria: <N>` - the R-ID count.
-3. **Source-tag tally** - compact one-liner. Format:
-   ```
-   Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
-   ```
-   Optional one-line per-section `[inferred]` breakdown when L > 0 (keep short — tallies, not the criteria prose):
-   ```
-   [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
-   ```
-   The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
-4. **Split note** - only when §2.5's gate fired; its reference owns the wording and the full allocation block.
-5. `Recommended next:` - the §2.8 judgment in the plan-vs-no-plan shape; before the write the id slot reads `<new spec>`.
-6. `Draft: <literal draft path>`.
-7. **Related context** footnote (if Phase 0.3 found memory hits) - one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
-8. **Rewrite-mode pointer** - only when `REWRITE_TARGET` is set; `references/rewrite-mode.md` owns the diff contract and the pointer clause.
-9. **Glossary term-add proposals** - only when §2.7's gate fired and collected any; `references/glossary-terms.md` owns the one-liner format.
+### 4.3 — Editor and correction handling
 
-### 4.2 — Interactive read-back
+This handling runs from §5.6a after the spec has been saved. Open the actual spec file, never the temporary synthesis copy. When the editor is chosen, wait for the user to return, then re-read the full saved spec before any subsequent operation. Preserve user edits; do not overwrite them from the temporary file or infer that an edit is approval to execute.
 
-**Step A - print first.** Emit the summary payload (plus the rewrite diff or split allocation when applicable) as an ordinary assistant message. The draft itself is not printed; it is in the file named on the `Draft:` line.
+For a correction supplied in chat, append the user's requirement or rejection verbatim to `## Conversation Evidence` first, then edit only the affected sections through the normal spec write plumbing. Retain the source-tag taxonomy, recheck findability, and show only the diff. Re-judge the recommended route when the criteria changed. The full spec prints only on request.
 
-**Step B - one ask.** Use `AskUserQuestion`:
+There is no re-approval loop. `continue` leaves the saved spec in place; stopping the review also leaves it in place. Deletion needs an explicit request. A later capture invocation still follows the duplicate/rewrite checks rather than minting a replacement for an editor round.
 
-- **header**: `Read-back`
-- **body** (SHORT - pointer + recommendation only; no multi-paragraph content):
-  1. One-line pointer: `Summary printed above; draft at <path>.` (rewrite: `Summary + rewrite diff printed above; draft at <path>.`)
-  2. **The recommendation - no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend `approve and write` - the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] (open in editor, or ask for the full draft) before choosing - approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve and write - <one-sentence rationale>. Confidence: [<tier>].`
-- **options** (frozen - each description states its consequence in plain words, "Choose this if…"); the built-in free-text answer is the edit request ("change X"):
-  - `approve and write` - proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
-  - `split-as-proposed` (only when §2.5's gate fired and proposed N>1) — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges; "you get N linked specs exactly as printed above"
-  - `open in editor` - the draft file opens in the user's editor ("edit the file directly; capture re-reads it when you are back")
-  - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
+### 4.4 — Autofix write gate
 
-Confidence tier (attaches to whichever recommendation the rule above produced):
-
-- `[high]` — `[inferred]` count is low (≤2) and no user-facing claims contradict the conversation evidence.
-- `[judgment-call]` — `[inferred]` count is moderate (3-6) or some `[inferred]` items are load-bearing (e.g. core acceptance criteria).
-- `[your-call]` — `[inferred]` count is high (7+) or rewrite-mode with substantive divergence from existing spec.
-
-**Never** put full criteria lists, section bodies, unified diffs, or multi-paragraph glossary definitions in the ask body - they render as collapsed plain text. The printed message and the draft file are the ratification surface.
-
-**Post-approve consent gates (interactive; each is a separate short ask — the read-back options above stay frozen):**
-
-- **`Glossary?`** - only when §2.7's gate fired AND `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve and write`. Question shape lives in `references/glossary-terms.md`; the write is §5.8.
-- **`Mark ready?`** - probe only after `approve and write`, before any Phase 5 write changes the rewrite target's state:
-
-  ```bash
-  ACTIVE=0
-  RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
-  if [ "$ACTIVE" = "0" ]; then
-    VAL="$(printf '%s' "$RAW" | jq -r '.value // empty' 2>/dev/null)" || ACTIVE=1      # parse ERROR ⇒ ACTIVE
-    [ -z "$VAL" ] && ACTIVE=1
-  fi
-  if [ "$ACTIVE" = "1" ]; then
-    echo "GATE ACTIVE — STOP. Read references/mark-ready.md before continuing."
-  fi   # default branch: bare no-op — NO link, NO read path
-  ```
-
-  When the sentinel prints, read [references/mark-ready.md](references/mark-ready.md) and run its full target-aware predicate — it decides whether the `Mark ready?` question is asked at all (new capture: adopted local readiness; rewrite: the target itself was ready), and owns the §5.9 write. When the gate is silent, `tracker.readyState` is configured: readiness is a one-way tracker→local pull, no question is ever offered, no readiness is written.
-
-### 4.3 — Edit branch
-
-An edit cycle starts from a free-text answer ("change X") or from `open in editor`:
-
-- **Free-text edit:** re-run Phase 2's drafting logic for the sections the answer names, with the correction as additional input.
-- **Correction turns become evidence FIRST.** When the edit reply states a requirement, constraint, or rejection in the user's own words, append it verbatim to `## Conversation Evidence` as `> user (edit cycle <N>): "<verbatim text>"` before redrafting — the §4.1 findability check runs against the evidence block, and without the append it would retag the user's genuinely-stated words as `[paraphrase]`/`[inferred]`, corrupting exactly the provenance this check protects. The ~30-line cap still applies (truncate older lines, never the correction just given).
-- Apply the revisions to the §4.1 draft file via the **Edit tool** (deltas only — never rewrite the whole file via Write).
-- **`open in editor`:** hand the draft file to the user's editor (`$VISUAL`, `$EDITOR`, or a host open command - the agent's call) and wait for the user to return.
-- **After either round, Read the FULL draft file before asking again**, so the write consumes what the user saw (this also satisfies the Edit tool's read-before-edit requirement). Re-run the findability check and re-tally `[inferred]`; re-judge §2.8 when the criteria changed.
-- **Print only the diff** (unified style, changed sections in full) as an ordinary message - never reprint the full draft; the full draft prints only when the user asks for it.
-- Re-issue the §4.2 ask. Loop until the user picks `approve and write`, `split-as-proposed`, or `abort`.
-
-Hard cap at **3 edit cycles**. If the user is still editing on the 4th cycle, surface: `You've gone through 3 edit cycles. Capture's read-back loop isn't deep refinement - consider /flow-next:refine <id> after capture lands for iterative Q&A.` Offer `approve as-is` / `abort` only (still print the diff first if the file changed).
-
-### 4.4 — Autofix read-back
-
-In autofix mode there is no user to ask: the §4.1 Write still materializes the draft file, the summary payload prints to stdout, and `--yes` is the consent substitute. The full rules live in `references/autofix-mode.md` (already read at mode detection).
-
-### 4.5 — Forbidden in Phase 4
-
-- **Never silently skip the read-back.** Even if `[inferred]` count is 0, interactive mode prints the summary then asks; autofix still materializes the draft file before any `.flow/` write. The user might still want to reject for reasons unrelated to inference.
-- **Never embed multi-paragraph drafts, diffs, or criteria lists in the `AskUserQuestion` body.** Print-then-ask only (R13).
-- **Never auto-split.** N specs are written only through the user picking `split-as-proposed`; `approve and write` writes exactly one spec, and autofix never splits.
-- **Never edit a `--rewrite` target without printing the diff** as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
-- **Never write glossary terms or readiness here.** Phase 4 collects consent only; the writes happen in §5.8 / §5.9, after the spec write.
+In autofix mode, follow [references/autofix-mode.md](references/autofix-mode.md), already loaded at mode detection: materialize the draft, print its summary, and write only with `--yes`. Without it, exit 0 with the draft path and no spec allocation. No interactive editor or consent questions run.
 
 ### Done when
 
-- Interactive: summary (and rewrite diff or split allocation when applicable) printed as ordinary markdown, then user picked `approve and write` (proceed to Phase 5, one spec), `split-as-proposed` (proceed to Phase 5 via the split reference, N specs), `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles printed only the diff, and the file was re-read after every editor round. On approve or split, the glossary and mark-ready consents (when their gates fired) are recorded for §5.8/§5.9.
-- Autofix with `--yes`: draft Written, summary payload printed, proceeding to Phase 5.
-- Autofix without `--yes`: draft Written, summary payload printed, exit 0.
+- The body is materialized with verified source tags, any split choice is settled, and pre-rewrite readiness is captured when applicable.
+- Interactive proceeds to Phase 5 without an approve-and-write question.
+- Autofix proceeds only with `--yes`; otherwise the draft-only terminal has been reported.
 
 ---
 
@@ -507,7 +440,7 @@ When Phase 0.3b's gate fired, run §5.0 from `references/strategy-alignment.md` 
 
 ### 5.1 — The spec body is the §4.1 draft file
 
-The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
+The source-checked draft file from §4.1 IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
 
 `spec set-plan` replaces the ENTIRE markdown file with the supplied body — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
 
@@ -551,13 +484,13 @@ date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 
 When the tracker gate above printed, read [references/tracker-integration.md](references/tracker-integration.md) and run its §5.2 tracker-first mint (and, later in this phase, its §5.7 touchpoint) around the flow-first post-check. When the gate is silent, `spec create` mints `fn-N` locally and nothing tracker-related happens anywhere in this run.
 
-The draft file round-trips embedded markdown and newlines byte-exact — `read_file_or_stdin` in `flowctl.py` handles `--file <path>` directly. No re-authoring: the approved content is consumed from disk, exactly as the user read it back.
+The draft file round-trips embedded markdown and newlines byte-exact — `read_file_or_stdin` in `flowctl.py` handles `--file <path>` directly. No re-authoring: the synthesized content is consumed from disk without a second rendering.
 
 When Phase 0.5b's chart gate fired, run that reference's §5.2 chart handoff — `chart link-spec` **only after** a successful `spec create` + `spec set-plan`, with its retry rules.
 
 ### 5.2b — Split branch
 
-Reached only when the user picked `split-as-proposed` at §4.2; the ceremony lives in `references/split-proposal.md` §5.2b (compose all N bodies → print → one short ask → run §5.2 once per spec in dependency order → `spec add-dep` per edge). Autofix never reaches this branch.
+Reached only when the user picked `split-as-proposed` at §4.1; the ceremony lives in `references/split-proposal.md` §5.2b (compose all N bodies → run §5.2 once per spec in dependency order → `spec add-dep` per edge → summarize the saved specs). Autofix never reaches this branch.
 
 ### 5.3 — Rewrite branch
 
@@ -598,17 +531,25 @@ Two reasons:
 
 If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + commit" branch, but the default stays "no commit, user owns the staging".
 
+### 5.6a — Saved-spec review (interactive only)
+
+After the spec body is written, read [docs/read-back.md](../../docs/read-back.md) for capture's saved-spec summary and editor offer. Print the title, criteria count, source tally, relevant warnings, recommended route, and actual spec path before asking. Include the rewrite diff when applicable; a full body prints only on request. For a split, show one summary per saved spec and offer the editor once for the set after all bodies and edges exist.
+
+Use one short `AskUserQuestion`: `open in editor` opens the saved file(s); `continue` leaves them as written. Free text requests a correction. Apply §4.3 to editor/correction rounds, then continue the remaining authorized follow-ups without generic re-approval. Skip an already-answered editor offer, and honor a request to leave the spec for later review. The summary itself is always reported.
+
+Saving or viewing the spec does not authorize marking ready, implementation, a commit, or an external write. Existing explicit instructions and configured tracker authority remain in force; do not manufacture a new confirmation for them.
+
 ### 5.7 — Tracker sync touchpoint (opt-in)
 
 Runs only when §5.2's tracker gate fired: execute `references/tracker-integration.md` §5.7 (leaf-resolved push / pull / reconcile / comment, best-effort, `--event capture` receipt). With no tracker configured this step does not exist — capture behaves exactly as it always has.
 
 ### 5.8 — Glossary term-adds (consent-gated; interactive only)
 
-Runs only when §4.2's `Glossary?` consent approved ≥1 term; the `flowctl glossary add` call site and its best-effort contract live in `references/glossary-terms.md` §5.8.
+When §2.7 found glossary proposals, ask the separate `Glossary?` question in [references/glossary-terms.md](references/glossary-terms.md), unless already answered. Write only the consented terms through its §5.8 call site. Autofix never writes terms.
 
 ### 5.9 — Mark-ready write (consent-gated; interactive only)
 
-Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl spec ready` call site and its best-effort contract live in `references/mark-ready.md` §5.9.
+Use the §4.2 snapshot to offer the separate `Mark ready?` question per [references/mark-ready.md](references/mark-ready.md), only when eligible and not already answered by the user. `mark-ready` authorizes its write; `keep-draft` leaves readiness unchanged. Autofix never writes readiness.
 
 ### 5.9b - No-plan write
 
@@ -650,7 +591,7 @@ When the sentinel prints, read [references/html-lens.md](references/html-lens.md
 - Optional branch-name is set if user named one.
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
-- Mark-ready write applied iff consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
+- Mark-ready write applied iff separately consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
 - No-plan write applied iff `--no-plan` was passed, or `from:flow` with a direct judgment (5.9b); skipped silently otherwise, with the refusal notice printed when the set was refused.
 - HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the single config read.
 

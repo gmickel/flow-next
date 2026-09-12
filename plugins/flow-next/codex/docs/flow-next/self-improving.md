@@ -29,7 +29,7 @@ Opt-in categorized store (bug / knowledge tracks) that survives context compacti
 
 ## Glossary
 
-Wrong-meaning-of-a-normal-word errors get built into plans and code. The glossary loop closes that: `/flow-next:prime` seeds `GLOSSARY.md` from the repo's load-bearing nouns (evidence-backed, read-back before write - never unseen); `/flow-next:refine` and `/flow-next:capture` add terms as new vocabulary surfaces in conversation (their drafts are ratified through the shared [read-back contract](read-back.md): a compact summary and one ask, the full draft on request); plan scouts, the work worker's re-anchor, and review prompts read task-relevant terms (budget-capped - never the whole file); `/flow-next:audit` prunes stale terms and alias creep as part of its normal sweep. File shape + `flowctl glossary` subcommands: [`glossary.md`](glossary.md).
+Wrong-meaning-of-a-normal-word errors get built into plans and code. The glossary loop closes that: `/flow-next:prime` seeds `GLOSSARY.md` from the repo's load-bearing nouns (evidence-backed, read-back before write - never unseen); `/flow-next:refine` and `/flow-next:capture` add terms as new vocabulary surfaces in conversation (glossary additions retain their separate consent; capture reviews its saved spec and refine ratifies write-back per the [read-back contract](read-back.md)); plan scouts, the work worker's re-anchor, and review prompts read task-relevant terms (budget-capped - never the whole file); `/flow-next:audit` prunes stale terms and alias creep as part of its normal sweep. File shape + `flowctl glossary` subcommands: [`glossary.md`](glossary.md).
 
 ## Decision records
 

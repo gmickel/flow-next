@@ -2,6 +2,11 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+- **Capture saves the spec before offering review.** An interactive capture request now writes the source-tagged spec, shows its summary, and offers the saved file in the editor. The redundant approve-and-write checkpoint is removed, including the second approval after choosing a split. Duplicate/rewrite choices, material questions, chart-risk overrides, glossary and readiness consent remain; plan/refine approval and autofix's `--yes` write gate are unchanged.
+
 ## [flow-next 5.1.1] - 2026-09-12
 
 Plan review no longer asks for a task split. A spec with zero tasks or one owner task is the default route, so the reviewer's job is the spec's content and, when task specs exist, their consistency with it.
