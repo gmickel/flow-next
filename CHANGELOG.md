@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 5.2.0] - 2026-09-13
+
 You can now carry a selected spec through PR convergence and merge in one flow run, while retaining the choice to stop before merge.
 
 ### Added
@@ -12,6 +14,13 @@ You can now carry a selected spec through PR convergence and merge in one flow r
 ### Changed
 - **An attended rerun with an existing PR offers landing.** Flow asks once unless the current item already has explicit landing authorization. Declining or leaving the question unanswered causes no landing mutation; default unattended flow still stops before merge. Consent stays scoped to the selected spec and PR across active retries, and a fresh session needs the flag again or current explicit authority. Recovery observes an already merged PR and resumes only its remaining authorized tail. Existing verdict names and standalone land behavior remain unchanged.
 - **Capture saves the spec before offering review.** An interactive capture request now writes the source-tagged spec, shows its summary, and offers the saved file in the editor. The redundant approve-and-write checkpoint is removed, including the second approval after choosing a split. Duplicate/rewrite choices, material questions, chart-risk overrides, glossary and readiness consent remain; plan/refine approval and autofix's `--yes` write gate are unchanged.
+
+
+### Fixed
+- **Landing preserves the source branch.** An open-PR handoff refuses a wrong branch or detached HEAD before it can fast-forward a local ref, including when the checked-out commit already matches the PR. Correct-branch catch-up and already-merged recovery remain available.
+- **Codex can dispatch the landing stage.** Generated flow instructions now use the host's actual skill spelling. Generator and installed-consumer checks cover the landing call and confirmed sibling dispatches while preserving internal authorization identifiers.
+
+Deprecated pilot and interview aliases remain available in this release. New recipes should use `flow --auto --tick` and `refine`.
 
 ## [flow-next 5.1.1] - 2026-09-12
 
