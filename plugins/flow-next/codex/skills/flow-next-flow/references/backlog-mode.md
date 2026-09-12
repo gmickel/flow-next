@@ -200,9 +200,7 @@ edges come from **two** sources and feed **one** existing sorter:
   identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
   for every provider. On GitHub this read validates the issue and returns no
   dependency edges: parent/sub-issue hierarchy is not blocked-by and never feeds
-  the sorter.
-  per issue, so the run passes that handle straight through; Linear/GitHub resolve
-  their display handle the same way. (Spec-backed candidates pass the spec/tracker id,
+  the sorter. (Spec-backed candidates pass the spec/tracker id,
   which resolves to the stored `tracker.identifier`.)
 
   (The inline tracker-sync wrapper builds

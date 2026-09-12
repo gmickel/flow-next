@@ -14,7 +14,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 - [Clean up `.flow/` safely](#clean-up-flow-safely)
 - [Debug Ralph runs](#debug-ralph-runs)
 - [Receipt validation failing](#receipt-validation-failing)
-- [`flow --auto` keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)](#flow---auto-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger-fn-184325)
+- [`flow --auto` keeps skipping a spec the board says is ready (strikes ledger)](#flow---auto-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger)
 - [Review loop stalls, repeats unchanged work, or runs away (fn-90/fn-159)](#review-loop-stalls-repeats-unchanged-work-or-runs-away-fn-90fn-159)
 - [flowctl says my config carries removed keys, or my routing block is ignored (fn-195)](#flowctl-says-my-config-carries-removed-keys-or-my-routing-block-is-ignored-fn-195)
 - [Review reports a model downgrade / floor (fn-76 resolution ladder)](#review-reports-a-model-downgrade-floor-fn-76-resolution-ladder)
@@ -100,11 +100,11 @@ Ralph reads receipts to decide whether to advance, retry, or block. A missing or
 
 <a id="pilot-keeps-skipping-a-spec-the-board-says-is-ready-strikes-ledger-fn-184325"></a>
 
-## `flow --auto` keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)
+## `flow --auto` keeps skipping a spec the board says is ready (strikes ledger)
 
 **Symptom:** `/flow-next:flow --auto` (or its one-release alias `/flow-next:pilot`) printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier run, and now every run skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
 
-**Why:** the driver records a **strike** for each healthy no-advance hop in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike** (fn-87 R7): the echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while `flow --auto` keeps it struck.
+**Why:** the driver records a **strike** for each healthy no-advance hop in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike**. The echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while `flow --auto` keeps it struck.
 
 **Inspect and recover:**
 
