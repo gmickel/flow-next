@@ -66,10 +66,7 @@ nothing more:
 3. **Enumerating tracker issues with no flow spec** - promoted tickets invisible to
    `flowctl specs`, unioned in via the `list-open` op.
 
-A **workable** item routes straight into the **existing** CLASSIFY → DISPATCH →
-VERIFY path (`auto.md` Phase 2–5) unchanged - backlog mode does not re-implement
-the pipeline, it only widens what reaches the front of it. There is no new gate and
-no spec-authoring engine.
+For a workable item, continue at `auto.md` Phase 2.
 
 ---
 

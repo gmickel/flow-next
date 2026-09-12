@@ -753,7 +753,7 @@ PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 
 For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK - findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED - no local app reachable, advancing"`. Only a *missing/stale* receipt routes to the healthy-no-advance strike below.
 
-For a run that dispatched several stages (a long-horizon run, or the `--tick` chain) the ledger writes are sequential within the single-threaded run: each stage's `ADVANCED` clear completes (atomic `jq` plus `mv`) before the next stage records its own clear or strike under its own `STAGE`; there is no clear-versus-strike race. The verdict is the last dispatched stage's verdict; `stage=` names every dispatched stage in order joined by `+`; the reason names the last outcome, and for the chained tick both outcomes, the fresh `qa_outcome` and the PR URL or its absence:
+Complete each stage's ledger update before recording the next stage's result. For a chained tick, include both the QA outcome and the PR result in `reason`:
 
 ```text
 PILOT_VERDICT=ADVANCED spec=<id> stage=work+qa+make-pr reason="make-pr: open PR <url>"

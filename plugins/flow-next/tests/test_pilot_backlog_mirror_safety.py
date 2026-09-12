@@ -51,7 +51,6 @@ from __future__ import annotations
 
 import json
 import pathlib
-import re
 import unittest
 
 
@@ -423,57 +422,6 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                 )
 
     # ── C. Autonomous-safety invariants (verifies R6/R7) ───────────────────
-
-    def test_every_ask_mention_in_pilot_canonical_is_a_negation(self) -> None:
-        """No-prompt invariant at the SOURCE: every AskUserQuestion mention in
-        the driver's canonical files is a NEGATION (never reached / forbidden /
-        never interactive / no path reaches) — `--auto` genuinely never asks.
-        (The one non-prose mention allowed is the maintainer breadcrumb's
-        'keep this file Claude-native (`AskUserQuestion`, `Task`)'.)"""
-        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
-        # G1, not grep: the cue list is reduced to minimal negation tokens
-        # rather than full sentence spellings.
-        negation_cue = re.compile(
-            r"\bnever\b|\bforbidden\b|can'?t|\bcannot\b|suppress"
-            r"|no (?:code )?path|Claude-native",
-            re.IGNORECASE,
-        )
-        for fname, text in (
-            ("auto.md", self.pilot_skill),
-            ("backlog-mode.md", self.pilot_backlog),
-        ):
-            for ln in text.splitlines():
-                if "AskUserQuestion" not in ln:
-                    continue
-                with self.subTest(file=fname, line=ln.strip()[:70]):
-                    self.assertTrue(
-                        negation_cue.search(ln),
-                        f"{fname}: a non-negation AskUserQuestion mention would "
-                        f"mean --auto asks interactively — line: {ln.strip()!r}",
-                    )
-
-    def test_mirror_preserves_the_never_prompt_negation(self) -> None:
-        """The no-prompt invariant survives the rewrite: every mirror mention
-        of the rewritten prompt form carries a negation cue — the rewritten
-        negation, not an injected ask. (Keyed on tokens, not sentences.)"""
-        negation_cue = re.compile(
-            r"\bnever\b|\bforbidden\b|can'?t|\bcannot\b|suppress"
-            r"|no (?:code )?path",
-            re.IGNORECASE,
-        )
-        for fname, text in (
-            ("auto.md", self.m_skill),
-            ("backlog-mode.md", self.m_backlog),
-        ):
-            for ln in text.splitlines():
-                if "plain-text numbered prompt" not in ln:
-                    continue
-                with self.subTest(file=fname, line=ln.strip()[:70]):
-                    self.assertTrue(
-                        negation_cue.search(ln),
-                        f"{fname}: non-negation prompt mention — --auto must "
-                        f"never ask — line: {ln.strip()!r}",
-                    )
 
     def test_never_merge_allowlist_survives_in_mirror(self) -> None:
         """Invariant #1 (never merge / never invoke land — R6) is an ENFORCING

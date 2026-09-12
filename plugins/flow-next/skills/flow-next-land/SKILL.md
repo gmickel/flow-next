@@ -9,7 +9,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 
 A tick is one invocation of `/flow-next:land`: discover the open PRs the build loop authored, walk each through the gate tree (CI tri-state → patience window → review-thread resolution → review signal → merge gates), take at most ONE action class per PR, and end with one terminal `LAND_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code owns the cadence (babysitting waits on external events — CI, reviewers — over hours).
 
-Land is the ship loop to the build loop of `/flow-next:flow --auto` (one item per invocation, or one hop per tick under a host `/goal` or `/loop`), which drains ready specs into draft PRs; land (`/loop`-shaped) wakes on a cadence, acts on those PRs, sleeps. Land never authors PRs and never touches in-flight specs - it only babysits PRs whose authoring spec has ALL tasks done (the build-loop concurrency interlock).
+Land is the ship loop to the build loop of `/flow-next:flow --auto`, which drains ready specs into draft PRs; land (`/loop`-shaped) wakes on a cadence, acts on those PRs, sleeps. Land never authors PRs and never touches in-flight specs - it only babysits PRs whose authoring spec has ALL tasks done (the build-loop concurrency interlock).
 
 Land and Ralph are alternative autonomous drivers. Never nest them, and never reuse Ralph harness state inside land.
 
