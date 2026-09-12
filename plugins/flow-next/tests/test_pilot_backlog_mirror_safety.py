@@ -83,8 +83,6 @@ MIRROR_TS_STEPS = (
     PLUGIN / "codex" / "skills" / "flow-next-tracker-sync" / "steps.md"
 )
 
-MIRROR_SKILLS_DIR = PLUGIN / "codex" / "skills"
-
 # The R2 numbered-prompt INSTRUCTION block sync-codex.sh injects into skills that
 # genuinely ask the user. Its presence in a pilot mirror file is the defect.
 R2_INSTRUCTION_SENTINEL = "Render the options below as a"

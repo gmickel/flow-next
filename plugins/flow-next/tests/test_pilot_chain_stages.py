@@ -53,7 +53,6 @@ REPO_ROOT = PLUGIN_DIR.parent.parent
 
 FLOW_SKILL = PLUGIN_DIR / "skills" / "flow-next-flow"
 MIRROR_FLOW_SKILL = PLUGIN_DIR / "codex" / "skills" / "flow-next-flow"
-PILOT_STUB = PLUGIN_DIR / "skills" / "flow-next-pilot" / "SKILL.md"
 CONDUCT_MD = REPO_ROOT / "agent_docs" / "conduct" / "pilot.md"
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync-codex.sh"
 
@@ -81,7 +80,6 @@ def both_copies(rel: str) -> list[Path]:
 
 
 AUTO_MDS = both_copies("auto.md")
-BACKLOG_MODES = both_copies("references/backlog-mode.md")
 
 
 def h2_section(text: str, heading: str) -> str:
@@ -90,12 +88,6 @@ def h2_section(text: str, heading: str) -> str:
     m = re.search(r"^## ", text[start + len(heading):], flags=re.M)
     end = start + len(heading) + m.start() if m else len(text)
     return text[start:end]
-
-
-def paragraph_starting(text: str, prefix: str) -> str:
-    start = text.index(prefix)
-    end = text.find("\n\n", start)
-    return text[start:end if end != -1 else len(text)]
 
 
 def chain_gate_fence(text: str) -> str:
@@ -234,14 +226,16 @@ class VerdictGrammarTestCase(unittest.TestCase):
         # and route failure to crash-class NEEDS_HUMAN.
         for path in AUTO_MDS:
             text = read(path)
-            start = text.find("For `make-pr`, advancement means")
-            end = text.find("Echo the URL when present", start)
-            self.assertTrue(start != -1 and end != -1, f"{path}: make-pr verify block not found")
-            block = text[start:end]
-            self.assertIn("PR_VERIFY_FAILED=0", block, path)
-            self.assertIn(") || PR_VERIFY_FAILED=1", block, path)
-            self.assertIn('stage=make-pr reason="gh probe failed at make-pr verify"', block, path)
-            self.assertNotIn("OPEN_PR_URL=$(gh pr list", block, path)
+            start = text.find("PR_VERIFY_FAILED=0\n")
+            end = text.find("```", start)
+            self.assertTrue(start != -1 and end != -1, f"{path}: make-pr verify fence not found")
+            fence = text[start:end]
+            self.assertIn(") || PR_VERIFY_FAILED=1", fence, path)
+            self.assertNotIn("OPEN_PR_URL=$(gh pr list", fence, path)
+            # The crash-class verdict for a failed probe follows the fence.
+            para = text.find("`PR_VERIFY_FAILED=1`", end)
+            after = text[para:text.find("\n\n", para)]
+            self.assertIn('stage=make-pr reason="gh probe failed at make-pr verify"', after, path)
 
 
 class ExplainReportTestCase(unittest.TestCase):

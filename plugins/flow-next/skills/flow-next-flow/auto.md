@@ -101,7 +101,7 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. This block also captures the run's ROOT CONFIG SNAPSHOT, the ONLY `config get` invocation across this file and its references: the `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses` reads derive from the snapshot file via jq, never a second config call. The gate is a **strict scalar string-enum**: backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves the run in `ready` mode, byte-for-byte unchanged (`references/backlog-mode.md` is never even read):
+Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. This block also captures the run's ROOT CONFIG SNAPSHOT, the ONLY `config get` invocation across this file and its references. The `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses` reads derive from the snapshot file via jq, never a second config call. The gate is a **strict scalar string-enum**. Backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves the run in `ready` mode, byte-for-byte unchanged (`references/backlog-mode.md` is never even read):
 
 ```bash
 # Root config snapshot: {"key":null,"value":{<merged config>}}. Persisted to a file
