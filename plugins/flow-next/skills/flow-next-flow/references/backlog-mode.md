@@ -284,11 +284,7 @@ ready-but-blocked item reaches `BLOCKED` (Phase 2) rather than collapsing into
 
 ## Phase 2 - TRIAGE (the host agent's read)
 
-Triage is **judgment, not arithmetic**. Read the selected item - its spec body (or,
-tracker-only, the issue title + body), its readiness signal, its deps - and classify
-it. The classification is **your read**; there is no flowctl field, no score, no
-regex grader, no second model. Classify by the **explicit readiness signal FIRST**,
-then by your reading of whether the spec is actually workable.
+Check the item's explicit readiness signal first, then classify its spec or issue content and dependencies.
 
 **Unready items are skipped silently.** An item with **no** explicit readiness signal
 (neither the flow `ready` flag set, nor the tracker status at the exact

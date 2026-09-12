@@ -654,7 +654,7 @@ What follows a fresh `qa_outcome` (`QA_ADVANCED=true`) is owned by `references/g
 
 **The QA skill commits its own handoff** (the `qa_verdict` receipt plus the exact bug-memory it filed) in autonomous mode (qa §6.3b), so the receipt is already on the branch and rides the eventual make-pr push. **The run adds no commit of its own here**: the agent that wrote the files commits them precisely, so the run never sweeps the tree or guesses paths.
 
-A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash: the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work/qa re-pass (out of scope here; autonomous surfaces and proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes unready the spec). `BLOCKED` from a missing app is a fresh terminal outcome, never a failed loop.
+A missing or stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), never a crash. The QA skill ran but produced no fresh verdict. Freshness is `references/qa-stage.md`'s rule; what each outcome does next is `references/gate-selection.md`'s.
 
 For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR hop must never record a strike. Capture the probe's exit status separately from the parse: a bare `gh | jq | head` pipeline returns `head`'s zero status and an empty URL when `gh` itself fails, which would turn an outage or auth failure into a healthy-no-advance strike:
 
@@ -751,7 +751,7 @@ When the run ends, print the terminal line. `stage=` names every dispatched stag
 PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 ```
 
-For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK — findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED — no local app reachable, advancing"`. Only a *missing/stale* receipt routes to the healthy-no-advance strike below.
+For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK - findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED - no local app reachable, advancing"`. Only a *missing/stale* receipt routes to the healthy-no-advance strike below.
 
 For a run that dispatched several stages (a long-horizon run, or the `--tick` chain) the ledger writes are sequential within the single-threaded run: each stage's `ADVANCED` clear completes (atomic `jq` plus `mv`) before the next stage records its own clear or strike under its own `STAGE`; there is no clear-versus-strike race. The verdict is the last dispatched stage's verdict; `stage=` names every dispatched stage in order joined by `+`; the reason names the last outcome, and for the chained tick both outcomes, the fresh `qa_outcome` and the PR URL or its absence:
 

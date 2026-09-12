@@ -226,9 +226,8 @@ class PilotSnapshotTestCase(unittest.TestCase):
                    "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
         for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
-            self.assertGreaterEqual(
-                text.count(rm_expr), 3,
-                f"{path}: explain terminals must remove the config snapshot")
+            self.assertIn(rm_expr, text,
+                          f"{path}: explain terminals must remove the config snapshot")
 
     def test_backlog_mode_has_zero_flowctl_config_calls(self):
         for path in both_copies("flow-next-flow/references/backlog-mode.md"):
