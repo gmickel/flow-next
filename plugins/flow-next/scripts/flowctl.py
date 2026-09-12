@@ -48148,6 +48148,29 @@ def _gate_command_sha256(command: str) -> str:
     return hashlib.sha256(command.encode("utf-8")).hexdigest()
 
 
+def _gate_ceiling_dirs() -> set[str]:
+    """Directories git itself refuses to walk up into (GIT_CEILING_DIRECTORIES).
+
+    Git honours this list during repository discovery, so a `.git` entry at or
+    above a ceiling was never examined by git and cannot be the reason a
+    rev-parse failed. The metadata-presence walk below stops at the same
+    boundary; otherwise it blames metadata git never looked at (a stray `.git`
+    in the system temp dir turned every outside-a-repo probe into a tooling
+    error).
+    """
+    raw = os.environ.get("GIT_CEILING_DIRECTORIES", "")
+    ceilings: set[str] = set()
+    for entry in raw.split(os.pathsep):
+        if not entry:
+            continue
+        ceilings.add(os.path.normpath(entry))
+        try:
+            ceilings.add(os.path.realpath(entry))
+        except OSError:
+            pass
+    return ceilings
+
+
 def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]:
     """Resolve current repository and HEAD without get_repo_root's fallback."""
     try:
@@ -48169,7 +48192,12 @@ def _gate_repo_and_head() -> tuple[Optional[Path], Optional[str], Optional[str]]
             # exists but is unusable - a tooling error (2+), never the quiet
             # exit-1 fallback.
             probe = Path.cwd()
+            ceilings = _gate_ceiling_dirs()
             for candidate in [probe, *probe.parents]:
+                # Mirror git: the start dir is always examined; the walk
+                # never climbs INTO a ceiling directory.
+                if candidate != probe and os.path.normpath(str(candidate)) in ceilings:
+                    break
                 try:
                     # lexists: a dangling .git symlink IS present-but-broken
                     # metadata (exists() would follow it and report absent).

@@ -222,6 +222,21 @@ class GateReceiptHarness(unittest.TestCase):
         result = self._flowctl("receipt", "--gate", gate_id, "--command", command)
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
+    def _outside_repo(self) -> tuple[Path, Path]:
+        """A cwd with NO repository, isolated from whatever sits above tempdir.
+
+        Returns (ceiling, cwd). Pin `GIT_CEILING_DIRECTORIES=ceiling` around
+        the probe: git will not climb into the ceiling, and flowctl's
+        metadata-presence walk mirrors that boundary, so a stray `.git`
+        anywhere above (a real `/tmp/.git` did this on one dev host) cannot
+        flip the not-a-repo classification. The directory is removed in
+        tearDown with the rest of the case tree.
+        """
+        ceiling = self._tmpdir_parent / "outside-root"
+        cwd = ceiling / "outside"
+        cwd.mkdir(parents=True)
+        return ceiling, cwd
+
     def _check(
         self, gate_id: str = GATE_ID, command: str = COMMAND, env: Optional[dict] = None
     ) -> subprocess.CompletedProcess:
@@ -383,12 +398,15 @@ class GateReceiptTestCase(GateReceiptHarness):
         self.assertEqual(self._check().returncode, 1)
 
     def test_non_git_repo_check_is_run_and_receipt_is_error(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            non_repo = Path(raw)
+        ceiling, non_repo = self._outside_repo()
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": str(ceiling)}):
             check = self._flowctl("check", "--gate", GATE_ID, "--command", COMMAND, cwd=non_repo)
             receipt = self._flowctl("receipt", "--gate", GATE_ID, "--command", COMMAND, cwd=non_repo)
-        self.assertEqual(check.returncode, 1)
-        self.assertEqual(receipt.returncode, 2)
+        self.assertEqual(check.returncode, 1, check.stderr or check.stdout)
+        self.assertEqual(receipt.returncode, 2, receipt.stderr or receipt.stdout)
+        # Classification, not git's wording: outside a repo is the quiet
+        # not-a-repo path, never the "metadata present but unusable" error.
+        self.assertNotIn("metadata present", receipt.stderr)
 
     def test_check_rejects_leading_space_flow_lookalike_dirt(self) -> None:
         # A path in a directory literally named " .flow" (leading space) is
@@ -765,23 +783,32 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
         self.assertIsNone(root)
         self.assertTrue(err and err.startswith("git error:"), err)
 
-        def fake_run_outside(cmd, **kwargs):
-            return subprocess.CompletedProcess(
-                cmd, 128, stdout="",
-                stderr="fatal: not a git repository (or any of the parent directories): .git",
-            )
-
+        # Both phrasings git has used for the absent-repository case. The
+        # classification keys on the stable "not a git repository" prefix,
+        # never on the tail, so a future rewording does not land here.
+        not_a_repo_phrasings = (
+            # git <= 2.54
+            "fatal: not a git repository (or any of the parent directories): .git",
+            # git 2.55
+            "fatal: not a git repository (or any parent up to mount point /)\n"
+            "Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).",
+        )
         # The genuinely-outside case must be probed from a cwd with NO .git
-        # anywhere on the upward walk (the metadata-presence check is cwd-based).
-        outside = Path(tempfile.mkdtemp()).resolve()
-        try:
-            os.chdir(outside)
-            with mock.patch.object(mod.subprocess, "run", side_effect=fake_run_outside):
-                root, head, err = mod._gate_repo_and_head()
-        finally:
-            os.chdir(self.tmpdir)
-            shutil.rmtree(outside, ignore_errors=True)
-        self.assertEqual(err, "not a git repo")
+        # on the upward walk up to the ceiling (the presence check is cwd-based).
+        ceiling, outside = self._outside_repo()
+        for phrasing in not_a_repo_phrasings:
+            def fake_run_outside(cmd, _stderr=phrasing, **kwargs):
+                return subprocess.CompletedProcess(cmd, 128, stdout="", stderr=_stderr)
+
+            try:
+                os.chdir(outside)
+                with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": str(ceiling)}), \
+                        mock.patch.object(mod.subprocess, "run", side_effect=fake_run_outside):
+                    root, head, err = mod._gate_repo_and_head()
+            finally:
+                os.chdir(self.tmpdir)
+            self.assertIsNone(root)
+            self.assertEqual(err, "not a git repo", phrasing)
 
     def test_check_broken_git_metadata_exits_2(self) -> None:
         # A .git FILE with an invalid gitdir target: git reports "not a git
@@ -874,9 +901,27 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
         self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
 
     def test_check_outside_repo_exits_1(self) -> None:
-        outside = Path(tempfile.mkdtemp()).resolve()
-        try:
+        ceiling, outside = self._outside_repo()
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": str(ceiling)}):
             result = self._flowctl("check", "--gate", GATE_ID, "--command", COMMAND, cwd=outside)
-            self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
-        finally:
-            shutil.rmtree(outside, ignore_errors=True)
+        self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
+
+    def test_check_ignores_git_metadata_above_ceiling(self) -> None:
+        # Real git, no mocks. A broken `.git` (empty dir) sits in the PARENT of
+        # cwd. With that parent pinned as a ceiling, git never examines it and
+        # reports not-a-repo; flowctl's presence walk must stop at the same
+        # boundary and classify quietly (exit 1), not blame metadata git never
+        # looked at. Without the ceiling the same tree IS present-but-unusable
+        # metadata and stays a tooling error (exit 2+).
+        parent = self._tmpdir_parent / "ceiled"
+        cwd = parent / "child"
+        cwd.mkdir(parents=True)
+        (parent / ".git").mkdir()
+        with mock.patch.dict(os.environ, {"GIT_CEILING_DIRECTORIES": str(parent)}):
+            ceiled = self._flowctl("check", "--gate", GATE_ID, "--command", COMMAND, cwd=cwd)
+        self.assertEqual(ceiled.returncode, 1, ceiled.stderr or ceiled.stdout)
+        with mock.patch.dict(os.environ):
+            os.environ.pop("GIT_CEILING_DIRECTORIES", None)
+            unceiled = self._flowctl("check", "--gate", GATE_ID, "--command", COMMAND, cwd=cwd)
+        self.assertGreaterEqual(unceiled.returncode, 2, unceiled.stderr or unceiled.stdout)
+        self.assertIn("metadata present but unusable", unceiled.stderr)
