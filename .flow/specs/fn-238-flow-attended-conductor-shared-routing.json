@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-238-flow-attended-conductor-shared-routing.md",
-  "status": "open",
+  "status": "done",
   "title": "flow: attended conductor, shared routing reference, opinionated defaults",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-11T21:25:32.706209Z"
+  "updated_at": "2026-09-12T00:07:45.853682Z"
 }
