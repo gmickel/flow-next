@@ -258,7 +258,7 @@ class ExplainReportTestCase(unittest.TestCase):
 
 class SingleStageSurfacesTestCase(unittest.TestCase):
     def test_every_single_stage_surface_carries_the_gated_clause(self):
-        for path in (*AUTO_MDS, PILOT_STUB, CONDUCT_MD):
+        for path in (*AUTO_MDS, CONDUCT_MD):
             self.assertIn("chainStages", read(path), f"{path}: gated clause missing")
 
     def test_conduct_checklist_names_the_closed_table(self):

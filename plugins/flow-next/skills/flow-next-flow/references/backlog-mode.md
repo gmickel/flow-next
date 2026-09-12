@@ -15,7 +15,7 @@ Backlog mode selects one dependency-ordered item, triages it, and drives it thro
 
 ---
 
-## Backlog-only verdict grammar (R10)
+## Backlog-only verdict grammar
 
 Backlog mode extends the common `auto.md` grammar with `ASKED`:
 
@@ -76,10 +76,10 @@ no spec-authoring engine.
 ## Phase 1 - SELECT (pull-before-scan, wide)
 
 The order is load-bearing. Readiness from the tracker must be **fresh this run**
-(R16), so the pull runs **before** the scan - a human moving a ticket out of
+so the pull runs **before** the scan - a human moving a ticket out of
 Backlog is reflected on the next run with no manual sync.
 
-### 1a - Pull/reconcile first (R16)
+### 1a - Pull/reconcile first
 
 Run an **unattended** tracker-sync pull/reconcile for linked specs, then continue.
 This applies status-sync's existing `tracker.readyState` → local `ready` projection,
@@ -92,8 +92,8 @@ any other:
 
 - **No-op when the bridge is inactive** (no `tracker.type`, no transport reachable)
   - the reconcile returns a `noop` receipt and selection proceeds on the flow facts
-  alone (R17 spec-first floor). Never a block, never a ceremony mid-loop.
-- **Autonomous-safe (R14).** The reconcile runs under the autonomy gate
+  alone (the spec-first floor). Never a block, never a ceremony mid-loop.
+- **Autonomous-safe.** The reconcile runs under the autonomy gate
   (tracker-sync Phase 0 recognizes `FLOW_AUTONOMOUS` / `mode:autonomous`): no path reaches `AskUserQuestion`; a genuine conflict / id collision /
   readyState-label failure resolves to `sync defer` (queued for the human), never a
   prompt that would stall the loop.
@@ -105,7 +105,7 @@ READY_ALL_JSON="$($FLOWCTL ready --all --json)"
 ```
 
 `ready --all` returns the flow-side open specs with **deterministic eligibility
-facts only** - `{id, ready, noPlan, readySignal, blockedBy, hasSpec}` (R8):
+facts only** - `{id, ready, noPlan, readySignal, blockedBy, hasSpec}`:
 
 - `ready` - the local `ready` boolean (after 1a's projection, a
   tracker-promoted spec reads `true`).
@@ -139,7 +139,7 @@ flowctl's deterministic tracker transport:
   branches on tracker type (Linear / GitHub / GitLab / Jira).
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
   promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
-  only**. The flow `ready` flag needs no tracker (R17). Same floor when no transport
+  only**. The flow `ready` flag needs no tracker. Same floor when no transport
   is reachable.
 - A tracker-only ticket is one with **no linked flow spec** - decided
   authoritatively by the **local sync state** (the tracker-ids the skill recorded
@@ -151,11 +151,10 @@ flowctl's deterministic tracker transport:
 
 The merged candidate set = the flow specs (1b) ∪ the tracker-only issues (1c).
 
-### 1d - Skip parked subjects (R7/R15)
+### 1d - Skip parked subjects
 
 **Skip any candidate carrying a `status=open` parked question** - it was already
-surfaced and is waiting on a human; re-picking it every run is exactly the nagging
-R3 forbids. Check the parked home that applies to the item:
+surfaced and is waiting on a human; re-picking it every run is exactly the nagging this mode exists to avoid. Check the parked home that applies to the item:
 
 - **Spec-backed** - scan the spec's `## Open Questions` for a
   `<!-- flow-next:question id=… status=open -->` anchor.
@@ -233,7 +232,7 @@ The **first** candidate in dep-order that (a) carries an explicit readiness sign
 and (b) is not parked becomes the item to triage in Phase 2. **A signalled item is
 selectable even when a dependency is unsatisfied** - it is picked and routed to
 `BLOCKED` in Phase 2's `dep-unsatisfied` branch, which **surfaces the dep wait** as a
-state-changing terminal (R10 - a live triage never ends on a no-op). Dep-blocked is
+state-changing terminal (a live triage never ends on a no-op). Dep-blocked is
 **not** a reason to skip selection; only a `status=open` **parked** question
 (already surfaced, waiting on a human - 1d) removes a candidate from the pool.
 
@@ -283,7 +282,7 @@ ready-but-blocked item reaches `BLOCKED` (Phase 2) rather than collapsing into
 
 ---
 
-## Phase 2 - TRIAGE (the host agent's read - R3, R8)
+## Phase 2 - TRIAGE (the host agent's read)
 
 Triage is **judgment, not arithmetic**. Read the selected item - its spec body (or,
 tracker-only, the issue title + body), its readiness signal, its deps - and classify
@@ -300,7 +299,7 @@ un-promoted item; it simply moves on. (Selection in 1f already filters to signal
 items, so a silent skip here is the rare case of an item that lost its signal between
 scan and triage.)
 
-For a **signalled** item, route it to exactly one class. **First match wins - and `dep-unsatisfied` is evaluated BEFORE `workable`:** a signalled item carrying an unsatisfied (acyclic) blocker is a dep-wait, never a workable advance, so it surfaces the wait (`BLOCKED`) rather than slipping into CLASSIFY/DISPATCH (1f selects it precisely so the wait gets surfaced - R10):
+For a **signalled** item, route it to exactly one class. **First match wins - and `dep-unsatisfied` is evaluated BEFORE `workable`:** a signalled item carrying an unsatisfied (acyclic) blocker is a dep-wait, never a workable advance, so it surfaces the wait (`BLOCKED`) rather than slipping into CLASSIFY/DISPATCH (1f selects it precisely so the wait gets surfaced):
 
 | Class | The agent's read | Route |
 |---|---|---|
@@ -391,14 +390,14 @@ Where the question parks depends on whether a spec exists:
   detected by scanning the issue comments) - **no spec import/flip happens until
   capture/interview later creates a spec.**
 
-**Idempotent (R7/R15).** Re-triaging the same blocked subject computes the **same**
+**Idempotent.** Re-triaging the same blocked subject computes the **same**
 anchor `id` (the hash covers stable fields only - `subjectId` + blocked-stage +
 `reasonCode` + `questionSlug`; the free prose is outside it), so comments-sync's
 marker dedup finds the existing comment and **skips the re-post**. A re-triage never
 duplicates a question. An **answered** question (Phase 1d) lets the next run
 re-triage and proceed.
 
-**Spec-first floor (R17).** When **no transport is reachable**, the question is
+**Spec-first floor.** When **no transport is reachable**, the question is
 written to the spec's `## Open Questions` **only** (when a spec exists), plus a
 one-line "enable tracker-sync to mirror" note - **never a block**. A tracker-only
 item with no transport has nowhere to park; that degrades to a `NEEDS_HUMAN` surface
@@ -411,7 +410,7 @@ durable-park semantics are owned by `auto.md`).
 
 ---
 
-## Full-auto default (R5) + the optional force-gate
+## Full-auto default + the optional force-gate
 
 **Full-auto by default.** A **workable**, **dep-clear**, **unambiguous** item is
 selected-and-advanced with **no pre-gate** - the agent never sets the ready flag
@@ -427,9 +426,9 @@ it to `ask` (Phase 3) instead of advancing - even when it is otherwise workable.
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
-# Derived from the auto.md root snapshot — NOT a config get call. The
+# Derived from the auto.md root snapshot, NOT a config get call. The
 # path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
-# Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI —
+# Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI.
 # `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
 # which the array-only `.value[]?` would silently drop.
 PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
@@ -442,7 +441,7 @@ selected item belongs to one.)
 
 ---
 
-## Deterministic, multi-tracker (R13)
+## Deterministic, multi-tracker
 
 Backlog mode's tracker surface is **only** four inline tracker-sync wrappers -
 `list-open` (enumerate the promoted lane), `list-comments` (READ one issue's
@@ -477,7 +476,7 @@ The executable mapping is fixed:
   carries both `issue.id` and `issue.identifier` in the normalized struct.
   The normalized op signature is identical for every tracker; the id/iid/key derivation is an
   adapter-internal concern, so the run still branches on **no** tracker type.
-- **Zero-setup (R17).** Tracker-sync's one-time discovery ceremony resolves and
+- **Zero-setup.** Tracker-sync's one-time discovery ceremony resolves and
   persists the destination, available capabilities, and existing auth
   (`gh`/`glab` CLI session, a registered Linear MCP, or a CI/REST env token - Jira
   is REST-token only, **no MCP**). Runtime operations
@@ -499,7 +498,7 @@ The executable mapping is fixed:
   spec only - never create one). The span is *workable spec → draft PR*, not
   *ticket → draft PR*.
 - **Never merges / never invokes land.** The terminus is `make-pr` (draft). Merge
-  stays human-gated; land owns it (R6).
+  stays human-gated; land owns it.
 - **Never sets the ready flag / never promotes.** Readiness is the human's explicit
   signal; the agent's completeness read can only *withhold*, never *force* or
   *promote*.

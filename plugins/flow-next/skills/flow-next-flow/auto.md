@@ -1,6 +1,6 @@
 # /flow-next:flow --auto - the unattended driver
 
-Read only when SKILL.md parsed the exact `--auto` token: one run selects one ready spec and drives it through `workflow.md`'s hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`, and ends with one `PILOT_VERDICT` line.
+Read only when SKILL.md parsed the exact `--auto` token. One run selects one ready spec and drives it through `workflow.md`'s hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`. Every run ends with one `PILOT_VERDICT` line.
 
 ### Chart is outside the build loop
 
@@ -66,7 +66,7 @@ Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one
 
 Retain an explicit request in the current user message to review the selected spec's design before work (for example, "flow --auto fn-12; review its design first") as host context for CLASSIFY. This intent is separate from argument parsing and `--review`, which selects a backend; it expires with this run.
 
-Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. `--auto` never accepts intent, a path, a branch, or free text: the ready flag is the consent boundary and there is no capture upstream of it. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
+Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. `--auto` never accepts intent, a path, a branch, or free text. The ready flag is the consent boundary and there is no capture upstream of it. Unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
 Use `PREV` because host argument interpolation rewrites positional tokens inside skill code blocks.
 
@@ -140,7 +140,7 @@ When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 t
 
 ## The verdict contract (read this before the phases)
 
-The `/goal` validator is transcript-blind: it reads conversation output only and never runs tools. Every hop therefore echoes its verification evidence into the output: flowctl status fields, task counts, task status transitions, and the gh-confirmed PR URL for make-pr.
+The `/goal` validator is transcript-blind. It reads conversation output only and never runs tools. Every hop therefore echoes its verification evidence into the output (flowctl status fields, task counts, task status transitions, and the gh-confirmed PR URL for make-pr).
 
 Every run ends with exactly one terminal line, the last line of the response, with nothing after it. The common ready-mode grammar is:
 
@@ -639,7 +639,7 @@ advanced=<true|false>
 
 When the work stage's output contains a `Sequential fallback:` line, repeat that line verbatim in the evidence echo.
 
-For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt**, observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**, and **the gate routes on `qa_outcome` (the four-outcome field), never on the Ralph-guard `verdict` projection**: the QA skill projects `BLOCKED->verdict=NEEDS_WORK`, so a hop that read `verdict` conflated "couldn't verify" with "found problems" and has broken this. QA is advisory; it never hard-blocks the build loop; the human reviewer plus the land gate act on its findings.
+For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt**, observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**, and **the gate routes on `qa_outcome` (the four-outcome field), never on the Ralph-guard `verdict` projection**: the QA skill projects `BLOCKED->verdict=NEEDS_WORK`, so a hop that read `verdict` conflated "couldn't verify" with "found problems" and has broken this.
 
 Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit; peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet; that is the next hop's make-pr):
 
@@ -673,14 +673,11 @@ head_sha=<receipt head_sha or ->
 advanced=<true|false>
 ```
 
-Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
-
-- `SHIP` / `NA` / `BLOCKED`: advance cleanly to make-pr (the next hop, or the next tick; BLOCKED = no local app reachable, NA = no driveable UI; both advance, since QA is the optional augmenting pass, never a wedge).
-- `NEEDS_WORK`: **still advance** (the build loop never stalls on QA). The findings ride the draft PR: make-pr surfaces them from the receipt (its §2.x QA-summary section), and the QA skill already filed them to the bug-memory track plus (when the bridge is active) the tracker comment. A `NEEDS_WORK` qa stage is an `ADVANCED` verdict, not `BLOCKED`/`NEEDS_HUMAN`.
+A fresh terminal `qa_outcome` (`QA_ADVANCED=true`) advances to make-pr on every value; `references/gate-selection.md` owns that policy and what the findings ride on.
 
 **The QA skill commits its own handoff** (the `qa_verdict` receipt plus the exact bug-memory it filed) in autonomous mode (qa §6.3b), so the receipt is already on the branch and rides the eventual make-pr push. **The run adds no commit of its own here**: the agent that wrote the files commits them precisely, so the run never sweeps the tree or guesses paths.
 
-A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash: the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work/qa re-pass (out of scope here; autonomous surfaces and proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes unready the spec). `BLOCKED` from a missing app is a fresh terminal outcome (it advances), never a failed loop.
+A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash: the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work/qa re-pass (out of scope here; autonomous surfaces and proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes unready the spec). `BLOCKED` from a missing app is a fresh terminal outcome, never a failed loop.
 
 For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR hop must never record a strike. Capture the probe's exit status separately from the parse: a bare `gh | jq | head` pipeline returns `head`'s zero status and an empty URL when `gh` itself fails, which would turn an outage or auth failure into a healthy-no-advance strike:
 
@@ -777,7 +774,7 @@ When the run ends, print the terminal line. `stage=` names every dispatched stag
 PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 ```
 
-For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK — findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED — no local app reachable, advancing"`. Every fresh terminal `qa_outcome` (SHIP/NEEDS_WORK/NA/BLOCKED) is an `ADVANCED`; QA is advisory and never `BLOCKED`/`NEEDS_HUMAN` on its own outcome; only a *missing/stale* receipt routes to the healthy-no-advance strike below.
+For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK — findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED — no local app reachable, advancing"`. Only a *missing/stale* receipt routes to the healthy-no-advance strike below.
 
 For a run that dispatched several stages (a long-horizon run, or the `--tick` chain) the ledger writes are sequential within the single-threaded run: each stage's `ADVANCED` clear completes (atomic `jq` plus `mv`) before the next stage records its own clear or strike under its own `STAGE`; there is no clear-versus-strike race. The verdict is the last dispatched stage's verdict; `stage=` names every dispatched stage in order joined by `+`; the reason names the last outcome, and for the chained tick both outcomes, the fresh `qa_outcome` and the PR URL or its absence:
 

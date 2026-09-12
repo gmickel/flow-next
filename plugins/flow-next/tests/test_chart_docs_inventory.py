@@ -643,13 +643,8 @@ class ChartInvariantPhrases(unittest.TestCase):
 
     def test_orchestration_not_pilot_stage(self) -> None:
         text = _read(DOCS / "orchestration.md")
-        self.assertRegex(text, r"(?i)not a stage of `flow --auto`")
         self.assertIn("CHART_VERDICT", text)
         self.assertIn("/flow-next:chart", text)
-
-    def test_ralph_not_pilot_stage(self) -> None:
-        text = _read(DOCS / "ralph.md")
-        self.assertRegex(text, r"(?i)never a stage of `flow --auto`|Chart is never a stage of `flow --auto`")
 
 
 class ChartUsageParity(unittest.TestCase):

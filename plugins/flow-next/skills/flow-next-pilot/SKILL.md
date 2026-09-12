@@ -21,5 +21,3 @@ Argument mapping (every pilot argument has a place; nothing is dropped):
 | `--backlog` or `--auto` (pilot's backlog switch) | `--backlog` |
 | `--dry-run` | `--explain` (`--dry-run` is also accepted for this release) |
 | `--review=<backend>`, `--research=<grep|rp>`, `--depth=<level>` | passed through unchanged |
-
-The rewritten invocation is `/flow-next:flow --auto --tick [<id>] [--backlog] [--explain] [--review=<backend>] [--research=<grep|rp>] [--depth=<level>]`. It behaves byte-for-byte as a pilot tick: one hop, one terminal `PILOT_VERDICT` line with the same grammar, the same rails, `pipeline.chainStages` still honoured under the tick. This file carries no logic of its own; the unattended driver lives in `../flow-next-flow/auto.md`.
