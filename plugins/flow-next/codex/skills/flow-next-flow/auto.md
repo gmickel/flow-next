@@ -798,9 +798,9 @@ PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2
 
 The recovery clause is part of the reason string, not a separate line: a strikeout is the one terminal a human must undo by hand, and on a repo with `tracker.readyState` armed the board cannot undo it (Phase 1 item 3), so the transcript-only driver or human reading this verdict gets the exact command. Keep it last in the reason, after `<why>`.
 
-### Backlog-mode dep-wait `BLOCKED` terminal (distinct from the strike path)
+### Backlog-mode dep-wait `BLOCKED` terminal
 
-**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** This is a SEPARATE `BLOCKED` terminal from the strike-based one above: it is a clean **dep-wait surface** (the selected, signalled item has an acyclic-but-unsatisfied blocker, Phase 1.6 / Phase 1f), **not** a no-advancement failure. It records **no strike** (the spec is healthy; it is simply waiting on a blocker the topo-sort offers first on a later run), does **not** unready the spec, and writes the `blocked` decision-log row (the dep-wait, not a strike). `<dep>` is the unsatisfied blocker id (flow `blockedBy` edge or tracker relation); name the first when several:
+**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** It writes a `blocked` decision-log row, records no strike, preserves readiness, and names the first unsatisfied dependency (`<dep>`, a flow `blockedBy` edge or a tracker relation).
 
 ```bash
 # No ledger write; a dep wait is healthy, not a strike. STAGE is the stage the

@@ -75,7 +75,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 ### Live QA stage
 
-`pipeline.qa` - **off by default**; the skill is always available. `flowctl config set pipeline.qa on` runs one live pass on every spec before make-pr (attended and `--auto`); `flowctl config set pipeline.qa auto` makes `/flow-next:flow` run it, attended or under `--auto`, only for a drivable spec with a startable target and record `skipped(reason)` otherwise. Details: [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md).
+`pipeline.qa` - **off by default**; the skill is always available. Set it with `flowctl config set pipeline.qa <off|on|auto>`; what each value does is in [`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md). Details: [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md).
 
 - **Automates away:** driving the running app like a real user against the spec's acceptance criteria, and filing evidence-backed findings before a human opens the PR.
 - **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a stage of `flow --auto` it sits between all-tasks-done and make-pr, so with `on` every spec pays it.

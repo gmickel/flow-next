@@ -494,8 +494,8 @@ Available questions (include only if corresponding config is unset):
   "question": "Run a live QA pass before the PR? /flow-next:qa drives the running app like a real user against the spec's acceptance criteria and files evidence-backed findings. It needs a startable target (dev server, deploy URL, or running instance) and a browser driver. Rule: skills/flow-next-flow/references/gate-selection.md",
   "options": [
     {"label": "off (Recommended when nothing runs in a browser yet)", "description": "QA runs only when you invoke /flow-next:qa <spec> yourself. Enable later: flowctl config set pipeline.qa on|auto"},
-    {"label": "on", "description": "Every spec gets one live pass at all-tasks-done, before make-pr (attended flow and flow --auto)"},
-    {"label": "auto", "description": "/flow-next:flow, attended or under --auto, runs the live pass only for specs whose acceptance is UI behaviour on a drivable surface with a startable target; every other spec records skipped(reason) and advances"}
+    {"label": "on", "description": "One live pass per spec at all-tasks-done, before make-pr (rule: the flow skill's gate-selection reference)"},
+    {"label": "auto", "description": "The live pass only where the flow skill's gate-selection reference selects it; other specs record skipped(reason) and advance"}
   ],
   "multiSelect": false
 }
@@ -970,7 +970,7 @@ Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "s
 Notes:
 - Plugin updates need no per-repo action, on any host — nothing was copied, so nothing goes stale. Re-run /flow-next:setup only when setup says the snippet schema bumped, or to change configuration / seed files.
 - Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor, Grok, and OpenCode — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
-- Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:flow (attended and --auto) run one live /flow-next:qa pass over the finished build before make-pr on every spec; `flowctl config set pipeline.qa auto` makes /flow-next:flow, attended or under --auto, run it only for specs whose acceptance is UI behaviour on a drivable surface with a startable target and record skipped(reason) otherwise. Needs a running app plus a browser driver
+- Live QA stage: off by default. Change it with `flowctl config set pipeline.qa <off|on|auto>`; what each value does is in the flow skill's gate-selection reference (`skills/flow-next-flow/references/gate-selection.md`). Needs a running app plus a browser driver
 - Stage chaining (deprecated, removed with the /flow-next:pilot alias next release): off by default. `flowctl config set pipeline.chainStages on` makes /flow-next:flow --auto --tick (and the pilot alias) run make-pr in the same tick as a fresh terminal qa verdict; a long-horizon /flow-next:flow --auto run already runs the two as consecutive hops and ignores the key with one notice
 - Land patience after review: off by default. `flowctl config set land.patienceMinutesAfterReview <minutes>` makes /flow-next:land's silence gate measure its patience window from the head-current automated review instead of the last push (silence signal only; null and 0 keep today's push-anchored wait)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
