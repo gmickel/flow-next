@@ -237,5 +237,26 @@ class CaptureSavedSpecContract(unittest.TestCase):
         self.assertNotIn("`approve and write`", saved_review)
 
 
+class CodexEditorQuestionPlacement(unittest.TestCase):
+    def test_negative_footer_is_not_an_ask_anchor(self) -> None:
+        source = _read(REPO_ROOT / "scripts" / "sync-codex.sh")
+        function = "def is_negative_context(line):" + source.split(
+            "def is_negative_context(line):", 1
+        )[1].split("\ndef is_table_line", 1)[0]
+        namespace = {"re": re}
+        exec(compile(function, "sync-codex:is_negative_context", "exec"), namespace)
+        negative = namespace["is_negative_context"]
+        self.assertTrue(negative("Informational only — never a plain-text numbered prompt."))
+        self.assertFalse(negative("Use `plain-text numbered prompt` for one short editor question:"))
+
+    def test_mirror_instruction_belongs_to_saved_editor_offer(self) -> None:
+        mirror = _read(PLUGIN / "codex" / "skills" / "flow-next-capture" / "workflow.md")
+        instruction = "**Ask the user via plain text.**"
+        self.assertEqual(mirror.count(instruction), 1)
+        editor = mirror[mirror.index("### 5.6a"):mirror.index("### 5.7")]
+        self.assertIn(instruction, editor)
+        self.assertNotIn(instruction, mirror[mirror.index("### Biz-suggestion footer"):])
+
+
 if __name__ == "__main__":
     unittest.main()

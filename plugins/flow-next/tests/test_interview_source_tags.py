@@ -66,7 +66,7 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 # workflow.md <-> write-back.md pair only, by STRATEGY_LONG_FORM below.
 SHARED_DEFINITIONS = (
     "User intent restated in spec language (semantic equivalence; no new constraints introduced)",
-    "Agent fill-in (most-scrutinized; user must confirm at read-back)",
+    "Agent fill-in",  # Shared provenance; capture/refine approval timing differs.
     "Derived from `STRATEGY.md` content",
 )
 
@@ -318,8 +318,9 @@ class InterviewSourceTagsTest(unittest.TestCase):
         (its files are not editable here per fn-84.2), so both sides are pinned
         to capture's middot form.
         """
+        self.assertIn("[docs/read-back.md](../../docs/read-back.md)", self.capture_workflow)
         for label, text in (
-            ("capture/workflow.md", self.capture_workflow),
+            ("docs/read-back.md", read(PLUGIN / "docs" / "read-back.md")),
             ("interview/references/write-back.md", self.write_back),
         ):
             with self.subTest(file=label):

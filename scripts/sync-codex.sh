@@ -1517,6 +1517,9 @@ def is_negative_context(line):
         return True
     if re.search(r'without (?:a |an |any )?(?:`?plain-text numbered prompt`?|prompt) call', line):
         return True
+    # Informational footers are not live questions.
+    if re.search(r'\bnever (?:a|an) `?plain-text numbered prompt`?', line, re.IGNORECASE):
+        return True
     # Reference-style "It is not / X is not ..." bullets. These describe
     # what the prompt isn't — not a live ask site.
     if re.search(r'(?:It|This|That) is not\b', line) and 'plain-text numbered prompt' in line:

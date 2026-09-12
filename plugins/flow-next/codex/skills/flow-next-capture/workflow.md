@@ -414,7 +414,9 @@ When the sentinel prints, read [references/mark-ready.md](references/mark-ready.
 
 This handling runs from §5.6a after the spec has been saved. Open the actual spec file, never the temporary synthesis copy. When the editor is chosen, wait for the user to return, then re-read the full saved spec before any subsequent operation. Preserve user edits; do not overwrite them from the temporary file or infer that an edit is approval to execute.
 
-For a correction supplied in chat, append the user's requirement or rejection verbatim to `## Conversation Evidence` first, then edit only the affected sections through the normal spec write plumbing. Retain the source-tag taxonomy, recheck findability, and show only the diff. Re-judge the recommended route when the criteria changed. The full spec prints only on request.
+For a correction supplied in chat, append the user's requirement or rejection verbatim to `## Conversation Evidence` first. Before agent-authored replacement, apply the source-tag checks, Phase 3 material-question checks, and the applicable §5.0 strategy contradiction check to the corrected body, then edit only the affected sections through the normal spec write plumbing.
+
+After either editor changes or chat corrections, recheck source-tag findability, recompute the tally, and re-judge the recommended route when criteria changed. Preserve the user's substantive edits; unsupported source tags use the existing taxonomy rather than claiming user approval. Direct editor changes also pass the applicable §5.0 strategy check before tracker/readiness or other follow-ups: preserve the saved file and surface a new conflict rather than rolling it back. Show only the diff and updated tally; the full spec prints only on request.
 
 There is no re-approval loop. `continue` leaves the saved spec in place; stopping the review also leaves it in place. Deletion needs an explicit request. A later capture invocation still follows the duplicate/rewrite checks rather than minting a replacement for an editor round.
 
@@ -535,7 +537,9 @@ If a future enhancement adds a `--commit` flag, Phase 5 would gain a "stage + co
 
 After the spec body is written, read [docs/read-back.md](../../docs/flow-next/read-back.md) for capture's saved-spec summary and editor offer. Print the title, criteria count, source tally, relevant warnings, recommended route, and actual spec path before asking. Include the rewrite diff when applicable; a full body prints only on request. For a split, show one summary per saved spec and offer the editor once for the set after all bodies and edges exist.
 
-Use one short `plain-text numbered prompt`: `open in editor` opens the saved file(s); `continue` leaves them as written. Free text requests a correction. Apply §4.3 to editor/correction rounds, then continue the remaining authorized follow-ups without generic re-approval. Skip an already-answered editor offer, and honor a request to leave the spec for later review. The summary itself is always reported.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Use `plain-text numbered prompt` for one short editor question: `open in editor` opens the saved file(s); `continue` leaves them as written. Free text requests a correction. Apply §4.3 to editor/correction rounds, then continue the remaining authorized follow-ups without generic re-approval. Skip an already-answered editor offer, and honor a request to leave the spec for later review. The summary itself is always reported.
 
 Saving or viewing the spec does not authorize marking ready, implementation, a commit, or an external write. Existing explicit instructions and configured tracker authority remain in force; do not manufacture a new confirmation for them.
 
@@ -664,8 +668,6 @@ business layer.
 EOF
 fi
 ```
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:refine --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a plain-text numbered prompt.
 

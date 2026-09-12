@@ -10,8 +10,8 @@ Path-specific lookups live one level deep in `references/*.md` and are loaded on
 | **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST |
 | **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using the canonical template |
 | **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict |
-| **4 - Read-back loop** | Print the compact summary, then one ask (shared contract in `docs/read-back.md`); obtain approval |
-| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec |
+| **4 - Prepare the write** | Check source tags, resolve any split choice, snapshot readiness |
+| **5 — Write via flowctl** | Save the spec, then offer the editor and separate consented follow-ups |
 | **6 - Suggested next step** | Print footer with the `Recommended next:` line from the shared routing reference |
 
 ---
