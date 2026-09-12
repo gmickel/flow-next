@@ -364,7 +364,7 @@ A `SELECTED_COUNT` of 0 (empty `SUBJECT_ID`, no candidate survived 1f/1g) falls 
 
 Done when: `SELECTED_COUNT` is 0 or 1, `SPEC_PATH` / `HAS_SPEC` are resolved for the picked subject, and no dispatch happened under `--explain`.
 
-Fall through to the existing terminal split **only when the pool is genuinely empty of a selectable candidate**; verbatim, backlog mode adds neither verdict:
+When no candidate is selectable, use the terminal split below:
 
 - **`NO_WORK`**: no signalled, unparked candidate exists at all (and no dep wait to report):
 
@@ -458,7 +458,7 @@ PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-top
 CHAIN_STAGES="$(jq -r '.value.pipeline.chainStages' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR => off (fail closed)
 if [ "${CHAIN_STAGES:-}" = "on" ]; then
   if [ "${AUTO_TICK:-0}" = "1" ]; then
-    CHAIN_ENABLED=1   # ONLY the literal `on` chains, and only under --tick
+    CHAIN_ENABLED=1
   else
     echo "pipeline.chainStages is deprecated and ignored under flow --auto (hops run back to back); it still applies under --tick and is removed with the pilot alias next release" >&2
   fi
@@ -566,7 +566,7 @@ Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level
 
 - `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`. Work re-anchors the owner without minting or automatic plan-review; additional or intentional tasks follow the planned route.
+- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
@@ -652,7 +652,7 @@ advanced=<true|false>
 
 What follows a fresh `qa_outcome` (`QA_ADVANCED=true`) is owned by `references/gate-selection.md`.
 
-**The QA skill commits its own handoff** (the `qa_verdict` receipt plus the exact bug-memory it filed) in autonomous mode (qa §6.3b), so the receipt is already on the branch and rides the eventual make-pr push. **The run adds no commit of its own here**: the agent that wrote the files commits them precisely, so the run never sweeps the tree or guesses paths.
+QA commits its receipt and filed bug-memory entries before returning (§6.3b). Flow adds no commit.
 
 A missing or stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), never a crash. The QA skill ran but produced no fresh verdict. Freshness is `references/qa-stage.md`'s rule; what each outcome does next is `references/gate-selection.md`'s.
 
