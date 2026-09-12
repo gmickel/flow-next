@@ -204,7 +204,7 @@ class MergeDestinationTest(unittest.TestCase):
                               fence("flow-next-land/workflow.md", "MERGE_VERDICT=skipped")))
             result = self.run_fence(code, env=common, before=before,
                                     after='printf "%s|%s|%s" "$CANDIDATE_SPECS" "$MERGE_VERDICT" "$(pwd -P)"', cwd=root)
-            self.assertEqual((result.returncode, result.stdout), (0, f"{spec}|green|{root}"), result.stderr)
+            self.assertEqual((result.returncode, result.stdout), (0, f"{spec}|green|{root.resolve()}"), result.stderr)
             self.assertEqual(run("git", "branch", "--show-current"), "feature")
             self.assertEqual(run("git", "branch", "--show-current", cwd=base), "main")
             scope_code = fence("flow-next-land/references/flow-handoff.md", "LAND_SCOPE_FAILED=")
@@ -230,6 +230,92 @@ class MergeDestinationTest(unittest.TestCase):
                                       after='printf unexpected-continuation', cwd=root)
             self.assertNotEqual(rejected.returncode, 0)
             self.assertEqual((base / "user-work.txt").read_text(), "preserve me")
+
+    def test_handoff_updates_only_the_verified_source_branch(self):
+        code = fence("flow-next-land/references/flow-handoff.md", "LAND_SCOPE_FAILED=")
+        cases = (("main", "behind", "OPEN", "0", False),
+                 ("other", "current", "OPEN", "0", False),
+                 ("detached", "current", "OPEN", "0", False),
+                 ("feature", "behind", "OPEN", "0", True),
+                 ("feature", "current", "OPEN", "0", True),
+                 ("feature", "diverged", "OPEN", "0", False),
+                 ("feature", "behind", "OPEN", "1", False),
+                 ("feature", "current", "OPEN", "1", True),
+                 ("main", "behind", "MERGED", "0", True))
+        for branch, position, state, dry_run, allowed in cases:
+            with self.subTest(branch=branch, position=position, state=state, dry_run=dry_run), \
+                    tempfile.TemporaryDirectory() as temp:
+                root = Path(temp) / "source"
+                origin = Path(temp) / "origin.git"
+                base = Path(temp) / "base"
+                claim = Path(temp) / "claim"
+                root.mkdir()
+                claim.mkdir()
+                (claim / "pid").write_text("fixture")
+                env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+                def git(*args, cwd=root, git_env=env):
+                    return subprocess.run(["git", *args], cwd=cwd, env=git_env,
+                                          capture_output=True, text=True, check=True).stdout.strip()
+
+                git("init", "-b", "main")
+                git("config", "user.email", "test@example.invalid")
+                git("config", "user.name", "Test")
+                git("commit", "--allow-empty", "-m", "base")
+                base_sha = git("rev-parse", "HEAD")
+                git("checkout", "-b", "pr-tip")
+                git("commit", "--allow-empty", "-m", "PR head")
+                head = git("rev-parse", "HEAD")
+                git("init", "--bare", str(origin))
+                git("remote", "add", "origin", str(origin))
+                git("push", "origin", "HEAD:refs/heads/feature")
+                git("branch", "feature", base_sha if position != "current" else head)
+                if branch == "detached":
+                    git("checkout", "--detach", head)
+                elif branch == "other":
+                    git("checkout", "-b", "other", head)
+                else:
+                    git("checkout", branch)
+                if position == "diverged":
+                    git("commit", "--allow-empty", "-m", "local work")
+                if branch == "main":
+                    base = root
+                else:
+                    git("worktree", "add", str(base), "main")
+                # Rejecting a foreign source must preserve its local work as well as refs.
+                if branch in ("other", "detached"):
+                    (root / "user-work.txt").write_text("preserve me")
+                refs_before = git("show-ref", "--heads")
+                head_before = git("rev-parse", "HEAD")
+                branch_before = git("symbolic-ref", "-q", "HEAD") if branch != "detached" else ""
+                fixture = {"url": "https://github.com/test/repo/pull/1", "number": 1, "state": state,
+                           "headRefName": "feature", "headRefOid": head, "baseRefName": "main",
+                           "isCrossRepository": False}
+                result = self.run_fence(code, env={**env, "FLOWCTL": "flowctl", "REPO_ROOT": str(root),
+                    "LAND_BASE_ROOT": str(base), "LAND_SCOPE_SPEC": "fn-1", "LAND_SCOPE_PR": fixture["url"],
+                    "LAND_AUTHORIZED": "1", "LAND_DRY_RUN": dry_run, "PR_FIXTURE": json.dumps(fixture),
+                    "TICK_LOCK": str(claim)}, before='''
+                    flowctl() { printf '{"branch_name":"feature"}'; }
+                    gh() {
+                      if [ "$1 $2" = "repo view" ]; then printf https://github.com/test/repo;
+                      else printf "%s" "$PR_FIXTURE"; fi
+                    }''', after='printf continued', cwd=root)
+                self.assertEqual(git("rev-parse", "refs/heads/main"), base_sha, result.stdout + result.stderr)
+                self.assertEqual(git("branch", "--show-current"), "" if branch == "detached" else branch)
+                self.assertEqual(result.returncode == 0, allowed, result.stdout + result.stderr)
+                self.assertEqual("continued" in result.stdout, allowed)
+                if allowed and state == "OPEN":
+                    self.assertEqual(git("rev-parse", "refs/heads/feature"), head)
+                else:
+                    self.assertEqual(git("show-ref", "--heads"), refs_before)
+                    self.assertEqual(git("rev-parse", "HEAD"), head_before)
+                    if branch_before:
+                        self.assertEqual(git("symbolic-ref", "HEAD"), branch_before)
+                if not allowed:
+                    self.assertIn("NEEDS_HUMAN", result.stdout)
+                    self.assertEqual(claim.exists(), dry_run == "1")
+                if branch in ("other", "detached"):
+                    self.assertEqual((root / "user-work.txt").read_text(), "preserve me")
 
 
 if __name__ == "__main__":

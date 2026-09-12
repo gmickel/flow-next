@@ -20,7 +20,7 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 
 1. The item this conversation last touched: the spec capture wrote, the task work closed, the PR make-pr opened. Capture's `Recommended next:` line names the step.
 2. The spec whose `branch_name` matches the current branch.
-3. Intent in the conversation that no spec captures yet. Ask whether to capture it into 1..n specs; a "yes" routes to `/flow-next:capture from:flow`, a "no" continues down the ladder.
+3. Intent in the conversation that no spec captures yet. Ask whether to capture it into 1..n specs; a "yes" routes to `$flow-next-capture from:flow`, a "no" continues down the ladder.
 4. The next open spec in `.flow`, by your judgement of readiness, order, and dependencies; `$FLOWCTL next` and the `ready` flag are hints. Several equally plausible candidates are an inline pick, never a guess.
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
@@ -50,7 +50,7 @@ $FLOWCTL spec clear-no-plan <spec-id> --json    # a positive plan signal was pre
 Invoke the stage skill by name with its normal arguments; pass `--review=<backend>` through when `REVIEW_OVERRIDE` is set. Flow never copies a stage's steps inline. Stage-specific notes:
 
 - **Capture under flow** is invoked with the exact token `from:flow`. Capture then applies `references/plan-vs-no-plan.md` itself, sets `no_plan` when the rule resolves to direct, and writes no placeholder requirement-coverage table on that route. The capture request authorizes saving the spec; capture then offers the saved file for review. Honor a request to capture or review only: neither saving nor editor continuation authorizes work. A previously authorized implementation route may continue after the capture follow-up.
-- **Work** runs `/flow-next:work <spec-id>`; with `no_plan` recorded the fork is pre-answered and never asks.
+- **Work** runs `$flow-next-work <spec-id>`; with `no_plan` recorded the fork is pre-answered and never asks.
 - **QA** runs per `references/gate-selection.md`. Under `pipeline.qa=auto`, judge drivability from the acceptance criteria and the repo before dispatching; a skip is recorded, never silent.
 - **Make-pr** ends a run from intent unless the selected merge destination or current explicit scoped consent authorizes continuation.
 - **Existing PR / land** follows `references/tail.md`: obtain current consent when required, bind one spec/PR, invoke one land tick, and observe its result. Explicit review-only convergence remains available without landing consent.

@@ -505,6 +505,40 @@ for nf in \
   rm -f "${nf}.bak"
 done
 
+# Flow's reached dispatch surfaces include inline calls, tracker command blocks,
+# and dispatch comments. Slash-form shell allowlist identities are not calls.
+python3 - "$CODEX_DIR/skills/flow-next-flow" <<'FLOW_DISPATCH_TRANSFORM'
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+targets = {
+    "auto.md": {"land", "tracker-sync", "make-pr"},
+    "workflow.md": {"capture", "work"},
+    "references/tail.md": {"land"},
+    "references/route-matrix.md": {"land", "refine", "visual"},
+    "references/plan-vs-no-plan.md": {"refine"},
+    "references/gate-selection.md": {"plan-review", "qa", "spec-completion-review"},
+    "references/backlog-mode.md": {"land", "capture", "refine"},
+}
+for relative, names in targets.items():
+    path = root / relative
+    pattern = re.compile(r"`/flow-next:(" + "|".join(sorted(names)) + r")(?=[ `])")
+    lines = []
+    for line in path.read_text().splitlines(keepends=True):
+        if "DISPATCH_TARGET=" not in line:
+            line = pattern.sub(r"`$flow-next-\1", line)
+        if re.match(r"\s*/flow-next:tracker-sync\s", line) or re.match(
+            r"\s*# -> dispatch\b", line
+        ):
+            line = line.replace("/flow-next:tracker-sync", "$flow-next-tracker-sync")
+        if relative == "references/tail.md":
+            line = line.replace("via the Skill tool", "by reading and following its SKILL.md")
+        lines.append(line)
+    path.write_text("".join(lines))
+FLOW_DISPATCH_TRANSFORM
+
 # --- STRUCTURAL: Task tool → agent invocation ---
 
 # flow-next-work: phases.md + its reached-path references (wave-join.md,
@@ -2420,6 +2454,58 @@ if [ "$closer_literal_fails" != "0" ]; then
   errors=$((errors + closer_literal_fails))
 else
   echo -e "  ${GREEN}✓${NC} Closer-roster literals all appear in rewritten \$flow-next- form"
+fi
+
+# Guard the reached flow command inventory against canonical source. Compare
+# invocation tokens and arguments, not prose, and require installed skill targets.
+# The few passive references and shell allowlist identities keep slash spelling.
+if ! python3 - "$SRC_SKILLS/flow-next-flow" "$CODEX_DIR/skills/flow-next-flow" <<'FLOW_DISPATCH_GUARD'
+import re
+import sys
+from pathlib import Path
+
+source, mirror = map(Path, sys.argv[1:])
+passive = {
+    ("references/route-matrix.md", "flow"),
+    ("references/gate-selection.md", "impl-review"),
+}
+inline = re.compile(r"`(/flow-next:|\$flow-next-)([a-z-]+)([^`]*)`")
+
+def calls(path, relative):
+    result = []
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        for prefix, skill, arguments in inline.findall(line):
+            if (relative, skill) in passive:
+                continue
+            if relative == "auto.md" and skill == "make-pr" and not arguments and "DISPATCH_TARGET=" in line:
+                continue  # parenthetical allowlist identity, not a dispatch
+            result.append((prefix, skill, arguments, number))
+        if re.match(r"\s*(?:/flow-next:|\$flow-next-)tracker-sync\s", line) or re.match(
+            r"\s*# -> dispatch\b", line
+        ):
+            match = re.search(r"(/flow-next:|\$flow-next-)(tracker-sync)(.*)", line)
+            if match:
+                result.append((*match.groups(), number))
+    return result
+
+for path in source.rglob("*.md"):
+    relative = path.relative_to(source).as_posix()
+    expected = calls(path, relative)
+    actual = calls(mirror / relative, relative)
+    if [(s, a) for _, s, a, _ in expected] != [(s, a) for _, s, a, _ in actual]:
+        raise SystemExit(f"flow dispatch inventory differs: {relative}")
+    for prefix, skill, _, number in actual:
+        if prefix != "$flow-next-":
+            raise SystemExit(f"unrewritten flow dispatch: {relative}:{number}: {skill}")
+        if not (mirror.parent / f"flow-next-{skill}" / "SKILL.md").is_file():
+            raise SystemExit(f"missing flow dispatch target: {relative}:{number}: {skill}")
+    if relative == "references/tail.md" and "Skill tool" in (mirror / relative).read_text():
+        raise SystemExit("Codex land handoff still requires the Skill tool")
+FLOW_DISPATCH_GUARD
+then
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Flow dispatches use reachable Codex skills"
 fi
 
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten

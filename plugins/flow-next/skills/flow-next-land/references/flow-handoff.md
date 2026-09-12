@@ -20,7 +20,9 @@ if [ -n "${LAND_SCOPE_SPEC:-}" ] || [ -n "${LAND_SCOPE_PR:-}" ]; then
     SCOPE_BASE="$(printf '%s\n' "$SCOPE_PR_JSON" | jq -r '.baseRefName')"
     SCOPE_HEAD="$(printf '%s\n' "$SCOPE_PR_JSON" | jq -r '.headRefOid')"
     if [ "$LAND_SCOPE_FAILED" = 0 ] && [ "$(printf '%s\n' "$SCOPE_PR_JSON" | jq -r '.state')" = OPEN ]; then
-      if ! [[ "$SCOPE_HEAD" =~ ^[0-9a-f]{40,64}$ ]]; then
+      if [ "$(git -C "$REPO_ROOT" symbolic-ref -q HEAD)" != "refs/heads/$SCOPE_BRANCH" ]; then
+        LAND_SCOPE_FAILED=1
+      elif ! [[ "$SCOPE_HEAD" =~ ^[0-9a-f]{40,64}$ ]]; then
         LAND_SCOPE_FAILED=1
       elif [ "$(git -C "$REPO_ROOT" rev-parse HEAD)" != "$SCOPE_HEAD" ]; then
         if [ "${LAND_DRY_RUN:-0}" = 1 ]; then

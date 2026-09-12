@@ -14,13 +14,13 @@ Runs per `review.backend` or the invocation's `--review=<backend>` flag; `/flow-
 
 ## Design review
 
-`/flow-next:plan-review <spec-id>` runs on an explicit request or when the route names design risk. It reviews a spec with zero tasks; task decomposition is never a prerequisite.
+`$flow-next-plan-review <spec-id>` runs on an explicit request or when the route names design risk. It reviews a spec with zero tasks; task decomposition is never a prerequisite.
 
 ## Live QA
 
 `pipeline.qa` is a string enum `off | on | auto`; any other value is `off`.
 
-- `off`: QA runs only when the user invokes `/flow-next:qa`.
+- `off`: QA runs only when the user invokes `$flow-next-qa`.
 - `on`: QA runs at all-tasks-done, before make-pr, on every spec.
 - `auto`: QA runs at all-tasks-done when the spec's acceptance describes UI behaviour on a drivable surface **and** a target can be started (a documented dev server, a deploy URL, or a running instance the QA skill can reach). Otherwise the stage records `skipped(config: pipeline.qa=auto: <no UI-observable criteria | no drivable surface | no startable target>)` and the route advances.
 
@@ -28,7 +28,7 @@ Whether a spec is drivable is judgment, read from the acceptance criteria and th
 
 ## Completion review
 
-Unchanged single-task policy: with one minted task whose acceptance is the whole spec, the per-task implementation review is the integration check and completion review records `skipped(policy: single-task, per-task SHIP covers spec surface)`. Multi-task plans run `/flow-next:spec-completion-review` as configured.
+Unchanged single-task policy: with one minted task whose acceptance is the whole spec, the per-task implementation review is the integration check and completion review records `skipped(policy: single-task, per-task SHIP covers spec surface)`. Multi-task plans run `$flow-next-spec-completion-review` as configured.
 
 ## Receipts
 

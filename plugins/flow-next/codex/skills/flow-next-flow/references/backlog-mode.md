@@ -33,7 +33,7 @@ Stage values add `triage` / `ask` to the common set.
   (`BLOCKED` here is the ready-but-dep-unsatisfied state-changing dep-wait surface).
 - **`NO_WORK` and `DEFERRED_TO_LAND` stay VERBATIM** - drivers grep
   `DEFERRED_TO_LAND` to route an all-done-with-open-PR spec to
-  `/flow-next:land`, and `/goal` / `/loop` stop clauses key on `NO_WORK`.
+  `$flow-next-land`, and `/goal` / `/loop` stop clauses key on `NO_WORK`.
   Coalescing either into generic idle breaks the land hand-off or loop stop.
 - **No `PROMOTED` verb** - the agent never sets the ready flag; promotion is the
   human's board act.
@@ -84,7 +84,7 @@ so a tracker-promoted spec reads `ready: true` from `flowctl ready --all` in 1b 
 any other:
 
 ```text
-/flow-next:tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1
+$flow-next-tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1
 ```
 
 - **No-op when the bridge is inactive** (no `tracker.type`, no transport reachable)
@@ -126,7 +126,7 @@ to `flowctl specs`. The inline tracker-sync wrapper supplies this half through
 flowctl's deterministic tracker transport:
 
 ```text
-/flow-next:tracker-sync list-open mode:autonomous
+$flow-next-tracker-sync list-open mode:autonomous
 ```
 
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
@@ -187,7 +187,7 @@ edges come from **two** sources and feed **one** existing sorter:
   blocked, `to` = blocker):
 
   ```text
-  /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
+  $flow-next-tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
   ```
 
   **The `<tracker-id>` passed is the candidate's `listOpenIssues` normalized
@@ -341,8 +341,8 @@ later, on their own time, via the spec or the tracker.
 
 Backlog mode **does not author specs.** Spec authoring (`capture`,
 conversation→spec; `interview`, interactive Q&A) is human-gated and upstream. A
-ticket without a workable spec is **surfaced as a gap** - "run `/flow-next:capture`
-or `/flow-next:refine`" - **never auto-written**. An agent inventing scope from a
+ticket without a workable spec is **surfaced as a gap** - "run `$flow-next-capture`
+or `$flow-next-refine`" - **never auto-written**. An agent inventing scope from a
 one-line ticket is exactly the slop the valve exists to prevent.
 
 The question is posted through tracker-sync's inline `question` wrapper. The skill
@@ -351,7 +351,7 @@ transport, marker dedup, and the normalized answer readback (tracker-sync steps.
 Phase 7 - backlog mode invokes it, never re-implements it):
 
 ```text
-/flow-next:tracker-sync question <spec-id | tracker-id> mode:autonomous
+$flow-next-tracker-sync question <spec-id | tracker-id> mode:autonomous
 ```
 
 For a **tracker-only** subject the `<tracker-id>` is the candidate's `list-open`
@@ -375,7 +375,7 @@ Where the question parks depends on whether a spec exists:
 - **Tracker-only** (`question <tracker-id>`, a promoted ticket with no flow spec) -
   there is no spec to anchor in, so the question lives in the **tracker comment
   ALONE**. The surfaced gap is always *"this promoted ticket has no flow spec - run
-  `/flow-next:capture` or `/flow-next:refine`"*. **Backlog mode never writes a
+  `$flow-next-capture` or `$flow-next-refine`"*. **Backlog mode never writes a
   spec stub** (that is the forbidden authoring). Its parked/answered state lives in
   the tracker (the `status=open` anchor + a matching `<!-- flow-next:answer id=… -->`,
   detected by scanning the issue comments) - **no spec import/flip happens until
