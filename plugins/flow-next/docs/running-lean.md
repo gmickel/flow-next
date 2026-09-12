@@ -1,6 +1,6 @@
 # Running lean - operating profiles
 
-For a ready cohesive spec and a capable coding agent, the recommended route is **spec -> `/flow-next:work <id> --no-plan`**. Add task planning when dependencies, ownership, staged delivery or execution constraints need decomposition. [Pipeline variations](pipeline-variations.md#no-plan-route) separates that choice from refinement and verification; configured gates still apply.
+For a ready cohesive spec and a capable coding agent, the recommended route is **spec -> `/flow-next:work <id> --no-plan`**. Add task planning only on a positive signal, where a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier. Dependencies, execution constraints, size, and risk alone do not trigger planning. [Pipeline variations](pipeline-variations.md#no-plan-route) separates that choice from refinement and verification; configured gates still apply.
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
 

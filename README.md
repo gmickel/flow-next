@@ -39,7 +39,7 @@ The [evidence page](https://flow-next.dev/project/evidence/) covers the measured
 Decide what to build, build it, and verify the result. Describe the workflow in plain language or invoke its skills directly. The host agent runs the process and adapts it to the work.
 
 **Everything reaches your queue already reviewed.**
-Configured review checks the design or implementation and records its verdict; a task cannot be marked done without evidence JSON. Review settings, completion-review policy and opt-in QA apply on both direct and planned routes.
+Configured review checks the design or implementation and records its verdict; the work contract closes each task through `flowctl done` with its evidence JSON (commits, tests, PRs), which the receipt records. Review settings, completion-review policy and opt-in QA apply on both direct and planned routes.
 
 **Open a PR that already makes its argument.**
 The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
@@ -71,7 +71,7 @@ The same specs, gates, receipts, and task state across harnesses. In a harness t
 | Tenet | What it means |
 |---|---|
 | **Spec-driven** | Intent survives the chat. The unit of work is the spec, never the ticket, the transcript, or the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. Acceptance criteria are prose judged against evidence (unlike ATDD, where a criterion only counts once it exists as an executable test). |
-| **Context-fit planning** | Optional task decomposition for dependencies, separate ownership, staged delivery or execution constraints. A ready cohesive spec can run through work with one owner. |
+| **Context-fit planning** | Optional task decomposition on a positive signal, where a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier. Dependencies, execution constraints, size, and risk alone do not trigger planning. A ready cohesive spec can run through work with one owner. |
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
 | **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor / Claude) reviews the design or implementation when configured. Different models make different mistakes, and the disagreement surface is where the gaps live. |
 | **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task, never narration. |
@@ -177,7 +177,7 @@ Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bu
 /flow-next:resolve-pr <PR#>          # 4. Fetch review threads → triage → resolve
 ```
 
-Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal: you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with `/flow-next:refine`; when the spec names a library or API the repo does not use yet, `refine --scope=research` reads the docs first. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto` for specs with a drivable surface) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
+Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal, where you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with `/flow-next:refine`; when the spec names a library or API the repo does not use yet, `refine --scope=research` reads the docs first. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto`, which runs QA only when the acceptance criteria are UI-observable, the surface is drivable, and a target can be started, and records `skipped(reason)` when any of the three is absent) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
 
 ### After every update
 
