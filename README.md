@@ -168,13 +168,16 @@ Use installation commands in your terminal or the host's plugin interface as sho
 /flow-next:flow <anything>           # Say what you have and let flow pick the route
 ```
 
-Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bug report, a how or why question about the code, a slowness to measure, a cleanup that keeps behaviour, a design fork to settle), picks the smallest sufficient route, runs it, and stops at the next decision that is yours. Describe the request without naming a skill and flow picks it up; a stage's pick is asked inline and the run continues. `/flow-next:flow --explain` shows the route without running it. The same path by hand:
+Flow takes whatever you have (nothing, an idea, a spec id, a branch, a pasted bug report, a how or why question about the code, a slowness to measure, a cleanup that keeps behaviour, a design fork to settle), picks the smallest sufficient route, runs it, and stops at the next decision that is yours. Describe the request without naming a skill and flow picks it up; a stage's pick is asked inline and the run continues. `/flow-next:flow --explain` shows the route without running it.
+
+Add `--until=merge` for a selected spec to continue through landing. On a plain attended rerun with an existing PR, flow offers landing and asks once unless you have already authorized that item; declining or leaving the question unanswered causes no landing mutation. The same path by hand:
 
 ```bash
 /flow-next:capture                   # 1. Synthesize conversation → .flow/specs/<id>.md
 /flow-next:work <spec-id> --no-plan  # 2. Implement a ready cohesive spec through Flow-Next
 /flow-next:make-pr <spec-id>         # 3. Open a PR connecting requirements to evidence
 /flow-next:resolve-pr <PR#>          # 4. Fetch review threads → triage → resolve
+/flow-next:land                     # 5. Opt in to gated landing of eligible PRs
 ```
 
 Direct execution is the default for a ready cohesive spec and a capable coding agent. Plan is chosen on a positive signal, where you asked for one, separate people will implement, delivery is staged across several PRs, or the implementer is routed to another tier. Multi-file scope or risk alone does not require decomposition. Refine unresolved material choices with `/flow-next:refine`; when the spec names a library or API the repo does not use yet, `refine --scope=research` reads the docs first. An explicit plan-review can review the spec design without task files. Live QA is opt-in (`pipeline.qa` set to `on`, or `auto`, which runs QA only when the acceptance criteria are UI-observable, the surface is drivable, and a target can be started, and records `skipped(reason)` when any of the three is absent) and neither review nor QA guarantees every regression is caught. The [route guide](plugins/flow-next/docs/pipeline-variations.md) explains when each stage helps; [running lean](plugins/flow-next/docs/running-lean.md) explains the agent work each layer adds.
@@ -214,13 +217,16 @@ The optional [HTML views](plugins/flow-next/docs/html-artifacts.md) present the 
 
 ## Going autonomous
 
-`/flow-next:flow --auto` drives one ready spec to a draft pull request in one invocation, routing every hop from the same reference the attended conductor reads and stopping only where a human is needed. Land handles CI, review convergence, and the merge policy you authorized. Run `flow --auto` once per item, or `flow --auto --tick` under your host's loop primitive where sessions are short. The same skills you use interactively do the work.
+`/flow-next:flow --auto` drives one ready spec to a draft pull request by default. Add `--until=merge` to carry the selected spec through land's CI and review convergence, gated merge, spec close, and persistence. Destination and interaction mode are independent; `/flow-next:flow <spec-id> --until=merge` uses the attended route. Release and tracker actions retain their existing authorization and configuration. Run `flow --auto` once per item, or `flow --auto --tick` under your host's loop primitive where sessions are short. The same skills you use interactively do the work.
 
 ```text
 /flow-next:flow --auto                      # one item, hop after hop, to its draft PR
+/flow-next:flow --auto <spec-id> --until=merge # same route through gated landing
 /loop 30m /flow-next:flow --auto --tick     # one hop per interval on a host that loops
 /goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK
 ```
+
+`--tick` performs at most one landing tick. A longer run can continue across CI and review waits using land's cadence; external waits do not consume pilot strikes. Merge consent covers the selected spec and PR while active, including retries. A fresh session needs the flag again or current explicit authorization; old receipts are not consent. See the [landing contract](plugins/flow-next/skills/flow-next-flow/references/tail.md) for scope, ownership, and recovery.
 
 `/flow-next:pilot` keeps working for one release as an alias for `flow --auto --tick`.
 

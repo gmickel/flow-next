@@ -41,9 +41,11 @@ The selected spec and PR remain the route's scope across handoffs and retries. E
 ## API Contracts
 <!-- scope: technical -->
 
-- Proposed spelling: `flow <spec> --until=merge` and `flow --auto <spec> --until=merge`. Destination and interaction mode are independent. The spelling is a proposal for this capture, not a previously settled interface. [inferred]
+- Accepted spelling: `flow <spec> --until=merge` and `flow --auto <spec> --until=merge`. Destination and interaction mode are independent. [user:2026-09-13]
 - Without a merge destination, unattended flow preserves its existing pre-merge terminal behavior. Attended flow adds landing to its existing-PR next-step guidance and obtains consent before invoking it. [paraphrase]
 - Attended approval authorizes landing the current item; refusal leaves it unmerged. Approval is not requested again at every CI or review retry while that authorization remains active. [paraphrase]
+- Consent covers the selected item, including retries and waits while current authorization remains active. A fresh session needs `--until=merge` again or current explicit authorization; historical transcripts and receipts alone are insufficient. Revocation stops subsequent mutations. [user:2026-09-13]
+- Landing includes spec closure and persistence. Releases and tracker writes require their existing authorization and configuration. Recovery observes completed steps and never repeats a completed merge. [user:2026-09-13]
 - Existing terminal names and default verdict semantics remain compatible. Landing progress, an external wait, a human blocker, and a confirmed merge must be distinguishable in the returned evidence; no new factory protocol is prescribed. [paraphrase]
 
 ## Edge Cases & Constraints
@@ -91,3 +93,8 @@ The selected spec and PR remain the route's scope across handoffs and retries. E
 - That patch remains under Unreleased. Include it in the minor release that ships fn-241; do not cut a separate capture release or repeat the capture implementation. Its final verification was 4,886 local tests with zero failures, a SHIP implementation review, and 14 green PR checks before merge. These results cover the capture patch, not fn-241. [paraphrase]
 - The combined release must finish the deferred downstream capture updates as well as fn-241's own documentation: the docs site's Capture skill page, first-30-minutes tutorial, and capture example in Writing Specs; the AI x SDLC guide's Flow-Next read-back paragraph; and the vault's Skills Catalog, Lifecycle and Handover Objects, Vocabulary and Concepts, and Messaging Library. Update release entries, the site version, and the vault index/log at that release, preserving historical entries. The repository's downstream-properties policy owns the publication and verification procedure. [paraphrase]
 - The remaining design choices are explicit: the destination spelling is still proposed; the precise fresh-session consent lifetime and post-merge authorization contract must be settled under R6. Reuse the existing landing behavior and the recorded scope constraints when settling them. They do not require reopening factory orchestration or fn-240. [paraphrase]
+
+## Accepted Contract (2026-09-13)
+<!-- scope: technical -->
+
+Gordon approved the destination, consent lifetime, and post-merge authorization contract above ("i agree with the above"). This resolves the open design choices recorded in the dated Delivery Handoff. Implement fn-241 with Astra high. Skip local model implementation and completion reviews for this run; use Bugbot on the GitHub PR, as explicitly requested. This review choice does not remove product landing gates or claim any review verdict.

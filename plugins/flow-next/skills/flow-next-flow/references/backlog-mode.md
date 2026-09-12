@@ -5,7 +5,7 @@
 > (config `pilot.autonomy`, or the per-run `--backlog` flag; default `ready`
 > means this file is never read and the ready-mode run is byte-identical). The
 > wiring that resolves the mode, threads the verdict grammar, and enforces the
-> never-merge / never-author invariants lives in `auto.md`; **this file is the
+> landing-authority / never-author invariants lives in `auto.md`; **this file is the
 > workflow those hooks execute**: the wide dep-ordered selection, the agentic
 > triage read, and the spec-first floor.
 
@@ -488,8 +488,7 @@ The executable mapping is fixed:
   is surfaced, never auto-written (may augment an obvious blank in an *existing*
   spec only - never create one). The span is *workable spec → draft PR*, not
   *ticket → draft PR*.
-- **Never merges / never invokes land.** The terminus is `make-pr` (draft). Merge
-  stays human-gated; land owns it.
+- **Backlog mode grants no merge authority.** The default terminus is `make-pr` (draft). A current scoped merge destination may invoke land through `tail.md`; land owns convergence, gates, merge and tail.
 - **Never sets the ready flag / never promotes.** Readiness is the human's explicit
   signal; the agent's completeness read can only *withhold*, never *force* or
   *promote*.

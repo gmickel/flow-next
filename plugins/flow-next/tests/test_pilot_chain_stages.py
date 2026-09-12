@@ -127,7 +127,8 @@ class ChainTableTestCase(unittest.TestCase):
 
     def test_block_targets_make_pr_only(self):
         for path, block in self.blocks():
-            self.assertIn("/flow-next:make-pr <spec-id> mode:autonomous", block, path)
+            command = "$flow-next-make-pr" if "codex" in path.parts else "/flow-next:make-pr"
+            self.assertIn(f"{command} <spec-id> mode:autonomous", block, path)
             rows = [ln for ln in block.splitlines() if ln.startswith("| `")]
             targets = [ln.split("|")[2].strip() for ln in rows]
             self.assertEqual(targets, ["`make-pr`"],

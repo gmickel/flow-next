@@ -160,7 +160,7 @@ No config key - these are skills you invoke or do not. Details: [`../skills/flow
 
 No config key to enable; `pilot.autonomy` (`ready` by default) only widens what pilot selects. Details: [`../skills/flow-next-pilot/SKILL.md`](../../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../../skills/flow-next-land/SKILL.md).
 
-- **Automates away:** the repetition - `flow --auto` drives one ready spec hop after hop to its draft PR in one invocation (`--tick` runs one hop for hosts that loop), land babysits the resulting PRs to merged.
+- **Automates away:** the repetition - `flow --auto` drives one ready spec hop after hop to its draft PR by default; add `--until=merge` to continue through land for that item. `--tick` runs one hop, including at most one landing tick. Land also remains independently invocable. [Destination and consent](pipeline-variations.md#choose-where-flow-stops) bound the continuation.
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
 - **Earns its keep when:** there is a queue of blessed, fully specified work and nobody who wants to sit through it.
 - **Lean invocation:** `/flow-next:work` is the human-driven equivalent and needs no loop primitive at all.

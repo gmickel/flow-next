@@ -56,46 +56,10 @@ if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; th
 fi
 ```
 
-Read the `land.*` config — ONE subtree read, then jq lookups from the captured JSON. Current flowctl seeds defaults, but tolerate `null` (pre-seed / pre-subtree flowctl copies, where the whole capture degrades to `{}` or `"value": null`) with hard fallbacks:
-
-```bash
-# ONE subtree read: {"key":"land","value":{...}} — the only config invocation in
-# this skill. Explicit status branch (NOT `|| echo '{}'`): a failing flowctl can
-# still print partial JSON to stdout, and appending '{}' to it would make every
-# jq lookup emit two documents, bypassing the "null" fallbacks below.
-if ! LAND_CFG="$("$FLOWCTL" config get land --json 2>/dev/null)"; then LAND_CFG='{}'; fi
-lcfg() { printf '%s\n' "$LAND_CFG" | jq -r ".value.$1"; }                  # missing key → literal "null"; explicit "" → empty line (same as the old per-key reads)
-LAND_RELEASE="$(lcfg release)";                  [[ -z "$LAND_RELEASE" || "$LAND_RELEASE" == "null" ]] && LAND_RELEASE=true
-PATIENCE_MIN="$(lcfg patienceMinutes)";          [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30
-REVIEW_SIGNAL="$(lcfg reviewSignal)";            [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIGNAL" == "null" ]] && REVIEW_SIGNAL=silence
-AUTOMATED_REVIEWERS="$(lcfg automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
-REVIEW_TRIGGER="$(lcfg reviewTrigger)";          [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
-CI_FIX_BUDGET="$(lcfg ciFixBudget)";             [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
-# Clean-review COMMENT pattern (silence-signal supplement, §2.6).
-# CONTRACT (distinct from the keys above — do NOT collapse `""` into the
-# default): the seeded built-in default is a STRUCTURED ERE; an unseeded
-# an older flowctl copy returns the literal "null" → fall back to the
-# built-in; an EXPLICIT empty string "" (the user's off-switch) → DISABLE
-# the comment scan; any other value → use it verbatim. `jq -r` prints the
-# literal "null" for JSON null and an EMPTY line for "", so the two are
-# distinguishable — guard ONLY the "null" case, never `-z`.
-CLEAN_REVIEW_PATTERN="$(lcfg cleanReviewCommentPattern)"
-if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
-  # pre-seed flowctl (key absent) → the canonical built-in default
-  CLEAN_REVIEW_PATTERN="(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\*\*Code Review\*\*.*\*\*Completed\*\*"
-fi   # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallback)
-# Opt-in repo merge-verdict gate (§2.9). unset / null / "" ALL mean OFF.
-MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "null" ]] && MERGE_VERDICT_CMD=""
-# Opt-in human reviewer request (§2.6b / §3.4b). unset / null / "" ALL mean OFF.
-REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
-# Opt-in silence-window re-anchor (§2.6). Active ONLY as a positive integer: unset / null / 0 mean OFF (0 is off because a zero grace period is the strict-silence anti-pattern the window exists to prevent). The schema is integer|null; a hand-edited or pre-schema string ("" / non-numeric) reads as off here rather than failing the tick — defensive, not a documented value.
-PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""   # any positive integer is on (the schema is unbounded); §2.6 compares overflow-safely
-```
-
 Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`. **The tick claim below is taken BEFORE the `LEDGER_JSON` read** — a snapshot read outside the claimed interval could gate this tick on state another tick then rewrote:
 
 ```bash
-LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --git-common-dir)/flow-next"
+LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)/flow-next"
 LEDGER="$LEDGER_DIR/land-strikes.json"
 ```
 
@@ -184,16 +148,65 @@ Two residuals of recording the spanning parent, both in the conservative (hold-l
 
 A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"` (the pid record first — a bare `rmdir` fails on the non-empty dir) immediately before printing the terminal `LAND_VERDICT` line, on EVERY tick-ending path after this point — Phase 4's normal exit AND every early terminal (Phase 1's no-work exit, a mid-tick `NEEDS_HUMAN` that ends the tick early), not only the Phase 4 exit. A tick that printed a terminal line while still holding the claim leaves the clone locked for up to the 240-minute reaper window. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
 
+For a scoped flow invocation (either scope value is present), read and execute [references/flow-handoff.md](references/flow-handoff.md) now. It validates the exact target and prepares the base workspace under this claim; failure stops before config or discovery. Standalone land skips that reference and uses `LAND_BASE_ROOT="$REPO_ROOT"`. Keep pre-merge spec/task reads on the source checkout: the base may not contain these PR-only artifacts yet.
+
+Read the `land.*` config — ONE subtree read, then jq lookups from the captured JSON. Current flowctl seeds defaults, but tolerate `null` (pre-seed / pre-subtree flowctl copies, where the whole capture degrades to `{}` or `"value": null`) with hard fallbacks:
+
+```bash
+# ONE subtree read: {"key":"land","value":{...}} — the only config invocation in
+# this skill. Explicit status branch (NOT `|| echo '{}'`): a failing flowctl can
+# still print partial JSON to stdout, and appending '{}' to it would make every
+# jq lookup emit two documents, bypassing the "null" fallbacks below.
+LAND_BASE_ROOT="${LAND_BASE_ROOT:-$REPO_ROOT}"
+if ! LAND_CFG="$(cd "$LAND_BASE_ROOT" && "$FLOWCTL" config get land --json 2>/dev/null)"; then
+  if [ -n "${LAND_SCOPE_SPEC:-}" ]; then
+    if [ "${LAND_DRY_RUN:-0}" != 1 ]; then rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"; fi
+    echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="cannot read trusted base configuration"'
+    exit 1
+  fi
+  LAND_CFG='{}'
+fi
+lcfg() { printf '%s\n' "$LAND_CFG" | jq -r ".value.$1"; }                  # missing key → literal "null"; explicit "" → empty line (same as the old per-key reads)
+LAND_RELEASE="$(lcfg release)";                  [[ -z "$LAND_RELEASE" || "$LAND_RELEASE" == "null" ]] && LAND_RELEASE=true
+PATIENCE_MIN="$(lcfg patienceMinutes)";          [[ -z "$PATIENCE_MIN" || "$PATIENCE_MIN" == "null" ]] && PATIENCE_MIN=30
+REVIEW_SIGNAL="$(lcfg reviewSignal)";            [[ -z "$REVIEW_SIGNAL" || "$REVIEW_SIGNAL" == "null" ]] && REVIEW_SIGNAL=silence
+AUTOMATED_REVIEWERS="$(lcfg automatedReviewers)"; [[ "$AUTOMATED_REVIEWERS" == "null" ]] && AUTOMATED_REVIEWERS=""
+REVIEW_TRIGGER="$(lcfg reviewTrigger)";          [[ "$REVIEW_TRIGGER" == "null" ]] && REVIEW_TRIGGER=""
+CI_FIX_BUDGET="$(lcfg ciFixBudget)";             [[ -z "$CI_FIX_BUDGET" || "$CI_FIX_BUDGET" == "null" ]] && CI_FIX_BUDGET=3
+# Clean-review COMMENT pattern (silence-signal supplement, §2.6).
+# CONTRACT (distinct from the keys above — do NOT collapse `""` into the
+# default): the seeded built-in default is a STRUCTURED ERE; an unseeded
+# an older flowctl copy returns the literal "null" → fall back to the
+# built-in; an EXPLICIT empty string "" (the user's off-switch) → DISABLE
+# the comment scan; any other value → use it verbatim. `jq -r` prints the
+# literal "null" for JSON null and an EMPTY line for "", so the two are
+# distinguishable — guard ONLY the "null" case, never `-z`.
+CLEAN_REVIEW_PATTERN="$(lcfg cleanReviewCommentPattern)"
+if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
+  # pre-seed flowctl (key absent) → the canonical built-in default
+  CLEAN_REVIEW_PATTERN="(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\*\*Code Review\*\*.*\*\*Completed\*\*"
+fi   # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallback)
+# Opt-in repo merge-verdict gate (§2.9). unset / null / "" ALL mean OFF.
+MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "null" ]] && MERGE_VERDICT_CMD=""
+# Opt-in human reviewer request (§2.6b / §3.4b). unset / null / "" ALL mean OFF.
+REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
+# Opt-in silence-window re-anchor (§2.6). Active ONLY as a positive integer: unset / null / 0 mean OFF (0 is off because a zero grace period is the strict-silence anti-pattern the window exists to prevent). The schema is integer|null; a hand-edited or pre-schema string ("" / non-numeric) reads as off here rather than failing the tick — defensive, not a documented value.
+PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""   # any positive integer is on (the schema is unbounded); §2.6 compares overflow-safely
+```
+
 ## Phase 1 — DISCOVER
 
 **Land babysits only PRs whose authoring spec has every task done** — `flow --auto` still owns in-flight specs (the build-loop concurrency interlock), so a tick that acted on a spec with an open task has broken this. Candidates from the minimal listing:
 
 ```bash
 SPECS_JSON="$($FLOWCTL specs --json)"
-CANDIDATE_SPECS="$(printf '%s\n' "$SPECS_JSON" | jq -r '.specs[] | select(.status == "open" and .tasks > 0 and .tasks == .done) | .id')"
+CANDIDATE_SPECS="$(printf '%s\n' "$SPECS_JSON" | jq -r --arg scope "${LAND_SCOPE_SPEC:-}" '
+  .specs[] | select(.tasks > 0 and .tasks == .done)
+  | select(if $scope == "" then .status == "open" else .id == $scope and (.status == "open" or .status == "done") end)
+  | .id')"
 ```
 
-For each candidate spec, resolve its branch and probe gh (`--state all` because a bare OPEN-only probe hides the merged-but-unclosed re-entry case, and `gh pr view` returns rc 0 for CLOSED/MERGED — so always filter on `.state` via jq):
+On a scoped tick, an empty candidate set is `NEEDS_HUMAN` (missing spec or incomplete tasks), never permission to select another item. For each candidate spec, resolve its branch and probe gh (`--state all` because a bare OPEN-only probe hides the merged-but-unclosed re-entry case, and `gh pr view` returns rc 0 for CLOSED/MERGED — so always filter on `.state` via jq):
 
 ```bash
 SPEC_JSON="$($FLOWCTL show "$spec" --json)"
@@ -201,8 +214,14 @@ BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 [[ -z "$BRANCH_NAME" ]] && continue   # no branch contract → not build-loop-authored
 
 PR_PROBE_FAILED=0
-PR_JSON="$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,isDraft --limit 20 2>/dev/null)" || PR_PROBE_FAILED=1
-OPEN_PRS="$(printf '%s\n' "${PR_JSON:-[]}" | jq -c '[.[] | select(.state == "OPEN")]')"
+if [ -n "${LAND_SCOPE_PR:-}" ]; then
+  PR_ONE="$(gh pr view "$LAND_SCOPE_PR" --json url,state,number,isDraft,headRefName,baseRefName 2>/dev/null)" || PR_PROBE_FAILED=1
+  PR_JSON="$(printf '%s\n' "$PR_ONE" | jq -ce --arg pr "$LAND_SCOPE_PR" --arg branch "$BRANCH_NAME" --arg base "$SCOPE_BASE" '
+    select(.url == $pr and .headRefName == $branch and .baseRefName == $base) | [. ]')" || PR_PROBE_FAILED=1
+else
+  PR_JSON="$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,isDraft --limit 20 2>/dev/null)" || PR_PROBE_FAILED=1
+fi
+OPEN_PRS="$(printf '%s\n' "${PR_JSON:-[]}" | jq -c '[.[] | select(.state == "OPEN")]')" || PR_PROBE_FAILED=1
 OPEN_COUNT="$(printf '%s\n' "$OPEN_PRS" | jq 'length')"
 MERGED_PR_NUM="$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "MERGED")][0].number // empty')"
 ```
@@ -213,8 +232,8 @@ Discovery outcomes per spec:
 - `OPEN_COUNT > 1`: two open PRs on one spec branch → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1` AND a MERGED PR also exists for the branch: ambiguous reopened/re-pushed state → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1`: babysit path → `PR_NUMBER="$(printf '%s\n' "$OPEN_PRS" | jq -r '.[0].number')"`, then the authorship check (below) → babysit candidate.
-- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail in its §3.5 order: close → release-follow → tracker → persist-push; never a second merge).
-- `OPEN_COUNT == 0` and no MERGED PR (no PR, or CLOSED-without-merge only): not land's work — skip silently (`flow --auto` owns the no-PR state; a closed-unmerged PR is human-rejected work land must not resurrect).
+- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec has a merged PR (scoped recovery also admits an already locally closed spec) → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail in its §3.5 order: close → release-follow → tracker → persist-push; never a second merge).
+- `OPEN_COUNT == 0` and no MERGED PR (no PR, or CLOSED-without-merge only): on a scoped tick report `NEEDS_HUMAN`, never substitute another PR; otherwise not land's work — skip silently (`flow --auto` owns the no-PR state; a closed-unmerged PR is human-rejected work land must not resurrect).
 
 **Authorship requires both signals before any mutation** — the branch match above **and** the make-pr breadcrumb in the PR body. A hand-opened PR on a spec branch that got auto-merged has broken this. **`PR_NUMBER` comes from the outcome branch above** (babysit: the single open PR's number; re-entry: `MERGED_PR_NUM`); a `PR_NUMBER` carried over from a prior loop iteration has broken this.
 
@@ -292,6 +311,8 @@ WINDOW_ANCHOR=push   # per-PR Phase 4 `anchor=` field — initialized HERE so ev
 REVIEWERS_STATE=off; [[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:not-due"   # per-PR Phase 4 `reviewers=` field — initialized HERE so every early-exit gate (2.1/2.2/CI/QA) still reports it: `off` ONLY when the key is unset/null/""; configured-but-not-due (red CI, open threads, signal already satisfied, CHANGES_REQUESTED) is `skipped:not-due`; §2.6b/§3.4b overwrite it
 OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 ```
+
+On a scoped tick, require `PR_URL == LAND_SCOPE_PR` and `BASE_REF == SCOPE_BASE` before any gate action; a mismatch is `NEEDS_HUMAN`. For a re-entry candidate, freshly confirm `state == MERGED` and its merge commit, then apply the durable-label gate and resume only the authorized tail. Do not run an OPEN merge plan on a PR that merged between discovery and action.
 
 ### 2.1 — Durable-label skip (first gate)
 
@@ -545,6 +566,11 @@ On a repo with no branch protection (free-plan private repos, where rulesets and
 Reached ONLY when every gate above is satisfied AND the action planned in 2.8 is `merge`. One execution per merge attempt, never one per patience tick - the verdict is freshest at the decision point. Context arrives as ENVIRONMENT only; the configured string is passed to `bash -c` verbatim and is never built from or interpolated with PR-derived text:
 
 ```bash
+LAND_GATE_ROOT="$REPO_ROOT"
+if [ -n "${LAND_SCOPE_SPEC:-}" ] && [ "${LAND_DRY_RUN:-0}" != 1 ]; then
+  cd "$LAND_BASE_ROOT" || exit 1
+  REPO_ROOT="$LAND_BASE_ROOT"
+fi
 MERGE_VERDICT=skipped        # green | refused | skipped | would-run (Phase 4 evidence)
 MERGE_VERDICT_HEAD=""        # the exact head the command judged (pins 3.5's merge)
 if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
@@ -570,7 +596,7 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
       # timeout (the host tool's bound - the `timeout` binary is not stock on
       # macOS). A tool-level timeout is a refusal, exactly like exit 124.
       MV_ERR_FILE="$(mktemp)"; MV_RC=0
-      # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout).
+      # cwd is the verified base; Phase 2 performs no branch checkout.
       FLOW_HEAD_SHA="$HEAD_OID" FLOW_BASE_REF="$BASE_REF" \
       FLOW_PR_NUMBER="$PR_NUMBER" FLOW_SPEC_ID="$spec" \
         bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
@@ -580,6 +606,8 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
     fi
   fi
 fi
+REPO_ROOT="$LAND_GATE_ROOT"
+cd "$REPO_ROOT" || exit 1
 ```
 
 | Command outcome | Land action |
@@ -593,9 +621,9 @@ fi
 
 **`MERGE_VERDICT` and `MERGE_VERDICT_HEAD` are per-PR state, not loop variables.** A tick that classifies several PRs records both values in each PR's classification record alongside its planned action; a later PR's classification never overwrites an earlier PR's verdict. 3.5 reads the values recorded for THE PR IT IS MERGING - a merge that read another iteration's (or a reset) verdict pair has broken this.
 
-**The command executes ONLY from the base checkout.** The command string and the config that carries it are read from the working tree, so a non-base checkout (the PR branch itself, a feature branch) would execute text the PR author controls - a self-approval channel. The trust guard above refuses on any checkout whose branch is not `BASE_REF`; a gate that executed the command from a non-base checkout has broken this.
+**The command executes ONLY from the base checkout.** The command string and the config that carries it are read from the base working tree on a scoped handoff (the existing working tree on standalone land), so a non-base checkout (the PR branch itself, a feature branch) would execute text the PR author controls - a self-approval channel. The scoped gate enters the verified base path before this guard, then returns to the source checkout. The trust guard above refuses on any checkout whose branch is not `BASE_REF`; a gate that executed the command from a non-base checkout has broken this.
 
-**The command runs on the BASE checkout, not the PR.** Phase 2 performs no checkout and land never checks out the PR branch for this gate, so a command that inspects the working tree is grading the base and would pass a broken PR. `$FLOW_HEAD_SHA` (the PR `.headRefOid` captured at the top of Phase 2) is the only thing that names the code being merged: the command must key on it - fetch it (`git fetch origin "$FLOW_HEAD_SHA"`), check it out into a scratch worktree, or read it through the API - and it must exit non-zero when it cannot see that head. `$FLOW_BASE_REF`, `$FLOW_PR_NUMBER`, and `$FLOW_SPEC_ID` carry the rest of the context.
+**The command runs on the BASE checkout, not the PR.** Phase 2 performs no branch checkout and land never executes this gate from the PR branch, so a command that inspects the working tree is grading the base and would pass a broken PR. `$FLOW_HEAD_SHA` (the PR `.headRefOid` captured at the top of Phase 2) is the only thing that names the code being merged: the command must key on it - fetch it (`git fetch origin "$FLOW_HEAD_SHA"`), check it out into a scratch worktree, or read it through the API - and it must exit non-zero when it cannot see that head. `$FLOW_BASE_REF`, `$FLOW_PR_NUMBER`, and `$FLOW_SPEC_ID` carry the rest of the context.
 
 ### Dry-run stops here (R17)
 
@@ -605,7 +633,7 @@ Done when: every discovered PR has one planned action class and a provisional ve
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Base-move sibling re-gate**: after any action in this tick that landed commits on the base — a successful merge, OR a successful base push without one (a `resume-tail`'s persist-push of tail `.flow` commits; the 3.5 tail's persist-push when a sibling still awaits its action) — EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists — a re-entry `resume-tail` ordered before an open sibling moves the base without any merge in this tick, so a merge-keyed rule would let that sibling act (even merge, absent §2.9) on stale gates. `ci-fix` is the sharp edge — executed on pre-move state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the base move just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Before each mutation, re-check current host consent and the bound PR identity; revocation or a mismatched scope stops `NEEDS_HUMAN` without that mutation. Re-read the exact PR state before ACT: an already merged PR uses `resume-tail` only, and a closed-unmerged PR stops. Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Base-move sibling re-gate**: after any action in this tick that landed commits on the base — a successful merge, OR a successful base push without one (a `resume-tail`'s persist-push of tail `.flow` commits; the 3.5 tail's persist-push when a sibling still awaits its action) — EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists — a re-entry `resume-tail` ordered before an open sibling moves the base without any merge in this tick, so a merge-keyed rule would let that sibling act (even merge, absent §2.9) on stale gates. `ci-fix` is the sharp edge — executed on pre-move state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the base move just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
@@ -801,41 +829,67 @@ else
 fi
 ```
 
-**The merge is always explicit, never `gh pr merge --auto`.** And **`MERGE_RC != 0` skips the whole post-merge tail** — a tail step that ran after a non-zero merge has broken this. Classify from the captured stderr, leave the worktree where it is (no checkout happened yet), and continue to the next PR:
+```bash
+MERGE_CONFIRMED=0
+if [ -n "${LAND_SCOPE_SPEC:-}" ] && [ "${MV_STALE_BASE:-0}" != 1 ]; then
+  MERGE_OBSERVATION="$(gh pr view "$LAND_SCOPE_PR" --json url,state,mergeCommit)" || MERGE_OBSERVATION=""
+  if printf '%s\n' "$MERGE_OBSERVATION" | jq -e --arg pr "$LAND_SCOPE_PR" '
+    .url == $pr and .state == "MERGED"
+    and (.mergeCommit.oid | type == "string" and length > 0)' >/dev/null 2>&1; then
+    MERGE_CONFIRMED=1
+  fi
+fi
+```
+
+**The merge is always explicit, never `gh pr merge --auto`.** On a scoped handoff, re-read the exact PR after the attempt even when the command failed: GitHub may have merged successfully before local branch deletion or checkout failed. Set `MERGE_CONFIRMED=1` only from a fresh `state=MERGED` with a nonempty merge commit for this PR; otherwise a nonzero command keeps the refusal path and an inconclusive probe is `NEEDS_HUMAN`. Never retry a confirmed merge. Report any local cleanup error separately and run only the authorized remaining tail. A zero exit code without a confirmed merge is also `NEEDS_HUMAN`, not success. Standalone land retains its existing `MERGE_RC != 0` refusal path.
+
+For an unconfirmed merge refusal, classify from the captured stderr, leave the worktree where it is, and continue to the next PR:
 
 - Head-SHA mismatch refusal (the `--match-head-commit` guard; stderr names the expected/actual sha) — state moved between gate and merge → verdict `RESOLVING` (re-tick), not `BLOCKED`.
 - Any other merge refusal (server-side rule) → verdict `BLOCKED`, reason = the captured `MERGE_ERR` line.
 
-Only on `MERGE_RC == 0`, move the worktree onto the merged base BEFORE any tail step — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
+After `MERGE_CONFIRMED=1` on a scoped handoff (or `MERGE_RC == 0` on standalone land), enter the merged base BEFORE any tail step (scoped flow uses `LAND_BASE_ROOT`; standalone land checks out the base in its current worktree) — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
 
 ```bash
-git checkout "$BASE_REF" && git pull --ff-only
-TAIL_BASE_OID="$(git rev-parse HEAD)"   # pre-tail base tip — step 4's rollback target
-MERGE_OID="$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')"
 TAIL_OK=1
-if [[ -z "$MERGE_OID" ]] || ! git merge-base --is-ancestor "$MERGE_OID" HEAD; then
+if [ -n "${LAND_SCOPE_SPEC:-}" ]; then
+  cd "$LAND_BASE_ROOT" || TAIL_OK=0
+  if [ "$TAIL_OK" = 1 ]; then
+    REPO_ROOT="$(pwd -P)"
+    ORIG_BRANCH="$BASE_REF"
+  fi
+fi
+if [ "$TAIL_OK" = 1 ]; then
+  git checkout "$BASE_REF" && git pull --ff-only || TAIL_OK=0
+fi
+TAIL_BASE_OID="$(git rev-parse HEAD)"   # pre-tail base tip
+MERGE_OID="$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')" || TAIL_OK=0
+if [[ -z "$MERGE_OID" || "$MERGE_OID" == null ]] || ! git merge-base --is-ancestor "$MERGE_OID" HEAD; then
   echo "Evidence: squash commit ${MERGE_OID:-<unknown>} not on local $BASE_REF after pull"
   TAIL_OK=0
 fi
 git log --oneline -1   # evidence echo: the squash commit referencing the PR
 ```
 
-`TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `squash commit missing from local base — tail not run`. **No tail step runs in that state** — no spec close, no tracker, no release; one that did has broken this. Continue to the next PR; a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
+`TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `base checkout/pull failed or squash commit missing — tail not run`. **No tail step runs in that state** — no spec close, no tracker, no release; one that did has broken this. Continue to the next PR; a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
 
 1. **Spec close — local commit, NOT pushed here (#345)** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. Commit the close file-scoped and move on; the push is step 4:
 
    ```bash
-   git add ".flow/specs/${spec}.json" ".flow/specs/${spec}.md" && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"   # stage ONLY this spec's files — pre-existing .flow dirtiness (allowed by the guards) must not ride the close commit
+   git add ".flow/specs/${spec}.json" ".flow/specs/${spec}.md" && {
+     git diff --cached --quiet -- ".flow/specs/${spec}.json" ".flow/specs/${spec}.md" ||
+       git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"
+   }
    ```
 
    **Committing here rather than pushing here is what keeps the rest of the tail reachable on a base that only accepts pull requests** — such a base refuses the push permanently, and persisting first meant one refusal skipped release-follow and the tracker touchpoint after a real merge. Both later steps are safe with the close committed but unpushed: release-follow's precondition is a clean non-`.flow/` tree, which the *commit* satisfies, and the tracker touchpoint gates on its own fresh GitHub `MERGED` probe (step 3), never on the close having been pushed. The tracker touchpoint stays after release-follow so its verdict comment can carry the release outcome, and it commits its own sync state locally for the same step-4 push.
-2. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
+2. **Release-follow** (only when `LAND_RELEASE == true` and current authorization covers release) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
    - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
    - Clean non-`.flow/` tree required before starting and asserted after.
    - **Idempotency probe BEFORE acting**: check for an existing tag/GitHub release for the target version (`git tag -l <v>`, `gh release view <v>`); already present → resume past completed steps, never re-tag.
    - Release-step failure AFTER the successful merge → verdict `NEEDS_HUMAN` + durable label on the (merged) PR via 3.4 — the merge is NEVER retried, and later ticks never blindly re-run the failed step (re-entry only resumes via the idempotency probe).
    - Release completed → verdict `RELEASED`.
-3. **Tracker touchpoint — the only `Done` driver** — deliberately after release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active**, not gated behind `tracker.perEvent.land.merged != off`. This is deliberate: a real merge is the only event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone; a run that gated the status on the `land.merged` leaf has broken this (the leaf, if a repo set it, only tunes the optional verdict comment):
+3. **Tracker touchpoint — the only `Done` driver** — only when current authorization permits tracker writes; a current restriction skips the touchpoint and is reported, never overridden by the bridge config. Deliberately after release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active**, not gated behind `tracker.perEvent.land.merged != off`. This is deliberate: a real merge is the only event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone; a run that gated the status on the `land.merged` leaf has broken this (the leaf, if a repo set it, only tunes the optional verdict comment):
 
    The complete `tracker.perEvent.land.merged` mapping is explicit: for
    `off`, `pull`, `push`, `reconcile`, and `comment`, a confirmed merge resolves
@@ -903,7 +957,11 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 4. **Persist — push the tail's `.flow` commits (close + any tracker sync state) together.** Last, after every consequential step has already run. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
 
    ```bash
-   git push || { git pull --rebase && git push; }
+   if [ -n "${LAND_SCOPE_SPEC:-}" ]; then
+     git push origin "HEAD:refs/heads/$BASE_REF"
+   else
+     git push || { git pull --rebase && git push; }
+   fi
    ```
 
    Release instructions discovered in step 2 may run their own `git push`
@@ -917,13 +975,17 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    MERGED probe, never on the release. A tail that skipped the touchpoint
    because the release could not push has broken this.
 
-   If the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail). **Guard first**: the rollback may run ONLY when every commit after `$TAIL_BASE_OID` is one of the tail's own file-scoped `.flow` commits — when release-follow committed anything (a version bump, a changelog roll) on top, do NOT reset; leave the tree as it stands and report `NEEDS_HUMAN` with reason `close + release commits unpushed` instead. A reset that dropped a release commit has broken this:
+   On a scoped flow handoff, a refused push leaves the local tail commits intact and reports `NEEDS_HUMAN`, `merged=<sha>; close=done; persist=pending`. Never rebase/reset the base to persist them: scoped discovery can resume this locally closed spec. Resolve a base divergence or protected push through the repository's authorized path, then re-enter the remaining tail.
+
+   On standalone land only, if the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail). **Guard first**: the rollback may run ONLY when every commit after `$TAIL_BASE_OID` is one of the tail's own file-scoped `.flow` commits — when release-follow committed anything (a version bump, a changelog roll) on top, do NOT reset; leave the tree as it stands and report `NEEDS_HUMAN` with reason `close + release commits unpushed` instead. A reset that dropped a release commit has broken this:
 
    ```bash
    # Verify by CHANGED PATHS, not commit subjects - a release commit could
    # legitimately wear any subject. Reset only when the whole range touches
    # .flow/ alone.
-   if git log --format= --name-only "$TAIL_BASE_OID"..HEAD | grep -v '^$' | grep -vq '^\.flow/'; then
+   if [ -n "${LAND_SCOPE_SPEC:-}" ]; then
+     echo "Evidence: scoped tail persistence pending - local commits retained"
+   elif git log --format= --name-only "$TAIL_BASE_OID"..HEAD | grep -v '^$' | grep -vq '^\.flow/'; then
      echo "Evidence: non-.flow paths in TAIL_BASE_OID..HEAD - leaving tree intact"
    else
      git rebase --abort 2>/dev/null || true
@@ -933,11 +995,11 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
    Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`. **The rollback is scoped to THIS step and skips NOTHING else** — the merge, release-follow, and the tracker touchpoint already ran and stand; on a pull-request-only base the residue is a cosmetic bookkeeping note, not a stalled lifecycle. Re-ticking after a refused persist is safe by construction: `spec close` succeeds idempotently, release-follow's idempotency probe (step 2) resumes past completed steps and never re-tags, and every verdict comment starts with the stable merge identity `evidence=<merge-commit-sha>` (step 3), so a repeat touchpoint for the same merge deduplicates.
 
-Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`) and its §3.4b claim dirs (`rm -rf "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-"*`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
+Only after required tail steps and remote persistence are confirmed, verdict `MERGED` (or `RELEASED`). A tail failure keeps `NEEDS_HUMAN` with the confirmed merge commit and the outstanding step; this success line never overwrites it. On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`) and its §3.4b claim dirs (`rm -rf "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-"*`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 
 ### 3.6 — `resume-tail` (re-entry idempotency)
 
-A merged-but-unclosed spec resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close (local commit) → release-follow → tracker touchpoint → persist-push of the tail's `.flow` commits. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec; the touchpoint's verdict comment dedupes on the merge identity). A previous tick that reached the merge but had its persist refused re-enters here and re-runs the whole tail — the earlier release and tracker work is not repeated destructively, and a second refusal again costs only the bookkeeping note. Verdict `MERGED`/`RELEASED` per how far the tail ran.
+A merged-but-unclosed spec, or the currently scoped locally closed spec whose tail is unfinished, resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close (local commit) → release-follow → tracker touchpoint → persist-push of the tail's `.flow` commits. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec; the touchpoint's verdict comment dedupes on the merge identity). A previous tick that reached the merge but had its persist refused re-enters here and re-runs the whole tail — the earlier release and tracker work is not repeated destructively, and a second refusal again costs only the bookkeeping note. Verdict `MERGED`/`RELEASED` only after required tail completion and persistence; otherwise retain `NEEDS_HUMAN`. On scoped recovery, inspect remote spec state and release/tracker evidence first and skip completed steps; a prior failure is never renewed permission or a second merge attempt.
 
 Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base after 3.5/3.6), and the non-`.flow/` tree is clean.
 
@@ -951,6 +1013,8 @@ PR <url> [<spec-id>]
   signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|-> reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>
   action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none> verdict=<VERDICT> reason="<one line>"
   mergeVerdict=<green|refused|skipped|would-run>
+  merged=<confirmed-commit-sha|-> close=<done|pending|-> persist=<pushed|pending|->
+  release=<completed|skipped:reason|failed:reason|-> tracker=<completed|skipped:reason|failed:reason|->
 ```
 
 `reviewers` reports §2.6b/§3.4b (`REVIEWERS_STATE`): `off` ONLY when `land.requestReviewers` is unset/null/`""`, `skipped:not-due` when it is configured but a human review is not the sole missing merge input (red CI, open threads, signal satisfied, `CHANGES_REQUESTED`, or an early-exit gate), `would-request` under `--dry-run` (plus `would-ready` for a draft), `requested`/`skipped:<reason>`/`failed:<one-line>` from §3.4b, `already:<sha8>` when this head was recorded or claimed earlier. `mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.

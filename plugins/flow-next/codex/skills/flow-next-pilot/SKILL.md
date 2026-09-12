@@ -20,4 +20,4 @@ Argument mapping (every pilot argument has a place; nothing is dropped):
 | `--spec <id>` or `--spec=<id>` | the positional `<id>` |
 | `--backlog` or `--auto` (pilot's backlog switch) | `--backlog` |
 | `--dry-run` | `--explain` (`--dry-run` is also accepted for this release) |
-| `--review=<backend>`, `--research=<grep|rp>`, `--depth=<level>` | passed through unchanged |
+| `--review=<backend>`, `--research=<grep|rp>`, `--depth=<level>`, `--until=merge` | passed through unchanged |
