@@ -168,9 +168,11 @@ cat >> "$PROMPT_FILE" <<'EOF'
 
 You are reviewing:
 1. **Spec** - The high-level plan
-2. **Task specs** - Individual task breakdowns
+2. **Task specs** - Individual task breakdowns, when the plan carries any
 
-**CRITICAL**: Check for consistency between spec and tasks. Flag if:
+Task count, task decomposition, and dispatch shape are the owner's and the orchestrator's decisions, never a finding. A spec with zero tasks or one owner task is the default route. Review the spec's content, and review the task specs only for consistency with it when they are supplied.
+
+**CRITICAL** when task specs are supplied: check for consistency between spec and tasks. Flag if:
 - Task specs contradict or miss spec requirements
 - Task acceptance criteria don't align with spec acceptance criteria
 - Task approaches would need to change based on spec design decisions
@@ -186,7 +188,7 @@ Conduct a John Carmack-level review:
 4. **Clarity** - Specs unambiguous? Acceptance criteria testable?
 5. **Architecture** - Right abstractions? Clean boundaries?
 6. **Risks** - Blockers identified? Security gaps? Mitigation?
-7. **Scope** - Right-sized? Over/under-engineering? Overengineering is a
+7. **Scope** - Is the requirement right-sized? Over/under-engineering? Overengineering is a
    FINDING, not a taste note: flag (a) any task or surface not traceable to a
    stated requirement (extra commands, export/import paths, detection hooks,
    config knobs "for later"); (b) risk-management machinery (trust/consent
@@ -200,7 +202,7 @@ Conduct a John Carmack-level review:
    forced excludes of runtime state).
 8. **Task sizing** - M tasks preferred. Flag over-splitting: 7+ tasks? Sequential S tasks that should be combined?
 9. **Testability** - How will we verify this works?
-10. **Consistency** - Do task specs align with spec?
+10. **Consistency** (only when task specs are supplied) - Do task specs align with spec?
 11. **Vocabulary** - [Include ONLY when `flowctl glossary list --json` reports `total_terms > 0`: "Canonical vocabulary lives in GLOSSARY.md — flag specs/tasks that contradict defined terms." Omit this line otherwise.]
 
 **Also explicitly verify (commonly-missed):** a stated **test strategy**; **observability** (logging/metrics/progress) for any async/batch work; each task **sized for one iteration and correctly ordered** by dependency; and stated **non-functional requirements** (performance, security, privacy).
