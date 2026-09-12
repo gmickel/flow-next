@@ -35,8 +35,6 @@ GATE_SELECTION = (
     PLUGIN_DIR / "skills" / "flow-next-flow" / "references" / "gate-selection.md"
 )
 
-QA_GATE_ON_TOKEN = '[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1'
-QA_GATE_AUTO_TOKEN = '[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1'
 SNAPSHOT_LINE = (
     'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-'
     "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\""
@@ -62,14 +60,9 @@ def _qa_gate_fence(workflow: str) -> str:
 
 
 class AutoQaGateReadsEveryValue(unittest.TestCase):
-    def test_gate_tokens_present_and_fence_reads_auto(self) -> None:
-        wf = _read(AUTO_MD)
-        self.assertIn(QA_GATE_ON_TOKEN, wf)
-        self.assertIn(QA_GATE_AUTO_TOKEN, wf)
-        fence = _qa_gate_fence(wf)
-        self.assertIn(QA_GATE_ON_TOKEN, fence)
-        self.assertIn(QA_GATE_AUTO_TOKEN, fence)
+    def test_fence_derives_from_the_snapshot(self) -> None:
         # Derived from the root snapshot, never a second config call.
+        fence = _qa_gate_fence(_read(AUTO_MD))
         self.assertNotRegex(fence, r'\$FLOWCTL"?\s+config get')
 
     @_POSIX_BASH

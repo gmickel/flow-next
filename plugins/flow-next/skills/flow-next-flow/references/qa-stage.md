@@ -1,16 +1,16 @@
 # QA stage - freshness probe (gated reference)
 
 > **Loaded only when `auto.md` Phase 2's QA gate prints its active read/execute/continue
-> sentinel** (`pipeline.qa` is `on` or `auto`, or the gate's probe/parse errored, fail
-> open). A default run (`pipeline.qa` off/unset) never reads this file. Contract: this file states
+> sentinel** (the gate flags resolved per `gate-selection.md`, or the gate's probe/parse
+> errored, fail open). A run whose gate printed no sentinel never reads this file. Contract: this file states
 > how to compute `QA_FRESH` (and resolve `BRANCH_NAME`); the **consumption stays
 > inline in `auto.md`**: the all-done PR probe's no-PR branch reads
 > `QA_STAGE_ENABLED` / `QA_STAGE_AUTO` / `QA_FRESH` there, and the Phase 5
 > post-dispatch verify keeps its own receipt re-read.
 
-## QA-stage freshness probe (only when the gate is `on` or `auto`)
+## QA-stage freshness probe (only when the gate printed its sentinel)
 
-When the QA gate is `on` or `auto`, the all-done juncture classifies `qa` **only when no *fresh* `qa_verdict` receipt exists** for the spec. Every hop re-classifies from disk: without this idempotence gate the run would re-classify `qa` forever and never reach make-pr. The receipt lives at the committed path `.flow/review-receipts/qa-<spec-id>.json` (the QA skill's default). A receipt is **fresh** iff all three hold:
+When the gate selects QA, the all-done juncture classifies `qa` **only when no *fresh* `qa_verdict` receipt exists** for the spec. Every hop re-classifies from disk: without this idempotence gate the run would re-classify `qa` forever and never reach make-pr. The receipt lives at the committed path `.flow/review-receipts/qa-<spec-id>.json` (the QA skill's default). A receipt is **fresh** iff all three hold:
 
 1. `receipt.id == <spec-id>` (the receipt's existing spec-id field is `id`, not `spec`).
 2. `receipt.head_sha` matches the spec **branch** head **with the `chore(flow): {qa verdict, pr artifact}` bookkeeping commits peeled off**. The receipt records the CODE head. The QA skill commits the receipt above it, and make-pr commits the pr.html artifact above that, so a raw `rev-parse "$BRANCH_NAME"` would never match and QA would re-run forever. Compute against the branch, never `HEAD`, because a resumed or manual run may sit on another branch. The post-dispatch verify runs before the receipt commit and still uses `HEAD` directly.

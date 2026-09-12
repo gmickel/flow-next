@@ -4,7 +4,7 @@ Read only when SKILL.md parsed the exact `--auto` token. One run selects one rea
 
 ## Preamble
 
-`$FLOWCTL` is the value SKILL.md's preamble established; this file defines no second copy.
+Reuse the `$FLOWCTL` value SKILL.md's preamble resolved.
 
 Shared shell context for the run:
 
@@ -428,7 +428,7 @@ case "$REVIEW_BACKEND" in
 esac
 ```
 
-Resolve the QA gate value. `pipeline.qa` is the string enum `off | on | auto` that `references/gate-selection.md` defines (any other value is `off`); the value is read once here from the root snapshot and consumed at the all-done juncture. The read is fail-open on a probe/parse error (the freshness reference gets read; the literal check still decides the flags):
+Resolve the QA gate value once from the root snapshot; [references/gate-selection.md](references/gate-selection.md) owns what each `pipeline.qa` value means, and the all-done juncture consumes the flags. The read is fail-open on a probe/parse error (the freshness reference gets read; the literal check still decides the flags):
 
 ```bash
 QA_STAGE_ENABLED=0
@@ -443,8 +443,8 @@ PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-top
 QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACTIVE=1   # snapshot/parse ERROR => ACTIVE (fail open)
 [ "$QA_GATE" = "on" ] && ACTIVE=1
 [ "$QA_GATE" = "auto" ] && ACTIVE=1
-[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1     # the literal `on`: QA on every spec at all-done
-[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1      # the literal `auto`: QA when gate-selection.md's drivability read says so
+[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1     # flag for the literal `on` (meaning: gate-selection.md)
+[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1      # flag for the literal `auto` (meaning: gate-selection.md)
 if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
 fi   # default branch: bare no-op - NO link, NO read path
@@ -467,11 +467,11 @@ if [ "${CHAIN_STAGES:-}" = "on" ]; then
 fi
 ```
 
-`CHAIN_ENABLED` is consumed by the explain report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert.
+`CHAIN_ENABLED` is consumed by the explain report below and by Phase 5's Chained stage. Without a fresh `qa` stage there is nothing to chain from, so the switch is inert.
 
 ### Route (workflow.md Step 2 runs here)
 
-Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. What this run adds:
+Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. Then:
 
 - **Route echo.** Step 2 records the route it resolved from plan-vs-no-plan.md. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the recording is printed as would-record and nothing is written.
 - **Refusal when a selected gate needs a backend the run lacks.** A design review the reference selects (an explicit request, or a recorded `needs_work` / `needs_human` plan review) with `REVIEW_CONFIGURED=0` is `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. The run never lowers a gate.
@@ -564,7 +564,7 @@ if [ "${PILOT_AUTONOMY:-ready}" = "backlog" ]; then
 fi
 ```
 
-workflow.md Step 3 runs here. What this run adds is `mode:autonomous` (and `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) plus the passthroughs on each invocation:
+workflow.md Step 3 runs here. Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
 - `plan`: `$flow-next-plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `$flow-next-plan-review <spec-id> --review=<backend>`
@@ -578,7 +578,7 @@ Done when: exactly one stage skill has been invoked and has returned; a hop that
 
 ## Phase 5 - VERIFY + evidence echo (workflow.md Step 4)
 
-workflow.md Step 4 runs here. What this run adds is the evidence echo a transcript-only driver validates from, the receipt and PR re-reads that decide `advanced` for each stage, and the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
+workflow.md Step 4 runs here. Echo each hop's observed evidence for the transcript-only driver, decide `advanced` from the receipt and PR re-reads below, and run the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 
 **Stage-outcome line.** Every evidence echo additionally carries the one `stage:` line `references/gate-selection.md` (Receipts) defines for the stage this hop dispatched; a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip. Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one). Record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
 

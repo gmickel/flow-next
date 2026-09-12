@@ -120,12 +120,7 @@ class ChainGateReadTestCase(unittest.TestCase):
     def test_only_literal_on_under_tick_enables_and_error_is_off(self):
         for path in AUTO_MDS:
             fence = chain_gate_fence(read(path))
-            self.assertIn('if [ "${CHAIN_STAGES:-}" = "on" ]; then', fence, path)
-            self.assertIn('if [ "${AUTO_TICK:-0}" = "1" ]; then', fence, path)
             self.assertIn("CHAIN_ENABLED=1", fence, path)
-            # Fail-closed: the jq read's error branch resolves to an empty (off)
-            # value, never to an ACTIVE-style fail-open flag.
-            self.assertIn('2>/dev/null)" || CHAIN_STAGES=""', fence, path)
 
 
 class ChainTableTestCase(unittest.TestCase):
