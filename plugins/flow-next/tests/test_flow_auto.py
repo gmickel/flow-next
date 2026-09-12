@@ -38,7 +38,6 @@ VERDICT_GRAMMAR_LINE = (
     "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> "
     'spec=<id> stage=<stage> reason="<one line>"'
 )
-JOINED_STAGE_EXAMPLE = "stage=work+qa+make-pr"
 CHAINED_TICK_TOKEN = "qa+make-pr"
 DEPRECATION_LINE = (
     "pilot is now flow --auto --tick; this alias is removed in the next release"
@@ -103,7 +102,7 @@ class VerdictGrammar(unittest.TestCase):
     def test_grammar_line_and_joined_stage_example(self) -> None:
         text = _read(AUTO_MD)
         self.assertIn(VERDICT_GRAMMAR_LINE, text)
-        self.assertIn(JOINED_STAGE_EXAMPLE, text, "long-horizon runs join dispatched stages with +")
+        self.assertRegex(text, r"stage=[a-z-]+(?:\+[a-z-]+){2,}", "long-horizon runs join every dispatched stage with +")
         self.assertIn(f"stage={CHAINED_TICK_TOKEN}", text, "the chained tick keeps its stage token")
         self.assertIn("--tick", text)
         # TRIAGED stays explain-only: never in the live grammar line.

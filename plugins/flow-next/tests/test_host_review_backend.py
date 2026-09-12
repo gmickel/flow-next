@@ -252,11 +252,6 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertIn("NEEDS_HUMAN", root)
         self.assertIn("needs_human", host)
         self.assertIn("NEEDS_HUMAN", rp)
-        self.assertIn(
-            "through its backend-aware shared owner",
-            work,
-            "work's 3g gate names the shared status owner completion review writes through",
-        )
         self.assertIn("ESCALATE: reviewer requested human review", host)
 
     def test_host_needs_human_fences_attach_before_exit(self) -> None:

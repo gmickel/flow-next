@@ -875,7 +875,7 @@ flowctl pilot strikes clear --all [--json]
 
 ### pilot-log
 
-The per-hop **decision log** `/flow-next:flow --auto --backlog` (fn-68) writes - the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) - deliberately **NOT** any `receipts/` path the ralph-guard validates, so a decision-log row never trips a Ralph receipt gate.
+`flow --auto --backlog` writes per-hop decision-log rows under `.flow/pilot-runs/`. The directory is auto-gitignored and is deliberately not a `receipts/` path the ralph-guard validates, so a decision-log row never trips a Ralph receipt gate.
 
 ```bash
 # Append one row (called by the skill at each backlog terminal)

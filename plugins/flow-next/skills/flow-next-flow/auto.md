@@ -2,10 +2,6 @@
 
 Read only when SKILL.md parsed the exact `--auto` token. One run selects one ready spec and drives it through `workflow.md`'s hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`. Every run ends with one `PILOT_VERDICT` line.
 
-### Chart is outside the build loop
-
-Chart is optional pre-capture discovery and never a stage of this run. An unattended chart drive (host `/loop` on `/flow-next:chart`) stops terminally at attended decisions (`CHART_VERDICT=NEEDS_HUMAN`); this run does not absorb or continue that work. Capture, refine, and chart stay human-gated upstream of the ready consent boundary.
-
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED - NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`. Subagents that run in fresh context fall back to the repo-local copy:
@@ -29,7 +25,7 @@ Cold session or run start: `$FLOWCTL brief` first for session-scope orientation 
 
 **Re-read this file at every run start.** A long `/loop` run executing from a stale in-context copy drifts from the file the repo ships; the file on disk is the contract, the remembered copy is not.
 
-**Probe an idle dispatched agent read-only**, through its side effects (commits, receipts, status fields), never with a resume message: a resume restarts the agent, so "checking on" an agent that was merely slow turns one run into two.
+**Check an idle dispatched agent through its commits, receipts, and status fields.** Sending it a resume message restarts it, so a merely slow agent becomes two runs.
 
 ## Hard guards (before anything else)
 
@@ -639,7 +635,7 @@ advanced=<true|false>
 
 When the work stage's output contains a `Sequential fallback:` line, repeat that line verbatim in the evidence echo.
 
-For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt**, observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**, and **the gate routes on `qa_outcome` (the four-outcome field), never on the Ralph-guard `verdict` projection**: the QA skill projects `BLOCKED->verdict=NEEDS_WORK`, so a hop that read `verdict` conflated "couldn't verify" with "found problems" and has broken this.
+For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt**, observed state, never the QA skill's narration. Read the receipt's `qa_outcome` field, never the Ralph-guard `verdict` projection (the QA skill projects `BLOCKED->verdict=NEEDS_WORK`, so a hop that read `verdict` conflated "couldn't verify" with "found problems" and has broken this).
 
 Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit; peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet; that is the next hop's make-pr):
 
@@ -673,7 +669,7 @@ head_sha=<receipt head_sha or ->
 advanced=<true|false>
 ```
 
-A fresh terminal `qa_outcome` (`QA_ADVANCED=true`) advances to make-pr on every value; `references/gate-selection.md` owns that policy and what the findings ride on.
+What follows a fresh `qa_outcome` (`QA_ADVANCED=true`) is owned by `references/gate-selection.md`.
 
 **The QA skill commits its own handoff** (the `qa_verdict` receipt plus the exact bug-memory it filed) in autonomous mode (qa §6.3b), so the receipt is already on the branch and rides the eventual make-pr push. **The run adds no commit of its own here**: the agent that wrote the files commits them precisely, so the run never sweeps the tree or guesses paths.
 
