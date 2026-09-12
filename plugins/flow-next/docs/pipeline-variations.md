@@ -24,13 +24,13 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Material choices plus dependencies, separate owners or staged delivery | capture → refine → plan → plan-review → work → [opt-in qa] → make-pr → land |
+| [Epic](#epic) | Material choices plus a plan signal (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier) | capture → refine → plan → plan-review → work → [qa when `on` or qualifying `auto`] → make-pr, ending at the draft PR; later runs converge it and a human merges |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
 | [Refactoring](#refactoring) | Structure changes, behaviour does not | pin the contract as the R-ID → work → review |
-| [Performance](#performance) | A measured slowness to move once | baseline as the R-ID → work → post-change measurement as evidence |
+| [Performance](#performance) | A measured slowness to move once | work → review → make-pr; the baseline measurement and its target are the R-ID work satisfies, the post-change measurement is its evidence |
 | [Hill climb](#hill-climb) | One metric against a target, many attempts | frozen harness → one change, one measurement, keep or revert, inside work |
 | [Investigation](#investigation) | A read-only question | cited answer; no `.flow/` write, no PR |
 | [Prototype](#prototype) | A fork whose answer is observable | throwaway build → observed decision → capture or work |
@@ -42,10 +42,14 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 ```mermaid
 flowchart LR
-    E([Epic intent]) --> C[/capture/] --> I[/refine/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/] --> Q[/qa/] --> M[/make-pr/] --> L[/land/]
+    E([Epic intent]) --> C[/capture/] --> I[/refine/] --> P[/plan/] --> PR[/plan-review/] --> W[/work/]
+    W -->|qa on, or auto qualifying| Q[/qa/] --> M[/make-pr/]
+    W -->|qa off, or auto skip recorded| M
+    M --> D([Draft PR, Flow stops here])
+    D -.human decision.-> L[/land/]
 ```
 
-The pattern that works in practice: **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, opted-in QA drives the live app, and land babysits the PRs to merged. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
+The pattern that works in practice is to **capture the entire epic, then let the machinery scope it.** Capture proposes whether the input is one spec or a dependency-sorted set (the epic-split proposal), and source-tags every criterion `[user]` / `[paraphrase]` / `[inferred]`. Then **refine sharpens** exactly what is soft - the `[inferred]` lines, the requirement someone should pressure-test - rather than re-litigating the whole spec. Plan decomposes into waved tasks, plan-review burns down design risk before code exists, work executes in fresh-context workers, QA drives the live app when `pipeline.qa` is `on` or a qualifying `auto`, and make-pr opens the draft PR where the flow run ends. Converging that PR (`/flow-next:resolve-pr`, CI fixes) is a later invocation, and merge is the human's decision, made by hand or handed to `/flow-next:land` as a separate driver. Every stage earns its place because every stage has an unknown to convert or a risk to bound.
 
 ### Feature, requirements known
 
@@ -56,7 +60,7 @@ flowchart LR
     S([Ready spec]) --> PR[/plan-review/] --> W[/work --no-plan/] --> M[/make-pr/]
 ```
 
-Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without task files. Then use `/flow-next:work <spec-id> --no-plan` if decomposition adds no coordination value. When the design needs dependent stages or separate owners, plan those tasks and review the resulting plan instead. The design-review decision does not force task decomposition.
+Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without task files. Then use `/flow-next:work <spec-id> --no-plan` if decomposition adds no coordination value. When a plan signal is present (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier), plan those tasks and review the resulting plan instead. The design-review decision does not force task decomposition.
 
 ### No-plan route
 
@@ -107,7 +111,7 @@ The sharpening tool for a defect is **reproduction, not conversation** - refine 
 
 ### Performance
 
-**Signal:** a measured slowness to move once. The baseline and its target are the R-ID and the post-change measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names what counts as a measurement.
+**Signal:** a measured slowness to move once. The route is work, then review, then make-pr. The baseline measurement and its target are the R-ID that work satisfies, and the post-change measurement is the evidence work records; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names what counts as a measurement.
 
 ### Hill climb
 
@@ -136,10 +140,10 @@ The change is made directly; `flowctl triage-skip --base <ref>` deterministicall
 
 Skipping a stage never skips the **evidence, consent, or review contract** that stage would have provided - the contract just gets satisfied by a cheaper mechanism or recorded as deliberately not needed:
 
-- **Evidence:** `flowctl done` requires evidence JSON (commits, test commands) on every variant. There is no route where a task closes on narration.
+- **Evidence:** `flowctl done` records the evidence JSON (commits, test commands) the caller supplies, and the work and review contracts require it on every change-producing route. No route closes a task on narration alone.
 - **Gates and receipts:** green receipts, review receipts, and QA verdict receipts gate the same transitions regardless of how much ceremony preceded them.
 - **Recorded skips:** every orchestrated stage records `ran`, `skipped(reason)`, or `failed(reason)` in the receipts it already writes - read back with `flowctl usage --stages <spec-id>`. A stage you deliberately left off is an explicit entry with your reason attached, not a silent absence ([`running-lean.md`](running-lean.md#a-lean-run-still-leaves-a-record)).
-- **Review:** configured review policy applies, including an explicit `none` setting or a qualifying triage-skip receipt. The dial from a cross-model backend down to `host` or `none`, and what each setting keeps running, is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
+- **Review:** configured review policy applies on every route that produces a change, including an explicit `none` setting or a qualifying triage-skip receipt for a docs-only, lockfile-only, release-chore, or generated-only diff. The investigation route has no work stage and no review because it ends at a cited answer. The dial from a cross-model backend down to `host` or `none`, and what each setting keeps running, is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
 That set - gates, receipts, evidence, review - is the verification spine (the docs-site page *Verification Spine* is its long-form treatment). The variants differ in which unknowns they pay to convert; none of them touches the spine.
 
