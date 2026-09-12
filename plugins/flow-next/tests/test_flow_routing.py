@@ -186,7 +186,7 @@ class FlowReferenceReachability(unittest.TestCase):
         self.assertEqual(unknown, set(), f"auto.md names unknown references: {sorted(unknown)}")
 
     def test_skill_links_auto_md_one_level_deep(self) -> None:
-        self.assertIn("[auto.md](auto.md)", _read(FLOW_SKILL))
+        self.assertRegex(_read(FLOW_SKILL), r"\]\(auto\.md\)", "SKILL.md must link auto.md one level deep")
 
 
 class ConsumerPointersResolve(unittest.TestCase):

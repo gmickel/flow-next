@@ -97,7 +97,7 @@ export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BA
 
 No branch flag exists. Branch resolution is run-owned from the selected spec's `branch_name`.
 
-There is no `--no-plan` flag: the accepted choice is the spec's `no_plan` field, set at capture, by attended flow, by work before mint, or by this run's route recording (Phase 2). A stray `--no-plan` gets the unknown-flag notice; the run never infers consent from a flag. Intentional plans and explicit design-review requests remain authoritative.
+There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field, set at capture, by attended flow, by work before mint, or by this run's route recording (Phase 2). A stray `--no-plan` gets the unknown-flag notice; the run never infers consent from a flag. Intentional plans and explicit design-review requests remain authoritative.
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
@@ -452,7 +452,7 @@ fi   # default branch: bare no-op - NO link, NO read path
 
 When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the classification below. The all-done PR probe's no-PR branch consumes `QA_STAGE_ENABLED` / `QA_STAGE_AUTO` / `QA_FRESH`; on a default run (`off`) the gate is silent and the reference is never read.
 
-Resolve the deprecated stage-chain key. `pipeline.chainStages` is honoured only under `--tick` (the `qa+make-pr` tick it was built for) and is removed with the pilot alias in the next release; in long-horizon mode the hop loop already runs `make-pr` as the next hop, so the key has nothing to chain and is ignored with one notice. Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot, **no** new `config get`. Unlike the QA probe this read is **fail-closed**: a snapshot/parse error resolves to off, because chaining is an accelerator and the safe degradation is the one-stage tick.
+Resolve the deprecated stage-chain key. `pipeline.chainStages` is honoured only under `--tick` (the `qa+make-pr` tick it was built for) and is removed with the pilot alias in the next release; in long-horizon mode the hop loop already runs `make-pr` as the next hop, so the key has nothing to chain and is ignored with one notice. Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot, **no** new `config get`. Unlike the QA probe this read is **fail-closed**. A snapshot or parse error disables chaining, because chaining is an accelerator and the safe degradation is the one-stage tick.
 
 ```bash
 CHAIN_ENABLED=0
@@ -745,7 +745,7 @@ tmp="$LEDGER.tmp.$$"
 jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
 ```
 
-Then, when the hop loop continues (long-horizon mode, an `ADVANCED` stage other than `make-pr`), return to Phase 2.
+Then apply the continuation rule in "The hop loop" above.
 
 When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome:
 
