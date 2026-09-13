@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-152-make-pr-opt-in-stack-linking-via-github",
   "impl_review_rounds": {
-    "fn-152-make-pr-opt-in-stack-linking-via-github.1": 1
+    "fn-152-make-pr-opt-in-stack-linking-via-github.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -437,9 +437,86 @@
       "task": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
       "timestamp": "2026-09-13T19:11:01.216772Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "50b66b4fcdabf6f774ff01e731b1fe510b8c577c2ec6a409aa185b9afa919f52",
+      "backend": "codex",
+      "base_sha": "f2eeb07095a363b4f11bf32e23f9f6dd1274966e",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "classification": "introduced",
+            "findingId": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "classification": "introduced",
+            "findingId": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "classification": "introduced",
+            "findingId": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "classification": "introduced",
+            "findingId": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "classification": "introduced",
+            "findingId": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "0989bb4beb679e5d20ca1dade468b98b4e3002a1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1840,
+      "output_sha256": "bd274b6605f4f842c7af0bc9996d07079e9960ee9a18c6b238efede7a0dcf0c2",
+      "reservation_id": "e423b87a706a4c96a59ae522069ead5d",
+      "round_consumed": true,
+      "scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "superseded_by": null,
+      "task": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "timestamp": "2026-09-13T19:13:52.327892Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1": 1,
     "plan": 1,
     "plan#completion": 0
   },
@@ -464,5 +541,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T19:11:01.220179Z"
+  "updated_at": "2026-09-13T19:13:52.330897Z"
 }
