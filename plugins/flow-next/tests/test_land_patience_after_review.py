@@ -266,7 +266,7 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
         for s in self.copies:
             with self.subTest(copy=s.path):
                 self.assertIn(
-                    'MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch '
+                    'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch '
                     '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
                     s.text,
                 )

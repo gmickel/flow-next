@@ -4,6 +4,13 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Fixed
+- **Glossary entries with both `_Avoid_` and `_Relates to_` no longer corrupt on `glossary add`.** The parser removed the two metadata lines cumulatively with offsets computed against the original body, so the second removal cut the wrong window and leaked a fragment into the definition on every add. Removals now apply in descending offset order in either authored line order, and the canonical rendering round-trips. Thanks to @flecamos for the report (#408).
+- **Land's merge step works under zsh.** The merge command was invoked as an unquoted string and relied on bash word-splitting, so under zsh (macOS default login shell) `gh pr merge` was one command name and the merge failed with exit 127. The fence now builds the command as an array; the `FLOW_PR_MERGE_CMD` override keeps its contract (whitespace-split into argv, never eval'd). Thanks to @TechupBusiness for the report (#406).
+- **Planned specs no longer record `status conflict (unmapped)` on GitHub/GitLab pushes.** A planned spec (all tasks todo) against capture's `status:backlog` label is an agreeing early state, so a requested todo/backlog is now a no-op at the tracker's slot instead of a conflict. The status-sync reference states that `perTracker.statusMap` is read by the Jira and Linear providers only. Thanks to @TechupBusiness for the report (#375).
+- **A merged spec-text-only PR no longer counts as merge evidence.** The status projection classified `gh pr list` rows by state alone, so a merged PR whose whole diff was `.flow/specs/` and `.flow/tasks/` (the spec's own text landing under one-PR-per-gate) projected a still-open spec to In Review and re-derived it on every touchpoint. Each merged row is now probed for its changed files and counts only when it touches a path outside those two directories; a failed file probe degrades to `probe-error`, never `merged`. Thanks to @sn-furali for the report (#391).
+- **Land's ci-fix step recovers when the PR branch is checked out in another worktree.** `gh pr checkout` refuses with `already checked out at '<path>'` in the Worktree Kit shape; the step now tells the agent to run the fix in that path, skipping the checkout and that checkout's branch restore, without creating or removing a worktree. Thanks to @TechupBusiness for the report (#411).
+
 ## [flow-next 5.2.1] - 2026-09-13
 
 ### Fixed

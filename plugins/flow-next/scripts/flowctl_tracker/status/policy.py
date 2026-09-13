@@ -125,6 +125,9 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
 
     Returns one of: merged|open|closed-unmerged|none|ambiguous|probe-error.
     Empty/missing branch_name → probe-error (never none, never merged).
+    Each MERGED row is then probed for its changed files (`gh pr view`);
+    a row touching only `.flow/specs/` / `.flow/tasks/` is not evidence
+    (#391), and a failed file probe is probe-error for the whole result.
     """
     branch = spec_data.get("branch_name")
     if not isinstance(branch, str) or not branch.strip():
@@ -154,16 +157,66 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
         return "probe-error"
     if not isinstance(rows, list):
         return "probe-error"
-    return _classify_pr_rows(rows)
+    spec_only = _spec_only_merged_numbers(rows, execute)
+    if spec_only is None:
+        return "probe-error"
+    return _classify_pr_rows(rows, spec_only)
 
 
-def _classify_pr_rows(rows: list) -> str:
-    merged = open_ = closed = draft = 0
+# A merged PR whose whole diff is the spec's own text (one-PR-per-gate
+# convention) is not shipped work (#391). Paths under these prefixes never
+# count toward merge evidence.
+SPEC_TEXT_PREFIXES = (".flow/specs/", ".flow/tasks/")
+
+
+def _spec_only_merged_numbers(rows: list, execute: Execute) -> Optional[frozenset]:
+    """Probe each MERGED row's changed files; return the numbers whose files
+    all sit under SPEC_TEXT_PREFIXES. None → a probe failed (caller maps to
+    probe-error; a merged row is never counted without its file list)."""
+    spec_only: set = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("state") or "").upper() != "MERGED":
+            continue
+        number = row.get("number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            return None
+        argv = ["gh", "pr", "view", str(number), "--json", "files"]
+        result = execute(Request(
+            provider="github", op="merge-evidence-files", method="GET",
+            url_or_argv=argv, idempotent=True,
+        ))
+        if not isinstance(result, Response):
+            return None
+        if result.status and result.status >= 400:
+            return None
+        try:
+            payload = json.loads(result.body or b"")
+        except (ValueError, TypeError):
+            return None
+        files = payload.get("files") if isinstance(payload, dict) else None
+        if not isinstance(files, list):
+            return None
+        paths = [f.get("path") for f in files if isinstance(f, dict)]
+        if len(paths) != len(files) or not all(isinstance(x, str) for x in paths):
+            return None
+        if all(x.startswith(SPEC_TEXT_PREFIXES) for x in paths):
+            spec_only.add(number)
+    return frozenset(spec_only)
+
+
+def _classify_pr_rows(rows: list, spec_only: frozenset = frozenset()) -> str:
+    merged = open_ = closed = draft = spec_text = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
         state = str(row.get("state") or "").upper()
         if state == "MERGED":
+            if row.get("number") in spec_only:
+                # Spec-text-only merge (#391): not evidence of shipped work.
+                spec_text += 1
+                continue
             merged += 1
         elif state == "OPEN":
             # Drafts are not clean open evidence - counted separately so a
@@ -191,7 +244,7 @@ def _classify_pr_rows(rows: list) -> str:
         return "ambiguous"
     if closed >= 1:
         return "closed-unmerged"
-    if not rows:
+    if len(rows) == spec_text:
         return "none"
     return "ambiguous"
 
@@ -379,6 +432,15 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
     if flow_norm == tracker_norm:
         return Decision("noop", target_slot=tracker_norm,
                         details={"who": "already-agree"})
+
+    # ── EARLY AGREEMENT: a planned spec (all tasks todo) against capture's
+    #    `status:backlog` label is the same "not started" bucket, not a
+    #    disagreement. A todo/backlog request stays at the tracker's slot
+    #    (#375); anything else falls through to the existing ladder. ──
+    if (flow_norm == "todo" and tracker_norm == "backlog"
+            and requested_to in ("todo", "backlog")):
+        return Decision("noop", target_slot=tracker_norm,
+                        details={"who": "early-agree"})
 
     # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
     #    After the agreement no-op and the evidence conflicts; deadlock

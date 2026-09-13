@@ -61,7 +61,10 @@ PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all \
 MERGED=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="MERGED")] | length')
 OPEN=$(printf '%s'   "$PR_JSON" | jq '[.[] | select(.state=="OPEN")]   | length')
 # prEvidence ∈ {
-#   merged          ≥1 MERGED
+#   merged          ≥1 MERGED whose changed files include a path outside
+#                   .flow/specs/ and .flow/tasks/ (a spec-text-only merge is
+#                   the spec landing, not shipped work - flowctl probes each
+#                   MERGED row's files and excludes it, #391)
 #   open            ≥1 OPEN, 0 MERGED
 #   closed-unmerged ≥1 CLOSED, 0 MERGED/OPEN
 #   none            no PR for branch (probe succeeded, empty result)
@@ -332,6 +335,9 @@ fixed types (so it always normalizes) but whose **name** carries meaning the def
 map misses — e.g. a `completed`-type state literally named "Verified" (→ should be
 normalized `verified`, not `done`), or a `canceled`-type "Won't Fix" vs "Duplicate".
 The `tracker.perTracker.statusMap` config name-override handles the *known* ones.
+Only the Jira and Linear providers read `statusMap`; GitHub and GitLab carry
+status as `status:*` labels with a fixed vocabulary, so `statusMap` has no
+effect there and a status conflict on those trackers is never a mapping gap.
 
 For a state the bridge genuinely **cannot map** (a name-override the config doesn't
 have, or — defensively — a `state.type` value Linear adds in a future schema version

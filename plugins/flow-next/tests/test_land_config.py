@@ -921,12 +921,16 @@ class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
         cls.seam = cls.text[start:end]
 
     def test_seam_default_is_gh_pr_merge(self) -> None:
-        self.assertIn('MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"', self.text)
+        self.assertIn(
+            "MERGE_CMD=( $(printf '%s' \"${FLOW_PR_MERGE_CMD:-gh pr merge}\") )",
+            self.text,
+        )
 
     def test_merge_call_goes_through_the_seam_unquoted(self) -> None:
-        # Unquoted expansion: whitespace-split, never eval'd (#277 shape).
+        # Array built from a command substitution: whitespace-split under
+        # bash AND zsh (#406), never eval'd (#277 shape).
         self.assertIn(
-            'MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch '
+            'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch '
             '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
             self.text,
         )

@@ -593,14 +593,17 @@ def parse_glossary_file(text: str) -> list[dict[str, Any]]:
         avoid_match = _GLOSSARY_AVOID_RE.search(body)
         relates_match = _GLOSSARY_RELATES_RE.search(body)
 
-        # Strip avoid/relates lines from the definition slice.
+        # Strip avoid/relates lines from the definition slice. Offsets were
+        # computed against `body`, so remove in descending start order: an
+        # earlier removal would otherwise shift the later match's window
+        # (#408 - either authored line order).
         def_text = body
-        for stripped_match in (avoid_match, relates_match):
-            if stripped_match is not None:
-                def_text = (
-                    def_text[: stripped_match.start()]
-                    + def_text[stripped_match.end() :]
-                )
+        stripped = [m for m in (avoid_match, relates_match) if m is not None]
+        for stripped_match in sorted(stripped, key=lambda m: m.start(), reverse=True):
+            def_text = (
+                def_text[: stripped_match.start()]
+                + def_text[stripped_match.end() :]
+            )
 
         avoid: list[str] = []
         if avoid_match is not None:

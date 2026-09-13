@@ -637,7 +637,7 @@ Before each mutation, re-check current host consent and the bound PR identity; r
 
 ### 3.1 — `ci-fix`
 
-1. `gh pr checkout "$PR_NUMBER"` (the spec branch lives in this repo; checkout tracks it).
+1. `gh pr checkout "$PR_NUMBER"` (the spec branch lives in this repo; checkout tracks it). If git refuses with `already checked out at '<path>'` (the branch lives in another worktree), run the fix in that path instead: skip the checkout and this checkout's branch restore (its branch never moved), and never create or remove a worktree (#411).
 2. Inspect the failing check from the Phase 2 `CHECKS_JSON` (`name`, `bucket`, `link`). When the link maps to a GitHub Actions run (`/actions/runs/<id>` in the URL), derive the run id and read `gh run view <id> --log-failed`. External/status checks with no Actions run: use the check name/link as evidence and attempt only locally-discoverable matching validation. Logs unavailable AND no local validation exists → verdict `NEEDS_HUMAN`, restore branch, continue (never pretend CI was diagnosed).
 3. Judge relatedness against the PR diff:
    - **Unrelated** (infra flake, e.g. runner timeout, network): ONE `gh run rerun <id>` for that run — verdict `FIXING_CI`, reason `infra flake — rerun dispatched`, restore branch, continue. The FIRST rerun for a PR consumes NO budget strike (diagnosis-only ticks must never durably label a healthy PR); a REPEAT flake on a later tick is a fresh attempt against the budget — it increments `ci_fix_count` alongside `rerun_count`. One rerun per PR per tick. **An identical second failure is never flake**: the rerun write below records `flake_sig` — the failing check's name plus the first distinctive failure line from the step-2 log read, joined `<check>|<line>` (trimmed, timestamps stripped) — **bound to the head it diagnosed** (`flake_sig_head`). The signature is live only while `flake_sig_head == HEAD_OID`; a recorded head that differs from the current `HEAD_OID` (any push moved the head — catch-up, thread fix, CI fix) means the signature diagnosed code that no longer exists, so treat `flake_sig` as ABSENT and take the fresh first-failure path above — the new head earns its own rerun. (No push path clears the pair; the head comparison invalidates it naturally.) When the ledger's `flake_sig` for this PR matches the current failure AT the recorded head, a failure that reproduces byte-for-byte is deterministic — do not dispatch another rerun; re-run the step-3 relatedness judgment on THIS tick's failed logs and let that verdict route it. An identical repeat proves recurrence, never that the diff caused it: a signature that still reads infra-shaped on the re-read (the same runner disk exhaustion, the same network-service error) is a **persistent infrastructure failure** — verdict `NEEDS_HUMAN`, durable label (3.4), reason naming the recurring signature; it never enters the Related branch, which edits and pushes the feature branch and spends the PR's CI-fix budget on a failure the PR did not cause. Only a re-read that shows the PR's own failure behind an infra-looking first line reclassifies as **Related** and proceeds down that branch. (An absent `flake_sig` with `rerun_count >= 1` — a pre-signature ledger, NOT a head-mismatched signature, which already routed fresh above — falls back to comparing the previous run attempt's failed logs via `gh run view` when retrievable; only a confirmed identical failure stops the rerun and enters this re-judgment. Budget semantics hold: a repeat flake with a FRESH signature reruns and consumes its strike as above; the identical-signature infra path dispatches nothing and escalates as a hold, never a strike.) Ledger write (every write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, atomic `jq` + `mv`):
@@ -820,9 +820,12 @@ else
   # Scope: THIS merge call ONLY. `gh pr ready` above, the post-merge
   # mergeCommit read, the tail, and every other gh call in the tick stay on the
   # session identity, and `gh` stays a preflight requirement.
-  MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"
+  # Array form: zsh does not word-split an unquoted parameter expansion, so
+  # `$MERGE_CMD` was one command name there (#406). Command-substitution
+  # output splits on IFS under both bash and zsh; still never eval'd.
+  MERGE_CMD=( $(printf '%s' "${FLOW_PR_MERGE_CMD:-gh pr merge}") )
   MERGE_RC=0
-  MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   if [[ "$MERGE_RC" -ne 0 ]]; then
     echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
   fi

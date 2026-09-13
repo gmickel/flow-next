@@ -1,0 +1,149 @@
+{
+  "branch_name": "fn-242-issue-sweep-glossary-offsets-zsh-merge",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-09-13T09:27:26.789818Z",
+  "created_at": "2026-09-13T06:31:33.429725Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-242-issue-sweep-glossary-offsets-zsh-merge",
+  "impl_review_rounds": {
+    "fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0,
+    "fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "665f21a5f6b04c0a06b5669026fc480c434f1cbf9fb5d6e53198f13e100bc2ea",
+      "backend": "codex",
+      "base_sha": "02f88472bd7643513111ad6707b6dc7b9fd91bb1",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2eab4587e001bcabebbf783ccc7827467840131e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1526,
+      "output_sha256": "54ef1f76e209a4ead67144b141ae20baf79cd07dd61efe5f439206f4b92770a0",
+      "reservation_id": "3d15e229d89e4a778201fa05033390e1",
+      "round_consumed": true,
+      "scope": "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1",
+      "superseded_by": null,
+      "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.1",
+      "timestamp": "2026-09-13T06:51:00.484529Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "7be688f78ba4bf9ca3b6c4c099a550c2849746ffeff084275a9bcee482c3c538",
+      "backend": "codex",
+      "base_sha": "54c0a8b7dc15ec1c207ab072c9c05d6b36a673c7",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1134ea1f0659a567066523448990d1716e09cd88",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1144,
+      "output_sha256": "af8f242f7adffd04dfeb384c5e428fbdf31cca335f435e670c0abec75be60c47",
+      "reservation_id": "2b69cbf233a848fc917958eab524b790",
+      "round_consumed": true,
+      "scope": "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2",
+      "superseded_by": null,
+      "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.2",
+      "timestamp": "2026-09-13T09:22:39.071123Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "64fea63f9f1f4e1021c45becb4ebbff55372d70507c57528728ad1610b5b791a",
+      "backend": "codex",
+      "base_sha": "bcbfbe5e16c9144f03077608f3a142f9e8bdcbda",
+      "counter_kind": "plan",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7a3b7bc99abb8e0a671bcf560d9e52d869dd1bb5",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 220845,
+      "output_sha256": "de5281ee394cd3a32bd4728c0586a179ba5d988c0c1106f3a8e557ea5341190f",
+      "reservation_id": "f1cb8e1e9e7a42ca99213f12826f3169",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-13T09:27:26.785257Z",
+      "tool_calls": 10,
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 1,
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 1,
+    "plan#completion": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "completion": 0,
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0,
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 0
+  },
+  "spec_path": ".flow/specs/fn-242-issue-sweep-glossary-offsets-zsh-merge.md",
+  "status": "open",
+  "title": "Issue sweep: glossary offsets, zsh merge, todo/backlog status",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-13T09:27:26.792179Z"
+}
