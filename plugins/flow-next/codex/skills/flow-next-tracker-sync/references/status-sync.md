@@ -61,7 +61,10 @@ PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all \
 MERGED=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="MERGED")] | length')
 OPEN=$(printf '%s'   "$PR_JSON" | jq '[.[] | select(.state=="OPEN")]   | length')
 # prEvidence ∈ {
-#   merged          ≥1 MERGED
+#   merged          ≥1 MERGED whose changed files include a path outside
+#                   .flow/specs/ and .flow/tasks/ (a spec-text-only merge is
+#                   the spec landing, not shipped work - flowctl probes each
+#                   MERGED row's files and excludes it, #391)
 #   open            ≥1 OPEN, 0 MERGED
 #   closed-unmerged ≥1 CLOSED, 0 MERGED/OPEN
 #   none            no PR for branch (probe succeeded, empty result)
