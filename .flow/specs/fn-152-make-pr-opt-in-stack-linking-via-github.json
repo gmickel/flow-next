@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-152-make-pr-opt-in-stack-linking-via-github",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-13T19:15:37.874765Z",
   "created_at": "2026-07-31T04:27:08.970594Z",
   "default_impl": null,
   "default_review": null,
@@ -528,7 +528,7 @@
   },
   "spec_path": ".flow/specs/fn-152-make-pr-opt-in-stack-linking-via-github.md",
   "status": "open",
-  "title": "Dependent-spec chains: branch from the parent, target its PR, link GitHub stacks",
+  "title": "Dependent-spec chains: branch from the parent, link GitHub stacks",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -541,5 +541,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T19:13:52.330897Z"
+  "updated_at": "2026-09-13T19:15:48.280529Z"
 }

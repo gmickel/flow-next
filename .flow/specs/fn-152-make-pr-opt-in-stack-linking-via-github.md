@@ -101,7 +101,7 @@ After a successful `gh pr create`, on a GitHub remote, with the base resolved by
 
 ```bash
 STACK=$(gh api "repos/{owner}/{repo}/stacks?pull_request=<parent_pr_number>" --jq '.[0] // empty')
-# parent already in a stack (the API takes an integer array; -F types numbers, -f would send strings):
+# fn-152-make-pr-opt-in-stack-linking-via-github Dependent-spec chains: branch from the parent, link GitHub stacks
 gh api --method POST "repos/{owner}/{repo}/stacks/<stack_number>/add" -F 'pull_requests[]=<new_pr_number>'
 # parent not in a stack:
 gh api --method POST "repos/{owner}/{repo}/stacks" -F 'pull_requests[]=<parent_pr_number>' -F 'pull_requests[]=<new_pr_number>'
