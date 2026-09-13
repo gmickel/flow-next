@@ -44,7 +44,7 @@ Three independent one-file fixes, one review surface (same shape as prior issue 
 ## Quick commands
 
 ```bash
-cd plugins/flow-next && python3 -m pytest tests/ -q -k "glossary or policy or status" 
+python3 scripts/run_tests_parallel.py
 zsh -c 'MERGE_CMD=(${=FLOW_PR_MERGE_CMD:-gh pr merge}); print -l -- "${MERGE_CMD[@]}"'
 bash scripts/sync-codex.sh --check 2>/dev/null || bash scripts/sync-codex.sh
 ```
