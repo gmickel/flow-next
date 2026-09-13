@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-242-issue-sweep-glossary-offsets-zsh-merge",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": "2026-09-13T06:51:40.875954Z",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-09-13T09:27:26.789818Z",
   "created_at": "2026-09-13T06:31:33.429725Z",
   "default_impl": null,
   "default_review": null,
@@ -87,15 +87,47 @@
       "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.2",
       "timestamp": "2026-09-13T09:22:39.071123Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "64fea63f9f1f4e1021c45becb4ebbff55372d70507c57528728ad1610b5b791a",
+      "backend": "codex",
+      "base_sha": "bcbfbe5e16c9144f03077608f3a142f9e8bdcbda",
+      "counter_kind": "plan",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7a3b7bc99abb8e0a671bcf560d9e52d869dd1bb5",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 220845,
+      "output_sha256": "de5281ee394cd3a32bd4728c0586a179ba5d988c0c1106f3a8e557ea5341190f",
+      "reservation_id": "f1cb8e1e9e7a42ca99213f12826f3169",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-13T09:27:26.785257Z",
+      "tool_calls": 10,
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 1,
-    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 1
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 1,
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0,
     "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 0
   },
@@ -113,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-13T09:22:39.073070Z"
+  "updated_at": "2026-09-13T09:27:26.792179Z"
 }
