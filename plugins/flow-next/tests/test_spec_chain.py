@@ -208,6 +208,18 @@ class ChainCliTestCase(unittest.TestCase):
         self.assertEqual([t["id"] for t in ready["ready"]], [tasks[0].stem])
         self.assertEqual([t["blocked_by"] for t in ready["blocked"]], [[tasks[0].stem]])
 
+    # ---- R9: the decision-log row carries the chained reason ----
+    def test_pilot_log_row_carries_the_reason_only_when_given(self) -> None:
+        spec = self.spec("subject")
+        res = self.flowctl("pilot-log", "append", "--id", spec, "--action", "advanced", "--stage", "work",
+                           "--reason", "chained on fn-1-parent; work: 1 task done")
+        self.assertEqual(res.returncode, 0, res.stdout)
+        rows = sorted((self.repo / ".flow" / "pilot-runs").glob("pilot-*.json"))
+        self.assertEqual(json.loads(rows[-1].read_text(encoding="utf-8"))["reason"], "chained on fn-1-parent; work: 1 task done")
+        self.flowctl("pilot-log", "append", "--id", spec, "--action", "advanced", "--stage", "work")
+        rows = sorted((self.repo / ".flow" / "pilot-runs").glob("pilot-*.json"), key=lambda p: p.stat().st_mtime)
+        self.assertEqual(set(json.loads(rows[-1].read_text(encoding="utf-8"))), {"tick", "id", "action", "stage", "costTokens", "timestamp"})
+
 
 if __name__ == "__main__":
     unittest.main()

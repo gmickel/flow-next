@@ -104,7 +104,7 @@ Cascade: `--base` → chain parent branch (parent PR open) → `origin/main` →
 | merged | the parent PR's base (`origin/<chain_base>`) | **create run only:** rewrite the branch onto it from the boundary (§0.6b fence) so the PR does not double-count the parent's pre-squash commits; `--dry-run` and `--update` never rewrite |
 | closed unmerged | — | exit 2 `NEEDS_HUMAN: parent <id> PR #<n> closed unmerged; the chain is broken` |
 
-A dependency that is open with all tasks done but whose history cannot be reached (no branch on origin and no merged PR), or a merged one whose PR head cannot be fetched, is **unresolved**: exit 2 `NEEDS_HUMAN: cannot establish the chain boundary for <D>; parent history unreachable`, never a guess. A repo with no dependency edges never enters the rung and takes the default cascade byte-identically.
+A dependency that is open with all tasks done but whose history cannot be reached (no branch on origin and no merged PR), or a merged one whose PR head cannot be fetched, is **unresolved**; so is a merged parent whose chain base cannot be refreshed from origin (a stale base would drop the parent's landed work from the child on rewrite): exit 2 `NEEDS_HUMAN: cannot establish the chain boundary for <D>; parent history unreachable`, never a guess. A repo with no dependency edges never enters the rung and takes the default cascade byte-identically.
 
 ### 0.4 — Branch validity
 
@@ -208,7 +208,10 @@ if [[ -n "$CHAIN_PARENT" ]]; then
     MERGED)
       PARENT_PR_BASE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')
       : "${PARENT_PR_BASE:=${CHAIN_BASE#origin/}}"
-      git -C "$REPO_ROOT" fetch -q origin "refs/heads/$PARENT_PR_BASE:refs/remotes/origin/$PARENT_PR_BASE" 2>/dev/null || true
+      # The rewrite target must be the CURRENT tip of the chain base (it carries the parent's squash);
+      # a stale local ref would drop the parent's work from the child, so a failed refresh is unresolved.
+      git -C "$REPO_ROOT" fetch -q origin "refs/heads/$PARENT_PR_BASE:refs/remotes/origin/$PARENT_PR_BASE" 2>/dev/null \
+        || { echo "NEEDS_HUMAN: cannot refresh chain base $PARENT_PR_BASE from origin; no rewrite" >&2; exit 2; }
       REWRITE_ONTO="origin/$PARENT_PR_BASE"; BASE_REF="$REWRITE_ONTO"; CHAIN_REWRITE=1 ;;
     CLOSED)
       echo "NEEDS_HUMAN: parent $CHAIN_PARENT PR #$PARENT_PR closed unmerged; the chain is broken" >&2
@@ -346,7 +349,10 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
     git -C "$REPO_ROOT" merge-base --is-ancestor "$CHAIN_BOUNDARY" HEAD 2>/dev/null || { echo "NEEDS_HUMAN: chain boundary $CHAIN_BOUNDARY is not an ancestor of HEAD" >&2; exit 2; }
     [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || { echo "NEEDS_HUMAN: working tree not clean; commit or stash before the merged-parent rewrite" >&2; exit 2; }
     PRE_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)
-    REMOTE_SHA=$(git -C "$REPO_ROOT" ls-remote origin "refs/heads/$HEAD_BRANCH" 2>/dev/null | cut -f1)
+    # A failed remote read is not "branch not on origin": it would skip the lease and leave origin stale.
+    REMOTE_LS=$(git -C "$REPO_ROOT" ls-remote origin "refs/heads/$HEAD_BRANCH" 2>/dev/null) \
+      || { echo "NEEDS_HUMAN: cannot read origin for $HEAD_BRANCH; no rewrite" >&2; exit 2; }
+    REMOTE_SHA=$(printf '%s' "$REMOTE_LS" | cut -f1)
     if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$PRE_HEAD" ]]; then
       echo "NEEDS_HUMAN: $HEAD_BRANCH on origin ($REMOTE_SHA) differs from HEAD; push or pull first" >&2; exit 2
     fi

@@ -882,6 +882,10 @@ Output:
 
 Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the recorded direct-route choice `flow --auto` consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids; a chain parent per [`spec chain`](#spec-chain) is not listed), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
 
+### pilot-log append `--reason`
+
+`flowctl pilot-log append` accepts an optional `--reason "<one line>"` (fn-152 R9): the host's verdict reason for that row, stored verbatim as `reason`. A chained dispatch's row therefore begins `chained on <parent-id>; `. Rows written without the flag keep the frozen `{tick, id, action, stage, costTokens}` shape.
+
 ### pilot strikes
 
 Read and clear the **strikes ledger** of `/flow-next:flow --auto` (and its one-release alias `/flow-next:pilot`) - the don't-thrash counter the flow skill's auto workflow writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.

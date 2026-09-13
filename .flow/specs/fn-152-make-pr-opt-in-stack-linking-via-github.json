@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-152-make-pr-opt-in-stack-linking-via-github",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-152-make-pr-opt-in-stack-linking-via-github.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
@@ -338,8 +340,19 @@
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1": 1
+  },
+  "review_reservations": {
+    "dbe5063d44574a6588e17d22f1010c80": {
+      "artifact_sha256": "b498cbe8b97eb0ec6316eddf0adca6f6ec34787e356bd4d48f9abb38e51cddcf",
+      "counter_scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "epoch": 0,
+      "exclusive": true,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "plan": 0
   },
@@ -358,5 +371,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T18:15:44.063248Z"
+  "updated_at": "2026-09-13T18:44:11.437917Z"
 }

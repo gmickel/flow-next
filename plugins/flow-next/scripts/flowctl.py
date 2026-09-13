@@ -41692,6 +41692,12 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
             "costTokens": getattr(args, "cost_tokens", None),
             "timestamp": timestamp,
         }
+        # fn-152 R9: the host's one-line reason (verdict reason, e.g. `chained
+        # on <parent>; ...`). Stored only when given, so rows written without
+        # it keep the frozen shape above.
+        reason = getattr(args, "reason", None)
+        if reason:
+            row["reason"] = reason
 
         # Reserve the deterministic tick slot before publishing the row. A
         # crash leaves an occupied slot, so recovery skips rather than reuses
@@ -53555,6 +53561,11 @@ def main() -> None:
         type=int,
         default=None,
         help="Host-reported token cost (optional)",
+    )
+    p_pilot_log_append.add_argument(
+        "--reason",
+        default=None,
+        help="Host-reported one-line reason (optional; the verdict reason, stored verbatim)",
     )
     p_pilot_log_append.add_argument("--json", action="store_true", help="JSON output")
     p_pilot_log_append.set_defaults(func=cmd_pilot_log_append)

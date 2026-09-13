@@ -1,0 +1,29 @@
+{
+  "backend": "codex",
+  "counter_scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+  "failure_class": "fanout_abandoned",
+  "finalized": {
+    "digest": "not_applicable",
+    "receipt": "not_applicable",
+    "status": "not_applicable"
+  },
+  "metadata": null,
+  "outcome": "transport_failure",
+  "receipt_payload": null,
+  "receipt_target": null,
+  "reservation_id": "dbe5063d44574a6588e17d22f1010c80",
+  "reset_rounds_on_ship": false,
+  "response": "fan-out dispatched; no finalize landed before this refund-intent journal was replayed",
+  "response_sha256": "6ea4de7239adcef700fcf360528c3918564fc4300515f3a62b9a089c94e74f20",
+  "review_kind": "impl",
+  "review_type": "impl",
+  "reviewed_base_sha": "f2eeb07095a363b4f11bf32e23f9f6dd1274966e",
+  "reviewed_head_sha": "2591ad0b20e12b50975acbc0b385282144dde051",
+  "scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+  "spec_id": "fn-152-make-pr-opt-in-stack-linking-via-github",
+  "status_target": null,
+  "superseded_by": null,
+  "task_id": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+  "timestamp": "2026-09-13T18:44:11.438457Z",
+  "verdict": null
+}

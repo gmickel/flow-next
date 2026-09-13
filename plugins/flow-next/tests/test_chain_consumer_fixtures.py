@@ -75,7 +75,9 @@ class ConsumerWorld(ChainWorld):
         return spec_id
 
     def run_rc(self, script: str, env: dict[str, str], outputs: list[str], cwd: Path) -> tuple[int, dict[str, str]]:
-        prelude = "".join(f"{k}={v!r}\n" for k, v in env.items())
+        # `set -e`: the make-pr workflow preamble runs its fences under it, so a fence
+        # that only degrades without `set -e` is a fence that aborts in production.
+        prelude = "set -e\n" + "".join(f"{k}={v!r}\n" for k, v in env.items())
         epilogue = "\n" + "".join(f'printf "%s\\n" "__OUT__ {k}=${{{k}:-}}"\n' for k in outputs)
         run_env = {"PATH": f"{self.bin}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(self.tmp), "GH_WORLD": str(self.world_path),
                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x", "FLOW_ACTOR": "t"}
@@ -226,6 +228,18 @@ class ChainDetectTestCase(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn(f"NEEDS_HUMAN: parent {parent} PR #1 closed unmerged; the chain is broken", got["_stderr"])
 
+    def test_merged_parent_whose_chain_base_cannot_be_refreshed_is_unresolved(self) -> None:
+        parent, child, a_tip = parent_child(self.w)
+        self.w.add_pr(1, "A", "main", state="MERGED")
+        self.w.squash_merge("A")
+        git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/main")   # the fetch of the chain base fails
+        git(self.w.work, "checkout", "-q", "B")
+        head = git(self.w.work, "rev-parse", "HEAD")
+        rc, got = self.detect(child)
+        self.assertEqual(rc, 2)
+        self.assertIn("NEEDS_HUMAN: cannot refresh chain base main from origin; no rewrite", got["_stderr"])
+        self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), head)   # exit 2 happened before the rewrite flag was set
+
     def test_parent_without_a_pr_uses_the_parent_branch_with_no_link_target(self) -> None:
         parent, child, a_tip = parent_child(self.w)
         rc, got = self.detect(child)
@@ -312,6 +326,13 @@ class ChainRewriteTestCase(unittest.TestCase):
         self.assertIn(f"NEEDS_HUMAN: B on origin ({moved}) differs from HEAD", got["_stderr"])
         self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), self.b_tip)
 
+    def test_failed_remote_read_refuses_before_rewriting(self) -> None:
+        git(self.w.work, "remote", "set-url", "origin", str(self.tmp / "nowhere.git"))
+        rc, got = self.rewrite()
+        self.assertEqual(rc, 2)
+        self.assertIn("NEEDS_HUMAN: cannot read origin for B; no rewrite", got["_stderr"])
+        self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), self.b_tip)
+
     def test_dry_run_and_update_never_rewrite_or_push(self) -> None:
         rc, got = self.rewrite(DRY_RUN="1")
         self.assertEqual(rc, 0, got["_stderr"])
@@ -354,7 +375,8 @@ class DraftMatrixTestCase(unittest.TestCase):
             (("1", "1", "", "fn-1-parent"), "--draft"),
             (("1", "0", "draft", "fn-1-parent"), "--draft"),
             (("0", "0", "draft", "fn-1-parent"), "--draft"),
-            (("0", "2", "ready", "fn-1-parent"), ""),
+            (("0", "2", "ready", "fn-1-parent"), "--draft"),
+            (("0", "2", "ready", ""), ""),
         ]
         for (autonomous, open_items, force, chain), expected in cases:
             with self.subTest(autonomous=autonomous, open_items=open_items, force=force, chain=chain):

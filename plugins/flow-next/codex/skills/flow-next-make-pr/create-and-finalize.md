@@ -38,7 +38,7 @@ If the spec title contains characters problematic for shell quoting (single-quot
 
 Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** This is the smart draft/ready default the autonomous create relies on: draft when `OPEN_ITEMS_COUNT > 0` (or Ralph / autonomous / `--draft`), ready otherwise (or `--ready`).
 
-**Chained-layer exception (fn-152 R8).** A chained layer (`PHASE0_CONTEXT.chain_parent` non-empty) with zero open items is created **ready even under Ralph / autonomous**: a human merging from GitHub's stack UI cannot merge a draft, and land flips ready only immediately before its own merge. Open items still force draft and an explicit `--draft` always wins; non-chained PRs keep the four-input matrix byte-identically.
+**Chained-layer exception (fn-152 R8).** A chained layer (`PHASE0_CONTEXT.chain_parent` non-empty) with zero open items is created **ready even under Ralph / autonomous**: a human merging from GitHub's stack UI cannot merge a draft, and land flips ready only immediately before its own merge. Open items still force draft on a chained layer (even over `--ready`) and an explicit `--draft` always wins; non-chained PRs keep the four-input matrix byte-identically.
 
 ```bash
 # fence:draft-matrix — inputs: RALPH, AUTONOMOUS, OPEN_ITEMS_COUNT, DRAFT_FORCE, CHAIN_PARENT (from PHASE0_CONTEXT.chain_parent; empty when not chained)
@@ -72,6 +72,12 @@ if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" && "$AUTONOMOUS" != "1" ]]; t
   DRAFT_FLAG=""
 fi
 
+# Layer 4b: on a chained layer, open items force draft even over --ready (fn-152 R8) - the layer is
+# merge-ready from the stack UI only when nothing is open. Non-chained PRs keep layer 4 as is.
+if [[ -n "${CHAIN_PARENT:-}" && "$OPEN_ITEMS_COUNT" -gt 0 ]]; then
+  DRAFT_FLAG="--draft"
+fi
+
 # Conflict surfacing: --draft AND --ready in the same invocation is the SKILL.md last-flag-wins rule.
 # DRAFT_FORCE captured the last one already; this layer just makes the conflict legible at runtime.
 if [[ "$DRAFT_FORCE" == "ready" && ( "$RALPH" == "1" || "$AUTONOMOUS" == "1" ) ]]; then
@@ -94,6 +100,7 @@ fi
 | Ralph / Autonomous, **chained layer** | 0 | — | — | **ready** (stack-UI merge needs a non-draft) |
 | Ralph / Autonomous, chained layer | >0 | — | — | draft |
 | any, chained layer | — | yes | — | draft |
+| any, chained layer | >0 | — | yes | draft (open items win over `--ready` on a chain) |
 
 `--draft` and `--ready` in the same invocation is handled by SKILL.md mode-detection's "last-flag-wins" rule — `DRAFT_FORCE` ends up as whichever flag appeared last in `$ARGUMENTS`. The conflict isn't a hard error.
 
@@ -363,16 +370,18 @@ STACK_LINE=""
 if [[ -n "${CHAIN_PARENT:-}" && -n "${PARENT_PR:-}" && "${PARENT_PR_STATE:-}" == "OPEN" ]] \
    && git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | grep -qi 'github\.com'; then
   NEW_PR="${PR_URL##*/}"
-  OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null)
+  # Every failure below is captured inside a conditional: this block runs under the
+  # preamble's `set -e`, and a bare `VAR=$(cmd); rc=$?` would abort before degrading.
   STACK_NUMBER=""; LINK_RC=1; LINK_OUT=""
-  if STACK_GET=$(gh api "repos/$OWNER_REPO/stacks?pull_request=$PARENT_PR" 2>&1); then
+  OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>&1) || { LINK_OUT="$OWNER_REPO"; OWNER_REPO=""; }
+  if [[ -n "$OWNER_REPO" ]] && STACK_GET=$(gh api "repos/$OWNER_REPO/stacks?pull_request=$PARENT_PR" 2>&1); then
     STACK_NUMBER=$(printf '%s' "$STACK_GET" | jq -r '.[0].number // empty' 2>/dev/null)
     if [[ -n "$STACK_NUMBER" ]]; then
-      LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks/$STACK_NUMBER/add" -F "pull_requests[]=$NEW_PR" 2>&1); LINK_RC=$?
+      if LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks/$STACK_NUMBER/add" -F "pull_requests[]=$NEW_PR" 2>&1); then LINK_RC=0; fi
     else
-      LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks" -F "pull_requests[]=$PARENT_PR" -F "pull_requests[]=$NEW_PR" 2>&1); LINK_RC=$?
+      if LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks" -F "pull_requests[]=$PARENT_PR" -F "pull_requests[]=$NEW_PR" 2>&1); then LINK_RC=0; fi
     fi
-  else
+  elif [[ -n "$OWNER_REPO" ]]; then
     LINK_OUT="$STACK_GET"
   fi
   if [[ "$LINK_RC" -eq 0 ]]; then
