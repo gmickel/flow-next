@@ -740,6 +740,22 @@ class ScopedHandoffReconcileTestCase(unittest.TestCase):
         got = self.reconcile(foreign)
         self.assertEqual((got["RC"], got["NOW"]), ("1", self.old_b))
 
+    def test_a_parent_that_edited_one_file_twice_still_reconciles(self) -> None:
+        w = ChainWorld(Path(tempfile.mkdtemp(prefix="fn149-handoff2-", dir=self.tmp)))
+        w.branch("A", "main", [("f.txt", "one\n"), ("f.txt", "two\n")])
+        w.branch("B", "A", [("b.txt", "b\n")])
+        w.add_pr(1, "A", "main"); w.add_pr(2, "B", "A")
+        w.squash_merge("A"); w.world["prs"]["1"]["state"] = "MERGED"; w.save()
+        git(w.work, "checkout", "-q", "B")
+        old_b = git(w.work, "rev-parse", "HEAD")
+        w.run(fence(REFERENCE, "cascade"), {"MERGED_PARENT": "A", "PARENT_PR": "1", "CHAIN_BASE": "main", "OWNER_REPO": "o/r"}, ["CASCADE_VERDICT"])
+        new_b = w.origin_sha("B")
+        self.assertNotEqual(new_b, old_b)
+        git(w.work, "fetch", "-q", "origin", new_b)
+        script = self.fn + '\nRC=0; land_scope_reconcile_rewrite || RC=$?\nNOW="$(git -C "$REPO_ROOT" rev-parse HEAD)"'
+        got = w.run(script, {"REPO_ROOT": str(w.work), "SCOPE_BASE": "main", "SCOPE_HEAD": new_b}, ["RC", "NOW"], cwd=w.work)
+        self.assertEqual((got["RC"], got["NOW"]), ("0", new_b))
+
     def test_a_local_only_commit_not_in_the_base_is_never_discarded(self) -> None:
         git(self.w.work, "checkout", "-q", "B")
         local_x = self.w.commit(self.w.work, "x.txt", "unpushed\n", "B: local-only X")
