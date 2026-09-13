@@ -13,6 +13,7 @@ Run:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -54,7 +55,10 @@ class ChainCliTestCase(unittest.TestCase):
     def flowctl(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(FLOWCTL_PY), *args, "--json"],
-            cwd=self.repo, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "HOME": str(self.tmp), "FLOW_ACTOR": "t@example.com"},
+            cwd=self.repo, capture_output=True, text=True,
+            # Inherit PATH: a fixed POSIX PATH finds no git.exe on Windows, and the chain
+            # predicate then reports every remote read as failed (CI on #433).
+            env={**os.environ, "HOME": str(self.tmp), "FLOW_ACTOR": "t@example.com"},
         )
 
     def spec(self, title: str, *, tasks: int = 1, done: bool = False, status: str | None = None, deps: list[str] = ()) -> str:
