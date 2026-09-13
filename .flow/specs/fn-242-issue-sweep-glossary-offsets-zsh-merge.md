@@ -51,7 +51,7 @@ bash scripts/sync-codex.sh --check 2>/dev/null || bash scripts/sync-codex.sh
 
 ## Acceptance Criteria
 
-- R1: Parsing a glossary entry that carries both `_Avoid_` and `_Relates to_` yields a clean definition and the correct lists, in either line order; `render(parse(t)) == t` for the canonical rendering; a regression test covers it. (#408)
-- R2: The land merge fence invokes the merge command in a form that works under both bash and zsh without `eval`, preserving the `FLOW_PR_MERGE_CMD` override; the Codex mirror is regenerated and `sync-codex.sh` is idempotent. (#406)
-- R3: `decide()` returns `noop` for `{flow: todo, tracker: backlog}` with a requested `todo` or `backlog` under every `conflictTiebreak`; existing rows are unchanged; a regression test covers the new rule; `status-sync.md` notes that `statusMap` is Jira/Linear-only. (#375)
-- R4: `CHANGELOG.md` gains three `Fixed` entries under `## Unreleased` crediting the reporters; no version bump.
+- **R1:** Parsing a glossary entry that carries both `_Avoid_` and `_Relates to_` yields a clean definition and the correct lists, in either line order; `render(parse(t)) == t` for the canonical rendering; a regression test covers it. (#408)
+- **R2:** The land merge fence invokes the merge command in a form that works under both bash and zsh without `eval`, preserving the `FLOW_PR_MERGE_CMD` override; the Codex mirror is regenerated and `sync-codex.sh` is idempotent. (#406)
+- **R3:** `decide()` returns `noop` for `{flow: todo, tracker: backlog}` with a requested `todo` or `backlog` under every `conflictTiebreak`; existing rows are unchanged; a regression test covers the new rule; `status-sync.md` notes that `statusMap` is Jira/Linear-only. (#375)
+- **R4:** `CHANGELOG.md` gains three `Fixed` entries under `## Unreleased` crediting the reporters; no version bump.
