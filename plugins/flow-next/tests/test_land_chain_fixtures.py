@@ -789,7 +789,7 @@ class ChainContractTokensTestCase(unittest.TestCase):
             self.assertIn("NEEDS_HUMAN: merge-async does not enforce a head pin", text)
             self.assertIn("merge_action=direct_merge", text)
             self.assertNotIn("merge_action=merge_queue", text)
-            self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" != 0 ]] && MERGE_FLAGS=(--squash)', text)
+            self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-unknown}" != 0 ]] && MERGE_FLAGS=(--squash)', text)
         for path in self.copies("SKILL.md"):
             text = path.read_text(encoding="utf-8")
             self.assertIn("references/chains-and-stacks.md", text)

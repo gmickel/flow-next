@@ -949,7 +949,9 @@ else
   # --delete-branch — deleting the branch closes the child permanently — and its branch is
   # recorded in pending_branch_deletes after the merge is confirmed. A failed children read is
   # `unknown` and also keeps the branch (the janitor deletes it once the read succeeds). Zero: today's flags.
-  MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" != 0 ]] && MERGE_FLAGS=(--squash)   # >0 OR unknown (failed read): keep the branch
+  # CHILD_COUNT is read in the §2.0 fence; a variable that did not survive into this fence is UNREAD,
+  # never zero — an unset count keeps the branch exactly like a failed read (cursor review on #432).
+  MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-unknown}" != 0 ]] && MERGE_FLAGS=(--squash)   # >0, unknown (failed read), OR unset: keep the branch
   MERGE_RC=0
   MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" "${MERGE_FLAGS[@]}" --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   fi
@@ -1069,11 +1071,11 @@ After `MERGE_CONFIRMED=1` on a scoped handoff (or `MERGE_RC == 0` on standalone 
 
 ```bash
 # fence:pending-delete — inputs: CHILD_COUNT, PR_SHAPE, BRANCH_NAME, PR_NUMBER, TODAY, LEDGER, LEDGER_DIR
-if [[ "${CHILD_COUNT:-0}" != 0 || "${PR_SHAPE:-standalone}" == "stacked" ]]; then
+if [[ "${CHILD_COUNT:-unknown}" != 0 || "${PR_SHAPE:-standalone}" == "stacked" ]]; then
   mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
   tmp="$LEDGER.tmp.$$"
   jq --arg br "$BRANCH_NAME" --argjson pr "$PR_NUMBER" --arg ts "$TODAY" '.pending_branch_deletes[$br] = {"pr": $pr, "merged_at": $ts}' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
-  echo "Evidence: branch $BRANCH_NAME kept (${CHILD_COUNT:-0} open child PR(s), or unread) — recorded for the janitor"
+  echo "Evidence: branch $BRANCH_NAME kept (${CHILD_COUNT:-unknown} open child PR(s), or unread) — recorded for the janitor"
 fi
 ```
 
