@@ -82,6 +82,7 @@ class MergeFenceShellSafety(unittest.TestCase):
     def test_codex_mirror_carries_the_same_fence(self) -> None:
         self.assertEqual(_merge_fence(MIRROR), self.fence)
 
+    @unittest.skipIf(sys.platform == "win32", "Native Windows bash is a WSL/git-bash stub; POSIX PATH and shim perms do not apply")
     def test_default_and_override_split_under_bash_and_zsh(self) -> None:
         tail = ["42", "--squash", "--delete-branch", "--match-head-commit", "abc123",
                 "MERGE_RC=0"]
