@@ -9,7 +9,8 @@
   "depends_on_epics": [],
   "id": "fn-242-issue-sweep-glossary-offsets-zsh-merge",
   "impl_review_rounds": {
-    "fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0
+    "fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0,
+    "fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -51,15 +52,52 @@
       "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.1",
       "timestamp": "2026-09-13T06:51:00.484529Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "7be688f78ba4bf9ca3b6c4c099a550c2849746ffeff084275a9bcee482c3c538",
+      "backend": "codex",
+      "base_sha": "54c0a8b7dc15ec1c207ab072c9c05d6b36a673c7",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1134ea1f0659a567066523448990d1716e09cd88",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1144,
+      "output_sha256": "af8f242f7adffd04dfeb384c5e428fbdf31cca335f435e670c0abec75be60c47",
+      "reservation_id": "2b69cbf233a848fc917958eab524b790",
+      "round_consumed": true,
+      "scope": "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2",
+      "superseded_by": null,
+      "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.2",
+      "timestamp": "2026-09-13T09:22:39.071123Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 1
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 1,
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
-    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0,
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.2": 0
   },
   "spec_path": ".flow/specs/fn-242-issue-sweep-glossary-offsets-zsh-merge.md",
   "status": "open",
@@ -75,5 +113,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-13T09:12:33.157189Z"
+  "updated_at": "2026-09-13T09:22:39.073070Z"
 }
