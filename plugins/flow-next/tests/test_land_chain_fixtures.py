@@ -652,6 +652,25 @@ class CascadeRecoveryPersistenceTestCase(unittest.TestCase):
         self.assertEqual(self.w.origin_sha("B"), b_before)
         self.assertNotIn("cascade", self.w.ledger_json())
 
+    def test_conflict_while_re_preparing_the_upper_layer_leaves_the_record_untouched(self) -> None:
+        # tick 1: B's push is refused → record with both layers unpublished
+        self.w.reject_pushes_to("B")
+        self.cascade()
+        before = self.w.ledger_json()["cascade"]
+        # someone commits on B's old history a c.txt that conflicts with C's c.txt
+        self.w.reject_pushes_to(None)
+        git(self.w.work, "fetch", "-q", "origin")
+        git(self.w.work, "checkout", "-q", "-B", "B", "origin/B")
+        self.w.commit(self.w.work, "c.txt", "b-version\n", "B: c.txt")
+        git(self.w.work, "push", "-q", "origin", "B")
+        b_remote, c_remote = self.w.origin_sha("B"), self.w.origin_sha("C")
+        # tick 2: B re-prepares, C's re-prepare conflicts → BLOCKED, nothing pushed, record NOT half-replaced
+        got = self.cascade()
+        self.assertEqual(got["CASCADE_VERDICT"], "blocked", got)
+        self.assertIn("c.txt", got["CASCADE_REASON"])
+        self.assertEqual(self.w.ledger_json()["cascade"], before)
+        self.assertEqual((self.w.origin_sha("B"), self.w.origin_sha("C")), (b_remote, c_remote))
+
     def test_re_prepared_lower_layer_persists_upper_replacements_before_any_push(self) -> None:
         # tick 1: B's push is refused → record with both layers unpublished
         self.w.reject_pushes_to("B")
@@ -720,6 +739,13 @@ class ScopedHandoffReconcileTestCase(unittest.TestCase):
         git(self.w.work, "fetch", "-q", "origin", foreign)
         got = self.reconcile(foreign)
         self.assertEqual((got["RC"], got["NOW"]), ("1", self.old_b))
+
+    def test_a_local_only_commit_not_in_the_base_is_never_discarded(self) -> None:
+        git(self.w.work, "checkout", "-q", "B")
+        local_x = self.w.commit(self.w.work, "x.txt", "unpushed\n", "B: local-only X")
+        git(self.w.work, "fetch", "-q", "origin", self.new_b)
+        got = self.reconcile(self.new_b)
+        self.assertEqual((got["RC"], got["NOW"]), ("1", local_x))
 
     def test_a_dirty_checkout_is_never_reset(self) -> None:
         (self.w.work / "b.txt").write_text("local edit\n", encoding="utf-8")

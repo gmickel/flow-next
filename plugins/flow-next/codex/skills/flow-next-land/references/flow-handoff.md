@@ -2,19 +2,31 @@
 
 For a flow handoff, require the complete tuple and current authority before taking the claim. Keep `REPO_ROOT` on the source checkout for spec/task/QA evidence and CI/resolve actions. Resolve `LAND_BASE_ROOT` to the base worktree in this same clone; verify both physical paths and common git directory. After acquiring the claim, prepare a missing base worktree with `git worktree add <new-owned-directory> <verified-base>` (fetch the base if needed), then validate it below before loading any config. Reuse it on later ticks via `git worktree list`; report the path for recovery. Never move an occupied source or base branch or discard local work. Standalone land defaults `LAND_BASE_ROOT` to `REPO_ROOT` and keeps its checkout behavior. Dry-run creates no worktree and reports an unavailable base as a would-prepare requirement; it executes no merge-verdict command.
 
-After a chain cascade (§3.7) or GitHub's stack retarget, the PR head is a rewrite of the same commits, so the source checkout cannot fast-forward to it. The reconcile below moves a clean, owned checkout onto such a head only when every commit on the new head exists by stable patch-id among the local commits above the base — a head that carries a patch the checkout never had is still a failure, never a reset:
+After a chain cascade (§3.7) or GitHub's stack retarget, the PR head is a rewrite of the same commits, so the source checkout cannot fast-forward to it. The reconcile below moves a clean, owned checkout onto such a head only when both directions hold: every commit on the new head exists by stable patch-id among the local commits above the base (a head carrying a patch the checkout never had is not a rewrite of this work), and every local commit missing from the new head is already contained in the base (the merged parent's commits, verified by reverse-applying each one against the base tree) — a local-only commit that is in neither is unpushed work, and the checkout stays where it is:
 
 ```bash
 # fence:scope-reconcile — inputs: REPO_ROOT, SCOPE_BASE, SCOPE_HEAD (fetched); → rc 0 when the checkout was moved
+land_scope_patch_in_base() {   # $1 commit, $2 base ref → rc 0 when the commit's change is already present in the base tree (reverse-apply check on a scratch index)
+  local idx rc; idx="$(git -C "$REPO_ROOT" rev-parse --git-path flow-next-reconcile.index)"
+  GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" read-tree "$2" 2>/dev/null || { rm -f "$idx"; return 1; }
+  git -C "$REPO_ROOT" diff "$1^" "$1" | GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" apply --cached --check -R 2>/dev/null; rc=$?
+  rm -f "$idx"; return $rc
+}
 land_scope_reconcile_rewrite() {
-  local base local_ids remote_ids c
+  local base local_ids remote_ids c id
   [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || return 1                      # never discard local work
   git -C "$REPO_ROOT" fetch -q origin "refs/heads/$SCOPE_BASE" 2>/dev/null || return 1
   base="origin/$SCOPE_BASE"
-  local_ids="$(for c in $(git -C "$REPO_ROOT" rev-list "$(git -C "$REPO_ROOT" merge-base HEAD "$base")..HEAD"); do git -C "$REPO_ROOT" show "$c" | git patch-id --stable | cut -d' ' -f1; done | sort -u)"
   remote_ids="$(for c in $(git -C "$REPO_ROOT" rev-list "$(git -C "$REPO_ROOT" merge-base "$SCOPE_HEAD" "$base")..$SCOPE_HEAD"); do git -C "$REPO_ROOT" show "$c" | git patch-id --stable | cut -d' ' -f1; done | sort -u)"
   [[ -n "$remote_ids" ]] || return 1
-  [[ -z "$(comm -13 <(printf '%s\n' "$local_ids") <(printf '%s\n' "$remote_ids"))" ]] || return 1   # a remote patch the checkout never had → not a rewrite of this work
+  local_ids=""
+  for c in $(git -C "$REPO_ROOT" rev-list "$(git -C "$REPO_ROOT" merge-base HEAD "$base")..HEAD"); do
+    id="$(git -C "$REPO_ROOT" show "$c" | git patch-id --stable | cut -d' ' -f1)"; local_ids="$local_ids$id
+"
+    # a local commit absent from the new head must already be in the base (the merged parent's work); anything else is unpushed work → refuse
+    printf '%s\n' "$remote_ids" | grep -qx "$id" || land_scope_patch_in_base "$c" "$base" || return 1
+  done
+  [[ -z "$(comm -13 <(printf '%s' "$local_ids" | sort -u) <(printf '%s\n' "$remote_ids"))" ]] || return 1   # a remote patch the checkout never had → not a rewrite of this work
   git -C "$REPO_ROOT" reset -q --hard "$SCOPE_HEAD"
 }
 ```

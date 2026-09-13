@@ -113,13 +113,14 @@ fi
 
 if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
   # ---- RECONCILE (no remote writes): each unpublished layer's remote head against the recorded tips. A layer that
-  # must be re-prepared invalidates every layer above it, and every replacement is PERSISTED in the record before
-  # the publish pass pushes anything — an interruption between two pushes never publishes a stale upper tip. ----
+  # must be re-prepared invalidates every layer above it. Replacements accumulate in NEW_LAYERS and the record is
+  # rewritten ONCE, only after every affected layer succeeded — a conflict or crash between two replacements leaves
+  # the record untouched (nothing half-replaced is ever published); the publish pass then pushes from the record. ----
   CHAIN_BASE="$(printf '%s' "$RECORD" | jq -r '.chain_base')"; MERGED_PARENT="$(printf '%s' "$RECORD" | jq -r '.merged_parent')"
   git fetch -q origin "refs/heads/$CHAIN_BASE" $(printf '%s' "$RECORD" | jq -r '.layers[].branch' | sed 's|^|refs/heads/|') 2>/dev/null || true
   git fetch -q origin "refs/heads/$MERGED_PARENT" 2>/dev/null || true
   BELOW_OLD="$(git rev-parse -q --verify "origin/$MERGED_PARENT" 2>/dev/null || true)"; BELOW_NEW="$(git rev-parse "origin/$CHAIN_BASE")"
-  REPREPARE=0; IDX=0
+  REPREPARE=0; IDX=0; NEW_LAYERS="$(printf '%s' "$RECORD" | jq -c '.layers')"
   while IFS='	' read -r LAYER PRN OLD_TIP NEW_TIP PUBLISHED BASE_EDITED; do
     [[ -z "$LAYER" ]] && continue
     if [[ "$PUBLISHED" != true ]]; then
@@ -128,7 +129,7 @@ if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
       fi
       REMOTE="$(git ls-remote origin "refs/heads/$LAYER" | cut -f1)"
       if [[ "$REPREPARE" == 0 ]] && { [[ "$REMOTE" == "$NEW_TIP" ]] || git merge-base --is-ancestor "$NEW_TIP" "$REMOTE" 2>/dev/null; }; then
-        cascade_write --argjson i "$IDX" '.cascade.layers[$i].published = true'   # the push landed (possibly with commits on top): no second rewrite
+        NEW_LAYERS="$(printf '%s' "$NEW_LAYERS" | jq -c --argjson i "$IDX" '.[$i].published = true')"   # the push landed (possibly with commits on top): no second rewrite
       elif [[ "$REPREPARE" == 0 && "$REMOTE" == "$OLD_TIP" ]]; then
         :   # the prepared tip is still valid; the publish pass pushes it
       elif [[ "$REPREPARE" == 1 ]] || git merge-base --is-ancestor "$OLD_TIP" "$REMOTE" 2>/dev/null; then
@@ -138,7 +139,7 @@ if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
         RENEW="$(cascade_rebase "$LAYER" "$REMOTE" "$FORK" "$BELOW_NEW")" || {
           [[ $? -eq 1 ]] && cascade_stop blocked "retarget of #$PRN conflicts in ${RENEW:-<unknown>} (record kept)" \
                          || cascade_stop needs_human "cannot create a worktree for $LAYER"; break; }
-        cascade_write --argjson i "$IDX" --arg o "$REMOTE" --arg n "$RENEW" '.cascade.layers[$i].old_tip = $o | .cascade.layers[$i].new_tip = $n'
+        NEW_LAYERS="$(printf '%s' "$NEW_LAYERS" | jq -c --argjson i "$IDX" --arg o "$REMOTE" --arg n "$RENEW" '.[$i].old_tip = $o | .[$i].new_tip = $n')"
         OLD_TIP="$REMOTE"; NEW_TIP="$RENEW"; REPREPARE=1
       else
         cascade_stop needs_human "$LAYER was rewritten by someone else during a cascade; reconcile by hand"; break
@@ -148,6 +149,7 @@ if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
   done <<EOF_RECONCILE
 $(printf '%s' "$RECORD" | jq -r '.layers[] | [.branch, (.pr|tostring), .old_tip, .new_tip, (.published|tostring), (.base_edited|tostring)] | @tsv')
 EOF_RECONCILE
+  [[ -z "$CASCADE_STOPPED" ]] && cascade_write --argjson layers "$NEW_LAYERS" '.cascade.layers = $layers'   # one atomic record rewrite, or none
 fi
 if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
   # ---- PUBLISH (bottom-up, from the persisted record): lease on the recorded old tip, base edit for the first layer ----
@@ -180,7 +182,7 @@ fi
 
 Rules the fence encodes, for the reader:
 
-- The record is written before the first push and cleared only after the last base edit. A push can succeed while the ledger write after it is lost, which is why resumption reconciles each unpublished layer's remote head first, in this order: at or above `new_tip` (published, no rewrite), at `old_tip` (push as prepared), above `old_tip` (re-prepare from the current head against the recorded tips below, and every layer above it likewise), anything else (`NEEDS_HUMAN`, a foreign rewrite). The reconcile pass persists every replacement tip in the record before the publish pass pushes anything, so a lease failure or crash between two pushes never leaves an upper layer's stale prepared tip to be published later.
+- The record is written before the first push and cleared only after the last base edit. A push can succeed while the ledger write after it is lost, which is why resumption reconciles each unpublished layer's remote head first, in this order: at or above `new_tip` (published, no rewrite), at `old_tip` (push as prepared), above `old_tip` (re-prepare from the current head against the recorded tips below, and every layer above it likewise), anything else (`NEEDS_HUMAN`, a foreign rewrite). The reconcile pass rewrites the record once, after every affected layer's replacement succeeded, and the publish pass pushes only from the record: a lease failure or crash between two pushes, and a conflict or crash between two replacements, both leave a record that is either fully consistent or untouched, never one with a fresh lower tip beside a stale upper one.
 - A failed child-list read during discovery prepares nothing and re-ticks (`RESOLVING`); a chain truncated by an unread layer would publish a lower rewrite and strand the layers above it.
 - A boundary that resolves onto the chain base means the invariant was already broken below; the whole cascade is refused before any push. A rebase conflict during prepare aborts that layer, removes the worktree, writes no record, and reports `BLOCKED` naming the files; land never hand-resolves a conflict. A lease failure during publish keeps the record and reports `RESOLVING`.
 - The recorded old tips are reachable only through this clone's objects after a force-push; a record whose objects are missing (another clone) is `NEEDS_HUMAN`. Land already runs from one clone per ledger.
