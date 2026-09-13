@@ -42,7 +42,7 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 
 | Variant | Driving signal | Route |
 |---|---|---|
-| [Epic](#epic) | Material choices plus a plan signal (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier) | capture → refine → plan → plan-review → work → [qa when `on` or qualifying `auto`] → make-pr, draft PR by default; optional authorized land stage through merge |
+| [Epic](#epic) | Material choices plus a plan signal (a plan was asked for, separate people implement, or delivery is staged across several PRs) | capture → refine → plan → plan-review → work → [qa when `on` or qualifying `auto`] → make-pr, draft PR by default; optional authorized land stage through merge |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; cohesive spec needs no task breakdown | spec → plan-review → work `--no-plan` → make-pr |
 | [No-plan route](#no-plan-route) | Ready cohesive spec; capable coding agent; no coordination benefit from tasks | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Small cohesive spec or an existing planned task | spec: work `--no-plan`; planned task: work `fn-N.M` |
@@ -78,7 +78,7 @@ flowchart LR
     S([Ready spec]) --> PR[/plan-review/] --> W[/work --no-plan/] --> M[/make-pr/]
 ```
 
-Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without task files. Then use `/flow-next:work <spec-id> --no-plan` if decomposition adds no coordination value. When a plan signal is present (a plan was asked for, separate people implement, delivery is staged across several PRs, or the implementer is routed to another tier), plan those tasks and review the resulting plan instead. The design-review decision does not force task decomposition.
+Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without task files. Then use `/flow-next:work <spec-id> --no-plan` if decomposition adds no coordination value. When a plan signal is present (a plan was asked for, separate people implement, or delivery is staged across several PRs), plan those tasks and review the resulting plan instead. The design-review decision does not force task decomposition.
 
 ### No-plan route
 

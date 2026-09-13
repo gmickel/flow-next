@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [flow-next 5.2.1] - 2026-09-13
+
+### Fixed
+
+- **Changing the implementation model or harness no longer forces task decomposition.** A ready cohesive spec keeps the direct route unless the user requests planning, separate human owners will implement, or delivery spans multiple PRs. Removed the routed-implementer trigger from Flow's shared rule and matching guidance; explicit plans, research, refinement, review, QA, and handoff requirements retain their existing behavior. Reported by @gmickel.
+
 ## [flow-next 5.2.0] - 2026-09-13
 
 You can now carry a selected spec through PR convergence and merge in one flow run, while retaining the choice to stop before merge.
