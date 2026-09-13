@@ -1,4 +1,4 @@
-# Issue sweep: glossary offsets, zsh merge command, todo/backlog status rule
+# Issue sweep: glossary offsets, zsh merge, todo/backlog status
 
 ## Conversation Evidence
 

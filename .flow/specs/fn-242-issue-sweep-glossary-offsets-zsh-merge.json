@@ -63,7 +63,7 @@
   },
   "spec_path": ".flow/specs/fn-242-issue-sweep-glossary-offsets-zsh-merge.md",
   "status": "open",
-  "title": "Issue sweep: glossary offsets, zsh merge command, todo/backlog status rule",
+  "title": "Issue sweep: glossary offsets, zsh merge, todo/backlog status",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -75,5 +75,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-13T06:51:40.875961Z"
+  "updated_at": "2026-09-13T06:56:31.416157Z"
 }
