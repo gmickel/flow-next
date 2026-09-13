@@ -11,6 +11,12 @@ All notable changes to the flow-next.
 - **A merged spec-text-only PR no longer counts as merge evidence.** The status projection classified `gh pr list` rows by state alone, so a merged PR whose whole diff was `.flow/specs/` and `.flow/tasks/` (the spec's own text landing under one-PR-per-gate) projected a still-open spec to In Review and re-derived it on every touchpoint. Each merged row is now probed for its changed files and counts only when it touches a path outside those two directories; a failed file probe degrades to `probe-error`, never `merged`. Thanks to @sn-furali for the report (#391).
 - **Land's ci-fix step recovers when the PR branch is checked out in another worktree.** `gh pr checkout` refuses with `already checked out at '<path>'` in the Worktree Kit shape; the step now tells the agent to run the fix in that path, skipping the checkout and that checkout's branch restore, without creating or removing a worktree. Thanks to @TechupBusiness for the report (#411).
 
+## [flow-next 5.2.1] - 2026-09-13
+
+### Fixed
+
+- **Changing the implementation model or harness no longer forces task decomposition.** A ready cohesive spec keeps the direct route unless the user requests planning, separate human owners will implement, or delivery spans multiple PRs. Removed the routed-implementer trigger from Flow's shared rule and matching guidance; explicit plans, research, refinement, review, QA, and handoff requirements retain their existing behavior. Reported by @gmickel.
+
 ## [flow-next 5.2.0] - 2026-09-13
 
 You can now carry a selected spec through PR convergence and merge in one flow run, while retaining the choice to stop before merge.

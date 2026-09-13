@@ -370,7 +370,7 @@ Backends, reviewers, and bridged implementers are prompts plus plumbing - when a
 
 ## Pipeline routing: who decides the shape
 
-Direct execution through `/flow-next:work <id> --no-plan` is the default for a ready cohesive spec; plan is chosen on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model). Refine material choices and review design risk separately; explicit plan-review can inspect a spec without task files. The rules live in the flow skill's [routing reference](../../skills/flow-next-flow/SKILL.md), one file per rule, and the attended decider, capture's closer, and plan's menu all read the same files. Six deciders read the item's state and instructions and print their reason.
+Direct execution through `/flow-next:work <id> --no-plan` is the default for a ready cohesive spec; plan is chosen on a positive signal (an explicit request, separate human owners, or staged multi-PR delivery). Refine material choices and review design risk separately; explicit plan-review can inspect a spec without task files. The rules live in the flow skill's [routing reference](../../skills/flow-next-flow/SKILL.md), one file per rule, and the attended decider, capture's closer, and plan's menu all read the same files. Six deciders read the item's state and instructions and print their reason.
 
 | Decider | Reads | Decides | Prints | Lives in |
 |---|---|---|---|---|

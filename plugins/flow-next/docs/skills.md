@@ -8,7 +8,7 @@ One surface ships without a row here, on purpose: `/flow-next:uninstall` is a co
 
 ## Lifecycle skills
 
-Skills below follow their lifecycle position. Flow sits above them: it picks the route from whatever you have. For a ready cohesive spec the direct route (`/flow-next:work <id> --no-plan`) is the default; plan is chosen on a positive signal (an explicit request, separate human owners, staged multi-PR delivery, or an implementer routed out of the session model). Explicit plan-review can review a spec before tasks exist. Chart is an optional discovery tool.
+Skills below follow their lifecycle position. Flow sits above them: it picks the route from whatever you have. For a ready cohesive spec the direct route (`/flow-next:work <id> --no-plan`) is the default; plan is chosen on a positive signal (an explicit request, separate human owners, or staged multi-PR delivery). Explicit plan-review can review a spec before tasks exist. Chart is an optional discovery tool.
 
 | Skill | Trigger | What it does |
 |---|---|---|
