@@ -6,9 +6,7 @@
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [
-    "fn-149-land-hardening-survive-stacked-pr-auto"
-  ],
+  "depends_on_epics": [],
   "id": "fn-152-make-pr-opt-in-stack-linking-via-github",
   "impl_review_rounds": {},
   "next_task": 1,
@@ -16,7 +14,7 @@
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-09-13T12:50:46.759586Z",
-  "ready": false,
+  "ready": true,
   "review_attempts": [
     {
       "artifact_sha256": "102957a654e89290661f5a8b6a953b0db63f51860869b1d3eea88f70d1b1d7c9",
@@ -360,5 +358,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T16:53:44.772197Z"
+  "updated_at": "2026-09-13T18:15:44.063248Z"
 }
