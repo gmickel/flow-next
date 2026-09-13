@@ -42,6 +42,9 @@ def fake_execute(responses: dict):
 
     def execute(request):
         calls.append(request)
+        if request.op == "merge-evidence-files" and request.op not in responses:
+            # Merged fixtures are shipped code unless a test says otherwise.
+            return ok(CODE_FILES)
         if request.op not in responses:
             raise AssertionError(f"unexpected op {request.op!r}; have {sorted(responses)}")
         out = responses[request.op]
@@ -56,6 +59,8 @@ def fake_execute(responses: dict):
 
 
 GH_NODE = "I_kwDOTestNode1"
+CODE_FILES = {"files": [{"path": "src/app.py"}]}
+MERGED_ROWS = [{"state": "MERGED", "number": 7}]
 GL_ID = "84817009"
 LN_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 JR_ID = "10042"
@@ -380,7 +385,7 @@ class MergeEvidence(unittest.TestCase):
 
     def test_classifies_buckets(self) -> None:
         cases = [
-            ([{"state": "MERGED"}], "merged"),
+            ([{"state": "MERGED", "number": 7}], "merged"),
             ([{"state": "OPEN"}], "open"),
             ([{"state": "CLOSED"}], "closed-unmerged"),
             ([], "none"),
@@ -406,7 +411,8 @@ class MergeEvidence(unittest.TestCase):
             ([{"state": "OPEN", "isDraft": True},
               {"state": "OPEN", "isDraft": False}], "open"),
             # merged always wins, drafts irrelevant
-            ([{"state": "OPEN", "isDraft": True}, {"state": "MERGED"}],
+            ([{"state": "OPEN", "isDraft": True},
+              {"state": "MERGED", "number": 7}],
              "merged"),
             # explicit isDraft: false keeps classifying as clean open
             ([{"state": "OPEN", "isDraft": False}], "open"),
@@ -416,6 +422,55 @@ class MergeEvidence(unittest.TestCase):
                 ex = fake_execute({"merge-evidence": ok(rows)})
                 got = merge_evidence(gh_cfg(), {"branch_name": "b"}, ex)
                 self.assertEqual(got, want)
+
+    def test_spec_text_only_merge_is_not_evidence(self) -> None:
+        """#391: a merged PR whose whole diff is .flow/specs/ + .flow/tasks/
+        is the spec's own text landing, not shipped work. Spec-only merged
+        rows are ignored; a merged row touching any other path still counts;
+        a file-probe failure on a merged row is probe-error, never merged."""
+        spec_files = {"files": [{"path": ".flow/specs/fn-1.md"},
+                                {"path": ".flow/tasks/fn-1.1.md"}]}
+        mixed_files = {"files": [{"path": ".flow/specs/fn-1.md"},
+                                 {"path": "src/app.py"}]}
+        merged = {"state": "MERGED", "number": 7}
+        cases = [
+            ("spec-only", [merged], {"merge-evidence-files": ok(spec_files)},
+             "none"),
+            ("spec-only alongside open", [merged, {"state": "OPEN"}],
+             {"merge-evidence-files": ok(spec_files)}, "open"),
+            ("mixed", [merged], {"merge-evidence-files": ok(mixed_files)},
+             "merged"),
+            ("two merged, one spec-only",
+             [merged, {"state": "MERGED", "number": 8}],
+             {"merge-evidence-files": [ok(spec_files), ok(mixed_files)]},
+             "merged"),
+            ("probe transport error", [merged],
+             {"merge-evidence-files": TrackerError(
+                 ErrorClass.TRANSPORT, "gh failed", subtype="spawn")},
+             "probe-error"),
+            ("probe non-json body", [merged],
+             {"merge-evidence-files": Response(200, {}, b"nope", 0.01)},
+             "probe-error"),
+            ("merged row without number", [{"state": "MERGED"}], {},
+             "probe-error"),
+        ]
+        for label, rows, extra, want in cases:
+            with self.subTest(label=label):
+                ex = fake_execute({"merge-evidence": ok(rows), **extra})
+                got = merge_evidence(gh_cfg(), {"branch_name": "b"}, ex)
+                self.assertEqual(got, want)
+                probes = [c for c in ex.calls if c.op == "merge-evidence-files"]
+                for c in probes:
+                    self.assertEqual(list(c.url_or_argv)[:3], ["gh", "pr", "view"])
+                    self.assertTrue(c.idempotent)
+                    self.assertEqual(c.method, "GET")
+
+    def test_open_and_closed_rows_are_never_file_probed(self) -> None:
+        ex = fake_execute({"merge-evidence": ok(
+            [{"state": "OPEN", "number": 1}, {"state": "CLOSED", "number": 2}])})
+        self.assertEqual(
+            merge_evidence(gh_cfg(), {"branch_name": "b"}, ex), "ambiguous")
+        self.assertEqual([c.op for c in ex.calls], ["merge-evidence"])
 
     def test_draft_only_decision_surfaces_ambiguity(self) -> None:
         """Draft-only evidence routes through the ambiguous conflict path
@@ -505,7 +560,7 @@ class StatusVerbGate(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in-progress"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
             })
             out = S.status(flow, "fn-1-demo", to="done", execute=ex)
             self.assertIsInstance(out, TrackerError)
@@ -556,8 +611,9 @@ class StatusVerbGate(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "noop")
             self.assertEqual(
-                [c.op for c in raw.calls], ["merge-evidence"],
-                "gh probe uses the unbound source-repository executor")
+                [c.op for c in raw.calls],
+                ["merge-evidence", "merge-evidence-files"],
+                "gh probes use the unbound source-repository executor")
             self.assertEqual(
                 [c.op for c in tracker_bound.calls], ["status-parent-read"])
 
@@ -739,7 +795,7 @@ class GitlabOpenedClosed(unittest.TestCase):
                     "id": int(GL_ID), "iid": 12, "state": "opened",
                     "labels": ["status:in_review"],
                 }),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": capture,
             })
             out = S.status(flow, "fn-1-demo", to="done", execute=ex)
@@ -1076,7 +1132,7 @@ class Round1HostFixes(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": empty_ok(),
@@ -1150,7 +1206,7 @@ class Round1HostFixes(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": [
@@ -1175,7 +1231,7 @@ class Round1HostFixes(unittest.TestCase):
                     state="closed",
                     labels=["status:in_review", "status:done"],
                     state_reason="completed")),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-label-rm": empty_ok(),
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
@@ -1192,8 +1248,8 @@ class Round1HostFixes(unittest.TestCase):
             self.assertEqual(receipts[0]["status"], "updated")
             self.assertEqual(
                 [c.op for c in retry_ex.calls],
-                ["status-parent-read", "merge-evidence", "status-label-rm",
-                 "status-label-add", "status-label-readback"])
+                ["status-parent-read", "merge-evidence", "merge-evidence-files",
+                 "status-label-rm", "status-label-add", "status-label-readback"])
 
     def test_retry_label_repair_preserves_duplicate_close_reason(self) -> None:
         """A safe noop retry repairs labels only. It must not replay PATCH
@@ -1216,7 +1272,7 @@ class Round1HostFixes(unittest.TestCase):
                     state="closed",
                     labels=["status:in_review", "status:done"],
                     state_reason="duplicate")),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-label-rm": empty_ok(),
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
@@ -1250,7 +1306,7 @@ class Round1HostFixes(unittest.TestCase):
             first = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": [
@@ -1279,7 +1335,7 @@ class Round1HostFixes(unittest.TestCase):
                 "status-parent-read": ok(_gh_parent(
                     state="closed", labels=[],
                     state_reason="completed")),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
@@ -1312,7 +1368,7 @@ class Round1HostFixes(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": empty_ok(),
@@ -1365,7 +1421,7 @@ class Round4PersistIntegrity(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": concurrent_set,
                 "status-label-rm": empty_ok(),
                 "status-label-add": ok([{"name": "status:done"}]),
@@ -1408,7 +1464,7 @@ class Round4PersistIntegrity(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": empty_ok(),
@@ -1524,7 +1580,7 @@ class Round6IdentityGuard(unittest.TestCase):
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_review"])),
-                "merge-evidence": ok([{"state": "MERGED"}]),
+                "merge-evidence": ok(MERGED_ROWS),
                 "status-set": ok({"node_id": GH_NODE, "number": 42,
                                   "state": "closed"}),
                 "status-label-rm": empty_ok(),
