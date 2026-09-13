@@ -63,7 +63,7 @@ LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-
 LEDGER="$LEDGER_DIR/land-strikes.json"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>", "flake_sig": "<check>|<failure line>|absent", "flake_sig_head": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b; `flake_sig` = the failure signature recorded at the last flake rerun and `flake_sig_head` = the head it diagnosed, §3.1). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>", "flake_sig": "<check>|<failure line>|absent", "flake_sig_head": "<sha|absent>", "verdict_head": "<sha|absent>", "verdict_base": "<sha|absent>", "verdict_patch_id": "<patch-id|absent>", "verdict_window_anchor": "<iso8601|absent>", "merge_async_uuid": "<uuid|absent>", "merge_async_expected_head": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b; `flake_sig` = the failure signature recorded at the last flake rerun and `flake_sig_head` = the head it diagnosed, §3.1; the four `verdict_*` fields are the evidence binding of §2.2b, written only when the review gates were satisfied at `verdict_head`; the two `merge_async_*` fields exist only while a stacked merge submit is pending, §3.5b). Two top-level keys sit beside the PR entries and are never touched by the per-PR tail cleanup: `pending_branch_deletes` (`{"<branch>": {"pr": <number>, "merged_at": "<iso8601>"}}`, the branch janitor §0.5) and `cascade` (present only while a chain rewrite is between its first push and its last base edit; shape in [references/chains-and-stacks.md](references/chains-and-stacks.md)). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 **Tick concurrency claim.** The ledger's jq+tmp+mv writes are last-writer-wins, so two overlapping ticks on one clone silently lose strikes and pushed-SHA records — the claim makes a tick the ledger's only reader-writer. Take it atomically here, BEFORE the `LEDGER_JSON` read and any ledger write. **A `--dry-run` tick takes NO claim**: it stops at the dry-run gate and writes nothing, so there is no writer to serialize against — and taking one would `mkdir -p` the ledger dir, leaving a directory behind in a clone that had none (breaking the zero-mutation promise):
 
@@ -194,6 +194,35 @@ REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" 
 PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""   # any positive integer is on (the schema is unbounded); §2.6 compares overflow-safely
 ```
 
+### 0.5 — Branch janitor sweep (every non-dry tick, before discovery)
+
+A merged PR whose branch still has open children merged without `--delete-branch` (§3.5) and left its branch in `pending_branch_deletes`; deleting it while a child still targets it closes that child permanently (2026-08-27). The sweep runs at the start of every tick, before candidate selection and whether or not any open spec exists, so a merge, a spec close, a child retarget in a later tick, and the deletion in a tick after that compose across separate invocations. `--dry-run` reports `janitor: would delete <branch>` per deletable branch and mutates nothing.
+
+```bash
+# fence:janitor — inputs: LEDGER, LEDGER_DIR, LEDGER_JSON, LAND_DRY_RUN; gh on PATH
+OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
+JANITOR_403=0   # a 403 is reported once per tick, never per branch
+for BR in $(printf '%s\n' "$LEDGER_JSON" | jq -r '.pending_branch_deletes // {} | keys[]'); do
+  CHILDREN="$(gh pr list --base "$BR" --state open --json number --jq 'length' 2>/dev/null)" || CHILDREN=err
+  if [[ "$CHILDREN" != 0 ]]; then echo "janitor: $BR kept ($CHILDREN open child PR(s))"; continue; fi   # err keeps the entry too — never delete on an unread
+  if [[ "$LAND_DRY_RUN" == 1 ]]; then echo "janitor: would delete $BR"; continue; fi
+  DEL_RC=0; DEL_ERR="$(gh api --method DELETE "repos/$OWNER_REPO/git/refs/heads/$BR" 2>&1 >/dev/null)" || DEL_RC=$?
+  if [[ "$DEL_RC" -eq 0 ]] || printf '%s' "$DEL_ERR" | grep -q 'HTTP 422'; then   # deleted, or already gone
+    echo "janitor: deleted $BR"
+    mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+    tmp="$LEDGER.tmp.$$"
+    jq --arg br "$BR" 'del(.pending_branch_deletes[$br])' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+    LEDGER_JSON="$(cat "$LEDGER")"
+  elif printf '%s' "$DEL_ERR" | grep -q 'HTTP 403'; then
+    [[ "$JANITOR_403" == 0 ]] && echo "janitor: branch delete forbidden (403) — entries kept for a later tick"; JANITOR_403=1
+  else
+    echo "janitor: $BR delete failed — $DEL_ERR (kept)"
+  fi
+done
+```
+
+A 403 keeps the entry and never counts as a strike (the App lacks the same branch-delete permission `--delete-branch` needed). A 422 (already gone) removes the entry silently. A `pr list` failure keeps the entry: an unread child list is never evidence of no children.
+
 ## Phase 1 — DISCOVER
 
 **Land babysits only PRs whose authoring spec has every task done** — `flow --auto` still owns in-flight specs (the build-loop concurrency interlock), so a tick that acted on a spec with an open task has broken this. Candidates from the minimal listing:
@@ -312,6 +341,43 @@ REVIEWERS_STATE=off; [[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:n
 OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 ```
 
+### 2.0 — Shape: stacked, plain chain, or standalone (re-derived every tick, never stored)
+
+One REST read beside the `gh pr view` probe classifies the PR from its `stack` object and its base ref; one `gh pr list --base` read counts open children. A human can stack, unstack, or retarget by hand between ticks, so only the PR tells the truth: the shape, the stack number, the position, the parent PR, the chain base, and the child count are logged in the tick output and carried in the verdict reason, and never written to the ledger or read from config. The parent walk resolves the chain base from the PR graph (a branch that is the head of some PR is a chain layer; the first base that is nobody's head is the chain base):
+
+```bash
+# fence:shape — inputs: OWNER_REPO, PR_NUMBER, BASE_REF, BRANCH_NAME; gh on PATH
+PR_REST="$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER" 2>/dev/null)" || PR_REST=""
+[[ -z "$PR_REST" ]] && echo "shape: REST read failed for #$PR_NUMBER — plain-path classification this tick" >&2
+STACK_NUMBER="$(printf '%s\n' "$PR_REST" | jq -r '.stack.number // empty' 2>/dev/null || true)"
+STACK_POSITION="$(printf '%s\n' "$PR_REST" | jq -r '.stack.position // empty' 2>/dev/null || true)"
+STACK_SIZE="$(printf '%s\n' "$PR_REST" | jq -r '.stack.size // empty' 2>/dev/null || true)"
+BASE_SHA="$(printf '%s\n' "$PR_REST" | jq -r '.base.sha // empty' 2>/dev/null || true)"
+# parent walk: the PR whose head is this PR's base, then its base, ... until a base that heads no PR (bounded)
+PARENT_PR=""; PARENT_STATE=""; CHAIN_BASE="$BASE_REF"; WALK=0
+while [[ $WALK -lt 16 ]]; do
+  WALK=$((WALK + 1))
+  UP="$(gh pr list --head "$CHAIN_BASE" --state all --json number,state,baseRefName --limit 20 2>/dev/null \
+    | jq -c '[.[] | select(.state != "CLOSED")] as $live | (if ($live | length) > 0 then $live else . end) | .[0] // empty')"
+  [[ -z "$UP" ]] && break
+  [[ -z "$PARENT_PR" ]] && { PARENT_PR="$(printf '%s' "$UP" | jq -r '.number')"; PARENT_STATE="$(printf '%s' "$UP" | jq -r '.state')"; }
+  CHAIN_BASE="$(printf '%s' "$UP" | jq -r '.baseRefName')"
+done
+if [[ -n "$STACK_NUMBER" ]]; then PR_SHAPE=stacked
+elif [[ -n "$PARENT_PR" ]]; then PR_SHAPE=chain
+else PR_SHAPE=standalone; fi
+CHILD_COUNT="$(gh pr list --base "$BRANCH_NAME" --state open --json number --jq 'length' 2>/dev/null)" || CHILD_COUNT=0
+echo "shape: #$PR_NUMBER $PR_SHAPE base=$BASE_REF chain_base=$CHAIN_BASE parent=${PARENT_PR:-none}${PARENT_STATE:+:$PARENT_STATE} stack=${STACK_NUMBER:-none}${STACK_POSITION:+ layer $STACK_POSITION of $STACK_SIZE} children=$CHILD_COUNT"
+```
+
+| `stack` object | base ref | `PR_SHAPE` | Merge path | Retarget owner |
+|---|---|---|---|---|
+| non-null | any | `stacked` | native `merge-async` (§3.5b) | GitHub |
+| null | heads a PR (parent walk found one) | `chain` | existing `gh pr merge` (§3.5) | land (§3.7) |
+| null | heads no PR (chain base) | `standalone` | existing `gh pr merge` (§3.5) | none |
+
+A failed REST read degrades to the plain-path classification for this tick with the one stderr line above. Children are counted on every shape, standalone included: the bottom layer of a plain chain is standalone by this table and has a child, and the child count alone decides branch deletion (§3.5). A `stack` object whose stack read (§2.8) returns 404 is `NEEDS_HUMAN` naming the inconsistency.
+
 On a scoped tick, require `PR_URL == LAND_SCOPE_PR` and `BASE_REF == SCOPE_BASE` before any gate action; a mismatch is `NEEDS_HUMAN`. For a re-entry candidate, freshly confirm `state == MERGED` and its merge commit, then apply the durable-label gate and resume only the authorized tail. Do not run an OPEN merge plan on a PR that merged between discovery and action.
 
 ### 2.1 — Durable-label skip (first gate)
@@ -325,6 +391,29 @@ HAS_NH_LABEL="$(printf '%s\n' "$PR_STATE" | jq -r '[.labels[].name] | index("flo
 ### 2.2 — Re-entry candidates
 
 A merged-but-unclosed spec (from DISCOVER) plans action `resume-tail` directly — no CI/review gates apply to a merged PR. Provisional verdict `MERGED` (upgraded to `RELEASED` if the tail's release step runs).
+
+### 2.2b — Verdict carry-over by patch-id
+
+A server-side rebase (GitHub after a lower layer merges), land's own retarget (§3.7), or a human rebase moves the head without changing the code a reviewer judged. The ledger's evidence binding (`verdict_head`, `verdict_base`, `verdict_patch_id`, `verdict_window_anchor`) records the head at which the review gates were last satisfied; when the current stable patch-id of base-to-head equals the bound one, the review gates, the stale-approval comparison, and the merge-verdict pin are evaluated against `verdict_head` on this and every later tick, while CI, `mergeStateStatus`, and dependency contiguity are always re-read at the current head. Computed from fetched refs, never from a working-tree checkout:
+
+```bash
+# fence:patchid — inputs: BASE_REF, BRANCH_NAME, HEAD_OID, PR_URL, LEDGER_JSON; git origin reachable
+CUR_PATCH_ID=""
+if git fetch -q origin "refs/heads/$BASE_REF" "refs/heads/$BRANCH_NAME" 2>/dev/null && git cat-file -e "$HEAD_OID^{commit}" 2>/dev/null; then
+  CUR_PATCH_ID="$(git diff "origin/$BASE_REF...$HEAD_OID" | git patch-id --stable | cut -d' ' -f1)"
+fi   # a fetch failure or an empty diff leaves CUR_PATCH_ID empty, which is treated as a different patch
+V_HEAD="$(printf '%s\n' "$LEDGER_JSON" | jq -r --arg pr "$PR_URL" '.[$pr].verdict_head // ""')"
+V_PATCH="$(printf '%s\n' "$LEDGER_JSON" | jq -r --arg pr "$PR_URL" '.[$pr].verdict_patch_id // ""')"
+V_ANCHOR="$(printf '%s\n' "$LEDGER_JSON" | jq -r --arg pr "$PR_URL" '.[$pr].verdict_window_anchor // ""')"
+VERDICT_CARRIED=0; BINDING_STALE=0; GATE_HEAD="$HEAD_OID"
+if [[ -n "$CUR_PATCH_ID" && -n "$V_HEAD" && "$CUR_PATCH_ID" == "$V_PATCH" ]]; then
+  VERDICT_CARRIED=1; GATE_HEAD="$V_HEAD"   # §2.3 anchors the window to V_ANCHOR: a head move with an equal patch-id is not a push (R8)
+elif [[ -n "$V_HEAD" ]]; then
+  BINDING_STALE=1   # a different (or uncomputable) patch-id: the binding is cleared at the Phase 4 write site and the gates run at the current head
+fi
+```
+
+`GATE_HEAD` replaces `HEAD_OID` in exactly these comparisons: the §2.6 reviews-loop `commit_id` test, the §2.6 clean-review comment SHA prefix, the §2.7 `land_pushed_sha` comparison, and the §2.9 merge-verdict pin (a green verdict bound at `verdict_head` is carried without re-executing the command). `HEAD_OID` stays the head for §2.4 CI, §2.8 `mergeStateStatus` and dependency contiguity, the §3.5 `--match-head-commit` guard, and the §3.5b `sha` pin, which always name the commit being merged. This block runs before §2.3, whose anchor fence reads `VERDICT_CARRIED` and `V_ANCHOR`. The binding is written at the Phase 4 write site only when the review gates were satisfied at the current head and `VERDICT_CARRIED == 0`; an unsatisfied evaluation and an equivalent head move never write it.
 
 ### 2.3 — Patience-window anchor
 
@@ -342,6 +431,7 @@ else
   CREATED_AT="$(printf '%s\n' "$PR_STATE" | jq -r '.createdAt // empty')"
   LAST_PUSH="$(printf '%s\n%s\n' "$COMMITTED_AT" "$CREATED_AT" | sort | tail -1)"   # ISO-8601 sorts lexically
 fi
+[[ "${VERDICT_CARRIED:-0}" == 1 && -n "${V_ANCHOR:-}" ]] && LAST_PUSH="$V_ANCHOR"   # §2.2b: an equal-patch head move is not a push — keep the anchor recorded with the verdict (R8)
 PUSH_EPOCH="$(printf '%s' "$LAST_PUSH" | jq -Rr 'fromdateiso8601' 2>/dev/null || echo "$NOW_EPOCH")"
 AGE_MIN=$(( (NOW_EPOCH - PUSH_EPOCH) / 60 ))
 WINDOW_ELAPSED=$(( AGE_MIN >= PATIENCE_MIN ? 1 : 0 ))
@@ -425,7 +515,7 @@ while IFS=$'\t' read -r login commit submitted; do
   [[ -z "$login" ]] && continue
   if [[ "$login" == *"[bot]" ]] || [[ ",$AUTOMATED_REVIEWERS," == *",$login,"* ]]; then
     AUTO_REVIEW_PRESENT=1
-    if [[ "$commit" == "$HEAD_OID" || "$submitted" > "$LAST_PUSH" ]]; then
+    if [[ "$commit" == "$GATE_HEAD" || "$submitted" > "$LAST_PUSH" ]]; then   # GATE_HEAD = verdict_head while the patch-id is carried (§2.2b), else HEAD_OID
       AUTO_REVIEW_CURRENT=1
       [[ "$submitted" > "$REVIEW_EVENT_AT" ]] && REVIEW_EVENT_AT="$submitted"   # running max (ISO-8601 sorts lexically, the LAST_PUSH convention) — page order is not newest-first and several bots may review
     fi
@@ -438,7 +528,7 @@ done < <(gh api --paginate "repos/$OWNER_REPO/pulls/$PR_NUMBER/reviews" \
 
 ```bash
 if [[ "$REVIEW_SIGNAL" == "silence" && -n "$CLEAN_REVIEW_PATTERN" ]]; then
-  HEAD_LC="$(printf '%s' "$HEAD_OID" | tr 'A-Z' 'a-z')"
+  HEAD_LC="$(printf '%s' "$GATE_HEAD" | tr 'A-Z' 'a-z')"   # §2.2b: a comment naming verdict_head keeps satisfying across equivalent head moves
   while IFS=$'\t' read -r login updated body; do
     [[ -z "$login" ]] && continue
     # 1) automated-reviewer allowlist (verbatim from the reviews loop)
@@ -542,7 +632,7 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 ```
 
 - Planned `ci-fix` with `CI_FIX_COUNT >= CI_FIX_BUDGET` → plan `label` instead: durable `flow-next:needs-human` label + verdict `NEEDS_HUMAN`, reason `CI-fix budget exhausted (<count>/<budget>)`.
-- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == HEAD_OID` (the head is still our push) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. **Yields when §2.6b set `HUMAN_REVIEW_PENDING == 1`**: with `land.requestReviewers` configured, a dismissed approval is exactly the re-ask case — the §2.6b plan stands (`request-reviewers` for a new head, `none` + `already:` once asked), the window bounds the wait, and the one-shot-per-head already prevents the ping-pong the label exists to stop; a label here would bury the re-request and block every later tick at §2.1.
+- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == GATE_HEAD` (the head is still our push; `GATE_HEAD` is `verdict_head` while §2.2b carries the verdict, else `HEAD_OID`) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. **Yields when §2.6b set `HUMAN_REVIEW_PENDING == 1`**: with `land.requestReviewers` configured, a dismissed approval is exactly the re-ask case — the §2.6b plan stands (`request-reviewers` for a new head, `none` + `already:` once asked), the window bounds the wait, and the one-shot-per-head already prevents the ping-pong the label exists to stop; a label here would bury the re-request and block every later tick at §2.1.
 
 ### 2.8 — Merge-state gates (only when the review signal is satisfied)
 
@@ -557,7 +647,22 @@ Both merge states route to the SAME action deliberately: the catch-up is one `gh
 
 **Dependency contiguity before `merge`.** `flow --auto` honors spec dependencies at select, but an all-tasks-done spec whose PR converges early can reach merge while a dependency is still open — merging it lands work whose foundation has not shipped. When 2.8 plans `merge`, check the spec's `depends_on_epics` — re-read it for THIS PR at evaluation time (`DEP_SPEC_JSON="$("$FLOWCTL" show "$spec" --json)"`, `$spec` = the spec id in this PR's classification record; the Phase 1 loop's `SPEC_JSON` is a loop variable holding whichever candidate iterated last, and a multi-candidate tick that reused it would gate an earlier PR on a later spec's dependency list — per-PR state, not loop variables, exactly as §2.9's verdict pair): every listed spec must report `status == "done"` (`"$FLOWCTL" show <dep-id> --json`); any that does not → plan `none` instead, verdict `AWAITING_REVIEW`, reason `dependency <dep-id> not done — merge deferred`. A hold, never a strike: no budget is consumed and the next tick re-checks.
 
-**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+**Frontier rule (chains and stacks), evaluated whenever 2.8 plans `merge` and `PR_SHAPE != standalone`.** Land merges only the bottom open layer, one layer per tick; the dependency contiguity check above stays and is the same rule expressed through flow state, so both must pass (a stack a human built without flow dependency edges is covered by the stack read alone):
+
+- `PR_SHAPE == chain`: `PARENT_STATE == OPEN` → plan `none`, verdict `AWAITING_REVIEW`, reason `chain layer awaits parent #<PARENT_PR>`. `PARENT_STATE == MERGED` (the base is still the merged parent's branch, so the host did not retarget) → plan `retarget` (§3.7, the plain-path cascade), provisional verdict `RESOLVING`. `PARENT_STATE == CLOSED` → verdict `NEEDS_HUMAN`, reason `chain broken; parent #<PARENT_PR> closed unmerged` — the child's commits include the parent's work and a human decides whether that change lives on. A ledger `cascade` record whose `layers[].branch` names this PR's branch → plan `retarget` (resume) and nothing else for this chain until the record clears.
+- `PR_SHAPE == stacked`: read the stack and require this PR to be its lowest open layer:
+
+  ```bash
+  # fence:frontier — inputs: OWNER_REPO, STACK_NUMBER, PR_NUMBER; gh on PATH → FRONTIER (number|""), STACK_RC, LOWER_COUNT
+  STACK_RC=0; STACK_JSON="$(gh api "repos/$OWNER_REPO/stacks/$STACK_NUMBER" 2>/dev/null)" || STACK_RC=$?
+  FRONTIER="$(printf '%s\n' "$STACK_JSON" | jq -r '[.pull_requests[] | select(.state == "open")][0].number // empty' 2>/dev/null || true)"
+  LOWER_COUNT="$(printf '%s\n' "$STACK_JSON" | jq -r --argjson me "$PR_NUMBER" '[.pull_requests[] | select(.state == "open")] | map(.number) | index($me) // 0' 2>/dev/null || echo 0)"
+  ```
+
+  `STACK_RC != 0` with an `HTTP 404` in the error → verdict `NEEDS_HUMAN`, reason `#<n> carries stack #<s> but the stack read is 404; reconcile the stack by hand` (an inconsistency, never a guess). Any other non-2xx → one stderr line, `PR_SHAPE=chain` for this tick (preview drift degrades to the plain path). `FRONTIER != PR_NUMBER` → plan `none`, verdict `AWAITING_REVIEW`, reason `stack #<s> layer <p> of <size> awaits <LOWER_COUNT> lower layer(s); frontier #<FRONTIER>`. `FRONTIER == PR_NUMBER` → the plan stays `merge` and §3.5 takes the native path (§3.5b). A set `FLOW_PR_MERGE_CMD` on a stacked layer → verdict `NEEDS_HUMAN`, reason `FLOW_PR_MERGE_CMD is set but #<n> is a stacked layer; stacked merges use the merge-async endpoint`, nothing merged. `autoMergeRequest` and `mergeStateStatus` are never read as stack readiness.
+- A ledger `merge_async_uuid` for this PR (a submit pending from an earlier tick) → plan `merge` again; §3.5b polls the stored uuid and never re-submits while it is set.
+
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `retarget`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
 
 ### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
 
@@ -573,7 +678,14 @@ if [ -n "${LAND_SCOPE_SPEC:-}" ] && [ "${LAND_DRY_RUN:-0}" != 1 ]; then
 fi
 MERGE_VERDICT=skipped        # green | refused | skipped | would-run (Phase 4 evidence)
 MERGE_VERDICT_HEAD=""        # the exact head the command judged (pins 3.5's merge)
-if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
+if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" && "${VERDICT_CARRIED:-0}" == 1 ]]; then
+  # §2.2b: the binding was written at verdict_head after this command judged that patch; an equal
+  # patch-id carries the green verdict without re-executing it. The merge pin stays the CURRENT head
+  # (the --match-head-commit guard names the commit being merged); the base is re-bound fresh below.
+  MERGE_VERDICT=green; MERGE_VERDICT_HEAD="$HEAD_OID"
+  MERGE_VERDICT_BASE="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
+  [[ -z "$MERGE_VERDICT_BASE" ]] && { MERGE_VERDICT=refused; MV_RC=1; MV_ERR="merge-verdict gate cannot resolve origin/$BASE_REF (ls-remote empty/failed)"; }
+elif [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
   if [[ "$LAND_DRY_RUN" == 1 ]]; then
     MERGE_VERDICT=would-run  # R3 — --dry-run NEVER executes the command
   elif [[ "$(git rev-parse --abbrev-ref HEAD)" != "$BASE_REF" ]]; then
@@ -627,13 +739,13 @@ cd "$REPO_ROOT" || exit 1
 
 ### Dry-run stops here (R17)
 
-`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.patienceMinutesAfterReview` is configured, the window field carries the binding anchor** — `window=<age>/<limit>m anchor=<push|review>`, exactly as the Phase 4 block states it; unset keeps the field byte-for-byte. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. **When §2.6b planned `request-reviewers`, the report states `action=request-reviewers reviewers=would-request` (plus `would-ready` when the PR is a draft)** — no `gh pr ready`, no `--add-reviewer`, no ledger write: the action class lives in Phase 3, which `--dry-run` never enters. Phase 0 took no tick claim under `--dry-run`, so there is nothing to release. Nothing was checked out, pushed, labeled, merged, dispatched, executed, written, or claimed (ledger and its directory untouched).
+`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.patienceMinutesAfterReview` is configured, the window field carries the binding anchor** — `window=<age>/<limit>m anchor=<push|review>`, exactly as the Phase 4 block states it; unset keeps the field byte-for-byte. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. **When §2.6b planned `request-reviewers`, the report states `action=request-reviewers reviewers=would-request` (plus `would-ready` when the PR is a draft)** — no `gh pr ready`, no `--add-reviewer`, no ledger write: the action class lives in Phase 3, which `--dry-run` never enters. **The §2.0 shape line is echoed for every PR** (`shape: #<n> <stacked|chain|standalone> ...`), a planned `retarget` reports `would-retarget`, and §0.5 reported `janitor: would delete <branch>` without deleting. Phase 0 took no tick claim under `--dry-run`, so there is nothing to release. Nothing was checked out, pushed, labeled, merged, dispatched, executed, written, or claimed (ledger and its directory untouched).
 
 Done when: every discovered PR has one planned action class and a provisional verdict, and the tree, ledger, and remote are untouched.
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Before each mutation, re-check current host consent and the bound PR identity; revocation or a mismatched scope stops `NEEDS_HUMAN` without that mutation. Re-read the exact PR state before ACT: an already merged PR uses `resume-tail` only, and a closed-unmerged PR stops. Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Base-move sibling re-gate**: after any action in this tick that landed commits on the base — a successful merge, OR a successful base push without one (a `resume-tail`'s persist-push of tail `.flow` commits; the 3.5 tail's persist-push when a sibling still awaits its action) — EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists — a re-entry `resume-tail` ordered before an open sibling moves the base without any merge in this tick, so a merge-keyed rule would let that sibling act (even merge, absent §2.9) on stale gates. `ci-fix` is the sharp edge — executed on pre-move state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the base move just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Before each mutation, re-check current host consent and the bound PR identity; revocation or a mismatched scope stops `NEEDS_HUMAN` without that mutation. Re-read the exact PR state before ACT: an already merged PR uses `resume-tail` only, and a closed-unmerged PR stops. Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`, `retarget`). A `retarget` (§3.7) rewrites every open layer above the merged one, so after it the remaining siblings in that chain downgrade exactly as after a merge. **Base-move sibling re-gate**: after any action in this tick that landed commits on the base — a successful merge, OR a successful base push without one (a `resume-tail`'s persist-push of tail `.flow` commits; the 3.5 tail's persist-push when a sibling still awaits its action) — EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists — a re-entry `resume-tail` ordered before an open sibling moves the base without any merge in this tick, so a merge-keyed rule would let that sibling act (even merge, absent §2.9) on stale gates. `ci-fix` is the sharp edge — executed on pre-move state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the base move just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
@@ -706,7 +818,7 @@ One API call, no local checkout: GitHub merges `$BASE_REF` into the PR's head br
 
 The worktree never moves in this path — no `gh pr checkout`, no branch restore, nothing to assert clean afterwards.
 
-**This removes land's force-push capability entirely.** No `git rebase`, no `--force-with-lease`: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are no worse off — `update-branch` fails on a fork whose maintainer-edit permission is off just as the old force-push failed; the refusal rides the classification above (first failure `RESOLVING`, an identical repeat escalates to the labeled `NEEDS_HUMAN`), so it surfaces as work for a human within two ticks.
+**This keeps land's catch-up free of any rewrite.** No `git rebase`, no `--force-with-lease` here — the one bounded exception is §3.7's leased cascade over the open layers of a chain whose parent merged, and nothing else: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are no worse off — `update-branch` fails on a fork whose maintainer-edit permission is off just as the old force-push failed; the refusal rides the classification above (first failure `RESOLVING`, an identical repeat escalates to the labeled `NEEDS_HUMAN`), so it surfaces as work for a human within two ticks.
 
 ### 3.4 — `label` (durable needs-human marker)
 
@@ -804,6 +916,8 @@ else
   # Contract (STABLE - integrators depend on it):
   #   - invoked exactly as, in this fixed argument order:
   #       $FLOW_PR_MERGE_CMD <pr> --squash --delete-branch --match-head-commit <sha>
+  #     (when the PR has open children the `--delete-branch` token is simply
+  #     omitted from that list — R5; the order of the remaining arguments holds)
   #   - the expansion is whitespace-split, never eval'd - the command path must
   #     not contain spaces; everything after it arrives as pre-quoted arguments
   #   - success: exit 0 and the PR is merged. Nonzero = not merged
@@ -823,14 +937,103 @@ else
   # Array form: zsh does not word-split an unquoted parameter expansion, so
   # `$MERGE_CMD` was one command name there (#406). Command-substitution
   # output splits on IFS under both bash and zsh; still never eval'd.
+  if [[ "${PR_SHAPE:-standalone}" == "stacked" ]]; then
+    MERGE_RC=1; MERGE_ERR="stacked layer: see §3.5b"   # §3.5b runs INSTEAD of the MERGE_CMD call and sets MERGE_RC/MERGE_ERR
+  else
   MERGE_CMD=( $(printf '%s' "${FLOW_PR_MERGE_CMD:-gh pr merge}") )
+  # Branch janitor (§0.5, R5): a PR with open children (§2.0 CHILD_COUNT) merges WITHOUT
+  # --delete-branch — deleting the branch closes the child permanently — and its branch is
+  # recorded in pending_branch_deletes after the merge is confirmed. No children: today's flags.
+  MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" -gt 0 ]] && MERGE_FLAGS=(--squash)
   MERGE_RC=0
-  MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" "${MERGE_FLAGS[@]}" --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  fi
   if [[ "$MERGE_RC" -ne 0 ]]; then
     echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
   fi
 fi
 ```
+
+#### 3.5b — Native merge (stacked frontier)
+
+The legacy merge endpoint refuses any PR in a GitHub stack; the stack endpoint merges every unmerged layer below the one requested. Run this instead of the `MERGE_CMD` call when `PR_SHAPE == stacked` (the §2.8 frontier rule already held the PR unless it is the lowest open layer). Two guards bound the collapse hazard to seconds: the stack is read once more immediately before the submit, and the `sha` head pin is enforced server-side (proven live 2026-09-13: a stale pin returns HTTP 400 `Pull request head branch was modified.` and merges nothing). `merge_action` is always `direct_merge`; merge-queue stays forbidden. `FLOW_PR_MERGE_CMD` cannot express this endpoint (§2.8 already stopped with `NEEDS_HUMAN` when it is set):
+
+```bash
+# fence:merge-async — inputs: OWNER_REPO, STACK_NUMBER, PR_NUMBER, PR_URL, HEAD_OID, LEDGER, LEDGER_DIR, LEDGER_JSON; gh on PATH
+# → MERGE_RC (0 merged), MERGE_ERR, MERGE_ASYNC_VERDICT (merged|resolving|blocked|needs_human)
+MERGE_RC=1; MERGE_ERR=""; MERGE_ASYNC_VERDICT=blocked
+ma_ledger() { mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"; tmp="$LEDGER.tmp.$$"; jq --arg pr "$PR_URL" --arg uuid "${2:-}" --arg head "${3:-}" "$1" "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"; }
+mkdir -p "$LEDGER_DIR"; MA_ERR_FILE="$LEDGER_DIR/merge-async.err.$$"
+PENDING_UUID="$(printf '%s\n' "$LEDGER_JSON" | jq -r --arg pr "$PR_URL" '.[$pr].merge_async_uuid // ""')"
+if [[ -z "$PENDING_UUID" ]]; then
+  # second stack read, immediately before submit (collapse guard)
+  FRONTIER_NOW="$(gh api "repos/$OWNER_REPO/stacks/$STACK_NUMBER" 2>/dev/null | jq -r '[.pull_requests[] | select(.state == "open")][0].number // empty')"
+  if [[ "$FRONTIER_NOW" != "$PR_NUMBER" ]]; then
+    MERGE_ERR="stack #$STACK_NUMBER frontier is now #${FRONTIER_NOW:-unknown}, not #$PR_NUMBER — no submit"; MERGE_ASYNC_VERDICT=resolving
+  else
+    SUBMIT_RC=0
+    SUBMIT="$(gh api --method PUT "repos/$OWNER_REPO/pulls/$PR_NUMBER/merge-async" \
+      -f merge_method=squash -f merge_action=direct_merge -f sha="$HEAD_OID" 2>"$MA_ERR_FILE")" || SUBMIT_RC=$?
+    SUBMIT_ERR="$(cat "$MA_ERR_FILE" 2>/dev/null)"
+    S_STATUS="$(printf '%s\n' "$SUBMIT" | jq -r '.status // ""' 2>/dev/null || true)"
+    S_MSG="$(printf '%s\n' "$SUBMIT" | jq -r '.details.message // ""' 2>/dev/null || true)"
+    if [[ "$S_STATUS" == "pending" ]]; then                                  # 202: recorded, then polled below
+      PENDING_UUID="$(printf '%s\n' "$SUBMIT" | jq -r '.details.uuid // ""')"
+      EXPECTED_HEAD="$(printf '%s\n' "$SUBMIT" | jq -r '.details.expected_head_sha // ""')"
+      if [[ "$EXPECTED_HEAD" != "$HEAD_OID" ]]; then
+        MERGE_ERR="merge-async expected_head_sha $EXPECTED_HEAD does not match the gated head $HEAD_OID"; MERGE_ASYNC_VERDICT=blocked; PENDING_UUID=""
+      else
+        ma_ledger '.[$pr].merge_async_uuid = $uuid | .[$pr].merge_async_expected_head = $head' "$PENDING_UUID" "$EXPECTED_HEAD"
+      fi
+    elif [[ "$S_STATUS" == "merged" ]]; then MERGE_ASYNC_VERDICT=merged                       # 200: already merged — confirmed by the re-probe below
+    elif [[ "$S_STATUS" == "failed" && "$S_MSG" == *"head branch was modified"* ]]; then       # 400 stale pin: the intended refusal
+      MERGE_ERR="merge-async refused a stale head pin ($S_MSG) — re-read next tick"; MERGE_ASYNC_VERDICT=resolving
+    elif printf '%s' "$SUBMIT_ERR" | grep -q 'HTTP 409'; then                                   # a merge request is already enqueued
+      MERGE_ERR="merge-async 409: a merge is already enqueued for #$PR_NUMBER"; MERGE_ASYNC_VERDICT=resolving
+    else
+      MERGE_ERR="merge-async refused: ${S_MSG:-${SUBMIT_ERR:-rc=$SUBMIT_RC}}"; MERGE_ASYNC_VERDICT=blocked       # 400 not mergeable / closed / draft, or any other failure
+    fi
+  fi
+fi
+if [[ -n "$PENDING_UUID" ]]; then
+  # poll within the same bounded budget as the merge-verdict command (600s); never re-submit while a uuid is stored
+  POLL_DEADLINE=$(( $(date -u +%s) + 600 )); POLL_STATUS=pending; POLL_MSG=""
+  while :; do
+    POLL_RC=0; POLL="$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER/merge-async/$PENDING_UUID" 2>"$MA_ERR_FILE")" || POLL_RC=$?
+    POLL_ERR="$(cat "$MA_ERR_FILE" 2>/dev/null)"
+    if [[ "$POLL_RC" -ne 0 ]] && printf '%s' "$POLL_ERR" | grep -q 'HTTP 404'; then POLL_STATUS=unknown; break; fi   # result expired (24h retention): unknown, re-probe below
+    POLL_STATUS="$(printf '%s\n' "$POLL" | jq -r '.status // "pending"' 2>/dev/null || echo pending)"
+    POLL_MSG="$(printf '%s\n' "$POLL" | jq -r '.details.message // ""' 2>/dev/null || true)"
+    [[ "$POLL_STATUS" == "merged" || "$POLL_STATUS" == "failed" ]] && break
+    [[ "$(date -u +%s)" -ge "$POLL_DEADLINE" ]] && break
+    sleep 3
+  done
+  case "$POLL_STATUS" in
+    merged)  MERGE_ASYNC_VERDICT=merged;  ma_ledger 'del(.[$pr].merge_async_uuid, .[$pr].merge_async_expected_head)' ;;
+    failed)  MERGE_ERR="merge-async failed: $POLL_MSG"; MERGE_ASYNC_VERDICT=blocked; ma_ledger 'del(.[$pr].merge_async_uuid, .[$pr].merge_async_expected_head)' ;;
+    unknown) MERGE_ASYNC_VERDICT=resolving; MERGE_ERR="merge-async result for uuid $PENDING_UUID is gone (404) — re-probing the PR"; ma_ledger 'del(.[$pr].merge_async_uuid, .[$pr].merge_async_expected_head)' ;;
+    *)       MERGE_ERR="merge-async still pending past the 600s budget — re-polled next tick from the stored uuid"; MERGE_ASYNC_VERDICT=resolving ;;
+  esac
+fi
+[ -f "$MA_ERR_FILE" ] && rm -f "$MA_ERR_FILE"
+if [[ "$MERGE_ASYNC_VERDICT" == "merged" || "$MERGE_ASYNC_VERDICT" == "resolving" ]]; then
+  # advancement needs the re-probe: state == MERGED with a non-null mergedAt, never a status flag alone
+  if gh pr view "$PR_NUMBER" --json state,mergedAt --jq '.state == "MERGED" and (.mergedAt != null)' 2>/dev/null | grep -q true; then
+    MERGE_RC=0; MERGE_ASYNC_VERDICT=merged
+  elif [[ "$MERGE_ASYNC_VERDICT" == "merged" ]]; then
+    MERGE_ERR="merge-async reported merged but the PR re-probe is not MERGED"; MERGE_ASYNC_VERDICT=needs_human
+  fi
+fi
+```
+
+| `MERGE_ASYNC_VERDICT` | Land action |
+|---|---|
+| `merged` (`MERGE_RC == 0`) | proceed to the post-merge tail exactly as after `gh pr merge`; the branch stays (native merges leave branches in place, proven 2026-09-13), so with `CHILD_COUNT > 0` it is recorded in `pending_branch_deletes` and otherwise deleted by the same record on the next sweep |
+| `resolving` | verdict `RESOLVING` (a stale pin, a moved frontier, a 409, an expired or still-pending uuid); the next tick re-reads the head and the stack, re-applies §2.2b, and submits again only when no uuid is stored |
+| `blocked` | verdict `BLOCKED`, reason = `MERGE_ERR` (expected-head mismatch naming both SHAs, `failed` with its message, or a 400) |
+| `needs_human` | verdict `NEEDS_HUMAN`, reason = `MERGE_ERR` (the re-probe failure) |
+
+**Stale-pin regression.** The R16 fixture keeps a stale-`sha` case: the stub refuses with 400 `failed` and nothing merges. If that fixture ever observes a merge despite a stale pin, native submission is disabled with `NEEDS_HUMAN: merge-async does not enforce a head pin; merge #<n> from the stack UI` and there is no fallback to response-only validation.
 
 ```bash
 MERGE_CONFIRMED=0
@@ -851,7 +1054,19 @@ For an unconfirmed merge refusal, classify from the captured stderr, leave the w
 - Head-SHA mismatch refusal (the `--match-head-commit` guard; stderr names the expected/actual sha) — state moved between gate and merge → verdict `RESOLVING` (re-tick), not `BLOCKED`.
 - Any other merge refusal (server-side rule) → verdict `BLOCKED`, reason = the captured `MERGE_ERR` line.
 
-After `MERGE_CONFIRMED=1` on a scoped handoff (or `MERGE_RC == 0` on standalone land), enter the merged base BEFORE any tail step (scoped flow uses `LAND_BASE_ROOT`; standalone land checks out the base in its current worktree) — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
+After `MERGE_CONFIRMED=1` on a scoped handoff (or `MERGE_RC == 0` on standalone land), record the branch for the janitor when the PR has open children — the branch was deliberately not deleted, and this top-level map survives the per-PR ledger cleanup at the end of the tail (on the native path every merged branch is recorded, children or not, because merge-async never deletes):
+
+```bash
+# fence:pending-delete — inputs: CHILD_COUNT, PR_SHAPE, BRANCH_NAME, PR_NUMBER, TODAY, LEDGER, LEDGER_DIR
+if [[ "${CHILD_COUNT:-0}" -gt 0 || "${PR_SHAPE:-standalone}" == "stacked" ]]; then
+  mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+  tmp="$LEDGER.tmp.$$"
+  jq --arg br "$BRANCH_NAME" --argjson pr "$PR_NUMBER" --arg ts "$TODAY" '.pending_branch_deletes[$br] = {"pr": $pr, "merged_at": $ts}' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+  echo "Evidence: branch $BRANCH_NAME kept (${CHILD_COUNT:-0} open child PR(s)) — recorded for the janitor"
+fi
+```
+
+Then enter the merged base BEFORE any tail step (scoped flow uses `LAND_BASE_ROOT`; standalone land checks out the base in its current worktree) — `spec close`, the tracker touchpoint, and release-follow all run from the clean base checkout, never from the (deleted) PR branch or a stale original branch:
 
 ```bash
 TAIL_OK=1
@@ -998,11 +1213,15 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
    Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`. **The rollback is scoped to THIS step and skips NOTHING else** — the merge, release-follow, and the tracker touchpoint already ran and stand; on a pull-request-only base the residue is a cosmetic bookkeeping note, not a stalled lifecycle. Re-ticking after a refused persist is safe by construction: `spec close` succeeds idempotently, release-follow's idempotency probe (step 2) resumes past completed steps and never re-tags, and every verdict comment starts with the stable merge identity `evidence=<merge-commit-sha>` (step 3), so a repeat touchpoint for the same merge deduplicates.
 
-Only after required tail steps and remote persistence are confirmed, verdict `MERGED` (or `RELEASED`). A tail failure keeps `NEEDS_HUMAN` with the confirmed merge commit and the outstanding step; this success line never overwrites it. On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`) and its §3.4b claim dirs (`rm -rf "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-"*`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
+Only after required tail steps and remote persistence are confirmed, verdict `MERGED` (or `RELEASED`). A tail failure keeps `NEEDS_HUMAN` with the confirmed merge commit and the outstanding step; this success line never overwrites it. On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv` — the top-level `pending_branch_deletes` and `cascade` keys are outside that entry and survive) and its §3.4b claim dirs (`rm -rf "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-"*`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 
 ### 3.6 — `resume-tail` (re-entry idempotency)
 
 A merged-but-unclosed spec, or the currently scoped locally closed spec whose tail is unfinished, resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close (local commit) → release-follow → tracker touchpoint → persist-push of the tail's `.flow` commits. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec; the touchpoint's verdict comment dedupes on the merge identity). A previous tick that reached the merge but had its persist refused re-enters here and re-runs the whole tail — the earlier release and tracker work is not repeated destructively, and a second refusal again costs only the bookkeeping note. Verdict `MERGED`/`RELEASED` only after required tail completion and persistence; otherwise retain `NEEDS_HUMAN`. On scoped recovery, inspect remote spec state and release/tracker evidence first and skip completed steps; a prior failure is never renewed permission or a second merge attempt.
+
+### 3.7 — `retarget` (plain-path cascade above a merged parent)
+
+Planned by §2.8 when a plain chain layer's parent PR is `MERGED` and the layer's base is still the parent's branch, or when a ledger `cascade` record names the layer. Read and execute [references/chains-and-stacks.md](references/chains-and-stacks.md) §Cascade: prepare every open layer above the merged one locally (each rebased from its merge-base with the pre-rewrite tip of the layer below onto the rewritten tip below it), write the cascade record, publish bottom-up with a lease on each recorded old tip, retarget the first layer with `gh pr edit --base <chain_base>`, and clear the record. A tick that finds a record resumes it by reconciling each unpublished layer's remote head against the recorded tips before deciding anything. Verdicts: `RESOLVING` after a successful cascade (the next tick re-gates each rewritten layer and §2.2b decides whether the review verdict carries), `RESOLVING` with the record kept on a lease failure, `BLOCKED` naming the files on a rebase conflict (nothing published), `NEEDS_HUMAN` on a boundary that resolves onto the chain base, a foreign rewrite mid-cascade, a record prepared in another clone, or a parent branch gone with no recorded base SHA. This is the only force-push land may perform: bounded to the open layers of a chain it is babysitting, each with a lease on the exact tip it read, inside the tick claim, after the layer below merged. Every published layer's PR gets the canonical post-push ledger write (`land_pushed_sha` = its new tip), so §2.7 attributes the move to land, and §2.2b keeps the review verdict when the patch-id is unchanged.
 
 Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base after 3.5/3.6), and the non-`.flow/` tree is clean.
 
@@ -1014,7 +1233,7 @@ Echo one evidence block per PR processed:
 PR <url> [<spec-id>]
   ci=<green|red|pending|none> checks=<pass>/<total> unresolved=<n> window=<AGE_MIN>/<PATIENCE_MIN>m
   signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|-> reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>
-  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none> verdict=<VERDICT> reason="<one line>"
+  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|retarget|none> verdict=<VERDICT> reason="<one line>"
   mergeVerdict=<green|refused|skipped|would-run>
   merged=<confirmed-commit-sha|-> close=<done|pending|-> persist=<pushed|pending|->
   release=<completed|skipped:reason|failed:reason|-> tracker=<completed|skipped:reason|failed:reason|->
@@ -1025,6 +1244,27 @@ PR <url> [<spec-id>]
 When `land.patienceMinutesAfterReview` is configured, the `window=` field is `window=<age>/<limit>m anchor=<push|review>` — `<AGE_MIN>/<PATIENCE_MIN>m anchor=push` whenever the re-anchor did not bind (configured-but-not-due: red CI, open threads, no head-current review, unparseable timestamp), `<REVIEW_AGE_MIN>/<PATIENCE_AFTER_REVIEW>m anchor=review` when it did. Unset keeps the `window=<AGE_MIN>/<PATIENCE_MIN>m` field above byte-for-byte — `anchor=` never appears.
 
 When the `silence` signal was satisfied via the clean-review comment path (`AUTO_REVIEW_SOURCE == comment`), append the comment evidence to the `signal=` line so the report shows the gate passed on a comment, not a formal review — e.g. `signal=silence:satisfied via=comment evidence="<AUTO_REVIEW_EVIDENCE>"`.
+
+**Chain and stack suffixes (R10).** A stacked layer's `reason` ends with `; stack #<STACK_NUMBER> layer <STACK_POSITION> of <STACK_SIZE>`; a plain chain layer's ends with `; chain on #<PARENT_PR>`; a held layer's reason already names the frontier PR and the separating layer count (§2.8). A standalone PR's reason and evidence block are byte-identical to today. When §2.2b carried the verdict, append `verdict=carried@<verdict_head sha8>` to the `signal=` line.
+
+**Evidence-binding write (non-dry ticks, per PR, at this write site).** The binding records the head at which the review gates were satisfied and is never written by an unsatisfied evaluation or an equivalent head move:
+
+```bash
+# fence:binding — inputs: SIGNAL_SATISFIED, VERDICT_CARRIED, BINDING_STALE, HEAD_OID, BASE_SHA, CUR_PATCH_ID, LAST_PUSH, PR_URL, LEDGER, LEDGER_DIR
+if [[ "${SIGNAL_SATISFIED:-0}" == 1 && "${VERDICT_CARRIED:-0}" == 0 && -n "${CUR_PATCH_ID:-}" ]]; then
+  mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+  tmp="$LEDGER.tmp.$$"
+  jq --arg pr "$PR_URL" --arg head "$HEAD_OID" --arg base "$BASE_SHA" --arg pid "$CUR_PATCH_ID" --arg anchor "$LAST_PUSH" '
+    .[$pr].verdict_head = $head | .[$pr].verdict_base = $base | .[$pr].verdict_patch_id = $pid | .[$pr].verdict_window_anchor = $anchor
+  ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+elif [[ "${BINDING_STALE:-0}" == 1 ]]; then
+  mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+  tmp="$LEDGER.tmp.$$"
+  jq --arg pr "$PR_URL" 'del(.[$pr].verdict_head, .[$pr].verdict_base, .[$pr].verdict_patch_id, .[$pr].verdict_window_anchor)' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+fi
+```
+
+A PR whose tail already dropped its ledger entry (a merged PR) skips this write. `--dry-run` writes nothing.
 
 Compute the tick verdict as the worst severity across all per-PR verdicts, priority order:
 

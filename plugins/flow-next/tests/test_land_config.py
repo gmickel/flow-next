@@ -930,12 +930,14 @@ class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
         # Array built from a command substitution: whitespace-split under
         # bash AND zsh (#406), never eval'd (#277 shape).
         self.assertIn(
-            'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch '
+            'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" "${MERGE_FLAGS[@]}" '
             '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
             self.text,
         )
         # The literal pre-seam call is gone - no ungoverned merge path.
         self.assertNotIn('$(gh pr merge "$PR_NUMBER" --squash', self.text)
+        # fn-149 R5/R11: the flags array is today's pair unless an open child targets the branch.
+        self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" -gt 0 ]] && MERGE_FLAGS=(--squash)', self.text)
 
     def test_contract_states_fixed_argument_order(self) -> None:
         self.assertIn(
@@ -1034,18 +1036,21 @@ class CatchUpWorkflowStaticTestCase(unittest.TestCase):
         self.assertNotIn("plan `rebase`", gates)
 
     def test_action_class_is_renamed_in_every_enumeration(self) -> None:
+        # fn-149 R6 added the `retarget` action class to both enumerations.
         self.assertIn(
-            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `none`)",
+            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `retarget`, `none`)",
             self.text,
         )
         self.assertIn(
-            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none>", self.text
+            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|retarget|none>", self.text
         )
         self.assertNotIn("mechanical rebase", self.skill)
         self.assertIn("server-side catch-up", self.skill)
 
     def test_force_push_removal_rationale_is_stated(self) -> None:
-        self.assertIn("removes land's force-push capability", self.act)
+        # fn-149 R6: catch-up stays rewrite-free; the one bounded exception is named (§3.7) rather than denied.
+        self.assertIn("keeps land's catch-up free of any rewrite", self.act)
+        self.assertIn("§3.7", self.act)
         self.assertIn("#302", self.act)
         self.assertIn("Fork PRs", self.act)
 

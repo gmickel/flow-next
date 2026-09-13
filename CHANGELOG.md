@@ -4,6 +4,9 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+- **Land drains chains and GitHub stacks one frontier at a time (fn-149).** A dependent PR (based on its parent's branch, with or without a GitHub stack over it) no longer breaks land or gets closed by a parent merge. Each tick classifies every PR from its REST `stack` object and base ref, merges only the lowest open layer (`merge-async` with squash, `direct_merge`, and a server-enforced `sha` pin on a stack; `gh pr merge` on a plain chain), keeps a review verdict across a rebase when the stable patch-id of base-to-head is unchanged (the reviewer's clean comment on the original head keeps satisfying through any number of equivalent head moves), retargets the layers above a merged parent itself on the plain path with a leased force-push per layer from a resumable ledger record, and defers branch deletion until no open PR targets the branch (the 2026-08-27 failure). The verdict reason names the stack number, layer, and size, or the parent PR. A standalone PR keeps byte-identical verdicts, merge arguments, tail order, and ledger writes; no config key was added. Details: [`chains-and-stacks.md`](plugins/flow-next/skills/flow-next-land/references/chains-and-stacks.md).
+
 ## [flow-next 5.2.2] - 2026-09-13
 
 Five reported defects are fixed for people using the glossary, landing PRs from zsh or worktree setups, and GitHub or GitLab trackers; nothing else changes.

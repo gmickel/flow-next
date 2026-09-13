@@ -266,10 +266,11 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
         for s in self.copies:
             with self.subTest(copy=s.path):
                 self.assertIn(
-                    'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch '
+                    'MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" "${MERGE_FLAGS[@]}" '
                     '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
                     s.text,
                 )
+                self.assertIn("MERGE_FLAGS=(--squash --delete-branch)", s.text)   # fn-149 R11: the standalone pair is unchanged
                 self.assertNotIn("gh pr merge --auto ", s.text.replace("never `gh pr merge --auto`", ""))
 
         # ── R9: initializer discipline + anchor= only when configured ────────
