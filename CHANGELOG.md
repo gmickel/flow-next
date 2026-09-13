@@ -4,6 +4,11 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Fixed
+- **Glossary entries with both `_Avoid_` and `_Relates to_` no longer corrupt on `glossary add`.** The parser removed the two metadata lines cumulatively with offsets computed against the original body, so the second removal cut the wrong window and leaked a fragment into the definition on every add. Removals now apply in descending offset order in either authored line order, and the canonical rendering round-trips. Thanks to @flecamos for the report (#408).
+- **Land's merge step works under zsh.** The merge command was invoked as an unquoted string and relied on bash word-splitting, so under zsh (macOS default login shell) `gh pr merge` was one command name and the merge failed with exit 127. The fence now builds the command as an array; the `FLOW_PR_MERGE_CMD` override keeps its contract (whitespace-split into argv, never eval'd). Thanks to @TechupBusiness for the report (#406).
+- **Planned specs no longer record `status conflict (unmapped)` on GitHub/GitLab pushes.** A planned spec (all tasks todo) against capture's `status:backlog` label is an agreeing early state, so a requested todo/backlog is now a no-op at the tracker's slot instead of a conflict. The status-sync reference states that `perTracker.statusMap` is read by the Jira and Linear providers only. Thanks to @TechupBusiness for the report (#375).
+
 ## [flow-next 5.2.0] - 2026-09-13
 
 You can now carry a selected spec through PR convergence and merge in one flow run, while retaining the choice to stop before merge.

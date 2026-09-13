@@ -2254,3 +2254,30 @@ class TerminalFoldConverges(unittest.TestCase):
             self.assertEqual(len(receipts), 1)
             self.assertEqual(receipts[0]["status"], "noop")
             self.assertEqual(receipts[0]["event"], "work.done")
+
+
+class TodoBacklogEarlyAgreement(unittest.TestCase):
+    """fn-242 (#375): flow=todo (planned, all tasks todo) and tracker=backlog
+    (capture's `status:backlog` label) are agreeing early states. A requested
+    todo/backlog against that pair is a noop at the tracker's slot under every
+    conflictTiebreak - never `status conflict (unmapped)`."""
+
+    def test_requested_todo_or_backlog_noops_under_every_tiebreak(self) -> None:
+        for tiebreak in ("always-ask", "flow-wins", "tracker-wins"):
+            for requested in ("todo", "backlog"):
+                with self.subTest(tiebreak=tiebreak, requested=requested):
+                    d = decide(requested, None, "todo", "backlog", "none", tiebreak)
+                    self.assertEqual(d.kind, "noop")
+                    self.assertEqual(d.target_slot, "backlog")
+
+    def test_other_requests_against_the_pair_keep_existing_behaviour(self) -> None:
+        d = decide("in_progress", None, "todo", "backlog", "none")
+        self.assertEqual(d.kind, "conflict")
+        self.assertEqual(d.reason, "unmapped")
+        d = decide("done", None, "todo", "backlog", "none")
+        self.assertEqual(d.kind, "conflict")
+        self.assertEqual(d.reason, "merge-evidence-gate")
+
+    def test_taskless_spec_still_noops(self) -> None:
+        d = decide("backlog", None, "backlog", "backlog", "none")
+        self.assertEqual(d.kind, "noop")

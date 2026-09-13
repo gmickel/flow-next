@@ -820,9 +820,12 @@ else
   # Scope: THIS merge call ONLY. `gh pr ready` above, the post-merge
   # mergeCommit read, the tail, and every other gh call in the tick stay on the
   # session identity, and `gh` stays a preflight requirement.
-  MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"
+  # Array form: zsh does not word-split an unquoted parameter expansion, so
+  # `$MERGE_CMD` was one command name there (#406). Command-substitution
+  # output splits on IFS under both bash and zsh; still never eval'd.
+  MERGE_CMD=( $(printf '%s' "${FLOW_PR_MERGE_CMD:-gh pr merge}") )
   MERGE_RC=0
-  MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   if [[ "$MERGE_RC" -ne 0 ]]; then
     echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
   fi

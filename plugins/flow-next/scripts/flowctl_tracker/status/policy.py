@@ -380,6 +380,15 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
         return Decision("noop", target_slot=tracker_norm,
                         details={"who": "already-agree"})
 
+    # ── EARLY AGREEMENT: a planned spec (all tasks todo) against capture's
+    #    `status:backlog` label is the same "not started" bucket, not a
+    #    disagreement. A todo/backlog request stays at the tracker's slot
+    #    (#375); anything else falls through to the existing ladder. ──
+    if (flow_norm == "todo" and tracker_norm == "backlog"
+            and requested_to in ("todo", "backlog")):
+        return Decision("noop", target_slot=tracker_norm,
+                        details={"who": "early-agree"})
+
     # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
     #    After the agreement no-op and the evidence conflicts; deadlock
     #    (terminal x in_progress) was caught above, so this branch is a REAL
