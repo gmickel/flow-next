@@ -16,6 +16,11 @@ Triage of the nine open GitHub issues on 2026-09-13 against 5.2.0 found four rep
 - **#406** — Land's merge step builds `MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"` and invokes `$MERGE_CMD ...` unquoted, relying on bash word-splitting. Under zsh (macOS default; Claude Code's Bash tool may run the login shell) the whole string is one command name and the merge fails with exit 127. `[user]`
 - **#375** — On a GitHub/GitLab tracker, `capture` labels the issue `status:backlog`; `plan` then pushes with flow=`todo` (all tasks todo) and `decide()` has no rule for `{flow: todo, tracker: backlog, requested: todo}`, so every planned spec's push receipt records `status conflict (unmapped)`. The error text and docs steer users to `perTracker.statusMap`, which only Jira/Linear providers read. `[user]`
 
+**Added in the second pass (same PR, 2026-09-13), under the strategy of agentic prose over new machinery:**
+
+- **#391** — `merge_evidence()` classifies `gh pr list --head <branch>` rows by `state` alone, so a merged PR whose whole diff is `.flow/specs/**` and `.flow/tasks/**` (the spec's own text landing under the one-PR-per-gate convention) counts as shipped work and projects a still-open spec to In Review on the first claim. The rung is re-derived on every touchpoint, so it cannot be corrected by hand. Tracker projection is deterministic by design, so this is a policy rule, not an agent judgment. `[user]`
+- **#411** — Land's ci-fix step runs `gh pr checkout` in the invoking checkout; when the PR branch is already checked out in another worktree (the Worktree Kit shape), git refuses with `already checked out at '<path>'`. The agent can read that error and recover, so the fix is one sentence of guidance in the fence, not a worktree lifecycle. The reporter's "land never switches branches" invariant and the commit-tree tail are declined: land runs from the base checkout by design (#368 reply). `[user]`
+
 ## Architecture & Data Models
 <!-- scope: technical -->
 
@@ -24,6 +29,9 @@ Three independent one-file fixes, one review surface (same shape as prior issue 
 1. **Glossary parse** (`scripts/flowctl.py`, `parse_glossary_file`): apply the `_Avoid_` / `_Relates to_` removals in descending offset order so an earlier removal cannot invalidate a later match's offsets. Round-trip property holds for entries with both lines.
 2. **Land merge command** (`skills/flow-next-land/workflow.md` merge block, plus the Codex mirror via `sync-codex.sh`): build the merge command as an array so the invocation is shell-agnostic. Keep the "never eval'd" contract and the `FLOW_PR_MERGE_CMD` override semantics.
 3. **Status policy** (`scripts/flowctl_tracker/status/policy.py`, `decide()`): `flow=todo` and `tracker=backlog` are agreeing early states; a requested `todo` (or `backlog`) against that pair is a `noop` at the tracker's current slot. `status-sync.md` states that `perTracker.statusMap` is read by the Jira and Linear providers only.
+
+4. **Merge evidence file scope** (`scripts/flowctl_tracker/status/policy.py`, `merge_evidence` / `_classify_pr_rows`): a `MERGED` row counts as `merged` only when its changed files include at least one path outside `.flow/specs/` and `.flow/tasks/`. Rows are probed through the same executor route (`gh pr view <n> --json files`); a probe error on a merged row degrades to `probe-error` for the whole evidence, never to `merged`. Open and closed rows are unchanged.
+5. **Ci-fix checkout hint** (`skills/flow-next-land/workflow.md` ci-fix step 1, plus the Codex mirror): if `gh pr checkout` fails because git reports the branch is already checked out at another path, run the fix in that path and skip the checkout and the branch restore for that checkout; the invoking checkout's branch never moved. No worktree is created or removed.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -55,3 +63,6 @@ bash scripts/sync-codex.sh --check 2>/dev/null || bash scripts/sync-codex.sh
 - **R2:** The land merge fence invokes the merge command in a form that works under both bash and zsh without `eval`, preserving the `FLOW_PR_MERGE_CMD` override; the Codex mirror is regenerated and `sync-codex.sh` is idempotent. (#406)
 - **R3:** `decide()` returns `noop` for `{flow: todo, tracker: backlog}` with a requested `todo` or `backlog` under every `conflictTiebreak`; existing rows are unchanged; a regression test covers the new rule; `status-sync.md` notes that `statusMap` is Jira/Linear-only. (#375)
 - **R4:** `CHANGELOG.md` gains three `Fixed` entries under `## Unreleased` crediting the reporters; no version bump.
+- **R5:** A merged PR on the spec branch whose changed files are all under `.flow/specs/` or `.flow/tasks/` does not count as merge evidence; a merged PR touching any other path still does; a file-probe failure on a merged row yields `probe-error`, never `merged`; a regression test covers the spec-only, mixed, and probe-failure cases. (#391)
+- **R6:** Land's ci-fix step tells the agent to run the fix in the path git names when `gh pr checkout` refuses with "already checked out at", without creating a worktree or moving the invoking checkout; the Codex mirror is regenerated and `sync-codex.sh` stays idempotent. (#411)
+- **R7:** `CHANGELOG.md` gains `Fixed` entries under `## Unreleased` for #391 (credit sn-furali) and #411 (credit TechupBusiness); no version bump.
