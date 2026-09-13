@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stubbed `gh` for the land chain/stack fixtures (fn-149 R16).
+"""Stubbed `gh` for the land and make-pr chain/stack fixtures (fn-149 R16, fn-152 R13).
 
 Answers the exact gh calls the land fences make from a JSON "world" file
 named by GH_WORLD, mutates it where GitHub would (base edits, merges, branch
@@ -106,6 +106,9 @@ def main(argv: list[str]) -> int:
         pr = prs[argv[2]]
         if (base := opt(argv, "--base")) is not None:
             pr["baseRefName"] = base
+        if (body_file := opt(argv, "--body-file")) is not None:
+            with open(body_file, encoding="utf-8") as fh:
+                pr["body"] = fh.read()
         save(world)
         return 0
 
@@ -126,9 +129,46 @@ def main(argv: list[str]) -> int:
     if argv[0] == "api":
         method = opt(argv, "--method") or "GET"
         path = next(a for a in argv[1:] if a.startswith("repos/"))
+        path, _, query = path.partition("?")
         parts = path.split("/")
         # repos/o/r/<kind>/...
         kind = parts[3]
+        if kind == "stacks" and method == "POST":
+            # fn-152 R6: create (`stacks`) or extend (`stacks/<n>/add`). Payload comes
+            # from `-F pull_requests[]=<n>`; the test asserts the integer typing.
+            err = world.get("stack_link_error")
+            if err == "transport":
+                sys.stderr.write("gh: connection reset\n")
+                return 1
+            if err:
+                sys.stderr.write(f"gh: stack link refused (HTTP {err})\n")
+                return 1
+            numbers = [int(argv[i + 1].split("=", 1)[1]) for i, a in enumerate(argv) if a == "-F" and argv[i + 1].startswith("pull_requests[]=")]
+            stacks = world.setdefault("stacks", {})
+            if len(parts) == 6 and parts[5] == "add":
+                stack = stacks[parts[4]]
+                stack["pull_requests"].extend({"number": n, "state": "open"} for n in numbers)
+                number = int(parts[4])
+            else:
+                number = max([int(k) for k in stacks] + [10]) + 1
+                stack = {"number": number, "pull_requests": [{"number": n, "state": "open"} for n in numbers]}
+                stacks[str(number)] = stack
+            size = len(stack["pull_requests"])
+            for pos, entry in enumerate(stack["pull_requests"], start=1):
+                prs[str(entry["number"])]["stack"] = {"number": number, "position": pos, "size": size}
+            save(world)
+            emit({"number": number, "pull_requests": [{"number": e["number"]} for e in stack["pull_requests"]]}, jq)
+            return 0
+        if kind == "stacks" and len(parts) == 4 and query.startswith("pull_request="):
+            err = world.get("stack_read_error")
+            if err:
+                sys.stderr.write(f"gh: server error (HTTP {err})\n")
+                return 1
+            wanted = int(query.split("=", 1)[1])
+            rows = [{**v, "number": int(k)} for k, v in world.get("stacks", {}).items()
+                    if any(e["number"] == wanted for e in v.get("pull_requests", []))]
+            emit(rows, jq)
+            return 0
         if kind == "pulls" and len(parts) == 5:
             pr = prs[parts[4]]
             payload = {

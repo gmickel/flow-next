@@ -173,6 +173,7 @@ setup-block check
 setup-block resolve
 show
 spec add-dep
+spec chain
 spec clear-no-plan
 spec close
 spec create

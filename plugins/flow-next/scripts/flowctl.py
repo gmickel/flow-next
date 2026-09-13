@@ -34845,6 +34845,203 @@ def upstream_stale_note(behind: int, upstream: str) -> str:
     )
 
 
+class RemoteHeads:
+    """One lazy `git ls-remote --heads origin` shared across chain evaluations.
+
+    `spec chain` (fn-152 R2) reads the remote at most once per invocation, and
+    the spec-level admission gates (`ready --all`, `next`) share one read
+    across every spec they evaluate. Nothing is read until a chain candidate
+    actually needs it, so a backlog with no open dependency never spawns git.
+    """
+
+    def __init__(self) -> None:
+        self._result: Optional[tuple[Optional[set[str]], str]] = None
+
+    def __call__(self) -> tuple[Optional[set[str]], str]:
+        if self._result is None:
+            self._result = ls_remote_heads_origin()
+        return self._result
+
+
+def ls_remote_heads_origin() -> tuple[Optional[set[str]], str]:
+    """Return ``(branch names on origin, "")``, or ``(None, first stderr line)``.
+
+    A failed query is distinct from an absent branch: callers must never
+    report ``None`` as "not on origin" (R2).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+    except (OSError, ValueError) as exc:
+        return None, str(exc)
+    if result.returncode != 0:
+        first = (result.stderr or "").strip().splitlines()
+        return None, (first[0] if first else f"exit {result.returncode}")
+    heads: set[str] = set()
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 1)
+        if len(parts) == 2 and parts[1].startswith("refs/heads/"):
+            heads.add(parts[1][len("refs/heads/"):])
+    return heads, ""
+
+
+def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool:
+    """True when the spec has at least one task and every task is ``done``.
+
+    A `no_plan` spec's minted implicit-owner task counts like any other; a
+    zero-task spec has nothing done yet and is therefore still in progress.
+    """
+    inventory = TaskInventory.load(flow_dir, use_json=use_json, spec_ids={spec_id})
+    tasks = inventory.by_spec.get(spec_id, [])
+    return bool(tasks) and all(t.get("status") == "done" for t in tasks)
+
+
+def evaluate_spec_chain(
+    flow_dir: Path,
+    spec_id: str,
+    *,
+    use_json: bool,
+    remote_heads: Optional[RemoteHeads] = None,
+) -> dict:
+    """The one chain-eligibility predicate (fn-152 R1/R2).
+
+    Exhaustive output shape: ``{spec, eligible, parent, parent_branch,
+    parent_branch_on_remote, reason}``. Exits 2 on an unknown spec or a
+    dependency naming a missing spec (the `validate` rule). Every consumer
+    (`spec chain`, the task-admission gates, and the skills) calls this;
+    none re-derives it.
+    """
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_path.exists():
+        error_exit(f"Spec {spec_id} not found", code=2, use_json=use_json)
+    spec_data = normalize_epic(load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=use_json))
+    result = {
+        "spec": spec_id,
+        "eligible": False,
+        "parent": None,
+        "parent_branch": None,
+        "parent_branch_on_remote": None,
+        "reason": "",
+    }
+    candidates: list[str] = []
+    in_progress: list[str] = []
+    for dep in spec_data.get("depends_on_epics", []) or []:
+        if dep == spec_id:
+            continue
+        dep_path = find_spec_json_path(flow_dir, dep)
+        if not dep_path.exists():
+            error_exit(
+                f"Spec {spec_id}: depends_on_epics missing spec {dep}",
+                code=2, use_json=use_json,
+            )
+        dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
+        if dep_data.get("status") == "done":
+            continue
+        if spec_tasks_all_done(flow_dir, dep, use_json=use_json):
+            candidates.append(dep)
+        else:
+            in_progress.append(dep)
+    if in_progress:
+        result["parent"] = candidates[0] if candidates else None
+        result["reason"] = f"dependency {in_progress[0]} in progress"
+        return result
+    if len(candidates) >= 2:
+        result["reason"] = f"two open parents: {', '.join(candidates)}; chains are linear"
+        return result
+    if not candidates:
+        result["eligible"] = True
+        result["reason"] = "no open dependency"
+        return result
+    parent = candidates[0]
+    parent_data = normalize_epic(
+        load_json_or_exit(find_spec_json_path(flow_dir, parent), f"Spec {parent}", use_json=use_json)
+    )
+    parent_branch = parent_data.get("branch_name") or ""
+    result["parent"] = parent
+    result["parent_branch"] = parent_branch or None
+    heads, err = (remote_heads or RemoteHeads())()
+    if heads is None:
+        result["reason"] = f"remote query failed: {err}"
+        return result
+    if not parent_branch or parent_branch not in heads:
+        result["parent_branch_on_remote"] = False
+        result["reason"] = (
+            f"parent branch {parent_branch or '<unset>'} not on origin; "
+            "push it or land the parent first"
+        )
+        return result
+    result["parent_branch_on_remote"] = True
+    for other_file in iter_spec_json_files(flow_dir):
+        other_id = other_file.stem
+        if other_id in (spec_id, parent):
+            continue
+        other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
+        if other.get("status") == "done":
+            continue
+        if parent not in (other.get("depends_on_epics", []) or []):
+            continue
+        if (other.get("branch_name") or "") in heads:
+            result["reason"] = f"parent {parent} already chained by {other_id}"
+            return result
+    result["eligible"] = True
+    result["reason"] = "parent open, all tasks done, branch on origin"
+    return result
+
+
+def spec_blocked_by_deps(
+    flow_dir: Path,
+    spec_id: str,
+    spec_data: dict,
+    *,
+    use_json: bool,
+    remote_heads: RemoteHeads,
+) -> list[str]:
+    """Spec-level admission gate shared by `ready --spec`, `next`, `ready --all`.
+
+    A dependency is blocking when its spec is missing or not ``done`` — except
+    the chain parent `evaluate_spec_chain` names (fn-152 R2a): an open parent
+    with every task done and its branch on origin counts as satisfied, so a
+    chained spec dispatches its tasks. The chain predicate is consulted only
+    when at least one dependency is open and none is missing, which keeps
+    every other spec on the byte-identical pre-chain path (no remote read).
+    """
+    blocked: list[str] = []
+    missing = False
+    for dep in spec_data.get("depends_on_epics", []) or []:
+        if dep == spec_id:
+            continue
+        dep_path = find_spec_json_path(flow_dir, dep)
+        if not dep_path.exists():
+            blocked.append(dep)
+            missing = True
+            continue
+        dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
+        if dep_data.get("status") != "done":
+            blocked.append(dep)
+    if blocked and not missing:
+        chain = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json, remote_heads=remote_heads)
+        if chain["eligible"] and chain["parent"] in blocked:
+            blocked.remove(chain["parent"])
+    return blocked
+
+
+def cmd_spec_chain(args: argparse.Namespace) -> None:
+    """Read-only chain eligibility for one spec (fn-152 R2)."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    result = evaluate_spec_chain(flow_dir, spec_id, use_json=args.json)
+    if args.json:
+        json_output(result)
+    else:
+        state = "eligible" if result["eligible"] else "not eligible"
+        parent = f" (parent: {result['parent']})" if result["parent"] else ""
+        print(f"{spec_id}: {state}{parent} - {result['reason']}")
+
+
 def cmd_ready_all(args: argparse.Namespace) -> None:
     """Spec-level eligibility FACTS for the whole backlog (fn-68.1, R1/R8/R9).
 
@@ -34874,6 +35071,7 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
     """
     flow_dir = get_flow_dir()
     stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
+    remote_heads = RemoteHeads()  # fn-152: at most one ls-remote per invocation.
 
     rows = []
     for spec_file in iter_spec_json_files(flow_dir):
@@ -34888,21 +35086,11 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
         # derived from the LOCAL flag only (no provenance stored).
         is_ready = bool(spec_data.get("ready", False))
 
-        # Spec-level deps: blocked when a dep spec is missing or not done.
-        # Same computation as cmd_next (flowctl.py blocked_by loop).
-        blocked_by: list[str] = []
-        for dep in spec_data.get("depends_on_epics", []) or []:
-            if dep == spec_id:
-                continue
-            dep_path = find_spec_json_path(flow_dir, dep)
-            if not dep_path.exists():
-                blocked_by.append(dep)
-                continue
-            dep_data = normalize_epic(
-                load_json_or_exit(dep_path, f"Spec {dep}", use_json=args.json)
-            )
-            if dep_data.get("status") != "done":
-                blocked_by.append(dep)
+        # Spec-level deps: blocked when a dep spec is missing or not done,
+        # except the chain parent (fn-152 R2a). Same gate as cmd_next / cmd_ready.
+        blocked_by = spec_blocked_by_deps(
+            flow_dir, spec_id, spec_data, use_json=args.json, remote_heads=remote_heads
+        )
 
         # hasSpec reflects whether the spec MARKDOWN exists — a .json sidecar can
         # exist without the .md, so a specless local row surfaces the needs-spec
@@ -34983,24 +35171,15 @@ def cmd_ready(args: argparse.Namespace) -> None:
     tasks_dir = flow_dir / TASKS_DIR
 
     # Spec-level dependency gate (GH PR #95): a spec blocked by unfinished
-    # depends_on_epics must not report its tasks as ready. Same dep rule as
-    # cmd_next / cmd_ready_all: blocked when a dep spec is missing or not done.
+    # depends_on_epics must not report its tasks as ready. Same gate as
+    # cmd_next / cmd_ready_all: blocked when a dep spec is missing or not done,
+    # except the chain parent (fn-152 R2a).
     spec_data = normalize_epic(
         load_json_or_exit(epic_path, f"Spec {spec_id}", use_json=args.json)
     )
-    blocked_by_specs: list[str] = []
-    for dep in spec_data.get("depends_on_epics", []) or []:
-        if dep == spec_id:
-            continue
-        dep_path = find_spec_json_path(flow_dir, dep)
-        if not dep_path.exists():
-            blocked_by_specs.append(dep)
-            continue
-        dep_data = normalize_epic(
-            load_json_or_exit(dep_path, f"Spec {dep}", use_json=args.json)
-        )
-        if dep_data.get("status") != "done":
-            blocked_by_specs.append(dep)
+    blocked_by_specs = spec_blocked_by_deps(
+        flow_dir, spec_id, spec_data, use_json=args.json, remote_heads=RemoteHeads()
+    )
     if blocked_by_specs:
         if args.json:
             payload = {
@@ -35174,6 +35353,7 @@ def cmd_next(args: argparse.Namespace) -> None:
         return (task_priority(t), id_task_num(t["id"]))
 
     blocked_epics: dict[str, list[str]] = {}
+    remote_heads = RemoteHeads()  # fn-152: at most one ls-remote per invocation.
 
     for epic_id in epic_ids:
         epic_path = find_spec_json_path(flow_dir, epic_id)
@@ -35188,20 +35368,10 @@ def cmd_next(args: argparse.Namespace) -> None:
         if epic_data.get("status") == "done":
             continue
 
-        # Skip specs blocked by spec-level dependencies
-        blocked_by: list[str] = []
-        for dep in epic_data.get("depends_on_epics", []) or []:
-            if dep == epic_id:
-                continue
-            dep_path = find_spec_json_path(flow_dir, dep)
-            if not dep_path.exists():
-                blocked_by.append(dep)
-                continue
-            dep_data = normalize_epic(
-                load_json_or_exit(dep_path, f"Spec {dep}", use_json=args.json)
-            )
-            if dep_data.get("status") != "done":
-                blocked_by.append(dep)
+        # Skip specs blocked by spec-level dependencies (chain parent excepted, fn-152 R2a)
+        blocked_by = spec_blocked_by_deps(
+            flow_dir, epic_id, epic_data, use_json=args.json, remote_heads=remote_heads
+        )
         if blocked_by:
             blocked_epics[epic_id] = blocked_by
             continue
@@ -54761,6 +54931,16 @@ def main() -> None:
         )
         p_reset_rounds.add_argument("--json", action="store_true", help="JSON output")
         p_reset_rounds.set_defaults(func=cmd_spec_reset_review_rounds)
+
+        p_chain = parent_sub.add_parser(
+            "chain",
+            help=f"Chain eligibility of a dependent {noun} (read-only; one git ls-remote at most)",
+        )
+        p_chain.add_argument(
+            "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
+        )
+        p_chain.add_argument("--json", action="store_true", help="JSON output")
+        p_chain.set_defaults(func=cmd_spec_chain)
 
         p_set_branch = parent_sub.add_parser(
             "set-branch", help=f"Set {noun} branch name"

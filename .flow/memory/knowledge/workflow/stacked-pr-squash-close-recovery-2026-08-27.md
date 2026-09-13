@@ -18,8 +18,15 @@ Squash also orphans the stack's history: the stacked branch still contains the b
 2. Force-push with lease; open a **successor PR** against main (the old PR number is lost — link it with "Supersedes #N" in the body).
 3. Squash-orphaned bookkeeping follows: task evidence commits and rebaseline-evidence baseline SHAs recorded on the stack point at commits the squash removed — repoint receipts at the squash SHA and regenerate evidence against a reachable baseline (codex flagged all three on #374).
 
+## Superseded by the chain rules (2026-09-13)
+
+The manual successor-PR playbook above is history. Dependent specs now build as **chains** (fn-152) and land drains them (fn-149):
+
+- `flowctl spec chain <id>` decides when a dependent spec may start (parent open, all tasks done, branch on origin; linear only). Work branches from the parent's remote tip; make-pr targets the parent's branch and links a GitHub stack. Rules: `plugins/flow-next/skills/flow-next-make-pr/workflow.md` §0.3, `flow-next-work/phases.md` Phase 2.
+- Land never deletes a branch while an open PR targets it (`pending_branch_deletes`), merges only the frontier, and retargets the layers above a merged parent itself with a leased force-push. Rules: `plugins/flow-next/skills/flow-next-land/references/chains-and-stacks.md`.
+- The merged-parent window before a child has a PR is make-pr's rebase-onto from the detected boundary (create run only), so no successor PR is needed.
+
 ## Avoiding it next time
 
-- Prefer landing the base and only THEN building the dependent branch off main, when timing allows.
-- If stacking is worth it, plan the successor-PR step as part of the land sequence rather than discovering it; the PR-body cognitive aid and thread history carry over via the Supersedes link.
+- Do not hand-build a dependent PR on a feature branch outside the chain rules; let work and make-pr build it so land can drain it.
 - Related GitHub sharp edge from the same run: a comma list after one closing keyword ("Fixes #A, #B, #C") auto-closes only #A — each issue needs its own keyword ("Fixes #A, fixes #B, fixes #C").

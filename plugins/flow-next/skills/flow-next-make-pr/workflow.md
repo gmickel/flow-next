@@ -93,7 +93,18 @@ Resolution order:
 
 ### 0.3 — Base-branch detection cascade
 
-Cascade: `--base` → `origin/main` → `main` → `origin/master` → `master` → ask (interactive) / exit 2 (Ralph/autonomous); the detected-or-supplied ref is then validated via `git rev-parse --verify --quiet`.
+Cascade: `--base` → chain parent branch (parent PR open) → `origin/main` → `main` → `origin/master` → `master` → ask (interactive) / exit 2 (Ralph/autonomous); the detected-or-supplied ref is then validated via `git rev-parse --verify --quiet`.
+
+**Chain rung (fn-152).** A spec that depends on another spec may have been built on that parent's branch (work branches a chained spec from the parent's remote tip; see `flow-next-work/phases.md` Phase 2). The rung tests **history, never scheduling state or a scratch file**: for each dependency `D` in `depends_on_epics` order, obtain a ref into `D`'s history (`origin/<D.branch_name>` after a fetch while the branch exists on origin, otherwise the head of `D`'s merged PR via `refs/pull/<n>/head`), compute `MB = git merge-base HEAD <D_ref>`, and call the branch chained on `D` when `MB` is **not** an ancestor of the chain base (the default-branch rung's result): the two branches share commits the chain base does not have. `MB` is the boundary of the parent's work inside this branch, whether the parent advanced after the fork, was squash-merged, or both; a parent merged with a merge commit or fast-forward yields an `MB` on the chain base, so the branch is correctly not chained. The first chained `D` wins. An explicit `--base` stays above the rung (no detection runs). Outcomes by parent PR state:
+
+| Parent PR | Base | Then |
+|---|---|---|
+| open | `origin/<parent_branch>` | after `gh pr create`, link into the parent's GitHub stack (`create-and-finalize.md` §4.6) |
+| none yet | `origin/<parent_branch>` | no link (nothing to link to); the body's stack line is omitted |
+| merged | the parent PR's base (`origin/<chain_base>`) | **create run only:** rewrite the branch onto it from the boundary (§0.6b fence) so the PR does not double-count the parent's pre-squash commits; `--dry-run` and `--update` never rewrite |
+| closed unmerged | — | exit 2 `NEEDS_HUMAN: parent <id> PR #<n> closed unmerged; the chain is broken` |
+
+A dependency that is open with all tasks done but whose history cannot be reached (no branch on origin and no merged PR), or a merged one whose PR head cannot be fetched, is **unresolved**: exit 2 `NEEDS_HUMAN: cannot establish the chain boundary for <D>; parent history unreachable`, never a guess. A repo with no dependency edges never enters the rung and takes the default cascade byte-identically.
 
 ### 0.4 — Branch validity
 
@@ -134,14 +145,77 @@ fi
 # no separate validation-only `show >/dev/null` call here.
 
 # --- §0.3: base-branch detection cascade ---
-if [[ -z "$BASE_REF" ]]; then
-  for candidate in origin/main main origin/master master; do
-    if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
-      BASE_REF="$candidate"
-      break
+# fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF (explicit --base or empty), DRY_RUN; gh on PATH unless --dry-run
+CHAIN_BASE=""
+for candidate in origin/main main origin/master master; do
+  if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+    CHAIN_BASE="$candidate"
+    break
+  fi
+done
+# Chain rung (fn-152): history, not scheduling state. Skipped under an explicit --base.
+CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
+if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
+  for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
+    DEP_JSON=$("$FLOWCTL" show "$DEP" --json 2>/dev/null) || continue
+    DEP_BRANCH=$(printf '%s' "$DEP_JSON" | jq -r '.branch_name // empty')
+    [[ -z "$DEP_BRANCH" ]] && continue
+    DEP_REF=""
+    if git -C "$REPO_ROOT" fetch -q origin "refs/heads/$DEP_BRANCH:refs/remotes/origin/$DEP_BRANCH" 2>/dev/null; then
+      DEP_REF="refs/remotes/origin/$DEP_BRANCH"
     fi
+    # Parent PR state: open first, else merged, else closed. A failed read never becomes a guess on a real run.
+    if DEP_PR_LIST=$(gh pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
+      DEP_PR_JSON=$(printf '%s' "$DEP_PR_LIST" | jq -c '(map(select(.state=="OPEN")) + map(select(.state=="MERGED")) + map(select(.state=="CLOSED"))) | .[0] // empty')
+    elif [[ "$DRY_RUN" == "1" ]]; then
+      echo "Note: cannot read the PR state of $DEP_BRANCH under --dry-run; treating parent $DEP as open." >&2
+      DEP_PR_JSON=""
+    else
+      echo "NEEDS_HUMAN: cannot read the PR state of parent $DEP ($DEP_BRANCH)" >&2
+      exit 2
+    fi
+    DEP_PR_STATE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.state // empty')
+    DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
+    if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
+      if git -C "$REPO_ROOT" fetch -q origin "refs/pull/$DEP_PR_NUMBER/head:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
+        DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
+      else
+        echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
+        exit 2
+      fi
+    fi
+    if [[ -z "$DEP_REF" ]]; then
+      DEP_UNREACHABLE=$(printf '%s' "$DEP_JSON" | jq '(.status != "done") and ([.tasks[]?] | length > 0) and ([.tasks[]? | select(.status != "done")] | length == 0)')
+      if [[ "$DEP_UNREACHABLE" == "true" ]]; then
+        echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
+        exit 2
+      fi
+      continue   # a long-done dependency with neither branch nor PR left: not a chain
+    fi
+    MB=$(git -C "$REPO_ROOT" merge-base HEAD "$DEP_REF" 2>/dev/null) || continue
+    if git -C "$REPO_ROOT" merge-base --is-ancestor "$MB" "$CHAIN_BASE" 2>/dev/null; then
+      continue   # shared history is on the chain base: merge-commit/fast-forward parent, or no chain
+    fi
+    CHAIN_PARENT="$DEP"; CHAIN_PARENT_BRANCH="$DEP_BRANCH"; CHAIN_BOUNDARY="$MB"
+    PARENT_PR="$DEP_PR_NUMBER"; PARENT_PR_STATE="$DEP_PR_STATE"
+    break
   done
 fi
+if [[ -n "$CHAIN_PARENT" ]]; then
+  case "$PARENT_PR_STATE" in
+    OPEN|"")
+      BASE_REF="origin/$CHAIN_PARENT_BRANCH" ;;
+    MERGED)
+      PARENT_PR_BASE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')
+      : "${PARENT_PR_BASE:=${CHAIN_BASE#origin/}}"
+      git -C "$REPO_ROOT" fetch -q origin "refs/heads/$PARENT_PR_BASE:refs/remotes/origin/$PARENT_PR_BASE" 2>/dev/null || true
+      REWRITE_ONTO="origin/$PARENT_PR_BASE"; BASE_REF="$REWRITE_ONTO"; CHAIN_REWRITE=1 ;;
+    CLOSED)
+      echo "NEEDS_HUMAN: parent $CHAIN_PARENT PR #$PARENT_PR closed unmerged; the chain is broken" >&2
+      exit 2 ;;
+  esac
+fi
+[[ -z "$BASE_REF" ]] && BASE_REF="$CHAIN_BASE"
 
 if [[ -z "$BASE_REF" ]]; then
   if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
@@ -258,6 +332,40 @@ EOF
   exit 1
 fi
 
+# --- §0.6b: merged-parent rewrite (create run only; same fence continues) ---
+# fence:chain-rewrite — inputs: REPO_ROOT, BASE_REF, CHAIN_REWRITE, CHAIN_PARENT, CHAIN_BOUNDARY, REWRITE_ONTO, DRY_RUN, UPDATE_MODE; gh on PATH unless --dry-run
+if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
+  HEAD_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "would rebase $HEAD_BRANCH onto ${REWRITE_ONTO#origin/} from $CHAIN_BOUNDARY" >&2
+  elif [[ "${UPDATE_MODE:-0}" != "1" ]]; then
+    # Preconditions, all inside this fence: no open or merged PR on this branch, boundary in HEAD's
+    # ancestry, clean tree, and origin (when the branch is there) at exactly the pre-rebase HEAD.
+    PRIOR_PRS=$(gh pr list --head "$HEAD_BRANCH" --state all --json number,state --jq '[.[] | select(.state=="OPEN" or .state=="MERGED")] | length' 2>/dev/null) || PRIOR_PRS=""
+    [[ "$PRIOR_PRS" == "0" ]] || { echo "NEEDS_HUMAN: $HEAD_BRANCH already has an open or merged PR, or the probe failed; no rewrite" >&2; exit 2; }
+    git -C "$REPO_ROOT" merge-base --is-ancestor "$CHAIN_BOUNDARY" HEAD 2>/dev/null || { echo "NEEDS_HUMAN: chain boundary $CHAIN_BOUNDARY is not an ancestor of HEAD" >&2; exit 2; }
+    [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || { echo "NEEDS_HUMAN: working tree not clean; commit or stash before the merged-parent rewrite" >&2; exit 2; }
+    PRE_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)
+    REMOTE_SHA=$(git -C "$REPO_ROOT" ls-remote origin "refs/heads/$HEAD_BRANCH" 2>/dev/null | cut -f1)
+    if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$PRE_HEAD" ]]; then
+      echo "NEEDS_HUMAN: $HEAD_BRANCH on origin ($REMOTE_SHA) differs from HEAD; push or pull first" >&2; exit 2
+    fi
+    if ! git -C "$REPO_ROOT" rebase --onto "$REWRITE_ONTO" "$CHAIN_BOUNDARY" >/dev/null 2>&1; then
+      CONFLICTS=$(git -C "$REPO_ROOT" diff --name-only --diff-filter=U | tr '\n' ' ')
+      git -C "$REPO_ROOT" rebase --abort 2>/dev/null
+      echo "NEEDS_HUMAN: parent $CHAIN_PARENT merged; rebase $HEAD_BRANCH onto ${REWRITE_ONTO#origin/} conflicts in ${CONFLICTS% }" >&2; exit 2
+    fi
+    if [[ -n "$REMOTE_SHA" ]]; then
+      if ! git -C "$REPO_ROOT" push -q --force-with-lease="refs/heads/$HEAD_BRANCH:$REMOTE_SHA" origin "$HEAD_BRANCH" 2>/dev/null; then
+        git -C "$REPO_ROOT" reset -q --hard "$PRE_HEAD"
+        echo "NEEDS_HUMAN: $HEAD_BRANCH moved on origin during rewrite" >&2; exit 2
+      fi
+    fi
+    HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
+    COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD)..HEAD")
+  fi
+fi
+
 # --- §0.7: capture pre-flight context (same fence continues) ---
 PHASE0_CONTEXT=$(jq -n \
   --arg spec "$SPEC_ID" \
@@ -272,21 +380,27 @@ PHASE0_CONTEXT=$(jq -n \
   --argjson no_mermaid "$NO_MERMAID" \
   --argjson write_memory "$WRITE_MEMORY" \
   --arg draft_force "$DRAFT_FORCE" \
+  --arg chain_parent "${CHAIN_PARENT:-}" \
+  --arg parent_pr "${PARENT_PR:-}" \
+  --arg parent_pr_state "${PARENT_PR_STATE:-}" \
   '{spec:$spec, base:$base, head:$head, branch:$branch,
     commits_ahead:$commits_ahead, open_tasks:$open_tasks,
     dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
     no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
-    draft_force:$draft_force}')
+    draft_force:$draft_force,
+    chain_parent:$chain_parent, parent_pr:$parent_pr, parent_pr_state:$parent_pr_state}')
 ```
 
-Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
+Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values. `chain_parent`, `parent_pr`, and `parent_pr_state` are empty strings on a non-chained branch; the §4.2 draft matrix and the §4.6 stack link read them back from the context (`jq -r '.chain_parent // empty'`).
+
+**§0.6b rewrite rules.** The merged-parent rewrite is the only history rewrite outside land, bounded to a branch with no open or merged PR, on a create run only. The boundary is the ancestor SHA the chain rung detected, never a scratch value: switching branches between work and make-pr, a missing `.flow/tmp/spec_base`, or a fresh clone changes nothing. A rebase conflict aborts the rebase (HEAD restored) and exits 2 naming the files; a lease failure restores the pre-rebase HEAD and exits 2 `NEEDS_HUMAN: <branch> moved on origin during rewrite`. `--dry-run` prints `would rebase <branch> onto <chain_base> from <boundary>` on stderr and renders against the current diff; `--update` never rewrites (a merged parent under `--update` is land's retarget case).
 
 ### Done when
 
 - Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set). Autonomous context detected (`AUTONOMOUS=1` if the `mode:autonomous` token was parsed or `FLOW_AUTONOMOUS=1`) — never sets `RALPH`; prompt sites hard-error under `RALPH || AUTONOMOUS`.
 - When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` there blocks the documented inspection path on machines / CI jobs that only render the body). Setting `FLOW_PR_CREATE_CMD` (the §4.6 create seam, #277) does NOT lift this requirement — the seam swaps only the create call; `gh pr view` / `gh pr edit` and the §4.6b repair still need `gh`.
 - `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2) and validated via `flowctl show <spec-id> --json` (spec exists).
-- `BASE_REF` resolved through the cascade (`--base` → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2) and validated via `git rev-parse --verify --quiet`.
+- `BASE_REF` resolved through the cascade (`--base` → chain parent branch when the parent PR is open or absent → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2) and validated via `git rev-parse --verify --quiet`. Chain detection ran from history (merge-base against each dependency's branch tip or merged-PR head, not on the chain base); a merged parent set `CHAIN_REWRITE=1` and the §0.6b fence rewrote the branch on a create run (never under `--dry-run` / `--update`); a closed-unmerged parent or an unreachable parent history exited 2 `NEEDS_HUMAN`.
 - HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
 - Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt) — interactively and under `--dry-run` alike. Ralph/autonomous hard-errors (exit 2).
 - Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty — no OPEN PR on the current branch (CLOSED/MERGED PRs never trigger refusal).
@@ -417,6 +531,8 @@ The body sections appear in this exact order. Skip any section whose source cont
 > **Tasks:** <done> completed (<open> open if any — flagged in Open items)
 > **R-ID coverage:** <covered>/<total> evidenced<, <M> claimed not yet evidenced><, <N> undeclared>
 ```
+
+**Stack line (chained layer only, written after creation).** When the §4.6 stack link succeeds on a GitHub remote, exactly one more blockquote line is inserted directly under the Branch line, sourced from the stacks API response: `> **Stack:** #<stack number>, layer <position> of <size>`. No other stack text appears anywhere in the body (the §2.5 guardrail against invented references applies); a non-chained PR, a chained layer whose parent has no PR, and a failed link all omit the line.
 
 (The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
 

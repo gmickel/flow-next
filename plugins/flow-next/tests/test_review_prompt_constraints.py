@@ -226,6 +226,11 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 # ONE deterministic `git status --porcelain=v2 --branch` read
                 # per invocation, never a fetch, never an execution bridge.
                 ("subprocess.run", "upstream_behind"): 1,
+                # fn-152 R2: chain eligibility reads the remote ONCE per
+                # invocation via `git ls-remote --heads origin` (memoized by
+                # RemoteHeads across the admission gates) - never gh, never
+                # a fetch, never an execution bridge.
+                ("subprocess.run", "ls_remote_heads_origin"): 1,
                 # fn-184.1 / #325: the pilot strikes ledger lives under the git
                 # COMMON dir (shared across worktrees), so resolving it is ONE
                 # deterministic `rev-parse --git-common-dir` read per
