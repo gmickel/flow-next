@@ -937,7 +937,7 @@ class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
         # The literal pre-seam call is gone - no ungoverned merge path.
         self.assertNotIn('$(gh pr merge "$PR_NUMBER" --squash', self.text)
         # fn-149 R5/R11: the flags array is today's pair unless an open child targets the branch.
-        self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" -gt 0 ]] && MERGE_FLAGS=(--squash)', self.text)
+        self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" != 0 ]] && MERGE_FLAGS=(--squash)', self.text)
 
     def test_contract_states_fixed_argument_order(self) -> None:
         self.assertIn(

@@ -34,10 +34,10 @@ Inputs: `MERGED_PARENT` (the merged parent's branch), `PARENT_PR` (its number), 
 
 ```bash
 # fence:cascade — inputs: MERGED_PARENT, PARENT_PR, CHAIN_BASE, LEDGER, LEDGER_DIR, LEDGER_JSON, OWNER_REPO, TODAY; gh on PATH; origin reachable
-CASCADE_VERDICT=resolving; CASCADE_REASON=""
+CASCADE_VERDICT=resolving; CASCADE_REASON=""; CASCADE_STOPPED=""
 CASCADE_NS="refs/flow-next/cascade"; WT_ROOT="$LEDGER_DIR/cascade-wt"
 cascade_write() { mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"; tmp="$LEDGER.tmp.$$"; jq "$@" "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"; LEDGER_JSON="$(cat "$LEDGER")"; }
-cascade_stop() { CASCADE_VERDICT="$1"; CASCADE_REASON="$2"; }
+cascade_stop() { CASCADE_VERDICT="$1"; CASCADE_REASON="$2"; CASCADE_STOPPED=1; }   # every later phase is skipped once a stop is recorded
 cascade_clear_refs() { git for-each-ref --format='%(refname)' "$CASCADE_NS/" | while read -r r; do git update-ref -d "$r"; done; }
 cascade_rebase() {   # $1 layer, $2 from-tip, $3 fork, $4 onto → prints the new tip; rc 1 = conflict (prints the conflicting files instead), rc 2 = worktree failure
   local wt="$WT_ROOT/$1" new
@@ -60,7 +60,7 @@ if [[ -z "$RECORD" ]]; then
   # ---- PREPARE (no remote writes) ----
   LAYERS=""; BELOW="$MERGED_PARENT"
   while :; do
-    KIDS="$(gh pr list --base "$BELOW" --state open --json number,headRefName --limit 20 2>/dev/null)" || KIDS='[]'
+    KIDS="$(gh pr list --base "$BELOW" --state open --json number,headRefName --limit 20 2>/dev/null)" || { cascade_stop resolving "cannot read the children of $BELOW; nothing prepared, re-tick"; break; }
     KID_N="$(printf '%s\n' "$KIDS" | jq 'length')"
     [[ "$KID_N" == 0 ]] && break
     [[ "$KID_N" != 1 ]] && { cascade_stop needs_human "$BELOW has $KID_N open children; the cascade needs a linear chain"; break; }
@@ -68,12 +68,12 @@ if [[ -z "$RECORD" ]]; then
     LAYERS="${LAYERS}${BELOW}	$(printf '%s\n' "$KIDS" | jq -r '.[0].number')
 "
   done
-  if [[ "$CASCADE_VERDICT" == resolving && -z "$LAYERS" ]]; then cascade_stop needs_human "no open layer above $MERGED_PARENT; nothing to retarget"; fi
-  if [[ "$CASCADE_VERDICT" == resolving ]]; then
+  if [[ -z "$CASCADE_STOPPED" && -z "$LAYERS" ]]; then cascade_stop needs_human "no open layer above $MERGED_PARENT; nothing to retarget"; fi
+  if [[ -z "$CASCADE_STOPPED" ]]; then
     git fetch -q origin "refs/heads/$CHAIN_BASE" $(printf '%s' "$LAYERS" | cut -f1 | sed 's|^|refs/heads/|') 2>/dev/null \
       || cascade_stop needs_human "cannot fetch the chain from origin"
   fi
-  if [[ "$CASCADE_VERDICT" == resolving ]]; then
+  if [[ -z "$CASCADE_STOPPED" ]]; then
     if git fetch -q origin "refs/heads/$MERGED_PARENT" 2>/dev/null; then
       BELOW_OLD="$(git rev-parse "origin/$MERGED_PARENT")"
     else
@@ -85,7 +85,7 @@ if [[ -z "$RECORD" ]]; then
         && cascade_stop needs_human "parent branch $MERGED_PARENT gone; rebase #$FIRST_PR onto $CHAIN_BASE by hand"
     fi
   fi
-  if [[ "$CASCADE_VERDICT" == resolving ]]; then
+  if [[ -z "$CASCADE_STOPPED" ]]; then
     ONTO="$(git rev-parse "origin/$CHAIN_BASE")"; ONTO_NAME="$CHAIN_BASE"; PREPARED='[]'
     while IFS='	' read -r LAYER PRN; do
       [[ -z "$LAYER" ]] && continue
@@ -102,7 +102,7 @@ if [[ -z "$RECORD" ]]; then
     done <<EOF_LAYERS
 $LAYERS
 EOF_LAYERS
-    if [[ "$CASCADE_VERDICT" == resolving ]]; then
+    if [[ -z "$CASCADE_STOPPED" ]]; then
       cascade_write --arg cb "$CHAIN_BASE" --arg mp "$MERGED_PARENT" --argjson layers "$PREPARED" '.cascade = {"chain_base": $cb, "merged_parent": $mp, "layers": $layers}'   # the record precedes the first push
       RECORD="$(printf '%s\n' "$LEDGER_JSON" | jq -c '.cascade')"
     else
@@ -111,8 +111,10 @@ EOF_LAYERS
   fi
 fi
 
-if [[ -n "$RECORD" && "$CASCADE_VERDICT" == resolving ]]; then
-  # ---- PUBLISH / RESUME (bottom-up, reconcile each unpublished layer's remote head against the recorded tips first) ----
+if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
+  # ---- RECONCILE (no remote writes): each unpublished layer's remote head against the recorded tips. A layer that
+  # must be re-prepared invalidates every layer above it, and every replacement is PERSISTED in the record before
+  # the publish pass pushes anything — an interruption between two pushes never publishes a stale upper tip. ----
   CHAIN_BASE="$(printf '%s' "$RECORD" | jq -r '.chain_base')"; MERGED_PARENT="$(printf '%s' "$RECORD" | jq -r '.merged_parent')"
   git fetch -q origin "refs/heads/$CHAIN_BASE" $(printf '%s' "$RECORD" | jq -r '.layers[].branch' | sed 's|^|refs/heads/|') 2>/dev/null || true
   git fetch -q origin "refs/heads/$MERGED_PARENT" 2>/dev/null || true
@@ -125,16 +127,12 @@ if [[ -n "$RECORD" && "$CASCADE_VERDICT" == resolving ]]; then
         cascade_stop needs_human "cascade for $MERGED_PARENT was prepared in another checkout; finish it there or rebase by hand"; break
       fi
       REMOTE="$(git ls-remote origin "refs/heads/$LAYER" | cut -f1)"
-      git fetch -q origin "refs/heads/$LAYER" 2>/dev/null || true
-      if [[ "$REPREPARE" == 0 && ( "$REMOTE" == "$NEW_TIP" || $(git merge-base --is-ancestor "$NEW_TIP" "$REMOTE" 2>/dev/null && echo yes) == yes ) ]]; then
-        : # the push landed (possibly with commits on top): already published, no second rewrite
+      if [[ "$REPREPARE" == 0 ]] && { [[ "$REMOTE" == "$NEW_TIP" ]] || git merge-base --is-ancestor "$NEW_TIP" "$REMOTE" 2>/dev/null; }; then
+        cascade_write --argjson i "$IDX" '.cascade.layers[$i].published = true'   # the push landed (possibly with commits on top): no second rewrite
       elif [[ "$REPREPARE" == 0 && "$REMOTE" == "$OLD_TIP" ]]; then
-        if ! git push -q --force-with-lease="refs/heads/$LAYER:$OLD_TIP" origin "$NEW_TIP:refs/heads/$LAYER" 2>/dev/null; then
-          cascade_stop resolving "lease on $LAYER failed at $OLD_TIP; the record is kept and the next tick resumes"; break
-        fi
-        cascade_pushed "$PRN" "$NEW_TIP"
-      elif [[ "$REPREPARE" == 1 || $(git merge-base --is-ancestor "$OLD_TIP" "$REMOTE" 2>/dev/null && echo yes) == yes ]]; then
-        # someone committed on the old history (or a layer below was re-prepared): re-prepare from the CURRENT head against the recorded tips below
+        :   # the prepared tip is still valid; the publish pass pushes it
+      elif [[ "$REPREPARE" == 1 ]] || git merge-base --is-ancestor "$OLD_TIP" "$REMOTE" 2>/dev/null; then
+        # someone committed on the old history, or a layer below was re-prepared: re-prepare from the CURRENT head against the recorded tips below
         [[ -z "$BELOW_OLD" ]] && { cascade_stop needs_human "parent branch $MERGED_PARENT gone during a cascade; rebase #$PRN onto $CHAIN_BASE by hand"; break; }
         FORK="$(git merge-base "$REMOTE" "$BELOW_OLD")"
         RENEW="$(cascade_rebase "$LAYER" "$REMOTE" "$FORK" "$BELOW_NEW")" || {
@@ -142,13 +140,25 @@ if [[ -n "$RECORD" && "$CASCADE_VERDICT" == resolving ]]; then
                          || cascade_stop needs_human "cannot create a worktree for $LAYER"; break; }
         cascade_write --argjson i "$IDX" --arg o "$REMOTE" --arg n "$RENEW" '.cascade.layers[$i].old_tip = $o | .cascade.layers[$i].new_tip = $n'
         OLD_TIP="$REMOTE"; NEW_TIP="$RENEW"; REPREPARE=1
-        if ! git push -q --force-with-lease="refs/heads/$LAYER:$OLD_TIP" origin "$NEW_TIP:refs/heads/$LAYER" 2>/dev/null; then
-          cascade_stop resolving "lease on $LAYER failed at $OLD_TIP; the record is kept and the next tick resumes"; break
-        fi
-        cascade_pushed "$PRN" "$NEW_TIP"
       else
         cascade_stop needs_human "$LAYER was rewritten by someone else during a cascade; reconcile by hand"; break
       fi
+    fi
+    BELOW_OLD="$OLD_TIP"; BELOW_NEW="$NEW_TIP"; IDX=$((IDX + 1))
+  done <<EOF_RECONCILE
+$(printf '%s' "$RECORD" | jq -r '.layers[] | [.branch, (.pr|tostring), .old_tip, .new_tip, (.published|tostring), (.base_edited|tostring)] | @tsv')
+EOF_RECONCILE
+fi
+if [[ -n "$RECORD" && -z "$CASCADE_STOPPED" ]]; then
+  # ---- PUBLISH (bottom-up, from the persisted record): lease on the recorded old tip, base edit for the first layer ----
+  RECORD="$(printf '%s\n' "$LEDGER_JSON" | jq -c '.cascade')"; IDX=0
+  while IFS='	' read -r LAYER PRN OLD_TIP NEW_TIP PUBLISHED BASE_EDITED; do
+    [[ -z "$LAYER" ]] && continue
+    if [[ "$PUBLISHED" != true ]]; then
+      if ! git push -q --force-with-lease="refs/heads/$LAYER:$OLD_TIP" origin "$NEW_TIP:refs/heads/$LAYER" 2>/dev/null; then
+        cascade_stop resolving "lease on $LAYER failed at $OLD_TIP; the record is kept and the next tick resumes"; break
+      fi
+      cascade_pushed "$PRN" "$NEW_TIP"
       cascade_write --argjson i "$IDX" '.cascade.layers[$i].published = true'
     fi
     if [[ "$IDX" == 0 && "$BASE_EDITED" != true ]]; then   # first layer only: retarget onto the chain base
@@ -157,11 +167,11 @@ if [[ -n "$RECORD" && "$CASCADE_VERDICT" == resolving ]]; then
       fi
       cascade_write '.cascade.layers[0].base_edited = true'
     fi
-    BELOW_OLD="$OLD_TIP"; BELOW_NEW="$NEW_TIP"; IDX=$((IDX + 1))
-  done <<EOF_RECORD
+    IDX=$((IDX + 1))
+  done <<EOF_PUBLISH
 $(printf '%s' "$RECORD" | jq -r '.layers[] | [.branch, (.pr|tostring), .old_tip, .new_tip, (.published|tostring), (.base_edited|tostring)] | @tsv')
-EOF_RECORD
-  if [[ "$CASCADE_VERDICT" == resolving ]] && printf '%s\n' "$LEDGER_JSON" | jq -e '.cascade.layers | all(.published) and (.[0].base_edited)' >/dev/null; then
+EOF_PUBLISH
+  if [[ -z "$CASCADE_STOPPED" ]] && printf '%s\n' "$LEDGER_JSON" | jq -e '.cascade.layers | all(.published) and (.[0].base_edited)' >/dev/null; then
     cascade_write 'del(.cascade)'; cascade_clear_refs
     CASCADE_REASON="cascade above $MERGED_PARENT published; layers re-gate next tick"
   fi
@@ -170,7 +180,8 @@ fi
 
 Rules the fence encodes, for the reader:
 
-- The record is written before the first push and cleared only after the last base edit. A push can succeed while the ledger write after it is lost, which is why resumption reconciles each unpublished layer's remote head first, in this order: at or above `new_tip` (published, no rewrite), at `old_tip` (push as prepared), above `old_tip` (re-prepare from the current head against the recorded tips below, and every layer above it likewise), anything else (`NEEDS_HUMAN`, a foreign rewrite).
+- The record is written before the first push and cleared only after the last base edit. A push can succeed while the ledger write after it is lost, which is why resumption reconciles each unpublished layer's remote head first, in this order: at or above `new_tip` (published, no rewrite), at `old_tip` (push as prepared), above `old_tip` (re-prepare from the current head against the recorded tips below, and every layer above it likewise), anything else (`NEEDS_HUMAN`, a foreign rewrite). The reconcile pass persists every replacement tip in the record before the publish pass pushes anything, so a lease failure or crash between two pushes never leaves an upper layer's stale prepared tip to be published later.
+- A failed child-list read during discovery prepares nothing and re-ticks (`RESOLVING`); a chain truncated by an unread layer would publish a lower rewrite and strand the layers above it.
 - A boundary that resolves onto the chain base means the invariant was already broken below; the whole cascade is refused before any push. A rebase conflict during prepare aborts that layer, removes the worktree, writes no record, and reports `BLOCKED` naming the files; land never hand-resolves a conflict. A lease failure during publish keeps the record and reports `RESOLVING`.
 - The recorded old tips are reachable only through this clone's objects after a force-push; a record whose objects are missing (another clone) is `NEEDS_HUMAN`. Land already runs from one clone per ledger.
 - The merged parent branch must still exist for the first boundary (the janitor guarantees it while a child targets it); when a human deleted it, the first layer's `verdict_base` (GitHub's `base.sha` at the last satisfied tick) is the boundary, or the cascade is `NEEDS_HUMAN`.

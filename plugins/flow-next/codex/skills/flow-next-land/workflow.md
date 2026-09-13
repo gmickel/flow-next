@@ -346,19 +346,23 @@ OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 One REST read beside the `gh pr view` probe classifies the PR from its `stack` object and its base ref; one `gh pr list --base` read counts open children. A human can stack, unstack, or retarget by hand between ticks, so only the PR tells the truth: the shape, the stack number, the position, the parent PR, the chain base, and the child count are logged in the tick output and carried in the verdict reason, and never written to the ledger or read from config. The parent walk resolves the chain base from the PR graph (a branch that is the head of some PR is a chain layer; the first base that is nobody's head is the chain base):
 
 ```bash
-# fence:shape — inputs: OWNER_REPO, PR_NUMBER, BASE_REF, BRANCH_NAME; gh on PATH
+# fence:shape — inputs: OWNER_REPO, PR_NUMBER, BASE_REF, BRANCH_NAME, LEDGER_JSON; gh on PATH
 PR_REST="$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER" 2>/dev/null)" || PR_REST=""
 [[ -z "$PR_REST" ]] && echo "shape: REST read failed for #$PR_NUMBER — plain-path classification this tick" >&2
 STACK_NUMBER="$(printf '%s\n' "$PR_REST" | jq -r '.stack.number // empty' 2>/dev/null || true)"
 STACK_POSITION="$(printf '%s\n' "$PR_REST" | jq -r '.stack.position // empty' 2>/dev/null || true)"
 STACK_SIZE="$(printf '%s\n' "$PR_REST" | jq -r '.stack.size // empty' 2>/dev/null || true)"
 BASE_SHA="$(printf '%s\n' "$PR_REST" | jq -r '.base.sha // empty' 2>/dev/null || true)"
-# parent walk: the PR whose head is this PR's base, then its base, ... until a base that heads no PR (bounded)
-PARENT_PR=""; PARENT_STATE=""; CHAIN_BASE="$BASE_REF"; WALK=0
-while [[ $WALK -lt 16 ]]; do
+# parent walk: the PR whose head is this PR's base, then its base, ... The walk stops at the repository's
+# default branch (a promotion PR whose head IS the default branch never makes a feature PR a chain layer)
+# or at a base that heads no PR; the stop is the chain base. A FAILED read is never a classification:
+# SHAPE_READ_FAILED=1 holds the merge (§2.8) instead of guessing standalone.
+DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null)" || DEFAULT_BRANCH=""
+PARENT_PR=""; PARENT_STATE=""; CHAIN_BASE="$BASE_REF"; WALK=0; SHAPE_READ_FAILED=0
+while [[ $WALK -lt 16 && "$CHAIN_BASE" != "$DEFAULT_BRANCH" ]]; do
   WALK=$((WALK + 1))
-  UP="$(gh pr list --head "$CHAIN_BASE" --state all --json number,state,baseRefName --limit 20 2>/dev/null \
-    | jq -c '[.[] | select(.state != "CLOSED")] as $live | (if ($live | length) > 0 then $live else . end) | .[0] // empty')"
+  UP_LIST="$(gh pr list --head "$CHAIN_BASE" --state all --json number,state,baseRefName --limit 20 2>/dev/null)" || { SHAPE_READ_FAILED=1; break; }
+  UP="$(printf '%s\n' "$UP_LIST" | jq -c '[.[] | select(.state != "CLOSED")] as $live | (if ($live | length) > 0 then $live else . end) | .[0] // empty')"
   [[ -z "$UP" ]] && break
   [[ -z "$PARENT_PR" ]] && { PARENT_PR="$(printf '%s' "$UP" | jq -r '.number')"; PARENT_STATE="$(printf '%s' "$UP" | jq -r '.state')"; }
   CHAIN_BASE="$(printf '%s' "$UP" | jq -r '.baseRefName')"
@@ -366,8 +370,12 @@ done
 if [[ -n "$STACK_NUMBER" ]]; then PR_SHAPE=stacked
 elif [[ -n "$PARENT_PR" ]]; then PR_SHAPE=chain
 else PR_SHAPE=standalone; fi
-CHILD_COUNT="$(gh pr list --base "$BRANCH_NAME" --state open --json number --jq 'length' 2>/dev/null)" || CHILD_COUNT=0
-echo "shape: #$PR_NUMBER $PR_SHAPE base=$BASE_REF chain_base=$CHAIN_BASE parent=${PARENT_PR:-none}${PARENT_STATE:+:$PARENT_STATE} stack=${STACK_NUMBER:-none}${STACK_POSITION:+ layer $STACK_POSITION of $STACK_SIZE} children=$CHILD_COUNT"
+# children: a failed read is `unknown`, which §3.5 treats as "children present" (branch kept, recorded for the janitor) — never as zero
+CHILD_COUNT="$(gh pr list --base "$BRANCH_NAME" --state open --json number --jq 'length' 2>/dev/null)" || CHILD_COUNT=unknown
+[[ "$CHILD_COUNT" =~ ^[0-9]+$ ]] || CHILD_COUNT=unknown
+# a cascade record naming this branch takes precedence over every other plan for this PR (§2.8)
+CASCADE_MEMBER=0; printf '%s\n' "$LEDGER_JSON" | jq -e --arg b "$BRANCH_NAME" '.cascade.layers // [] | map(.branch) | index($b) != null' >/dev/null 2>&1 && CASCADE_MEMBER=1
+echo "shape: #$PR_NUMBER $PR_SHAPE base=$BASE_REF chain_base=$CHAIN_BASE parent=${PARENT_PR:-none}${PARENT_STATE:+:$PARENT_STATE} stack=${STACK_NUMBER:-none}${STACK_POSITION:+ layer $STACK_POSITION of $STACK_SIZE} children=$CHILD_COUNT read_failed=$SHAPE_READ_FAILED cascade_member=$CASCADE_MEMBER"
 ```
 
 | `stack` object | base ref | `PR_SHAPE` | Merge path | Retarget owner |
@@ -376,7 +384,7 @@ echo "shape: #$PR_NUMBER $PR_SHAPE base=$BASE_REF chain_base=$CHAIN_BASE parent=
 | null | heads a PR (parent walk found one) | `chain` | existing `gh pr merge` (§3.5) | land (§3.7) |
 | null | heads no PR (chain base) | `standalone` | existing `gh pr merge` (§3.5) | none |
 
-A failed REST read degrades to the plain-path classification for this tick with the one stderr line above. Children are counted on every shape, standalone included: the bottom layer of a plain chain is standalone by this table and has a child, and the child count alone decides branch deletion (§3.5). A `stack` object whose stack read (§2.8) returns 404 is `NEEDS_HUMAN` naming the inconsistency.
+A failed REST read degrades to the plain-path classification for this tick with the one stderr line above. A failed parent-list read (`SHAPE_READ_FAILED=1`) is not a classification: §2.8 holds a planned merge as `AWAITING_REVIEW`, reason `chain topology unreadable — merge deferred`. Children are counted on every shape, standalone included: the bottom layer of a plain chain is standalone by this table and has a child, and the child count alone decides branch deletion (§3.5); a failed children read is `unknown` and keeps the branch. A `stack` object whose stack read (§2.8) returns 404 is `NEEDS_HUMAN` naming the inconsistency. `CASCADE_MEMBER=1` (a ledger `cascade` record names this branch) routes the PR to `retarget` before any other gate — a layer that already reached the chain base mid-cascade must not merge while the layers above it are unfinished.
 
 On a scoped tick, require `PR_URL == LAND_SCOPE_PR` and `BASE_REF == SCOPE_BASE` before any gate action; a mismatch is `NEEDS_HUMAN`. For a re-entry candidate, freshly confirm `state == MERGED` and its merge commit, then apply the durable-label gate and resume only the authorized tail. Do not run an OPEN merge plan on a PR that merged between discovery and action.
 
@@ -413,7 +421,7 @@ elif [[ -n "$V_HEAD" ]]; then
 fi
 ```
 
-`GATE_HEAD` replaces `HEAD_OID` in exactly these comparisons: the §2.6 reviews-loop `commit_id` test, the §2.6 clean-review comment SHA prefix, the §2.7 `land_pushed_sha` comparison, and the §2.9 merge-verdict pin (a green verdict bound at `verdict_head` is carried without re-executing the command). `HEAD_OID` stays the head for §2.4 CI, §2.8 `mergeStateStatus` and dependency contiguity, the §3.5 `--match-head-commit` guard, and the §3.5b `sha` pin, which always name the commit being merged. This block runs before §2.3, whose anchor fence reads `VERDICT_CARRIED` and `V_ANCHOR`. The binding is written at the Phase 4 write site only when the review gates were satisfied at the current head and `VERDICT_CARRIED == 0`; an unsatisfied evaluation and an equivalent head move never write it.
+`GATE_HEAD` replaces `HEAD_OID` in exactly these comparisons: the §2.6 reviews-loop `commit_id` test, the §2.6 clean-review comment SHA prefix, and the §2.7 `land_pushed_sha` comparison. `HEAD_OID` stays the head for §2.4 CI, §2.8 `mergeStateStatus` and dependency contiguity, the §2.9 merge-verdict command (a repo gate like CI: it runs at the current head every merge attempt, and its pin is the current head), the §3.5 `--match-head-commit` guard, and the §3.5b `sha` pin, which always name the commit being merged. The binding is review evidence only; it never records or grants a merge-verdict result. This block runs before §2.3, whose anchor fence reads `VERDICT_CARRIED` and `V_ANCHOR`. The binding is written at the Phase 4 write site only when the review gates were satisfied at the current head and `VERDICT_CARRIED == 0`; an unsatisfied evaluation and an equivalent head move never write it.
 
 ### 2.3 — Patience-window anchor
 
@@ -647,19 +655,22 @@ Both merge states route to the SAME action deliberately: the catch-up is one `gh
 
 **Dependency contiguity before `merge`.** `flow --auto` honors spec dependencies at select, but an all-tasks-done spec whose PR converges early can reach merge while a dependency is still open — merging it lands work whose foundation has not shipped. When 2.8 plans `merge`, check the spec's `depends_on_epics` — re-read it for THIS PR at evaluation time (`DEP_SPEC_JSON="$("$FLOWCTL" show "$spec" --json)"`, `$spec` = the spec id in this PR's classification record; the Phase 1 loop's `SPEC_JSON` is a loop variable holding whichever candidate iterated last, and a multi-candidate tick that reused it would gate an earlier PR on a later spec's dependency list — per-PR state, not loop variables, exactly as §2.9's verdict pair): every listed spec must report `status == "done"` (`"$FLOWCTL" show <dep-id> --json`); any that does not → plan `none` instead, verdict `AWAITING_REVIEW`, reason `dependency <dep-id> not done — merge deferred`. A hold, never a strike: no budget is consumed and the next tick re-checks.
 
-**Frontier rule (chains and stacks), evaluated whenever 2.8 plans `merge` and `PR_SHAPE != standalone`.** Land merges only the bottom open layer, one layer per tick; the dependency contiguity check above stays and is the same rule expressed through flow state, so both must pass (a stack a human built without flow dependency edges is covered by the stack read alone):
+**Cascade precedence (before every other plan).** `CASCADE_MEMBER == 1` (§2.0: a ledger `cascade` record names this PR's branch) → plan `retarget` (resume, §3.7), provisional verdict `RESOLVING`, and no other gate plans anything for this PR until the record clears — whatever its current shape, base, CI, or review state. A first layer whose base edit already landed reads as standalone on the chain base; merging it before the layers above carry their rewrite would strand them.
 
-- `PR_SHAPE == chain`: `PARENT_STATE == OPEN` → plan `none`, verdict `AWAITING_REVIEW`, reason `chain layer awaits parent #<PARENT_PR>`. `PARENT_STATE == MERGED` (the base is still the merged parent's branch, so the host did not retarget) → plan `retarget` (§3.7, the plain-path cascade), provisional verdict `RESOLVING`. `PARENT_STATE == CLOSED` → verdict `NEEDS_HUMAN`, reason `chain broken; parent #<PARENT_PR> closed unmerged` — the child's commits include the parent's work and a human decides whether that change lives on. A ledger `cascade` record whose `layers[].branch` names this PR's branch → plan `retarget` (resume) and nothing else for this chain until the record clears.
+**Frontier rule (chains and stacks), evaluated whenever 2.8 plans `merge` and `PR_SHAPE != standalone`.** Land merges only the bottom open layer, one layer per tick; the dependency contiguity check above stays and is the same rule expressed through flow state, so both must pass (a stack a human built without flow dependency edges is covered by the stack read alone). `SHAPE_READ_FAILED == 1` (§2.0 could not read the parent list) → plan `none`, verdict `AWAITING_REVIEW`, reason `chain topology unreadable — merge deferred`, on every shape: an unread topology is never a standalone classification.
+
+- `PR_SHAPE == chain`: `PARENT_STATE == OPEN` → plan `none`, verdict `AWAITING_REVIEW`, reason `chain layer awaits parent #<PARENT_PR>`. `PARENT_STATE == MERGED` (the base is still the merged parent's branch, so the host did not retarget) → plan `retarget` (§3.7, the plain-path cascade), provisional verdict `RESOLVING`. `PARENT_STATE == CLOSED` → verdict `NEEDS_HUMAN`, reason `chain broken; parent #<PARENT_PR> closed unmerged` — the child's commits include the parent's work and a human decides whether that change lives on.
 - `PR_SHAPE == stacked`: read the stack and require this PR to be its lowest open layer:
 
   ```bash
-  # fence:frontier — inputs: OWNER_REPO, STACK_NUMBER, PR_NUMBER; gh on PATH → FRONTIER (number|""), STACK_RC, LOWER_COUNT
-  STACK_RC=0; STACK_JSON="$(gh api "repos/$OWNER_REPO/stacks/$STACK_NUMBER" 2>/dev/null)" || STACK_RC=$?
+  # fence:frontier — inputs: OWNER_REPO, STACK_NUMBER, PR_NUMBER, LEDGER_DIR; gh on PATH → FRONTIER (number|""), STACK_RC, STACK_ERR, LOWER_COUNT
+  mkdir -p "$LEDGER_DIR"; STACK_RC=0; STACK_JSON="$(gh api "repos/$OWNER_REPO/stacks/$STACK_NUMBER" 2>"$LEDGER_DIR/stack.err.$$")" || STACK_RC=$?
+  STACK_ERR="$(cat "$LEDGER_DIR/stack.err.$$" 2>/dev/null)"; rm -f "$LEDGER_DIR/stack.err.$$"
   FRONTIER="$(printf '%s\n' "$STACK_JSON" | jq -r '[.pull_requests[] | select(.state == "open")][0].number // empty' 2>/dev/null || true)"
   LOWER_COUNT="$(printf '%s\n' "$STACK_JSON" | jq -r --argjson me "$PR_NUMBER" '[.pull_requests[] | select(.state == "open")] | map(.number) | index($me) // 0' 2>/dev/null || echo 0)"
   ```
 
-  `STACK_RC != 0` with an `HTTP 404` in the error → verdict `NEEDS_HUMAN`, reason `#<n> carries stack #<s> but the stack read is 404; reconcile the stack by hand` (an inconsistency, never a guess). Any other non-2xx → one stderr line, `PR_SHAPE=chain` for this tick (preview drift degrades to the plain path). `FRONTIER != PR_NUMBER` → plan `none`, verdict `AWAITING_REVIEW`, reason `stack #<s> layer <p> of <size> awaits <LOWER_COUNT> lower layer(s); frontier #<FRONTIER>`. `FRONTIER == PR_NUMBER` → the plan stays `merge` and §3.5 takes the native path (§3.5b). A set `FLOW_PR_MERGE_CMD` on a stacked layer → verdict `NEEDS_HUMAN`, reason `FLOW_PR_MERGE_CMD is set but #<n> is a stacked layer; stacked merges use the merge-async endpoint`, nothing merged. `autoMergeRequest` and `mergeStateStatus` are never read as stack readiness.
+  `STACK_RC != 0` with `HTTP 404` in `STACK_ERR` → verdict `NEEDS_HUMAN`, reason `#<n> carries stack #<s> but the stack read is 404; reconcile the stack by hand` (an inconsistency, never a guess). Any other non-2xx → one stderr line, `PR_SHAPE=chain` for this tick (preview drift degrades to the plain path). `FRONTIER != PR_NUMBER` → plan `none`, verdict `AWAITING_REVIEW`, reason `stack #<s> layer <p> of <size> awaits <LOWER_COUNT> lower layer(s); frontier #<FRONTIER>`. `FRONTIER == PR_NUMBER` → the plan stays `merge` and §3.5 takes the native path (§3.5b). A set `FLOW_PR_MERGE_CMD` on a stacked layer → verdict `NEEDS_HUMAN`, reason `FLOW_PR_MERGE_CMD is set but #<n> is a stacked layer; stacked merges use the merge-async endpoint`, nothing merged. `autoMergeRequest` and `mergeStateStatus` are never read as stack readiness.
 - A ledger `merge_async_uuid` for this PR (a submit pending from an earlier tick) → plan `merge` again; §3.5b polls the stored uuid and never re-submits while it is set.
 
 **Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `retarget`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
@@ -678,14 +689,7 @@ if [ -n "${LAND_SCOPE_SPEC:-}" ] && [ "${LAND_DRY_RUN:-0}" != 1 ]; then
 fi
 MERGE_VERDICT=skipped        # green | refused | skipped | would-run (Phase 4 evidence)
 MERGE_VERDICT_HEAD=""        # the exact head the command judged (pins 3.5's merge)
-if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" && "${VERDICT_CARRIED:-0}" == 1 ]]; then
-  # §2.2b: the binding was written at verdict_head after this command judged that patch; an equal
-  # patch-id carries the green verdict without re-executing it. The merge pin stays the CURRENT head
-  # (the --match-head-commit guard names the commit being merged); the base is re-bound fresh below.
-  MERGE_VERDICT=green; MERGE_VERDICT_HEAD="$HEAD_OID"
-  MERGE_VERDICT_BASE="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
-  [[ -z "$MERGE_VERDICT_BASE" ]] && { MERGE_VERDICT=refused; MV_RC=1; MV_ERR="merge-verdict gate cannot resolve origin/$BASE_REF (ls-remote empty/failed)"; }
-elif [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
+if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
   if [[ "$LAND_DRY_RUN" == 1 ]]; then
     MERGE_VERDICT=would-run  # R3 — --dry-run NEVER executes the command
   elif [[ "$(git rev-parse --abbrev-ref HEAD)" != "$BASE_REF" ]]; then
@@ -943,8 +947,9 @@ else
   MERGE_CMD=( $(printf '%s' "${FLOW_PR_MERGE_CMD:-gh pr merge}") )
   # Branch janitor (§0.5, R5): a PR with open children (§2.0 CHILD_COUNT) merges WITHOUT
   # --delete-branch — deleting the branch closes the child permanently — and its branch is
-  # recorded in pending_branch_deletes after the merge is confirmed. No children: today's flags.
-  MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" -gt 0 ]] && MERGE_FLAGS=(--squash)
+  # recorded in pending_branch_deletes after the merge is confirmed. A failed children read is
+  # `unknown` and also keeps the branch (the janitor deletes it once the read succeeds). Zero: today's flags.
+  MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" != 0 ]] && MERGE_FLAGS=(--squash)   # >0 OR unknown (failed read): keep the branch
   MERGE_RC=0
   MERGE_ERR="$("${MERGE_CMD[@]}" "$PR_NUMBER" "${MERGE_FLAGS[@]}" --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   fi
@@ -1019,7 +1024,13 @@ fi
 if [[ "$MERGE_ASYNC_VERDICT" == "merged" || "$MERGE_ASYNC_VERDICT" == "resolving" ]]; then
   # advancement needs the re-probe: state == MERGED with a non-null mergedAt, never a status flag alone
   if gh pr view "$PR_NUMBER" --json state,mergedAt --jq '.state == "MERGED" and (.mergedAt != null)' 2>/dev/null | grep -q true; then
-    MERGE_RC=0; MERGE_ASYNC_VERDICT=merged
+    MERGED_HEAD="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null)"
+    if [[ -n "$MERGED_HEAD" && "$MERGED_HEAD" != "$HEAD_OID" ]]; then
+      # the server merged a head the gates never judged: the pin is not enforced — no fallback, no further native submits
+      MERGE_ERR="NEEDS_HUMAN: merge-async does not enforce a head pin (merged $MERGED_HEAD, pinned $HEAD_OID); merge #$PR_NUMBER from the stack UI"; MERGE_ASYNC_VERDICT=needs_human
+    else
+      MERGE_RC=0; MERGE_ASYNC_VERDICT=merged
+    fi
   elif [[ "$MERGE_ASYNC_VERDICT" == "merged" ]]; then
     MERGE_ERR="merge-async reported merged but the PR re-probe is not MERGED"; MERGE_ASYNC_VERDICT=needs_human
   fi
@@ -1031,9 +1042,9 @@ fi
 | `merged` (`MERGE_RC == 0`) | proceed to the post-merge tail exactly as after `gh pr merge`; the branch stays (native merges leave branches in place, proven 2026-09-13), so with `CHILD_COUNT > 0` it is recorded in `pending_branch_deletes` and otherwise deleted by the same record on the next sweep |
 | `resolving` | verdict `RESOLVING` (a stale pin, a moved frontier, a 409, an expired or still-pending uuid); the next tick re-reads the head and the stack, re-applies §2.2b, and submits again only when no uuid is stored |
 | `blocked` | verdict `BLOCKED`, reason = `MERGE_ERR` (expected-head mismatch naming both SHAs, `failed` with its message, or a 400) |
-| `needs_human` | verdict `NEEDS_HUMAN`, reason = `MERGE_ERR` (the re-probe failure) |
+| `needs_human` | verdict `NEEDS_HUMAN`, reason = `MERGE_ERR` (the re-probe failure, or a merged head that differs from the pinned one) |
 
-**Stale-pin regression.** The R16 fixture keeps a stale-`sha` case: the stub refuses with 400 `failed` and nothing merges. If that fixture ever observes a merge despite a stale pin, native submission is disabled with `NEEDS_HUMAN: merge-async does not enforce a head pin; merge #<n> from the stack UI` and there is no fallback to response-only validation.
+**Stale-pin regression.** The R16 fixture keeps a stale-`sha` case: the stub refuses with 400 `failed` and nothing merges. The fence also observes the merged head after every native merge: a merged head that differs from the pinned one means the pin is not enforced, and the verdict is `NEEDS_HUMAN: merge-async does not enforce a head pin; merge #<n> from the stack UI` with no fallback to response-only validation — the R16 fixture exercises that path with a stub whose pin is not enforced.
 
 ```bash
 MERGE_CONFIRMED=0
@@ -1058,11 +1069,11 @@ After `MERGE_CONFIRMED=1` on a scoped handoff (or `MERGE_RC == 0` on standalone 
 
 ```bash
 # fence:pending-delete — inputs: CHILD_COUNT, PR_SHAPE, BRANCH_NAME, PR_NUMBER, TODAY, LEDGER, LEDGER_DIR
-if [[ "${CHILD_COUNT:-0}" -gt 0 || "${PR_SHAPE:-standalone}" == "stacked" ]]; then
+if [[ "${CHILD_COUNT:-0}" != 0 || "${PR_SHAPE:-standalone}" == "stacked" ]]; then
   mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
   tmp="$LEDGER.tmp.$$"
   jq --arg br "$BRANCH_NAME" --argjson pr "$PR_NUMBER" --arg ts "$TODAY" '.pending_branch_deletes[$br] = {"pr": $pr, "merged_at": $ts}' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
-  echo "Evidence: branch $BRANCH_NAME kept (${CHILD_COUNT:-0} open child PR(s)) — recorded for the janitor"
+  echo "Evidence: branch $BRANCH_NAME kept (${CHILD_COUNT:-0} open child PR(s), or unread) — recorded for the janitor"
 fi
 ```
 

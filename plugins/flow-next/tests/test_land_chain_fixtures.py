@@ -568,6 +568,166 @@ class MergeAsyncTestCase(unittest.TestCase):
         self.assertEqual([c for c in self.w.reload()["calls"] if "PUT" in c], [])
 
 
+@_POSIX
+class FailedReadsAndPrecedenceTestCase(unittest.TestCase):
+    """A failed topology read is never permission (review round 1, findings 2/3/6); cascade precedence; pin enforcement observed."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="fn149-reads-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.w = ChainWorld(self.tmp)
+        three_layer_chain(self.w)
+        self.shape = fence(WORKFLOW, "shape")
+
+    def run_shape(self, pr: int, base: str, branch: str) -> dict[str, str]:
+        return self.w.run(self.shape, {"OWNER_REPO": "o/r", "PR_NUMBER": str(pr), "BASE_REF": base, "BRANCH_NAME": branch},
+                          ["PR_SHAPE", "CHAIN_BASE", "CHILD_COUNT", "SHAPE_READ_FAILED", "CASCADE_MEMBER", "PARENT_PR"])
+
+    def test_failed_children_read_is_unknown_and_the_merge_keeps_the_branch(self) -> None:
+        self.w.world["fail_children_of"] = ["A"]; self.w.save()
+        got = self.run_shape(1, "main", "A")
+        self.assertEqual(got["CHILD_COUNT"], "unknown")
+        text = WORKFLOW.read_text(encoding="utf-8")
+        merge_fence = re.search(r"^(  MERGE_CMD.*?\n  MERGE_ERR=.*?\n)", text, re.MULTILINE | re.DOTALL).group(1)
+        self.w.run(merge_fence, {"PR_NUMBER": "1", "HEAD_OID": self.w.origin_sha("A"), "CHILD_COUNT": "unknown"}, [])
+        self.assertNotIn("--delete-branch", self.w.calls("pr", "merge")[-1])
+        self.assertNotEqual(self.w.origin_sha("A"), "")
+        self.w.run(fence(WORKFLOW, "pending-delete"), {"CHILD_COUNT": "unknown", "PR_SHAPE": "standalone", "BRANCH_NAME": "A", "PR_NUMBER": "1"}, [])
+        self.assertIn("A", self.w.ledger_json()["pending_branch_deletes"])
+
+    def test_failed_parent_read_is_a_hold_not_standalone(self) -> None:
+        self.w.world["fail_parent_reads"] = True; self.w.save()
+        got = self.run_shape(3, "B", "C")
+        self.assertEqual(got["SHAPE_READ_FAILED"], "1")
+        self.assertEqual(got["PARENT_PR"], "")
+
+    def test_promotion_pr_headed_by_the_default_branch_never_chains_a_feature_pr(self) -> None:
+        self.w.add_pr(9, "main", "release", state="MERGED")
+        got = self.run_shape(1, "main", "A")
+        self.assertEqual((got["PR_SHAPE"], got["CHAIN_BASE"], got["PARENT_PR"]), ("standalone", "main", ""))
+
+    def test_cascade_record_naming_the_branch_is_flagged_before_any_gate(self) -> None:
+        self.w.write_ledger({"cascade": {"chain_base": "main", "merged_parent": "A", "layers": [{"branch": "B", "pr": 2, "old_tip": "x", "new_tip": "y", "published": True, "base_edited": True}, {"branch": "C", "pr": 3, "old_tip": "x", "new_tip": "y", "published": False, "base_edited": False}]}})
+        self.assertEqual(self.run_shape(2, "main", "B")["CASCADE_MEMBER"], "1")
+        self.assertEqual(self.run_shape(1, "main", "A")["CASCADE_MEMBER"], "0")
+
+    def test_stack_read_error_keeps_the_http_status_for_the_404_rule(self) -> None:
+        self.w.world["stack_read_error"] = "500"; self.w.save()
+        got = self.w.run(fence(WORKFLOW, "frontier"), {"OWNER_REPO": "o/r", "STACK_NUMBER": "11", "PR_NUMBER": "1"}, ["STACK_RC", "STACK_ERR"])
+        self.assertEqual(got["STACK_RC"], "1")
+        self.assertIn("HTTP 500", got["STACK_ERR"])
+        self.assertNotIn("HTTP 404", got["STACK_ERR"])
+
+    def test_unenforced_pin_is_observed_after_the_merge_and_disables_native_submission(self) -> None:
+        self.w.world["prs"]["1"]["stack"] = {"number": 11, "position": 1, "size": 1}
+        self.w.world["stacks"]["11"] = {"pull_requests": [{"number": 1, "state": "open"}]}
+        self.w.world["pin_enforced"] = False; self.w.save()
+        got = self.w.run(fence(WORKFLOW, "merge-async"), {"OWNER_REPO": "o/r", "STACK_NUMBER": "11", "PR_NUMBER": "1", "PR_URL": "https://github.com/o/r/pull/1", "HEAD_OID": self.w.origin_sha("main")},
+                         ["MERGE_RC", "MERGE_ERR", "MERGE_ASYNC_VERDICT"])
+        self.assertEqual((got["MERGE_RC"], got["MERGE_ASYNC_VERDICT"]), ("1", "needs_human"), got)
+        self.assertIn("merge-async does not enforce a head pin", got["MERGE_ERR"])
+        self.assertNotIn("merge_async_uuid", self.w.ledger_json().get("https://github.com/o/r/pull/1", {}))
+
+
+@_POSIX
+class CascadeRecoveryPersistenceTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="fn149-recover-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.w = ChainWorld(self.tmp)
+        three_layer_chain(self.w)
+        self.c_patch = self.w.patch_id("B", "C")
+        self.w.squash_merge("A")
+        self.w.world["prs"]["1"]["state"] = "MERGED"; self.w.save()
+
+    def cascade(self) -> dict[str, str]:
+        return self.w.run(fence(REFERENCE, "cascade"), {"MERGED_PARENT": "A", "PARENT_PR": "1", "CHAIN_BASE": "main", "OWNER_REPO": "o/r"}, ["CASCADE_VERDICT", "CASCADE_REASON"])
+
+    def test_unreadable_child_list_prepares_nothing(self) -> None:
+        self.w.world["fail_children_of"] = ["B"]; self.w.save()
+        b_before = self.w.origin_sha("B")
+        got = self.cascade()
+        self.assertEqual(got["CASCADE_VERDICT"], "resolving", got)
+        self.assertIn("cannot read the children of B", got["CASCADE_REASON"])
+        self.assertEqual(self.w.origin_sha("B"), b_before)
+        self.assertNotIn("cascade", self.w.ledger_json())
+
+    def test_re_prepared_lower_layer_persists_upper_replacements_before_any_push(self) -> None:
+        # tick 1: B's push is refused → record with both layers unpublished
+        self.w.reject_pushes_to("B")
+        got = self.cascade()
+        self.assertIn("lease on B", got["CASCADE_REASON"])
+        c_prepared_v1 = self.w.ledger_json()["cascade"]["layers"][1]["new_tip"]
+        # someone commits on B's old history between ticks (the hook is lifted for the human push, then re-armed)
+        self.w.reject_pushes_to(None)
+        git(self.w.work, "fetch", "-q", "origin")
+        git(self.w.work, "checkout", "-q", "-B", "B", "origin/B")
+        self.w.commit(self.w.work, "b2.txt", "b2\n", "B: b2")
+        git(self.w.work, "push", "-q", "origin", "B")
+        self.w.reject_pushes_to("B")
+        # tick 2: B is re-prepared, its push is refused again — C's replacement is already in the record
+        got = self.cascade()
+        self.assertIn("lease on B", got["CASCADE_REASON"])
+        rec = self.w.ledger_json()["cascade"]["layers"]
+        self.assertEqual(rec[0]["old_tip"], self.w.origin_sha("B"))
+        self.assertNotEqual(rec[1]["new_tip"], c_prepared_v1)
+        self.assertEqual(rec[1]["old_tip"], self.w.origin_sha("C"))
+        self.assertEqual([l["published"] for l in rec], [False, False])
+        # tick 3: publish completes from the persisted record; C sits on B's CURRENT tip and carries b2
+        self.w.reject_pushes_to(None)
+        got = self.cascade()
+        self.assertEqual(got["CASCADE_VERDICT"], "resolving", got)
+        self.assertNotIn("cascade", self.w.ledger_json())
+        self.assertEqual(self.w.boundary("C", "B"), self.w.origin_sha("B"))
+        self.assertEqual(self.w.patch_id("B", "C"), self.c_patch)
+        git(self.w.land, "fetch", "-q", "origin")
+        self.assertIn("b2.txt", git(self.w.land, "diff", "--name-only", "origin/main...origin/C"))
+
+
+@_POSIX
+class ScopedHandoffReconcileTestCase(unittest.TestCase):
+    """The scoped handoff moves a clean source checkout onto a validated rewrite (integration finding 4)."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="fn149-handoff-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.w = ChainWorld(self.tmp)
+        three_layer_chain(self.w)
+        self.w.squash_merge("A")
+        self.w.world["prs"]["1"]["state"] = "MERGED"; self.w.save()
+        # the source checkout (work clone) sits on B's OLD history
+        git(self.w.work, "checkout", "-q", "B")
+        self.old_b = git(self.w.work, "rev-parse", "HEAD")
+        self.w.run(fence(REFERENCE, "cascade"), {"MERGED_PARENT": "A", "PARENT_PR": "1", "CHAIN_BASE": "main", "OWNER_REPO": "o/r"}, ["CASCADE_VERDICT"])
+        self.new_b = self.w.origin_sha("B")
+        self.assertNotEqual(self.new_b, self.old_b)
+        self.fn = fence(LAND / "references" / "flow-handoff.md", "scope-reconcile")
+
+    def reconcile(self, head: str) -> dict[str, str]:
+        script = self.fn + '\nRC=0; land_scope_reconcile_rewrite || RC=$?\nNOW="$(git -C "$REPO_ROOT" rev-parse HEAD)"'
+        return self.w.run(script, {"REPO_ROOT": str(self.w.work), "SCOPE_BASE": "main", "SCOPE_HEAD": head}, ["RC", "NOW"], cwd=self.w.work)
+
+    def test_same_patches_rewritten_moves_the_checkout(self) -> None:
+        git(self.w.work, "fetch", "-q", "origin", self.new_b)
+        got = self.reconcile(self.new_b)
+        self.assertEqual((got["RC"], got["NOW"]), ("0", self.new_b))
+
+    def test_a_head_with_a_patch_the_checkout_never_had_is_refused(self) -> None:
+        git(self.w.land, "fetch", "-q", "origin")
+        git(self.w.land, "checkout", "-q", "-B", "B", "origin/B")
+        foreign = self.w.commit(self.w.land, "foreign.txt", "f\n", "foreign")
+        git(self.w.land, "push", "-q", "origin", "B")
+        git(self.w.work, "fetch", "-q", "origin", foreign)
+        got = self.reconcile(foreign)
+        self.assertEqual((got["RC"], got["NOW"]), ("1", self.old_b))
+
+    def test_a_dirty_checkout_is_never_reset(self) -> None:
+        (self.w.work / "b.txt").write_text("local edit\n", encoding="utf-8")
+        git(self.w.work, "fetch", "-q", "origin", self.new_b)
+        got = self.reconcile(self.new_b)
+        self.assertEqual((got["RC"], got["NOW"]), ("1", self.old_b))
+
+
 class ChainContractTokensTestCase(unittest.TestCase):
     """Shape tokens pinned on the canonical files and their codex mirror copies."""
 
@@ -587,7 +747,7 @@ class ChainContractTokensTestCase(unittest.TestCase):
             self.assertIn("NEEDS_HUMAN: merge-async does not enforce a head pin", text)
             self.assertIn("merge_action=direct_merge", text)
             self.assertNotIn("merge_action=merge_queue", text)
-            self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" -gt 0 ]] && MERGE_FLAGS=(--squash)', text)
+            self.assertIn('MERGE_FLAGS=(--squash --delete-branch); [[ "${CHILD_COUNT:-0}" != 0 ]] && MERGE_FLAGS=(--squash)', text)
         for path in self.copies("SKILL.md"):
             text = path.read_text(encoding="utf-8")
             self.assertIn("references/chains-and-stacks.md", text)

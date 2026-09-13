@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-149-land-hardening-survive-stacked-pr-auto",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-149-land-hardening-survive-stacked-pr-auto.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
@@ -360,6 +362,114 @@
       "task": null,
       "timestamp": "2026-09-13T13:00:54.900843Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "a2625d44a019fa8111ade4e64de6cd8b2c4e0342e1b400d8576bef0d123a56c9",
+      "backend": "codex",
+      "base_sha": "76db5df39208e53f5e3e27e5acad5c694401f1c3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-4b7f6e71c62a36a256532b71e0491d92",
+            "classification": "introduced",
+            "findingId": "finding-4b7f6e71c62a36a256532b71e0491d92",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f1a0199f10462e949b220e95ccc3d63f",
+            "classification": "introduced",
+            "findingId": "finding-f1a0199f10462e949b220e95ccc3d63f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-63610c8cd413eda128b83d259a823a4f",
+            "classification": "introduced",
+            "findingId": "finding-63610c8cd413eda128b83d259a823a4f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-72c29ecee62feb8e712f88e82dbbcc86",
+            "classification": "introduced",
+            "findingId": "finding-72c29ecee62feb8e712f88e82dbbcc86",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-72b2cfda82606a36a43892188429e4eb",
+            "classification": "introduced",
+            "findingId": "finding-72b2cfda82606a36a43892188429e4eb",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-20d3f44291040034d01f5a3f94141a9d",
+            "classification": "introduced",
+            "findingId": "finding-20d3f44291040034d01f5a3f94141a9d",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-9790d960dd2399058578f64e9b108672",
+            "classification": "introduced",
+            "findingId": "finding-9790d960dd2399058578f64e9b108672",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0d7ecf20afb26d6e78ecdfd0f7fd9615",
+            "classification": "introduced",
+            "findingId": "finding-0d7ecf20afb26d6e78ecdfd0f7fd9615",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4942f4125c21e99e3485537f2a003efc",
+            "classification": "introduced",
+            "findingId": "finding-4942f4125c21e99e3485537f2a003efc",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e4e020474587e2be77da1fe0a0e5968bee8355fe",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 6933,
+      "output_sha256": "71746902ed74f8421d8f03733f873d297cdbc9e1c984c5e015255bf713387e6f",
+      "reservation_id": "22dcab63ea944b4ba7cc8684573dd6a8",
+      "round_consumed": true,
+      "scope": "impl:fn-149-land-hardening-survive-stacked-pr-auto.1",
+      "superseded_by": null,
+      "task": "fn-149-land-hardening-survive-stacked-pr-auto.1",
+      "timestamp": "2026-09-13T17:36:32.847015Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -369,6 +479,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-149-land-hardening-survive-stacked-pr-auto.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-149-land-hardening-survive-stacked-pr-auto.md",
@@ -386,5 +497,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-83"
   },
-  "updated_at": "2026-09-13T16:54:41.025485Z"
+  "updated_at": "2026-09-13T17:36:32.850494Z"
 }

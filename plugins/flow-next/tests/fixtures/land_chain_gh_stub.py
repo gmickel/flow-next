@@ -76,14 +76,20 @@ def main(argv: list[str]) -> int:
 
     if argv[:2] == ["repo", "view"]:
         owner, name = world["owner_repo"].split("/")
-        emit({"owner": {"login": owner}, "name": name}, jq)
+        emit({"owner": {"login": owner}, "name": name, "defaultBranchRef": {"name": world.get("default_branch", "main")}}, jq)
         return 0
 
     if argv[:2] == ["pr", "list"]:
         rows = list(prs.values())
         if (base := opt(argv, "--base")) is not None:
+            if base in world.get("fail_children_of", []):
+                sys.stderr.write("gh: connection reset (HTTP 502)\n")
+                return 1
             rows = [p for p in rows if p["baseRefName"] == base]
         if (head := opt(argv, "--head")) is not None:
+            if world.get("fail_parent_reads"):
+                sys.stderr.write("gh: connection reset (HTTP 502)\n")
+                return 1
             rows = [p for p in rows if p["headRefName"] == head]
         state = opt(argv, "--state") or "open"
         if state != "all":
@@ -135,6 +141,9 @@ def main(argv: list[str]) -> int:
             emit(payload, jq)
             return 0
         if kind == "stacks":
+            if world.get("stack_read_error"):
+                sys.stderr.write(f"gh: server error (HTTP {world['stack_read_error']})\n")
+                return 1
             stack = world.get("stacks", {}).get(parts[4])
             if stack is None:
                 sys.stderr.write("gh: Not Found (HTTP 404)\n")
@@ -145,7 +154,7 @@ def main(argv: list[str]) -> int:
             pr = prs[parts[4]]
             pin = opt(argv, "-f") and next(a for a in argv if a.startswith("sha="))[4:]
             head = ref_sha(world, pr["headRefName"])
-            if pin != head:
+            if pin != head and world.get("pin_enforced", True):
                 emit({"status": "failed", "details": {"message": "Pull request head branch was modified."}}, None)
                 sys.stderr.write("gh: Unprocessable (HTTP 400)\n")
                 return 1
