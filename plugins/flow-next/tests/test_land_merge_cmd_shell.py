@@ -63,7 +63,9 @@ class MergeFenceShellSafety(unittest.TestCase):
 
     def _run(self, shell: str, env_override: dict[str, str]) -> list[str]:
         script = (
-            'PR_NUMBER=42\nHEAD_OID=abc123\n'
+            # A standalone PR whose children read returned zero: the case today's flags model.
+            # Unset would mean UNREAD and keep the branch (cursor review on #432).
+            'PR_NUMBER=42\nHEAD_OID=abc123\nCHILD_COUNT=0\n'
             + self.fence
             + 'printf "%s\\n" "$MERGE_ERR"\necho "MERGE_RC=$MERGE_RC"\n'
         )
