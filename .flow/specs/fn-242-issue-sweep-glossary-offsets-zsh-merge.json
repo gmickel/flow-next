@@ -8,12 +8,59 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-242-issue-sweep-glossary-offsets-zsh-merge",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "665f21a5f6b04c0a06b5669026fc480c434f1cbf9fb5d6e53198f13e100bc2ea",
+      "backend": "codex",
+      "base_sha": "02f88472bd7643513111ad6707b6dc7b9fd91bb1",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2eab4587e001bcabebbf783ccc7827467840131e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1526,
+      "output_sha256": "54ef1f76e209a4ead67144b141ae20baf79cd07dd61efe5f439206f4b92770a0",
+      "reservation_id": "3d15e229d89e4a778201fa05033390e1",
+      "round_consumed": true,
+      "scope": "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1",
+      "superseded_by": null,
+      "task": "fn-242-issue-sweep-glossary-offsets-zsh-merge.1",
+      "timestamp": "2026-09-13T06:51:00.484529Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-242-issue-sweep-glossary-offsets-zsh-merge.1": 0
+  },
   "spec_path": ".flow/specs/fn-242-issue-sweep-glossary-offsets-zsh-merge.md",
   "status": "open",
   "title": "Issue sweep: glossary offsets, zsh merge command, todo/backlog status rule",
@@ -28,5 +75,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-13T06:31:34.315199Z"
+  "updated_at": "2026-09-13T06:51:00.486916Z"
 }
