@@ -156,6 +156,9 @@ done
 # Chain rung (fn-152): history, not scheduling state. Skipped under an explicit --base.
 CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
 if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
+  # The ancestry test below reads the chain base; refresh it first so a parent merged
+  # elsewhere since the last fetch (merge commit or fast-forward) is seen as landed.
+  [[ "$CHAIN_BASE" == origin/* ]] && { git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2; }
   for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
     DEP_JSON=$("$FLOWCTL" show "$DEP" --json 2>/dev/null) || continue
     DEP_BRANCH=$(printf '%s' "$DEP_JSON" | jq -r '.branch_name // empty')
@@ -370,6 +373,9 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
     HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
     COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD)..HEAD")
   fi
+  # Rewritten (or about to be) onto the chain base: the PR is a standalone bottom layer, not a
+  # chained layer - the draft exception and the stack link do not apply.
+  CHAIN_PARENT=""
 fi
 
 # --- §0.7: capture pre-flight context (same fence continues) ---

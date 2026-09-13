@@ -755,7 +755,7 @@ jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "
 
 Then apply the continuation rule in "The hop loop" above.
 
-When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome. For a **chained** spec (SELECT's `CHAIN_PARENT` non-empty) the reason starts with `chained on <parent-id>; ` followed by the existing reason text; a non-chained run prints byte-identical lines (fn-152 R9). The backlog decision-log row carries the same string through `pilot-log append --reason`, so a chained dispatch's row begins with the same prefix.
+When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome. For a **chained** spec (SELECT's `CHAIN_PARENT` non-empty) the reason starts with `chained on <parent-id>; ` followed by the existing reason text; a non-chained run prints byte-identical lines (fn-152 R9). A chained dispatch's backlog decision-log row carries the same string through `pilot-log append --reason` (passed only when `CHAIN_PARENT` is set), so that row begins with the same prefix while non-chained rows keep their shape.
 
 ```bash
 # fence:verdict-reason — inputs: CHAIN_PARENT (SELECT's `spec chain` .parent, empty when not chained), REASON (the existing reason text)
@@ -813,13 +813,13 @@ The recovery clause is part of the reason string, not a separate line: a strikeo
 
 ### Backlog-mode dep-wait `BLOCKED` terminal
 
-**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** It writes a `blocked` decision-log row, records no strike, preserves readiness, and names the first unsatisfied dependency (`<dep>`, a flow `blockedBy` edge or a tracker relation). For a spec-backed subject the `<dep>` clause is the `reason` string `spec chain` returned (backlog-mode.md 1f), so an unpushed parent reads `parent branch <b> not on origin; push it or land the parent first` rather than a bare `not yet done`; the row's `--reason` is the verdict line's reason text.
+**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** It writes a `blocked` decision-log row, records no strike, preserves readiness, and names the first unsatisfied dependency (`<dep>`, a flow `blockedBy` edge or a tracker relation). For a spec-backed subject the `<dep>` clause is the `reason` string `spec chain` returned (backlog-mode.md 1f), so an unpushed parent reads `parent branch <b> not on origin; push it or land the parent first` rather than a bare `not yet done`; on a chained subject the row's `--reason` is the verdict line's reason text.
 
 ```bash
 # No ledger write; a dep wait is healthy, not a strike. STAGE is the stage the
 # item would advance to once unblocked (or '-'); $SUBJECT_ID is spec-backed or a
 # tracker key. The `blocked` action distinguishes the dep wait from the strike path.
-$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action blocked --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} --reason "$REASON"
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action blocked --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} ${CHAIN_PARENT:+--reason "$REASON"}
 ```
 
 ```text
@@ -861,10 +861,11 @@ Terminal verdict when no spec was dispatched, split by why. **The two cases stay
 #   ADVANCED  -> advanced   · ASKED -> asked   · BLOCKED -> blocked   · NEEDS_HUMAN -> needs-human
 # STAGE is the pipeline stage advanced/blocked-at, or 'ask' for ASKED, or '-' when none.
 # COST_TOKENS is host-reported (this run's token cost); omit the flag when unavailable.
-$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} --reason "$REASON"
-# REASON is the verdict line's reason text for this row (after the `# fence:verdict-reason`
-# prefix, so a chained dispatch's row begins `chained on <parent-id>; ` exactly like the
-# verdict); the row stores it verbatim and a non-chained row is byte-identical to before.
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} ${CHAIN_PARENT:+--reason "$REASON"}
+# --reason is passed ONLY on a chained dispatch (CHAIN_PARENT set): REASON is the verdict
+# line's reason text after the `# fence:verdict-reason` prefix, so that row begins
+# `chained on <parent-id>; ` exactly like the verdict. A non-chained dispatch omits the
+# flag and its row keeps the frozen shape byte-identically.
 
 # A run that dispatched several stages appends one row per stage, in dispatch order.
 # Every intermediate row is `advanced` (the loop continued only from ADVANCED) and

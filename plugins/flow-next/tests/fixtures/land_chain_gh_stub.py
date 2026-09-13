@@ -129,6 +129,7 @@ def main(argv: list[str]) -> int:
     if argv[0] == "api":
         method = opt(argv, "--method") or "GET"
         path = next(a for a in argv[1:] if a.startswith("repos/"))
+        path = path.replace("{owner}/{repo}", world["owner_repo"])
         path, _, query = path.partition("?")
         parts = path.split("/")
         # repos/o/r/<kind>/...

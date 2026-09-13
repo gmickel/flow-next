@@ -128,6 +128,28 @@ class WorkBranchTestCase(unittest.TestCase):
         self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text().strip(), a_tip)
         self.assertEqual(git(self.w.work, "branch", "--list", "A"), "")   # never creates a local branch named after the parent
 
+    def test_new_branch_carries_the_specs_tracked_files_the_parent_tip_lacks(self) -> None:
+        (self.w.work / ".git" / "info" / "exclude").write_text("", encoding="utf-8")
+        parent = self.w.spec("parent", "A")
+        git(self.w.work, "add", ".flow")
+        git(self.w.work, "commit", "-q", "-m", "flow: parent")
+        git(self.w.work, "push", "-q", "origin", "main")
+        a_tip = self.w.branch("A", "main", [("a.txt", "a\n")])
+        git(self.w.work, "checkout", "-q", "main")
+        child = self.w.spec("child", "B", deps=[parent], tasks_done=False)   # planned on main after the parent branched
+        git(self.w.work, "add", ".flow")
+        git(self.w.work, "commit", "-q", "-m", "flow: child")
+        git(self.w.work, "push", "-q", "origin", "main")
+        rc, got = self.run_branch(child, "B", "new")
+        self.assertEqual(rc, 0, got["_stdout"] + got["_stderr"])
+        self.assertEqual(git(self.w.work, "rev-parse", "HEAD~1"), a_tip)
+        self.assertEqual(git(self.w.work, "status", "--porcelain"), "")
+        self.assertTrue((self.w.work / ".flow" / "specs" / f"{child}.json").exists())
+        self.assertEqual(sorted(git(self.w.work, "diff", "--name-only", "HEAD~1", "HEAD").splitlines()),
+                         sorted(f".flow/{p}" for p in (f"specs/{child}.json", f"specs/{child}.md", f"tasks/{child}.1.json", f"tasks/{child}.1.md")))
+        ready = self.w.flowctl("ready", "--spec", child)
+        self.assertEqual(len(ready["ready"]), 1, ready)
+
     def test_non_chained_new_branch_forks_from_main(self) -> None:
         solo = self.w.spec("solo", "S")
         rc, got = self.run_branch(solo, "S", "new")
@@ -215,6 +237,18 @@ class ChainDetectTestCase(unittest.TestCase):
         rc, got = self.detect(child)
         self.assertEqual((rc, got["CHAIN_PARENT"], got["BASE_REF"], got["CHAIN_REWRITE"]), (0, "", "origin/main", "0"))
 
+    def test_parent_merged_from_another_clone_is_seen_after_the_base_refresh(self) -> None:
+        parent, child, a_tip = parent_child(self.w)
+        self.w.add_pr(1, "A", "main", state="MERGED")
+        git(self.w.land, "fetch", "-q", "origin")                       # another clone lands the parent with a merge commit
+        git(self.w.land, "checkout", "-q", "-B", "main", "origin/main")
+        git(self.w.land, "merge", "-q", "--no-ff", "-m", "merge A", "origin/A")
+        git(self.w.land, "push", "-q", "origin", "main")
+        stale = git(self.w.work, "rev-parse", "origin/main")            # this clone's origin/main still predates the merge
+        rc, got = self.detect(child)
+        self.assertEqual((rc, got["CHAIN_PARENT"], got["BASE_REF"], got["CHAIN_REWRITE"]), (0, "", "origin/main", "0"))
+        self.assertNotEqual(git(self.w.work, "rev-parse", "origin/main"), stale)
+
     def test_unreachable_parent_history_and_closed_parent_exit_2(self) -> None:
         parent, child, a_tip = parent_child(self.w)
         git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/A")
@@ -289,7 +323,7 @@ class ChainRewriteTestCase(unittest.TestCase):
     def rewrite(self, **extra: str) -> tuple[int, dict[str, str]]:
         env = {**REWRITE_ENV, "REPO_ROOT": str(self.w.work), "BASE_REF": "origin/main", "CHAIN_REWRITE": "1", "CHAIN_PARENT": self.parent,
                "CHAIN_BOUNDARY": self.a_tip, "REWRITE_ONTO": "origin/main", "DRY_RUN": "0", "UPDATE_MODE": "0", **extra}
-        return self.w.run_rc(self.fence, env, ["HEAD_SHA", "COMMITS_AHEAD"], cwd=self.w.work)
+        return self.w.run_rc(self.fence, env, ["HEAD_SHA", "COMMITS_AHEAD", "CHAIN_PARENT"], cwd=self.w.work)
 
     def test_create_run_rebases_onto_the_chain_base_with_a_leased_push(self) -> None:
         rc, got = self.rewrite()
@@ -297,6 +331,7 @@ class ChainRewriteTestCase(unittest.TestCase):
         head = git(self.w.work, "rev-parse", "HEAD")
         self.assertEqual(git(self.w.work, "rev-parse", "HEAD~1"), self.main_tip)
         self.assertEqual((got["HEAD_SHA"], got["COMMITS_AHEAD"], self.w.origin_sha("B")), (head, "1", head))
+        self.assertEqual(got["CHAIN_PARENT"], "")   # a rewritten branch is a standalone bottom layer: no draft exception, no link
 
     def test_conflict_aborts_and_names_the_files(self) -> None:
         git(self.w.work, "checkout", "-q", "main")
@@ -443,6 +478,23 @@ class StackLinkTestCase(unittest.TestCase):
                 self.assertEqual(len(self.posts()), 1)   # no retry
                 self.assertEqual(self.w.calls("pr", "edit"), [])
         self.assertNotIn("Stack:", self.body.read_text(encoding="utf-8"))
+
+    def test_update_refresh_reinserts_the_stack_line_from_the_pr_payload(self) -> None:
+        refresh = fence(MAKE_PR / "create-and-finalize.md", "stack-line-refresh")
+        self.w.world["prs"]["7"]["stack"] = {"number": 11, "position": 2, "size": 3}
+        self.w.save()
+        rc, got = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
+        self.assertEqual(rc, 0, got["_stderr"])
+        body = self.body.read_text(encoding="utf-8")
+        self.assertIn("> **Branch:** `B` → `A`\n> **Stack:** #11, layer 2 of 3\n", body)
+        rc, _ = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
+        self.assertEqual(self.body.read_text(encoding="utf-8").count("Stack:"), 1)   # idempotent
+        self.w.world["prs"]["7"]["stack"] = None
+        self.w.save()
+        self.body.write_text("> **Branch:** `B` → `A`\n", encoding="utf-8")
+        rc, _ = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
+        self.assertEqual((rc, self.body.read_text(encoding="utf-8")), (0, "> **Branch:** `B` → `A`\n"))
+        self.assertEqual([c for c in self.w.calls("api") if "--method" in c], [])
 
     def test_non_github_remote_and_missing_parent_pr_make_no_call(self) -> None:
         git(self.w.work, "remote", "set-url", "origin", str(self.w.origin))

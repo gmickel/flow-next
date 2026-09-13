@@ -233,6 +233,27 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -z "$UPDATE_PR_NUMBER" ]]; then
     echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
   fi
+fi
+```
+
+A linked layer keeps its Stack line across a body refresh — the freshly rendered body has none, so read it from the PR payload (read-only; the stack is never linked or unstacked here):
+
+```bash
+# fence:stack-line-refresh — inputs: UPDATE_MODE, UPDATE_PR_NUMBER, BODY_FILE; gh on PATH
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+  STACK_OBJ=$(gh api "repos/{owner}/{repo}/pulls/$UPDATE_PR_NUMBER" --jq '.stack // empty' 2>/dev/null) || STACK_OBJ=""
+  if [[ -n "$STACK_OBJ" ]] && ! grep -q '^> \*\*Stack:\*\*' "$BODY_FILE"; then
+    STACK_LINE=$(printf '%s' "$STACK_OBJ" | jq -r '"**Stack:** #\(.number), layer \(.position) of \(.size)"')
+    awk -v line="> $STACK_LINE" '{ print } /^> \*\*Branch:\*\*/ && !done { print line; done = 1 }' "$BODY_FILE" > "$BODY_FILE.stack" \
+      && mv "$BODY_FILE.stack" "$BODY_FILE"
+  fi
+fi
+```
+
+Then the edit itself:
+
+```bash
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
     PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
@@ -462,6 +483,7 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `AskUserQuestion` to resolve genuinely-missing info (base/spec), never to confirm.
 - §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD with a clear stderr error before any push — an empty `--head` would fail with a cryptic "Head sha can't be blank"), then §4.6a links the PR to the tracker issue (if active), then `git push -u origin HEAD`, then `sleep 1` (cli/cli #2691 eventual-consistency lag), then 3-attempt retry loop on the eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast — auth (401/403), body-too-long (422), PR-already-exists (409) do NOT retry.
 - `gh pr create --title --body-file --base --head [--draft]` invoked with `--base "${BASE_REF#origin/}"` (strip the remote-tracking prefix — `--base` expects a branch name, not `origin/main`). PR URL captured from stdout (single line; `gh pr create` has no `--json` flag).
+- `--update` re-inserts the `> **Stack:** #<n>, layer <p> of <s>` line from the PR payload's `stack` object when the PR is in a stack (read-only; never links or unstacks), so a body refresh never drops it.
 - §4.6c (post-create, chained layer with an OPEN parent PR, GitHub remote): `GET repos/{owner}/{repo}/stacks?pull_request=<parent>` then `POST .../stacks/<n>/add` (parent already stacked) or `POST .../stacks` with parent + child (integer-typed `-F pull_requests[]=`); success inserts the single `> **Stack:** #<n>, layer <p> of <s>` line under the Branch line via `gh pr edit`; 404 / 409 / 422 / transport print one `stack link skipped: HTTP <code> <message>` line and the PR stands as a plain chain layer. Non-GitHub remote: skipped silently. Never runs for a parent without a PR.
 - §4.6b (post-create, bridge active + ref derived): happy path asserts locally (whole-line `grep -qixF "$REF"` on `$BODY_FILE` — the file the create consumed; no network). Live PR body fetched (`gh pr view --json body`) ONLY when the local assertion fails (hand-rolled-create / stale-file bypass), then repaired append-only via `gh pr edit --body-file -` when absent, 65,536-char cap re-checked. Idempotent (ref already present → untouched) and fully non-fatal.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.

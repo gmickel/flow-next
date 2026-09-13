@@ -136,7 +136,16 @@ fi
 case "$BRANCH_MODE" in
   new)
     if [[ -n "$CHAIN_PARENT" ]]; then
+      PRE_HEAD=$(git rev-parse HEAD)
       git checkout -q -b "$BRANCH_NAME" "$BASE_BRANCH"          # from the parent tip; the parent branch itself is never touched
+      # The parent tip may predate this spec's tracked .flow files (planned on the default branch
+      # after the parent branched); carry the spec's own spec/task files across so admission sees them.
+      SPEC_FILES=$(git ls-tree -r --name-only "$PRE_HEAD" -- .flow/specs .flow/tasks 2>/dev/null \
+        | grep -E "^\.flow/(specs/$SPEC_ID\.(md|json)|tasks/$SPEC_ID\.[0-9]+\.(md|json))$" || true)
+      if [[ -n "$SPEC_FILES" ]]; then
+        printf '%s\n' "$SPEC_FILES" | xargs git checkout -q "$PRE_HEAD" --
+        git diff --cached --quiet || git commit -q -m "chore(flow): carry $SPEC_ID spec files onto the chain branch"
+      fi
     else
       git checkout -q main && git pull -q origin main && git checkout -q -b "$BRANCH_NAME"
     fi ;;
@@ -152,7 +161,7 @@ git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base
 Based on user's answer from setup questions (`BRANCH_MODE`):
 
 - **Worktree**: use `skill: flow-next-worktree-kit`, with the same `BASE_BRANCH` the fence resolved (the parent's remote-tracking ref on a chained spec, the default branch otherwise).
-- **New branch**: the fence's `new` arm - from `origin/<parent_branch>` on a chained spec, else `main` pulled from origin.
+- **New branch**: the fence's `new` arm - from `origin/<parent_branch>` on a chained spec (carrying the spec's own tracked `.flow/specs/<id>.*` and `.flow/tasks/<id>.*` files from the pre-checkout commit when the parent tip lacks them, as one bookkeeping commit), else `main` pulled from origin.
 - **Current branch**: proceed (user already confirmed); on a chained spec the fence's `current` arm requires the parent tip in the branch's ancestry and blocks naming the missing ancestry otherwise.
 
 The fence persists the SPEC-RUN BASE once (`git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base`); the base is the run's `BASE_BRANCH`, never a hard-coded `origin/main`. Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls and the auditor dispatch. Publication is unchanged: the spec branch is pushed as today, and no PR exists until make-pr, which detects the chain from history (`flow-next-make-pr/workflow.md` §0.3).
