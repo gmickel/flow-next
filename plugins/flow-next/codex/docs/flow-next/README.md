@@ -79,6 +79,8 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 
 ## Notable updates
 
+- **5.2.2: five issue fixes, no new knobs.** Glossary entries with both metadata lines survive `glossary add`; land's merge step works under zsh and its ci-fix step follows git to a worktree that already holds the branch; a planned spec against a `status:backlog` label is a no-op instead of a conflict; a merged spec-text-only PR no longer counts as merge evidence. Enable: nothing. Details: [CHANGELOG](https://github.com/gmickel/flow-next/blob/main/CHANGELOG.md).
+
 - **5.2.1: keep the direct route when changing implementers.** Choosing another model or harness no longer triggers task decomposition. Explicit planning requests, separate human owners, and staged PRs still select a plan. See [the route rule](../../skills/flow-next-flow/references/plan-vs-no-plan.md).
 
 - **5.2.0: carry one selected spec through gated merge.** Add `--until=merge` to attended or unattended flow; default unattended runs still stop before landing. Capture saves the spec before its editor offer. See [the landing contract](../../skills/flow-next-flow/references/tail.md) and [capture](../../skills/flow-next-capture/SKILL.md).
