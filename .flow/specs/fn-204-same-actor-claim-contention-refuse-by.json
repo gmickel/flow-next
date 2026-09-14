@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-204-same-actor-claim-contention-refuse-by",
   "impl_review_rounds": {
-    "fn-204-same-actor-claim-contention-refuse-by.1": 1
+    "fn-204-same-actor-claim-contention-refuse-by.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -61,9 +61,55 @@
       "task": "fn-204-same-actor-claim-contention-refuse-by.1",
       "timestamp": "2026-09-14T15:18:36.872517Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "c9777d97fa3525adcc14e13dc3a458630a2eed11d5eb3d227e9cfd1814564fbf",
+      "backend": "codex",
+      "base_sha": "e0cee32b3e204d6beec59b2ed3d3d02e3e3d086a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "classification": "introduced",
+            "findingId": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "firstSeenThisRound": false,
+            "severity": "P3",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "ca5a61ff7543d06eb2eafbad3d587e730a700cf3",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 871,
+      "output_sha256": "d4cc4b39c57b2baef9504b85b46a6b206d2d1276aed6651924d2ad3e6ba2ec2f",
+      "reservation_id": "fd5615a7990d447586c29a2dd83f4496",
+      "round_consumed": true,
+      "scope": "impl:fn-204-same-actor-claim-contention-refuse-by.1",
+      "superseded_by": null,
+      "task": "fn-204-same-actor-claim-contention-refuse-by.1",
+      "timestamp": "2026-09-14T15:19:42.612693Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-204-same-actor-claim-contention-refuse-by.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -83,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:18:36.875048Z"
+  "updated_at": "2026-09-14T15:19:42.614912Z"
 }
