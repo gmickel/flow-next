@@ -942,13 +942,15 @@ Start task (set status=in_progress). Sets assignee to current actor.
 flowctl start fn-1.2 [--force] [--reclaim] [--note "..."] [--json]
 ```
 
-`--reclaim` rewrites the claimant when a task is held by a stale or wrong identity and records `Reclaimed from <identity> (identity repair)` - distinct from `--force`, which records `Taken over from <identity>`, so the record says which one happened. It relaxes only the claim-ownership gates (claimed-by-another, and `in_progress` owned by another); dependency, `blocked`, and `done` gates still require `--force`. On an unclaimed or self-claimed task it is a plain claim with no repair note; `--note` overrides the generated note; `--reclaim --force` writes the repair note. No identity validation is performed - which identities are legitimate is the consuming repo's governance (#316).
+An `in_progress` task held by the **current** actor refuses a plain `start` (non-zero exit, error naming the task and claimant): two runs by one person on one clone share the actor string, so a second `start` cannot tell itself from a crash resume, and before this refusal it silently dispatched a second worker onto a live task (#369, #370). Recovery is one step: confirm the prior run ended, then `flowctl start <task> --reclaim`. Nothing is inferred from a claim's age; `--reclaim` stays a human or skill decision made after that check.
+
+`--reclaim` is the one explicit resume path: on your own `in_progress` claim it resumes with no repair note; on a task held by a stale or wrong identity it rewrites the claimant and records `Reclaimed from <identity> (identity repair)` - distinct from `--force`, which records `Taken over from <identity>`, so the record says which one happened. It relaxes only the claim-ownership gates (claimed-by-self while `in_progress`, claimed-by-another, and `in_progress` owned by another); dependency, `blocked`, and `done` gates still require `--force`. On an unclaimed task it is a plain claim with no repair note; `--note` overrides the generated note; `--reclaim --force` writes the repair note. No identity validation is performed - which identities are legitimate is the consuming repo's governance (#316).
 
 Validates:
-- Status is `todo` (or `in_progress` if resuming own task)
+- Status is `todo` (or `in_progress` with `--reclaim`)
 - Status is not `blocked` unless `--force`
 - All dependencies are `done`
-- Not claimed by another actor
+- Not claimed by another actor, and not already `in_progress` under this actor without `--reclaim`
 
 Use `--force` to skip checks and take over from another actor.
 Use `--note` to add a claim note (auto-set on takeover).

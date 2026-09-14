@@ -1,20 +1,120 @@
 {
   "branch_name": "fn-204-same-actor-claim-contention-refuse-by",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T15:23:03.337823Z",
   "created_at": "2026-08-22T20:15:08.961348Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-204-same-actor-claim-contention-refuse-by",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-204-same-actor-claim-contention-refuse-by.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "bff85d53021244e50a93cf348663b04a8ff097bacec5deeb813da4cba895e5b5",
+      "backend": "codex",
+      "base_sha": "e0cee32b3e204d6beec59b2ed3d3d02e3e3d086a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "classification": "introduced",
+            "findingId": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "firstSeenThisRound": true,
+            "severity": "P3",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8a8c78139637dcafbb35becf35c1845a79e367b9",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2473,
+      "output_sha256": "15d26058adb29b44ec4551245baedf929c2862fa6ac7aa8070017a8d9b096624",
+      "reservation_id": "9c66d3751b344aedb11882c8fb9e67ac",
+      "round_consumed": true,
+      "scope": "impl:fn-204-same-actor-claim-contention-refuse-by.1",
+      "superseded_by": null,
+      "task": "fn-204-same-actor-claim-contention-refuse-by.1",
+      "timestamp": "2026-09-14T15:18:36.872517Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "c9777d97fa3525adcc14e13dc3a458630a2eed11d5eb3d227e9cfd1814564fbf",
+      "backend": "codex",
+      "base_sha": "e0cee32b3e204d6beec59b2ed3d3d02e3e3d086a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "classification": "introduced",
+            "findingId": "finding-36048bbcee251a0b69ba22b1fc0d31c2",
+            "firstSeenThisRound": false,
+            "severity": "P3",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "ca5a61ff7543d06eb2eafbad3d587e730a700cf3",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 871,
+      "output_sha256": "d4cc4b39c57b2baef9504b85b46a6b206d2d1276aed6651924d2ad3e6ba2ec2f",
+      "reservation_id": "fd5615a7990d447586c29a2dd83f4496",
+      "round_consumed": true,
+      "scope": "impl:fn-204-same-actor-claim-contention-refuse-by.1",
+      "superseded_by": null,
+      "task": "fn-204-same-actor-claim-contention-refuse-by.1",
+      "timestamp": "2026-09-14T15:19:42.612693Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-204-same-actor-claim-contention-refuse-by.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-204-same-actor-claim-contention-refuse-by.1": 0
+  },
   "spec_path": ".flow/specs/fn-204-same-actor-claim-contention-refuse-by.md",
   "status": "open",
   "title": "Same-actor claim contention: refuse by default, resume by explicit reclaim",
@@ -29,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T14:56:10.608387Z"
+  "updated_at": "2026-09-14T15:23:03.337830Z"
 }

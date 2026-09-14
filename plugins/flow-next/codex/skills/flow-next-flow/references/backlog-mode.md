@@ -255,7 +255,10 @@ already skipped at SELECT**, so they must run here, before triage:
   assigned to **another** actor makes the candidate non-selectable: drop it and take
   the next dep-ordered candidate (record `claimed by other actor` in the skip table).
   Resolve the actor exactly as `flowctl.get_actor()` does. (A tracker-only item has
-  no flow tasks - this is a no-op for it.)
+  no flow tasks - this is a no-op for it.) An own-actor `in_progress` claim is not
+  skipped here; it reaches CLASSIFY's resume-consent / stale-claim rows, and
+  `flowctl start` refuses it without `--reclaim`, which only the evidence-checked
+  resume row licenses - a second run of this actor never resumes by default.
 - **Strikes / re-bless** - a `count >= 2` ledger entry on a candidate that is **ready
   again** has been human re-blessed: clear the entry and treat the spec as fresh.
   **BUT NOT under an active `tracker.readyState` projection** - 1a re-projects `ready=true`
