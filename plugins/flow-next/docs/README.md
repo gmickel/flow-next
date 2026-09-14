@@ -76,6 +76,8 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 
 ## Notable updates
 
+- **5.3.0: dependent specs chain on their parent, land drains the chain.** A spec whose parent is built but unmerged now builds on the parent's branch, opens its PR against it, and joins a GitHub stack; land merges the bottom layer first, carries review verdicts across a rebase when the patch is unchanged, and never deletes a branch a child still targets. Enable: nothing, the dependency graph decides. Details: [chains and stacks](../skills/flow-next-land/references/chains-and-stacks.md), [orchestration](orchestration.md), [CHANGELOG](../../../CHANGELOG.md).
+
 - **5.2.2: five issue fixes, no new knobs.** Glossary entries with both metadata lines survive `glossary add`; land's merge step works under zsh and its ci-fix step follows git to a worktree that already holds the branch; a planned spec against a `status:backlog` label is a no-op instead of a conflict; a merged spec-text-only PR no longer counts as merge evidence. Enable: nothing. Details: [CHANGELOG](../../../CHANGELOG.md).
 
 - **5.2.1: keep the direct route when changing implementers.** Choosing another model or harness no longer triggers task decomposition. Explicit planning requests, separate human owners, and staged PRs still select a plan. See [the route rule](../skills/flow-next-flow/references/plan-vs-no-plan.md).
