@@ -1,22 +1,22 @@
 {
   "branch_name": "fn-152-make-pr-opt-in-stack-linking-via-github",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-13T19:15:37.874765Z",
   "created_at": "2026-07-31T04:27:08.970594Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [
-    "fn-149-land-hardening-survive-stacked-pr-auto"
-  ],
+  "depends_on_epics": [],
   "id": "fn-152-make-pr-opt-in-stack-linking-via-github",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-152-make-pr-opt-in-stack-linking-via-github.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-09-13T12:50:46.759586Z",
-  "ready": false,
+  "ready": true,
   "review_attempts": [
     {
       "artifact_sha256": "102957a654e89290661f5a8b6a953b0db63f51860869b1d3eea88f70d1b1d7c9",
@@ -334,20 +334,201 @@
       "task": null,
       "timestamp": "2026-09-13T12:50:46.756416Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "b498cbe8b97eb0ec6316eddf0adca6f6ec34787e356bd4d48f9abb38e51cddcf",
+      "backend": "codex",
+      "base_sha": "f2eeb07095a363b4f11bf32e23f9f6dd1274966e",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2591ad0b20e12b50975acbc0b385282144dde051",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "cd1b82510ed49a2f84ce02863458a9c015c8b4043283386a93ad10f581dc7435",
+      "reservation_id": "dbe5063d44574a6588e17d22f1010c80",
+      "round_consumed": false,
+      "scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "superseded_by": null,
+      "task": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "timestamp": "2026-09-13T18:58:02.023037Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "84af8aa0512f8b3de3d470aa9be6cc98a1b2fb33b708ee33e43429304a654ea1",
+      "backend": "codex",
+      "base_sha": "f2eeb07095a363b4f11bf32e23f9f6dd1274966e",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "classification": "introduced",
+            "findingId": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "classification": "introduced",
+            "findingId": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "classification": "introduced",
+            "findingId": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "classification": "introduced",
+            "findingId": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "classification": "introduced",
+            "findingId": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c556ec82dcb38227f47313f1ed0da4503258aa99",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4453,
+      "output_sha256": "37359c9db703253af91dea580091385725ef08e23080123a1b4b9781b0b88da5",
+      "reservation_id": "6c7510be89994b409c300630294849a6",
+      "round_consumed": true,
+      "scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "superseded_by": null,
+      "task": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "timestamp": "2026-09-13T19:11:01.216772Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "50b66b4fcdabf6f774ff01e731b1fe510b8c577c2ec6a409aa185b9afa919f52",
+      "backend": "codex",
+      "base_sha": "f2eeb07095a363b4f11bf32e23f9f6dd1274966e",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "classification": "introduced",
+            "findingId": "finding-4e65c3e51955dc82411f2b5bb1095e1a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "classification": "introduced",
+            "findingId": "finding-681885cf4dcaf561bc5d6a9f1ccc5643",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "classification": "introduced",
+            "findingId": "finding-acdd3e0dc659e8ad1533f443f5944798",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "classification": "introduced",
+            "findingId": "finding-1c36e792768e92ab38bf46eda4a52d7b",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "classification": "introduced",
+            "findingId": "finding-4a9fcce44458fd53b1d62595560434d3",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "0989bb4beb679e5d20ca1dade468b98b4e3002a1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1840,
+      "output_sha256": "bd274b6605f4f842c7af0bc9996d07079e9960ee9a18c6b238efede7a0dcf0c2",
+      "reservation_id": "e423b87a706a4c96a59ae522069ead5d",
+      "round_consumed": true,
+      "scope": "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "superseded_by": null,
+      "task": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+      "timestamp": "2026-09-13T19:13:52.327892Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1": 1,
     "plan": 1,
     "plan#completion": 0
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-152-make-pr-opt-in-stack-linking-via-github.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-152-make-pr-opt-in-stack-linking-via-github.md",
   "status": "open",
-  "title": "Dependent-spec chains: branch from the parent, target its PR, link GitHub stacks",
+  "title": "Dependent-spec chains: branch from the parent, link GitHub stacks",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -360,5 +541,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T16:53:44.772197Z"
+  "updated_at": "2026-09-13T19:15:48.280529Z"
 }

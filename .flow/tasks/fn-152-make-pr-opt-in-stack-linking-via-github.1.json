@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-13T18:15:57.979557Z",
+  "depends_on": [],
+  "id": "fn-152-make-pr-opt-in-stack-linking-via-github.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-152-make-pr-opt-in-stack-linking-via-github",
+  "spec_path": ".flow/tasks/fn-152-make-pr-opt-in-stack-linking-via-github.1.md",
+  "status": "todo",
+  "title": "Implement Dependent-spec chains: branch from the parent, target its PR, link GitHub stacks",
+  "updated_at": "2026-09-13T18:15:57.979557Z"
+}

@@ -25,6 +25,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [review-artifact](#review-artifact)
   - [rp mode-probe](#rp-mode-probe)
   - [spec set-branch](#spec-set-branch)
+  - [spec chain](#spec-chain)
   - [spec set-title](#spec-set-title)
   - [spec close](#spec-close)
   - [spec ready / spec unready](#spec-ready-spec-unready)
@@ -415,6 +416,29 @@ Set spec branch_name.
 ```bash
 flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 ```
+
+### spec chain
+
+Chain eligibility of a dependent spec (fn-152): may this spec start now, and on which parent's branch. Read-only; the single owner of the rule every consumer applies (`flow --auto` selection in ready and backlog mode, attended flow's next-item ladder, `/flow-next:work` at branch creation, and flowctl's own task-admission gate below). Never calls `gh`; at most one `git ls-remote --heads origin` per invocation, and none when the spec has no dependencies.
+
+```bash
+flowctl spec chain fn-2 [--json]
+```
+
+Output (exhaustive shape):
+```json
+{
+  "success": true,
+  "spec": "fn-2-child",
+  "eligible": true,
+  "parent": "fn-1-parent",
+  "parent_branch": "fn-1-parent",
+  "parent_branch_on_remote": true,
+  "reason": "parent open, all tasks done, branch on origin"
+}
+```
+
+`eligible` is true when every dependency is `done` (`parent`, `parent_branch`, `parent_branch_on_remote` are `null`, `reason` is `no open dependency`; no remote read), or when exactly one dependency is open with all of its tasks done (a `no_plan` spec's minted implicit task counts; a zero-task spec is still in progress), every other dependency is `done`, that parent's `branch_name` exists on `origin`, and no other open spec naming the same parent already has its branch on origin. Otherwise `eligible` is false with `parent` still naming the candidate parent where one exists and one of these reasons: `dependency <id> in progress`, `two open parents: <id>, <id>; chains are linear`, `parent branch <b> not on origin; push it or land the parent first` (`parent_branch_on_remote: false`), `parent <id> already chained by <sibling-id>`, or `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch). Exit 0 on any evaluation including `eligible: false`; exit 2 when the spec does not exist or a dependency names a missing spec (the `validate` rule).
 
 ### spec set-title
 
@@ -822,7 +846,7 @@ Output:
 }
 ```
 
-Spec-level deps gate the whole spec (same rule as `next`): when the spec's `depends_on_epics` include a spec that is missing or not `done`, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`:
+Spec-level deps gate the whole spec (same rule as `next` and `ready --all`): when the spec's `depends_on_epics` include a spec that is missing or not `done`, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. One exception (fn-152): the **chain parent** [`spec chain`](#spec-chain) names — an open dependency with every task done and its branch on origin — counts as satisfied, so a chained spec dispatches its tasks; every other not-done dependency still empties the frontier, and task-level `depends_on` is unchanged.
 
 ```json
 {
@@ -853,7 +877,11 @@ Output:
 }
 ```
 
-Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the recorded direct-route choice `flow --auto` consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the recorded direct-route choice `flow --auto` consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids; a chain parent per [`spec chain`](#spec-chain) is not listed), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+
+### pilot-log append `--reason`
+
+`flowctl pilot-log append` accepts an optional `--reason "<one line>"` (fn-152 R9): the host's verdict reason for that row, stored verbatim as `reason`. A chained dispatch's row therefore begins `chained on <parent-id>; `. Rows written without the flag keep the frozen `{tick, id, action, stage, costTokens}` shape.
 
 ### pilot strikes
 
@@ -902,7 +930,7 @@ Output:
 
 A non-closed zero-task spec with recorded `no_plan: true` returns `status: work`, its spec ID, `task: null`, and `reason: needs_implicit_task`. This selects work's spec-level direct route; it is neither a runnable task nor completed work. Consumers that require a task must stop safely or invoke spec-level work to mint the owner. An unmet explicit `--require-plan-review` takes precedence for that direct spec and returns `status: plan`, `task: null`, `reason: needs_plan_review`, so the spec can be reviewed before tasks exist.
 
-An ordinary zero-task spec still returns `status: plan`, `reason: needs_tasks`, before its plan-review check. Selection stops at the first eligible spec in id order.
+An ordinary zero-task spec still returns `status: plan`, `reason: needs_tasks`, before its plan-review check. Selection stops at the first eligible spec in id order. A spec whose only not-done dependency is its chain parent ([`spec chain`](#spec-chain)) is not blocked; one `git ls-remote` serves the whole invocation.
 
 The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 

@@ -38,13 +38,21 @@ If the spec title contains characters problematic for shell quoting (single-quot
 
 Compute `DRAFT_FLAG` from a four-input matrix: `OPEN_ITEMS_COUNT`, Ralph context, `--draft` force flag, `--ready` force flag. **Resolution order: explicit force flags win over context-derived defaults.** This is the smart draft/ready default the autonomous create relies on: draft when `OPEN_ITEMS_COUNT > 0` (or Ralph / autonomous / `--draft`), ready otherwise (or `--ready`).
 
+**Chained-layer exception (fn-152 R8).** A chained layer (`PHASE0_CONTEXT.chain_parent` non-empty) with zero open items is created **ready even under Ralph / autonomous**: a human merging from GitHub's stack UI cannot merge a draft, and land flips ready only immediately before its own merge. Open items still force draft on a chained layer (even over `--ready`) and an explicit `--draft` always wins; non-chained PRs keep the four-input matrix byte-identically.
+
 ```bash
+# fence:draft-matrix — inputs: RALPH, AUTONOMOUS, OPEN_ITEMS_COUNT, DRAFT_FORCE, CHAIN_PARENT (from PHASE0_CONTEXT.chain_parent; empty when not chained)
 # Default state — neither flag forced; let context decide.
 DRAFT_FLAG=""
 
 # Layer 1: Ralph OR autonomous mode forces draft (autonomous-loop opens-for-human-review default).
 if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
   DRAFT_FLAG="--draft"
+fi
+
+# Layer 1b: a chained layer with nothing open is born ready — a draft cannot be merged from the stack UI.
+if [[ -n "${CHAIN_PARENT:-}" && "$OPEN_ITEMS_COUNT" -eq 0 ]]; then
+  DRAFT_FLAG=""
 fi
 
 # Layer 2: Open items default to draft (incomplete state shouldn't go straight to ready).
@@ -62,6 +70,12 @@ fi
 # Layer 1 is a hard invariant - autonomous loops (Ralph or flow --auto) MUST NOT open ready PRs even with --ready in args.
 if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" && "$AUTONOMOUS" != "1" ]]; then
   DRAFT_FLAG=""
+fi
+
+# Layer 4b: on a chained layer, open items force draft even over --ready (fn-152 R8) - the layer is
+# merge-ready from the stack UI only when nothing is open. Non-chained PRs keep layer 4 as is.
+if [[ -n "${CHAIN_PARENT:-}" && "$OPEN_ITEMS_COUNT" -gt 0 ]]; then
+  DRAFT_FLAG="--draft"
 fi
 
 # Conflict surfacing: --draft AND --ready in the same invocation is the SKILL.md last-flag-wins rule.
@@ -83,8 +97,14 @@ fi
 | Ralph / Autonomous | 0 | — | — | draft |
 | Ralph / Autonomous | — | — | yes | draft (autonomous always draft) |
 | Ralph / Autonomous | — | yes | — | draft |
+| Ralph / Autonomous, **chained layer** | 0 | — | — | **ready** (stack-UI merge needs a non-draft) |
+| Ralph / Autonomous, chained layer | >0 | — | — | draft |
+| any, chained layer | — | yes | — | draft |
+| any, chained layer | >0 | — | yes | draft (open items win over `--ready` on a chain) |
 
 `--draft` and `--ready` in the same invocation is handled by SKILL.md mode-detection's "last-flag-wins" rule — `DRAFT_FORCE` ends up as whichever flag appeared last in `$ARGUMENTS`. The conflict isn't a hard error.
+
+`CHAIN_PARENT` is read back from Phase 0's context before the matrix runs (the variable does not survive across tool-call fences): `CHAIN_PARENT=$(printf '%s' "$PHASE0_CONTEXT" | jq -r '.chain_parent // empty')`; the same read supplies `PARENT_PR` / `PARENT_PR_STATE` to the §4.6 stack link.
 
 **OPEN_ITEMS_COUNT derivation** (combines Phase 1's payload with the separate spec-completion-review status from §2.11 Source C):
 
@@ -213,6 +233,27 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -z "$UPDATE_PR_NUMBER" ]]; then
     echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
   fi
+fi
+```
+
+A linked layer keeps its Stack line across a body refresh — the freshly rendered body has none, so read it from the PR payload (read-only; the stack is never linked or unstacked here):
+
+```bash
+# fence:stack-line-refresh — inputs: UPDATE_MODE, UPDATE_PR_NUMBER, BODY_FILE; gh on PATH
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+  STACK_OBJ=$(gh api "repos/{owner}/{repo}/pulls/$UPDATE_PR_NUMBER" --jq '.stack // empty' 2>/dev/null) || STACK_OBJ=""
+  if [[ -n "$STACK_OBJ" ]] && ! grep -q '^> \*\*Stack:\*\*' "$BODY_FILE"; then
+    STACK_LINE=$(printf '%s' "$STACK_OBJ" | jq -r '"**Stack:** #\(.number), layer \(.position) of \(.size)"')
+    awk -v line="> $STACK_LINE" '{ print } /^> \*\*Branch:\*\*/ && !done { print line; done = 1 }' "$BODY_FILE" > "$BODY_FILE.stack" \
+      && mv "$BODY_FILE.stack" "$BODY_FILE"
+  fi
+fi
+```
+
+Then the edit itself:
+
+```bash
+if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
     PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
@@ -340,6 +381,48 @@ if [[ -z "$PR_URL" ]]; then
   exit 1
 fi
 
+```
+
+**§4.6c — Stack link (fn-152 R6/R7).** A chained layer whose parent has an OPEN PR is linked into the parent's GitHub stack via the stacks REST endpoints right after creation; `-F` types `pull_requests[]` as integers (the API rejects strings). Every failure (404 stacks unavailable, 409 concurrent modification, 422 the parent's base does not chain or the PR is already elsewhere, any transport error) prints ONE stderr line `stack link skipped: HTTP <code> <message>` and leaves a plain chain layer: no retry in the same run, no unstack, and PR creation never fails because of the link. A non-GitHub remote skips silently (no GitHub-only call runs). The gh-stack extension is never required, invoked, or detected, and its local state is never read. `CHAIN_PARENT` / `PARENT_PR` / `PARENT_PR_STATE` come from `PHASE0_CONTEXT` (§4.2 read).
+
+```bash
+# fence:stack-link — inputs: REPO_ROOT, PR_URL, BODY_FILE, CHAIN_PARENT, PARENT_PR, PARENT_PR_STATE (from PHASE0_CONTEXT); gh on PATH
+STACK_LINE=""
+if [[ -n "${CHAIN_PARENT:-}" && -n "${PARENT_PR:-}" && "${PARENT_PR_STATE:-}" == "OPEN" ]] \
+   && git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | grep -qi 'github\.com'; then
+  NEW_PR="${PR_URL##*/}"
+  # Every failure below is captured inside a conditional: this block runs under the
+  # preamble's `set -e`, and a bare `VAR=$(cmd); rc=$?` would abort before degrading.
+  STACK_NUMBER=""; LINK_RC=1; LINK_OUT=""
+  OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>&1) || { LINK_OUT="$OWNER_REPO"; OWNER_REPO=""; }
+  if [[ -n "$OWNER_REPO" ]] && STACK_GET=$(gh api "repos/$OWNER_REPO/stacks?pull_request=$PARENT_PR" 2>&1); then
+    STACK_NUMBER=$(printf '%s' "$STACK_GET" | jq -r '.[0].number // empty' 2>/dev/null)
+    if [[ -n "$STACK_NUMBER" ]]; then
+      if LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks/$STACK_NUMBER/add" -F "pull_requests[]=$NEW_PR" 2>&1); then LINK_RC=0; fi
+    else
+      if LINK_OUT=$(gh api --method POST "repos/$OWNER_REPO/stacks" -F "pull_requests[]=$PARENT_PR" -F "pull_requests[]=$NEW_PR" 2>&1); then LINK_RC=0; fi
+    fi
+  elif [[ -n "$OWNER_REPO" ]]; then
+    LINK_OUT="$STACK_GET"
+  fi
+  if [[ "$LINK_RC" -eq 0 ]]; then
+    STACK_NUMBER=$(printf '%s' "$LINK_OUT" | jq -r --arg fallback "$STACK_NUMBER" '.number // $fallback' 2>/dev/null)
+    STACK_SIZE=$(printf '%s' "$LINK_OUT" | jq -r '.pull_requests | length' 2>/dev/null)
+    STACK_POS=$(printf '%s' "$LINK_OUT" | jq -r --argjson n "$NEW_PR" '(.pull_requests | map(.number) | index($n)) + 1' 2>/dev/null)
+    STACK_LINE="**Stack:** #$STACK_NUMBER, layer $STACK_POS of $STACK_SIZE"
+    awk -v line="> $STACK_LINE" '{ print } /^> \*\*Branch:\*\*/ && !done { print line; done = 1 }' "$BODY_FILE" > "$BODY_FILE.stack" \
+      && mv "$BODY_FILE.stack" "$BODY_FILE"
+    gh pr edit "$NEW_PR" --body-file "$BODY_FILE" >/dev/null 2>&1 || echo "stack line not written: gh pr edit #$NEW_PR failed" >&2
+  else
+    HTTP_CODE=$(printf '%s' "$LINK_OUT" | grep -Eo 'HTTP [0-9]{3}' | head -1 | cut -d' ' -f2)
+    echo "stack link skipped: HTTP ${HTTP_CODE:-transport} $(printf '%s' "$LINK_OUT" | head -1)" >&2
+  fi
+fi
+```
+
+The create block then continues:
+
+```bash
 # 4.6b — Post-create ref verify/repair. §4.6a appends the ref to the
 # LOCAL body file before create — the guard exists to catch a hand-rolled
 # `gh pr create` (or a stale / absent local file) that bypassed it, opening the
@@ -400,6 +483,8 @@ When `gh pr create` fails after the retry loop is exhausted, the skill emits man
 - **No interactive confirm gate** — make-pr creates the PR directly (autonomous). `--dry-run` (§4.0) is the inspection escape hatch; `--ready`/`--draft` override the draft decision. Phase 0 may still `AskUserQuestion` to resolve genuinely-missing info (base/spec), never to confirm.
 - §4.6: `HEAD_BRANCH=$(git branch --show-current)` resolved + validated non-empty (rejects detached HEAD with a clear stderr error before any push — an empty `--head` would fail with a cryptic "Head sha can't be blank"), then §4.6a links the PR to the tracker issue (if active), then `git push -u origin HEAD`, then `sleep 1` (cli/cli #2691 eventual-consistency lag), then 3-attempt retry loop on the eventual-consistency error class (`Head sha can't be blank` / `No commits between`). Backoff `2s, 4s, 6s`. Other errors fail fast — auth (401/403), body-too-long (422), PR-already-exists (409) do NOT retry.
 - `gh pr create --title --body-file --base --head [--draft]` invoked with `--base "${BASE_REF#origin/}"` (strip the remote-tracking prefix — `--base` expects a branch name, not `origin/main`). PR URL captured from stdout (single line; `gh pr create` has no `--json` flag).
+- `--update` re-inserts the `> **Stack:** #<n>, layer <p> of <s>` line from the PR payload's `stack` object when the PR is in a stack (read-only; never links or unstacks), so a body refresh never drops it.
+- §4.6c (post-create, chained layer with an OPEN parent PR, GitHub remote): `GET repos/{owner}/{repo}/stacks?pull_request=<parent>` then `POST .../stacks/<n>/add` (parent already stacked) or `POST .../stacks` with parent + child (integer-typed `-F pull_requests[]=`); success inserts the single `> **Stack:** #<n>, layer <p> of <s>` line under the Branch line via `gh pr edit`; 404 / 409 / 422 / transport print one `stack link skipped: HTTP <code> <message>` line and the PR stands as a plain chain layer. Non-GitHub remote: skipped silently. Never runs for a parent without a PR.
 - §4.6b (post-create, bridge active + ref derived): happy path asserts locally (whole-line `grep -qixF "$REF"` on `$BODY_FILE` — the file the create consumed; no network). Live PR body fetched (`gh pr view --json body`) ONLY when the local assertion fails (hand-rolled-create / stale-file bypass), then repaired append-only via `gh pr edit --body-file -` when absent, 65,536-char cap re-checked. Idempotent (ref already present → untouched) and fully non-fatal.
 - Failure recovery hints (§4.7) printed to stderr before exit on each error class.
 

@@ -19,6 +19,14 @@ The unit of intent: `.flow/specs/<id>.md` (body) + `.flow/specs/<id>.json` (meta
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Task, R-ID, Chart
 
 _Avoid_: epic, ticket, story, PRD, requirements doc
@@ -28,6 +36,14 @@ _Relates to_: Task, R-ID, Chart
 ## Task
 
 An execution unit under a spec (`fn-N.M`), sized to one `/flow-next:work` iteration (~100k tokens of fresh context). Declares `requires:` dependencies and optionally the R-IDs it `satisfies:`. Implemented by a worker subagent, never by the conductor directly.
+
+
+
+
+
+
+
+
 
 
 
@@ -69,6 +85,14 @@ A numbered acceptance criterion in a spec, written `**R1:** ...`. Renumber-forbi
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: AC-1, requirement #1, renumbering, req id
@@ -78,6 +102,14 @@ _Relates to_: Spec, Task
 ## Wave
 
 A set of tasks whose dependencies are all satisfied at the same point — the parallel candidates `/flow-next:plan` reports. A wave is a scheduling fact derived from the dependency graph, not a time box and not a mandate to share one checkout: parallel workers get isolated workspaces and the conductor joins the wave before review.
+
+
+
+
+
+
+
+
 
 
 
@@ -119,6 +151,14 @@ Optional pre-capture decision mapping (`/flow-next:chart`) for one idea too larg
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: discovery doc, RFC, design doc, plan, prospect
@@ -128,6 +168,14 @@ _Relates to_: Spec, Task
 ## Receipt
 
 A JSON artefact on disk that proves a step happened and gates the next one — review receipts under `.flow/review-receipts/`, green receipts under `.flow/tmp/green-receipts/`, QA verdict receipts. A receipt is a file; a verdict is the terminal line a loop skill prints into the transcript for its driver (`PILOT_VERDICT=`, `LAND_VERDICT=`). Never use one word for the other.
+
+
+
+
+
+
+
+
 
 
 
@@ -169,6 +217,14 @@ A pass/fail check the workflow refuses to proceed past — the repo's full local
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Receipt
 
 _Avoid_: check, hook, CI, guardrail
@@ -178,6 +234,14 @@ _Relates to_: Receipt
 ## Anchor
 
 Re-reading the spec, the task, and git state before work continues, so long sessions do not drift. `flowctl anchor <task-id>` is the per-task bundle a worker reads every iteration; `flowctl brief` is the cold-session equivalent. Not `/flow-next:prime`, which assesses whether a repo is ready for agents at all.
+
+
+
+
+
+
+
+
 
 
 
@@ -219,6 +283,14 @@ _Relates to_: Task, Spec
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Spec, Task
 
 _Avoid_: sync, tracker-sync, resync
@@ -244,6 +316,14 @@ The engine that performs a cross-model review: `rp` (RepoPrompt), `codex`, `copi
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Receipt
 
 _Avoid_: judge, provider, model
@@ -253,6 +333,14 @@ _Relates to_: Receipt
 ## Memory
 
 Categorized durable learnings under `.flow/memory/` — `bug/<category>/` and `knowledge/<category>/` entries with YAML frontmatter, searched via `flowctl memory search`. Memory is audited, superseded, and graduated into gates; it is not a scratchpad and not a substitute for docs or code comments.
+
+
+
+
+
+
+
+
 
 
 
@@ -300,6 +388,14 @@ What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinki
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Reach, Review backend
 
 _Avoid_: pin, model tier, capability level, role map
@@ -309,6 +405,14 @@ _Relates to_: Reach, Review backend
 ## Reach
 
 How the active harness obtains a model for a tier: the in-session model, an in-host subagent, shelling out to another CLI, or not available. Documented once per harness under [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md) and never inside a skill — a skill asks for a tier and names no spawn primitive, CLI flag, or vendor path. An undetectable harness resolves to the generic page and says so.
+
+
+
+
+
+
+
+
 
 
 
@@ -350,6 +454,14 @@ The tier for anything grading work someone else produced. The only tier carrying
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Tier, Review backend
 
 _Avoid_: grader, review model, critic
@@ -359,6 +471,14 @@ _Relates to_: Tier, Review backend
 ## Implementer tier
 
 The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
+
+
+
+
+
+
+
+
 
 
 
@@ -400,6 +520,14 @@ The tier for mechanical inventory scanning, where the cheapest model is the corr
 
 
 
+
+
+
+
+
+
+
+
 _Relates to_: Tier
 
 _Avoid_: cheap tier, scanner model, fast model, low tier
@@ -409,6 +537,14 @@ _Relates to_: Tier
 ## Thinking scout tier
 
 The tier for analysis that degrades badly on a fast model — requirement analysis and pattern judgment, not scans. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
+
+
+
+
+
+
+
+
 
 
 
@@ -536,3 +672,35 @@ The positive signal on the route matrix's ready-spec row: the spec names a libra
 The read-only agent for rationale questions. It anchors on `git blame` and the PRs behind the commits, reads the tracker thread through access the session already has, then the bug and decision memory tracks, and tiers each finding `direct`, `supported`, `inferred`, or `unknown`; the caller may not rewrite a tier. Named by the route matrix's investigation row for why questions.
 
 _Relates to_: Thinking scout tier
+
+## Chain
+
+A dependent PR whose base is the parent spec's branch instead of the default branch (fn-152). Exists on any code host because it is only a branch and a base ref. A dependent spec is chain-eligible when its parent is open with every task done and its branch on origin, judged by `flowctl spec chain`, the one predicate every consumer calls; work then branches from the parent's remote tip and make-pr targets the parent's branch. Chains are linear: one open parent, one child at a time.
+
+_Avoid_: stacked branch, dependent branch, branch-on-branch
+
+_Relates to_: Stack, Layer, Frontier, Spec
+
+## Stack
+
+GitHub's server-side object over a chain: the linked PRs, the stack map in the merge box, sequential merge, and auto-retarget of the layers above a merged one. An enhancement of a chain, present only when the host is GitHub and make-pr's link call succeeded; on any other host, or after a failed link, the PR stands as a plain chain layer. Never a local file: the gh-stack extension is not required or read.
+
+_Avoid_: gh-stack, stacked diff, Graphite stack
+
+_Relates to_: Chain, Layer, Frontier
+
+## Layer
+
+One PR in a chain or stack. The bottom layer is the open layer whose base is the chain's base branch (the default branch, or the branch a human chose); every other layer's base is the branch of the layer below it, so a reviewer sees only that layer's own diff.
+
+_Avoid_: sub-PR, child PR, stacked PR
+
+_Relates to_: Chain, Stack, Frontier
+
+## Frontier
+
+The bottom open layer of a chain or stack, the only one that can merge next. Land merges at most one frontier per tick, from the bottom up; a human merging from GitHub's stack UI does the same. Distinct from the task frontier `flowctl ready` reports inside one spec.
+
+_Avoid_: head of the stack, top layer, mergeable PR
+
+_Relates to_: Chain, Stack, Layer

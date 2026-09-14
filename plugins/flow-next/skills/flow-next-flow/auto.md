@@ -263,7 +263,7 @@ TASKS_JSON="$($FLOWCTL tasks --spec "$candidate" --json)"
 
 Apply the full predicate:
 
-1. Dependencies: every `depends_on_epics[]` value is satisfied iff `$FLOWCTL show <dep> --json` reports `status == "done"`. Any unsatisfied dependency skips the candidate and records `deps unsatisfied: <ids>`.
+1. Dependencies: `CHAIN_JSON="$($FLOWCTL spec chain "$candidate" --json)"` is the whole test — the candidate passes iff `.eligible == true`. That one read-only predicate (fn-152 R1/R2) accepts every dependency `done`, or exactly one dependency open with all its tasks done and its branch on origin (the **chain parent**, `.parent`); anything else (`.eligible == false`) parks the candidate with the command's `.reason` verbatim (`dependency <id> in progress`, `two open parents: …`, `parent branch <b> not on origin; …`, `parent <id> already chained by <sibling>`, `remote query failed: …`), records **no strike**, and preserves readiness — an unpushed parent and a failed remote query park here instead of being dispatched into a block. Never re-derive the rule from `show <dep>`; the command is the single owner. Keep `CHAIN_PARENT="$(printf '%s' "$CHAIN_JSON" | jq -r '.parent // empty')"` for the branch row and the verdict prefix (Phase 6). The command's single `git ls-remote` is the only remote read in SELECT.
 2. Collision avoidance: no task may be `in_progress` and assigned to another actor. The minimal `tasks --spec` listing carries no `assignee`; for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee` field. Resolve this session's actor identity exactly as `flowctl.get_actor()` does: `$FLOW_ACTOR` env var, else `git config user.email`, else `git config user.name`, else `$USER`, else `unknown`. If resolution bottoms out at `unknown`, any non-empty assignee counts as another actor.
 3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--explain`, do not write; report the entry as would-clear in the classification report instead. **Exception, active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every run**, so a "ready again" under a configured `tracker.readyState` is mechanical, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every run forever, defeating the strike limit. **So with `tracker.readyState` set, a `count >= 2` strike survives a projection-set ready**: the strikeout stands (skip the candidate as still-struck) until the human who answered the surfaced failure runs `flowctl pilot strikes clear <spec-id>`. That verb is THE recognized human clear under an armed `tracker.readyState`; no board state can serve as one, because a deliberate out-and-back move and a projection echo are byte-identical in every durable artifact, so "an explicit re-ready" is not something this run can detect. A cleared strike whose only "re-bless" was a board-set ready has broken this. The `BLOCKED spec=… reason="strike 2/2"` terminal names the verb, so the transcript carries its own recovery.
 4. **No gh touch here.** PR state belongs exclusively to the all-done classification branch; a gh call in SELECT has broken this.
@@ -533,7 +533,7 @@ Matrix:
 | State | Action |
 |---|---|
 | branch exists and stage is `work` | `git checkout <branch_name>`, dispatch work with `--branch=current` |
-| branch absent and stage is the first `work` hop | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name`, so later hops find it |
+| branch absent and stage is the first `work` hop | dispatch work with `--branch=new`; under autonomy work names it exactly the spec's `branch_name`, so later hops find it. A chained candidate (`CHAIN_PARENT` set) needs no extra row: work runs the same `spec chain` predicate and branches from `origin/<parent_branch>` itself (`flow-next-work/phases.md` Phase 2) |
 | stage is `qa` and branch exists | `git checkout <branch_name>`; QA drives the running app against this branch's build (never the default branch; the app under test is the spec's build). After checkout `HEAD` equals the branch head, so the Phase 5 post-dispatch freshness verify uses `HEAD`. |
 | stage is `qa` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` (all-done with no branch is the same inconsistency as the make-pr row; QA never silently skips) |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
@@ -755,7 +755,12 @@ jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "
 
 Then apply the continuation rule in "The hop loop" above.
 
-When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome:
+When the run ends, print the terminal line. `stage=` names every dispatched stage in order joined by `+`; the reason names the last hop's outcome. For a **chained** spec (SELECT's `CHAIN_PARENT` non-empty) the reason starts with `chained on <parent-id>; ` followed by the existing reason text; a non-chained run prints byte-identical lines (fn-152 R9). A chained dispatch's backlog decision-log row carries the same string through `pilot-log append --reason` (passed only when `CHAIN_PARENT` is set), so that row begins with the same prefix while non-chained rows keep their shape.
+
+```bash
+# fence:verdict-reason — inputs: CHAIN_PARENT (SELECT's `spec chain` .parent, empty when not chained), REASON (the existing reason text)
+[[ -n "${CHAIN_PARENT:-}" ]] && REASON="chained on $CHAIN_PARENT; $REASON"
+```
 
 ```text
 PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
@@ -808,13 +813,13 @@ The recovery clause is part of the reason string, not a separate line: a strikeo
 
 ### Backlog-mode dep-wait `BLOCKED` terminal
 
-**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** It writes a `blocked` decision-log row, records no strike, preserves readiness, and names the first unsatisfied dependency (`<dep>`, a flow `blockedBy` edge or a tracker relation).
+**Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `dep-unsatisfied`.** It writes a `blocked` decision-log row, records no strike, preserves readiness, and names the first unsatisfied dependency (`<dep>`, a flow `blockedBy` edge or a tracker relation). For a spec-backed subject the `<dep>` clause is the `reason` string `spec chain` returned (backlog-mode.md 1f), so an unpushed parent reads `parent branch <b> not on origin; push it or land the parent first` rather than a bare `not yet done`; on a chained subject the row's `--reason` is the verdict line's reason text.
 
 ```bash
 # No ledger write; a dep wait is healthy, not a strike. STAGE is the stage the
 # item would advance to once unblocked (or '-'); $SUBJECT_ID is spec-backed or a
 # tracker key. The `blocked` action distinguishes the dep wait from the strike path.
-$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action blocked --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action blocked --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} ${CHAIN_PARENT:+--reason "$REASON"}
 ```
 
 ```text
@@ -856,7 +861,11 @@ Terminal verdict when no spec was dispatched, split by why. **The two cases stay
 #   ADVANCED  -> advanced   · ASKED -> asked   · BLOCKED -> blocked   · NEEDS_HUMAN -> needs-human
 # STAGE is the pipeline stage advanced/blocked-at, or 'ask' for ASKED, or '-' when none.
 # COST_TOKENS is host-reported (this run's token cost); omit the flag when unavailable.
-$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
+$FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"} ${CHAIN_PARENT:+--reason "$REASON"}
+# --reason is passed ONLY on a chained dispatch (CHAIN_PARENT set): REASON is the verdict
+# line's reason text after the `# fence:verdict-reason` prefix, so that row begins
+# `chained on <parent-id>; ` exactly like the verdict. A non-chained dispatch omits the
+# flag and its row keeps the frozen shape byte-identically.
 
 # A run that dispatched several stages appends one row per stage, in dispatch order.
 # Every intermediate row is `advanced` (the loop continued only from ADVANCED) and

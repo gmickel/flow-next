@@ -112,7 +112,10 @@ facts only** - `{id, ready, noPlan, readySignal, blockedBy, hasSpec}`:
 - `readySignal ∈ {local, none}` - whether the local flag is set. flowctl stores no
   readiness provenance, so it cannot attribute a *tracker-projected* ready; that is
   fine - after the 1a pull the flag is simply `local`.
-- `blockedBy` - the unsatisfied `depends_on_epics` (the flow dep edges, 1d).
+- `blockedBy` - the unsatisfied `depends_on_epics` (the flow dep edges, 1d). A
+  **chain parent** (an open dependency with every task done and its branch on
+  origin, fn-152) is already excluded here: flowctl's admission gate treats it as
+  satisfied, so a chained spec sorts as ready-now in 1e.
 - `hasSpec` - whether a spec file exists.
 
 flowctl returns **no** `triageClass` - *thin / ambiguous / needs-spec / needs-human*
@@ -231,6 +234,16 @@ state-changing terminal (a live triage never ends on a no-op). Dep-blocked is
 **not** a reason to skip selection; only a `status=open` **parked** question
 (already surfaced, waiting on a human - 1d) removes a candidate from the pool.
 
+For a **spec-backed** pick with dependencies, the flow-side dependency answer is
+`CHAIN_JSON="$($FLOWCTL spec chain "$SUBJECT_ID" --json)"` - the same predicate
+ready-mode SELECT applies (auto.md Phase 1 Pass 2 item 1; the command is the single
+owner of chain eligibility, never re-derived from `show <dep>`). `.eligible == true`
+means the flow deps are satisfied (every dependency done, or exactly one open
+**chain parent** with all tasks done and its branch on origin - keep `.parent` as
+`CHAIN_PARENT` for the verdict prefix); `.eligible == false` is the
+`dep-unsatisfied` class with the command's `.reason` as the `<dep>` clause. Tracker
+relations keep their existing `list-relations` read.
+
 ### 1g - Apply the ready-mode claim / collision / re-bless checks
 
 Backlog SELECT **reuses the SAME checks as ready-mode SELECT** (`auto.md` Phase 1
@@ -295,7 +308,7 @@ For a **signalled** item, route it to exactly one class. **First match wins - an
 | Class | The agent's read | Route |
 |---|---|---|
 | **needs-spec** | a **tracker-only** promoted item - no flow spec exists at all | **`ask` via the tracker comment ALONE** (Phase 3) - surface "run capture/interview"; **never a spec stub** |
-| **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** - a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` - the item was selectable in 1f); the topo-sort offers the blocker first on a later run. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
+| **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done - for a spec-backed item, `spec chain` reported `eligible: false` (1f) | **`BLOCKED <id> by <dep>`** - a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` - the item was selectable in 1f); `<dep>` is the command's `reason` string for a flow dep; the topo-sort offers the blocker first on a later run. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
 | **workable** | signal present, **deps satisfied**, AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance**: hand to `auto.md` Phase 2, which drives it from there |
 | **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) - kick back the gap; **never build, never auto-author** |
 | **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |

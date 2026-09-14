@@ -21,7 +21,7 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 1. The item this conversation last touched: the spec capture wrote, the task work closed, the PR make-pr opened. Capture's `Recommended next:` line names the step.
 2. The spec whose `branch_name` matches the current branch.
 3. Intent in the conversation that no spec captures yet. Ask whether to capture it into 1..n specs; a "yes" routes to `$flow-next-capture from:flow`, a "no" continues down the ladder.
-4. The next open spec in `.flow`, by your judgement of readiness, order, and dependencies; `$FLOWCTL next` and the `ready` flag are hints. Several equally plausible candidates are an inline pick, never a guess.
+4. The next open spec in `.flow`, by your judgement of readiness and order; `$FLOWCTL next` and the `ready` flag are hints. A candidate with dependencies is admitted by `$FLOWCTL spec chain <id> --json` reporting `eligible: true`, never by judgement: every dependency done, or one open **chain parent** with all tasks done and its branch on origin (work then branches from that parent's tip). An `eligible: false` candidate is skipped with the command's `reason`. Several equally plausible candidates are an inline pick, never a guess.
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 5. Ask once what to work on (`plain-text numbered prompt`, or the plain-text fallback).
