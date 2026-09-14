@@ -128,7 +128,25 @@ echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignore
 
 Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
 
+## Bridged implementer (gated on the implementer tier)
+
+**Gate.** This section runs only when the **implementer** tier resolves to a model this harness reaches by shelling out to another CLI, per its reach page (`plugins/flow-next/docs/reach/`). Resolve the tier by the routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model. When the tier resolves to the session model or to an in-host subagent model, this section is inert: the standard phases run unchanged, Phase 1.5 included. When the named model is unreachable from this harness, the reach page's degradation applies: fall back to the session model, say so once, and continue on the standard path.
+
+**Who does what.** The worker keeps judgment and the child does the work. The worker composes the prompt, checks the diff, runs the gates, dispatches review, and owns `flowctl done`; the child re-anchors on the repo, investigates, implements, and tests in its own context. The conductor never bridges.
+
+**Keep** Phase 0 and Phase 1 exactly as written, including the baseline check and the persisted `.flow/tmp/base_commit`: the child's commit range is reviewed from that base. **Skip** Phase 1.5 (investigation targets, similar-code search, defect-pattern sweep) and any scout fan-out that pre-digests the repo for the child: the child re-reads whatever a scout would have read, so worker-side investigation is session-model context spent twice (observed on a live run, #431). Phase 2's rules still bind the diff the worker accepts; a child's commit that weakens a test, adds surface the ACs do not name, or leaves a speculative fix behind is a finding the worker fixes before Phase 3.
+
+**Compose the pointer prompt.** It carries: the task id; the spec path (`.flow/specs/<SPEC_ID>.md`) and the task path (`.flow/tasks/<TASK_ID>.md`, which carries any `## Investigation targets`); the spec's `## Resolved via Research` section when present; the project instruction file (`CLAUDE.md` / `AGENTS.md`); and the instruction to re-anchor on the repo, investigate, implement, and test. Then append the long-task brief from the usage guide (`<FLOWCTL> usage`, section `## Orchestration & model steering`, "Long bridged tasks") **verbatim**, with `<branch>` filled from the Phase-1 bundle's current branch: checkpoint commits on the named branch, the five never clauses (never push, never rebase or amend or rewrite history, never change the scope, never issue a review verdict, never spawn another agent or bridge), and one return condition (return only when the scope is done or blocked). The brief carries no timebox and no "stop cleanly if you run out of room" line. The `TIMEBOX` line in this worker's own dispatch is the worker's cap; a worker that copied it into the child's brief has broken this: a timebox teaches the child to return partial, and every partial return costs a fresh context and a re-brief (one task took 19 dispatches this way, #431).
+
+**Run the bridge.** One blocking foreground Bash call with a generous timeout, from the asserted repo root (`[ "$(git rev-parse --show-toplevel)" = "<repo-root>" ]`), at the sandbox level that permits commits. For codex that is `--sandbox danger-full-access`: `workspace-write` keeps `.git/` read-only, so `git commit` fails with `index.lock: Read-only file system` (verified on 0.153.4, #436). Exact flags per CLI live in the usage guide's recipes. Capture the child's digest to a file (`-o` for codex), never by scraping stdout. Never `run_in_background` + a monitor: a background completion does not reliably resume this context.
+
+**On return.** Re-read the base (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`), read the child's digest, and review `<base>..HEAD` yourself: `git log --oneline "$BASE_COMMIT"..HEAD` and `git diff "$BASE_COMMIT"..HEAD` against the task's acceptance criteria, the `FORBIDDEN` line, and Phase 2's rules. A commit that landed on a branch other than the named one is a review finding. Run the spec's focused Quick commands on that range now; Phase 5's Verify block stays the authoritative gate. Then continue with Phase 3 onward exactly as written: Phase 3's `git add -A` commits anything the child left uncommitted (a sandbox that denied the child's commits is reported in its digest, and the worker commits on its behalf; never stall or loop retrying), Phase 4 dispatches review over `BASE_COMMIT..HEAD`, and Phase 5 runs the Verify block and `flowctl done`. Under `PARALLEL_WAVE` or `REVIEW_MODE: host-deferred` this path changes only who wrote the code; the handover and deferral contracts stand.
+
+Done when: the tier resolution is recorded (bridged, or standard with the reason), and on the bridged path the child has returned, `<base>..HEAD` has been reviewed by the worker, and the worker has resumed at Phase 3.
+
 ## Phase 1.5: Pre-implementation Investigation
+
+**Skipped on the bridged implementer path** (section above): the child investigates in its own context.
 
 **If the task spec contains `## Investigation targets`:**
 
@@ -558,7 +576,7 @@ conductor owns both after integration. The existing host-deferred exception
 likewise returns `in_progress` for the conductor's review.
 
 - **Re-anchor first** - the spec is read before anything is implemented
-- **Investigate first** - a task spec with investigation targets has them read before any code
+- **Investigate first** - a task spec with investigation targets has them read before any code (on the bridged implementer path, by the child, which receives the task path)
 - **No TodoWrite** - flowctl tracks tasks; a TodoWrite task list has broken this
 - **git add -A** - staging is never an explicit file list
 - **One task only** - a commit implementing a task you were not given has broken this

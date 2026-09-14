@@ -321,6 +321,10 @@ When the sentinel prints, read [references/tracker-touchpoints.md](references/tr
 
 ### 3c. Run Worker Agent(s)
 
+Implementation is the **implementer** tier: absent any preference, the worker runs on the session model. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches a non-session model — and what the degradation is when it cannot — lives in its reach page ([`docs/reach/README.md`](../../docs/flow-next/reach/README.md)), never here.
+
+**When the implementer tier resolves to a model this harness reaches only by CLI bridge, the worker runs the bridge itself and the conductor never bridges.** The dispatch below is unchanged: the worker's "Bridged implementer" section (worker.md) composes the child's pointer prompt, runs the bridge in the foreground, reviews the child's commit range from its persisted base, runs the gates, and owns `flowctl done`, so bridging from the conductor would put a multi-hour foreground call in this context and duplicate the worker's gate and commit ownership. The `TIMEBOX` line is the worker's cap and never the child's: the child gets the usage guide's timebox-free long-task brief, and a worker that copied `TIMEBOX` into it has broken this.
+
 Use the **worker** agent role to implement each selected task. For a multi-task
 wave, create one isolated mutable workspace and task-unique summary/evidence
 paths per worker, then dispatch the selected workers concurrently. For a

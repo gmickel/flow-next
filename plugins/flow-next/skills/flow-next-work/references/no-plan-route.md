@@ -125,3 +125,13 @@ hand subagents disjoint surfaces or serialize. Join barrier: every dispatched su
 is awaited and reconciled BEFORE staging, verification, and commit — no live writer
 exists at `git add -A` time (same discipline as the wave-level workspace cleanup gate
 in [wave-join.md](wave-join.md)).
+
+**Bridged implementer path** (worker.md "Bridged implementer": the implementer tier
+resolves to a model the harness reaches by CLI bridge): the license narrows. Parallel
+implementation of independent surfaces means parallel bridge calls on disjoint
+surfaces, each with its own pointer prompt and the same long-task brief, awaited and
+reconciled before `git add -A` (the usage guide's thin-wrapper recipe where the host
+has nested dispatch; serial otherwise). Background research and scouting do not apply:
+the child re-anchors and investigates in its own context, so a scout fan-out that
+pre-digests the repo for it spends session-model context the child re-reads anyway
+(observed on a live run, #431). Commit ownership and the join barrier stand unchanged.
