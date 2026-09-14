@@ -617,6 +617,7 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
+IMPLEMENTER: <model> at <effort>
 FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
@@ -637,6 +638,8 @@ conductor cannot act mid-flight, so the cap is applied at its next control
 point — the worker's return, the host's own tool timeout or error, or a lost
 result — where 3d's side-effects rule classifies whatever the lane left
 behind.
+
+`IMPLEMENTER` is optional and carries the invocation's explicit implementer model (and effort) only — the highest rung of the routing precedence, which the fresh-context worker cannot otherwise see. Pass it when the user named an implementer in the moment; omit it when the project routing block or the session model should decide. The conductor passes the value and never bridges, composes a brief, or resolves reach itself.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
@@ -684,6 +687,7 @@ SECTION3C
     "FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target" \
     "TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on" \
     "Implementation is the **implementer** tier" \
+    "IMPLEMENTER: <model> at <effort>" \
     "the worker bridges and the conductor never does"; do
     if ! grep -qF "$dispatch_field" "$phases"; then
       echo "SYNC-FAIL: mirror phases.md 3c lost dispatch field: $dispatch_field (update SECTION3C in sync-codex.sh)" >&2

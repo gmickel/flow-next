@@ -8,13 +8,83 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-245-bridge-child-owns-the-task-worker",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-245-bridge-child-owns-the-task-worker.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "16deb1bb4b249106c6d2977e3a9dc0e84b0f172d0785f86e93694b09677a3512",
+      "backend": "codex",
+      "base_sha": "07cfcf662d978796aa4b7b46e8bccec27109effe",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bb747d0a447d38a5991fab52e598ac36",
+            "classification": "introduced",
+            "findingId": "finding-bb747d0a447d38a5991fab52e598ac36",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8848f844991f8bb2c4806adb9f64af61",
+            "classification": "introduced",
+            "findingId": "finding-8848f844991f8bb2c4806adb9f64af61",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ad3636b05b75c0c8f920b7549b23ab67",
+            "classification": "introduced",
+            "findingId": "finding-ad3636b05b75c0c8f920b7549b23ab67",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "aaba15d0290b7a2213ae83507b72287c7917fa4a",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4260,
+      "output_sha256": "d119012a24e103b5ab51ce43f0910d7019bd7bbd0a919f28608e41839b74682f",
+      "reservation_id": "bc81574400004393a056955764620d86",
+      "round_consumed": true,
+      "scope": "impl:fn-245-bridge-child-owns-the-task-worker.1",
+      "superseded_by": null,
+      "task": "fn-245-bridge-child-owns-the-task-worker.1",
+      "timestamp": "2026-09-14T10:39:48.543162Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-245-bridge-child-owns-the-task-worker.1": 0
+  },
   "spec_path": ".flow/specs/fn-245-bridge-child-owns-the-task-worker.md",
   "status": "open",
   "title": "Bridge child owns the task: worker bridge path, fan-out license restored, July codex caveats retired",
@@ -29,5 +99,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T10:18:53.861582Z"
+  "updated_at": "2026-09-14T10:39:48.545545Z"
 }
