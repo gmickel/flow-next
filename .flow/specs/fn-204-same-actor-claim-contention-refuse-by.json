@@ -10,9 +10,11 @@
   "id": "fn-204-same-actor-claim-contention-refuse-by",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-204-same-actor-claim-contention-refuse-by.md",
   "status": "open",
   "title": "Same-actor claim contention: refuse by default, resume by explicit reclaim",
@@ -27,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T14:53:32.460182Z"
+  "updated_at": "2026-09-14T14:56:10.608387Z"
 }

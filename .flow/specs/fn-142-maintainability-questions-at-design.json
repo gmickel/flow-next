@@ -12,9 +12,11 @@
   "id": "fn-142-maintainability-questions-at-design",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-142-maintainability-questions-at-design.md",
   "status": "open",
   "title": "Maintainability questions at design time, and an honest claim",
@@ -29,5 +31,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T14:53:19.590810Z"
+  "updated_at": "2026-09-14T14:56:09.735073Z"
 }
