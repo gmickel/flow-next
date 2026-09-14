@@ -116,7 +116,7 @@
     "impl:fn-204-same-actor-claim-contention-refuse-by.1": 0
   },
   "spec_path": ".flow/specs/fn-204-same-actor-claim-contention-refuse-by.md",
-  "status": "open",
+  "status": "done",
   "title": "Same-actor claim contention: refuse by default, resume by explicit reclaim",
   "tracker": {
     "baseHashFlow": null,
@@ -129,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:23:03.337830Z"
+  "updated_at": "2026-09-14T16:24:02.083370Z"
 }
