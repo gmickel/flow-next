@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-244-bridged-implementer-may-commit",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T07:48:56.149778Z",
   "created_at": "2026-09-14T07:20:44.619982Z",
   "default_impl": null,
   "default_review": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T07:45:38.576660Z"
+  "updated_at": "2026-09-14T07:48:56.149786Z"
 }
