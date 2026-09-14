@@ -92,11 +92,12 @@ atomic: flowctl refuses (nonzero exit, naming the existing task) when the spec a
 has any task, checked under the same lock that allocates ids — so of two concurrent
 direct-route runs exactly one mints. The loser STOPS with a typed report naming that
 existing task — it never claims, resumes, or dispatches in the same invocation: the
-winner is live, and same-actor `flowctl start` cannot tell the two runs apart (per-run
-claim identity is a flowctl structural fix, not this route's). A LATER re-invocation —
-after the concurrent run finished or died — resumes the task through the normal path
-(task count is 1; a second mint is unreachable by construction): crash-resume stays
-legal, concurrent double-dispatch does not.
+winner is live, and `flowctl start` refuses an `in_progress` task held by this same
+actor unless `--reclaim` is passed, which only Phase 1's evidence-checked resume
+admission licenses. A LATER re-invocation — after the concurrent run finished or
+died — resumes the task through the normal path (task count is 1; a second mint is
+unreachable by construction; Phase 1 admits the owner on evidence and 3b claims it
+with `--reclaim`): crash-resume stays legal, concurrent double-dispatch does not.
 Then continue with Phase 2 (branch choice) and the standard pipeline. A run that
 minted a second task, or copied a plan into the body, has broken this.
 

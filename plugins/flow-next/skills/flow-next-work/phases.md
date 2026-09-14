@@ -56,7 +56,11 @@ context for the owner ID and evidence reference; these are context, not target
 arguments. Resolve that reference and verify it identifies the current actor/claim
 and its ended prior invocation. Missing, inaccessible, ambiguous or mismatched
 evidence stops with `NEEDS_HUMAN` before claims or dispatch. Age, silence and an
-empty ready list prove nothing. Retain the input's `SINGLE_TASK_MODE` or `SPEC_MODE`
+empty ready list prove nothing. `flowctl start` refuses an `in_progress` task held
+by this same actor unless `--reclaim` is passed (a second run on one clone shares
+the actor string, so a plain start cannot tell itself from a crash resume); the
+admission above is the evidence check that licenses the flag, and 3b passes it
+only for an owner admitted here. Retain the input's `SINGLE_TASK_MODE` or `SPEC_MODE`
 and carry the admitted owner to 3a.
 
 ---
@@ -231,7 +235,8 @@ $FLOWCTL ready --spec <spec-id> --json
 For a direct owner admitted for resume in Phase 1, re-read its task status and
 claim. While it remains `in_progress` under this actor, select that owner alone
 instead of the ready list; re-anchor and continue through the usual claim and
-worker gates. Stop on a changed owner. Once the task is `done`, discard the resume
+worker gates, where 3b's claim carries `--reclaim` for this owner only. Stop on a
+changed owner. Once the task is `done`, discard the resume
 selection. Retain the original mode: `SINGLE_TASK_MODE` executes no other task and
 proceeds to Phase 4; `SPEC_MODE` uses the normal frontier, including the 3f loop
 and 3g completion-review policy when the frontier is empty.
@@ -290,6 +295,20 @@ Claim every selected task before dispatch:
 ```bash
 $FLOWCTL start <task-id> --json
 ```
+
+For the direct owner admitted for resume in Phase 1 (and only for it), the
+claim is `$FLOWCTL start <owner-id> --reclaim --json`: a plain start refuses an
+`in_progress` task held by this same actor, and the Phase 1 evidence check is
+what licenses the flag. Every other claim runs without `--reclaim`; a same-actor
+contention refusal there means another run of this actor is live on the task -
+fail closed exactly as for a foreign claim, never add the flag to get past it.
+
+For the direct owner admitted for resume in Phase 1 (and only for it), the
+claim is `$FLOWCTL start <owner-id> --reclaim --json`: a plain start refuses an
+`in_progress` task held by this same actor, and the Phase 1 evidence check is
+what licenses the flag. Every other claim runs without `--reclaim`; a same-actor
+contention refusal there means another run of this actor is live on the task -
+fail closed exactly as for a foreign claim, never add the flag to get past it.
 
 If any claim fails, do not dispatch that task. Retain every successfully
 claimed task in the selected wave and recompute only the failed/unclaimed

@@ -1,8 +1,11 @@
-"""`flowctl start --reclaim` identity repair (fn-179.4, issue #316).
+"""`flowctl start --reclaim` identity repair (fn-179.4, issue #316) and
+same-actor claim contention (fn-204, issues #369 / #370).
 
 --reclaim rewrites the claimant deliberately with a repair-flavored claim note.
 --force keeps its takeover meaning and its takeover note; the two must stay
-distinguishable in the record.
+distinguishable in the record. An `in_progress` task held by the CURRENT actor
+refuses a plain `start` (a second run on one clone shares the actor string and
+must not read as a crash resume); `--reclaim` is the one explicit resume path.
 """
 
 from __future__ import annotations
@@ -144,6 +147,38 @@ class StartReclaimTest(unittest.TestCase):
         self._run("done", task, "--summary", "done", actor="other-actor")
         proc = self._run("start", task, "--reclaim", actor="me")
         self.assertNotEqual(proc.returncode, 0, proc.stdout)
+
+    # --- same-actor contention (fn-204) ----------------------------------
+
+    def test_same_actor_in_progress_refuses_without_reclaim(self) -> None:
+        task = self._new_task()
+        self.assertEqual(self._run("start", task, actor="me").returncode, 0)
+        before = self._state(task)
+        proc = self._run("start", task, actor="me")
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        payload = json.loads(proc.stdout)
+        self.assertFalse(payload["success"])
+        for needle in (task, "me", "--reclaim", "in_progress"):
+            self.assertIn(needle, payload["error"])
+        self.assertEqual(self._state(task), before)
+
+    def test_same_actor_in_progress_resumes_with_reclaim(self) -> None:
+        task = self._new_task()
+        self.assertEqual(self._run("start", task, actor="me").returncode, 0)
+        proc = self._run("start", task, "--reclaim", actor="me")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        state = self._state(task)
+        self.assertEqual((state["assignee"], state["status"]), ("me", "in_progress"))
+        self.assertEqual(state.get("claim_note", ""), "")
+
+    def test_same_actor_in_progress_force_keeps_its_meaning(self) -> None:
+        task = self._new_task()
+        self.assertEqual(self._run("start", task, actor="me").returncode, 0)
+        proc = self._run("start", task, "--force", actor="me")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        state = self._state(task)
+        self.assertEqual((state["assignee"], state["status"]), ("me", "in_progress"))
+        self.assertEqual(state.get("claim_note", ""), "")
 
     # --- force stays exactly as it was -----------------------------------
 
