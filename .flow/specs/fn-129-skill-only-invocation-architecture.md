@@ -324,3 +324,7 @@ On revisit, repeat the live matrix; do not treat the 2026-07-23 results as curre
 fn-139 gutting the tracker-sync skill prose (its R11 targets a >=150,000 character reduction across `steps.md` and the adapter references) touches the same files this spec's invocation-surface pass edits. Landing both in the same window means touch conflicts on `flow-next-tracker-sync/steps.md`, `SKILL.md` and `references/*.md`.
 
 No dependency is recorded because neither blocks the other semantically - this is a scheduling choice, not an ordering requirement. Whoever picks these up second should rebase rather than merge, and expect the tracker-sync prose to have changed shape entirely if fn-139 went first.
+
+## Close note
+
+Closed 2026-09-14: overtaken. Hosts still diverge on slash forms (the Devin smoke in fn-243 shows only five of thirty-three skills get a slash form there), and discovery now lives in the flow routing reference. fn-243 carries the live version of the question.

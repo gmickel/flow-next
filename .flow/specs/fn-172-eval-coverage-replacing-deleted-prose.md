@@ -23,3 +23,7 @@ Candidate clusters, from the census's worst deleted offenders:
 <!-- scope: both -->
 
 Parked as a stub 2026-08-07: maintainer leaning toward building a general eval suite ad-hoc rather than executing this as a planned spec. If that happens, close this spec against that work.
+
+## Close note
+
+Closed 2026-09-14: absorbed. Coverage for skill behaviours lives in the agent-evals studies (METHODOLOGY.md, lib/evalkit.py) rather than repo prose pins; criteria.md G2 stands.

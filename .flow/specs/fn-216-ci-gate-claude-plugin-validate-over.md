@@ -54,3 +54,7 @@ Accepted from the contributor's suggestion on PR #390 at merge time (thanks @ace
 | R1 | fn-N.M (TBD — populate via /flow-next:plan) |
 | R2 | fn-N.M (TBD — populate via /flow-next:plan) |
 | R3 | fn-N.M (TBD — populate via /flow-next:plan) |
+
+## Close note
+
+Closed 2026-09-14 (maintainer decision): the motivating #389 frontmatter defect is fixed and recorded in the changelog; the standing prose-contract suites cover skill metadata. The CI `claude plugin validate` step itself was not added; reopen if a second silent-metadata failure appears.

@@ -27,3 +27,7 @@ Rebuild the Ralph harness on top of the pilot/land tick contracts instead of its
 ## Acceptance Criteria
 
 - **R1:** STUB — to be defined at interview/planning. Ralph v2 drives pilot/land ticks from a fresh-session shell loop, preserving guard hooks + receipts, replacing bespoke stage logic. [user]
+
+## Close note
+
+Closed 2026-09-14: overtaken. Ralph is deprecated, pilot folded into `flow --auto`, and land is the ship loop; there is no harness left to rebuild on the tick contracts. Existing Ralph installs stay documented in docs/ralph.md.

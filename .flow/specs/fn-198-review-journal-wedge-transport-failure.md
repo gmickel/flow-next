@@ -25,3 +25,7 @@ Observed live on flow-98.1's host impl-review (2026-08-14). Manual repair requir
 ## Decision Context
 
 Stub captured from the live incident during the flow-98 conducted run; the conductor's workaround (trash the journal, hand-edit `review_attempts[].finalized`) is recorded in the flow-98 session, not in any receipt. Sizing: likely S/M — the fix is in `cmd_review_rounds_record`'s transport-failure branch, the increment pre-gate's journal scan, and `cmd_spec_reset_review_rounds`.
+
+## Close note
+
+Closed 2026-09-14: shipped without this spec being closed. The changelog entry "A failed review round can no longer wedge every future review of that spec" delivers R1 to R3 (refunded rounds finish their own bookkeeping, no `REPLAY_REQUIRED` on a verdict-less journal, reset-review-rounds is a complete repair).

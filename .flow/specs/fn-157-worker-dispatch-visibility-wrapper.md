@@ -49,3 +49,7 @@ Two changes, independent but complementary:
 - Run: flow-swarm `fn-150-provider-instances-multiple-claudecodex`, task .1, 2026-08-01 23:42 → 00:03 CEST.
 - Worker: `cursor-agent -p --model cursor-grok-4.5-high`, pid 7519, 21 min wall clock, 9s CPU, one ESTABLISHED TLS connection throughout.
 - Outcome was fine (`0ed3c81a`, 19 tests pass, lint green) — the defect is purely that nobody could tell while it ran.
+
+## Close note
+
+Closed 2026-09-14: superseded. The thin-wrapper recipe in `flowctl usage` (fn-94) and the worker's foreground-call rules cover the wrapper subagent and streaming discipline this stub asked for; fn-203 (rolling scheduler) is done; the bridged-implementer path (fn-245, 5.4.0) owns dispatch visibility through the worker's `implement` stage line.

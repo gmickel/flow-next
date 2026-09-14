@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-172-eval-coverage-replacing-deleted-prose.md",
-  "status": "open",
+  "status": "done",
   "title": "Eval coverage replacing deleted prose-quality test pins",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-07T07:52:40.405442Z"
+  "updated_at": "2026-09-14T12:40:29.611698Z"
 }
