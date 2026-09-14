@@ -2,6 +2,10 @@
 
 Read from `workflow.md` §2.0 (shape), §2.8 (frontier rule), §3.5b (native merge), and §3.7 (`retarget`). This page holds the vocabulary, the invariant, and the one cascade fence the plain path executes. Everything else about chains is a rule the tick applies from the PR and git each time; nothing here is stored beyond the ledger fields `workflow.md` Phase 0 lists.
 
+## GitHub stacked pull requests (public preview)
+
+The native path rides GitHub's stacked pull requests, in public preview since 2026-07-30 and labelled "subject to change": [announcement](https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/), [about stacked PRs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs), [stacks REST API](https://docs.github.com/en/rest/pulls/stacks), [asynchronous merge endpoint](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request-asynchronously). The [gh-stack extension](https://github.com/github/gh-stack) is never required; every call here is `gh api`. GitHub documents that the legacy merge endpoints cannot merge a stack, that merging a layer merges every open layer below it, and that the layers above a merged one are rebased and retargeted server-side; the frontier rule, the second stack read before submit, and the patch-id carry-over exist because of those three facts. When the preview is unavailable on a repository, or on any other host, the same chain runs on the plain path below.
+
 ## Vocabulary
 
 - **Chain**: a dependent PR whose base is the parent's branch, on any host. **Stack**: GitHub's server-side object over a chain (the REST payload's non-null `stack`). **Layer**: one PR in either. **Frontier**: the bottom open layer, the only one land merges.
