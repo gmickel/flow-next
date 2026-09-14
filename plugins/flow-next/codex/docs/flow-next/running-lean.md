@@ -181,7 +181,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 ### Implementation offload (no layer to enable)
 
-Offloading implementation to a second CLI is **not an optional layer** - there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload-the-bridge-route).
+Offloading implementation to a second CLI is **not an optional layer** - there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, the timebox-free brief for long bridged tasks, and the rule that the bridged child writes code and commits checkpoints while the host keeps push, review, task state, and any history rewrite live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload-the-bridge-route).
 
 ## A lean run still leaves a record
 

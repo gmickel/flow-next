@@ -1,0 +1,80 @@
+{
+  "branch_name": "fn-244-bridged-implementer-may-commit",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T07:48:56.149778Z",
+  "created_at": "2026-09-14T07:20:44.619982Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-244-bridged-implementer-may-commit",
+  "impl_review_rounds": {
+    "fn-244-bridged-implementer-may-commit.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "ef090d804c5087056482382894adb7446c6e4c099973e6d1c2ab8428c08a5bc4",
+      "backend": "codex",
+      "base_sha": "bb3554f6854c9f5ee7dc02bdebf77c0d33722a4a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "15792ae478d5a9fa8b8d1d60c10f55a0c0fa08a9",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2068,
+      "output_sha256": "a1692e8a49a8a2e2cdf8cb6003fdd3da91f3b261f203cab41f3059ba21ed186b",
+      "reservation_id": "578d584fe3804f3cb5d300ea2a077f69",
+      "round_consumed": true,
+      "scope": "impl:fn-244-bridged-implementer-may-commit.1",
+      "superseded_by": null,
+      "task": "fn-244-bridged-implementer-may-commit.1",
+      "timestamp": "2026-09-14T07:45:38.574556Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-244-bridged-implementer-may-commit.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-244-bridged-implementer-may-commit.1": 0
+  },
+  "spec_path": ".flow/specs/fn-244-bridged-implementer-may-commit.md",
+  "status": "open",
+  "title": "Bridged implementer may commit checkpoints; timebox-free brief for long bridged tasks (#431)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-14T07:48:56.149786Z"
+}

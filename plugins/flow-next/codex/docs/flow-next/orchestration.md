@@ -121,7 +121,7 @@ For the models that execute stages, the chain is the one stated above: **routing
 
 ### The host model: the conductor
 
-You pick it in your harness (e.g. `/model`). The host owns everything that requires judgment: gating, task classification, git, review-verdict interpretation, user consent. Workers and resolvers ship with `model: inherit`, so the session model *is* the implementation model unless you route implementation out over a bridge (below). Practical consequence: a frontier session model gives you a frontier planner *and* frontier workers; dropping the session model for a mechanical spec drops both.
+You pick it in your harness (e.g. `/model`). The host owns everything that requires judgment: gating, task classification, push and history rewrite, review-verdict interpretation, user consent. Workers and resolvers ship with `model: inherit`, so the session model *is* the implementation model unless you route implementation out over a bridge (below). Practical consequence: a frontier session model gives you a frontier planner *and* frontier workers; dropping the session model for a mechanical spec drops both.
 
 ### Agent defaults: the floor
 
@@ -320,10 +320,10 @@ claude -p "<self-contained prompt>"     # the same bridge in reverse, from a Cod
 
 Two rules survive from the packaged path and are not optional:
 
-- **The bridged child writes code; the host keeps git, judgment, and the verdict.** The child never commits, never decides scope, never issues a review verdict, and never spawns a bridge of its own. Drop this and a bridge recipe becomes an unbounded second agent.
+- **The bridged child writes code and may commit checkpoints on the branch the host names; the host keeps push, review, `flowctl done`, task state, and any history rewrite.** The child never pushes, never rebases or rewrites history, never decides scope, never issues a review verdict, and never spawns a bridge of its own. On return the host reviews the child's commit range from the base it recorded before dispatch, the same range the in-host worker path gets. Drop the never clauses and a bridge recipe becomes an unbounded second agent; forbidding the local commit bought nothing and forced host-inserted turns on long tasks (#431).
 - **Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for genuinely gnarly ones. Spec quality is what makes the trade safe - a vague brief burns the saving on rework.
 
-Full recipes (including the thin-wrapper pattern for unattended loops): the usage guide's `## Orchestration & model steering` section - `flowctl usage`. Make it durable by writing the routing into your instruction file: [Durable routing](#durable-routing--a-model-table-in-claudemd).
+Full recipes (including the thin-wrapper pattern for unattended loops and the timebox-free brief for long bridged tasks): the usage guide's `## Orchestration & model steering` section - `flowctl usage`. Make it durable by writing the routing into your instruction file: [Durable routing](#durable-routing--a-model-table-in-claudemd).
 
 ### Per-spec backend fields: external orchestrators
 
@@ -412,7 +412,7 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 
 | Pattern from the field | The idea | flow-next expression |
 |------------------------|----------|----------------------|
-| **Orchestrator → executor** | The frontier model plans and judges; a cheaper, highly steerable model (the implementer tier, on a subscription you already pay for) writes the code | A `codex exec` bridge recipe, ad hoc or as standing prose in `CLAUDE.md`. Host keeps gating/git/review; the bridged child writes code |
+| **Orchestrator → executor** | The frontier model plans and judges; a cheaper, highly steerable model (the implementer tier, on a subscription you already pay for) writes the code | A `codex exec` bridge recipe, ad hoc or as standing prose in `CLAUDE.md`. Host keeps gating/push/review; the bridged child writes code and commits checkpoints |
 | **Orchestrator → reader** | Token-hungry, low-judgment reads (codebase analysis, doc sweeps) run on fast models that report summaries back - the orchestrator never holds the raw tokens | Already the default: planning scouts and prime scanners run on the fast tiers and return digests. Add `/flow-next:map` for token-efficient exploration |
 | **Cross-family reviewer** | The model that writes is never the model that reviews - uncorrelated blind spots | `review.backend <backend>` - per-task `review:` pins exceptions |
 | **Effort discipline** | Run the orchestrator at high, not max - top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; a bridged child takes its effort inline (`-c model_reasoning_effort=medium` is the recommended floor - raise it for gnarly tasks, and keep `low` for plain CRUD) |
@@ -609,7 +609,7 @@ This page lives in the plugin's doc tree - *outside* the repo you're working in.
 
 Steering is broad but not unbounded - these hold no matter what the routing table says:
 
-- **Judgment stays with the host.** A bridged child writes code; it never owns git, task state, review verdicts, or decisions.
+- **Judgment stays with the host.** A bridged child writes code and commits checkpoints on the branch it was given; it never owns push, history rewrite, task state, review verdicts, or decisions.
 - **Merge needs explicit authority.** Standalone land and flow's authorized land stage use land's bounded license (`--squash --match-head-commit`, full gate tree first). The ready flag and PR existence grant no merge permission.
 - **Verification is independent.** A bridged diff is never trusted on the child's own summary - the host re-runs the gates before `flowctl done`.
 - **Escalation beats thrift.** Downgrade defaults are A/B-verified here; when you downgrade a role yourself, watch the first outputs and revert on the first quality miss.
