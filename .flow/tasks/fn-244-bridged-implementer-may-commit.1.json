@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-14T07:32:54.558519Z",
+  "depends_on": [],
+  "id": "fn-244-bridged-implementer-may-commit.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-244-bridged-implementer-may-commit",
+  "spec_path": ".flow/tasks/fn-244-bridged-implementer-may-commit.1.md",
+  "status": "todo",
+  "title": "Implement Bridged implementer may commit checkpoints; timebox-free brief for long bridged tasks (#431)",
+  "updated_at": "2026-09-14T07:32:54.558519Z"
+}

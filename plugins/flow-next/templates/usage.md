@@ -46,7 +46,7 @@ flow-next skills are prompts the host agent executes — so you (the host) can r
 
 **Tiers and reach.** A **tier** is what kind of model a job wants — `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model, and the majority). **Reach** is how *this* harness gets one: the in-session model, an in-host subagent, another CLI over a bridge, or not available. Write your preferences once as `<tier>: <model>` (optionally `at <effort>`) in `CLAUDE.md` / `AGENTS.md` — `/flow-next:setup` scaffolds the block commented out, and the model names are yours, verified against your own account. Routing precedence, highest first: an explicit argument in the invocation, then that routing block, then the agent definition's own default, then the session model — a model this harness cannot reach falls back to the session model, says so once, and continues. Tier definitions: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants); per-harness reach: [`docs/reach/`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/reach/README.md).
 
-**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). **Safety rule for every recipe below: the bridged child writes code; the host keeps git, judgment, and the verdict.** The child never commits, never decides scope, never issues a review verdict, and never spawns a bridge of its own.
+**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). **Safety rule for every recipe below: the bridged child writes code and may commit checkpoints on the branch the host names; the host keeps push, review, `flowctl done`, task state, and any history rewrite.** The child never pushes, never rebases or rewrites history, never decides scope, never issues a review verdict, and never spawns a bridge of its own. A local commit is reversible and reviewable; push, rewrite, scope, and verdict are the bounds that matter.
 
 ```bash
 # codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
@@ -59,6 +59,9 @@ codex exec -s read-only --skip-git-repo-check "<self-contained investigation pro
 # suppresses the silent-refusal failure mode, never the safety check:
 [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "<intended-repo-root>" ] && \
 codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null  # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+# workspace-write keeps .git/ READ-ONLY: `git commit` fails with "index.lock: Read-only file system" (verified on 0.153.4).
+# A child that should commit checkpoints (long-task brief below) runs `--sandbox danger-full-access` inside the
+# repo root you just asserted; a run that must stay in workspace-write uses the one-run-per-scope-unit fallback.
 
 # cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
 # Run it INSIDE a git repo (`git init` scratch dirs first): in a non-repo dir it blocks on an
@@ -81,6 +84,19 @@ The codex bridge also works FROM a Codex host (same-family self-bridge): `codex 
 **Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for the genuinely gnarly ones. Spec quality is what makes that trade safe — a vague brief burns the saving on rework.
 
 **Thin-wrapper recipe:** a quick interactive bridge call can stay raw. For a long-running, unattended, or parallel bridge, dispatch a thin fast-tier subagent that composes the self-contained prompt, runs the bridge **in the foreground**, verifies non-empty/parseable output, repairs environment or flag failures once, and returns only a digest. The wrapper never changes the task, model, or verdict and never delegates recursively; judgment stays with the host.
+
+**Long bridged tasks: the host's return handling and the brief.** Record the base commit before dispatch (`git rev-parse HEAD`). On return, review the child's commit range from that base (`<base>..HEAD`, the same range the in-host worker path gets), run the gates on that diff, and decide as the host whether the checkpoints squash or stay. The brief for a task that runs for hours states the branch and commit convention, the checkpoint unit, the five never clauses, and one return condition. Do **not** add a timebox or a "stop cleanly if you run out of room" line: it teaches the child to return partial, and every partial return costs a fresh context and a re-brief (one task took 19 dispatches this way, #431).
+
+```text
+Branch: <branch>, already checked out. Commit each completed scope unit (one spec step or one
+commit-sized unit) as a checkpoint on this branch: git add -A && git commit -m "<type>(<scope>): <what>".
+Never push. Never rebase, amend, or rewrite history. Never change the scope. Never issue a review
+verdict. Never spawn another agent or bridge. Return only when this scope is done or blocked, with
+the commit list and anything blocked. If the sandbox denies git commit, leave the tree as it is and
+say so in your digest.
+```
+
+Sandbox that denies commits (read-only, or `workspace-write` on codex): fall back to one run per scope unit with the host committing between runs; the child reports the denied commit in its digest rather than returning a silently dirty tree.
 
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 

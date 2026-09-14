@@ -47,6 +47,7 @@ the session model with one notice. Host review is the exception: preserve its
 fresh-context, tool-enforced read-only, cross-family requirement and fail closed
 if unavailable. Reviews through other backends retain their existing contracts.
 Escalate an inadequate cheaper implementation within the authorized scope.
-Unattended bridge calls use the thin-wrapper recipe in `flowctl usage`; the host
-keeps git, judgment, and verdict ownership.
+Unattended bridge calls use the thin-wrapper recipe in `flowctl usage`; the
+bridged child may commit checkpoints on the named branch, and the host keeps
+push, history rewrite, review, task state, and verdict ownership.
 <!-- flow-next:model-routing:end -->
