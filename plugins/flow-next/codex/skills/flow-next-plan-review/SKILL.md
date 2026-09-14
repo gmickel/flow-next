@@ -146,6 +146,15 @@ backend, a `MAJOR_RETHINK` escalated as `BLOCKED: DESIGN_CONFLICT`, a
 with a `NEEDS_WORK` neither fixed in the current spec nor re-entered into the
 same backend has broken this.
 
+**Maintainability pointer.** The verdict's `maintainability:` block is
+advisory and lives in the verdict artifact. When either key names a finding
+(anything other than `none identified`), append one line to the current
+spec's `## Decision Context` with `spec set-plan` in the round the finding
+arrived, whatever the verdict: `Maintainability (plan review): duplication -
+<finding or none identified>; structure - <finding or none identified>`. Both
+keys `none identified` writes nothing; a verdict without the block reads as
+"not asked", never as "no risk". No new section, no new flag.
+
 Recovery after context compaction:
 
 ```bash

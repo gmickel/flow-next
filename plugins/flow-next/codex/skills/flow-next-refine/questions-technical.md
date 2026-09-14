@@ -22,6 +22,13 @@ Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
 - For parallel work: can tasks touch disjoint files? (reduces merge conflicts)
 - For task sizing: can sequential steps be combined into M-sized tasks? (avoid over-splitting)
 
+## Maintainability (ask once)
+
+Ask both questions once, each answered concretely or "none identified"; the answers land in `## Decision Context` through the normal write-back, never in a new section or behind a new flag. Name the duplication or the structural fact and stop: "could be cleaner" and any recommendation to add an abstraction are out of scope, and a future requirement nobody stated is not evidence.
+
+- Duplication: does this plan make the same edit, or the same decision, in more than one place?
+- Structure: does the plan add a back-edge against the intended dependency direction, or add branching to a function that is already the hottest in its module?
+
 ## Error Handling & Failure Modes
 
 - What can go wrong?

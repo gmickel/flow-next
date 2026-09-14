@@ -32,6 +32,8 @@ Generating a change is only part of the work. Someone still has to clarify the r
 
 Flow-Next makes that work repeatable. A spec preserves intent beyond the chat. Focused workers reread it before implementing. Review and live QA examine the result, and the PR connects changes to their requirements and evidence. Start with one change, then adapt the same workflow to a team or an unattended backlog.
 
+The pipeline proves the change does what was asked and records what it did; it does not prove the codebase stays maintainable. Plan review and the technical refine pass ask two structural questions while the change is still a plan (does it make the same edit twice, does it bend a dependency direction) and record the answer; measuring what happened to the code after the fact is separate, later work.
+
 The [evidence page](https://flow-next.dev/project/evidence/) covers the measured problem behind this approach, field use, and internal evaluations. [One real change through review](plugins/flow-next/docs/worked-example.md) shows what the workflow produced in this repository.
 
 ## What you get

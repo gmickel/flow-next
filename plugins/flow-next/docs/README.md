@@ -2,6 +2,8 @@
 
 The offline-resilient reference for flow-next. Every file here is self-contained and readable without a network, and every cross-link is a relative repo path so a fork keeps working.
 
+The pipeline proves the change does what was asked and records what it did; it does not prove the codebase stays maintainable.
+
 ## Start here by intent
 
 | You want to know | Read |
