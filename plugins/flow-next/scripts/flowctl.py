@@ -35630,13 +35630,33 @@ def cmd_start(args: argparse.Namespace) -> None:
                 use_json=args.json,
             )
 
-        # Validate task is in todo status (unless --force or resuming own task)
+        # fn-204 (#369, #370): a same-actor in_progress claim is contention,
+        # not a resume. Two runs by one person on one clone (a second
+        # terminal, a scheduled tick, a shared checkout) share the actor
+        # string, so the second run's start used to read as a crash resume
+        # and dispatched a second worker onto a live task. Refuse exactly as
+        # a foreign claim does; --reclaim is the one explicit resume path
+        # (passed after the caller confirmed the prior run ended), and
+        # --force keeps its takeover meaning.
+        if (
+            not args.force
+            and not reclaim_flag
+            and status == "in_progress"
+            and existing_assignee == current_actor
+        ):
+            error_exit(
+                f"Cannot start task {args.id}: already in_progress under "
+                f"'{existing_assignee}' (this actor) - another run may be live on it. "
+                f"Confirm that run ended, then re-run with --reclaim to resume; "
+                f"otherwise leave it.",
+                use_json=args.json,
+            )
+
+        # Validate task is in todo status (unless --force or --reclaim on an
+        # in_progress task: own claim after the caller's evidence check, or
+        # another identity's claim as repair).
         if not args.force and status != "todo":
-            # Allow resuming your own in_progress task, or repairing the
-            # claimant of an in_progress task via --reclaim.
-            resuming_own = status == "in_progress" and existing_assignee == current_actor
-            repairing = reclaim_flag and status == "in_progress"
-            if not (resuming_own or repairing):
+            if not (reclaim_flag and status == "in_progress"):
                 error_exit(
                     f"Cannot start task {args.id}: status is '{status}', expected 'todo'. "
                     f"Use --force to override.",
@@ -55493,7 +55513,10 @@ def main() -> None:
     p_start.add_argument(
         "--reclaim",
         action="store_true",
-        help="Rewrite the claimant of a task claimed by another identity (identity repair, not a takeover)",
+        help=(
+            "Resume an in_progress task deliberately: your own claim after confirming "
+            "the prior run ended, or another identity's claim as repair (not a takeover)"
+        ),
     )
     p_start.add_argument("--note", help="Claim note (e.g., reason for taking over)")
     p_start.add_argument("--json", action="store_true", help="JSON output")

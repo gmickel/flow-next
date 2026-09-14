@@ -49,26 +49,28 @@ else
 fi
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 NOTES_DIR="$NOTES_PARENT/flow-notes/<spec-id>-$RUN_ID"
-# Remove any stale pointer FIRST - an interrupted earlier run can leave
-# .flow/tmp/notes_dir behind, and 3c reads the FILE: if this run's mkdir
-# then failed, workers would inherit the abandoned run's directory (and 3f
-# cleanup would delete it). Clearing only the shell variable has broken this.
-rm -f .flow/tmp/notes_dir
+# The pointer file is keyed by RUN_ID: a second concurrent run on this
+# checkout writes its own pointer, so neither run reads, overwrites, or
+# cleans up the other's. Never write an unkeyed .flow/tmp/notes_dir.
+NOTES_POINTER=".flow/tmp/notes_dir.$RUN_ID"
 if mkdir -p "$NOTES_DIR" \
    && mkdir -p .flow/tmp \
-   && printf '%s' "$NOTES_DIR" > .flow/tmp/notes_dir; then
-  : # Pointer persisted - bash variables do not survive prompt turns.
+   && printf '%s' "$NOTES_DIR" > "$NOTES_POINTER"; then
+  echo "RUN_ID=$RUN_ID"   # record this literal - every later step keys on it
 else
   NOTES_DIR=""
 fi
 ```
 
-The path embeds a timestamp and PID, so it cannot be re-derived later:
-every later consumer (the 3c pointer lines, 3f cleanup) re-reads it via
-`$(cat .flow/tmp/notes_dir)` instead of assuming the shell variable
-survived. `.flow/tmp/notes_dir` is runtime state under `.flow/tmp` (already
-outside the receipts discipline) and is removed together with the notes
-directory at 3f cleanup.
+`RUN_ID` is the one value this run carries across prompt turns: record the
+literal the block printed. The notes path embeds a timestamp and PID, so it
+cannot be re-derived later; every later consumer (the 3c pointer lines, 3f
+cleanup) re-reads it via `$(cat .flow/tmp/notes_dir.<RUN_ID>)` instead of
+assuming the shell variable survived. A pointer left behind by an interrupted
+earlier run has a different `RUN_ID` and is never read, so no stale-pointer
+clearing runs here. `.flow/tmp/notes_dir.<RUN_ID>` is runtime state under
+`.flow/tmp` (already outside the receipts discipline) and is removed together
+with the notes directory at 3f cleanup.
 
 If creation OR the pointer persist fails (the two are one failure mode: a
 surface whose pointer never landed is unreachable by 3c's file read), set
@@ -194,7 +196,10 @@ $FLOWCTL start <task-id> --json
 If a claim fails, do not dispatch that task: drop it from this admission event
 (it may become admissible again at a later event; recompute from ground
 truth). A failed claim can also mean another run owns the task: claims are spec-scoped in the shared runtime state store, and
-contention fails closed. Never clear or steal another run's claim. Retain
+contention fails closed - including a same-actor refusal (`flowctl start`
+refuses an `in_progress` task held by this same actor without `--reclaim`,
+and this loop never passes the flag: a second run of this actor is live on
+the task). Never clear or steal another run's claim. Retain
 every successfully claimed task; never abandon a task this conductor already
 moved to `in_progress`.
 
@@ -229,8 +234,9 @@ as written there:
   returns the parallel handover. Review and completion are conductor-owned
   for every backend (3d) - the conductor RECORDS each task's resolved
   `REVIEW_MODE` at dispatch and applies it itself after integration.
-- **Notes pointer line:** when `.flow/tmp/notes_dir` exists, re-read the
-  path (`NOTES_DIR="$(cat .flow/tmp/notes_dir)"` - never assume the 3.0
+- **Notes pointer line:** when `.flow/tmp/notes_dir.<RUN_ID>` exists (the
+  `RUN_ID` recorded at 3.0), re-read the path
+  (`NOTES_DIR="$(cat .flow/tmp/notes_dir.<RUN_ID>)"` - never assume the 3.0
   shell variable survived intervening prompt turns) and append one line to
   the 3c prompt template (after the config lines, before "Follow your
   phases"). A MISSING pointer file means this run has no notes surface
@@ -401,13 +407,21 @@ outcome instead, never here. At quiesce:
    its timing shifts to quiesce, never its semantics.
 
 Then continue with Phase 4 (quality) and Phase 5 (ship). **The notes
-directory outlives quiesce**: delete it only as the run's LAST cleanup step -
-re-read the path from the persisted file
-(`NOTES_DIR="$(cat .flow/tmp/notes_dir)"`; the 3.0 shell variable has not
-survived this many prompt turns), then
-`rm -r "$NOTES_DIR" && rm -f .flow/tmp/notes_dir` when non-empty - after
-Phase 5 completes cleanly
-- a quality or ship failure is not a clean completion, and its diagnostic
+directory outlives quiesce**: delete it only as the run's LAST cleanup step,
+after Phase 5 completes cleanly, and only this run's own - re-read the path
+from the pointer keyed by the `RUN_ID` recorded at 3.0 (the shell variable
+has not survived this many prompt turns); a sibling run's pointer and directory
+are never touched:
+
+```bash
+NOTES_POINTER=".flow/tmp/notes_dir.<RUN_ID>"   # the RUN_ID recorded at 3.0
+if [ -s "$NOTES_POINTER" ]; then
+  NOTES_DIR="$(cat "$NOTES_POINTER")"
+  rm -r "$NOTES_DIR" && rm -f "$NOTES_POINTER"
+fi
+```
+
+A quality or ship failure is not a clean completion, and its diagnostic
 notes must still exist. On an interrupted or escalated run leave the directory
 in place (inert prose, removable by hand).
 
