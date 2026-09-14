@@ -119,7 +119,12 @@ license — judgment governs there (spec Decision Context).
 
 The worker prompt for the minted task carries a broad license: parallel implementation
 of independent surfaces, background research, scouting — the SHAPE is chosen by the
-harness at execution time, never prescribed here. A host without nested dispatch
+harness at execution time, never prescribed here. The holder is the owner wherever the
+owner runs: the in-host worker on the standard path, or the bridged child when
+worker.md's Phase 1b hands the task over a CLI bridge — the long-task brief in
+`flowctl usage` carries the same license, and the worker passes this paragraph through
+to the child verbatim. Wrappers, scouts, and conductors never fan out on the owner's
+behalf (STRATEGY.md, "The owner holds the license"). A host without nested dispatch
 degrades to serial, never errors; no capability probing. Commit ownership unchanged:
 the worker is the only committer; `git add -A` and the single-commit convention stand;
 hand subagents disjoint surfaces or serialize. Join barrier: every dispatched subagent

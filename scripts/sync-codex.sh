@@ -567,6 +567,10 @@ if [ -f "$phases" ]; then
     cat >> "${phases}.tmp" << 'SECTION3C'
 ### 3c. Run Worker Agent(s)
 
+Implementation is the **implementer** tier: absent any preference, the worker runs on the session model. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches a non-session model — and what the degradation is when it cannot — lives in its reach page (`plugins/flow-next/docs/reach/`), never here.
+
+**When the implementer tier resolves to a model this harness reaches only over a CLI bridge, the worker bridges and the conductor never does.** The dispatch below is unchanged: the worker resolves the tier itself (worker Phase 1b), hands the task to the bridged child with the usage guide's brief, and reviews the child's commit range before its own review dispatch. The bridged child owns the task and its own delegation; a conductor that composed a brief, ran a bridge call, or fanned out on the implementer's behalf has broken this.
+
 Use the **worker** agent role to implement each selected task. For a multi-task
 wave, create one isolated mutable workspace and task-unique summary/evidence
 paths per worker, then dispatch the selected workers concurrently. For a
@@ -678,7 +682,9 @@ SECTION3C
   # a failure here means: update SECTION3C, never relax the guard.
   for dispatch_field in \
     "FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target" \
-    "TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on"; do
+    "TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on" \
+    "Implementation is the **implementer** tier" \
+    "the worker bridges and the conductor never does"; do
     if ! grep -qF "$dispatch_field" "$phases"; then
       echo "SYNC-FAIL: mirror phases.md 3c lost dispatch field: $dispatch_field (update SECTION3C in sync-codex.sh)" >&2
       exit 1

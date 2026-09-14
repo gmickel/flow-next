@@ -1,0 +1,33 @@
+{
+  "branch_name": "fn-245-bridge-child-owns-the-task-worker",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-09-14T10:16:49.480119Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-245-bridge-child-owns-the-task-worker",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "spec_path": ".flow/specs/fn-245-bridge-child-owns-the-task-worker.md",
+  "status": "open",
+  "title": "Bridge child owns the task: worker bridge path, fan-out license restored, July codex caveats retired",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-14T10:18:53.861582Z"
+}

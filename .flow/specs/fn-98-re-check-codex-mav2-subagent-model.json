@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-98-re-check-codex-mav2-subagent-model.md",
-  "status": "open",
+  "status": "done",
   "title": "Re-check codex MAv2 subagent model steering fixes (watch, ~2026-07-22)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-07T11:40:07.190612Z"
+  "updated_at": "2026-09-14T10:34:00.868173Z"
 }

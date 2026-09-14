@@ -7,16 +7,16 @@ How this harness obtains a model for a [tier](../orchestration.md#tiers-what-kin
 | Mechanism | Here |
 |---|---|
 | In-session model | **Yes** - chosen in the harness; the default executor for every unset tier. |
-| In-host subagent | **Yes, but model selection on the spawn path is not dependable** on current builds: an explicit per-spawn model or effort can be dropped silently, and whether a role profile was applied is not verifiable from inside the run. Treat a subagent's model as best-effort and record what actually ran. |
-| Shell out to another CLI | **Yes**, and this is the dependable way to steer a model here - a fresh non-interactive run of a CLI takes its model and effort on the command line, so nothing can strip them. It works with this harness's own CLI (same family, different model) and with another vendor's. Two conditions: the parent sandbox must allow spawning a process and reaching the network, and the child prompt stays flat - a child that fans out subagents of its own can return a result the parent cannot decode. |
+| In-host subagent | **Yes.** Model and effort steering on `spawn_agent` works on both paths since codex-cli 0.146.0 (fn-98, measured 2026-08-03 from the child thread's rollout `turn_context`, never from the child's self-report). Precedence: a role's declared `model` / `model_reasoning_effort` wins over an explicit spawn parameter; where the role declares no model, the explicit parameter applies; with no `agent_type`, the explicit parameter applies and `reasoning_effort` may be set alone; the explicit `model` parameter accepts a shorter list than a role can pin. Two dispatch gotchas: `agent_type` takes the role's `name` (hyphenated), not the `[agents.<key>]` table key; `agent_type` requires `fork_turns: "none"`. A role's `sandbox_mode` is not enforced - a child inherits its parent's sandbox in both directions, so read-only is prompt-only here and containment comes from the parent launch flag (`codex -s read-only`). There is no in-band receipt of the effective model; pin, record what ran, and re-probe out of band. |
+| Shell out to another CLI | **Yes.** A fresh non-interactive run of a CLI takes its model and effort on the command line, so nothing can strip them. It works with this harness's own CLI (same family, different model) and with another vendor's. One condition: the parent sandbox must allow spawning a process and reaching the network. Watch (2026-09-14) on the child's own fan-out: openai/codex#33267, a `codex exec` parent unable to decode the result of a child that spawned subagents, is still open upstream and reported on codex-cli 0.144 to 0.145 with the gpt-5.6 family; its minimal repro ran clean 3 of 3 on codex-cli 0.153.4 with gpt-6-astra, and 17 exec-originated spawning runs with 23 spawning child threads in September 2026 returned zero decode errors. A bridged child on a current build may fan out; on a build in the reported range, keep the child prompt flat. |
 
 ## What is unavailable
 
-Dependable per-spawn model steering. Nothing else is missing; the shell-out route covers the same intent.
+An in-band receipt of the model a subagent ran on, and a role-level sandbox narrowing. Nothing else is missing.
 
 ## Degradation
 
-When a tier cannot be honored on the spawn path, the work runs on the session model (or via a shelled-out run, when one is available) and the fallback is stated once. A preference is never recorded as if it were an observation.
+When a tier names a model neither path can reach, the work runs on the session model and the fallback is stated once. A preference is never recorded as if it were an observation.
 
 ## Models observed (2026-09-05)
 
