@@ -129,9 +129,17 @@ in [wave-join.md](wave-join.md)).
 **Bridged implementer path** (worker.md "Bridged implementer": the implementer tier
 resolves to a model the harness reaches by CLI bridge): the license narrows. Parallel
 implementation of independent surfaces means parallel bridge calls on disjoint
-surfaces, each with its own pointer prompt and the same long-task brief, awaited and
-reconciled before `git add -A` (the usage guide's thin-wrapper recipe where the host
-has nested dispatch; serial otherwise). Background research and scouting do not apply:
-the child re-anchors and investigates in its own context, so a scout fan-out that
-pre-digests the repo for it spends session-model context the child re-reads anyway
-(observed on a live run, #431). Commit ownership and the join barrier stand unchanged.
+surfaces, and because every child's long-task brief orders `git add -A` checkpoint
+commits, concurrent children never share a checkout: disjoint files still share one
+Git index, so one child would stage and commit another's unfinished edits. Each
+concurrent child gets its own isolated workspace and its own branch (the same
+isolation the conductor gives a wave worker), its brief names that branch, and the
+worker integrates every returned branch onto the task branch after all children have
+returned and before verification (the usage guide's thin-wrapper recipe where the host
+has nested dispatch). A host without nested dispatch, or a worker that keeps the shared
+checkout, runs the bridge calls serially. Background research and scouting do not
+apply: the child re-anchors and investigates in its own context, so a scout fan-out
+that pre-digests the repo for it spends session-model context the child re-reads
+anyway (observed on a live run, #431). Commit ownership on the task branch is
+unchanged: a child commits only on the branch its brief names, the worker is the only
+committer on the task branch, and the join barrier binds the integration step.

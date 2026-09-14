@@ -8,13 +8,75 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-245-worker-bridged-implementer-path-431",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-245-worker-bridged-implementer-path-431.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d41cfec5d419fa7ac72747bf0330c75627fffe1ff391e97a6c9718a30eb9e3a9",
+      "backend": "codex",
+      "base_sha": "6887375522ede1d2ad64f654bb6da11eaa3b0f8d",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-c39ccf27fe708857612ee25e38a6d77c",
+            "classification": "introduced",
+            "findingId": "finding-c39ccf27fe708857612ee25e38a6d77c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b52beb609618a2f78243353340497b43",
+            "classification": "introduced",
+            "findingId": "finding-b52beb609618a2f78243353340497b43",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "85204f010f75f3223dae5b1c3db3d7a6621d1622",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3566,
+      "output_sha256": "57e5f90796fea578f65796655aa0118056cbee9c081cac125dbfa055ba578f39",
+      "reservation_id": "f310c0b3624a4f5da060beca63663072",
+      "round_consumed": true,
+      "scope": "impl:fn-245-worker-bridged-implementer-path-431.1",
+      "superseded_by": null,
+      "task": "fn-245-worker-bridged-implementer-path-431.1",
+      "timestamp": "2026-09-14T08:34:52.684186Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-245-worker-bridged-implementer-path-431.1": 0
+  },
   "spec_path": ".flow/specs/fn-245-worker-bridged-implementer-path-431.md",
   "status": "open",
   "title": "Worker bridged implementer path (#431 follow-up)",
@@ -29,5 +91,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T08:21:07.850449Z"
+  "updated_at": "2026-09-14T08:34:52.686603Z"
 }
