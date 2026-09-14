@@ -321,6 +321,10 @@ When the sentinel prints, read [references/tracker-touchpoints.md](references/tr
 
 ### 3c. Run Worker Agent(s)
 
+Implementation is the **implementer** tier: absent any preference, the worker runs on the session model. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches a non-session model — and what the degradation is when it cannot — lives in its reach page (`plugins/flow-next/docs/reach/`), never here.
+
+**When the implementer tier resolves to a model this harness reaches only over a CLI bridge, the worker bridges and the conductor never does.** The dispatch below is unchanged: the worker resolves the tier itself (worker Phase 1b), hands the task to the bridged child with the usage guide's brief, and reviews the child's commit range before its own review dispatch. The bridged child owns the task and its own delegation; a conductor that composed a brief, ran a bridge call, or fanned out on the implementer's behalf has broken this.
+
 Use the **worker** agent role to implement each selected task. For a multi-task
 wave, create one isolated mutable workspace and task-unique summary/evidence
 paths per worker, then dispatch the selected workers concurrently. For a
@@ -367,6 +371,7 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
+IMPLEMENTER: <model> at <effort>
 FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
@@ -387,6 +392,8 @@ conductor cannot act mid-flight, so the cap is applied at its next control
 point — the worker's return, the host's own tool timeout or error, or a lost
 result — where 3d's side-effects rule classifies whatever the lane left
 behind.
+
+`IMPLEMENTER` is optional and carries the invocation's explicit implementer model (and effort) only — the highest rung of the routing precedence, which the fresh-context worker cannot otherwise see. Pass it when the user named an implementer in the moment; omit it when the project routing block or the session model should decide. The conductor passes the value and never bridges, composes a brief, or resolves reach itself.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 

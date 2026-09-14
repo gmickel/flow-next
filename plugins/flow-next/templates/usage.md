@@ -79,7 +79,7 @@ grok -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null 
 grok --always-approve --no-plan -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Ask the CLI what it offers (`grok --help`, host catalog) rather than copying an identifier from a doc.
 ```
 
-The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m <model> -c model_reasoning_effort=<effort> "<prompt>"` steers a different tier of the same family reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
+The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m <model> -c model_reasoning_effort=<effort> "<prompt>"` steers a different tier of the same family. It is one route, not the only one. Since codex-cli 0.146.0, `spawn_agent` model and effort steering works on both the role path and the explicit-parameter path (fn-98, read from the child rollout's `turn_context`; the codex reach page carries the precedence rule and the two dispatch gotchas). Watch (2026-09-14): openai/codex#33267, a `codex exec` parent unable to decode the result of a child that fanned out subagents, is still open upstream and reported on codex-cli 0.144 to 0.145 with the model family the issue names. Its minimal repro ran clean 3 of 3 on codex-cli 0.153.4 with this harness's current model (the identifier is on the codex reach page, which names no model here by design), and 17 exec-originated spawning runs with 23 spawning child threads in September 2026 returned zero decode errors. A bridged child on a current build may fan out; on a build in the reported range, keep the child prompt flat.
 
 **Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for the genuinely gnarly ones. Spec quality is what makes that trade safe — a vague brief burns the saving on rework.
 
@@ -91,10 +91,16 @@ The codex bridge also works FROM a Codex host (same-family self-bridge): `codex 
 Branch: <branch>, already checked out. Commit each completed scope unit (one spec step or one
 commit-sized unit) as a checkpoint on this branch: git add -A && git commit -m "<type>(<scope>): <what>".
 Never push. Never rebase, amend, or rewrite history. Never change the scope. Never issue a review
-verdict. Never spawn another agent or bridge. Return only when this scope is done or blocked, with
-the commit list and anything blocked. If the sandbox denies git commit, leave the tree as it is and
-say so in your digest.
+verdict. Never spawn another bridge. You own delegation for this scope: parallel implementation of
+independent surfaces, background research, scouting - the shape is yours to choose at execution time,
+and a host without nested dispatch degrades to serial, never errors. You are the only committer: hand
+subagents disjoint surfaces or serialize, and await and reconcile every subagent before staging,
+verification, and commit. Return only when this scope is done or blocked, with the commit list, the
+number of subagents you dispatched, and anything blocked. If the sandbox denies git commit, leave the
+tree as it is and say so in your digest.
 ```
+
+The never-list bounds push, history, scope, verdict, and a nested bridge, never the owner's own delegation. The delegation sentences are the judicious-subagent license the in-host worker holds on the no-plan route, so whoever implements owns delegation wherever it runs (STRATEGY.md, "The owner holds the license"). "Never spawn another agent" was a widening that shipped in #436 and is retired; a brief that reinstates it has narrowed the owner without a requirement.
 
 Sandbox that denies commits (read-only, or `workspace-write` on codex): fall back to one run per scope unit with the host committing between runs; the child reports the denied commit in its digest rather than returning a silently dirty tree.
 
