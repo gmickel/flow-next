@@ -134,7 +134,7 @@
     "impl:fn-142-maintainability-questions-at-design.1": 0
   },
   "spec_path": ".flow/specs/fn-142-maintainability-questions-at-design.md",
-  "status": "open",
+  "status": "done",
   "title": "Maintainability questions at design time, and an honest claim",
   "tracker": {
     "baseHashFlow": null,
@@ -147,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:17:40.009904Z"
+  "updated_at": "2026-09-14T17:40:47.392231Z"
 }
