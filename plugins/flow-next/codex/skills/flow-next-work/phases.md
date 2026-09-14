@@ -303,13 +303,6 @@ what licenses the flag. Every other claim runs without `--reclaim`; a same-actor
 contention refusal there means another run of this actor is live on the task -
 fail closed exactly as for a foreign claim, never add the flag to get past it.
 
-For the direct owner admitted for resume in Phase 1 (and only for it), the
-claim is `$FLOWCTL start <owner-id> --reclaim --json`: a plain start refuses an
-`in_progress` task held by this same actor, and the Phase 1 evidence check is
-what licenses the flag. Every other claim runs without `--reclaim`; a same-actor
-contention refusal there means another run of this actor is live on the task -
-fail closed exactly as for a foreign claim, never add the flag to get past it.
-
 If any claim fails, do not dispatch that task. Retain every successfully
 claimed task in the selected wave and recompute only the failed/unclaimed
 membership from ground truth; never abandon a task that this conductor already
