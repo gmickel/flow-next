@@ -11,7 +11,7 @@
   ],
   "id": "fn-142-maintainability-questions-at-design",
   "impl_review_rounds": {
-    "fn-142-maintainability-questions-at-design.1": 1
+    "fn-142-maintainability-questions-at-design.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -71,9 +71,63 @@
       "task": "fn-142-maintainability-questions-at-design.1",
       "timestamp": "2026-09-14T15:11:14.691630Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "aa1d0fa881f752490c9860bd4b57570d6a867e49f460c0923f1fc4be1ff540d8",
+      "backend": "codex",
+      "base_sha": "e0cee32b3e204d6beec59b2ed3d3d02e3e3d086a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-eebacdcfe588a80021c60c756304c1d9",
+            "classification": "introduced",
+            "findingId": "finding-eebacdcfe588a80021c60c756304c1d9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-63a0d53e0e99eb85694c928e4d1f9c90",
+            "classification": "introduced",
+            "findingId": "finding-63a0d53e0e99eb85694c928e4d1f9c90",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "47c218f63e92c1417cd5a937ddfefa4afa0f4146",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1678,
+      "output_sha256": "9e5f711a5c41970bbe1278374ad5d6012bbee16aadb5e70865e4370190ebfa54",
+      "reservation_id": "71dd8dcfe4704593b56a926bd82eca1e",
+      "round_consumed": true,
+      "scope": "impl:fn-142-maintainability-questions-at-design.1",
+      "superseded_by": null,
+      "task": "fn-142-maintainability-questions-at-design.1",
+      "timestamp": "2026-09-14T15:14:02.305967Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-142-maintainability-questions-at-design.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -93,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:11:14.694292Z"
+  "updated_at": "2026-09-14T15:14:02.308278Z"
 }
