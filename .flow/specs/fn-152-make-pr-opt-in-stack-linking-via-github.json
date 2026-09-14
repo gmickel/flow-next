@@ -527,7 +527,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-152-make-pr-opt-in-stack-linking-via-github.md",
-  "status": "open",
+  "status": "done",
   "title": "Dependent-spec chains: branch from the parent, link GitHub stacks",
   "tracker": {
     "baseHashFlow": null,
@@ -541,5 +541,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-85"
   },
-  "updated_at": "2026-09-13T19:15:48.280529Z"
+  "updated_at": "2026-09-14T06:15:22.142030Z"
 }

@@ -872,7 +872,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-149-land-hardening-survive-stacked-pr-auto.md",
-  "status": "open",
+  "status": "done",
   "title": "Land chains and stacks: frontier merge, patch-id carry-over, retarget",
   "tracker": {
     "baseHashFlow": null,
@@ -886,5 +886,5 @@
     "mergeBaseTracker": null,
     "url": "https://linear.app/gmickel/issue/FLOW-83"
   },
-  "updated_at": "2026-09-13T18:02:09.342577Z"
+  "updated_at": "2026-09-14T06:15:21.838822Z"
 }
