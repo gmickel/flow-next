@@ -63,7 +63,7 @@
     "impl:fn-244-bridged-implementer-may-commit.1": 0
   },
   "spec_path": ".flow/specs/fn-244-bridged-implementer-may-commit.md",
-  "status": "open",
+  "status": "done",
   "title": "Bridged implementer may commit checkpoints; timebox-free brief for long bridged tasks (#431)",
   "tracker": {
     "baseHashFlow": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T07:48:56.149786Z"
+  "updated_at": "2026-09-14T08:04:33.315670Z"
 }
