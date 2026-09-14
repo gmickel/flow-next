@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-204-same-actor-claim-contention-refuse-by",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T15:23:03.337823Z",
   "created_at": "2026-08-22T20:15:08.961348Z",
   "default_impl": null,
   "default_review": null,
@@ -129,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:19:42.614912Z"
+  "updated_at": "2026-09-14T15:23:03.337830Z"
 }
