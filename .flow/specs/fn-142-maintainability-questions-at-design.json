@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-142-maintainability-questions-at-design",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T15:17:40.009897Z",
   "created_at": "2026-07-27T20:01:43.354577Z",
   "default_impl": null,
   "default_review": null,
@@ -147,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T15:14:02.308278Z"
+  "updated_at": "2026-09-14T15:17:40.009904Z"
 }
