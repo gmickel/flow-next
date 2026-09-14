@@ -133,9 +133,11 @@ Done when: the anchor bundle has been read, the baseline result is recorded (`gr
 
 **Resolve the implementer tier before Phase 1.5** — routing precedence, highest first: the `IMPLEMENTER` line in your dispatch prompt (the conductor passes it only when the invocation named a model explicitly; you have no other view of the invocation), then the project routing block in the instruction file, then the agent definition's own default, then the session model. How this harness reaches the named model lives in its reach page (`plugins/flow-next/docs/reach/`, or the generic page when the host is undetectable):
 
-- **Session model, or an in-host subagent model** → this phase is inert. Continue with Phase 1.5; the standard phases run unchanged and the summary carries no `implement` stage line.
+- **Session model, or an in-host subagent model** → this phase is inert and ends here. Continue with Phase 1.5; the standard phases run unchanged and the summary carries no `implement` stage line.
 - **A model this harness reaches only by shelling out to another CLI** → this phase runs. You stay the task's worker (anchor, base commit, review dispatch, gates, evidence, `done`), and the bridged child becomes the task's owner: it reads the artifacts, implements, commits, and decides its own delegation.
-- **A named model this harness cannot reach** → fall back to the session model, say so once, record `stage: implement - skipped(reach: <model> unreachable, session model used)` for Phase 5, and continue with Phase 1.5.
+- **A named model this harness cannot reach** → fall back to the session model, say so once, record `stage: implement - skipped(reach: <model> unreachable, session model used)` for Phase 5, and continue with Phase 1.5; this phase ends here.
+
+Everything below in this phase, its Done-when included, binds only the bridged branch.
 
 **Skip Phase 1.5 and every worker-side scout.** The child investigates and delegates for itself; a worker that read Investigation targets, ran the similar-code search, or dispatched scouts before the bridge has done the child's work twice.
 
@@ -156,7 +158,7 @@ Done when: the anchor bundle has been read, the baseline result is recorded (`gr
 
 Under `PARALLEL_WAVE` or `host-deferred` review this phase changes only who wrote the code; the handover and deferral contracts in Phase 5 stand unchanged.
 
-Done when: the tier resolution is recorded as an `implement` stage line, the child's range is committed, reviewed against the ACs, and gated, and no worker-side scouting, parallel bridge, or worktree ran.
+Done when (bridged branch only): the bridge run is recorded as an `implement` stage line, the child's range is committed, reviewed against the ACs, and gated, and no worker-side scouting, parallel bridge, or worktree ran.
 
 ## Phase 1.5: Pre-implementation Investigation
 
@@ -591,7 +593,7 @@ conductor owns both after integration. The existing host-deferred exception
 likewise returns `in_progress` for the conductor's review.
 
 - **Re-anchor first** - the spec is read before anything is implemented
-- **Investigate first** - a task spec with investigation targets has them read before any code
+- **Investigate first (standard path only)** - a task spec with investigation targets has them read before any code; on the Phase 1b bridged path the child reads them, and a worker that read them before the bridge has broken this
 - **No TodoWrite** - flowctl tracks tasks; a TodoWrite task list has broken this
 - **git add -A** - staging is never an explicit file list
 - **One task only** - a commit implementing a task you were not given has broken this
