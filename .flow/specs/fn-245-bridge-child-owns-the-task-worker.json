@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-245-bridge-child-owns-the-task-worker",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-14T10:49:51.748819Z",
   "created_at": "2026-09-14T10:16:49.480119Z",
   "default_impl": null,
   "default_review": null,
@@ -161,5 +161,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-14T10:42:48.388252Z"
+  "updated_at": "2026-09-14T10:49:51.748827Z"
 }
