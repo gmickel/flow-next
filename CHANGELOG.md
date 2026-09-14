@@ -4,9 +4,9 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
-## Unreleased
+## [flow-next 5.5.0] - 2026-09-14
 
-Anyone who runs two flow-next sessions as the same person on one clone (a second terminal, a scheduled `flow --auto` tick, a second machine on a shared checkout) stops getting two workers silently dispatched onto one task. `flowctl` identifies a claimant by git email, so until now a second run's `flowctl start` on a task the first run was mid-flight on read as a crash resume and went ahead; nothing errored. The second run now fails loudly instead of stealing, and a genuine crash resume stays one step.
+Two gaps closed in how the pipeline treats your own process. Before code exists, plan review and the technical refine pass now ask whether the plan repeats an edit or a decision and whether it bends the intended dependency direction, and the public claim states plainly what the pipeline does not prove about maintainability. And anyone who runs two flow-next sessions as the same person on one clone (a second terminal, a scheduled `flow --auto` tick, a second machine on a shared checkout) stops getting two workers silently dispatched onto one task: the second `flowctl start` refuses with a typed error instead of reading as a crash resume, and a genuine crash resume stays one explicit step.
 
 ### Changed
 
