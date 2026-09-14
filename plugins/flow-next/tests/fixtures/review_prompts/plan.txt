@@ -69,6 +69,7 @@ Task count, task decomposition, and dispatch shape are the owner's and the orche
 6. **Scope** - Is the requirement right-sized? Over/under-engineering? Overengineering is a FINDING, not a taste note: flag (a) any task or surface not traceable to a stated requirement (extra commands, export/import paths, detection hooks, config knobs "for later"); (b) risk-management machinery (trust/consent layers, caps, scanners, secondary state stores) where the risk could be eliminated structurally (closed schema, inert format, capability not exposed); (c) N-way generality where the request names one concrete case. Scope-minimality never trims rigor: error/negative-case enumeration per AC must stay complete — flag the plan if minimality was achieved by dropping error handling or by dropping filesystem-identity, permission, or concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state).
 7. **Testability** - How will we verify this works?
 8. **Consistency** (only when task specs are supplied) - Do task specs align with epic spec? Are `**Touches:**` declarations plausible against each task's Files/Approach, and do any two dep-independent tasks' Touches sets overlap (overlaps force serial dispatch - flag the pair)? On a multi-task spec, a dep-independent task missing its `**Touches:**` line is a finding to flag (omission silently forces serial dispatch; the plan skill mandates the line on every task — uncertain → declare WIDER, never omit).
+9. **Maintainability** - Answer two questions from the plan as written, each with a concrete finding or "none identified": (a) **Duplication** - does this plan make the same edit, or the same decision, in more than one place? (b) **Structure** - does the plan add a back-edge against the intended dependency direction, or add branching to a function that is already the hottest in its module? Name the duplication or the structural fact and stop: "could be cleaner" and any recommendation to add an abstraction are out of scope, and a future requirement nobody stated is not evidence. A maintainability finding alone is advisory; it contributes to NEEDS_WORK only when it names concrete duplication already in the plan, a named back-edge, or a named function absorbing the new branching.
 
 ## Verdict Scope
 
@@ -129,6 +130,14 @@ Problem:
 Suggestion:
 
 After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
+
+Then emit the maintainability block (advisory; both keys required, each a concrete finding or `none identified`):
+
+```
+maintainability:
+  duplication: <concrete edit or decision made in >1 place in this plan> | none identified
+  structure: <named back-edge or named hot function> | none identified
+```
 
 Be critical. Find real issues.
 
