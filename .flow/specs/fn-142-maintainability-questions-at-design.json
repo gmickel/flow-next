@@ -1,0 +1,33 @@
+{
+  "branch_name": "fn-142-maintainability-questions-at-design",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-07-27T20:01:43.354577Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [
+    "fn-159-convergence-aware-review-terminals-and"
+  ],
+  "id": "fn-142-maintainability-questions-at-design",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-142-maintainability-questions-at-design.md",
+  "status": "open",
+  "title": "Maintainability questions at design time, and an honest claim",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-14T14:53:19.590810Z"
+}
