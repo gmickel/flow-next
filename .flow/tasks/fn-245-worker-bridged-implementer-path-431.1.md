@@ -16,6 +16,8 @@ baseline: green (python3 scripts/run_tests_parallel.py suite_rc=0; uvx ruff@0.16
 
 stage: impl-review - ran (codex, 3-draw fan-out round 1 NEEDS_WORK -> single-dispatch round 2 SHIP; findings fixed: concurrent checkpointing children need isolated workspaces and branches, dirty tree committed before range inspection)
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+
 Follow-up noted, not built: the mirror's `worker.toml` carries the canonical repo path `plugins/flow-next/docs/reach/` as a code span (agent bodies rewrite only `](../docs/` links); harmless in prose, but a Codex-relative pointer would read better.
 ## Evidence
 - Commits: 85204f010f75f3223dae5b1c3db3d7a6621d1622, c6a4872f23bb09f2f9c8ebd2ffa839103921ad2d
