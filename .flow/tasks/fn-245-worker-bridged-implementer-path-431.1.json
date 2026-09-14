@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-14T08:21:53.578663Z",
+  "depends_on": [],
+  "id": "fn-245-worker-bridged-implementer-path-431.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-245-worker-bridged-implementer-path-431",
+  "spec_path": ".flow/tasks/fn-245-worker-bridged-implementer-path-431.1.md",
+  "status": "todo",
+  "title": "Implement Worker bridged implementer path (#431 follow-up)",
+  "updated_at": "2026-09-14T08:21:53.578663Z"
+}
