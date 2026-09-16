@@ -162,3 +162,13 @@ Five to build, each opt-in behind the key with byte-identical behaviour when the
 5. Memory rerank in the memory scout, gated on a human-labeled subset agreeing with the scout labels.
 
 Dropped on evidence: plan vs no-plan Nouls, spec-count tripwire, review preflight, verdict prediction, CI failure class (untestable here), the Noul precedence tree as a router, host-assist hints on intent text.
+
+### Pass 5 (2026-09-17): third scout, tiny boundary, harness/model tier routing
+
+- Third scout resolved 16/18 unstable route samples; 2 stay three-way splits. Route assist re-scored on the held-out third at floor 0.7: 85% coverage at 95% covered accuracy (pass 4's 98% had silently dropped 13 confidence-1.0 samples from its held-out count; corrected). Whole set: 83% coverage at 96%.
+- Tiny vs build is one sample. Rewritten criteria cost 7 coverage for no gain; a direct-change Noul override never fires; a 0.8 floor on those two kinds trades 8 coverage for 1 fix; the cheapest fix is masking lifecycle kinds on non-live views (1 fix, 2 coverage, no extra call). Adopted.
+- Tier routing, labels of record are model judgment: 121 task fixtures (56 real done tasks, 65 authored), three blind scouts, unanimous on 97/121, pairwise 0.81-0.95 exact and 1.00 within one tier. Jev Choice over four tiers: 0.91 exact, 121/121 within one tier, held-out 0.92; 0.96 on the unanimous subset, 0.80 on real tasks alone, 65/65 on authored (likely stereotyped). All 11 misses are real tasks on the moderate/intelligent boundary, 6 where the scouts themselves split. Score argmax 0.86 and leans dearer. Code-only file/criteria thresholds 0.24 exact.
+- Confident decisions: mechanical at confidence >= 0.8 is 20/20 correct (held-out 12/12, recall 0.95); long-running at 0.8 is 13/13; "not intelligent" at 0.7 is 51/51. Floor 0.7 covers 73% at 0.99, 0.8 covers 64% at 1.00.
+- Outcome proxy is weak and secondary (Spearman 0.3 vs lines changed, 0.12 vs first-round NEEDS_WORK); none of the 95 verdict tasks is confident-mechanical, so a counterfactual must draw from new work.
+
+Tier-routing verdict: confident mechanical (worker implementer tier) and scout-tier choice are Jev jobs with a bounded failure mode; long-running is a recommendation for the bridge decision; the moderate/intelligent boundary stays with the host. Plug-in points: worker Phase 1b implementer resolution, scout dispatch, bridge decision. Gate before shipping: a 10-task cheap-tier SHIP counterfactual (designed, not run). Added to the build list as item 6.
