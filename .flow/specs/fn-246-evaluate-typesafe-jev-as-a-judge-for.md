@@ -143,3 +143,22 @@ Routing conclusion: the route step is a Jev job as (1) the kind Choice after cod
 - --explain: full recommendation shape from code plus one call in about 0.6 s versus 6-8 s for a sonnet host; the host's why-not prose is better.
 
 Design: lifecycle rows decided by code first; one Jev call carrying the kind Choice (starting-state plus positive-signal criteria) and the anchored Nouls; kind at or above 0.7 routes and quotes its firing Noul as the Signal line; below the floor or none_of_the_above the host decides with the top-3 as candidates and never receives the raw Nouls; modifiers (plan asked, staged PRs, separate owners, research names, repro) from code and fact-grade Nouls. Verdict: a value add for unattended runs and hosts that would spend a turn on routing (removes the route step for five inputs in six and never decides the sixth), and for cross-host consistency; not a value add for an attended session on a capable host. Before shipping: a third scout on the 18 unstable issue/PR samples, and the tiny-vs-build boundary tightened in the matrix text or handed to the host below 0.8.
+
+### Record of passes and the build list (as of 2026-09-17)
+
+Passes run, all in the private eval study `jev-pipeline-judge-2026-09` (report.md, report_v2.md, report_v3.md, report_v4.md, records per pass):
+
+1. Five pipeline-variation sites over 49 samples; plumbing proven, naive row picker disproved.
+2. Evidence fixes plus six deferred sites with real ground truth where it exists; baselines and per-class metrics; the win/lose pattern (facts from code, narrow question, matching option set).
+3. Labeler ceiling, decomposed facts, the cloned verdict-prediction shape (dropped), the pipeline composer (kind works, judgment stages do not).
+4. Balanced 196-sample set, kind Choice shape, confidence floor with a held-out third, code facts, host-assist test (does not transfer on intent text), --explain mock, route-assist design.
+
+Five to build, each opt-in behind the key with byte-identical behaviour when the key is absent:
+
+1. Land clean-review detection as a three-way Choice (clean / findings / wrapper); regex stays as the fallback.
+2. QA gate under pipeline.qa=auto: code supplies the startable-target fact, Jev answers the UI-observable question.
+3. Fork gate before prototype-before-ask: a Noul with a floor near 0.5 ahead of the observable-vs-preference Choice.
+4. Route assist for flow --auto and --explain: lifecycle rows by code, one call with the kind Choice (starting-state plus positive-signal criteria) and the anchored Nouls, floor 0.7, host owns the fallback sixth and attended routing.
+5. Memory rerank in the memory scout, gated on a human-labeled subset agreeing with the scout labels.
+
+Dropped on evidence: plan vs no-plan Nouls, spec-count tripwire, review preflight, verdict prediction, CI failure class (untestable here), the Noul precedence tree as a router, host-assist hints on intent text.
