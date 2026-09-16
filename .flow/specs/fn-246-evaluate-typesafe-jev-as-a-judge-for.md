@@ -100,3 +100,25 @@ Report shape, one block per site: agreement rate, mean confidence on agreements 
 - **Session model as labeler.** It is the router today, so agreement with it is the directional question; a human eyeball over disagreements is the cheapest correction for its own errors. [inferred]
 - **Optional by construction.** Jev is an external service behind an invite; the strategy's zero-dependency contract means any later integration follows the opt-in pattern with no key meaning today's behaviour byte for byte. This spec ships nothing, so it stays inside the contract. [paraphrase]
 - **Rejected:** shadow logging in flow (unnecessary given direct eval), a Python SDK dependency (the endpoint is one HTTP call), and evaluating verdict prediction (a calibrated guess is not a gate). [paraphrase]
+
+## Results (2026-09-17, two passes)
+
+Study: private eval repo, `studies/jev-pipeline-judge-2026-09` (report.md, report_v2.md, records). Pass 1 covered the five pipeline-variation sites over 49 samples from three repos; pass 2 fixed the evidence (deterministic pre-routing, declared arrival view, live PR state, code-supplied startable target, tightened instructions, fork gate), added majority baselines and per-class precision/recall, and evaluated the six deferred sites. All Jev calls fit the budget (max 17k input tokens), median 600-970 ms per request, cost negligible.
+
+| Site | Result vs majority baseline | Call |
+|---|---|---|
+| Land clean-review as 3-way Choice (clean / findings / wrapper) | 100/100 vs 0.77; catches 7 clean rewordings the regex misses; regex 5/12 with 15 false alarms | build |
+| QA gate, UI-only question plus code-supplied startable fact | 0.88 vs 0.71 | build |
+| Fork gate Noul, then observable-vs-preference Choice | 0.88 vs 0.76 gate; 10/12 on labeled forks; invented forks 12 to 1 | build with a confidence floor |
+| Memory rerank, 15 Scores per call | precision@5 0.66 vs BM25 0.48; beats BM25 on 19/26 tasks | promising; needs a human-labeled subset |
+| Route matrix, two-phase | 0.65 vs 0.28 on 40 non-prerouted samples; residue is refine vs plan-review vs chart | host keeps routing; Jev top-3 usable as a shortlist |
+| Resolve-pr triage | actionable unscorable (79/90 fixed); category 0.51 vs 0.39 | needs a different enum and real negatives |
+| Plan vs no-plan | at baseline; recorded routes encode the retired plan-by-default policy | drop |
+| Spec-count tripwire | 33 trips predicted vs 15 labeled under both wordings | drop |
+| Review preflight (predict first-round verdict from the diff) | 0.61 vs 0.55; no decomposed Noul separates; verdict tracks reviewer backend (codex 85% NEEDS_WORK, host 71% SHIP) | drop |
+| CI failure class | ground truth degenerate on this repo (37 vs 2, no reruns) | untestable here |
+| Implementer tier | Spearman 0.43 with lines changed; no real label | no call |
+
+Pattern: Jev wins where code supplies the facts and the option set matches what the data contains, and loses where the decision is a judgment over soft categories. Caveats: single Jev run per sample; clean-review, triage category, and memory labels are session-model eyeballs; thresholds at 0.5 or swept on the same data; 53/96 preflight diffs truncated.
+
+Follow-ups chosen: build clean-review detection in land (regex stays as the no-key fallback), the QA gate under pipeline.qa=auto, and the fork gate in prototype-before-ask, each opt-in behind the key. Iteration continues on the route step (labeler self-consistency ceiling; decomposed fact Nouls with the matrix in code) before any router decision.
