@@ -1,9 +1,17 @@
 {
   "branch_name": "fn-246-evaluate-typesafe-jev-as-a-judge-for",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-09-16T21:11:30.582188Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-246-evaluate-typesafe-jev-as-a-judge-for",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-246-evaluate-typesafe-jev-as-a-judge-for.md",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-16T21:11:30.584662Z"
+  "updated_at": "2026-09-16T21:29:53.231032Z"
 }
