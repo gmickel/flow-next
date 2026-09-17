@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-247-flowctl-judge-typesafe-jev-plumbing-and",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-17T04:49:17.536741Z",
   "created_at": "2026-09-17T03:37:20.188843Z",
   "default_impl": null,
   "default_review": null,
@@ -300,5 +300,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-17T03:54:55.340676Z"
+  "updated_at": "2026-09-17T04:49:17.536754Z"
 }
