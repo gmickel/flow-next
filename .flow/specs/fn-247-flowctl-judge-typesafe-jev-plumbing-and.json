@@ -1,14 +1,21 @@
 {
   "branch_name": "fn-247-flowctl-judge-typesafe-jev-plumbing-and",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-09-17T03:37:20.188843Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-247-flowctl-judge-typesafe-jev-plumbing-and",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-247-flowctl-judge-typesafe-jev-plumbing-and.md",
   "status": "open",
-  "title": "flowctl judge: TypeSafe Jev plumbing and the three ungated sites",
+  "title": "flowctl judge: TypeSafe Jev plumbing and the six judged sites",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -20,5 +27,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-17T03:37:20.191703Z"
+  "updated_at": "2026-09-17T03:42:44.170512Z"
 }
