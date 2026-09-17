@@ -10,6 +10,18 @@
       "description": "URL of the JSON Schema this config validates against, stamped by /flow-next:setup. Inert to flowctl (just a string); editors are the consumer.",
       "type": "string"
     },
+    "judge": {
+      "description": "Optional TypeSafe Jev judgment settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Enable the optional judge when TYPESAFE_API_KEY is present in the environment. Default true; false disables requests. Invalid non-boolean values warn and behave as true. See docs/judge.md.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
     "memory": {
       "description": "Memory system settings (.flow/memory/ categorized learnings).",
       "type": "object",

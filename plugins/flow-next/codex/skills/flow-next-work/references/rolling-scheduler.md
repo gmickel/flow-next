@@ -187,6 +187,8 @@ admitted task satisfies all five conditions against the in-flight set.
 
 ## 3b Claim at Admission
 
+For each admitted task, apply [judge-tier.md](judge-tier.md) once before spawn; carry its decision to Phase 3c without re-asking. Its `Tier:` line joins the dispatch and done summary.
+
 Claim every task admitted at this event before dispatch:
 
 ```bash

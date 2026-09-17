@@ -166,7 +166,7 @@ Driver condition examples (the default recipe is one `flow --auto` per item; the
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring plus answer round-trip live in tracker-sync; backlog mode invokes them, never re-implements them.
 - **Never execute merge or tail steps inline.** Without current landing authority, either mode ends at the draft PR. The only driver-composition exception is the scoped land stage under `references/tail.md`; backlog mode alone grants no merge authority. Never dispatch another flow, pilot, Ralph, or host loop.
 - **Never authoring a spec** (backlog mode). `capture`/`refine` are human-gated upstream. A missing or too-thin spec is surfaced as a "needs capture/refine" gap and parked (`ASKED`), never auto-written. The only writing the `ask` stage may do is fill an obvious blank in an *existing* spec, never create a spec stub from a bare ticket.
-- Touching gh anywhere except the all-done classification branch's PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`.
+- Touching gh anywhere except Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`.
 - Printing anything after the `PILOT_VERDICT` line.
 - Running under Ralph (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH`).
 
@@ -470,7 +470,7 @@ fi
 
 ### Route (workflow.md Step 2 runs here)
 
-Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. Then:
+Run workflow Step 2's `judge --preset route --spec <spec-id> --json` once for this hop and capture it as `ROUTE_JSON` without printing raw answers; apply workflow Step 2's `host_route` projection before any host fallback and retain its code lifecycle decision and shared fork/QA answers. Available decisions carry `decision.pr_ref`, the observed branch PR (or null), so the existing-PR/all-done handling below consumes that observation without another branch probe. A top-level `pr_probe_failed: true` takes today's failed-probe terminal immediately, without a retry. Unavailable uses the pre-existing probes and host classification below. Print its `Route:` line even on fallback. Never classify independently under auto or re-probe a failed PR as absent. Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. Then:
 
 - **Route echo.** Step 2 records the route it resolved from plan-vs-no-plan.md. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the recording is printed as would-record and nothing is written.
 - **Refusal when a selected gate needs a backend the run lacks.** A design review the reference selects (an explicit request, or a recorded `needs_work` / `needs_human` plan review) with `REVIEW_CONFIGURED=0` is `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. The run never lowers a gate.
@@ -479,12 +479,19 @@ Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details
 
 ### The all-done PR probe
 
-Before the all-done row of `references/route-matrix.md` runs, the run probes PR state, because an open PR belongs to land and a merged or closed PR changes the answer. This is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
+Before dispatch from the existing-PR or all-done row, consume the route observation, because an open PR belongs to land and a merged or closed PR changes the answer. Only an unavailable route falls back to the original PR probe here. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
 ```bash
 BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 PR_PROBE_FAILED=0
-PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid,mergedAt --limit 100 2>/dev/null) || PR_PROBE_FAILED=1
+if [[ "$(printf '%s' "${ROUTE_JSON:-null}" | jq -r '.pr_probe_failed // false')" == true ]]; then
+  PR_PROBE_FAILED=1; PR_JSON='[]'
+elif [[ "$(printf '%s' "${ROUTE_JSON:-null}" | jq -r '.available')" == true ]]; then
+  PR_JSON=$(printf '%s' "$ROUTE_JSON" | jq '[.decision.pr_ref | select(. != null)]')
+  [[ "$(printf '%s' "$ROUTE_JSON" | jq -r '.decision.rule')" == pr_probe_failed ]] && PR_PROBE_FAILED=1
+else
+  PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid,mergedAt --limit 100 2>/dev/null) || PR_PROBE_FAILED=1
+fi
 # `--limit` is a fetch cap, not an exhaustion guarantee: a probe that returns
 # exactly 100 rows may be truncated, and a truncated history can select the
 # wrong merged head. Treat it as probe failure - same NEEDS_HUMAN as a gh error.
@@ -497,7 +504,7 @@ MERGED_HEAD=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "M
 
 If a PR identity was already bound by this run, bypass branch-history selection: re-read that exact PR per `references/tail.md`. Missing, mismatched or closed-unmerged targets stop; never substitute another PR. On first binding, failed/unparseable or truncated reads and multiple plausible PRs stop `NEEDS_HUMAN` before dispatch.
 
-Outcomes for the all-done branch (evaluate in order, first match wins). The all-done invariant: an all-done / completion-satisfied (`ship` or `not_required`) spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective*; the run keeps driving it (`qa` or `make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`:
+Apply these existing outcomes to the observed PR for `existing_pr_tail` or `all_done_make_pr` (evaluate in order, first match wins). An unfinished build still stops before land under `references/tail.md`. The all-done invariant: an all-done / completion-satisfied (`ship` or `not_required`) spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective*; the run keeps driving it (`qa` or `make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`:
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: with the merge destination or current explicit scoped consent, read `references/tail.md`, bind the unique target, set `STAGE=land`, and retain this selected spec. Without that authority this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
@@ -507,7 +514,7 @@ Outcomes for the all-done branch (evaluate in order, first match wins). The all-
 
 ### Explain stop
 
-`--explain` stops after classification. It prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It additionally prints `chain=<off|on>` from `CHAIN_ENABLED` and, only when on, a precondition-checked `would-chain=`: a classified `qa` stage prints `would-chain=make-pr (conditional on a fresh terminal qa_outcome)`, a conditional, never a promise, since explain dispatches nothing; any other classified stage prints `would-chain=none (stage <x> heads no pair)`. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so an explain run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
+`--explain` stops after classification. For explain, replace `--json` with `--explain` on the same route call (never a second request) and prints `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:` (with probabilities on available answers). It also prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It additionally prints `chain=<off|on>` from `CHAIN_ENABLED` and, only when on, a precondition-checked `would-chain=`: a classified `qa` stage prints `would-chain=make-pr (conditional on a fresh terminal qa_outcome)`, a conditional, never a promise, since explain dispatches nothing; any other classified stage prints `would-chain=none (stage <x> heads no pair)`. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so an explain run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"

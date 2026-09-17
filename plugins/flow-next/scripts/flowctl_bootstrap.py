@@ -22,7 +22,7 @@ HELP_NAME = "flowctl-help.txt"
 # (flowctl_tracker/MANIFEST.json) - one integrity mechanism, verified by
 # installers post-copy, consulted here only to authenticate the static-help
 # fast path. A missing/stale manifest declines the fast path safely.
-HELP_SHA256 = "ce8ff4d55a37803a2ade9887aa6810efdb1f2137f49d2b32dcc7b0d6f4274267"
+HELP_SHA256 = "c66c1806a392b1cb41219365472eb6832a2fe0a079d195082b6bbdb00fde0bd5"
 HELP_PYTHON = (3, 14)
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "

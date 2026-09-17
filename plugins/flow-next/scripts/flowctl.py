@@ -1552,6 +1552,7 @@ def get_default_config() -> dict:
         # beside `qa`; an upgrade init adds the leaf without touching a
         # user-set sibling (defaults MERGE).
         "pipeline": {"qa": "off", "chainStages": "off"},
+        "judge": {"enabled": True},
         # fn-135.9 — chart discovery size ceiling and stale-claim threshold.
         # Seeded so `config get chart.maxDecisions` / `chart.claimStaleAfter`
         # return defaults (NOT null) on a fresh repo via the defaults MERGE.
@@ -23699,6 +23700,787 @@ def _memory_score_search(
     return score
 
 
+JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an investment, or chart the unclear idea with the host.',
+               'Skip when `STRATEGY.md` exists or the effort is small enough that direction is not in '
+               'question'),
+ 'theme': ('Narrow the theme to one effort, or prospect for candidates.',
+           'Chart cannot take a direction: it needs a destination whose route is unknown. Narrow first, or '
+           'prospect when the ask is which effort to pick'),
+ 'build': ('Capture the meaningful idea as a spec.',
+           'Skip chart; do not manufacture a chart for clear work. Count specs per `spec-count.md` when the '
+           'tripwire trips'),
+ 'capture_brief': ('Capture the structured brief.',
+                   'Skip chart. Narrow or skip refine only after source-grounded synthesis establishes no '
+                   'material gaps'),
+ 'defect': ('Reproduce the defect, then implement and review the fix.',
+            'Refine is the wrong instrument for a defect. Capture only when the diagnosis conversation '
+            'itself carries decisions worth locking down'),
+ 'cleanup': ('Pin the current behavior, then implement and review the structural change.',
+             'New behaviour named anywhere makes it a feature with cleanup inside; route to capture or work. '
+             'Skip the pin only when existing coverage already asserts the contract'),
+ 'slowness': ('Measure the baseline and target on the named surface before changing code.',
+              'No nameable metric or surface routes to the read-only question row first. A fix motivated by '
+              'reading source instead of a measurement is not evidence'),
+ 'hillclimb': ('Work against the frozen harness and its metric target.',
+               'One expected fix is the slowness row. Never relax the target to meet it'),
+ 'question': ('Answer the question with repository, history, and memory evidence.',
+              'When the answer is a prerequisite for a change already asked for, route the change and let '
+              'its stage read'),
+ 'fork': ('Settle the observable fork with a prototype or measurement.',
+          'Skip when the direction is already set. No decision means no prototype'),
+ 'tiny': ('Make the bounded change and run the repository review path.',
+          'Skip chart and the full spec pipeline. The review and consent gates the change needs still run'),
+ 'refine': ('Refine the unresolved product or authority questions.',
+            'Reopen discovery as chart only when the answers show the effort itself is not yet specifiable'),
+ 'plan_review': ('Review the spec design independently.',
+                 'Review the spec directly; task decomposition is not a prerequisite'),
+ 'work_no_plan_default': ('Work directly from the ready spec without task decomposition.',
+                          'Plan only on a positive signal; the signals and the exclusions live in '
+                          '`plan-vs-no-plan.md`. The read-first pass is satisfied by a `## Resolved via '
+                          'Research` section or a plan that ran the scouts, so it never runs twice and never '
+                          'by default'),
+ 'plan': ('Plan the work around the positive planning signal.',
+          'Plan only on a positive signal; the signals and the exclusions live in `plan-vs-no-plan.md`. The '
+          'read-first pass is satisfied by a `## Resolved via Research` section or a plan that ran the '
+          'scouts, so it never runs twice and never by default'),
+ 'work_planned': ('Continue work on the recorded task route.',
+                  'Stay on work plus the configured review, QA, and ship gates (`gate-selection.md`). Chart '
+                  'is too late for understood work'),
+ 'all_done_make_pr': ('Apply the QA gate, then make the pull request.',
+                      'QA runs or records `skipped(reason)`; make-pr is never skipped on this route'),
+ 'existing_pr_tail': ('Apply the existing pull request tail and consent rules.',
+                      'Review-only convergence keeps its limited scope. PR existence is not consent; land '
+                      'owns all convergence, merge and tail gates')}
+
+
+# Live routing consumes the same spec/task inventory as `show`; no state store.
+def judge_startable_target(repo: Path, text: str = "") -> str | None:
+    """Read documented launch facts; never start a process or infer from UI words."""
+    paths = [repo / "README.md", repo / "AGENTS.md", repo / "CLAUDE.md"]
+    paths += sorted((repo / ".flow" / "features").glob("*.md"))
+    documents = [text]
+    for path in paths:
+        try:
+            documents.append(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    for document in documents:
+        for line in document.splitlines():
+            url = re.search(
+                r"(?:launch target|deploy(?:ment)?(?: url)?|dev(?:elopment)? url|base url|preconditions)"
+                r"[^\n]*?(https?://[^\s`<>]+)", line, re.I,
+            )
+            if url:
+                return url.group(1).rstrip(".,;)")
+            command = re.search(
+                r"\b((?:npm|pnpm|yarn|bun) (?:run )?(?:dev|start)(?: [^`\n#]+)?|"
+                r"(?:python3? -m (?:http\.server|uvicorn)|uvicorn|flask run|cargo run)"
+                r"(?: [^`\n#]+)?)", line,
+            )
+            if command:
+                return command.group(1).strip()
+    return None
+
+
+def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
+    """Assemble facts without asking the host to summarize lifecycle or PR state."""
+    state = dict(state)
+    repo = get_repo_root()
+    if spec_id:
+        flow_dir = get_flow_dir()
+        spec_id = resolve_spec_id_arg(flow_dir, spec_id, use_json=True)
+        spec = normalize_epic(load_json_or_exit(
+            find_spec_json_path(flow_dir, spec_id), f"Spec {spec_id}", use_json=True,
+        ))
+        tasks = TaskInventory.load(flow_dir, use_json=True, spec_id=spec_id).by_spec.get(spec_id, [])
+        body = find_spec_md_path(flow_dir, spec_id).read_text(encoding="utf-8")
+        state = {
+            "view": "live", "repo": str(repo), "spec_title": spec["title"],
+            "spec_body": body, "status": spec["status"],
+            "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
+            "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
+            "pr_exists": None, "pr_ref": None,
+        }
+        branch = spec.get("branch_name")
+        if branch and os.environ.get("TYPESAFE_API_KEY") and get_config("judge.enabled", True) is not False:
+            try:
+                probe = subprocess.run(
+                    ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
+                    cwd=repo, capture_output=True, text=True, timeout=10, check=False,
+                )
+                prs = json.loads(probe.stdout) if probe.returncode == 0 else None
+                if isinstance(prs, list) and len(prs) < 100 and all(
+                    isinstance(pr, dict) and pr.get("state") in {"OPEN", "MERGED", "CLOSED"}
+                    and isinstance(pr.get("number"), int) and isinstance(pr.get("url"), str)
+                    for pr in prs
+                ) and sum(pr["state"] == "OPEN" for pr in prs) <= 1:
+                    # Prefer an open PR if a branch was reused; retain closed/merged observations.
+                    prs.sort(key=lambda pr: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[pr["state"]],
+                                             pr.get("mergedAt") or "", pr["number"]), reverse=True)
+                    state["pr_exists"] = bool(prs)
+                    state["pr_ref"] = prs[0] if prs else None
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                pass  # Unknown remains unknown; never manufacture absence.
+    meanings = {
+        "intent": "User intent at intake, without a recorded spec lifecycle.",
+        "brief": "A structured brief at intake, without a recorded spec lifecycle.",
+        "live": "An existing spec with observed task and pull request lifecycle.",
+    }
+    if state.get("view") in meanings:
+        state["view_meaning"] = meanings[state["view"]]
+    state.setdefault("repo", str(repo))
+    text = state.get("spec_body", state.get("intent", ""))
+    state["startable_target_fact"] = judge_startable_target(repo, text)
+    if isinstance(state.get("spec_body"), str) and len(state["spec_body"]) > 100000:
+        state["spec_body"] = state["spec_body"][:100000]
+        state["spec_body_truncated"] = True
+    return state
+
+
+def judge_route_lifecycle(state: dict) -> dict | None:
+    """First-match lifecycle inventory; only intake needs kind classification."""
+    if state.get("view") != "live":
+        return None
+    def decision(value, rule):
+        return {"value": value, "rule": rule, "met": value != "host", "candidates": []}
+    if state.get("pr_exists") is None:
+        return decision("host", "pr_probe_failed")
+    if state["pr_exists"]:
+        return decision("existing_pr_tail", "observed PR")
+    total = state["tasks_total"]
+    if total and state["tasks_done"] == total:
+        return decision("all_done_make_pr", "all tasks done")
+    if total:
+        return decision("work_planned", "recorded task route")
+    if not state["ready"]:
+        return decision("host", "spec not ready")
+    if state.get("no_plan") is True:
+        return decision("work_no_plan_default", "recorded no_plan")
+    text = state["spec_body"]
+    patterns = {
+        "asks_for_plan": r"\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\bbreak (this|it) (down )?into tasks\b|\btask plan\b|\bdecompose\b",
+        "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
+        "staged_prs": r"\b(separate|two|three|several|multiple|staged|stacked)\s+prs?\b|\bin (two|three) prs\b",
+    }
+    for signal, pattern in patterns.items():
+        if re.search(pattern, text, re.I):
+            return decision("plan", signal)
+    return decision("work_no_plan_default", "no positive plan signal")
+
+
+def judge_dependency_tokens(state: dict) -> list[str]:
+    """Name concrete dependency mentions absent from local manifest/import facts."""
+    text = state.get("spec_body", state.get("intent", ""))
+    mentions = set(re.findall(r"`([A-Za-z][A-Za-z0-9_.@/-]*)`", text))
+    mentions.update(re.findall(r"\b([A-Za-z][A-Za-z0-9_.-]*) (?:library|SDK|API)\b", text))
+    repo = get_repo_root()
+    known = set()
+    for name in ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod"):
+        try:
+            known.update(re.findall(r"[A-Za-z][A-Za-z0-9_.@/-]*", (repo / name).read_text(encoding="utf-8").lower()))
+        except OSError:
+            pass
+    # A tracked-file inventory excludes vendored/untracked trees; inspect Python import roots.
+    try:
+        paths = subprocess.run(["git", "ls-files", "*.py"], cwd=repo, capture_output=True,
+                               text=True, timeout=10, check=False)
+        if paths.returncode == 0:
+            for name in paths.stdout.splitlines():
+                try:
+                    source = (repo / name).read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                known.update(x.lower() for x in re.findall(r"^(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)", source, re.M))
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return sorted(token for token in mentions if token.lower() not in known)
+
+
+def judge_route_explain(result: dict, state: dict) -> list[str]:
+    """Render evidence from this hop only; no second judge or hidden host call."""
+    lifecycle = judge_route_lifecycle(state)
+    decision = result.get("decision", lifecycle or {})
+    value = decision.get("value", "host")
+    candidates = decision.get("candidates", [])
+    if not result.get("available"):
+        route = f"host (jev-unavailable({result['reason']}))"
+    elif lifecycle:
+        route = f"{value} (code: {lifecycle['rule']})"
+    elif value == "host":
+        route = "host (jev below floor: " + ", ".join(f"{k} {p:.2f}" for k, p in candidates) + ")"
+    else:
+        route = f"{value} (jev {result['answers']['kind']['confidence']:.2f})"
+    answers = result.get("answers", {})
+    fact_ids = set(JUDGE_PRESETS["route"]["questions"]) - {
+        "kind", "fork_present", "fork_kind", "ui_observable_criteria",
+        "tiny_one_context_change", "intent_and_boundaries_stateable",
+    }
+    facts = [
+        (key, answer["noul"]) for key, answer in answers.items()
+        if key in fact_ids and answer.get("type") == "noul" and answer.get("noul", 0) >= 0.5
+    ]
+    signal = ", ".join(f"{key} (jev {probability:.2f})" for key, probability in facts)
+    if not signal:
+        signal = lifecycle["rule"] if lifecycle else "host decides"
+    if answers.get("names_unfamiliar_library_or_api", {}).get("noul", 0) >= 0.5:
+        tokens = judge_dependency_tokens(state)
+        if tokens:
+            signal += "; dependency scan: " + ", ".join(tokens)
+    alternatives = ", ".join(f"{key} {probability:.2f}" for key, probability in candidates[1:3])
+    next_step = JUDGE_ROUTE_PRESENTATION.get(value, ("host decides", "host decides"))[0]
+    if decision.get("research_recommended"):
+        next_step = "Read the unfamiliar dependency documentation first; then " + next_step
+    if decision.get("defect_repro") == "provided":
+        next_step = "Run the supplied repro, then implement and review the fix."
+    return [
+        f"Next: {next_step}",
+        f"Route: {route}", f"Signal: {signal}",
+        f"Skip/narrow: {JUDGE_ROUTE_PRESENTATION.get(value, ('host decides', 'host decides'))[1]}",
+        f"Why not the alternatives: {alternatives or 'lifecycle precedence' if lifecycle else alternatives or 'host decides'}",
+    ]
+
+
+
+# --- Optional System One judge (fn-247): self-contained for copied flowctl. ---
+
+JUDGE_MODEL = "jev-latest"
+JUDGE_PRESETS = {'clean-review': {'required': ['body'],
+                  'questions': {'review': {'type': 'choice',
+                                           'instructions': 'What kind of automated review body is '
+                                                           'this?',
+                                           'criteria': {'clean': 'a completed review that reports '
+                                                                 'no findings / no issues on the '
+                                                                 'reviewed commit',
+                                                        'findings': 'a completed review that '
+                                                                    'raises at least one concern, '
+                                                                    'suggestion, or defect',
+                                                        'wrapper_or_status': 'a summary, status, '
+                                                                             'quota, stale-marker, '
+                                                                             'or boilerplate body '
+                                                                             'that neither clears '
+                                                                             'nor raises anything '
+                                                                             'itself'}}}},
+ 'route': {'required': ['view',
+                        'view_meaning',
+                        'repo',
+                        'status',
+                        'ready',
+                        'no_plan',
+                        'tasks_total',
+                        'tasks_done',
+                        'pr_exists',
+                        'pr_ref',
+                        'startable_target_fact'],
+           'questions': {'kind': {'type': 'choice',
+                                  'instructions': 'Which kind of work is this starting state? '
+                                                  'Route on content and context, never on input '
+                                                  'kind. The state carries `view` with its '
+                                                  'meaning. Pick none_of_the_above when no kind '
+                                                  'fits.',
+                                  'criteria': {'build': 'One meaningful idea whose intent and '
+                                                        'boundaries can be stated. Clear '
+                                                        'meaningful idea',
+                                               'capture_brief': 'Existing structured brief with '
+                                                                'resolved business and technical '
+                                                                'choices. Structured brief or '
+                                                                'chart briefing ready',
+                                               'defect': 'A reported defect (bug report, console '
+                                                         'dump, failing behaviour). The unknown is '
+                                                         'the cause, the risk is regression',
+                                               'cleanup': 'A structural change with behaviour '
+                                                          'meant to stay the same (rename, '
+                                                          'extract, inline, dedupe, move). No new '
+                                                          'behaviour named; callers to migrate or '
+                                                          'a shape to collapse',
+                                               'slowness': 'A measured slowness or a number the '
+                                                           'user wants moved once. A metric and a '
+                                                           'surface the user can name; a trace or '
+                                                           'a repro',
+                                               'hillclimb': 'One metric to improve against a '
+                                                            'target through repeated attempts. A '
+                                                            'harness that reruns cheaply and a '
+                                                            'target number',
+                                               'question': 'A read-only question ("how does X '
+                                                           'work", "why was Y built this way", '
+                                                           '"are we sure about Z"). The '
+                                                           'deliverable is an answer',
+                                               'fork': 'A design or behaviour fork whose answer is '
+                                                       'observable. A named decision the prototype '
+                                                       'exists to make; the output is a decision, '
+                                                       'not shippable code',
+                                               'tiny': 'Tiny, local, low-risk change that fits one '
+                                                       'implementation context. One-context fix; '
+                                                       'low risk',
+                                               'theme': 'A theme or direction ("make X more Y"). '
+                                                        'No nameable end state, so no outcome and '
+                                                        'no scope boundary',
+                                               'discovery': 'No written direction - target '
+                                                            'problem, users, or key metrics stated '
+                                                            'nowhere. Repeated arguments about '
+                                                            'what matters; no `STRATEGY.md`; '
+                                                            'Looking for candidate investments '
+                                                            'across a domain. Domain search; '
+                                                            'ranked candidates needed; One large '
+                                                            'idea, unclear boundaries, several '
+                                                            'consequential unknowns. Singular '
+                                                            'effort too big for one capture; '
+                                                            'unknowns block stating intent',
+                                               'refine': 'A valid spec with unresolved product or '
+                                                         'authority questions. Spec exists; '
+                                                         'judgment gaps remain',
+                                               'plan_review': 'A spec whose design needs an '
+                                                              'independent assessment. '
+                                                              'Consequential design choices; a '
+                                                              'zero-task spec qualifies',
+                                               'none_of_the_above': None}},
+                         'reports_defect': {'type': 'noul',
+                                            'instructions': 'Does the text report a defect: a bug '
+                                                            'report, console dump, crash, or '
+                                                            'failing behaviour, where the unknown '
+                                                            'is the cause and the risk is '
+                                                            'regression?'},
+                         'defect_has_repro': {'type': 'noul',
+                                              'instructions': 'If the text reports a defect, does '
+                                                              'it carry a concrete repro (steps, a '
+                                                              'failing command, a trace with a '
+                                                              'location, a case that shows it)? '
+                                                              'Answer no when there is no defect '
+                                                              'or no repro.'},
+                         'structural_change_behaviour_kept': {'type': 'noul',
+                                                              'instructions': 'Is the text a '
+                                                                              'structural change '
+                                                                              'with behaviour '
+                                                                              'meant to stay the '
+                                                                              'same (rename, '
+                                                                              'extract, inline, '
+                                                                              'dedupe, move; '
+                                                                              'callers to migrate '
+                                                                              'or a shape to '
+                                                                              'collapse) with no '
+                                                                              'new behaviour named '
+                                                                              'anywhere?'},
+                         'names_metric_and_surface': {'type': 'noul',
+                                                      'instructions': 'Does the text name a '
+                                                                      'measured slowness or a '
+                                                                      'number the user wants moved '
+                                                                      'once, with a metric and a '
+                                                                      'surface the user can name '
+                                                                      '(a trace or a repro)?'},
+                         'repeated_metric_target': {'type': 'noul',
+                                                    'instructions': 'Does the text ask to improve '
+                                                                    'one metric against a target '
+                                                                    'number through repeated '
+                                                                    'attempts on a harness that '
+                                                                    'reruns cheaply?'},
+                         'read_only_question': {'type': 'noul',
+                                                'instructions': 'Is the text a read-only question '
+                                                                '(how does X work, why was Y built '
+                                                                'this way, are we sure about Z) '
+                                                                'whose deliverable is an answer '
+                                                                'rather than a change?'},
+                         'theme_no_end_state': {'type': 'noul',
+                                                'instructions': 'Is the text a theme or direction '
+                                                                '("make X more Y") with no '
+                                                                'nameable end state, so no outcome '
+                                                                'and no scope boundary?'},
+                         'no_written_direction': {'type': 'noul',
+                                                  'instructions': 'Does the text show that no '
+                                                                  'written direction exists '
+                                                                  '(target problem, users, or key '
+                                                                  'metrics stated nowhere; '
+                                                                  'repeated arguments about what '
+                                                                  'matters)?'},
+                         'large_idea_several_unknowns': {'type': 'noul',
+                                                         'instructions': 'Is the text one large '
+                                                                         'singular idea with '
+                                                                         'unclear boundaries and '
+                                                                         'several consequential '
+                                                                         'unknowns that block '
+                                                                         'stating intent (too big '
+                                                                         'for one capture)?'},
+                         'names_unfamiliar_library_or_api': {'type': 'noul',
+                                                             'instructions': 'Does the text name a '
+                                                                             'library, service, or '
+                                                                             'API that the '
+                                                                             'repository does not '
+                                                                             'already use (an '
+                                                                             'unfamiliar '
+                                                                             'dependency that '
+                                                                             'needs reading '
+                                                                             'first)?'},
+                         'tiny_one_context_change': {'type': 'noul',
+                                                     'instructions': 'Is the text a tiny, local, '
+                                                                     'low-risk change that fits '
+                                                                     'one implementation context '
+                                                                     '(a one-context fix)?'},
+                         'intent_and_boundaries_stateable': {'type': 'noul',
+                                                             'instructions': 'Can the intent and '
+                                                                             'the boundaries of '
+                                                                             'this effort be '
+                                                                             'stated now (a clear '
+                                                                             'meaningful idea), '
+                                                                             'without further '
+                                                                             'discovery?'},
+                         'fork_present': {'type': 'noul',
+                                          'instructions': 'Does the text pose a design or '
+                                                          'behaviour fork (two named alternatives '
+                                                          'to choose between) that is still open?'},
+                         'fork_kind': {'type': 'choice',
+                                       'instructions': 'Assume an open design or behaviour fork '
+                                                       'exists. Classify what its answer depends '
+                                                       'on.',
+                                       'criteria': {'observable': 'Observable: behaviour, output, '
+                                                                  'timing, layout, a failing case, '
+                                                                  'a measurement',
+                                                    'product_or_preference': 'A product or '
+                                                                             'preference call no '
+                                                                             'experiment can '
+                                                                             'settle: scope, '
+                                                                             'priority, authority, '
+                                                                             'taste, a business '
+                                                                             'rule',
+                                                    'none_of_the_above': None}},
+                         'ui_observable_criteria': {'type': 'noul',
+                                                    'instructions': "Does the spec's acceptance "
+                                                                    'describe UI behaviour a user '
+                                                                    'could observe on a drivable '
+                                                                    'surface (a screen, a page, a '
+                                                                    'window, a rendered widget), '
+                                                                    'as opposed to CLI output, '
+                                                                    'file contents, or library '
+                                                                    'behaviour?'}}},
+ 'qa-gate': {'required': ['acceptance', 'startable_target_fact'],
+             'questions': {'ui_observable_criteria': {'type': 'noul',
+                                                      'instructions': "Does the spec's acceptance "
+                                                                      'describe UI behaviour a '
+                                                                      'user could observe on a '
+                                                                      'drivable surface (a screen, '
+                                                                      'a page, a window, a '
+                                                                      'rendered widget), as '
+                                                                      'opposed to CLI output, file '
+                                                                      'contents, or library '
+                                                                      'behaviour?'}}},
+ 'fork-gate': {'required': ['text'],
+               'questions': {'fork_present': {'type': 'noul',
+                                              'instructions': 'Does the text pose a design or '
+                                                              'behaviour fork (two named '
+                                                              'alternatives to choose between) '
+                                                              'that is still open?'},
+                             'fork_kind': {'type': 'choice',
+                                           'instructions': 'Assume an open design or behaviour '
+                                                           'fork exists. Classify what its answer '
+                                                           'depends on.',
+                                           'criteria': {'observable': 'Observable: behaviour, '
+                                                                      'output, timing, layout, a '
+                                                                      'failing case, a measurement',
+                                                        'product_or_preference': 'A product or '
+                                                                                 'preference call '
+                                                                                 'no experiment '
+                                                                                 'can settle: '
+                                                                                 'scope, priority, '
+                                                                                 'authority, '
+                                                                                 'taste, a '
+                                                                                 'business rule',
+                                                        'none_of_the_above': None}}}},
+ 'memory-rerank': {'required': ['query', 'entries'], 'questions': {}},
+ 'tier': {'required': ['task_title',
+                       'task_body',
+                       'acceptance',
+                       'touches_count',
+                       'has_quick_commands',
+                       'repo'],
+          'questions': {'tier': {'type': 'choice',
+                                 'instructions': 'Which is the minimum harness/model tier a senior '
+                                                 'engineer would assign this task to? Judge from '
+                                                 'the task text and the code facts beside it; pick '
+                                                 'the cheapest tier that would get it right first '
+                                                 'try.',
+                                 'criteria': {'mechanical': 'mechanical: a rename, a config bump, '
+                                                            'mirroring a doc, adding a test '
+                                                            'fixture, a one-place edit with a '
+                                                            'known answer; a fast, cheap model can '
+                                                            'do it and a wrong attempt is cheap to '
+                                                            'redo',
+                                              'moderate': 'moderate: a bounded feature or fix in '
+                                                          'one module with its tests; the shape is '
+                                                          'known, the acceptance is concrete, no '
+                                                          'design judgment beyond the module',
+                                              'intelligent': 'intelligent: design judgment, a '
+                                                             'cross-module change, ambiguous or '
+                                                             'negotiable acceptance, tradeoffs a '
+                                                             'senior engineer would want to weigh; '
+                                                             'the strongest available model in the '
+                                                             'session',
+                                              'long_running': 'long_running: a multi-hour '
+                                                              'implementation spanning many files '
+                                                              'or subsystems that needs a long '
+                                                              'uninterrupted run in an isolated '
+                                                              'harness (a bridged external CLI on '
+                                                              'its own branch), not a turn in the '
+                                                              'session'}},
+                        'purely_mechanical_edit': {'type': 'noul',
+                                                   'instructions': 'Is this a purely mechanical '
+                                                                   'edit (rename, config bump, '
+                                                                   'mirror a doc, add a fixture, a '
+                                                                   'one-place change with a known '
+                                                                   'answer)?'},
+                        'needs_long_uninterrupted_run': {'type': 'noul',
+                                                         'instructions': 'Would a competent '
+                                                                         'implementer need a long '
+                                                                         'uninterrupted run '
+                                                                         '(multi-hour, many files, '
+                                                                         'several subsystems) '
+                                                                         'rather than one bounded '
+                                                                         'turn?'}}}}
+
+def judge_questions(preset: str, state: dict) -> dict:
+    """Every question for one decision point, with no runtime file dependencies."""
+    if preset == "memory-rerank":
+        return {
+            f"entry_{i}": {
+                "type": "score",
+                "instructions": f"How relevant is `entries.{i}` to the task in `query`?",
+                "criteria": ["not relevant", "tangential", "directly relevant"],
+            }
+            for i in range(len(state["entries"]))
+        }
+    questions = dict(JUDGE_PRESETS[preset]["questions"])
+    if preset == "route":
+        if state["view"] == "live":
+            questions.pop("kind")
+        if get_config("pipeline.qa", "off") != "auto":
+            questions.pop("ui_observable_criteria")
+    return questions
+
+
+def judge_validate_state(preset: str, state: dict) -> None:
+    if preset not in JUDGE_PRESETS:
+        raise ValueError("unknown preset; registered presets: " + ", ".join(JUDGE_PRESETS))
+    if not isinstance(state, dict):
+        raise ValueError("state must be a JSON object")
+    required = list(JUDGE_PRESETS[preset]["required"])
+    if preset == "route":
+        if state.get("view") not in ("intent", "brief", "live"):
+            raise ValueError("state field view must be intent, brief, or live")
+        required += ["intent"] if state["view"] == "intent" else ["spec_title", "spec_body"]
+    for key in required:
+        if key not in state:
+            raise ValueError("missing required state field: " + key)
+    text_fields = {"clean-review": ["body"], "qa-gate": ["acceptance"], "fork-gate": ["text"],
+                   "memory-rerank": ["query"], "tier": ["task_title", "task_body", "acceptance", "repo"],
+                   "route": ["view_meaning", "repo"] + (["intent"] if state.get("view") == "intent" else ["spec_title", "spec_body"])}
+    for key in text_fields[preset]:
+        if not isinstance(state[key], str):
+            raise ValueError("state field must be a string: " + key)
+    if preset in ("route", "tier"):
+        counts = ["tasks_total", "tasks_done"] if preset == "route" else ["touches_count"]
+        for key in counts:
+            if type(state[key]) is not int or state[key] < 0:
+                raise ValueError("state field must be a nonnegative integer: " + key)
+        flags = ["ready", "no_plan"] if preset == "route" else ["has_quick_commands"]
+        for key in flags:
+            if type(state[key]) is not bool:
+                raise ValueError("state field must be boolean: " + key)
+    if preset == "route":
+        if state["tasks_done"] > state["tasks_total"]:
+            raise ValueError("state field tasks_done exceeds tasks_total")
+        if state["pr_exists"] is not None and type(state["pr_exists"]) is not bool:
+            raise ValueError("state field pr_exists must be boolean or null")
+    if preset == "memory-rerank":
+        entries = state["entries"]
+        if not isinstance(entries, list) or len(entries) > 15:
+            raise ValueError("state field entries must be a list of at most 15 entries")
+        if any(not isinstance(e, dict) or not isinstance(e.get("entry_id"), str) for e in entries):
+            raise ValueError("each entries item requires a string entry_id")
+        if len({e["entry_id"] for e in entries}) != len(entries):
+            raise ValueError("entries must have unique entry_id values")
+
+
+def _judge_number(value, maximum=1) -> bool:
+    return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= maximum
+
+
+def judge_validate_answers(questions: dict, payload: dict) -> dict:
+    """Reject partial distributions and non-finite values, never repair an answer."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("model"), str):
+        raise ValueError("bad_answer")
+    if not isinstance(payload.get("usage"), dict) or not isinstance(payload.get("answers"), dict):
+        raise ValueError("bad_answer")
+    answers = {}
+    for qid, question in questions.items():
+        answer = payload["answers"].get(qid)
+        kind = question["type"]
+        if not isinstance(answer, dict) or answer.get("type") != kind:
+            raise ValueError("bad_answer")
+        if kind == "noul":
+            if not _judge_number(answer.get("noul")):
+                raise ValueError("bad_answer")
+            answers[qid] = {"type": kind, "noul": answer["noul"]}
+            continue
+        if not _judge_number(answer.get("confidence")):
+            raise ValueError("bad_answer")
+        options = question["criteria"] if kind == "choice" else [str(i) for i in range(len(question["criteria"]))]
+        probabilities = answer.get("probabilities")
+        if (not isinstance(probabilities, dict) or set(probabilities) != set(options)
+                or not all(_judge_number(p) for p in probabilities.values())
+                or not math.isclose(sum(probabilities.values()), 1, abs_tol=0.02)):
+            raise ValueError("bad_answer")
+        answers[qid] = {"type": kind, "confidence": answer["confidence"], "probabilities": probabilities}
+        if kind == "choice":
+            if answer.get("choice") not in options:
+                raise ValueError("bad_answer")
+            answers[qid]["choice"] = answer["choice"]
+        else:
+            if not _judge_number(answer.get("score"), len(options) - 1):
+                raise ValueError("bad_answer")
+            answers[qid]["score"] = answer["score"]
+    return answers
+
+
+def judge_decide(preset: str, state: dict, answers: dict, route_decision: dict | None = None) -> dict:
+    decision = {"value": None, "rule": "", "met": False}
+    if preset == "clean-review":
+        answer = answers["review"]
+        decision.update(value=answer["choice"] == "clean" and answer["confidence"] >= 0.7,
+                        rule="clean confidence>=0.7")
+        decision["met"] = decision["value"]
+    elif preset == "qa-gate":
+        ui = answers["ui_observable_criteria"]["noul"]
+        target = bool(state["startable_target_fact"])
+        value = "qa_runs" if ui >= 0.5 and target else "qa_skipped"
+        decision.update(value=value, rule="ui>=0.5 AND startable target", met=value == "qa_runs")
+        if value == "qa_skipped":
+            decision["reason"] = "no UI-observable criteria" if ui < 0.5 else "no startable target"
+    elif preset == "fork-gate":
+        gate, kind = answers["fork_present"]["noul"], answers["fork_kind"]
+        value = "none" if gate < 0.5 else (
+            kind["choice"] if kind["confidence"] >= 0.5 and kind["choice"] != "none_of_the_above" else "host")
+        decision.update(value=value, rule="fork>=0.5 then kind confidence>=0.5", met=value != "host")
+    elif preset == "memory-rerank":
+        ranked = [(entry["entry_id"], answers[f"entry_{i}"]["score"]) for i, entry in enumerate(state["entries"])]
+        ranked.sort(key=lambda pair: pair[1], reverse=True)
+        decision.update(value=[[entry_id, score] for entry_id, score in ranked if score >= 1][:10],
+                        rule="score>=1.0; descending stable; cap 10", met=True)
+    elif preset == "route" and state["view"] == "live":
+        decision = dict(route_decision or judge_route_lifecycle(state))
+        decision["candidates"] = []
+        decision["pr_ref"] = state["pr_ref"]
+        decision["startable_target_fact"] = state["startable_target_fact"]
+        if "ui_observable_criteria" in answers:
+            decision["qa"] = judge_decide("qa-gate", state, answers)
+        decision["fork"] = judge_decide("fork-gate", state, answers)
+        decision["research_recommended"] = (decision["value"] in ("plan", "work_no_plan_default")
+            and answers["names_unfamiliar_library_or_api"]["noul"] >= 0.5
+            and not re.search(r"^## Resolved via Research\s*$", state["spec_body"], re.M))
+    else:
+        qid, floor = ("kind", 0.7) if preset == "route" else ("tier", 0.8)
+        answer = answers[qid]
+        candidates = sorted(answer["probabilities"].items(), key=lambda pair: pair[1], reverse=True)[:3]
+        value = answer["choice"]
+        met = answer["confidence"] >= floor and value != "none_of_the_above"
+        if preset == "tier":
+            met = met and value in ("mechanical", "long_running")
+        decision.update(value=value if met else ("host" if preset == "route" else "session"),
+                        rule=f"{qid} confidence>={floor}", met=met, candidates=[list(c) for c in candidates])
+        if preset == "route":
+            if value == "defect" and met:
+                decision["defect_repro"] = "provided" if answers["defect_has_repro"]["noul"] >= 0.5 else "needed"
+            if "ui_observable_criteria" in answers:
+                decision["qa"] = judge_decide("qa-gate", state, answers)
+            decision["fork"] = judge_decide("fork-gate", state, answers)
+    return decision
+
+
+def judge_evaluate(preset: str, state: dict) -> dict:
+    """One bounded HTTP request, with retry only for documented overload statuses."""
+    judge_validate_state(preset, state)
+    unavailable = {"success": True, "available": False, "preset": preset}
+    enabled = get_config("judge.enabled", True)
+    if not isinstance(enabled, bool):
+        print("Warning: judge.enabled must be boolean; treating it as true", file=sys.stderr)
+        enabled = True
+    key = os.environ.get("TYPESAFE_API_KEY", "")
+    if not enabled:
+        return {**unavailable, "reason": "disabled"}
+    if not key:
+        return {**unavailable, "reason": "no_key"}
+    route_decision = judge_route_lifecycle(state) if preset == "route" else None
+    if route_decision and route_decision["rule"] == "pr_probe_failed":
+        return {**unavailable, "reason": "transport", "pr_probe_failed": True}
+    questions = judge_questions(preset, state)
+    body = json.dumps({"model": JUDGE_MODEL, "state": state, "questions": questions}, ensure_ascii=False)
+    if len(body) > 32000 * 4:
+        return {**unavailable, "reason": "over_budget"}
+    started = time.monotonic()
+    if not questions:
+        return {"success": True, "available": True, "preset": preset, "model": JUDGE_MODEL,
+                "decision": judge_decide(preset, state, {}), "answers": {}, "latency_ms": 0, "usage": {}}
+    for attempt in range(3):
+        connection = None
+        try:
+            connection = http.client.HTTPSConnection("api.typesafe.ai", timeout=10)
+            connection.request("POST", "/v1/systemone", body=body.encode("utf-8"),
+                               headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+            response = connection.getresponse()
+            status = response.status
+            if status in (429, 529) and attempt < 2:
+                connection.close()
+                time.sleep(attempt + 1)
+                continue
+            if not 200 <= status < 300:
+                return {**unavailable, "reason": f"http_{status}"}
+            raw = response.read()
+            # Never echo server diagnostics or unexpected fields, including an echoed credential.
+            payload = json.loads(raw)
+            if key in json.dumps(payload):
+                return {**unavailable, "reason": "bad_answer"}
+            answers = judge_validate_answers(questions, payload)
+            return {"success": True, "available": True, "preset": preset, "model": payload["model"],
+                    "decision": judge_decide(preset, state, answers, route_decision), "answers": answers,
+                    "latency_ms": round((time.monotonic() - started) * 1000), "usage": payload["usage"]}
+        except (TimeoutError, socket.timeout):
+            return {**unavailable, "reason": "timeout"}
+        except (OSError, http.client.HTTPException):
+            return {**unavailable, "reason": "transport"}
+        except (ValueError, TypeError, KeyError, UnicodeError):
+            return {**unavailable, "reason": "bad_answer"}
+        finally:
+            if connection is not None:
+                connection.close()
+    return {**unavailable, "reason": "transport"}
+
+
+def cmd_judge(args: argparse.Namespace) -> None:
+    try:
+        if not args.state_file and not args.spec:
+            raise ValueError("--state-file is required unless --spec is supplied")
+        state = json.loads(Path(args.state_file).read_text(encoding="utf-8")) if args.state_file else {}
+        if not isinstance(state, dict):
+            raise ValueError("state must be a JSON object")
+        if not args.spec:
+            judge_validate_state(args.preset, state)
+        if args.preset == "route":
+            state = judge_route_state(state, args.spec)
+        elif args.preset == "qa-gate" and args.spec:
+            flow_dir = get_flow_dir()
+            spec_id = resolve_spec_id_arg(flow_dir, args.spec, use_json=True)
+            body = find_spec_md_path(flow_dir, spec_id).read_text(encoding="utf-8")
+            state = {"acceptance": body, "startable_target_fact": judge_startable_target(get_repo_root(), body)}
+        elif args.spec:
+            raise ValueError("--spec applies only to the route and qa-gate presets")
+        if args.explain and args.preset != "route":
+            raise ValueError("--explain applies only to the route preset")
+        result = judge_evaluate(args.preset, state)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        error_exit("state file is unreadable or is not JSON", use_json=args.json)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json)
+    if args.explain and not args.json:
+        print("\n".join(judge_route_explain(result, state)).encode("ascii", "backslashreplace").decode("ascii"))
+    else:
+        print(json.dumps(result, ensure_ascii=True))
+
+
 def cmd_memory_search(args: argparse.Namespace) -> None:
     """Search memory entries via weighted token overlap.
 
@@ -23846,6 +24628,19 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
                     )
 
     combined = results + legacy_results
+    rerank_meta = {}
+    if getattr(args, "rerank", False):
+        original_count = min(len(combined), 15)
+        judged = judge_evaluate("memory-rerank", {"query": query, "entries": combined[:15]})
+        if judged["available"]:
+            by_id = {entry["entry_id"]: entry for entry in combined[:15]}
+            combined = [{**by_id[entry_id], "jev_score": score, "jev_rank": rank}
+                        for rank, (entry_id, score) in enumerate(judged["decision"]["value"], 1)]
+            rerank_meta = {"rerank": "jev", "stage_line": f"memory: reranked (jev, {original_count} -> {len(combined)})"}
+        else:
+            reason = judged["reason"]
+            rerank_meta = {"rerank": "bm25", "rerank_reason": reason,
+                           "stage_line": f"memory: bm25 (jev-unavailable({reason}))"}
 
     if limit is not None and limit > 0:
         combined = combined[:limit]
@@ -23856,8 +24651,25 @@ def cmd_memory_search(args: argparse.Namespace) -> None:
                 "query": query,
                 "matches": combined,
                 "count": len(combined),
+                **rerank_meta,
             }
         )
+        return
+
+    if getattr(args, "rerank", False):
+        def cell(value):
+            return str(value).replace("|", "\\|").replace("\n", " ").encode("ascii", "backslashreplace").decode("ascii")
+        print(rerank_meta["stage_line"])
+        print("## Memory findings")
+        print("| Track | Category | Entry | Why relevant |")
+        print("|-------|----------|-------|--------------|")
+        for entry in combined:
+            relevance = f"jev {entry['jev_score']:.2f}" if "jev_score" in entry else f"bm25 {entry['score']}"
+            print("| " + " | ".join(cell(v) for v in (entry["track"], entry["category"], entry["entry_id"], relevance)) + " |")
+        for entry in combined:
+            print("- " + cell(entry["title"]) + ": " + cell(entry["snippet"]))
+        if not combined:
+            print("No relevant entries in project memory.")
         return
 
     if not combined:
@@ -52939,6 +53751,14 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    p_judge = subparsers.add_parser("judge", help="Optional typed System One judgments")
+    p_judge.add_argument("--preset", required=True, choices=list(JUDGE_PRESETS))
+    p_judge.add_argument("--state-file", help="JSON state file")
+    p_judge.add_argument("--spec", help="Assemble route or QA state from a live spec")
+    p_judge.add_argument("--explain", action="store_true", help="Print the route recommendation")
+    p_judge.add_argument("--json", action="store_true", help="JSON output")
+    p_judge.set_defaults(func=cmd_judge)
+
     # init
     p_init = subparsers.add_parser("init", help="Initialize .flow/ directory")
     p_init.add_argument("--json", action="store_true", help="JSON output")
@@ -54105,6 +54925,7 @@ def main() -> None:
         default="active",
         help="Filter by status (default: active — excludes stale + hardened)",
     )
+    p_memory_search.add_argument("--rerank", action="store_true", help="Rerank top 15 matches with the optional judge")
     p_memory_search.add_argument("--json", action="store_true", help="JSON output")
     p_memory_search.set_defaults(func=cmd_memory_search)
 

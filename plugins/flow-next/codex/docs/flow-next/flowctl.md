@@ -60,6 +60,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [done](#done)
   - [block](#block)
   - [validate](#validate)
+  - [judge](#judge)
   - [config](#config)
   - [review-backend](#review-backend)
   - [review-findings attach](#review-findings-attach)
@@ -1051,6 +1052,48 @@ Checks:
 
 Exits with code 1 if validation fails (for CI use).
 
+### judge
+
+Classify one supplied state with a bundled TypeSafe Jev preset and apply its decision rule.
+
+```bash
+flowctl judge --preset <name> --state-file state.json [--json]
+flowctl judge --preset route --spec <spec-id> --json
+flowctl judge --preset route --spec <spec-id> --explain
+flowctl judge --preset qa-gate --spec <spec-id> --json
+```
+
+Presets: `clean-review`, `route`, `qa-gate`, `fork-gate`, `memory-rerank`, `tier`.
+The [judge reference](judge.md) specifies their questions, required state, floors,
+route precedence, and fallback behavior. The command reads `TYPESAFE_API_KEY`
+from the environment at call time. `judge.enabled=false` disables it.
+
+An available result contains `success`, `available`, `preset`, the returned
+`model`, typed `answers`, `decision` (`value`, `rule`, `met`), `latency_ms`, and
+`usage`. Route and tier decisions also contain the three leading
+`candidates` as `[option, probability]` pairs. Memory decisions contain ordered
+entry IDs and scores.
+
+Unavailable results exit 0, omit the decision, and name the reason:
+
+```json
+{"success": true, "available": false, "preset": "route", "reason": "no_key"}
+```
+
+Reasons are `no_key`, `disabled`, `http_<status>`, `transport`, `timeout`,
+`bad_answer`, and `over_budget`. The caller takes its existing fallback and
+records the reason. Unknown presets, unreadable/non-JSON state files, and missing
+required state fields exit nonzero. Requests use `jev-latest`, a 10-second timeout,
+and two retries only for HTTP 429/529, after 1 and 2 seconds. A request estimated
+over 32k tokens at four characters per token is rejected without sending.
+The command never writes state, answers, or credentials to disk.
+
+`--spec` assembles route or QA facts from the live spec and repository;
+`--explain` prints the route recommendation instead of JSON. A failed PR probe
+adds `pr_probe_failed: true` to the unavailable result so the caller preserves
+its existing failure outcome. Available live-route decisions include `pr_ref`
+and `startable_target_fact` for reuse by the tail and QA gates.
+
 ### config
 
 Manage project configuration stored in `.flow/config.json`.
@@ -1088,6 +1131,7 @@ flowctl config set memory.enabled false [--json]
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| `judge.enabled` | bool | `true` | Use [Jev judgment](judge.md) when `TYPESAFE_API_KEY` is present; false disables requests; non-booleans warn and act as true |
 | `memory.enabled` | bool | `true` | Enable memory system |
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in since 4.5.1; earlier inits wrote `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
@@ -1305,13 +1349,20 @@ flowctl memory upsert --track knowledge --category workflow \
 
 # Query
 flowctl memory list [--track bug] [--category runtime-errors] [--status active|stale|hardened|all] [--json]
-flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|hardened|all] [--json]
+flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|hardened|all] [--rerank] [--json]
 flowctl memory read <id> [--json]
 ```
 
 `memory read` accepts: full id (`bug/runtime-errors/slug-YYYY-MM-DD`), `slug+date`, `slug` (latest date wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
 
 `--status` defaults to `active`, which excludes **both** stale and hardened entries from default `list` / `search` results - audit-flagged advice stops polluting `memory-scout` output, and a hardened lesson now lives in an enforced gate, so re-injecting it as context is waste. Pass `--status stale`, `--status hardened`, or `--status all` to include them.
+
+`--rerank` sends up to 15 BM25 hits in one `memory-rerank` request, orders by
+Jev score (ties retain BM25 order), drops scores below 1.0, and returns at most
+10 hits. JSON adds `jev_score` and `jev_rank` to reranked matches and top-level
+`rerank: "jev"`. An unavailable judge keeps BM25 order and returns
+`rerank: "bm25"`; zero hits send no request. Plain-text output uses the memory
+scout's `## Memory findings` table. Status filtering is unchanged.
 
 #### memory mark-stale
 

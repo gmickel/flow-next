@@ -41,6 +41,7 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 | [`worked-example.md`](worked-example.md) | One actual requirement, review finding, correction, and PR handover |
 | [`skills.md`](skills.md) | All 31 skills in the published catalog, what triggers each one, and what it does |
 | [`spec-template.md`](spec-template.md) | What belongs in a spec, the R-ID rules, and how to customize the scaffold from a root `SPEC.md` |
+| [`judge.md`](judge.md) | Optional Jev decisions, confidence floors, key setup, fallback, and measured costs |
 | [`flowctl.md`](flowctl.md) | The full CLI: every command, flag, JSON shape, and exit code |
 | [`orchestration.md`](orchestration.md) | Two routing axes: the pipeline shape per item (six deciders, each printing its reason) and the model per job (four tiers, the routing block, review backends, the bridge route); an unattended field case with 38 landed PRs and a five-rung setup ladder |
 | [`reach/README.md`](reach/README.md) | What each harness can actually reach, and how it degrades when it cannot |

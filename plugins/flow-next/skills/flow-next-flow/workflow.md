@@ -26,15 +26,59 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 
 ## Step 2: Route
 
-Read [references/route-matrix.md](references/route-matrix.md) and match the starting state. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve the rule now; the route is recorded after the explain stop below, before any stage runs.
+Read [references/route-matrix.md](references/route-matrix.md). Ask once per hop, in attended and auto mode alike:
+
+```bash
+ROUTE_JSON="$("$FLOWCTL" judge --preset route --spec <spec-id> --json)"
+# Intake without a live spec: state contains view=intent + intent, or
+# view=brief + spec_title/spec_body, and the documented route fields.
+ROUTE_JSON="$("$FLOWCTL" judge --preset route --state-file <route-state.json> --json)"
+```
+
+Use only the applicable command. `--spec` assembles fresh lifecycle state in code from the normalized spec/task inventory and `gh pr list --head <branch> --state all` (or the tracker bridge). A failed probe retains today's failure path, never a fabricated absent PR. The code resolves startable targets from documented commands, deploy URLs or the features map, trims `spec_body` at 100000 characters with `spec_body_truncated: true`, and applies first-match lifecycle order: observed PR (open, merged or closed) -> tail; all tasks done -> QA/make-pr; intentional tasks or sole implicit owner -> recorded work route; ready with zero tasks -> recorded direct or the plan-signal regex rule; not ready -> host. Existing `spec chain` admission and work's direct-owner resume admission still apply.
+
+For intent/brief, apply `decision.value` when `decision.met`; otherwise use today's matrix judgment with only `decision.candidates` (top three probabilities), never raw Nouls as facts. `none_of_the_above` always goes to the host. Unavailable uses today's route and names `reason`. Keep the answer only for this hop: fork and auto-QA consume its answers without another request. Nouls feed the code's defect-repro/research branch and the `Signal:` line; `tiny_one_context_change` and `intent_and_boundaries_stateable` are hints only.
+
+Print `Route: <kind> (jev <confidence>)`, `Route: <lifecycle route> (code)`, `Route: host (jev below floor: <top three>)`, or `Route: host (jev-unavailable(<reason>))` on every hop. Match the resulting route to the matrix. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve the rule now; the route is recorded after the explain stop below, before any stage runs.
 
 A spec with an intentional plan (tasks beyond the sole implicit owner) runs the planned route unchanged. A spec whose tasks are all done reads [references/gate-selection.md](references/gate-selection.md) for the QA decision and then routes to make-pr. A spec with an existing PR, including a merged PR with unfinished tail work, reads [references/tail.md](references/tail.md).
+
+Keep `ROUTE_JSON` inside the tool process or an ephemeral run temporary file, not tool output. Before handing a fallback to the host, run this projection with `result` parsed from that JSON; print only `host_route`. Shared QA/fork consumers read the retained full JSON directly. No durable judge state or answer log is created.
+
+```python
+# fence:judge-route-consumer
+if not result["available"]:
+    route_value = "host"
+    host_route = {"route": "host", "line": "Route: host (jev-unavailable(%s))" % result["reason"]}
+    if result.get("pr_probe_failed"):
+        host_route["pr_probe_failed"] = True
+else:
+    decision = result["decision"]
+    route_value = decision["value"] if decision["met"] else "host"
+    if route_value == "host":
+        candidates = decision.get("candidates", [])
+        detail = ", ".join("%s %.2f" % (kind, probability) for kind, probability in candidates)
+        host_route = {"route": "host", "candidates": candidates,
+                      "line": "Route: host (jev below floor: %s)" % detail}
+    elif "kind" in result["answers"]:
+        host_route = {"route": route_value, "line": "Route: %s (jev %.2f)" % (
+            route_value, result["answers"]["kind"]["confidence"])}
+    else:
+        host_route = {"route": route_value, "line": "Route: %s (code)" % route_value}
+    if route_value != "host":
+        if decision.get("research_recommended"):
+            host_route["next_modifier"] = "read unfamiliar dependency documentation first"
+        if "defect_repro" in decision:
+            host_route["defect_repro"] = decision["defect_repro"]
+```
+
+`next_modifier` runs the research-only refine pass before work; `defect_repro=provided` runs the supplied repro, while `needed` obtains one before the fix. Neither branch predicts a verification result.
 
 When the starting point is intent that has not been captured and the criteria you would draft trip the tripwire, read [references/spec-count.md](references/spec-count.md); capture applies the same file at its split-choice step, so the count is decided once.
 
 When two routes would materially differ and the answer is not observable, read [references/prototype-before-ask.md](references/prototype-before-ask.md) before asking; ask at most one question per hop.
 
-**`EXPLAIN=1` ends here.** Print the recommendation shape from the route matrix (route, positive signal, safe skip and its kind, why not the alternatives) and stop. No `.flow/` write, no dispatch, no route recording.
+**`EXPLAIN=1` ends here.** Replace `--json` with `--explain` on the same judge invocation (never a second request) and print `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:`. The signal names the firing fact-grade Noul and probability; alternatives name the next two kinds and probabilities. Below-floor output names all three candidates and says the host decides; unavailable prints today's host recommendation with its reason. Stop. No `.flow/` write, no dispatch, no route recording.
 
 **Record the route.** Past the explain stop, when the match was a ready spec with no tasks and no recorded route, write the resolved route before anything else runs:
 

@@ -4,6 +4,24 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+Users with a TypeSafe API key can route work, recognize clean automated reviews,
+and select relevant memory with one short judgment request at each decision.
+Ambiguous answers return to the host, and users without a key keep the existing
+workflow.
+
+### Added
+
+- **Optional Jev judgment at six decision sites.** Clean-review classification
+  precedes land's regex; flow combines route, fork, and QA questions in one
+  request; memory search reranks up to 15 hits; confident mechanical tasks can
+  use the configured fast tier. Long-running tasks receive a bridge
+  recommendation. Existing review, QA, and merge gates retain their authority.
+  Set `TYPESAFE_API_KEY` in the host environment; `judge.enabled=false` disables
+  requests. See the [judge reference](plugins/flow-next/docs/judge.md) for the
+  fixed floors, failure paths, and evaluation limits.
+
 ## [flow-next 5.5.0] - 2026-09-14
 
 Two gaps closed in how the pipeline treats your own process. Before code exists, plan review and the technical refine pass now ask whether the plan repeats an edit or a decision and whether it bends the intended dependency direction, and the public claim states plainly what the pipeline does not prove about maintainability. And anyone who runs two flow-next sessions as the same person on one clone (a second terminal, a scheduled `flow --auto` tick, a second machine on a shared checkout) stops getting two workers silently dispatched onto one task: the second `flowctl start` refuses with a typed error instead of reading as a crash resume, and a genuine crash resume stays one explicit step.
