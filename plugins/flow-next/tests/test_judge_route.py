@@ -37,6 +37,11 @@ class JudgeRouteTests(unittest.TestCase):
             ({"spec_body": "Please plan this out"}, "plan"),
             ({"spec_body": "Separate owners implement each part"}, "plan"),
             ({"spec_body": "Ship in two PRs"}, "plan"),
+            ({"spec_body": "Please decompose this into tasks"}, "plan"),
+            # Isolated vocabulary and negated requests are not plan signals.
+            ({"spec_body": "Implement a decompose() helper for matrix factorization."}, "work_no_plan_default"),
+            ({"spec_body": "Do not decompose this into tasks; deliver one PR."}, "work_no_plan_default"),
+            ({"spec_body": "Don't plan this out; never break it down into tasks."}, "work_no_plan_default"),
             ({"ready": False}, "host"),
         ]
         for overrides, expected in cases:
@@ -113,6 +118,42 @@ class JudgeRouteTests(unittest.TestCase):
             self.assertEqual(len(state["spec_body"]), 100000)
             self.assertTrue(state["spec_body_truncated"])
             self.assertEqual(state["startable_target_fact"], "pnpm dev")
+
+    def test_target_preserves_documented_commands_and_rejects_placeholders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            cases = [
+                ("Start command: make dev", "make dev"),
+                ("Start command: pnpm dev:web", "pnpm dev:web"),
+                ("run `pnpm dev:web` locally", "pnpm dev:web"),
+                ("- Launch target: `http://127.0.0.1:<port>` on a port this run owns.", None),
+                ("- Start command: `npm run dev -- --port <port> --host 127.0.0.1`.", None),
+                ("Launch target: `http://127.0.0.1:8787`.", "http://127.0.0.1:8787"),
+            ]
+            for text, expected in cases:
+                with self.subTest(text=text):
+                    self.assertEqual(f.judge_startable_target(repo, text), expected)
+
+    def test_explain_json_keeps_structured_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "state.json"
+            state.write_text(json.dumps({
+                "view": "intent", "view_meaning": "An intent at intake", "repo": tmp, "intent": "Fix the crash on save",
+                "status": None, "ready": False, "no_plan": False, "tasks_total": 0, "tasks_done": 0,
+                "pr_exists": False, "pr_ref": None, "startable_target_fact": None,
+            }), encoding="utf-8")
+            args = SimpleNamespace(preset="route", spec=None, state_file=str(state), explain=True, json=True)
+            out = io.StringIO()
+            with patch.object(f, "get_repo_root", return_value=Path(tmp)), patch.object(f, "judge_evaluate", return_value={"available": False, "reason": "no_key"}), redirect_stdout(out):
+                f.cmd_judge(args)
+            result = json.loads(out.getvalue())
+            self.assertFalse(result["available"])
+            self.assertEqual(result["reason"], "no_key")
+            self.assertEqual(result["explain"][1], "Route: host (jev-unavailable(no_key))")
+            self.assertEqual([line.split(":", 1)[0] for line in result["explain"]], ["Next", "Route", "Signal", "Skip/narrow", "Why not the alternatives"])
+        workflow = (SCRIPTS.parent / "skills/flow-next-flow/workflow.md").read_text()
+        self.assertIn("Add `--explain` to the same `--json`", workflow)
+        self.assertNotIn("Replace `--json` with `--explain`", workflow)
 
     def test_explain_uses_same_answers(self):
         result = {"available": True, "decision": {"value": "defect", "candidates": [["defect", .91], ["build", .06], ["tiny", .02]]}, "answers": {"kind": {"confidence": .91}, "reports_defect": {"type": "noul", "noul": .94}, "tiny_one_context_change": {"type": "noul", "noul": .99}}}

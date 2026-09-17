@@ -23764,21 +23764,30 @@ def judge_startable_target(repo: Path, text: str = "") -> str | None:
             documents.append(path.read_text(encoding="utf-8"))
         except OSError:
             continue
+    def resolved(candidate: str) -> str | None:
+        # An unfilled `<port>`-style placeholder is documentation, not a target.
+        candidate = candidate.strip().rstrip(".,;)")
+        return candidate if candidate and not re.search(r"<[^>]*>", candidate) else None
+
     for document in documents:
         for line in document.splitlines():
             url = re.search(
                 r"(?:launch target|deploy(?:ment)?(?: url)?|dev(?:elopment)? url|base url|preconditions)"
-                r"[^\n]*?(https?://[^\s`<>]+)", line, re.I,
+                r"[^\n]*?(https?://[^\s`]+)", line, re.I,
             )
-            if url:
-                return url.group(1).rstrip(".,;)")
+            if url and resolved(url.group(1)):
+                return resolved(url.group(1))
+            # An explicitly labelled command is kept verbatim (`make dev`, `just serve`).
+            labelled = re.search(r"(?:start command|dev server|launch command)\s*:\s*`?([^`\n]+)", line, re.I)
+            if labelled and resolved(labelled.group(1)):
+                return resolved(labelled.group(1))
             command = re.search(
-                r"\b((?:npm|pnpm|yarn|bun) (?:run )?(?:dev|start)(?: [^`\n#]+)?|"
+                r"\b((?:npm|pnpm|yarn|bun) (?:run )?(?:dev|start)[\w:.-]*(?: [^`\n#]+)?|"
                 r"(?:python3? -m (?:http\.server|uvicorn)|uvicorn|flask run|cargo run)"
                 r"(?: [^`\n#]+)?)", line,
             )
-            if command:
-                return command.group(1).strip()
+            if command and resolved(command.group(1)):
+                return resolved(command.group(1))
     return None
 
 
@@ -23858,7 +23867,8 @@ def judge_route_lifecycle(state: dict) -> dict | None:
         return decision("work_no_plan_default", "recorded no_plan")
     text = state["spec_body"]
     patterns = {
-        "asks_for_plan": r"\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\bbreak (this|it) (down )?into tasks\b|\btask plan\b|\bdecompose\b",
+        # Affirmative requests only: a negated request or a code identifier is not a plan signal.
+        "asks_for_plan": r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\b(?:break|split|decompose) (this|it) (down )?into tasks\b|\btask plan\b)",
         "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
         "staged_prs": r"\b(separate|two|three|several|multiple|staged|stacked)\s+prs?\b|\bin (two|three) prs\b",
     }
@@ -24477,6 +24487,9 @@ def cmd_judge(args: argparse.Namespace) -> None:
     if args.explain and not args.json:
         print("\n".join(judge_route_explain(result, state)).encode("ascii", "backslashreplace").decode("ascii"))
     else:
+        if args.explain:
+            # One request serves both the projection and the explain rendering.
+            result["explain"] = judge_route_explain(result, state)
         print(json.dumps(result, ensure_ascii=True))
 
 

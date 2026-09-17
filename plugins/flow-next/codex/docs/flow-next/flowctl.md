@@ -1060,6 +1060,7 @@ Classify one supplied state with a bundled TypeSafe Jev preset and apply its dec
 flowctl judge --preset <name> --state-file state.json [--json]
 flowctl judge --preset route --spec <spec-id> --json
 flowctl judge --preset route --spec <spec-id> --explain
+flowctl judge --preset route --spec <spec-id> --explain --json
 flowctl judge --preset qa-gate --spec <spec-id> --json
 ```
 
@@ -1089,7 +1090,8 @@ over 32k tokens at four characters per token is rejected without sending.
 The command never writes state, answers, or credentials to disk.
 
 `--spec` assembles route or QA facts from the live spec and repository;
-`--explain` prints the route recommendation instead of JSON. A failed PR probe
+`--explain` prints the route recommendation instead of JSON; with `--json` the
+structured result gains an `explain` list of those lines instead. A failed PR probe
 adds `pr_probe_failed: true` to the unavailable result so the caller preserves
 its existing failure outcome. Available live-route decisions include `pr_ref`
 and `startable_target_fact` for reuse by the tail and QA gates.
