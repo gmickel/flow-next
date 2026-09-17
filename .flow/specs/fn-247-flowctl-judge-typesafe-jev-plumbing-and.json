@@ -10,6 +10,7 @@
   "id": "fn-247-flowctl-judge-typesafe-jev-plumbing-and",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-09-17T03:54:20.799898Z",
@@ -299,5 +300,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-17T03:54:20.800979Z"
+  "updated_at": "2026-09-17T03:54:55.340676Z"
 }
