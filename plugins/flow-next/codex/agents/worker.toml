@@ -19,7 +19,6 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
 - `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
 - `TIER_LINE` - the conductor's dispatch decision; retain in the done summary, adding the evidenced actual model only after execution.
-- `MEMORY_FINDINGS` - optional conductor findings path; read it once and reuse instead of running the same memory query.
 - `IMPLEMENTER` - optional; present for an explicit invocation model (`<model>` or `<model> at <effort>`) or a conductor-selected confident mechanical fast tier; an explicit invocation always wins. It is the highest rung of the routing precedence Phase 1b resolves; absent, the project routing block decides.
 
 ## Phase 0: Enter the assigned workspace (FIRST)
@@ -72,7 +71,7 @@ Narrow with `--track bug|knowledge`, `--category <cat>`, `--module <path>`, or `
 
 Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surface via the bundle's memory index and `memory search` (track=`legacy`) until `flowctl memory migrate` has run.
 
-When `MEMORY_FINDINGS` was supplied, read that pointer and skip duplicate retrieval. Otherwise, from the bundle's memory index, look for entries relevant to your task's technology/domain/module — then `memory search` / `memory read` the ones that matter.
+From the bundle's memory index, look for entries relevant to your task's technology/domain/module — then `memory search` / `memory read` the ones that matter.
 
 **Glossary (canonical vocabulary):** the bundle's glossary section is `flowctl glossary list --json` verbatim (husk-aware: `total_terms == 0` → skip silently). When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed). **Only the matching entries' definitions are kept** — they are the canonical meanings for naming and concepts in this task, and the implementation must not contradict them. Pulling the whole glossary into context has broken this. No glossary, a husk, or zero matches → skip, zero change.
 

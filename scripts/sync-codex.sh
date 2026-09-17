@@ -621,7 +621,6 @@ HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
 IMPLEMENTER: <model> at <effort>
 TIER_LINE: <dispatch Tier: line>
-MEMORY_FINDINGS: <findings path, when retrieved by conductor>
 FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 

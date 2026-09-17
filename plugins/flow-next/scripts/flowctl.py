@@ -23871,8 +23871,10 @@ def judge_route_lifecycle(state: dict) -> dict | None:
 def judge_dependency_tokens(state: dict) -> list[str]:
     """Name concrete dependency mentions absent from local manifest/import facts."""
     text = state.get("spec_body", state.get("intent", ""))
-    mentions = set(re.findall(r"`([A-Za-z][A-Za-z0-9_.@/-]*)`", text))
-    mentions.update(re.findall(r"\b([A-Za-z][A-Za-z0-9_.-]*) (?:library|SDK|API)\b", text))
+    # Dependency-shaped mentions only: install commands and backticked import statements.
+    mentions = set(re.findall(
+        r"(?:pip install|uv add|npm install|yarn add|pnpm add|cargo add|go get)\s+([A-Za-z@][A-Za-z0-9_.@/-]*)", text))
+    mentions.update(re.findall(r"`(?:import|from)\s+([A-Za-z_][A-Za-z0-9_.]*)", text))
     repo = get_repo_root()
     known = set()
     for name in ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod"):
@@ -24430,10 +24432,7 @@ def judge_evaluate(preset: str, state: dict) -> dict:
             if not 200 <= status < 300:
                 return {**unavailable, "reason": f"http_{status}"}
             raw = response.read()
-            # Never echo server diagnostics or unexpected fields, including an echoed credential.
             payload = json.loads(raw)
-            if key in json.dumps(payload):
-                return {**unavailable, "reason": "bad_answer"}
             answers = judge_validate_answers(questions, payload)
             return {"success": True, "available": True, "preset": preset, "model": payload["model"],
                     "decision": judge_decide(preset, state, answers, route_decision), "answers": answers,

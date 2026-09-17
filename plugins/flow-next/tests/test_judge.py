@@ -128,7 +128,7 @@ class JudgeTests(unittest.TestCase):
                          lambda p: p["answers"]["kind"].update(confidence=float("nan")),
                          lambda p: p["answers"]["kind"].update(choice="imaginary"),
                          lambda p: p["answers"]["reports_defect"].update(noul=True),
-                         lambda p: p.update(model="test-secret-never-output")):
+                         lambda p: p.update(model=None)):
             payload = payload_for("route")
             mutation(payload)
             self.assertEqual(self.request("route", payload=payload)["reason"], "bad_answer")

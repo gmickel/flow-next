@@ -88,8 +88,8 @@ class JudgeRouteTests(unittest.TestCase):
             (repo / "package.json").write_text('{"dependencies":{"react":"1"}}')
             (repo / "app.py").write_text("import sqlite3\n")
             with patch.object(f, "get_repo_root", return_value=repo), patch.object(f.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="app.py\n")):
-                tokens = f.judge_dependency_tokens({"intent": "Use `react`, `sqlite3` and `newlib`; TypeSafe API"})
-            self.assertEqual(tokens, ["TypeSafe", "newlib"])
+                tokens = f.judge_dependency_tokens({"intent": "Use the react library, `import sqlite3`, run `npm install newlib` and `pip install typesafe`; keep `flowctl` unchanged"})
+            self.assertEqual(tokens, ["newlib", "typesafe"])
 
     def test_presentation_skip_cells_match_matrix(self):
         matrix = (SCRIPTS.parent / "skills/flow-next-flow/references/route-matrix.md").read_text()

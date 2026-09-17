@@ -82,7 +82,7 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertEqual(out["fork_line"], "fork-gate: host (jev-unavailable(no_key))")
 
     def test_memory_applies_returned_order_and_spawn_fallback(self):
-        path = "skills/flow-next-work/references/judge-memory.md"
+        path = "skills/flow-next-plan/references/judge-memory.md"
         matches = [{"entry_id": "b", "jev_score": 2, "jev_rank": 1},
                    {"entry_id": "a", "jev_score": 1, "jev_rank": 2}]
         out = execute(path, "fence:judge-memory-consumer", result={"matches": matches, "rerank": "jev", "stage_line": "memory: reranked (jev, 3 -> 2)"})

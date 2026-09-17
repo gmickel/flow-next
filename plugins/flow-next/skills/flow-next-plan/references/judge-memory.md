@@ -15,4 +15,4 @@ spawn_memory_scout = result["rerank"] == "bm25" and bool(memory_matches)
 memory_line = result["stage_line"]
 ```
 
-For work, store the findings in the existing run temporary area and pass its `MEMORY_FINDINGS` path; plan consumes the table directly. A retrieval with no hits is complete regardless of judge availability.
+Plan consumes the table directly; workers run their own `--rerank` search at anchor time. A retrieval with no hits is complete regardless of judge availability.

@@ -118,7 +118,7 @@ and carry the admitted owner to 3a.
 
 Done when: the input is classified into exactly one of the five kinds, the mode (`SPEC_MODE` / `SINGLE_TASK_MODE`) is recorded, and a spec id exists to carry into Phase 2.
 
-When memory is enabled, apply [references/judge-memory.md](references/judge-memory.md) directly for the selected task/spec. Available reranks replace the memory-scout spawn; pass the findings pointer to workers rather than repeating the retrieval. Before any remaining scout dispatch apply [references/judge-tier.md](references/judge-tier.md).
+Before any scout dispatch apply [references/judge-tier.md](references/judge-tier.md).
 
 ## Phase 2: Apply Branch Choice
 
@@ -397,7 +397,6 @@ HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
 IMPLEMENTER: <model> at <effort>
 TIER_LINE: <dispatch Tier: line>
-MEMORY_FINDINGS: <findings path, when retrieved by conductor>
 FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 

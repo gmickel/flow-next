@@ -167,7 +167,7 @@ fi
 
 When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content; STOP and Read [`references/strategy-alignment.md`](references/strategy-alignment.md) before any further step — it owns the `## Strategy Alignment` and `## Strategy drift flagged for review` sections Step 5 renders. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to; load no reference.
 
-**Memory retrieval:** when enabled, first apply [the direct memory path](../flow-next-work/references/judge-memory.md); an available rerank replaces only the memory-scout spawn and supplies the same findings contract. Unavailable retains the scout.
+**Memory retrieval:** when enabled, first apply [the direct memory path](references/judge-memory.md); an available rerank replaces only the memory-scout spawn and supplies the same findings contract. Unavailable retains the scout.
 
 **Every other scout in the depth-appropriate set below runs, in parallel.** The set is keyed on `--depth` — a deterministic, user-signaled tier — never on your judgment of "what seems relevant". A fan-out that dropped a scout because it seemed irrelevant has broken this; that judgment-skip is the anti-pattern.
 
