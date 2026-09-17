@@ -93,8 +93,13 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertTrue(out["spawn_memory_scout"])
         self.assertEqual([m["entry_id"] for m in out["memory_matches"]], ["a", "b"])
         self.assertIn("jev-unavailable(no_key)", out["memory_line"])
+        # An empty first search on an unavailable judge still gets the scout's refinement.
         fallback["matches"] = []
-        self.assertFalse(execute(path, "fence:judge-memory-consumer", result=fallback)["spawn_memory_scout"])
+        out = execute(path, "fence:judge-memory-consumer", result=fallback)
+        self.assertTrue(out["spawn_memory_scout"])
+        self.assertEqual(out["memory_matches"], [])
+        empty = {"matches": [], "rerank": "jev", "stage_line": "memory: reranked (jev, 0 -> 0)"}
+        self.assertFalse(execute(path, "fence:judge-memory-consumer", result=empty)["spawn_memory_scout"])
 
     def test_shared_route_gate_decisions_are_consumed(self):
         answers = {"ui_observable_criteria": {"noul": 0.84}, "fork_present": {"noul": 0.8},
@@ -137,7 +142,8 @@ class JudgeConsumerTests(unittest.TestCase):
 
     def tier(self, choice="mechanical", confidence=0.88, **overrides):
         args = dict(result=result("tier", {"tier": {"choice": choice, "confidence": confidence, "probabilities": {choice: confidence}}}),
-                    explicit_model=None, fast_model="fast-test-model", can_spawn_model=True, can_bridge=False)
+                    explicit_model=None, fast_model="fast-test-model", can_spawn_model=True, can_bridge=False,
+                    role_model=None)
         args.update(overrides)
         return execute("skills/flow-next-work/references/judge-tier.md", "fence:judge-tier-dispatch", **args)
 
@@ -151,6 +157,22 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertEqual(calls[0]["model"], "fast-test-model")
         self.assertEqual(calls[0]["prompt"], "IMPLEMENTER: fast-test-model")
         self.assertIn("Tier: mechanical", out["tier_line"])
+
+    def test_tier_pinned_role_wins_over_spawn_parameter(self):
+        # Codex reach: a role's declared model beats the spawn parameter (reach/codex.md).
+        def effective_model(role_model, **spawn_kwargs):
+            return role_model or spawn_kwargs.get("model") or "session"
+        for role_model in ("gpt-5.6-terra", None):
+            with self.subTest(role_model=role_model):
+                out = self.tier(role_model=role_model)
+                actual = effective_model(role_model, **out["spawn_model_args"])
+                self.assertIn(actual, out["tier_line"])
+                self.assertEqual(out["selected_model"], None if role_model else "fast-test-model")
+        pinned = self.tier(role_model="gpt-5.6-terra")
+        self.assertIsNone(pinned["implementer"])
+        self.assertIn("(role pins model)", pinned["tier_line"])
+        pinned = self.tier(role_model="gpt-5.6-terra", explicit_model="user-model")
+        self.assertIn("explicit IMPLEMENTER preserved", pinned["tier_line"])
 
     def test_tier_preserves_explicit_and_unreachable_and_unavailable(self):
         for kwargs in ({"explicit_model": "user-model"}, {"fast_model": None},
