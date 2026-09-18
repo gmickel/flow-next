@@ -8,12 +8,93 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-248-capture-the-resolved-spec-template",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-248-capture-the-resolved-spec-template.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d30049524523480c54a11203f945e5dd74ad57d47d5660a670b2c00c47f61b99",
+      "backend": "codex",
+      "base_sha": "07905c2c36b6f96eea815e120e117fff6d2bc8dc",
+      "counter_kind": "impl",
+      "failure_class": "nonzero_exit",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8376f913cab59350f868f42188ef27c09ac05fd1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 75,
+      "output_sha256": "54a3f11c7b2d494ea37c84ca79ea09596e131b28e95c2073cb830fa99ab55bd5",
+      "reservation_id": "0a47d9589eb94a2ca747e98524775f3f",
+      "round_consumed": false,
+      "scope": "impl:fn-248-capture-the-resolved-spec-template.1",
+      "superseded_by": null,
+      "task": "fn-248-capture-the-resolved-spec-template.1",
+      "timestamp": "2026-09-18T15:29:11.640608Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "d30049524523480c54a11203f945e5dd74ad57d47d5660a670b2c00c47f61b99",
+      "backend": "codex",
+      "base_sha": "07905c2c36b6f96eea815e120e117fff6d2bc8dc",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-eea14ff2a89f94df5fa6b33f89ac0605",
+            "classification": "introduced",
+            "findingId": "finding-eea14ff2a89f94df5fa6b33f89ac0605",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8376f913cab59350f868f42188ef27c09ac05fd1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2137,
+      "output_sha256": "37706aea95bfcaa731fdf30ea82ff46faf728afab82adb3afa30bf73996ba0ba",
+      "reservation_id": "e64217d63a0c4eb7b5f3df78d7bc30d1",
+      "round_consumed": true,
+      "scope": "impl:fn-248-capture-the-resolved-spec-template.1",
+      "superseded_by": null,
+      "task": "fn-248-capture-the-resolved-spec-template.1",
+      "timestamp": "2026-09-18T15:35:10.180799Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-248-capture-the-resolved-spec-template.1": 0
+  },
   "spec_path": ".flow/specs/fn-248-capture-the-resolved-spec-template.md",
   "status": "open",
   "title": "capture: the resolved spec template decides which sections are written",
@@ -28,5 +109,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-18T14:49:29.272496Z"
+  "updated_at": "2026-09-18T15:35:10.182915Z"
 }

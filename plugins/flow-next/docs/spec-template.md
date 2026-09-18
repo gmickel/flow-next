@@ -98,6 +98,8 @@ Frontmatter and the `<!-- scope: ... -->` markers are authoring guidance, not sp
 
 `/flow-next:capture` writes the sections your template names and adds none it leaves out. The seven canonical sections are named as headings. The auxiliary sections (`Conversation Evidence`, `Strategy Alignment`, `Parked unknowns`, `Requirement coverage` and the rest) are named in the frontmatter `auxiliary_sections` list, and each still appears only when its own trigger fires.
 
+Position follows the template as well. An auxiliary section you place as a heading in your `SPEC.md` lands where you put it. One that is named only in the list takes the placement its list entry states, which for the bundled entries is `Conversation Evidence` at the top of the body and `Requirement coverage` at the end.
+
 To stop a section from landing in your specs, delete its entry from that list in your `SPEC.md`. Two entries are worth knowing about:
 
 - **`Conversation Evidence`** is the block of verbatim user quotes capture puts at the top of a spec. No tool reads it. Capture still collects the quotes during the run and still checks every `[user]` tag against them before it writes. Dropping the entry costs one thing. A reviewer who later doubts a `[user]` tag can no longer look the quote up in the spec.

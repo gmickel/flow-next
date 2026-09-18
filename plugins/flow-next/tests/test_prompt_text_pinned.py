@@ -184,9 +184,11 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/templates/spec.md":
         # fn-248 R1/R4: the auxiliary list gains `Requirement coverage` (so the
         # template names every section capture writes) and the customization
-        # comment says capture adds no section the template leaves out
+        # comment says capture adds no section the template leaves out. The
+        # `Conversation Evidence` and `Requirement coverage` entries also state
+        # their default placement, so position is the template's call too
         # (deliberate bump).
-        "d6564aa76b0704dcee03f972ba3f2d8b2bf38c8fbb5576eb2d1ee3b296ec746d",
+        "1d32373730f112696b567222cfe38f4e83dfaefc0c311f07f325393e2e07fbee",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
         "e95af5266a1a943423ca774b51a4d235fb205753b9615d12c051a78e4cc650e3",

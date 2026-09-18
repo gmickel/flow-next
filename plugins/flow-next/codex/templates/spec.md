@@ -17,12 +17,12 @@ auxiliary_sections:
   - Strategy Alignment       # written when STRATEGY.md has content
   - Strategy Conflicts       # written when STRATEGY.md has content
   - Glossary Conflicts       # written when doc-aware mode detects a vocabulary mismatch
-  - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail)
+  - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail); opens the body unless you place it as a heading
   - Resolved via Codebase    # written by /flow-next:refine --scope=technical
   - Resolved via Project Docs  # written by /flow-next:refine --scope=business
   - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
-  - Requirement coverage     # written by /flow-next:capture on a planned route; /flow-next:plan fills it
+  - Requirement coverage     # written by /flow-next:capture on a planned route; /flow-next:plan fills it; closes the body unless you place it as a heading
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
 
