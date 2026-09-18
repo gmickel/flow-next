@@ -94,6 +94,17 @@ Frontmatter and the `<!-- scope: ... -->` markers are authoring guidance, not sp
   Composable with [role passes](teams.md#roles-and-ownership): a platform or quality role's standing section is just another row of this table.
 - **Adding project vocabulary**, links to your ADRs / design docs / glossary, or a house rule ("every spec names the observability signal that proves it worked").
 
+### Leaving a section out
+
+`/flow-next:capture` writes the sections your template names and adds none it leaves out. The seven canonical sections are named as headings. The auxiliary sections (`Conversation Evidence`, `Strategy Alignment`, `Parked unknowns`, `Requirement coverage` and the rest) are named in the frontmatter `auxiliary_sections` list, and each still appears only when its own trigger fires.
+
+To stop a section from landing in your specs, delete its entry from that list in your `SPEC.md`. Two entries are worth knowing about:
+
+- **`Conversation Evidence`** is the block of verbatim user quotes capture puts at the top of a spec. No tool reads it. Capture still collects the quotes during the run and still checks every `[user]` tag against them before it writes. Dropping the entry costs one thing. A reviewer who later doubts a `[user]` tag can no longer look the quote up in the spec.
+- **`Requirement coverage`** is the placeholder table capture adds on a planned route. `/flow-next:plan` writes its own coverage table, so dropping the entry only means the table arrives with the plan.
+
+A `SPEC.md` written from scratch, with no `auxiliary_sections` list, gets no auxiliary sections from capture. A `SPEC.md` copied from the bundled file keeps the list and behaves as before.
+
 ### What breaks if you rename or remove a canonical heading
 
 These four headings are parsed by `flowctl`. Renaming or deleting one does not error - the corresponding feature silently degrades, which is worse. Verified against the current implementation:

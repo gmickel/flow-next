@@ -22,6 +22,7 @@ auxiliary_sections:
   - Resolved via Project Docs  # written by /flow-next:refine --scope=business
   - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
+  - Requirement coverage     # written by /flow-next:capture on a planned route; /flow-next:plan fills it
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
 
@@ -57,6 +58,11 @@ free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
 `## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
 the features that parse them (R-ID coverage, PR "Not in this PR", refine scope
 routing, Decision Context shape detection).
+
+/flow-next:capture writes the sections this file names and adds none it leaves out.
+Auxiliary sections are named in the frontmatter `auxiliary_sections` list. Drop an
+entry (e.g. `Conversation Evidence`, which no tool reads) and captured specs stop
+carrying it. A SPEC.md with no such list gets no auxiliary sections.
 
 Full guide, incl. the known limitation for custom sections under a refine pass:
 flow-next docs, "Customizing the scaffold for your project"

@@ -182,9 +182,11 @@ TEMPLATE_HASHES = {
     # SPEC_SKELETON_TEMPLATE constant used to carry: a scaffold edit is a
     # deliberate bump with a rationale in the commit message, never silent.
     "plugins/flow-next/templates/spec.md":
-        # fn-238 R15/R16: auxiliary-section comments name the renamed refine
-        # writer and add the `## Resolved via Research` block (deliberate bump).
-        "b38c5aed8a7297dc318b2d51dc854ec105e72ccba5cc0e0a508a4fdea29ff791",
+        # fn-248 R1/R4: the auxiliary list gains `Requirement coverage` (so the
+        # template names every section capture writes) and the customization
+        # comment says capture adds no section the template leaves out
+        # (deliberate bump).
+        "d6564aa76b0704dcee03f972ba3f2d8b2bf38c8fbb5576eb2d1ee3b296ec746d",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
         "e95af5266a1a943423ca774b51a4d235fb205753b9615d12c051a78e4cc650e3",

@@ -55,6 +55,10 @@ When a rule on this page collides with a contract of the emitting surface, the s
 - **Projection.** The drafting agent never overrides envelopes or projection-only source-truth constraints. The tracker-sync bridge projects. It never authors.
 - **Sourced outcomes.** Outcome-first ordering (rule 8) applies only when a sourced outcome exists in the payload. The drafting agent never invents outcome prose to satisfy the rule.
 
+## Project instruction files layer on top
+
+A project's own instruction file (`AGENTS.md`, `CLAUDE.md`, or the host's equivalent) adds house style on top of this contract. The drafting agent reads both in the same context, and the host injects the instruction file into subagents too. A length budget, a reading level, or a required phrasing written there reaches every artifact the agent drafts. The precedence above still holds. A house rule that would drop or reshape a section an emitting surface defines yields to that surface. This page sets no length rule on purpose. The right budget for a PR body differs from the right budget for a memory entry, so length belongs to the project.
+
 ## Scope boundary
 
 The contract covers the durable artifact surfaces named in the opening paragraph: PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, and changelogs. It makes no claim about code quality or maintainability decay. Prompt-side quality rules are an intercept intervention per SlopCodeBench (arXiv 2603.24755). That paper is why the claim stays this narrow. This page governs how the prose reads. Section 2.5 of [`../skills/flow-next-make-pr/workflow.md`](../../skills/flow-next-make-pr/workflow.md) governs what the prose may claim. This page cross-links that fabrication-side contract and leaves the eleven rules there.

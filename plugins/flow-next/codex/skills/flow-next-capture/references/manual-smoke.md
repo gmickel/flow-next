@@ -9,6 +9,7 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 
 - Phase 0 walks `.flow/specs/`, runs memory search if memory is initialized, detects compaction, applies idempotency. Branches into duplicate-detection question if ≥2 strong matches; exits cleanly on `abort`.
 - Phase 1 emits a `## Conversation Evidence` block with verbatim user quotes (≤30 lines).
+- Template decides the sections: with the bundled template the saved spec carries `## Conversation Evidence`; with a repo-root `SPEC.md` whose `auxiliary_sections` list omits it, the saved spec does not, and `[user]` tags are still checked against the Phase 1 evidence.
 - Phase 2 produces a draft with per-line source tags. Every acceptance criterion has one of `[user]` / `[paraphrase]` / `[inferred]`. Biz-context signals (R24) route to their destinations using only `[user]` / `[paraphrase]` tags; categories without conversation signal leave their destinations absent. `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6.
 - Phase 3 fires must-ask cases only when (a) title is genuinely ambiguous, (b) acceptance is untestable, (c) scope-conflict persists. Optional ambiguities are deferred to Phase 4.
 - Phase 4 materializes the body once and checks source-tag findability. An N>1 split gets one explicit choice, never a second body-approval question. Pre-rewrite readiness is observed before the write; no readiness question runs yet. Autofix retains its draft-only result without `--yes`.
