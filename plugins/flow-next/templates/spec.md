@@ -17,11 +17,12 @@ auxiliary_sections:
   - Strategy Alignment       # written when STRATEGY.md has content
   - Strategy Conflicts       # written when STRATEGY.md has content
   - Glossary Conflicts       # written when doc-aware mode detects a vocabulary mismatch
-  - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail)
+  - Conversation Evidence    # written by /flow-next:capture (source-tagged AC trail); opens the body unless you place it as a heading
   - Resolved via Codebase    # written by /flow-next:refine --scope=technical
   - Resolved via Project Docs  # written by /flow-next:refine --scope=business
   - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
+  - Requirement coverage     # written by /flow-next:capture on a planned route; /flow-next:plan fills it; closes the body unless you place it as a heading
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
 
@@ -57,6 +58,11 @@ free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
 `## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
 the features that parse them (R-ID coverage, PR "Not in this PR", refine scope
 routing, Decision Context shape detection).
+
+/flow-next:capture writes the sections this file names and adds none it leaves out.
+Auxiliary sections are named in the frontmatter `auxiliary_sections` list. Drop an
+entry (e.g. `Conversation Evidence`, which no tool reads) and captured specs stop
+carrying it. A SPEC.md with no such list gets no auxiliary sections.
 
 Full guide, incl. the known limitation for custom sections under a refine pass:
 flow-next docs, "Customizing the scaffold for your project"
