@@ -4,7 +4,9 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
-## Unreleased
+## [flow-next 5.5.1] - 2026-09-18
+
+Teams that customize their spec scaffold get the last two sections back under their control. A custom `SPEC.md` shaped every section of a captured spec except the evidence block at the top and the coverage table at the end, which capture added by itself. Now the scaffold decides those too, so a team whose reviewers scroll past 15 to 20 lines of raw prompt text on every read can drop the block, and the check that keeps a `[user]` tag honest still runs.
 
 ### Changed
 

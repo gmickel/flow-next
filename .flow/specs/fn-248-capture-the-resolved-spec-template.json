@@ -96,7 +96,7 @@
     "impl:fn-248-capture-the-resolved-spec-template.1": 0
   },
   "spec_path": ".flow/specs/fn-248-capture-the-resolved-spec-template.md",
-  "status": "open",
+  "status": "done",
   "title": "capture: the resolved spec template decides which sections are written",
   "tracker": {
     "baseHashFlow": null,
@@ -109,5 +109,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-18T15:35:10.182915Z"
+  "updated_at": "2026-09-18T16:15:06.896475Z"
 }
