@@ -248,7 +248,7 @@ Auxiliary section rules layered on the template:
 
 - Use the prose prefix format: `- **R1:** ...`, `- **R2:** ...`, etc.
 - Allocate sequentially from R1 in creation order. Capture-created specs have never been reviewed → no renumber concern (the renumber-forbidden rule from `flow-next-plan/steps.md:227-262` only applies after a review cycle).
-- R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match.
+- R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match whenever the coverage section is written (§2.2).
 - Plain markdown prose, not YAML.
 - When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
 
@@ -352,7 +352,8 @@ Once the criteria are drafted, read [`plan-vs-no-plan.md`](../flow-next-flow/ref
 - Untestable acceptance candidates flagged for Phase 3 must-ask.
 - `BIZ_SIGNAL_CATEGORIES` (0..9) computed for Phase 6 R25 dispatch.
 - `GLOSSARY_PROPOSALS` collected (≤5; empty when the glossary gate is closed).
-- `ROUTE_DIRECT` judged (§2.8); `## Requirement coverage` present only on a planned route.
+- `ROUTE_DIRECT` judged (§2.8); `## Requirement coverage` present only on a planned route AND only when the resolved template names it.
+- The drafted body carries no section the resolved template leaves out (§2.2), `## Conversation Evidence` included.
 
 ---
 
