@@ -30,8 +30,10 @@ Read [references/route-matrix.md](references/route-matrix.md). Ask once per hop,
 
 ```bash
 ROUTE_JSON="$("$FLOWCTL" judge --preset route --spec <spec-id> --json)"
-# Intake without a live spec: state contains view=intent + intent, or
-# view=brief + spec_title/spec_body, and the documented route fields.
+# Intake without a live spec: the state file is exactly one of
+#   {"view": "intent", "intent": "<text>"}
+#   {"view": "brief", "spec_title": "<title>", "spec_body": "<body>"}
+# Code assembles every other route fact; write no lifecycle or PR field.
 ROUTE_JSON="$("$FLOWCTL" judge --preset route --state-file <route-state.json> --json)"
 ```
 

@@ -4,6 +4,16 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **Route judging works at intake.** `flowctl judge --preset route --state-file`
+  rejected the state an idea or a brief arrives with, because it required
+  lifecycle, PR, and repository facts before assembling them. The state file
+  now holds only `view` and its text; code assembles the rest. A state file
+  missing several fields names all of them in one error, on every preset.
+
 ## [flow-next 5.6.0] - 2026-09-19
 
 Users with a TypeSafe API key can route work, recognize clean automated reviews,

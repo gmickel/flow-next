@@ -23840,9 +23840,15 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
     }
     if state.get("view") in meanings:
         state["view_meaning"] = meanings[state["view"]]
+    if state.get("view") in ("intent", "brief"):
+        # Intake has no lifecycle: the absent facts are assembled here, never asked of the host.
+        for key, value in (("status", None), ("ready", False), ("no_plan", False), ("tasks_total", 0),
+                           ("tasks_done", 0), ("pr_exists", False), ("pr_ref", None)):
+            state.setdefault(key, value)
     state.setdefault("repo", str(repo))
     text = state.get("spec_body", state.get("intent", ""))
-    state["startable_target_fact"] = judge_startable_target(repo, text)
+    # A non-text artifact is validation's error to name, not assembly's crash.
+    state["startable_target_fact"] = judge_startable_target(repo, text if isinstance(text, str) else "")
     if isinstance(state.get("spec_body"), str) and len(state["spec_body"]) > 100000:
         state["spec_body"] = state["spec_body"][:100000]
         state["spec_body_truncated"] = True
@@ -24278,9 +24284,9 @@ def judge_validate_state(preset: str, state: dict) -> None:
         if state.get("view") not in ("intent", "brief", "live"):
             raise ValueError("state field view must be intent, brief, or live")
         required += ["intent"] if state["view"] == "intent" else ["spec_title", "spec_body"]
-    for key in required:
-        if key not in state:
-            raise ValueError("missing required state field: " + key)
+    missing = [key for key in required if key not in state]
+    if missing:
+        raise ValueError("missing required state field: " + ", ".join(missing))
     text_fields = {"clean-review": ["body"], "qa-gate": ["acceptance"], "fork-gate": ["text"],
                    "memory-rerank": ["query"], "tier": ["task_title", "task_body", "acceptance", "repo"],
                    "route": ["view_meaning", "repo"] + (["intent"] if state.get("view") == "intent" else ["spec_title", "spec_body"])}
@@ -24469,9 +24475,9 @@ def cmd_judge(args: argparse.Namespace) -> None:
         state = json.loads(Path(args.state_file).read_text(encoding="utf-8")) if args.state_file else {}
         if not isinstance(state, dict):
             raise ValueError("state must be a JSON object")
-        if not args.spec:
-            judge_validate_state(args.preset, state)
         if args.preset == "route":
+            # Assembly fills the code-owned facts, so intake supplies only its text;
+            # judge_evaluate validates the assembled state before any request.
             state = judge_route_state(state, args.spec)
         elif args.preset == "qa-gate" and args.spec:
             flow_dir = get_flow_dir()
