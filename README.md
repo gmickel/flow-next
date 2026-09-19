@@ -12,15 +12,23 @@
 
 **Implementation got cheap. Reviewing it, verifying it, and keeping a codebase coherent did not.**
 
-Flow-Next is a workflow plugin that runs inside your coding agent. Give it the change you want and the rules your project follows. It turns that intent into specs, implementation, review, and pull requests with evidence. Your specs, decisions, and task state live in your repository.
-
-<img src="assets/flow-next-pipeline.gif" alt="A real pipeline run: the unattended driver plans the spec, cross-model plan review catches a gap and ships, the worker implements with tests, impl review ships, ending on the task receipt" width="860">
-
-*A real recorded run: plan, then cross-model plan review (catches a missing guard, fix, SHIP), then implement plus tests, then impl review SHIP, ending on the receipt. Nothing staged; every frame is live output.*
-
-<sub>The recording drives each tick with `claude -p "..."` (Claude Code's non-interactive / headless mode) so the whole run captures unattended. In normal use you type the prompt or the `/flow-next:...` command in your interactive session: same pipeline, same gates.</sub>
-
 </div>
+
+Flow-Next runs inside your coding agent. Give it anything you need to fix, improve, or build. It picks the pipeline for that kind of work, runs it with a different model family reviewing every handover, and stops at a pull request that carries its own evidence.
+
+| You say | What Flow-Next does |
+|---|---|
+| "This fails: `<pasted stack trace>`" | Reproduces it as a failing test, makes that test the requirement, fixes it, gets the fix reviewed, opens a draft PR. |
+| "Add passwordless login" (or the conversation you just had about it) | Captures a spec with numbered acceptance criteria, builds it, reviews it, opens a PR that maps every change to a criterion. |
+| "The /reports page takes four seconds, it should take under one" | Measures on a real surface before any edit. The before-and-after numbers are the evidence. |
+| "Extract the pricing rules into their own module" | Pins a characterization test first, so the refactor is proven to keep behaviour. |
+| "Work ticket WOR-17" | Reads the issue through the access you already have and routes on what it says. |
+| "Why does the parser reject empty headers?" | Answers with citations from git history and the project's decision memory. Writes nothing. |
+| `/flow-next:flow --auto` | The same pipeline unattended: routes, builds, reviews, opens the PR, and with `--until=merge` babysits CI and review threads and merges when the receipts say so. |
+
+Every stage prints `ran`, `skipped(<reason>)`, or `failed(<reason>)`. The model that wrote the diff never reviews it. Specs, decisions, task state, and receipts live under `.flow/` in your repository and stay readable if you stop using Flow-Next. `flow --explain <anything>` prints the route it would take and why, and writes nothing.
+
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode.
 
 > 📖 **[Doc index](plugins/flow-next/docs/README.md)** · 👥 **[Teams guide](plugins/flow-next/docs/teams.md)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)** · **[Full documentation site: flow-next.dev](https://flow-next.dev)**
 
