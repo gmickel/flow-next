@@ -2044,7 +2044,7 @@ flowctl glossary remove <term> [--json]
 
 ### strategy
 
-Project strategy commands for `STRATEGY.md` at the **repo root** (single-root; lives outside `.flow/` so it survives flow-next removal). Read-only plumbing - the `/flow-next:strategy` skill writes the file. See [`strategy.md`](strategy.md).
+Project strategy commands for `STRATEGY.md` at the **repo root** (single-root; lives outside `.flow/` so it survives flow-next removal). Read-only plumbing - the `/flow-next:strategy` skill writes the file. See [Strategy on flow-next.dev](https://flow-next.dev/skills/strategy/).
 
 ```bash
 flowctl strategy status [--json]

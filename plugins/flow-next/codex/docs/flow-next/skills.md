@@ -7,7 +7,7 @@ Every stable skill flow-next ships, in one table. 31 skills: 26 slash-command-tr
 
 One surface ships without a row here, on purpose: `/flow-next:uninstall` is a command with no skill behind it.
 
-> Lifecycle position and narrative for the core commands: [root README - How the flow works](https://github.com/gmickel/flow-next/blob/main/README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](https://github.com/gmickel/flow-next/blob/main/README.md#commands) with flags and opt-in notes.
+> Lifecycle position and narrative for the core commands: [introduction on flow-next.dev](https://flow-next.dev/introduction/). Slash commands also appear in the [skills catalog on flow-next.dev](https://flow-next.dev/skills/) with flags and opt-in notes.
 
 ## Lifecycle skills
 
@@ -67,6 +67,6 @@ No slash command - just describe what you want.
 
 ## See also
 
-- [Root README - Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) - the slash-command table with flags and opt-in notes.
+- [Skills catalog on flow-next.dev](https://flow-next.dev/skills/) - the slash-command table with flags and opt-in notes.
 - [`README.md`](README.md) - the doc index (subsystem + workflow references).
 - [`../../../agent_docs/adding-skills.md`](https://github.com/gmickel/flow-next/blob/main/agent_docs/adding-skills.md) - how to add a new skill (the three-edit rule).

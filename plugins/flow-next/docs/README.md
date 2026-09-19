@@ -32,7 +32,7 @@ The files below stay in the repository because something at runtime reads them: 
 | [`glossary.md`](glossary.md) | How the repo-root `GLOSSARY.md` file is shaped, resolved, and edited with `flowctl glossary`; no site page covers the file mechanics yet |
 | [`ci-workflow-example.yml`](ci-workflow-example.yml) | `flowctl.md` links it as the drop-in `flowctl validate --all` job; the mirror rewrites its link |
 
-Skill prose lives beside each skill under [`../skills/`](../skills/). The flow conductor is [`flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md) (`/flow-next:flow --explain` prints a route without running it), and the optional chart stage is [`flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md).
+Skill prose lives beside each skill under `../skills/`. The flow conductor is [`flow-next-flow/SKILL.md`](../skills/flow-next-flow/SKILL.md) (`/flow-next:flow --explain` prints a route without running it), and the optional chart stage is [`flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md).
 
 ## Conventions
 
