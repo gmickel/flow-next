@@ -188,25 +188,37 @@ class TestInstallCursorNoUnderLists(unittest.TestCase):
         )
 
 
-class TestReadmeCursorMarketplace(unittest.TestCase):
-    def test_readme_cursor_mentions_marketplace_import(self) -> None:
-        text = _read(README_MD)
-        # Platforms table Cursor row.
-        m = re.search(
-            r"\|\s*Cursor\s*\|[^|]+\|",
-            text,
-            re.IGNORECASE,
+class TestPlatformsMatrixCursorMarketplace(unittest.TestCase):
+    def test_platform_matrix_cursor_row_mentions_marketplace_import(self) -> None:
+        # The root README is the medium-length front door and links to the
+        # site for per-host install; the platform matrix row lives in
+        # platforms.md (the canonical home named by the install-block comment).
+        text = _read(PLATFORMS_MD)
+        rows = [
+            m.group(0).lower()
+            for m in re.finditer(r"\|\s*Cursor\s*\|[^|]+\|", text, re.IGNORECASE)
+        ]
+        self.assertTrue(rows, "platforms.md must have a Cursor platform matrix row")
+        row = next(
+            (
+                r
+                for r in rows
+                if "marketplace" in r and ("import" in r or "team" in r)
+            ),
+            None,
         )
-        self.assertIsNotNone(m, "README.md must have a Cursor platforms table row")
-        row = m.group(0).lower()
-        self.assertTrue(
-            "marketplace" in row and ("import" in row or "team" in row),
-            "README Cursor row must mention marketplace import",
+        self.assertIsNotNone(
+            row, "platforms.md Cursor matrix row must mention marketplace import"
         )
         self.assertIsNone(
             UNDER_LISTS_RE.search(row),
-            "README Cursor row must not claim autocomplete under-list",
+            "platforms.md Cursor matrix row must not claim autocomplete under-list",
         )
+
+    def test_readme_points_at_site_install_for_cursor(self) -> None:
+        text = _read(README_MD)
+        self.assertIn("Cursor", text)
+        self.assertIn("https://flow-next.dev/install/", text)
 
 
 if __name__ == "__main__":

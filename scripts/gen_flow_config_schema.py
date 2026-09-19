@@ -41,6 +41,12 @@ DESCRIPTIONS: dict[str, str] = {
         "/flow-next:setup. Inert to flowctl (just a string); editors are "
         "the consumer."
     ),
+    "judge": "Optional TypeSafe Jev judgment settings.",
+    "judge.enabled": (
+        "Enable the optional judge when TYPESAFE_API_KEY is present in the "
+        "environment. Default true; false disables requests. Invalid "
+        "non-boolean values warn and behave as true. See docs/judge.md."
+    ),
     "memory": "Memory system settings (.flow/memory/ categorized learnings).",
     "memory.enabled": (
         "Enable the memory system: skills capture and search categorized "
@@ -554,6 +560,8 @@ def _build_table() -> list[tuple[str, dict]]:
     """Ordered TABLE: dotted path -> container or leaf fragment."""
     return [
         ("$schema", {"type": "string"}),
+        ("judge", {"kind": "object", "open": False}),
+        ("judge.enabled", {"type": "boolean"}),
         ("memory", {"kind": "object", "open": False}),
         ("memory.enabled", {"type": "boolean"}),
         ("planSync", {"kind": "object", "open": False}),

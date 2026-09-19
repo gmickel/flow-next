@@ -41,19 +41,26 @@ It re-runs `scripts/sync-codex.sh` (so release step 2 below is a belt-and-braces
 ./scripts/sync-codex.sh                            # 2. regenerate Codex mirror
 jq . plugins/flow-next/.codex-plugin/plugin.json   # 3. verify version
 # 4. update CHANGELOG.md with [flow-next X.Y.Z] entry (repo canonical, keep-a-changelog style)
-# 5. update the flow-next.dev docs-site changelog — see "Docs-site changelog entry" below
-#    ALSO bump FLOW_NEXT_VERSION in that repo's src/lib/site.ts (the site version
-#    badge) — bump.sh does NOT touch it and it goes stale silently (caught at 3.18.0)
-# 6. if this release has a behavior-affecting change or new opt-in default, append one line
-#    to plugins/flow-next/docs/README.md § "Notable updates" (newest first; format is
-#    documented inline in that section). Same story on the flow-next.dev landing page
-#    when that surface exists for the release.
-# 7. BIG-PICTURE DOCS SWEEP (repo docs AND flow-next.dev) — a feature page is not enough.
-#    Ask: which OTHER pages does this change touch? Does it alter the pipeline picture
-#    (strategy/pipeline, teams.md lifecycle map, the guide's pipeline breakdown)? Does it
-#    give a team role a new surface (teams/collaboration, teams.md roles table)? Does it
-#    interact with an existing feature's page (cross-link both ways)? A new capability
-#    documented only on its own page is half-shipped.
+# 5. DOCS LIVE ON flow-next.dev. The site is the canonical user documentation; the repo
+#    keeps README.md (the medium-length front door) and the runtime docs under
+#    plugins/flow-next/docs/ that skills, templates, hooks, the schema, and tests read
+#    (its README lists each file and its reader). Update the site pages the release
+#    touches: the feature's page, the pages it interacts with (cross-link both ways),
+#    the pipeline picture (understand/pipeline, compose-the-pipeline, for-teams) when
+#    the shape changes, and the homepage desk (src/pages/index.astro; see "Notable
+#    updates" below). Update BOTH site navs in src/lib/site.ts when a page is added,
+#    renamed, or moved (a page not in the nav is invisible; a moved slug gets a
+#    redirect in astro.config.ts). A new capability documented only on its own page
+#    is half-shipped.
+# 6. flow-next.dev changelog entry — see "Docs-site changelog entry" below — AND bump
+#    FLOW_NEXT_VERSION in that repo's src/lib/site.ts plus package.json version.
+#    bump.sh does NOT touch them and they go stale silently (caught at 3.18.0).
+# 7. REPO DOCS: touch README.md only when the front-door claim, the you-say table, the
+#    install block, or the "Where to read more" links change. Touch a runtime doc under
+#    plugins/flow-next/docs/ only when the behaviour it documents changed (the tests
+#    that pin it will say so). The repo never regains a page that mirrors the site: a
+#    user-facing explanation that is not read at runtime goes to the site, and the
+#    repo links to it with the full https://flow-next.dev/... URL.
 # 8. NEW OR CHANGED CONFIG KEYS → the flow-next.dev config reference
 #    (src/content/docs/flowctl/configuration.mdx) is generated from
 #    plugins/flow-next/schema/flow-config.schema.json and documents EVERY key. When a
@@ -130,11 +137,11 @@ Technical completeness still matters. Preserve migration notes, compatibility
 bounds, failure behavior, and measured proof, but place them after the reader
 understands the value.
 
-### Notable updates (docs home)
+### Notable updates (homepage desk)
 
-`plugins/flow-next/docs/README.md` § **Notable updates** is the GitHub docs entry point for behavior-affecting changes and new opt-in defaults - one line each plus how to enable, newest first. Append when a release introduces something a user (or agent reading the docs home) would otherwise miss. Do not dump the full CHANGELOG there; the section documents its own format inline.
+Behavior-affecting changes and new opt-in defaults surface on flow-next.dev, never in the repo. `plugins/flow-next/docs/README.md` carries no release notes since 5.5.1; it is the runtime-docs index and the `CHANGELOG.md` at the repo root is the full record.
 
-The flow-next.dev homepage carries a shorter rotating desk: one prominent latest
+The flow-next.dev homepage carries a rotating desk: one prominent latest
 update plus the three preceding notable releases, all visible at once. Do not
 turn it into a carousel or hide entries behind controls. On each behavior
 release, add the new outcome-first item at the front, remove the oldest homepage
@@ -159,6 +166,8 @@ the branch/commit you actually want to dogfood. (For prompt-only optimizations t
 to dogfood early — just re-run the installer.)
 
 ## Docs-site changelog entry (flow-next.dev)
+
+flow-next.dev is the canonical user documentation, so every release lands its documentation there: the feature pages and their cross-links, both navs in `src/lib/site.ts`, this changelog page, and `FLOW_NEXT_VERSION`. The repo side of a release is `CHANGELOG.md`, the version manifests, and, only when the front-door claim or install changes, `README.md`.
 
 The public, human-readable changelog at `~/work/flow-next.dev/src/content/docs/releases/changelog.mdx` is **not** a copy of the repo `CHANGELOG.md` — it is a *scannable* highlights page with a strict format. Every release MUST follow it so the page stays readable (one line per release, expand for detail) and the right-sidebar TOC stays a version index.
 

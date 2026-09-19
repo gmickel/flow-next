@@ -55,3 +55,5 @@ Skip/narrow: <the safe skip or narrow condition>
 Skip kind: signal absent | despite unresolved risk
 Why not the alternatives: <one line>
 ```
+
+The route preset embeds each intake kind's starting-state and positive-signal cells verbatim, joined by a period; keep the drift test green when changing those cells. Workflow Step 2 applies code lifecycle precedence before the kind Choice, and retains host judgment only for unavailable/below-floor decisions. `--explain` includes the `Route:` source and candidate probabilities.

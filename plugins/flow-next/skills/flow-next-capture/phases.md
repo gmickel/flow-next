@@ -22,7 +22,7 @@ Every acceptance criterion line, every decision-context line, every scope-boundi
 
 | Tag | Meaning | Acceptance test |
 |-----|---------|-----------------|
-| `[user]` | Verbatim from conversation evidence — the tagged content is FINDABLE in the `## Conversation Evidence` block (quote-level fidelity; trimming/ellipsis fine, rewording not) | Point at a specific evidence line containing these words; a close restatement is `[paraphrase]`, never `[user]`. |
+| `[user]` | Verbatim from conversation evidence — the tagged content is FINDABLE in the Phase 1 `Conversation Evidence`, whether or not the resolved template writes that block into the spec (quote-level fidelity; trimming/ellipsis fine, rewording not) | Point at a specific evidence line containing these words; a close restatement is `[paraphrase]`, never `[user]`. |
 | `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced). A close restatement of user wording belongs here, never under `[user]`. | The user expressed this idea, but agent rephrased to match spec conventions. Same content, cleaner wording. |
 | `[inferred]` | Agent fill-in (most-scrutinized; visible in the saved-spec summary) | Agent decided this; user did not state it explicitly. May be a reasonable default, may be wrong. |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim quote of approach / track body) | The criterion follows directly from a populated section in `STRATEGY.md` — the track name appears literal in the tag. Activates only when Phase 0 strategy snapshot is present. |

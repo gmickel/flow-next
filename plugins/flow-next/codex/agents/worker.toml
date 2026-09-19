@@ -18,7 +18,8 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
 - `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
-- `IMPLEMENTER` - optional; present only when the invocation named an implementer model explicitly (`<model>` or `<model> at <effort>`). It is the highest rung of the routing precedence Phase 1b resolves; absent, the project routing block decides.
+- `TIER_LINE` - the conductor's dispatch decision; retain in the done summary, adding the evidenced actual model only after execution.
+- `IMPLEMENTER` - optional; present for an explicit invocation model (`<model>` or `<model> at <effort>`) or a conductor-selected confident mechanical fast tier; an explicit invocation always wins. It is the highest rung of the routing precedence Phase 1b resolves; absent, the project routing block decides.
 
 ## Phase 0: Enter the assigned workspace (FIRST)
 
@@ -63,7 +64,7 @@ The bundle carries, verbatim and in fixed order: the task record + body (`show`/
 **The bundle is a floor, not a ceiling.** It replaces the discrete Phase-1 reads — it does not cap your context. Query further whenever useful:
 
 ```bash
-<FLOWCTL> memory search "<keyword>" --json   # by task keyword / module / tag
+<FLOWCTL> memory search "<keyword>" --rerank --json   # by task keyword / module / tag
 <FLOWCTL> memory read <entry-id>             # full entry body
 ```
 Narrow with `--track bug|knowledge`, `--category <cat>`, `--module <path>`, or `--tags "a,b"` when you have context. Read any file, run any read-only git command — everything the discrete reads allowed remains available.
@@ -131,7 +132,7 @@ Done when: the anchor bundle has been read, the baseline result is recorded (`gr
 
 ## Phase 1b: Bridged implementer (runs only when the implementer tier reaches a model over a CLI bridge)
 
-**Resolve the implementer tier before Phase 1.5** — routing precedence, highest first: the `IMPLEMENTER` line in your dispatch prompt (the conductor passes it only when the invocation named a model explicitly; you have no other view of the invocation), then the project routing block in the instruction file, then the agent definition's own default, then the session model. How this harness reaches the named model lives in its reach page (`plugins/flow-next/docs/reach/`, or the generic page when the host is undetectable):
+**Resolve the implementer tier before Phase 1.5** — routing precedence, highest first: the `IMPLEMENTER` line in your dispatch prompt (the conductor passes an explicit invocation or the judged mechanical tier; you have no other view of the invocation), then the project routing block in the instruction file, then the agent definition's own default, then the session model. How this harness reaches the named model lives in its reach page (`plugins/flow-next/docs/reach/`, or the generic page when the host is undetectable):
 
 - **Session model, or an in-host subagent model** → this phase is inert and ends here. Continue with Phase 1.5; the standard phases run unchanged and the summary carries no `implement` stage line.
 - **A model this harness reaches only by shelling out to another CLI** → this phase runs. You stay the task's worker (anchor, base commit, review dispatch, gates, evidence, `done`), and the bridged child becomes the task's owner: it reads the artifacts, implements, commits, and decides its own delegation.
@@ -582,6 +583,8 @@ second copy of what it says:
   the sandbox denied, a surprise the conductor must act on
 
 Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, the workspace and gate results on a parallel-wave task, and — where the path allows it — the review verdict.
+
+Return `actual_model: <model>` only from host execution metadata or the Phase 1b bridge command that ran. Include the conductor's `Tier:` line in the done summary, annotated with that actual model when evidenced; never infer it from `IMPLEMENTER`. If the host exposes no executed model, omit the field and annotation.
 
 ## Rules
 
