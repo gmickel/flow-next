@@ -8,11 +8,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Fixed
 
-- **Route judging works at intake.** `flowctl judge --preset route --state-file`
-  rejected the state an idea or a brief arrives with, because it required
-  lifecycle, PR, and repository facts before assembling them. The state file
-  now holds only `view` and its text; code assembles the rest. A state file
-  missing several fields names all of them in one error, on every preset.
+- **An idea or a brief handed to flow reaches the route judge on the first
+  try.** In 5.6.0 the judge rejected the state a new idea arrives with, so a
+  host spent minutes filling it in one field at a time and then routed on its
+  own judgment; the request itself takes about 0.6 seconds. The intake state
+  file now holds only `view` and its text (`intent`, or `spec_title` plus
+  `spec_body`), and code assembles the repository, lifecycle, and PR facts.
+  Existing specs were unaffected. On every preset, a state file missing several
+  fields names all of them in one error from `flowctl judge`.
 
 ## [flow-next 5.6.0] - 2026-09-19
 
