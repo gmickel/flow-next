@@ -74,6 +74,52 @@ class JudgeRouteTests(unittest.TestCase):
                         self.assertEqual(f.judge_route_lifecycle(state)["value"], "existing_pr_tail")
                     self.assertFalse(state["no_plan"])
 
+    def test_missing_branch_is_nothing_to_probe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            body = repo / "spec.md"
+            body.write_text("Implement feature", encoding="utf-8")
+            planned = [{"status": "todo"}, {"status": "done"}]
+            for branch, tasks, expected in ((None, planned, "work_planned"), ("", [], "work_no_plan_default")):
+                with self.subTest(branch=branch):
+                    spec_data = {"title": "Feature", "status": "open", "ready": True, "branch_name": branch}
+                    with patch.dict(f.os.environ, {"TYPESAFE_API_KEY": "test-key"}), patch.object(f, "get_config", return_value=True), patch.object(f, "get_repo_root", return_value=repo), patch.object(f, "get_flow_dir", return_value=repo), patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), patch.object(f, "load_json_or_exit", return_value=spec_data), patch.object(f, "normalize_epic", side_effect=lambda x: x), patch.object(f, "find_spec_md_path", return_value=body), patch.object(f.TaskInventory, "load", return_value=SimpleNamespace(by_spec={"fn-1-feature": tasks})), patch.object(f.subprocess, "run") as run:
+                        state = f.judge_route_state({}, "fn-1-feature")
+                        with patch.object(f, "judge_questions", return_value=[]), patch.object(f, "judge_decide", return_value={}):
+                            result = f.judge_evaluate("route", state)
+                    run.assert_not_called()
+                    self.assertIs(state["pr_exists"], False)
+                    self.assertIsNone(state["pr_ref"])
+                    self.assertEqual(f.judge_route_lifecycle(state)["value"], expected)
+                    self.assertTrue(result["available"])
+                    self.assertNotEqual(result.get("reason"), "transport")
+                    self.assertNotIn("pr_probe_failed", result)
+
+    def test_scanners_skip_non_utf8_files_and_explain_completes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "README.md").write_bytes("Dev server: `pnpm dev`\nCaf\xe9\n".encode("latin-1"))
+            (repo / "AGENTS.md").write_text("Launch command: `make serve`\n", encoding="utf-8")
+            (repo / "requirements.txt").write_bytes(b"caf\xe9lib\n")
+            (repo / "legacy.py").write_bytes(b"# caf\xe9\nimport sqlite3\n")
+            (repo / "app.py").write_text("import requests\n", encoding="utf-8")
+            self.assertEqual(f.judge_startable_target(repo), "make serve")
+            with patch.object(f, "get_repo_root", return_value=repo), patch.object(f.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="legacy.py\napp.py\n")):
+                tokens = f.judge_dependency_tokens({"intent": "`import requests`, `import sqlite3`, `pip install newlib`"})
+            self.assertEqual(tokens, ["newlib", "sqlite3"])
+            state = repo / "state.json"
+            state.write_text(json.dumps({
+                "view": "intent", "view_meaning": "An intent at intake", "repo": tmp,
+                "intent": "`pip install newlib` for the crash on save", "status": None, "ready": False,
+                "no_plan": False, "tasks_total": 0, "tasks_done": 0, "pr_exists": False, "pr_ref": None,
+                "startable_target_fact": None,
+            }), encoding="utf-8")
+            args = SimpleNamespace(preset="route", spec=None, state_file=str(state), explain=True, json=False)
+            out = io.StringIO()
+            with patch.object(f, "get_repo_root", return_value=repo), patch.object(f, "judge_evaluate", return_value={"available": False, "reason": "no_key"}), patch.object(f.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="legacy.py\napp.py\n")), redirect_stdout(out):
+                f.cmd_judge(args)
+            self.assertIn("Route: host (jev-unavailable(no_key))", out.getvalue())
+
     def test_standalone_qa_assembles_target_without_pr_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

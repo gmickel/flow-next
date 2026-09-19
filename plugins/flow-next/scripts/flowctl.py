@@ -23762,8 +23762,8 @@ def judge_startable_target(repo: Path, text: str = "") -> str | None:
     for path in paths:
         try:
             documents.append(path.read_text(encoding="utf-8"))
-        except OSError:
-            continue
+        except (OSError, UnicodeDecodeError):
+            continue  # An unreadable or non-UTF-8 document contributes no facts.
     def resolved(candidate: str) -> str | None:
         # An unfilled `<port>`-style placeholder is documentation, not a target.
         candidate = candidate.strip().rstrip(".,;)")
@@ -23811,7 +23811,10 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
             "pr_exists": None, "pr_ref": None,
         }
         branch = spec.get("branch_name")
-        if branch and os.environ.get("TYPESAFE_API_KEY") and get_config("judge.enabled", True) is not False:
+        if not branch:
+            # No branch means nothing to probe: absence is observed, not a probe failure.
+            state["pr_exists"] = False
+        elif os.environ.get("TYPESAFE_API_KEY") and get_config("judge.enabled", True) is not False:
             try:
                 probe = subprocess.run(
                     ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
@@ -23890,7 +23893,7 @@ def judge_dependency_tokens(state: dict) -> list[str]:
     for name in ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod"):
         try:
             known.update(re.findall(r"[A-Za-z][A-Za-z0-9_.@/-]*", (repo / name).read_text(encoding="utf-8").lower()))
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             pass
     # A tracked-file inventory excludes vendored/untracked trees; inspect Python import roots.
     try:
@@ -23900,8 +23903,8 @@ def judge_dependency_tokens(state: dict) -> list[str]:
             for name in paths.stdout.splitlines():
                 try:
                     source = (repo / name).read_text(encoding="utf-8")
-                except OSError:
-                    continue
+                except (OSError, UnicodeDecodeError):
+                    continue  # A non-UTF-8 source is skipped, never a crash.
                 known.update(x.lower() for x in re.findall(r"^(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)", source, re.M))
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -24480,16 +24483,17 @@ def cmd_judge(args: argparse.Namespace) -> None:
         if args.explain and args.preset != "route":
             raise ValueError("--explain applies only to the route preset")
         result = judge_evaluate(args.preset, state)
+        # One request serves both the projection and the explain rendering.
+        explain = judge_route_explain(result, state) if args.explain else None
     except (OSError, UnicodeError, json.JSONDecodeError):
         error_exit("state file is unreadable or is not JSON", use_json=args.json)
     except ValueError as exc:
         error_exit(str(exc), use_json=args.json)
-    if args.explain and not args.json:
-        print("\n".join(judge_route_explain(result, state)).encode("ascii", "backslashreplace").decode("ascii"))
+    if explain is not None and not args.json:
+        print("\n".join(explain).encode("ascii", "backslashreplace").decode("ascii"))
     else:
-        if args.explain:
-            # One request serves both the projection and the explain rendering.
-            result["explain"] = judge_route_explain(result, state)
+        if explain is not None:
+            result["explain"] = explain
         print(json.dumps(result, ensure_ascii=True))
 
 
