@@ -569,6 +569,8 @@ if [ -f "$phases" ]; then
 
 Implementation is the **implementer** tier: absent any preference, the worker runs on the session model. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches a non-session model — and what the degradation is when it cannot — lives in its reach page (`plugins/flow-next/docs/reach/`), never here.
 
+Before spawning, apply [references/judge-tier.md](references/judge-tier.md) once for this task. Use its selected model in the host spawn-model parameter as well as the `IMPLEMENTER:` line; an explicit invocation always wins.
+
 **When the implementer tier resolves to a model this harness reaches only over a CLI bridge, the worker bridges and the conductor never does.** The dispatch below is unchanged: the worker resolves the tier itself (worker Phase 1b), hands the task to the bridged child with the usage guide's brief, and reviews the child's commit range before its own review dispatch. The bridged child owns the task and its own delegation; a conductor that composed a brief, ran a bridge call, or fanned out on the implementer's behalf has broken this.
 
 Use the **worker** agent role to implement each selected task. For a multi-task
@@ -618,6 +620,7 @@ HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
 IMPLEMENTER: <model> at <effort>
+TIER_LINE: <dispatch Tier: line>
 FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
@@ -639,7 +642,7 @@ point — the worker's return, the host's own tool timeout or error, or a lost
 result — where 3d's side-effects rule classifies whatever the lane left
 behind.
 
-`IMPLEMENTER` is optional and carries the invocation's explicit implementer model (and effort) only — the highest rung of the routing precedence, which the fresh-context worker cannot otherwise see. Pass it when the user named an implementer in the moment; omit it when the project routing block or the session model should decide. The conductor passes the value and never bridges, composes a brief, or resolves reach itself.
+`IMPLEMENTER` carries an explicit invocation model first; otherwise it may carry the confident mechanical tier's reachable fast-scout model from `references/judge-tier.md`. Omit it when neither applies. Pass the native model through the spawn-model parameter too. The conductor never bridges or composes the worker's brief.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
@@ -653,7 +656,7 @@ internal handoff, not a public CLI or stored schema.
 
 **Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
 
-**Worker returns** (both paths): task id, terminal status, commit range, and the
+**Worker returns** (both paths): task id, terminal status, commit range, `actual_model` when evidenced, and the
 summary/evidence paths (plus the review receipt path when the single-worker path
 ran review). Content lives in those files — read them, never a restatement.
 

@@ -169,7 +169,7 @@ The capture and plan closers, `flow --explain`, and flow's own route step all re
 
 ## See also
 
-- [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline) - how the stages compose and the composition moves (chain, prompt-into, reorder, parallelize).
+- [Compose the pipeline on flow-next.dev](https://flow-next.dev/understand/compose-the-pipeline/) - how the stages compose and the composition moves (chain, prompt-into, reorder, parallelize).
 - [`../skills/flow-next-flow/SKILL.md`](../../skills/flow-next-flow/SKILL.md) - `/flow-next:flow`, the attended conductor that applies the routing reference; `--explain` shows the route without running it.
 - [`../skills/flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) - capture's Phase 6 closer, which reads the routing reference and prints its `Recommended next:` line.
 - [`../skills/flow-next-plan/references/next-steps-menu.md`](../../skills/flow-next-plan/references/next-steps-menu.md) - plan's interactive menu, which reads the same reference for the plan-review-vs-work decision.

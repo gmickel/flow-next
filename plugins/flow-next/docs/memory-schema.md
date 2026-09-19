@@ -323,5 +323,5 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 - [`review-findings.md`](review-findings.md) - structured receipt identity,
   currentness, bounds, fallback, and the consumer boundary with memory.
 - [`glossary.md`](glossary.md) - pairs naturally with the `knowledge/decisions/` subtree (terminology + load-bearing choices).
-- [`strategy.md`](strategy.md) - `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
+- [Strategy on flow-next.dev](https://flow-next.dev/skills/strategy/) - `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
 - [`flowctl.md`](flowctl.md) - full `flowctl memory` reference (every subcommand, flag, JSON shape).

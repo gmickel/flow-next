@@ -54,5 +54,5 @@ A small list of jargon terms is grep-guarded out of canonical skill / agent / co
 ## See also
 
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - this repo's own glossary: 18 load-bearing terms (Spec, Task, R-ID, Receipt, Gate, plan-sync, Tier, Reach, ...) with `_Avoid_` aliases. Long-form text: [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
-- [`strategy.md`](strategy.md) - peer doc for the repo-root `STRATEGY.md` file.
+- [Strategy on flow-next.dev](https://flow-next.dev/skills/strategy/) - the repo-root `STRATEGY.md` file; the `flowctl strategy` commands are in [`flowctl.md`](flowctl.md#strategy).
 - [`memory-schema.md`](memory-schema.md) - categorized memory schema; the `knowledge/decisions/` subtree pairs naturally with glossary as terminology + load-bearing choices.

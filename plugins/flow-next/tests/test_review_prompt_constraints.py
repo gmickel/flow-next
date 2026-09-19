@@ -180,6 +180,9 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("run_cursor_exec", "_cursor_run_exec"): 1,
                 ("run_claude_exec", "_claude_run_exec"): 1,
                 ("subprocess.run", "get_repo_root"): 1,
+                # fn-247: observed PR lifecycle and tracked dependency facts, not LLM bridges.
+                ("subprocess.run", "judge_route_state"): 1,
+                ("subprocess.run", "judge_dependency_tokens"): 1,
                 ("subprocess.run", "find_strategy_file"): 1,
                 ("subprocess.run", "get_state_dir"): 1,
                 ("subprocess.run", "run_rp_cli"): 1,

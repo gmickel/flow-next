@@ -167,7 +167,9 @@ fi
 
 When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content; STOP and Read [`references/strategy-alignment.md`](references/strategy-alignment.md) before any further step — it owns the `## Strategy Alignment` and `## Strategy drift flagged for review` sections Step 5 renders. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to; load no reference.
 
-**Every scout in the depth-appropriate set below runs, in parallel.** The set is keyed on `--depth` — a deterministic, user-signaled tier — never on your judgment of "what seems relevant". A fan-out that dropped a scout because it seemed irrelevant has broken this; that judgment-skip is the anti-pattern.
+**Memory retrieval:** when enabled, first apply [the direct memory path](references/judge-memory.md); an available rerank replaces only the memory-scout spawn and supplies the same findings contract. Unavailable retains the scout.
+
+**Every other scout in the depth-appropriate set below runs, in parallel.** The set is keyed on `--depth` — a deterministic, user-signaled tier — never on your judgment of "what seems relevant". A fan-out that dropped a scout because it seemed irrelevant has broken this; that judgment-skip is the anti-pattern.
 
 Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
 
@@ -189,11 +191,13 @@ Run ALL of these scouts in parallel:
 | `flow-next:practice-scout` | Best practices + pitfalls | YES |
 | `flow-next:docs-scout` | External documentation | YES |
 | `flow-next:github-scout` | Cross-repo patterns via gh CLI | IF scouts.github |
-| `flow-next:memory-scout` | Project memory entries | IF memory.enabled |
+| `flow-next:memory-scout` | Project memory entries | IF memory.enabled and direct rerank unavailable |
 | `flow-next:spec-scout` | Dependencies on open specs | YES |
 | `flow-next:docs-gap-scout` | Docs needing updates | YES |
 
 **Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
+
+**Before each scout dispatch**, apply [judge-tier.md](../flow-next-work/references/judge-tier.md) to its assignment and use the actual spawn-model parameter when selected. Explicit invocation choices win; otherwise the fallback tiers below remain unchanged.
 
 **Scout model tiers.** `repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`,
 `practice-scout` and `github-scout` — and Step 3's `flow-gap-analyst` — are

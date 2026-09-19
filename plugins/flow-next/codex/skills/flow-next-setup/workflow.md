@@ -876,6 +876,10 @@ marker, do not read either Ralph reference, do not register hooks, and set
 
 ## Step 8: Print Summary
 
+When `TYPESAFE_API_KEY` is absent or empty, add exactly one notice:
+`Judge: off (TYPESAFE_API_KEY is not set).` Check presence only; never print,
+store, request, or configure the key. See [judge](../../docs/flow-next/judge.md).
+
 ```
 Flow-Next setup complete!
 

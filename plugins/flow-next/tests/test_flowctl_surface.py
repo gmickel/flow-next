@@ -120,6 +120,7 @@ glossary list
 glossary read
 glossary remove
 init
+judge
 list
 memory add
 memory init

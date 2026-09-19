@@ -449,3 +449,16 @@ Removing the skill is trivial: `rm -rf .clawpatch/` removes both the index and t
 - [`troubleshooting.md`](troubleshooting.md) - review-backend conflicts (custom RepoPrompt CLI instructions), receipt validation.
 - [`ralph.md`](ralph.md) - Ralph hook limits on each platform.
 - [`../scripts/install-codex.sh`](../../../scripts/install-codex.sh) - canonical install script for Codex.
+
+## Optional Jev judgment
+
+Every supported host uses the same [judge presets](judge.md) in `flowctl`.
+Export `TYPESAFE_API_KEY` into the host process environment to enable them;
+`judge.enabled=false` disables requests. Keyless hosts retain their existing
+routing, review matching, QA decisions, and memory search fallback.
+
+For confident mechanical work, the conductor selects the configured fast-scout
+model through the host's spawn-model parameter and passes `IMPLEMENTER:` for a
+configured bridge. A host with neither mechanism keeps its existing model and
+says so in the `Tier:` line. An explicit invocation override wins. The done
+summary records the model reported by the worker, rather than the requested model.
