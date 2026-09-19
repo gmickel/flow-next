@@ -263,6 +263,72 @@ class JudgeTests(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("clean-review", proc.stderr)
 
+    def test_intake_state_as_the_skill_writes_it_reaches_the_judge(self):
+        """The host supplies only view and its text; code assembles every other route fact."""
+        workflow = (SCRIPTS.parent / "skills/flow-next-flow/workflow.md").read_text()
+        self.assertIn('{"view": "intent", "intent": "<text>"}', workflow)
+        self.assertIn('{"view": "brief", "spec_title": "<title>", "spec_body": "<body>"}', workflow)
+        for written in ({"view": "intent", "intent": "Fix the crash on save"},
+                        {"view": "brief", "spec_title": "Crash on save", "spec_body": "Fix the crash on save"}):
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "state.json"
+                path.write_text(json.dumps(written))
+                args = argparse.Namespace(preset="route", state_file=str(path), spec=None, explain=False, json=True)
+                self.connection.reset_mock()
+                self.connection.getresponse.return_value = Mock(
+                    status=200, read=lambda: json.dumps(payload_for("route", state_for("route"))).encode())
+                stdout = io.StringIO()
+                with patch.object(f, "get_repo_root", return_value=Path(directory)), redirect_stdout(stdout):
+                    f.cmd_judge(args)
+                self.assertTrue(json.loads(stdout.getvalue())["available"])
+                sent = json.loads(self.connection.request.call_args.kwargs["body"])["state"]
+                self.assertEqual(set(f.JUDGE_PRESETS["route"]["required"]) - set(sent), set())
+                self.assertEqual((sent["status"], sent["tasks_total"], sent["pr_exists"]), (None, 0, False))
+
+    def test_spec_flag_reaches_the_live_route_through_the_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            body = repo / "spec.md"
+            body.write_text("Implement feature")
+            spec_data = {"title": "Feature", "status": "open", "ready": True, "branch_name": None}
+            inventory = Mock(by_spec={"fn-1-feature": [{"status": "todo"}]})
+            args = argparse.Namespace(preset="route", state_file=None, spec="fn-1-feature", explain=False, json=True)
+            live = {"view": "live", "spec_title": "Feature", "spec_body": "Implement feature"}
+            self.connection.getresponse.return_value = Mock(
+                status=200, read=lambda: json.dumps(payload_for("route", live)).encode())
+            stdout = io.StringIO()
+            with patch.object(f, "get_repo_root", return_value=repo), patch.object(f, "get_flow_dir", return_value=repo), \
+                    patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), \
+                    patch.object(f, "load_json_or_exit", return_value=spec_data), \
+                    patch.object(f, "normalize_epic", side_effect=lambda x: x), \
+                    patch.object(f, "find_spec_md_path", return_value=body), \
+                    patch.object(f.TaskInventory, "load", return_value=inventory), redirect_stdout(stdout):
+                f.cmd_judge(args)
+            result = json.loads(stdout.getvalue())
+            self.assertTrue(result["available"])
+            self.assertEqual(result["decision"]["value"], "work_planned")
+
+    def test_every_missing_field_is_named_at_once(self):
+        for preset in ("route", "tier"):
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "state.json"
+                path.write_text(json.dumps({"view": "live"} if preset == "route" else {}))
+                args = argparse.Namespace(preset=preset, state_file=str(path), spec=None, explain=False, json=True)
+                stdout = io.StringIO()
+                with patch.object(f, "get_repo_root", return_value=Path(directory)), redirect_stdout(stdout), self.assertRaises(SystemExit):
+                    f.cmd_judge(args)
+                for field in ("task_title", "repo") if preset == "tier" else ("status", "pr_ref", "spec_body"):
+                    self.assertIn(field, stdout.getvalue())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            path.write_text(json.dumps({"view": "intent", "intent": 5}))
+            args = argparse.Namespace(preset="route", state_file=str(path), spec=None, explain=False, json=True)
+            stdout = io.StringIO()
+            with patch.object(f, "get_repo_root", return_value=Path(directory)), redirect_stdout(stdout), self.assertRaises(SystemExit):
+                f.cmd_judge(args)
+            self.assertIn("must be a string: intent", stdout.getvalue())
+        self.connection.request.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

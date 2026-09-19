@@ -1081,7 +1081,10 @@ Unavailable results exit 0, omit the decision, and name the reason:
 Reasons are `no_key`, `disabled`, `http_<status>`, `transport`, `timeout`,
 `bad_answer`, and `over_budget`. The caller takes its existing fallback and
 records the reason. Unknown presets, unreadable/non-JSON state files, and missing
-required state fields exit nonzero. Requests use `jev-latest`, a 10-second timeout,
+required state fields exit nonzero; one error names every missing field. A route
+intake state file holds only `view` and its text (`intent`, or `spec_title` plus
+`spec_body`): code assembles `view_meaning`, `repo`, `startable_target_fact`, and
+the empty lifecycle and PR facts. Requests use `jev-latest`, a 10-second timeout,
 and two retries only for HTTP 429/529, after 1 and 2 seconds. A request estimated
 over 32k tokens at four characters per token is rejected without sending.
 The command never writes state, answers, or credentials to disk.
