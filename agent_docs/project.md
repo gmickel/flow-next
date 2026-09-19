@@ -140,6 +140,10 @@ guidance changes need no version bump. Read [releasing.md](releasing.md) only
 when preparing a release or writing a changelog entry.
 
 Update affected public docs and flow-next.dev for user-facing product changes.
+flow-next.dev is the canonical user documentation; the repo keeps only the
+medium-length `README.md` and the runtime docs under `plugins/flow-next/docs/`
+that skills, templates, hooks, the schema, or tests read, and never regains a
+page that mirrors the site.
 The maintainer's private downstream policy owns additional local properties;
 do not copy private paths into public guidance. Developer-only instruction
 maintenance does not require a customer release announcement.
