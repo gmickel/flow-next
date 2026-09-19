@@ -89,8 +89,11 @@ class ReviewFindingsDocsTest(unittest.TestCase):
                     (DOCS / relative).read_text(encoding="utf-8"),
                 )
 
+        # The root README is the medium-length front door that points at
+        # flow-next.dev; the docs index (a runtime surface the skills read)
+        # carries the contract link instead.
         root_surfaces = {
-            "README.md": "docs/review-findings.md",
+            "plugins/flow-next/docs/README.md": "review-findings.md",
             # Root GLOSSARY.md is a compact vocabulary dictionary; the
             # long-form `## Structured finding` entry moved to the archive.
             "agent_docs/archive/GLOSSARY-full.md": "## Structured finding",
