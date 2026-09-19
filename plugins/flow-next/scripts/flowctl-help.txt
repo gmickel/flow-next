@@ -1,6 +1,5 @@
 usage: flowctl.py [-h]
-                  {judge,init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
-                  ...
+                  {judge,init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
