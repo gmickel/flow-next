@@ -287,7 +287,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-247-flowctl-judge-typesafe-jev-plumbing-and.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl judge: TypeSafe Jev plumbing and the six judged sites",
   "tracker": {
     "baseHashFlow": null,
@@ -300,5 +300,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-17T04:49:17.536754Z"
+  "updated_at": "2026-09-19T06:34:06.410083Z"
 }
