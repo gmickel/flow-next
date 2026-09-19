@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-246-evaluate-typesafe-jev-as-a-judge-for.md",
-  "status": "open",
+  "status": "done",
   "title": "Evaluate TypeSafe Jev as a judge for flow's pipeline-variation decisions",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-16T21:29:53.231032Z"
+  "updated_at": "2026-09-19T08:53:59.814926Z"
 }
