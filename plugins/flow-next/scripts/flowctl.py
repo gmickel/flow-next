@@ -7,6 +7,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
+import copy
 import errno
 import hashlib
 import heapq
@@ -29238,6 +29239,57 @@ def _pr_aid_serialized_text(artifact: Any) -> str:
     return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _expand_pr_cognitive_aid_input(
+    artifact: Any,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]],
+) -> dict[str, Any]:
+    """Fill omitted input fields; stored-v1 readers still validate without expansion."""
+    artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
+    if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+        _pr_aid_fail(
+            "pr_cognitive_aid",
+            f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
+        )
+    artifact = copy.deepcopy(artifact)
+    walkthrough = _pr_aid_object(
+        artifact.get("changeWalkthrough"), "changeWalkthrough"
+    )
+    groups = _pr_aid_array(
+        walkthrough.get("groups"), "changeWalkthrough.groups", minimum=1, maximum=11
+    )
+    for group_index, raw_group in enumerate(groups):
+        group_path = f"changeWalkthrough.groups[{group_index}]"
+        group = _pr_aid_object(raw_group, group_path)
+        files = _pr_aid_array(group.get("files", []), f"{group_path}.files", maximum=200)
+        for file_index, raw_file in enumerate(files):
+            file_path = f"{group_path}.files[{file_index}]"
+            record = _pr_aid_object(raw_file, file_path)
+            repo_path = _pr_aid_repo_path(record.get("path"), f"{file_path}.path")
+            metadata = (
+                expected_diff_files.get(repo_path)
+                if expected_diff_files is not None else None
+            )
+            if expected_diff_files is not None and metadata is None:
+                _pr_aid_fail(f"{file_path}.path", "does not belong to the bound Git diff")
+            for index, field_name in enumerate(("changeType", "additions", "deletions")):
+                if field_name not in record:
+                    if metadata is None or metadata[index] is None:
+                        _pr_aid_fail(
+                            f"{file_path}.{field_name}",
+                            "cannot derive omitted field: no diff metadata available",
+                        )
+                    record[field_name] = metadata[index]
+            if "diffUrl" not in record:
+                # A file anchor needs only its path, not a forge URL or PR number.
+                record["diffUrl"] = "#diff-" + hashlib.sha256(
+                    repo_path.encode("utf-8")
+                ).hexdigest()
+            for field_name in ("sourceRefs", "rIds", "taskIds"):
+                if field_name not in record and field_name in group:
+                    record[field_name] = copy.deepcopy(group[field_name])
+    return artifact
+
+
 def validate_pr_cognitive_aid(
     artifact: Any,
     *,
@@ -29817,6 +29869,7 @@ def write_pr_cognitive_aid(
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> Path:
     """Validate and atomically create one immutable generation."""
+    artifact = _expand_pr_cognitive_aid_input(artifact, expected_diff_files)
     artifact = validate_pr_cognitive_aid(
         artifact,
         expected_spec_id=spec_id,
@@ -30115,11 +30168,13 @@ def cmd_pr_cognitive_aid_validate(args: argparse.Namespace) -> None:
         artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
         base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
         head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        artifact = _expand_pr_cognitive_aid_input(artifact, expected_diff_files)
         artifact = validate_pr_cognitive_aid(
             artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            expected_diff_files=expected_diff_files,
         )
     except PrCognitiveAidValidationError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
