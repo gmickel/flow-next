@@ -5,7 +5,7 @@ render format, these tests lock the behaviour):
 
 - Six fixed sections (header counts, open specs, actionable, completions,
   memory, pointers). Empty `.flow/` → every body is "(none)", exit 0.
-- Pure read, no git. Default budget 8000 chars on BOTH markdown and JSON
+- Pure read, local git evidence for closed dependencies. Default budget 8000 chars on BOTH markdown and JSON
   (measure the larger). Selection computed once so both forms retain
   identical ids/omissions. `--full` lifts the budget.
 - Truncation tiers in order: oldest completions → memory lines →
@@ -13,7 +13,8 @@ render format, these tests lock the behaviour):
   whole open-spec rows (count line kept) → excess unreadable lines to
   aggregate count. One `[truncated: … — use --full]` marker per tier.
 - Titles 80-char end-ellipsis; goals/summaries/paths 120-char.
-- Readiness = cmd_ready semantics (task-deps + parent-spec-deps).
+- Readiness uses task-deps and landed-at-base parent-spec-deps, without
+  the scheduler chain-parent waiver (which needs a remote query).
   Closed-parent orphans still appear.
 - Evidence: commits/tests/prs must be non-empty lists → true; default-empty
   dict, missing dict, or non-list values (string/dict) → false.

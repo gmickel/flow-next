@@ -35570,7 +35570,7 @@ class RemoteHeads:
     `spec chain` (fn-152 R2) reads the remote at most once per invocation, and
     the spec-level admission gates (`ready --all`, `next`) share one read
     across every spec they evaluate. Nothing is read until a chain candidate
-    actually needs it, so a backlog with no open dependency never spawns git.
+    actually needs it; done dependencies still require local base-object reads.
     """
 
     def __init__(self) -> None:
@@ -35617,36 +35617,55 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
     return bool(tasks) and all(t.get("status") == "done" for t in tasks)
 
 
-def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str]:
-    """A local close is landed only when the base also carries the close.
+_SPEC_BASE_CACHE: dict[Path, tuple[str, str]] = {}
+_spec_base_notice_printed = False
 
-    The base is origin's default branch, then make-pr's chain-base cascade;
-    only local git objects are read. A missing spec at a readable base is
-    unmerged and a failed read of an existing base fails closed. With no base
-    ref at all, the local close stands.
+
+def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
+    """Return (landed, error, diagnostic) from local base evidence.
+
+    Resolve origin's default branch, then the chain-base cascade. Successful
+    resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
+    With no base ref the local close stands, with one stderr notice per process.
     """
+    global _spec_base_notice_printed
     if spec_data.get("status") != "done":
-        return False, ""
+        return False, "", ""
+    diagnostic = ""
     try:
         repo_root = get_repo_root()
-        base = None
-        head = subprocess.run(
-            ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-            cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-        )
-        candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
-        for candidate in (*candidates, "origin/main", "main", "origin/master", "master"):
-            probe = subprocess.run(
-                ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+        cwd = Path.cwd()
+        cached = _SPEC_BASE_CACHE.get(cwd)
+        if cached is None:
+            head = subprocess.run(
+                ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
                 cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
             )
-            if probe.returncode == 0:
-                base = probe.stdout.strip()
-                break
-        if base is None:
-            # No base to merge into (no git repo, or no default branch yet):
-            # the local close is the only record there is.
-            return True, ""
+            candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
+            candidates = list(dict.fromkeys([*candidates, "origin/main", "main", "origin/master", "master"]))
+            for candidate in candidates:
+                probe = subprocess.run(
+                    ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                )
+                if probe.returncode == 0:
+                    cached = (candidate, probe.stdout.strip())
+                    _SPEC_BASE_CACHE[cwd] = cached
+                    break
+            if cached is None:
+                diagnostic = (
+                    "no base ref resolved; tried refs/remotes/origin/HEAD, "
+                    + ", ".join(candidates) + "; using local status"
+                )
+                if not _spec_base_notice_printed:
+                    print(f"note: {diagnostic}", file=sys.stderr)
+                    _spec_base_notice_printed = True
+                return True, "", diagnostic
+        base_ref, base = cached
+        diagnostic = (
+            f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+            "fetch the base or land it"
+        )
         flow_path = flow_dir.relative_to(repo_root).as_posix()
         paths = [f"{flow_path}/{directory}/{spec_id}.json" for directory in (SPECS_JSON_DIR, EPICS_DIR)]
         tree = subprocess.run(
@@ -35656,17 +35675,18 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
         present = set(tree.stdout.splitlines())
         path = next((path for path in paths if path in present), None)
         if path is None:
-            return False, ""
+            return False, "", diagnostic
         blob = subprocess.run(
             ["git", "show", f"{base}:{path}"],
             cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
         )
         data = json.loads(blob.stdout)
         if not isinstance(data, dict):
-            return False, f"base spec {spec_id} is not an object"
-        return data.get("status") == "done", ""
+            return False, f"base spec {spec_id} is not an object", ""
+        landed = data.get("status") == "done"
+        return landed, "", "" if landed else diagnostic
     except (subprocess.CalledProcessError, OSError, ValueError) as exc:
-        return False, f"base read failed: {exc}"
+        return False, f"base read failed: {exc}", ""
 
 
 def evaluate_spec_chain(
@@ -35696,6 +35716,11 @@ def evaluate_spec_chain(
         "parent_branch_on_remote": None,
         "reason": "",
     }
+    diagnostics: list[str] = []
+
+    def set_reason(reason: str) -> None:
+        result["reason"] = "; ".join(dict.fromkeys(item for item in [*diagnostics, reason] if item))
+
     candidates: list[str] = []
     in_progress: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
@@ -35708,11 +35733,13 @@ def evaluate_spec_chain(
                 code=2, use_json=use_json,
             )
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        landed, err = spec_landed_at_base(flow_dir, dep, dep_data)
+        landed, err, diagnostic = spec_landed_at_base(flow_dir, dep, dep_data)
+        if diagnostic:
+            diagnostics.append(diagnostic)
         if err:
             result["parent"] = dep
             result["parent_branch"] = dep_data.get("branch_name") or None
-            result["reason"] = f"base query failed: {err}"
+            set_reason(f"base query failed: {err}")
             return result
         if landed:
             continue
@@ -35722,14 +35749,14 @@ def evaluate_spec_chain(
             in_progress.append(dep)
     if in_progress:
         result["parent"] = candidates[0] if candidates else None
-        result["reason"] = f"dependency {in_progress[0]} in progress"
+        set_reason(f"dependency {in_progress[0]} in progress")
         return result
     if len(candidates) >= 2:
-        result["reason"] = f"two open parents: {', '.join(candidates)}; chains are linear"
+        set_reason(f"two open parents: {', '.join(candidates)}; chains are linear")
         return result
     if not candidates:
         result["eligible"] = True
-        result["reason"] = "no open dependency"
+        set_reason("no open dependency")
         return result
     parent = candidates[0]
     parent_data = normalize_epic(
@@ -35740,11 +35767,12 @@ def evaluate_spec_chain(
     result["parent_branch"] = parent_branch or None
     heads, err = (remote_heads or RemoteHeads())()
     if heads is None:
-        result["reason"] = f"remote query failed: {err}"
+        set_reason(f"remote query failed: {err}")
         return result
     if not parent_branch or parent_branch not in heads:
         result["parent_branch_on_remote"] = False
-        result["reason"] = (
+        set_reason(
+            "" if parent_data.get("status") == "done" else
             f"parent branch {parent_branch or '<unset>'} not on origin; "
             "push it or land the parent first"
         )
@@ -35757,17 +35785,21 @@ def evaluate_spec_chain(
         other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
         if parent not in (other.get("depends_on_epics", []) or []):
             continue
-        landed, err = spec_landed_at_base(flow_dir, other_id, other)
+        landed, err, diagnostic = spec_landed_at_base(flow_dir, other_id, other)
+        if diagnostic:
+            diagnostics.append(diagnostic)
         if err:
-            result["reason"] = f"base query failed: {err}"
+            set_reason(f"base query failed: {err}")
             return result
         if landed:
             continue
         if (other.get("branch_name") or "") in heads:
-            result["reason"] = f"parent {parent} already chained by {other_id}"
+            set_reason(f"parent {parent} already chained by {other_id}")
             return result
     result["eligible"] = True
-    result["reason"] = "parent open, all tasks done, branch on origin"
+    set_reason("parent closed locally, all tasks done, branch on origin"
+               if parent_data.get("status") == "done" else
+               "parent open, all tasks done, branch on origin")
     return result
 
 
@@ -35796,7 +35828,7 @@ def spec_blocked_by_deps(
             missing = True
             continue
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        landed, _ = spec_landed_at_base(flow_dir, dep, dep_data)
+        landed, _, _ = spec_landed_at_base(flow_dir, dep, dep_data)
         if not landed:
             blocked.append(dep)
     if blocked and not missing:
@@ -38094,7 +38126,11 @@ def _brief_memory_enabled(flow_dir: Path) -> bool:
 def _brief_spec_blocked_by(
     flow_dir: Path, spec_id: str, spec_data: dict, specs_by_id: dict[str, dict]
 ) -> list[str]:
-    """Spec-level dep gate: deps missing or not done (cmd_ready semantics)."""
+    """Use the scheduler's landed-at-base evidence for spec dependencies.
+
+    Stay strict about chain parents: sharing the scheduler's waiver would
+    add a remote read to brief, which only reads local evidence.
+    """
     blocked: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
         if dep == spec_id:
@@ -38112,7 +38148,8 @@ def _brief_spec_blocked_by(
                 blocked.append(dep)
                 continue
             specs_by_id[dep] = dep_data
-        if dep_data.get("status") != "done":
+        landed, _, _ = spec_landed_at_base(flow_dir, dep, dep_data)
+        if not landed:
             blocked.append(dep)
     return blocked
 

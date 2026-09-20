@@ -425,7 +425,7 @@ flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 
 ### spec chain
 
-Chain eligibility of a dependent spec (fn-152): may this spec start now, and on which parent's branch. Read-only; the single owner of the rule every consumer applies (`flow --auto` selection in ready and backlog mode, attended flow's next-item ladder, `/flow-next:work` at branch creation, and flowctl's own task-admission gate below). Never calls `gh`; at most one `git ls-remote --heads origin` per invocation, and none when the spec has no dependencies.
+Chain eligibility of a dependent spec: may this spec start now, and on which parent's branch. The chain consumers and task-admission gates share this read-only predicate. Base resolution reads `refs/remotes/origin/HEAD`, then probes its target and `origin/main`, `main`, `origin/master`, `master` in order with local `git rev-parse`. A successful ref and commit are cached per working directory for the process. Each locally done dependency and each locally done sibling examined uses `git ls-tree` and, when its spec exists, `git show` to read base evidence. These object reads may repeat across admission and chain checks. There is at most one existing `git ls-remote --heads origin` per invocation, shared across specs and needed only for a chain candidate. No fetch occurs; with no dependencies there is no chain git read.
 
 ```bash
 flowctl spec chain fn-2 [--json]
@@ -444,7 +444,25 @@ Output (exhaustive shape):
 }
 ```
 
-`eligible` is true when every dependency is `done` (`parent`, `parent_branch`, `parent_branch_on_remote` are `null`, `reason` is `no open dependency`; no remote read), or when exactly one dependency is open with all of its tasks done (a `no_plan` spec's minted implicit task counts; a zero-task spec is still in progress), every other dependency is `done`, that parent's `branch_name` exists on `origin`, and no other open spec naming the same parent already has its branch on origin. Otherwise `eligible` is false with `parent` still naming the candidate parent where one exists and one of these reasons: `dependency <id> in progress`, `two open parents: <id>, <id>; chains are linear`, `parent branch <b> not on origin; push it or land the parent first` (`parent_branch_on_remote: false`), `parent <id> already chained by <sibling-id>`, or `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch). Exit 0 on any evaluation including `eligible: false`; exit 2 when the spec does not exist or a dependency names a missing spec (the `validate` rule).
+A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per process names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
+
+`eligible` is true when every dependency is landed (`parent`, `parent_branch`, and `parent_branch_on_remote` are `null`; no remote read), or when exactly one unlanded dependency has all tasks done, its branch exists on origin, and no other unlanded sibling naming that parent has a branch on origin. A minted implicit task counts; zero tasks still means in progress. A locally closed but unlanded sibling still occupies the chain.
+
+The `reason` vocabulary is below. Base diagnostics are retained alongside the evaluation reason when several conditions apply.
+
+- `no open dependency`
+- `parent open, all tasks done, branch on origin`
+- `parent closed locally, all tasks done, branch on origin`
+- `dependency <id> in progress`
+- `two open parents: <id>, <id>; chains are linear`
+- `parent branch <b> not on origin; push it or land the parent first` for a locally open parent (`parent_branch_on_remote: false`)
+- `dependency <id> closed locally but not recorded at <base>; fetch the base or land it`, including a locally closed parent whose branch is gone from origin
+- `parent <id> already chained by <sibling-id>`
+- `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch)
+- `base query failed: <error>` (unreadable base evidence blocks admission)
+- `no base ref resolved; tried <refs>; using local status` (the fallback notice)
+
+Exit 0 on any evaluation including `eligible: false`; exit 2 when the spec does not exist or a dependency names a missing spec (the `validate` rule).
 
 ### spec set-title
 
@@ -864,7 +882,7 @@ Output:
 }
 ```
 
-Spec-level deps gate the whole spec (same rule as `next` and `ready --all`): when the spec's `depends_on_epics` include a spec that is missing or not `done`, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. One exception (fn-152): the **chain parent** [`spec chain`](#spec-chain) names — an open dependency with every task done and its branch on origin — counts as satisfied, so a chained spec dispatches its tasks; every other not-done dependency still empties the frontier, and task-level `depends_on` is unchanged.
+Spec-level deps gate the whole spec. `ready`, `next`, `ready --all`, and `brief` share the landed-at-base evidence rule described in [`spec chain`](#spec-chain), including the no-base fallback and notice. Missing dependencies and unreadable base evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` keeps the strict base gate because applying that waiver would add a remote read. Task-level `depends_on` is unchanged.
 
 ```json
 {

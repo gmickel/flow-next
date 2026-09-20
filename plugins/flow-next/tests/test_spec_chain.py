@@ -12,6 +12,7 @@ Run:
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
@@ -160,8 +162,72 @@ class ChainCliTestCase(unittest.TestCase):
         self.push_branch(parent)
         git(self.repo, "update-ref", "-d", "refs/heads/main")
         git(self.repo, "update-ref", "-d", "refs/remotes/origin/main")
-        rc, out = self.chain(child)
-        self.assertEqual((rc, out["eligible"], out["parent"]), (0, True, None))
+        second = self.spec("second closed parent", done=True, status="done")
+        self.flowctl("spec", "add-dep", child, second)
+        res = self.flowctl("spec", "chain", child)
+        out = json.loads(res.stdout)
+        self.assertEqual((res.returncode, out["eligible"], out["parent"]), (0, True, None))
+        self.assertEqual(res.stderr.count("note: no base ref resolved"), 1)
+        for token in ("refs/remotes/origin/HEAD", "origin/main", "main",
+                      "origin/master", "master", "using local status"):
+            self.assertIn(token, res.stderr)
+            self.assertIn(token, out["reason"])
+        ready = json.loads(self.flowctl("ready", "--spec", child).stdout)
+        self.assertEqual(len(ready["ready"]), 1)
+
+    def test_stale_base_with_deleted_parent_branch_names_base(self) -> None:
+        parent = self.spec("parent", done=True, status="done")
+        child = self.spec("child", deps=[parent])
+        git(self.repo, "checkout", "-q", "-b", parent)
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "closed parent")
+        self.push_branch(parent)
+        # Model a merge and branch deletion elsewhere, without refreshing
+        # this checkout's origin/main (where the parent is absent).
+        git(self.origin, "update-ref", "refs/heads/main", git(self.repo, "rev-parse", "HEAD"))
+        git(self.origin, "update-ref", "-d", f"refs/heads/{parent}")
+        _, out = self.chain(child)
+        self.assertFalse(out["eligible"])
+        self.assertEqual(out["reason"],
+                         f"dependency {parent} closed locally but not recorded at origin/main; fetch the base or land it")
+        self.assertNotIn("push it", out["reason"])
+
+    def test_brief_blocks_branch_closed_dependency_without_remote_read(self) -> None:
+        parent, child = self.closed_parent_branch()
+        self.push_branch(parent)
+        # A broken remote must not affect brief's local-only base gate.
+        git(self.repo, "remote", "set-url", "origin", str(self.tmp / "nowhere.git"))
+        res = self.flowctl("brief", "--full")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        out = json.loads(res.stdout)
+        self.assertNotIn(child + ".1", json.dumps(out["actionable_tasks"]["items"]))
+
+    def test_base_resolution_cache_is_success_only_and_cwd_scoped(self) -> None:
+        scripts_dir = str(Path(__file__).resolve().parents[1] / "scripts")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        self.addCleanup(sys.path.remove, scripts_dir)
+        spec = importlib.util.spec_from_file_location("flowctl_chain_cache", FLOWCTL_PY)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        self.addCleanup(sys.modules.pop, spec.name)
+        spec.loader.exec_module(mod)
+        previous = Path.cwd()
+        self.addCleanup(os.chdir, previous)
+        os.chdir(self.repo)
+        parent = self.spec("parent", done=True, status="done")
+        with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
+            for _ in range(2):
+                self.assertFalse(mod.spec_landed_at_base(self.repo / ".flow", parent, {"status": "done"})[0])
+            self.assertEqual(sum(c.args[0][1] == "symbolic-ref" for c in run.call_args_list), 1)
+        other = self.tmp / "other"
+        other.mkdir()
+        git(other, "init", "-q", "-b", "develop")
+        os.chdir(other)
+        with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
+            for _ in range(2):
+                self.assertTrue(mod.spec_landed_at_base(other / ".flow", parent, {"status": "done"})[0])
+            self.assertEqual(sum(c.args[0][1] == "symbolic-ref" for c in run.call_args_list), 2)
+        self.assertNotIn(other, mod._SPEC_BASE_CACHE)
 
     def test_done_parent_absent_at_base_is_not_landed(self) -> None:
         parent = self.spec("parent", done=True, status="done")
