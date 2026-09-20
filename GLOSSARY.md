@@ -569,7 +569,7 @@ _Relates to_: Tier
 
 ## Emission point
 
-A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/refine/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
+A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/refine/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict output, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
 
 ## No-plan route
 
@@ -617,7 +617,7 @@ _Relates to_: Hop, Long-horizon run, Driver, Pilot
 
 ## Long-horizon run
 
-The default shape of `flow --auto`: one invocation drives one ready item hop after hop until a terminal (a PR exists, deferred to land, asked, blocked, needs human, no work). With `--until=merge`, it can continue through land ticks and external waits until the selected PR is confirmed merged and its required tail is complete, or an existing stop condition applies. The verdict line names every dispatched stage in order joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict. One item per run; the next invocation selects the next item.
+The default shape of `flow --auto`: one invocation drives one ready item hop after hop until a terminal (a PR exists, deferred to land, asked, blocked, needs human, no work). With `--until=merge`, it can continue through land ticks and external waits until the selected PR is confirmed merged, or an existing stop condition applies. The verdict line names every dispatched stage in order joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict. One item per run; the next invocation selects the next item.
 
 _Avoid_: multi-stage tick, chained tick, autopilot run
 
@@ -625,7 +625,7 @@ _Relates to_: Hop, Tick, Verdict line
 
 ## Verdict line
 
-The terminal line every `flow --auto` run and every `/flow-next:land` tick prints last, for the driver to read: `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"` and `LAND_VERDICT=...`. The `PILOT_VERDICT` name is kept unchanged across the pilot retirement so existing drivers keep parsing; `TRIAGED` appears under `--explain` and `--dry-run` only. Under a merge destination, the reason and observed evidence distinguish landing progress, external waiting, blockage, confirmed merge, and remaining tail work; the original `LAND_VERDICT` is retained in the evidence.
+The terminal line every `flow --auto` run and every `/flow-next:land` tick prints last, for the driver to read: `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"` and `LAND_VERDICT=...`. The `PILOT_VERDICT` name is kept unchanged across the pilot retirement so existing drivers keep parsing; `TRIAGED` appears under `--explain` and `--dry-run` only. Under a merge destination, the reason and observed evidence distinguish landing progress, external waiting, blockage, confirmed merge, and any tracker touchpoint failure; the original `LAND_VERDICT` is retained in the evidence.
 
 _Avoid_: exit status, summary line, result banner
 

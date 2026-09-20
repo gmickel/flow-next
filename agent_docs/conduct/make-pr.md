@@ -7,4 +7,4 @@ A correct run renders a cognitive-aid PR body from flow-next state and opens the
 - [ ] The PR is created without a confirm gate; the only questions asked are the Phase 0 info prompts for something that cannot be derived, such as an unresolvable base ref or undetected spec id. A run that asks "do you want to create it?" has broken this.
 - [ ] `--dry-run` puts the body on stdout and stops before any `git push`, `gh pr create`, or artifact commit.
 - [ ] Undeclared R-IDs (no task claims them) are flagged rather than attributed to a task; claimed-but-not-evidenced criteria keep their claiming-task attribution with the claimed-not-evidenced marker (fn-180). The body describes the diff without quoting raw code from it.
-- [ ] A created PR ends with the breadcrumb line and the `<!-- flow-next:make-pr spec=<spec-id> base=<base-ref> -->` machine marker in footer position, which land's authorship probe keys on.
+- [ ] A created PR ends with the breadcrumb line and the `<!-- flow-next:make-pr spec=<spec-id> base=<base-ref> -->` machine marker in footer position; it is a provenance breadcrumb, not a landing gate.
