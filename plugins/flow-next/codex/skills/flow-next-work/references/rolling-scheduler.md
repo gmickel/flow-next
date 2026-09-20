@@ -294,6 +294,8 @@ Two event kinds drive 3d, and **admission (3a) is recomputed immediately after
 handling EACH event** - never deferred to the end of a task's review tail:
 
 **Worker-return event** (that task only):
+Before accepting the return or integrating, execute the task-status and live-command check in [phases.md Phase 3d](../phases.md#3d-join-integrate-and-verify), including waiting within the existing runtime cap and resuming the same worker without a failure strike for an early return with a live command.
+
 1. Read [wave-join.md](wave-join.md) and execute its handover +
    integration steps: confirm the handover; integrate that task's workspace
    commits onto the target branch; normalize its evidence SHAs to the

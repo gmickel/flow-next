@@ -439,6 +439,8 @@ ran review). Content lives in those files — read them, never a restatement.
 
 ### 3d. Join, Integrate, and Verify
 
+**Before accepting any worker return**, check the task status with `flowctl show <task-id> --json` and check for commands the worker left running using the host's background-task list or process table. For `in_progress` with a live command, wait within the existing runtime cap and resume the same worker without counting the early return as a failed attempt; with nothing running, continue through the existing handover/review gates and not-done diagnosis below, and if the command outlasts the cap, use the existing runtime-cap handling.
+
 **Parallel wave or reviewer-overlap dispatch** (3a `Dispatch count` > 1, or an
 overlapped one-task wave): read
 [references/wave-join.md](references/wave-join.md) and execute it — it owns the

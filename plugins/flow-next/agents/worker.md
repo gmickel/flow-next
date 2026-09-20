@@ -21,6 +21,8 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TIER_LINE` - the conductor's dispatch decision; retain in the done summary, adding the evidenced actual model only after execution.
 - `IMPLEMENTER` - optional; present for an explicit invocation model (`<model>` or `<model> at <effort>`) or a conductor-selected confident mechanical fast tier; an explicit invocation always wins. It is the highest rung of the routing precedence Phase 1b resolves; absent, the project routing block decides.
 
+**Command ownership:** Do not return while any command you started is still running: run gates in the foreground, and if the host backgrounds a command, block on it, read its exit code, and report that code before returning. If you cannot wait within the existing runtime cap, return partial under the existing contract and name the command still running.
+
 ## Phase 0: Enter the assigned workspace (FIRST)
 
 Before any `flowctl` or git operation, baseline test, file read, or edit:
@@ -218,6 +220,7 @@ Done when: every Required file named by `## Investigation targets` has been read
 Read relevant code, implement the feature/fix. Follow existing patterns.
 
 Rules:
+- Use a temporary worktree to inspect another tree state, never `git stash`; follow the existing workspace-teardown rules.
 - Small, focused changes
 - Follow existing code style
 - **Never weaken a test, gate, or baseline to make a wrong implementation
