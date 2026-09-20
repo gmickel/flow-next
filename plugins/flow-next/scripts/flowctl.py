@@ -30734,6 +30734,19 @@ def _note_completion_review_reset(
         )
 
 
+def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> None:
+    """Reopen a closed spec after a successful task creation or start."""
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_path.exists():
+        return
+    spec_data = load_json(spec_path)
+    if spec_data.get("status") != "done":
+        return
+    spec_data["status"] = "open"
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_path, spec_data)
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec.
 
@@ -30934,6 +30947,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
+        _reopen_spec_for_task_change(flow_dir, spec_id)
+
         # fn-205 follow-up: new tasks change the review surface — a
         # policy-excused `not_required` no longer holds.
         review_reset = _reset_excused_completion_review(flow_dir, spec_id)
@@ -31087,6 +31102,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
 
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
+
+    _reopen_spec_for_task_change(flow_dir, spec_id)
 
     # fn-205 follow-up: a new task changes the review surface — a
     # policy-excused `not_required` no longer holds.
@@ -36520,9 +36537,8 @@ def cmd_start(args: argparse.Namespace) -> None:
         # Write inside lock
         store.save_runtime(args.id, runtime_updates)
 
-    # NOTE: We no longer update epic timestamp on task start/done.
-    # Epic timestamp only changes on epic-level operations (set-plan, close).
-    # This reduces merge conflicts in multi-user scenarios.
+    # Open specs remain untouched; only resuming closed work changes the spec.
+    _reopen_spec_for_task_change(get_flow_dir(), task_def["spec"])
 
     if args.json:
         json_output(
@@ -36775,11 +36791,14 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
     incomplete = []
+    final_tasks = []
     for task_file in tasks_dir.glob(f"{args.id}.*.json"):
         task_id = task_file.stem
         if not is_task_id(task_id):
             continue  # Skip non-task files (e.g., fn-1.2-review.json)
         task_data = load_task_with_state(task_id, use_json=args.json)
+        definition = load_task_definition(task_id, use_json=args.json)
+        final_tasks.append((task_file, definition, task_data["status"]))
         if task_data["status"] != "done":
             incomplete.append(f"{task_data['id']} ({task_data['status']})")
 
@@ -36790,6 +36809,14 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
         )
 
     spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+    # Validate the whole spec before publishing any final task status. Keep
+    # runtime claims and evidence local; only the status must travel with git.
+    for task_file, definition, status in final_tasks:
+        if definition.get("status") != status:
+            definition["status"] = status
+            canonicalize_task_for_write(definition)
+            atomic_write_json(task_file, definition)
+
     spec_data["status"] = "done"
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_path, spec_data)
