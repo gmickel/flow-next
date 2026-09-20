@@ -29239,6 +29239,23 @@ def _pr_aid_serialized_text(artifact: Any) -> str:
     return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _pr_aid_pattern_attention(repo_path: str) -> Optional[str]:
+    """Only known state, lockfile names, and the generated mirror imply attention."""
+    parts = repo_path.split("/")
+    if (len(parts) == 3 and parts[:2] in ([".flow", "tasks"], [".flow", "specs"])
+            and parts[-1].endswith(".json")):
+        return "mechanical"
+    if parts[-1] in {
+        "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock",
+        "bun.lock", "bun.lockb", "Cargo.lock", "Gemfile.lock", "poetry.lock",
+        "uv.lock", "Pipfile.lock", "composer.lock",
+    }:
+        return "mechanical"
+    if repo_path.startswith("plugins/flow-next/codex/"):
+        return "generated"
+    return None
+
+
 def _expand_pr_cognitive_aid_input(
     artifact: Any,
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]],
@@ -29264,6 +29281,31 @@ def _expand_pr_cognitive_aid_input(
         groups = walkthrough.get("groups")
         if not isinstance(groups, list):
             return result
+        # Use existing step slots, last first: never invent an eighth step or
+        # an optional kept/verify claim. Explicit empty refs avoid inheriting
+        # claims the host did not make for these paths.
+        if expected_diff_files is not None:
+            listed = {
+                row["path"] for group in groups if isinstance(group, dict)
+                and isinstance(group.get("files"), list)
+                for row in group["files"] if isinstance(row, dict)
+                and isinstance(row.get("path"), str)
+            }
+            steps = [group for group in reversed(groups) if isinstance(group, dict)
+                     and group.get("kind") == "step" and isinstance(group.get("files"), list)]
+            sources = result.get("sources")
+            diff_refs = [source["id"] for source in sources if isinstance(source, dict)
+                         and source.get("kind") == "diff_metadata"
+                         and isinstance(source.get("id"), str)] if isinstance(sources, list) else []
+            for repo_path in sorted(set(expected_diff_files) - listed):
+                if not steps:
+                    break  # Structural validation owns the missing step error.
+                group = next((group for group in steps if len(group["files"]) < 200), steps[0])
+                group["files"].append({
+                    "path": repo_path, "summary": "",
+                    "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
+                    "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
+                })
         for group_index, group in enumerate(groups):
             if not isinstance(group, dict) or not isinstance(group.get("files"), list):
                 continue
@@ -29276,6 +29318,10 @@ def _expand_pr_cognitive_aid_input(
                 except PrCognitiveAidValidationError:
                     # Validation reports this once and skips the dependent row checks.
                     continue
+                if "attentionClass" not in record:
+                    attention = _pr_aid_pattern_attention(repo_path)
+                    if attention is not None:
+                        record["attentionClass"] = attention
                 metadata = (
                     expected_diff_files.get(repo_path)
                     if expected_diff_files is not None else None
@@ -29622,6 +29668,7 @@ def validate_pr_cognitive_aid(
                     record.get("summary"),
                     f"{file_path}.summary",
                     maximum=500,
+                    allow_empty=True,
                 )
                 refs = validate_refs(record, file_path, require_grounding=bool(summary))
                 if refs is not None and not any(

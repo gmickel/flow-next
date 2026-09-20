@@ -24,6 +24,30 @@ unsupported, invalid, forked, or ambiguous chain remains evidence but supplies
 no current verification or ship claim. Select a labeled fallback; never merge
 legacy fields into a partial v1 view.
 
+## Sparse authoring
+
+Validate and write accept rows with only judgment fields. Missing Git change
+type, additions, deletions, and diff links are filled from the bound diff;
+explicit values remain subject to validation. Row references inherit the
+corresponding group fields unless explicitly supplied.
+
+Unlisted changed paths get rows with `summary: ""`, diff-only `sourceRefs`, and
+empty `rIds`/`taskIds`. These rows make no semantic claim. They are appended in
+path order to existing step groups, filling the last step first and preceding
+steps if its 200-file limit is reached. Group identity, authored row order,
+and the one-to-seven step limit remain unchanged; no optional group is invented.
+The persisted schema stays v1, with explicit fields on every row.
+
+Only `.flow/tasks/*.json` and `.flow/specs/*.json` (direct children), known
+package-manager lockfile names, and `plugins/flow-next/codex/` determine default
+attention: state and lockfiles are `mechanical`, the mirror is `generated`.
+Known lockfile names are `package-lock.json`, `npm-shrinkwrap.json`,
+`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`, `Cargo.lock`, `Gemfile.lock`,
+`poetry.lock`, `uv.lock`, `Pipfile.lock`, and `composer.lock`, at any depth.
+Other unlisted paths are `canonical`, including authored Flow Markdown and
+arbitrary directories named `generated` or `dist`. An authored row without a
+matching pattern must supply `attentionClass`; an explicit class always wins.
+
 ## Semantic projection
 
 The envelope owns one bounded `sources[]` table. Every proof, group, and file

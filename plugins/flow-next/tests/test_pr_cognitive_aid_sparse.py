@@ -103,6 +103,110 @@ class SparseInputTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             self.assertEqual(json.loads(second.read_text(encoding="utf-8"))["schemaVersion"], 1)
 
+    def test_r4_unlisted_paths_expand_without_claims_and_store_like_complete(self):
+        patterns = {
+            ".flow/tasks/fn-1.1.json": "mechanical",
+            ".flow/specs/fn-1.json": "mechanical",
+            "packages/app/pnpm-lock.yaml": "mechanical",
+            "plugins/flow-next/codex/skills/example.md": "generated",
+            "src/forgotten.py": "canonical",
+            ".flow/specs/fn-1.md": "canonical",
+            ".flow/tasks/fn-1.1.md": "canonical",
+            ".flow/memory/decision.md": "canonical",
+            "src/generated/handwritten.py": "canonical",
+            "dist/handwritten.py": "canonical",
+            "custom.lock": "canonical",
+        }
+        sparse = self.complete()
+        diff = artifact_diff_files(sparse)
+        diff.update({path: ("added", 1, 0) for path in patterns})
+        complete = copy.deepcopy(sparse)
+        files = complete["changeWalkthrough"]["groups"][2]["files"]
+        for path in sorted(patterns):
+            files.append({
+                "path": path, "summary": "", "attentionClass": patterns[path],
+                "changeType": "added", "additions": 1, "deletions": 0,
+                "diffUrl": "#diff-" + hashlib.sha256(path.encode("utf-8")).hexdigest(),
+                "sourceRefs": ["diff"], "rIds": [], "taskIds": [],
+            })
+        before = copy.deepcopy(sparse)
+        self.assertEqual(self.validate_input(sparse, diff), complete)
+        self.assertEqual(self.validate_input(sparse, dict(reversed(list(diff.items())))), complete)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = self.write(root / "sparse", sparse, diff)
+            second = self.write(root / "complete", complete, diff)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            stored = json.loads(first.read_text(encoding="utf-8"))
+            self.assertEqual(flowctl.validate_pr_cognitive_aid(stored), complete)
+        self.assertEqual(sparse, before)
+
+    def test_r4_seven_steps_keep_group_identity_and_file_bounds(self):
+        golden = Path(__file__).parent / "fixtures/pr-cognitive-aid/v1/golden.json"
+        for fill_last_step in (False, True):
+            with self.subTest(fill_last_step=fill_last_step):
+                value = json.loads(golden.read_text(encoding="utf-8"))
+                groups = value["changeWalkthrough"]["groups"]
+                step_indexes = [i for i, g in enumerate(groups) if g["kind"] == "step"]
+                self.assertEqual(len(step_indexes), 7)
+                last_step = groups[step_indexes[-1]]
+                if fill_last_step:
+                    for group in groups[2:step_indexes[-1]]:
+                        while group["files"] and len(last_step["files"]) < 200:
+                            last_step["files"].append(group["files"].pop())
+                    self.assertEqual(len(last_step["files"]), 200)
+                # The fixture already has 500 paths. Omit a row, keeping its
+                # diff entry, rather than exceeding the v1 file limit.
+                diff = artifact_diff_files(value)
+                donor = next(g for g in groups[2:step_indexes[-1]] if g["files"])
+                omitted = donor["files"].pop(0)["path"]
+                result = self.validate_input(value, diff)
+                expanded = result["changeWalkthrough"]["groups"]
+                self.assertEqual(len(expanded), len(groups))
+                target = step_indexes[-2] if fill_last_step else step_indexes[-1]
+                self.assertEqual(expanded[target]["files"][-1]["path"], omitted)
+                for old, new in zip(groups, expanded):
+                    self.assertEqual({k: v for k, v in old.items() if k != "files"},
+                                     {k: v for k, v in new.items() if k != "files"})
+                    self.assertEqual(new["files"][:len(old["files"])], old["files"])
+                    self.assertLessEqual(len(new["files"]), 200)
+
+    def test_r4_authored_pattern_defaults_and_explicit_classes(self):
+        for path, default in ((".flow/tasks/fn-1.1.json", "mechanical"),
+                              ("yarn.lock", "mechanical"),
+                              ("plugins/flow-next/codex/generated.md", "generated")):
+            for explicit in (None, "canonical", "mechanical", "generated"):
+                with self.subTest(path=path, explicit=explicit):
+                    value = self.complete()
+                    row = value["changeWalkthrough"]["groups"][2]["files"][0]
+                    row["path"] = "nested/" + path if path == "yarn.lock" else path
+                    # Avoid the other fixture row's generated path.
+                    row["path"] = row["path"].replace("generated.md", "other.md")
+                    if explicit is None:
+                        del row["attentionClass"]
+                    else:
+                        row["attentionClass"] = explicit
+                    result = self.validate_input(value, artifact_diff_files(value))
+                    self.assertEqual(result["changeWalkthrough"]["groups"][2]["files"][0]
+                                     ["attentionClass"], explicit or default)
+
+    def test_r4_unknown_pattern_requires_authored_attention(self):
+        value = self.complete()
+        del value["changeWalkthrough"]["groups"][2]["files"][0]["attentionClass"]
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(flowctl.PrCognitiveAidValidationError,
+                                        r"groups\[2\].files\[0\].*attentionClass"):
+                self.write(Path(tmp), value, artifact_diff_files(value))
+
+    def test_r4_authored_path_outside_diff_stays_rejected(self):
+        value = self.complete()
+        diff = artifact_diff_files(value)
+        del diff[value["changeWalkthrough"]["groups"][2]["files"][0]["path"]]
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(flowctl.PrCognitiveAidValidationError,
+                                        r"groups\[2\].files\[0\].path:.*bound Git diff"):
+                self.write(Path(tmp), value, diff)
+
     def test_r5_inherits_each_omitted_reference_field_and_preserves_overrides(self):
         for field in ("sourceRefs", "rIds", "taskIds", "all"):
             with self.subTest(field=field):

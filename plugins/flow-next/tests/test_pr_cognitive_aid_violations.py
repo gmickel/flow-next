@@ -55,7 +55,7 @@ class AllViolationsTests(unittest.TestCase):
         rows[1]["path"] = "outside.py"
         del rows[1]["changeType"]
         del rows[1]["additions"]
-        rows[2]["summary"] = ""
+        rows[2]["summary"] = None  # R4 permits empty strings, but not non-string summaries.
         expected = {
             "schemaVersion", "generatedAt", "sources[0].kind", "changeWalkthrough.thesis",
             "changeWalkthrough.proof[0].label", "changeWalkthrough.proof[0].value",
@@ -94,7 +94,7 @@ class AllViolationsTests(unittest.TestCase):
                         diff = artifact_diff_files(value)
                         rows = value["changeWalkthrough"]["groups"][2]["files"]
                         rows[0] = {} if path_value is None else {"path": path_value}
-                        rows[1]["summary"] = ""
+                        rows[1]["summary"] = None  # Keep testing an invalid summary under R4.
                         errors = self.cli_errors(value, diff, as_json=as_json, command=command)
                         self.assertEqual([e.split(": ", 1)[0] for e in errors], [
                             "changeWalkthrough.groups[2].files[0].path",
@@ -128,7 +128,8 @@ class AllViolationsTests(unittest.TestCase):
                     for index, row in enumerate(rows):
                         row["path"] = f"file-{index}.py"
                 for row in rows[:2]:
-                    row[field] = ""
+                    # Empty file summaries are valid under R4; types still matter.
+                    row[field] = None if container == "files" else ""
                 owner[container] = rows
                 path = "changeWalkthrough.proof" if container == "proof" else "changeWalkthrough.groups[2].files"
                 with self.assertRaises(flowctl.PrCognitiveAidValidationError) as raised:
