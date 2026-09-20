@@ -68,7 +68,7 @@ Notes, negative findings included:
 
 ## Recomputed authored bytes (2026-09-20)
 
-Strict, proven omissions save **40,957 bytes (2.5553%)** across the 39 tracked
+Strict, proven omissions save **51,595 bytes (3.2190%)** across the 39 tracked
 artifacts in this clone. This is much smaller than the Goal's 57% mechanical
 field estimate. That estimate described 111 artifacts; this measurement uses
 only the 39 returned by the current index, with 2,236 file rows.
@@ -76,8 +76,8 @@ only the 39 returned by the current index, with 2,236 file rows.
 | Measure | Bytes |
 |---|---:|
 | Complete artifacts as stored | 1,602,803 |
-| Sparse inputs plus unchanged artifacts without an identity solution | 1,561,846 |
-| Proven reduction | 40,957 |
+| Sparse inputs plus unchanged artifacts without an identity solution | 1,551,208 |
+| Proven reduction | 51,595 |
 
 | Omitted field | Occurrences | Bytes saved |
 |---|---:|---:|
@@ -86,10 +86,20 @@ only the 39 returned by the current index, with 2,236 file rows.
 | `deletions` | 155 | 4,361 |
 | `diffUrl` | 0 | 0 |
 | `sourceRefs` | 0 | 0 |
-| `rIds` | 118 | 5,148 |
-| `taskIds` | 132 | 13,644 |
-| `attentionClass` | 177 | 7,639 |
+| `rIds` | 191 | 7,644 |
+| `taskIds` | 257 | 19,608 |
+| `attentionClass` | 227 | 9,817 |
 | Whole rows added by flowctl | 0 | 0 |
+
+The pre-review expansion saved 40,957 bytes (2.5553%). It always added a
+path-hash fragment, even without bound metadata, preventing identity for 29
+artifacts (1,172 missing links). That result remains a negative baseline. After
+the review fix, links use `/<owner>/<repo>/blob/<headSha>/<path>` and require
+both local origin identity and bound metadata. This clone resolves
+`gmickel/flow-next`; unavailable historical ranges now leave omitted links
+absent, allowing more independent reference and attention omissions. The
+conditional figure below is unchanged. Neither result approaches the original
+57% estimate.
 
 **Conditional figure under assumptions A and B**
 
@@ -104,7 +114,7 @@ when Git cannot read its recorded range; verification against the live diff
 when the artifact was written is assumed, not re-proven here.
 Assumption B judges expansion identity modulo `diffUrl` values added to rows
 whose stored form had none; every other leaf still matches byte for byte,
-and a stored `diffUrl` differing from the derived anchor stays in the sparse input.
+and a stored `diffUrl` differing from the derived head-bound blob link stays in the sparse input.
 Neither figure counts rows an agent would now simply not write, since every
 stored row has a summary, so the input-side saving from unlisted paths is not
 measurable from stored artifacts.
@@ -133,15 +143,14 @@ Strict-mode method and limits:
   no metadata, retains additions/deletions/change type and whole rows, and still
   proves any independent reference or attention omission. The result is a
   conservative locally provable figure, not a prediction for a complete clone.
-- **29 artifacts have no identical expansion even as complete input.** They
-  omit `diffUrl` on 1,172 rows, and this branch's expansion adds it. No supported
+- **14 artifacts have no identical expansion even as complete input.** They
+  omit `diffUrl` on 843 rows, and this branch's expansion adds it. No supported
   omission can suppress that addition. The script explicitly reports these as
   having no identity solution and carries their original size into the total
   with zero savings; it does not claim their unchanged inputs round-trip.
-  This historical compatibility finding is retained for the host; product
-  changes are outside this measurement unit.
-- The other 10 artifacts shrink. Existing diff links differ from the derived
-  anchors and must remain. No source-reference omission reproduces the stored
+  This historical compatibility limit remains part of the result.
+- The other 25 artifacts shrink. Existing diff links differ from the derived
+  head-bound blob links and must remain. No source-reference omission reproduces the stored
   arrays. This measures expansion identity, not full historical validation or
   current-head eligibility. It does not measure tokens, calls, or time.
 

@@ -29132,21 +29132,6 @@ def _pr_aid_object(value: Any, path: str) -> dict[str, Any]:
     return value
 
 
-def _pr_aid_keys(
-    value: dict[str, Any],
-    path: str,
-    *,
-    required: set[str],
-    optional: set[str] = frozenset(),
-) -> None:
-    missing = required - set(value)
-    if missing:
-        _pr_aid_fail(path, f"missing fields: {', '.join(sorted(missing))}")
-    unknown = set(value) - required - optional
-    if unknown:
-        _pr_aid_fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
-
-
 def _pr_aid_array(
     value: Any, path: str, *, maximum: int, minimum: int = 0
 ) -> list[Any]:
@@ -29221,17 +29206,6 @@ def _pr_aid_url(value: Any, path: str) -> str:
     return result
 
 
-def _pr_aid_string_array(value: Any, path: str) -> list[str]:
-    values = _pr_aid_array(value, path, maximum=32)
-    result = [
-        _pr_aid_string(item, f"{path}[{index}]", maximum=160)
-        for index, item in enumerate(values)
-    ]
-    if len(set(result)) != len(result):
-        _pr_aid_fail(path, "must not contain duplicates")
-    return result
-
-
 def _pr_aid_nonnegative_int(value: Any, path: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         _pr_aid_fail(path, "must be a non-negative integer")
@@ -29258,6 +29232,23 @@ def _pr_aid_pattern_attention(repo_path: str) -> Optional[str]:
     if repo_path.startswith("plugins/flow-next/codex/"):
         return "generated"
     return None
+
+
+def _pr_aid_blob_prefix(head_sha: Any) -> Optional[str]:
+    """Resolve a head-bound repository-relative link using the local origin."""
+    if not isinstance(head_sha, str) or not _PR_COGNITIVE_AID_SHA_RE.fullmatch(head_sha):
+        return None
+    rc, remote, _ = _export_run_git(["remote", "get-url", "origin"])
+    if rc:
+        return None
+    match = re.fullmatch(
+        r"(?:https?://[^/]+/|ssh://[^/]+/|[^/@:]+@[^/:]+:)"
+        r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
+        remote.strip(),
+    )
+    if not match or any(part in (".", "..") for part in match.groups()):
+        return None
+    return f"/{match[1]}/{match[2]}/blob/{head_sha}/"
 
 
 def _expand_pr_cognitive_aid_input(
@@ -29310,6 +29301,8 @@ def _expand_pr_cognitive_aid_input(
                     "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
                     "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
                 })
+        blob_prefix = None
+        origin_checked = False
         for group_index, group in enumerate(groups):
             if not isinstance(group, dict) or not isinstance(group.get("files"), list):
                 continue
@@ -29341,10 +29334,14 @@ def _expand_pr_cognitive_aid_input(
                             )
                         else:
                             record[field_name] = metadata[index]
-                if "diffUrl" not in record:
-                    record["diffUrl"] = "#diff-" + hashlib.sha256(
-                        repo_path.encode("utf-8")
-                    ).hexdigest()
+                if "diffUrl" not in record and metadata is not None:
+                    if not origin_checked:
+                        blob_prefix = _pr_aid_blob_prefix(result.get("headSha"))
+                        origin_checked = True
+                    if blob_prefix is not None:
+                        diff_url = blob_prefix + urllib.parse.quote(repo_path, safe="/")
+                        if len(diff_url) <= 2048:
+                            record["diffUrl"] = diff_url
                 for field_name in ("sourceRefs", "rIds", "taskIds"):
                     if field_name not in record and field_name in group:
                         record[field_name] = copy.deepcopy(group[field_name])
@@ -30354,16 +30351,20 @@ def cmd_pr_cognitive_aid_current(args: argparse.Namespace) -> None:
 
 def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     if args.file:
-        artifact = _pr_aid_read_input(args.file)
+        artifact = _pr_aid_read_input(args.file, use_json=False)
         try:
             artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
             base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
             head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+            expected_diff_files = _pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            )
+            errors: list[str] = []
+            artifact = _expand_pr_cognitive_aid_input(
+                artifact, expected_diff_files, _errors=errors
+            )
             artifact = validate_pr_cognitive_aid(
-                artifact,
-                expected_diff_files=_pr_aid_live_diff_files(
-                    get_repo_root(), base_sha, head_sha
-                ),
+                artifact, expected_diff_files=expected_diff_files, _errors=errors
             )
             print(render_pr_cognitive_aid_markdown(artifact), end="")
         except PrCognitiveAidValidationError as exc:
@@ -30419,16 +30420,20 @@ def render_pr_cognitive_aid_html_input(artifact: Any) -> str:
 
 
 def cmd_pr_cognitive_aid_html_input(args: argparse.Namespace) -> None:
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=False)
     try:
         artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
         base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
         head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        errors: list[str] = []
+        artifact = _expand_pr_cognitive_aid_input(
+            artifact, expected_diff_files, _errors=errors
+        )
         artifact = validate_pr_cognitive_aid(
-            artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            artifact, expected_diff_files=expected_diff_files, _errors=errors
         )
         print(render_pr_cognitive_aid_html_input(artifact), end="")
     except PrCognitiveAidValidationError as exc:

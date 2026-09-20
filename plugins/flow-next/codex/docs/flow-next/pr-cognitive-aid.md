@@ -44,13 +44,26 @@ The PR body still travels with the PR; the local aid files do not.
 
 ## Sparse authoring
 
-Validate and write accept rows with only judgment fields. Missing Git change
-type, additions, deletions, and diff links are filled from the bound diff;
-explicit values remain subject to validation. Row references inherit the
-corresponding group fields unless explicitly supplied.
+Validate, write, render --file, and html-input --file accept rows with only
+judgment fields. Missing `changeType`, `additions`, and `deletions` are filled
+from the bound diff. An omitted `diffUrl` becomes
+`/<owner>/<repo>/blob/<headSha>/<path>`, with the path URL-encoded and slashes
+preserved. The repository identity comes from the local origin remote and the
+SHA from the artifact's `headSha`. Without a resolvable identity or bound diff
+metadata for the row, the optional field stays absent; it also stays absent if
+the derived URL exceeds the v1 length bound. Readers receive either that literal
+string shape or no `diffUrl` key, which renders as a dash. Supplied links retain
+the existing URL-safety validation; they need not equal the derived link.
+Explicit counts and change types must match the bound diff. Row references
+inherit the corresponding group fields unless explicitly supplied.
 
 Unlisted changed paths get rows with `summary: ""`, diff-only `sourceRefs`, and
-empty `rIds`/`taskIds`. These rows make no semantic claim. They are appended in
+empty `rIds`/`taskIds`. An empty summary means "not described", is legal on any
+row, and carries no semantic grounding requirement. A non-empty summary keeps
+the existing grounding rule. Every row still cites the bound `diff_metadata`
+source and validates any supplied references. The stored form has no marker
+that distinguishes an authored empty summary from a flowctl-added one.
+These rows make no semantic claim. They are appended in
 path order to existing step groups, filling the last step first and preceding
 steps if its 200-file limit is reached. Group identity, authored row order,
 and the one-to-seven step limit remain unchanged; no optional group is invented.

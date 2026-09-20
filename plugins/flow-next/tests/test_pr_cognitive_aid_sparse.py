@@ -2,11 +2,10 @@
 
 import argparse
 import copy
-import hashlib
 import json
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest import mock
@@ -17,14 +16,19 @@ from test_pr_cognitive_aid import (
 
 
 class SparseInputTests(unittest.TestCase):
+    def setUp(self):
+        remote = mock.patch.object(
+            flowctl, "_export_run_git", return_value=(0, "git@example.test:acme/repo.git", "")
+        )
+        remote.start()
+        self.addCleanup(remote.stop)
+
     def complete(self):
         value = artifact(canonical_files=1)
         group = value["changeWalkthrough"]["groups"][2]
         group["sourceRefs"] = ["diff", "task", "rid"]
         for row in group["files"]:
-            row["diffUrl"] = "#diff-" + hashlib.sha256(
-                row["path"].encode("utf-8")
-            ).hexdigest()
+            row["diffUrl"] = f"/acme/repo/blob/{HEAD_SHA}/{row['path']}"
         return value
 
     def validate_input(self, value, diff):
@@ -43,6 +47,95 @@ class SparseInputTests(unittest.TestCase):
             root, value, spec_id=SPEC_ID, base_sha=BASE_SHA,
             head_sha=HEAD_SHA, expected_diff_files=diff,
         )
+
+    def test_file_commands_share_expansion_and_complete_render_is_unchanged(self):
+        complete = self.complete()
+        sparse = copy.deepcopy(complete)
+        rows = sparse["changeWalkthrough"]["groups"][2]["files"]
+        described = rows[0]["path"]
+        omitted = rows.pop()["path"]
+        for row in rows:
+            for field in ("changeType", "additions", "deletions", "diffUrl"):
+                del row[field]
+        diff = artifact_diff_files(complete)
+        expanded = self.validate_input(sparse, diff)
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(flowctl, "_pr_aid_live_diff_files", return_value=diff):
+            path = Path(tmp) / "input.json"
+            for value, expected in ((sparse, expanded), (complete, complete)):
+                path.write_text(json.dumps(value), encoding="utf-8")
+                args = argparse.Namespace(file=str(path), json=True)
+                output = StringIO()
+                with redirect_stdout(output):
+                    flowctl.cmd_pr_cognitive_aid_validate(args)
+                self.assertEqual(json.loads(output.getvalue())["artifact"], expected)
+                output = StringIO()
+                with redirect_stdout(output):
+                    flowctl.cmd_pr_cognitive_aid_render(args)
+                self.assertEqual(output.getvalue().encode("utf-8"),
+                                 flowctl.render_pr_cognitive_aid_markdown(expected).encode("utf-8"))
+                if value is sparse:
+                    self.assertIn(described, output.getvalue())
+                    self.assertIn(omitted, output.getvalue())
+                output = StringIO()
+                with redirect_stdout(output):
+                    flowctl.cmd_pr_cognitive_aid_html_input(args)
+                payload = output.getvalue().split(">", 1)[1].split("</script>", 1)[0]
+                self.assertEqual(json.loads(payload), expected)
+
+    def test_file_commands_report_parse_errors_as_human_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "invalid.json"
+            path.write_text("{", encoding="utf-8")
+            for command in (flowctl.cmd_pr_cognitive_aid_render,
+                            flowctl.cmd_pr_cognitive_aid_html_input):
+                with self.subTest(command=command.__name__):
+                    out, err = StringIO(), StringIO()
+                    with redirect_stdout(out), redirect_stderr(err), \
+                         self.assertRaises(SystemExit) as raised:
+                        command(argparse.Namespace(file=str(path)))
+                    self.assertEqual(raised.exception.code, 2)
+                    self.assertEqual(out.getvalue(), "")
+                    self.assertIn("invalid JSON", err.getvalue())
+                    self.assertFalse(err.getvalue().lstrip().startswith("{"))
+
+    def test_optional_link_absent_without_identity_or_bound_diff(self):
+        for remote, diff_available in (("", True), ("/local/repo", True),
+                                       ("git@example.test:acme/repo.git", False)):
+            with self.subTest(remote=remote, diff=diff_available):
+                value = self.complete()
+                row = value["changeWalkthrough"]["groups"][2]["files"][0]
+                del row["diffUrl"]
+                diff = artifact_diff_files(value) if diff_available else None
+                with mock.patch.object(flowctl, "_export_run_git", return_value=(0, remote, "")):
+                    expanded = self.validate_input(value, diff)
+                self.assertNotIn("diffUrl", expanded["changeWalkthrough"]["groups"][2]["files"][0])
+                self.assertEqual(expanded, value)
+
+    def test_derived_link_encodes_path_and_binds_head_for_remote_forms(self):
+        for remote in ("https://example.test/acme/repo.git",
+                       "ssh://git@example.test/acme/repo.git",
+                       "git@example.test:acme/repo.git"):
+            with self.subTest(remote=remote):
+                value = self.complete()
+                row = value["changeWalkthrough"]["groups"][2]["files"][0]
+                row["path"] = "src/a #()[].py"
+                del row["diffUrl"]
+                with mock.patch.object(flowctl, "_export_run_git", return_value=(0, remote, "")):
+                    result = self.validate_input(value, artifact_diff_files(value))
+                self.assertEqual(result["changeWalkthrough"]["groups"][2]["files"][0]["diffUrl"],
+                                 f"/acme/repo/blob/{HEAD_SHA}/src/a%20%23%28%29%5B%5D.py")
+
+    def test_empty_summary_round_trips_without_semantic_grounding(self):
+        value = self.complete()
+        row = value["changeWalkthrough"]["groups"][2]["files"][0]
+        row.update(summary="", sourceRefs=["diff"], rIds=[], taskIds=[])
+        diff = artifact_diff_files(value)
+        self.assertEqual(self.validate_input(value, diff), value)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(Path(tmp), value, diff)
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(self.validate_input(stored, diff), value)
 
     def test_r1_omitted_mechanics_validate_and_write_for_all_git_statuses(self):
         for status in ("added", "modified", "deleted", "copied", "renamed"):
@@ -126,7 +219,7 @@ class SparseInputTests(unittest.TestCase):
             files.append({
                 "path": path, "summary": "", "attentionClass": patterns[path],
                 "changeType": "added", "additions": 1, "deletions": 0,
-                "diffUrl": "#diff-" + hashlib.sha256(path.encode("utf-8")).hexdigest(),
+                "diffUrl": f"/acme/repo/blob/{HEAD_SHA}/{path}",
                 "sourceRefs": ["diff"], "rIds": [], "taskIds": [],
             })
         before = copy.deepcopy(sparse)

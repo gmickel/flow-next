@@ -1325,7 +1325,7 @@ field paths in stable order, including failures while filling omitted input
 fields. Human output lists them on separate lines; `--json` carries the same
 lines in the `error` string and returns `success: false`. Both exit with code 2.
 Malformed JSON produces only its parse error. An invalid or missing file path
-produces one row error and skips checks that depend on that path.
+produces one row error and skips that row's remaining checks.
 
 ### memory
 
