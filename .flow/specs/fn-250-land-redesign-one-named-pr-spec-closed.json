@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-250-land-redesign-one-named-pr-spec-closed",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-09-20T13:19:39.939262Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-250-land-redesign-one-named-pr-spec-closed",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-250-land-redesign-one-named-pr-spec-closed.md",
+  "status": "open",
+  "title": "Land redesign: one named PR, spec closed at the PR head",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-20T13:46:05.061465Z"
+}
