@@ -1323,6 +1323,13 @@ invalid source bindings, duplicate membership, unsupported versions, broken
 chains, bounds overflow, and stale identity without truncation. Consumer,
 fixture, and vendoring rules: [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
+`validate` and `write` report all independent artifact violations with their
+field paths in stable order, including failures while filling omitted input
+fields. Human output lists them on separate lines; `--json` carries the same
+lines in the `error` string and returns `success: false`. Both exit with code 2.
+Malformed JSON produces only its parse error. An invalid or missing file path
+produces one row error and skips that row's remaining checks.
+
 ### memory
 
 Manage persistent learnings under `.flow/memory/`.

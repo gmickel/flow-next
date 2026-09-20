@@ -24,6 +24,61 @@ unsupported, invalid, forked, or ambiguous chain remains evidence but supplies
 no current verification or ship claim. Select a labeled fallback; never merge
 legacy fields into a partial v1 view.
 
+Make-pr's resolve step reuses a valid current generation at the same base and
+head, including one written from sparse input. A same-head successor that
+explicitly supersedes the tip publishes a deliberate correction to authored
+content. A moved head, missing artifact, or failed validation requires composing
+again.
+
+Aid generations and their `.write.lock` files are ignored by the managed
+`.flow/.gitignore` block after `flowctl init` refreshes it. HTML lenses and
+other artifact kinds remain trackable. Already tracked aid files require a
+one-time maintainer untracking step; flowctl never removes them from the index.
+
+Ignored aids are per-clone state. A PR created on another host or clone has no
+stored walkthrough available to a projector reading this clone's artifact home.
+The PR body still travels with the PR; the local aid files do not.
+
+## Sparse authoring
+
+Validate, write, render --file, and html-input --file accept rows with only
+judgment fields. Missing `changeType`, `additions`, and `deletions` are filled
+from the bound diff. An omitted `diffUrl` becomes
+`/<owner>/<repo>/blob/<headSha>/<path>`, with the path URL-encoded and slashes
+preserved. The repository identity comes from the local origin remote and the
+SHA from the artifact's `headSha`. Without a resolvable identity or bound diff
+metadata for the row, the optional field stays absent; it also stays absent for
+a deleted path, which has no blob at the head, and if the derived URL exceeds
+the v1 length bound. The path shape is the one the pull-request forge that
+make-pr opens against serves; a reader on another forge should treat the link
+as advisory. Readers receive either that literal
+string shape or no `diffUrl` key, which renders as a dash. Supplied links retain
+the existing URL-safety validation; they need not equal the derived link.
+Explicit counts and change types must match the bound diff. Row references
+inherit the corresponding group fields unless explicitly supplied.
+
+Unlisted changed paths get rows with `summary: ""`, diff-only `sourceRefs`, and
+empty `rIds`/`taskIds`. An empty summary means "not described", is legal on any
+row, and carries no semantic grounding requirement. A non-empty summary keeps
+the existing grounding rule. Every row still cites the bound `diff_metadata`
+source and validates any supplied references. The stored form has no marker
+that distinguishes an authored empty summary from a flowctl-added one.
+These rows make no semantic claim. They are appended in
+path order to existing step groups, filling the last step first and preceding
+steps if its 200-file limit is reached. Group identity, authored row order,
+and the one-to-seven step limit remain unchanged; no optional group is invented.
+The persisted schema stays v1, with explicit fields on every row.
+
+Only `.flow/tasks/*.json` and `.flow/specs/*.json` (direct children), known
+package-manager lockfile names, and `plugins/flow-next/codex/` determine default
+attention: state and lockfiles are `mechanical`, the mirror is `generated`.
+Known lockfile names are `package-lock.json`, `npm-shrinkwrap.json`,
+`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`, `Cargo.lock`, `Gemfile.lock`,
+`poetry.lock`, `uv.lock`, `Pipfile.lock`, and `composer.lock`, at any depth.
+Other unlisted paths are `canonical`, including authored Flow Markdown and
+arbitrary directories named `generated` or `dist`. An authored row without a
+matching pattern must supply `attentionClass`; an explicit class always wins.
+
 ## Semantic projection
 
 The envelope owns one bounded `sources[]` table. Every proof, group, and file

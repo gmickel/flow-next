@@ -7,6 +7,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
+import copy
 import errno
 import hashlib
 import heapq
@@ -20082,6 +20083,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # per-axis review text, dispatch meta) — per-run runtime artifacts, same
     # class as receipts/; a `git add -A` must never commit them.
     "review-fanout/",
+    # Head-bound aid generations and their writer lock stay per-clone. Keep
+    # HTML lenses, other artifact kinds, and measurement records trackable.
+    "artifacts/*/pr-cognitive-aid/*.json",
+    "artifacts/*/pr-cognitive-aid/.write.lock",
 ]
 
 
@@ -29127,21 +29132,6 @@ def _pr_aid_object(value: Any, path: str) -> dict[str, Any]:
     return value
 
 
-def _pr_aid_keys(
-    value: dict[str, Any],
-    path: str,
-    *,
-    required: set[str],
-    optional: set[str] = frozenset(),
-) -> None:
-    missing = required - set(value)
-    if missing:
-        _pr_aid_fail(path, f"missing fields: {', '.join(sorted(missing))}")
-    unknown = set(value) - required - optional
-    if unknown:
-        _pr_aid_fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
-
-
 def _pr_aid_array(
     value: Any, path: str, *, maximum: int, minimum: int = 0
 ) -> list[Any]:
@@ -29216,17 +29206,6 @@ def _pr_aid_url(value: Any, path: str) -> str:
     return result
 
 
-def _pr_aid_string_array(value: Any, path: str) -> list[str]:
-    values = _pr_aid_array(value, path, maximum=32)
-    result = [
-        _pr_aid_string(item, f"{path}[{index}]", maximum=160)
-        for index, item in enumerate(values)
-    ]
-    if len(set(result)) != len(result):
-        _pr_aid_fail(path, "must not contain duplicates")
-    return result
-
-
 def _pr_aid_nonnegative_int(value: Any, path: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         _pr_aid_fail(path, "must be a non-negative integer")
@@ -29238,6 +29217,143 @@ def _pr_aid_serialized_text(artifact: Any) -> str:
     return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _pr_aid_pattern_attention(repo_path: str) -> Optional[str]:
+    """Only known state, lockfile names, and the generated mirror imply attention."""
+    parts = repo_path.split("/")
+    if (len(parts) == 3 and parts[:2] in ([".flow", "tasks"], [".flow", "specs"])
+            and parts[-1].endswith(".json")):
+        return "mechanical"
+    if parts[-1] in {
+        "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock",
+        "bun.lock", "bun.lockb", "Cargo.lock", "Gemfile.lock", "poetry.lock",
+        "uv.lock", "Pipfile.lock", "composer.lock",
+    }:
+        return "mechanical"
+    if repo_path.startswith("plugins/flow-next/codex/"):
+        return "generated"
+    return None
+
+
+def _pr_aid_blob_prefix(head_sha: Any) -> Optional[str]:
+    """Resolve a head-bound repository-relative link using the local origin."""
+    if not isinstance(head_sha, str) or not _PR_COGNITIVE_AID_SHA_RE.fullmatch(head_sha):
+        return None
+    rc, remote, _ = _export_run_git(["remote", "get-url", "origin"])
+    if rc:
+        return None
+    match = re.fullmatch(
+        r"(?:https?://[^/]+/|ssh://[^/]+/|[^/@:]+@[^/:]+:)"
+        r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
+        remote.strip(),
+    )
+    if not match or any(part in (".", "..") for part in match.groups()):
+        return None
+    return f"/{match[1]}/{match[2]}/blob/{head_sha}/"
+
+
+def _expand_pr_cognitive_aid_input(
+    artifact: Any,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]],
+    *,
+    _errors: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    """Fill input fields, collecting failures alongside the stored-v1 checks."""
+    errors = _errors if _errors is not None else []
+
+    def expand() -> Any:
+        # Structural errors belong to validation; only expand reachable rows.
+        if not isinstance(artifact, dict):
+            return artifact
+        if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+            errors.append(
+                f"pr_cognitive_aid: encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes"
+            )
+            return artifact
+        result = copy.deepcopy(artifact)
+        walkthrough = result.get("changeWalkthrough")
+        if not isinstance(walkthrough, dict):
+            return result
+        groups = walkthrough.get("groups")
+        if not isinstance(groups, list):
+            return result
+        # Use existing step slots, last first: never invent an eighth step or
+        # an optional kept/verify claim. Explicit empty refs avoid inheriting
+        # claims the host did not make for these paths.
+        if expected_diff_files is not None:
+            listed = {
+                row["path"] for group in groups if isinstance(group, dict)
+                and isinstance(group.get("files"), list)
+                for row in group["files"] if isinstance(row, dict)
+                and isinstance(row.get("path"), str)
+            }
+            steps = [group for group in reversed(groups) if isinstance(group, dict)
+                     and group.get("kind") == "step" and isinstance(group.get("files"), list)]
+            sources = result.get("sources")
+            diff_refs = [source["id"] for source in sources if isinstance(source, dict)
+                         and source.get("kind") == "diff_metadata"
+                         and isinstance(source.get("id"), str)] if isinstance(sources, list) else []
+            for repo_path in sorted(set(expected_diff_files) - listed):
+                if not steps:
+                    break  # Structural validation owns the missing step error.
+                group = next((group for group in steps if len(group["files"]) < 200), steps[0])
+                group["files"].append({
+                    "path": repo_path, "summary": "",
+                    "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
+                    "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
+                })
+        blob_prefix = None
+        origin_checked = False
+        for group_index, group in enumerate(groups):
+            if not isinstance(group, dict) or not isinstance(group.get("files"), list):
+                continue
+            for file_index, record in enumerate(group["files"]):
+                file_path = f"changeWalkthrough.groups[{group_index}].files[{file_index}]"
+                if not isinstance(record, dict):
+                    continue
+                try:
+                    repo_path = _pr_aid_repo_path(record.get("path"), f"{file_path}.path")
+                except PrCognitiveAidValidationError:
+                    # Validation reports this once and skips the dependent row checks.
+                    continue
+                if "attentionClass" not in record:
+                    attention = _pr_aid_pattern_attention(repo_path)
+                    if attention is not None:
+                        record["attentionClass"] = attention
+                metadata = (
+                    expected_diff_files.get(repo_path)
+                    if expected_diff_files is not None else None
+                )
+                if expected_diff_files is not None and metadata is None:
+                    errors.append(f"{file_path}.path: does not belong to the bound Git diff")
+                    continue
+                for index, field_name in enumerate(("changeType", "additions", "deletions")):
+                    if field_name not in record:
+                        if metadata is None or metadata[index] is None:
+                            errors.append(
+                                f"{file_path}.{field_name}: cannot derive omitted field: no diff metadata available"
+                            )
+                        else:
+                            record[field_name] = metadata[index]
+                # A deleted path has no blob at the head, so no head-bound link resolves.
+                if "diffUrl" not in record and metadata is not None and record.get("changeType") != "deleted":
+                    if not origin_checked:
+                        blob_prefix = _pr_aid_blob_prefix(result.get("headSha"))
+                        origin_checked = True
+                    if blob_prefix is not None:
+                        diff_url = blob_prefix + urllib.parse.quote(repo_path, safe="/")
+                        if len(diff_url) <= 2048:
+                            record["diffUrl"] = diff_url
+                for field_name in ("sourceRefs", "rIds", "taskIds"):
+                    if field_name not in record and field_name in group:
+                        record[field_name] = copy.deepcopy(group[field_name])
+        return result
+
+    result = expand()
+    if _errors is None and errors:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
+    return result
+
+
 def validate_pr_cognitive_aid(
     artifact: Any,
     *,
@@ -29245,349 +29361,385 @@ def validate_pr_cognitive_aid(
     expected_base_sha: Optional[str] = None,
     expected_head_sha: Optional[str] = None,
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+    _errors: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Validate one v1 artifact without coercion, truncation, or I/O."""
-    artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
-    _pr_aid_keys(
-        artifact,
-        "pr_cognitive_aid",
-        required={
-            "schemaVersion",
-            "artifactId",
-            "specId",
-            "baseSha",
-            "headSha",
-            "generatedAt",
-            "sources",
-            "changeWalkthrough",
-        },
-        optional={"supersedesArtifactId"},
-    )
-    encoded = _pr_aid_serialized_text(artifact).encode("utf-8")
-    if len(encoded) > PR_COGNITIVE_AID_MAX_BYTES:
-        _pr_aid_fail(
-            "pr_cognitive_aid",
-            f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
-        )
+    """Validate v1 fields in traversal order, collecting independent violations."""
+    errors = _errors if _errors is not None else []
+    suppressed: set[str] = set()
+
+    def failed(path: str) -> bool:
+        return path in suppressed or any(error.startswith(path + ":") for error in errors)
+
+    def fail(path: str, message: str) -> None:
+        errors.append(f"{path}: {message}")
+
+    def check(validator: Any, value: Any, path: str, **kwargs: Any) -> Any:
+        if failed(path):
+            return None
+        try:
+            return validator(value, path, **kwargs)
+        except PrCognitiveAidValidationError as exc:
+            errors.append(str(exc))
+            if validator is _pr_aid_array and isinstance(value, list):
+                return value
+            return None
+
+    def keys(value: dict[str, Any], path: str, *, required: set[str],
+             optional: set[str] = frozenset()) -> None:
+        missing = required - set(value)
+        report_missing = {
+            key for key in missing
+            if not failed(f"{path}.{key}" if path != "pr_cognitive_aid" else key)
+        }
+        if report_missing:
+            fail(path, f"missing fields: {', '.join(sorted(report_missing))}")
+        suppressed.update(f"{path}.{key}" if path != "pr_cognitive_aid" else key for key in missing)
+        unknown = set(value) - required - optional
+        if unknown:
+            fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
+
+    def strings(value: Any, path: str) -> Optional[list[str]]:
+        values = check(_pr_aid_array, value, path, maximum=32)
+        if values is None:
+            return None
+        result = []
+        for index, item in enumerate(values):
+            text = check(_pr_aid_string, item, f"{path}[{index}]", maximum=160)
+            result.append(text)
+        valid = [item for item in result if item is not None]
+        if len(set(valid)) != len(valid):
+            fail(path, "must not contain duplicates")
+        return result
+
+    root = check(_pr_aid_object, artifact, "pr_cognitive_aid")
+    if root is None:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
+    keys(artifact, "pr_cognitive_aid", required={
+        "schemaVersion", "artifactId", "specId", "baseSha", "headSha",
+        "generatedAt", "sources", "changeWalkthrough",
+    }, optional={"supersedesArtifactId"})
+    if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+        fail("pr_cognitive_aid", f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes")
     schema_version = artifact.get("schemaVersion")
-    if (
-        not isinstance(schema_version, int)
-        or isinstance(schema_version, bool)
+    if not failed("schemaVersion") and (
+        not isinstance(schema_version, int) or isinstance(schema_version, bool)
         or schema_version != PR_COGNITIVE_AID_SCHEMA_VERSION
     ):
-        _pr_aid_fail("schemaVersion", "unsupported schema version")
-    artifact_id = _pr_aid_artifact_id(artifact.get("artifactId"), "artifactId")
-    spec_id = _pr_aid_string(artifact.get("specId"), "specId", maximum=160)
-    if not is_spec_id(spec_id):
-        _pr_aid_fail("specId", "must be a canonical Flow spec ID")
-    base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
-    head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
-    generated_at = _pr_aid_string(
-        artifact.get("generatedAt"), "generatedAt", maximum=160
+        fail("schemaVersion", "unsupported schema version")
+    artifact_id = check(_pr_aid_artifact_id, artifact.get("artifactId"), "artifactId")
+    spec_id = check(_pr_aid_string, artifact.get("specId"), "specId", maximum=160)
+    if spec_id is not None and not is_spec_id(spec_id):
+        fail("specId", "must be a canonical Flow spec ID")
+        spec_id = None
+    base_sha = check(_pr_aid_sha, artifact.get("baseSha"), "baseSha")
+    head_sha = check(_pr_aid_sha, artifact.get("headSha"), "headSha")
+    generated_at = check(
+        _pr_aid_string,
+        artifact.get("generatedAt"),
+        "generatedAt",
+        maximum=160,
     )
-    try:
-        parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-    except ValueError:
-        _pr_aid_fail("generatedAt", "must be an ISO-8601 timestamp")
-    if parsed_generated_at.tzinfo is None:
-        _pr_aid_fail("generatedAt", "must include a timezone")
-    supersedes = artifact.get("supersedesArtifactId")
-    if supersedes is not None:
-        supersedes = _pr_aid_artifact_id(supersedes, "supersedesArtifactId")
-        if supersedes == artifact_id:
-            _pr_aid_fail("supersedesArtifactId", "must not reference itself")
-    if expected_spec_id is not None and spec_id != expected_spec_id:
-        _pr_aid_fail("specId", f"does not match expected {expected_spec_id}")
-    if expected_base_sha is not None and base_sha != expected_base_sha:
-        _pr_aid_fail("baseSha", "does not match the current merge base")
-    if expected_head_sha is not None and head_sha != expected_head_sha:
-        _pr_aid_fail("headSha", "does not match the current PR head")
+    if generated_at is not None:
+        try:
+            parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        except ValueError:
+            fail("generatedAt", "must be an ISO-8601 timestamp")
+        else:
+            if parsed_generated_at.tzinfo is None:
+                fail("generatedAt", "must include a timezone")
+    if artifact.get("supersedesArtifactId") is not None:
+        supersedes = check(
+            _pr_aid_artifact_id,
+            artifact["supersedesArtifactId"],
+            "supersedesArtifactId",
+        )
+        if supersedes is not None and supersedes == artifact_id:
+            fail("supersedesArtifactId", "must not reference itself")
+    for path, actual, expected, message in (
+        ("specId", spec_id, expected_spec_id, f"does not match expected {expected_spec_id}"),
+        ("baseSha", base_sha, expected_base_sha, "does not match the current merge base"),
+        ("headSha", head_sha, expected_head_sha, "does not match the current PR head"),
+    ):
+        if actual is not None and expected is not None and actual != expected:
+            fail(path, message)
 
-    sources = _pr_aid_array(
-        artifact.get("sources"), "sources", minimum=1, maximum=128
-    )
+    sources = check(_pr_aid_array, artifact.get("sources"), "sources", minimum=1, maximum=128)
     source_by_id: dict[str, dict[str, Any]] = {}
-    for index, raw_source in enumerate(sources):
-        source_path = f"sources[{index}]"
-        source = _pr_aid_object(raw_source, source_path)
-        _pr_aid_keys(
-            source,
-            source_path,
-            required={"id", "kind", "ref"},
-            optional={"digest"},
-        )
-        source_id = _pr_aid_identifier(source.get("id"), f"{source_path}.id")
-        if source_id in source_by_id:
-            _pr_aid_fail(f"{source_path}.id", "duplicate source ID")
-        kind = _pr_aid_string(source.get("kind"), f"{source_path}.kind", maximum=160)
-        if kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
-            _pr_aid_fail(f"{source_path}.kind", "unsupported source kind")
-        source_ref = _pr_aid_string(
-            source.get("ref"), f"{source_path}.ref", maximum=1024
-        )
-        if kind == "spec" and source_ref != spec_id:
-            _pr_aid_fail(f"{source_path}.ref", "must identify artifact.specId")
-        if kind == "task":
-            if not is_task_id(source_ref) or spec_id_from_task(source_ref) != spec_id:
-                _pr_aid_fail(
-                    f"{source_path}.ref", "must identify a task of artifact.specId"
-                )
-        if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(source_ref):
-            _pr_aid_fail(f"{source_path}.ref", "must be a canonical R-ID")
-        if kind == "diff_metadata" and source_ref != f"{base_sha}..{head_sha}":
-            _pr_aid_fail(
-                f"{source_path}.ref", "must identify artifact baseSha..headSha"
-            )
-        if kind == "commit":
-            _pr_aid_sha(source_ref, f"{source_path}.ref")
-        digest = source.get("digest")
-        if digest is not None:
-            digest = _pr_aid_string(digest, f"{source_path}.digest", maximum=160)
-            if not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
-                _pr_aid_fail(f"{source_path}.digest", "must be a SHA-256 digest")
-        source_by_id[source_id] = source
-
-    walkthrough = _pr_aid_object(
-        artifact.get("changeWalkthrough"), "changeWalkthrough"
-    )
-    _pr_aid_keys(
-        walkthrough,
-        "changeWalkthrough",
-        required={"thesis", "proof", "groups"},
-    )
-    _pr_aid_string(
-        walkthrough.get("thesis"), "changeWalkthrough.thesis", maximum=4000
-    )
+    invalid_source_ids: set[str] = set()
+    for index, raw_source in enumerate(sources or []):
+        path = f"sources[{index}]"
+        source = check(_pr_aid_object, raw_source, path)
+        if source is None:
+            continue
+        keys(source, path, required={"id", "kind", "ref"}, optional={"digest"})
+        source_id = check(_pr_aid_identifier, source.get("id"), f"{path}.id")
+        if source_id is not None and source_id in source_by_id:
+            fail(f"{path}.id", "duplicate source ID")
+        kind = check(_pr_aid_string, source.get("kind"), f"{path}.kind", maximum=160)
+        if kind is not None and kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
+            fail(f"{path}.kind", "unsupported source kind")
+        ref = check(_pr_aid_string, source.get("ref"), f"{path}.ref", maximum=1024)
+        if ref is not None:
+            if kind == "spec" and spec_id is not None and ref != spec_id:
+                fail(f"{path}.ref", "must identify artifact.specId")
+            if (
+                kind == "task"
+                and spec_id is not None
+                and (not is_task_id(ref) or spec_id_from_task(ref) != spec_id)
+            ):
+                fail(f"{path}.ref", "must identify a task of artifact.specId")
+            if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(ref):
+                fail(f"{path}.ref", "must be a canonical R-ID")
+            if (
+                kind == "diff_metadata"
+                and base_sha is not None
+                and head_sha is not None
+                and ref != f"{base_sha}..{head_sha}"
+            ):
+                fail(f"{path}.ref", "must identify artifact baseSha..headSha")
+            if kind == "commit":
+                check(_pr_aid_sha, ref, f"{path}.ref")
+        if source.get("digest") is not None:
+            digest = check(_pr_aid_string, source["digest"], f"{path}.digest", maximum=160)
+            if digest is not None and not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
+                fail(f"{path}.digest", "must be a SHA-256 digest")
+        if source_id is not None:
+            source_by_id[source_id] = source
+            if any(failed(f"{path}.{field}") for field in ("id", "kind", "ref")):
+                invalid_source_ids.add(source_id)
 
     def validate_refs(
-        record: dict[str, Any], record_path: str, *, require_grounding: bool
-    ) -> tuple[list[str], list[str], list[str]]:
-        refs = _pr_aid_string_array(
-            record.get("sourceRefs"), f"{record_path}.sourceRefs"
+        record: dict[str, Any], path: str, *, require_grounding: bool
+    ) -> Optional[list[str]]:
+        refs = strings(record.get("sourceRefs"), f"{path}.sourceRefs")
+        refs_valid = refs is not None and not any(
+            error.startswith(f"{path}.sourceRefs[") for error in errors
         )
-        if require_grounding and not refs:
-            _pr_aid_fail(
-                f"{record_path}.sourceRefs", "must ground the semantic summary"
-            )
-        for ref_index, source_id in enumerate(refs):
-            if source_id not in source_by_id:
-                _pr_aid_fail(
-                    f"{record_path}.sourceRefs[{ref_index}]",
-                    "does not resolve to sources[]",
-                )
-        r_ids = _pr_aid_string_array(
-            record.get("rIds", []), f"{record_path}.rIds"
-        )
-        task_ids = _pr_aid_string_array(
-            record.get("taskIds", []), f"{record_path}.taskIds"
-        )
-        for r_index, r_id in enumerate(r_ids):
-            if not _PR_COGNITIVE_AID_RID_RE.fullmatch(r_id):
-                _pr_aid_fail(
-                    f"{record_path}.rIds[{r_index}]", "must be a canonical R-ID"
-                )
-        for task_index, task_id in enumerate(task_ids):
-            if not is_task_id(task_id) or spec_id_from_task(task_id) != spec_id:
-                _pr_aid_fail(
-                    f"{record_path}.taskIds[{task_index}]",
-                    "must identify a task of artifact.specId",
-                )
-        referenced_sources = [source_by_id[source_id] for source_id in refs]
-        for r_id in r_ids:
-            if not any(
-                source.get("kind") == "rid" and source.get("ref") == r_id
-                for source in referenced_sources
-            ):
-                _pr_aid_fail(
-                    f"{record_path}.rIds",
-                    f"{r_id} lacks a same-record rid sourceRef",
-                )
-        for task_id in task_ids:
-            if not any(
-                source.get("kind") == "task" and source.get("ref") == task_id
-                for source in referenced_sources
-            ):
-                _pr_aid_fail(
-                    f"{record_path}.taskIds",
-                    f"{task_id} lacks a same-record task sourceRef",
-                )
-        return refs, r_ids, task_ids
+        if refs_valid and require_grounding and not refs:
+            fail(f"{path}.sourceRefs", "must ground the semantic summary")
+        for index, source_id in enumerate(refs or []):
+            if source_id is None:
+                continue
+            if source_id in invalid_source_ids:
+                refs_valid = False
+            if sources is not None and source_id not in source_by_id:
+                fail(f"{path}.sourceRefs[{index}]", "does not resolve to sources[]")
+                refs_valid = False
+        r_ids = strings(record.get("rIds", []), f"{path}.rIds")
+        task_ids = strings(record.get("taskIds", []), f"{path}.taskIds")
+        for ref_field, ids in (("rIds", r_ids), ("taskIds", task_ids)):
+            for index, identifier in enumerate(ids or []):
+                if identifier is None:
+                    continue
+                if ref_field == "rIds" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(identifier):
+                    fail(f"{path}.{ref_field}[{index}]", "must be a canonical R-ID")
+                    continue
+                if (
+                    ref_field == "taskIds"
+                    and spec_id is not None
+                    and (not is_task_id(identifier) or spec_id_from_task(identifier) != spec_id)
+                ):
+                    fail(f"{path}.{ref_field}[{index}]", "must identify a task of artifact.specId")
+                    continue
+                if refs_valid and sources is not None and not any(
+                    source_by_id.get(source_id, {}).get("kind") == ("rid" if ref_field == "rIds" else "task")
+                    and source_by_id.get(source_id, {}).get("ref") == identifier
+                    for source_id in refs or []
+                ):
+                    fail(
+                        f"{path}.{ref_field}",
+                        f"{identifier} lacks a same-record {'rid' if ref_field == 'rIds' else 'task'} sourceRef",
+                    )
+        return refs if refs_valid and sources is not None else None
 
-    proof = _pr_aid_array(
-        walkthrough.get("proof"), "changeWalkthrough.proof", maximum=16
-    )
-    for index, raw_cell in enumerate(proof):
-        cell_path = f"changeWalkthrough.proof[{index}]"
-        cell = _pr_aid_object(raw_cell, cell_path)
-        _pr_aid_keys(
-            cell,
-            cell_path,
-            required={"label", "value", "sourceRefs"},
+    walkthrough = check(_pr_aid_object, artifact.get("changeWalkthrough"), "changeWalkthrough")
+    if walkthrough is not None:
+        keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"})
+        check(
+            _pr_aid_string,
+            walkthrough.get("thesis"),
+            "changeWalkthrough.thesis",
+            maximum=4000,
         )
-        _pr_aid_string(cell.get("label"), f"{cell_path}.label", maximum=160)
-        _pr_aid_string(cell.get("value"), f"{cell_path}.value", maximum=160)
-        validate_refs(cell, cell_path, require_grounding=True)
-
-    groups = _pr_aid_array(
-        walkthrough.get("groups"),
-        "changeWalkthrough.groups",
-        minimum=1,
-        maximum=11,
-    )
-    kind_positions = {
-        kind: index for index, kind in enumerate(PR_COGNITIVE_AID_GROUP_KINDS)
-    }
-    kind_counts = {kind: 0 for kind in PR_COGNITIVE_AID_GROUP_KINDS}
-    last_kind_position = -1
-    last_ordinal = -1
-    ordinals: set[int] = set()
-    files_seen: dict[str, tuple[Any, ...]] = {}
-    for group_index, raw_group in enumerate(groups):
-        group_path = f"changeWalkthrough.groups[{group_index}]"
-        group = _pr_aid_object(raw_group, group_path)
-        _pr_aid_keys(
-            group,
-            group_path,
-            required={
-                "ordinal",
-                "kind",
-                "title",
-                "summary",
-                "sourceRefs",
-                "rIds",
-                "taskIds",
-                "files",
-            },
+        proof = check(
+            _pr_aid_array,
+            walkthrough.get("proof"),
+            "changeWalkthrough.proof",
+            maximum=16,
         )
-        ordinal = _pr_aid_nonnegative_int(
-            group.get("ordinal"), f"{group_path}.ordinal"
-        )
-        if ordinal in ordinals:
-            _pr_aid_fail(f"{group_path}.ordinal", "duplicate ordinal")
-        if ordinal <= last_ordinal:
-            _pr_aid_fail(f"{group_path}.ordinal", "must increase in render order")
-        last_ordinal = ordinal
-        ordinals.add(ordinal)
-        kind = _pr_aid_string(group.get("kind"), f"{group_path}.kind", maximum=160)
-        if kind not in kind_positions:
-            _pr_aid_fail(f"{group_path}.kind", "unsupported group kind")
-        if kind_positions[kind] < last_kind_position:
-            _pr_aid_fail(f"{group_path}.kind", "violates logical group order")
-        last_kind_position = kind_positions[kind]
-        kind_counts[kind] += 1
-        _pr_aid_string(group.get("title"), f"{group_path}.title", maximum=160)
-        summary = _pr_aid_string(
-            group.get("summary"), f"{group_path}.summary", maximum=1000
-        )
-        validate_refs(group, group_path, require_grounding=bool(summary))
-        files = _pr_aid_array(
-            group.get("files", []), f"{group_path}.files", maximum=200
-        )
-        for file_index, raw_file in enumerate(files):
-            file_path = f"{group_path}.files[{file_index}]"
-            file_record = _pr_aid_object(raw_file, file_path)
-            _pr_aid_keys(
-                file_record,
-                file_path,
-                required={
-                    "path",
-                    "changeType",
-                    "attentionClass",
-                    "summary",
-                    "sourceRefs",
-                    "rIds",
-                    "taskIds",
-                },
-                optional={"additions", "deletions", "diffUrl"},
-            )
-            repo_path = _pr_aid_repo_path(
-                file_record.get("path"), f"{file_path}.path"
-            )
-            change_type = _pr_aid_string(
-                file_record.get("changeType"),
-                f"{file_path}.changeType",
-                maximum=160,
-            )
-            if change_type not in PR_COGNITIVE_AID_CHANGE_TYPES:
-                _pr_aid_fail(f"{file_path}.changeType", "unsupported Git change type")
-            attention = _pr_aid_string(
-                file_record.get("attentionClass"),
-                f"{file_path}.attentionClass",
-                maximum=160,
-            )
-            if attention not in PR_COGNITIVE_AID_ATTENTION_CLASSES:
-                _pr_aid_fail(
-                    f"{file_path}.attentionClass", "unsupported attention class"
-                )
-            file_summary = _pr_aid_string(
-                file_record.get("summary"), f"{file_path}.summary", maximum=500
-            )
-            file_refs, _, _ = validate_refs(
-                file_record, file_path, require_grounding=bool(file_summary)
-            )
-            if not any(
-                source_by_id[source_id]["kind"] == "diff_metadata"
-                for source_id in file_refs
-            ):
-                _pr_aid_fail(
-                    f"{file_path}.sourceRefs",
-                    "must cite the artifact diff_metadata source",
-                )
-            additions = file_record.get("additions")
-            deletions = file_record.get("deletions")
-            if additions is not None:
-                additions = _pr_aid_nonnegative_int(
-                    additions, f"{file_path}.additions"
-                )
-            if deletions is not None:
-                deletions = _pr_aid_nonnegative_int(
-                    deletions, f"{file_path}.deletions"
-                )
-            diff_url = file_record.get("diffUrl")
-            if diff_url is not None:
-                _pr_aid_url(diff_url, f"{file_path}.diffUrl")
-            membership = (
-                ordinal,
-                change_type,
-                attention,
-                additions,
-                deletions,
-                diff_url,
-            )
-            if repo_path in files_seen:
-                if files_seen[repo_path] != membership:
-                    _pr_aid_fail(
-                        f"{file_path}.path", "conflicts with duplicate file membership"
-                    )
-                _pr_aid_fail(f"{file_path}.path", "duplicate file membership")
-            files_seen[repo_path] = membership
-            if expected_diff_files is not None:
-                expected_file = expected_diff_files.get(repo_path)
-                actual_file = (change_type, additions, deletions)
-                if expected_file is None:
-                    _pr_aid_fail(
-                        f"{file_path}.path", "does not belong to the bound Git diff"
-                    )
-                if actual_file != expected_file:
-                    _pr_aid_fail(
-                        file_path,
-                        "changeType/additions/deletions do not match the bound Git diff",
-                    )
-            if len(files_seen) > 500:
-                _pr_aid_fail("changeWalkthrough.groups", "exceeds 500 unique files")
-    if not 1 <= kind_counts["step"] <= 7:
-        _pr_aid_fail("changeWalkthrough.groups", "must contain exactly 1-7 step groups")
-    for optional_kind in ("problem", "principle", "kept", "verify"):
-        if kind_counts[optional_kind] > 1:
-            _pr_aid_fail(
-                "changeWalkthrough.groups",
-                f"must contain at most one {optional_kind} group",
-            )
-    if expected_diff_files is not None and set(files_seen) != set(expected_diff_files):
-        _pr_aid_fail(
+        for index, raw_cell in enumerate(proof or []):
+            path = f"changeWalkthrough.proof[{index}]"
+            cell = check(_pr_aid_object, raw_cell, path)
+            if cell is None:
+                continue
+            keys(cell, path, required={"label", "value", "sourceRefs"})
+            check(_pr_aid_string, cell.get("label"), f"{path}.label", maximum=160)
+            check(_pr_aid_string, cell.get("value"), f"{path}.value", maximum=160)
+            validate_refs(cell, path, require_grounding=True)
+        groups = check(
+            _pr_aid_array,
+            walkthrough.get("groups"),
             "changeWalkthrough.groups",
-            "file membership does not cover the bound Git diff exactly",
+            minimum=1,
+            maximum=11,
         )
+        kind_positions = {kind: index for index, kind in enumerate(PR_COGNITIVE_AID_GROUP_KINDS)}
+        kind_counts = dict.fromkeys(PR_COGNITIVE_AID_GROUP_KINDS, 0)
+        last_kind_position = last_ordinal = -1
+        ordinals: set[int] = set()
+        files_seen: dict[str, tuple[Any, ...]] = {}
+        complete_membership = groups is not None
+        complete_kinds = groups is not None
+        for group_index, raw_group in enumerate(groups or []):
+            path = f"changeWalkthrough.groups[{group_index}]"
+            group = check(_pr_aid_object, raw_group, path)
+            if group is None:
+                complete_membership = complete_kinds = False
+                continue
+            keys(
+                group,
+                path,
+                required={"ordinal", "kind", "title", "summary", "sourceRefs", "rIds", "taskIds", "files"},
+            )
+            ordinal = check(_pr_aid_nonnegative_int, group.get("ordinal"), f"{path}.ordinal")
+            if ordinal is not None:
+                if ordinal in ordinals:
+                    fail(f"{path}.ordinal", "duplicate ordinal")
+                if ordinal <= last_ordinal:
+                    fail(f"{path}.ordinal", "must increase in render order")
+                last_ordinal = ordinal
+                ordinals.add(ordinal)
+            kind = check(_pr_aid_string, group.get("kind"), f"{path}.kind", maximum=160)
+            if kind not in kind_positions:
+                if kind is not None:
+                    fail(f"{path}.kind", "unsupported group kind")
+                complete_kinds = False
+            else:
+                if kind_positions[kind] < last_kind_position:
+                    fail(f"{path}.kind", "violates logical group order")
+                last_kind_position = kind_positions[kind]
+                kind_counts[kind] += 1
+            check(_pr_aid_string, group.get("title"), f"{path}.title", maximum=160)
+            summary = check(
+                _pr_aid_string,
+                group.get("summary"),
+                f"{path}.summary",
+                maximum=1000,
+            )
+            validate_refs(group, path, require_grounding=bool(summary))
+            files = check(_pr_aid_array, group.get("files", []), f"{path}.files", maximum=200)
+            if files is None:
+                complete_membership = False
+            for file_index, raw_file in enumerate(files or []):
+                file_path = f"{path}.files[{file_index}]"
+                record = check(_pr_aid_object, raw_file, file_path)
+                if record is None:
+                    complete_membership = False
+                    continue
+                repo_path = check(_pr_aid_repo_path, record.get("path"), f"{file_path}.path")
+                if repo_path is None:
+                    complete_membership = False
+                    continue
+                keys(
+                    record,
+                    file_path,
+                    required={
+                        "path", "changeType", "attentionClass", "summary",
+                        "sourceRefs", "rIds", "taskIds",
+                    },
+                    optional={"additions", "deletions", "diffUrl"},
+                )
+                change_type = check(
+                    _pr_aid_string,
+                    record.get("changeType"),
+                    f"{file_path}.changeType",
+                    maximum=160,
+                )
+                if change_type is not None and change_type not in PR_COGNITIVE_AID_CHANGE_TYPES:
+                    fail(f"{file_path}.changeType", "unsupported Git change type")
+                attention = check(
+                    _pr_aid_string,
+                    record.get("attentionClass"),
+                    f"{file_path}.attentionClass",
+                    maximum=160,
+                )
+                if attention is not None and attention not in PR_COGNITIVE_AID_ATTENTION_CLASSES:
+                    fail(f"{file_path}.attentionClass", "unsupported attention class")
+                summary = check(
+                    _pr_aid_string,
+                    record.get("summary"),
+                    f"{file_path}.summary",
+                    maximum=500,
+                    allow_empty=True,
+                )
+                refs = validate_refs(record, file_path, require_grounding=bool(summary))
+                if refs is not None and not any(
+                    source_by_id.get(source_id, {}).get("kind") == "diff_metadata"
+                    for source_id in refs
+                ):
+                    fail(
+                        f"{file_path}.sourceRefs",
+                        "must cite the artifact diff_metadata source",
+                    )
+                additions = record.get("additions")
+                deletions = record.get("deletions")
+                if additions is not None:
+                    additions = check(
+                        _pr_aid_nonnegative_int,
+                        additions,
+                        f"{file_path}.additions",
+                    )
+                if deletions is not None:
+                    deletions = check(
+                        _pr_aid_nonnegative_int,
+                        deletions,
+                        f"{file_path}.deletions",
+                    )
+                diff_url = record.get("diffUrl")
+                if diff_url is not None:
+                    check(_pr_aid_url, diff_url, f"{file_path}.diffUrl")
+                membership = (ordinal, change_type, attention, additions, deletions, diff_url)
+                if repo_path in files_seen:
+                    fail(
+                        f"{file_path}.path",
+                        "conflicts with duplicate file membership"
+                        if files_seen[repo_path] != membership
+                        else "duplicate file membership",
+                    )
+                files_seen[repo_path] = membership
+                if expected_diff_files is not None:
+                    expected = expected_diff_files.get(repo_path)
+                    if expected is None:
+                        fail(f"{file_path}.path", "does not belong to the bound Git diff")
+                    elif not any(
+                        failed(f"{file_path}.{field}")
+                        for field in ("changeType", "additions", "deletions")
+                    ) and (change_type, additions, deletions) != expected:
+                        fail(
+                            file_path,
+                            "changeType/additions/deletions do not match the bound Git diff",
+                        )
+                if len(files_seen) > 500:
+                    fail("changeWalkthrough.groups", "exceeds 500 unique files")
+        if complete_kinds and not 1 <= kind_counts["step"] <= 7:
+            fail("changeWalkthrough.groups", "must contain exactly 1-7 step groups")
+        for optional_kind in ("problem", "principle", "kept", "verify"):
+            if kind_counts[optional_kind] > 1:
+                fail(
+                    "changeWalkthrough.groups",
+                    f"must contain at most one {optional_kind} group",
+                )
+        if (
+            complete_membership
+            and expected_diff_files is not None
+            and set(files_seen) != set(expected_diff_files)
+        ):
+            fail(
+                "changeWalkthrough.groups",
+                "file membership does not cover the bound Git diff exactly",
+            )
+    if errors:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
     return artifact
 
 
@@ -29817,12 +29969,15 @@ def write_pr_cognitive_aid(
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> Path:
     """Validate and atomically create one immutable generation."""
+    errors: list[str] = []
+    artifact = _expand_pr_cognitive_aid_input(artifact, expected_diff_files, _errors=errors)
     artifact = validate_pr_cognitive_aid(
         artifact,
         expected_spec_id=spec_id,
         expected_base_sha=base_sha,
         expected_head_sha=head_sha,
         expected_diff_files=expected_diff_files,
+        _errors=errors,
     )
     home = _pr_cognitive_aid_home(flow_dir, spec_id)
     target = home / f"{artifact['artifactId']}.json"
@@ -30074,7 +30229,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _pr_aid_read_input(path_arg: str) -> Any:
+def _pr_aid_read_input(path_arg: str, *, use_json: bool = True) -> Any:
     try:
         if path_arg == "-":
             raw_bytes = sys.stdin.buffer.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
@@ -30083,19 +30238,19 @@ def _pr_aid_read_input(path_arg: str) -> Any:
                 raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
     except OSError as exc:
         error_exit(
-            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=True, code=2
+            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=use_json, code=2
         )
     if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
         error_exit(
             f"PR cognitive-aid artifact exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
-            use_json=True,
+            use_json=use_json,
             code=2,
         )
     try:
         return json.loads(raw_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         error_exit(
-            f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=True, code=2
+            f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=use_json, code=2
         )
 
 
@@ -30110,16 +30265,28 @@ def _pr_aid_cli_shas(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def cmd_pr_cognitive_aid_validate(args: argparse.Namespace) -> None:
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=args.json)
     try:
-        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
-        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
-        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = None
+        errors: list[str] = []
+        try:
+            record = _pr_aid_object(artifact, "pr_cognitive_aid")
+            base_sha = _pr_aid_sha(record.get("baseSha"), "baseSha")
+            head_sha = _pr_aid_sha(record.get("headSha"), "headSha")
+        except PrCognitiveAidValidationError:
+            # Schema validation reports bad bindings with the other errors.
+            pass
+        else:
+            expected_diff_files = _pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            )
+            artifact = _expand_pr_cognitive_aid_input(
+                artifact, expected_diff_files, _errors=errors
+            )
         artifact = validate_pr_cognitive_aid(
             artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            expected_diff_files=expected_diff_files,
+            _errors=errors,
         )
     except PrCognitiveAidValidationError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
@@ -30133,7 +30300,7 @@ def cmd_pr_cognitive_aid_write(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
     base_sha, head_sha = _pr_aid_cli_shas(args)
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=args.json)
     try:
         expected_diff_files = _pr_aid_live_diff_files(
             get_repo_root(), base_sha, head_sha
@@ -30185,16 +30352,20 @@ def cmd_pr_cognitive_aid_current(args: argparse.Namespace) -> None:
 
 def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     if args.file:
-        artifact = _pr_aid_read_input(args.file)
+        artifact = _pr_aid_read_input(args.file, use_json=False)
         try:
             artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
             base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
             head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+            expected_diff_files = _pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            )
+            errors: list[str] = []
+            artifact = _expand_pr_cognitive_aid_input(
+                artifact, expected_diff_files, _errors=errors
+            )
             artifact = validate_pr_cognitive_aid(
-                artifact,
-                expected_diff_files=_pr_aid_live_diff_files(
-                    get_repo_root(), base_sha, head_sha
-                ),
+                artifact, expected_diff_files=expected_diff_files, _errors=errors
             )
             print(render_pr_cognitive_aid_markdown(artifact), end="")
         except PrCognitiveAidValidationError as exc:
@@ -30250,16 +30421,20 @@ def render_pr_cognitive_aid_html_input(artifact: Any) -> str:
 
 
 def cmd_pr_cognitive_aid_html_input(args: argparse.Namespace) -> None:
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=False)
     try:
         artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
         base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
         head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        errors: list[str] = []
+        artifact = _expand_pr_cognitive_aid_input(
+            artifact, expected_diff_files, _errors=errors
+        )
         artifact = validate_pr_cognitive_aid(
-            artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            artifact, expected_diff_files=expected_diff_files, _errors=errors
         )
         print(render_pr_cognitive_aid_html_input(artifact), end="")
     except PrCognitiveAidValidationError as exc:

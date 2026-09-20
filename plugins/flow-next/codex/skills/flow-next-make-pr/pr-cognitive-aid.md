@@ -3,7 +3,7 @@
 Run this phase after `export-cognitive-aid` and before the optional HTML lens
 and final PR-body composition. The existing host agent owns every judgment:
 thesis, logical groups, summaries, order, and source attribution. This phase
-adds no model call. `flowctl` only validates, persists, selects, and renders.
+adds no model call. `flowctl` fills diff metadata, validates, persists, and renders.
 
 ## 1. Resolve or compose
 
@@ -35,15 +35,15 @@ repository. The object follows `pr_cognitive_aid` schema version 1:
 - Source refs are bound, not labels: `spec` equals `specId`; `task` belongs to
   that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
   `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
-- Each proof/group/file semantic claim carries non-empty `sourceRefs`.
-  Group/file `rIds` and `taskIds` also carry a same-record source reference to
-  the matching `rid` or `task` source. File claims do not inherit group claims.
-- Each file comes only from `diff_summary.files[]`, cites the bound
-  `diff_metadata` source, and keeps its upstream group and array order.
-  `changeType` is Git state (`added|modified|deleted|renamed|copied`);
-  `attentionClass` is review attention
-  (`canonical|generated|mechanical`). Never collapse these dimensions.
-- No raw diff text. `diffUrl` may be HTTPS or repository-relative only.
+- Author only judgment: thesis, proof, groups, sources, and file path/summary.
+  Write rows only for files worth a sentence, from `diff_summary.files[]`.
+- Rows inherit group refs unless explicit; each semantic claim needs sources.
+  `rIds`/`taskIds` need matching sources; files cite bound `diff_metadata`.
+- Omit `changeType`, `additions`, `deletions`, `diffUrl`; flowctl fills them.
+  Explicit counts/types must match; links must be HTTPS or relative. No raw diff.
+- Supply `attentionClass` (`canonical|generated|mechanical`) unless a known
+  state/lockfile/mirror pattern decides it; explicit classes win. Unlisted paths
+  get empty-summary rows in existing steps, canonical unless a pattern applies.
 
 The validator enforces the full v1 payload, string, path, URL, provenance,
 group, file, and byte bounds. Never pre-truncate to make invalid input pass.
