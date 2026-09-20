@@ -1,7 +1,4 @@
-"""Execute Flow destination fences; R9 retired land discovery/tail/handoff fences.
-
-Flow dispatch remains covered here until R10 changes its landing stage.
-"""
+"""R10: execute Flow landing observation and consent fences."""
 
 from __future__ import annotations
 
@@ -66,27 +63,53 @@ class MergeDestinationTest(unittest.TestCase):
                 self.assertEqual("dispatched" in result.stdout, allowed)
 
 
-    def test_landing_outcomes_preserve_waits_blockers_and_incomplete_tail(self):
+    def test_r10_named_pr_handoff_removes_retired_inputs(self):
+        root = PLUGIN / "skills/flow-next-flow"
+        tail = (root / "references/tail.md").read_text()
+        self.assertIn("/flow-next:land <PR> <current authorization>", tail)
+        for path in root.rglob("*.md"):
+            with self.subTest(path=path):
+                self.assertNotRegex(path.read_text(),
+                    r"LAND_BASE_ROOT|land's.*ledger|tick claim|source checkout|base checkout|"
+                    r"flow-next-land/references/|LAND_COMPLETE|merged-tail|incomplete tail")
+
+    def test_r10_disappeared_pr_never_continues(self):
+        self.assert_target_stops("MISSING")
+
+    def test_r10_closed_unmerged_pr_never_continues(self):
+        self.assert_target_stops("CLOSED")
+
+    def assert_target_stops(self, state):
         code = fence("flow-next-flow/references/tail.md", "PILOT_LAND_VERDICT=")
-        cases = (("AWAITING_REVIEW", "0", "0", "0", "DEFERRED_TO_LAND", "1"),
-                 ("AWAITING_REVIEW", "0", "0", "1", "DEFERRED_TO_LAND", "0"),
-                 ("RESOLVING", "1", "0", "0", "ADVANCED", "1"),
-                 ("FIXING_CI", "0", "0", "0", "DEFERRED_TO_LAND", "1"),
-                 ("MERGED", "0", "1", "0", "ADVANCED", "0"),
-                 ("MERGED", "0", "0", "0", "NEEDS_HUMAN", "0"),
-                 ("RELEASED", "0", "0", "0", "NEEDS_HUMAN", "0"),
-                 ("BLOCKED", "1", "1", "0", "BLOCKED", "0"),
-                 ("NEEDS_HUMAN", "1", "1", "0", "NEEDS_HUMAN", "0"),
-                 ("NO_WORK", "0", "0", "0", "NEEDS_HUMAN", "0"))
-        for verdict, progress, complete, tick, expected, again in cases:
-            with self.subTest(verdict=verdict, complete=complete, tick=tick):
+        result = self.run_fence(code, env={"LAND_RESULT": "AWAITING_REVIEW",
+            "LAND_OBSERVED": "1", "LAND_PR_STATE": state, "LAND_AUTHORIZED": "1",
+            "AUTO_TICK": "0"},
+            after='printf "%s|%s" "$PILOT_LAND_VERDICT" "$LAND_CONTINUE"')
+        self.assertEqual(result.stdout, "NEEDS_HUMAN|0")
+
+    def test_landing_outcomes_preserve_waits_blockers_and_confirmed_merge(self):
+        code = fence("flow-next-flow/references/tail.md", "PILOT_LAND_VERDICT=")
+        cases = (("AWAITING_REVIEW", "0", "OPEN", "", "0", "DEFERRED_TO_LAND", "1"),
+                 ("AWAITING_REVIEW", "0", "OPEN", "", "1", "DEFERRED_TO_LAND", "0"),
+                 ("RESOLVING", "1", "OPEN", "", "0", "ADVANCED", "1"),
+                 ("FIXING_CI", "0", "OPEN", "", "0", "DEFERRED_TO_LAND", "1"),
+                 ("MERGED", "0", "MERGED", "abc", "0", "ADVANCED", "0"),
+                 ("MERGED", "0", "MERGED", "", "0", "NEEDS_HUMAN", "0"),
+                 ("AWAITING_REVIEW", "0", "MERGED", "abc", "0", "ADVANCED", "0"),
+                 ("BLOCKED", "1", "OPEN", "", "0", "BLOCKED", "0"),
+                 ("NEEDS_HUMAN", "1", "OPEN", "", "0", "NEEDS_HUMAN", "0"),
+                 ("NO_WORK", "0", "OPEN", "", "0", "NEEDS_HUMAN", "0"))
+        for verdict, progress, state, merge, tick, expected, again in cases:
+            with self.subTest(verdict=verdict, state=state, merge=merge, tick=tick):
                 result = self.run_fence(code, env={"LAND_RESULT": verdict, "LAND_PROGRESS": progress,
-                    "LAND_COMPLETE": complete, "AUTO_TICK": tick, "LAND_OBSERVED": "1", "LAND_AUTHORIZED": "1"},
+                    "LAND_PR_STATE": state, "LAND_MERGE_COMMIT": merge, "AUTO_TICK": tick,
+                    "LAND_OBSERVED": "1", "LAND_AUTHORIZED": "1"},
                     after='printf "%s|%s" "$PILOT_LAND_VERDICT" "$LAND_CONTINUE"')
                 self.assertEqual((result.returncode, result.stdout), (0, f"{expected}|{again}"))
-        for missing in ("LAND_OBSERVED", "LAND_AUTHORIZED"):
-            result = self.run_fence(code, env={"LAND_RESULT": "MERGED", "LAND_COMPLETE": "1",
-                "LAND_OBSERVED": "1", "LAND_AUTHORIZED": "1", missing: "0"},
+        for authorized, observed in (("0", "1"), ("1", "0")):
+            result = self.run_fence(code, env={"LAND_RESULT": "AWAITING_REVIEW",
+                "LAND_PR_STATE": "OPEN", "LAND_AUTHORIZED": authorized,
+                "LAND_OBSERVED": observed, "LAND_CONTINUE": "1"},
                 after='printf "%s|%s" "$PILOT_LAND_VERDICT" "$LAND_CONTINUE"')
             self.assertEqual(result.stdout, "NEEDS_HUMAN|0")
 

@@ -23602,9 +23602,9 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
                   'is too late for understood work'),
  'all_done_make_pr': ('Apply the QA gate, then make the pull request.',
                       'QA runs or records `skipped(reason)`; make-pr is never skipped on this route'),
- 'existing_pr_tail': ('Apply the existing pull request tail and consent rules.',
+ 'existing_pr_tail': ('Apply the existing pull request landing and consent rules.',
                       'Review-only convergence keeps its limited scope. PR existence is not consent; land '
-                      'owns all convergence, merge and tail gates')}
+                      'owns convergence and merge gates')}
 
 
 # Live routing consumes the same spec/task inventory as `show`; no state store.
@@ -23719,6 +23719,10 @@ def judge_route_lifecycle(state: dict) -> dict | None:
         return decision("host", "pr_probe_failed")
     if state["pr_exists"]:
         return decision("existing_pr_tail", "observed PR")
+    if state.get("status") == "done":
+        # Closing precedes PR creation; absence cannot distinguish a failed open
+        # from a disappeared PR. Let the host report it, never create a replacement.
+        return decision("host", "closed spec without observed PR")
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")

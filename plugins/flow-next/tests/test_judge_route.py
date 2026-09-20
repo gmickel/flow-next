@@ -72,7 +72,36 @@ class JudgeRouteTests(unittest.TestCase):
                     if status in {"OPEN", "MERGED", "CLOSED"}:
                         self.assertEqual(state["pr_ref"]["state"], status)
                         self.assertEqual(f.judge_route_lifecycle(state)["value"], "existing_pr_tail")
+                        # make-pr now closes the spec before opening its PR. Keep
+                        # every observed PR on the tail route so the host can land,
+                        # end after merge, or stop on an unmerged closure.
+                        state["status"] = "done"
+                        self.assertEqual(f.judge_route_lifecycle(state)["value"], "existing_pr_tail")
                     self.assertFalse(state["no_plan"])
+
+    def test_closed_spec_without_observed_pr_never_routes_to_replacement(self):
+        scratch = SCRIPTS.parents[2] / ".flow" / "tmp"
+        scratch.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as tmp:
+            repo = Path(tmp)
+            body = repo / "spec.md"
+            body.write_text("Implement feature", encoding="utf-8")
+            spec_path = repo / "spec.json"
+            # This is the persisted status written by spec close. Exercise the
+            # real JSON reader and normalizer rather than inventing route facts.
+            spec_path.write_text(json.dumps({
+                "id": "fn-1-feature", "title": "Feature", "status": "done",
+                "branch_name": "fn-1-feature", "ready": True,
+            }), encoding="utf-8")
+            probe = SimpleNamespace(returncode=0, stdout="[]")
+            with patch.dict(f.os.environ, {"TYPESAFE_API_KEY": "test-key"}), patch.object(f, "get_config", return_value=True), patch.object(f, "get_repo_root", return_value=repo), patch.object(f, "get_flow_dir", return_value=repo), patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), patch.object(f, "find_spec_json_path", return_value=spec_path), patch.object(f, "find_spec_md_path", return_value=body), patch.object(f.TaskInventory, "load", return_value=SimpleNamespace(by_spec={"fn-1-feature": [{"status": "done"}]})), patch.object(f.subprocess, "run", return_value=probe):
+                state = f.judge_route_state({}, "fn-1-feature")
+            self.assertEqual(state["status"], "done")
+            self.assertEqual((state["tasks_total"], state["tasks_done"]), (1, 1))
+            self.assertIs(state["pr_exists"], False)
+            route = f.judge_route_lifecycle(state)
+            self.assertEqual(route["value"], "host")
+            self.assertEqual(route["rule"], "closed spec without observed PR")
 
     def test_missing_branch_is_nothing_to_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
