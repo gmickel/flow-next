@@ -29554,13 +29554,24 @@ def validate_pr_cognitive_aid(
 
     walkthrough = check(_pr_aid_object, artifact.get("changeWalkthrough"), "changeWalkthrough")
     if walkthrough is not None:
-        keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"})
+        keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"},
+             optional={"userImpact", "blastRadius", "unverifiedSteps"})
         check(
             _pr_aid_string,
             walkthrough.get("thesis"),
             "changeWalkthrough.thesis",
             maximum=4000,
         )
+        for field in ("userImpact", "blastRadius"):
+            if field in walkthrough:
+                check(_pr_aid_string, walkthrough[field], f"changeWalkthrough.{field}",
+                      maximum=4000, allow_empty=True)
+        if "unverifiedSteps" in walkthrough:
+            steps = check(_pr_aid_array, walkthrough["unverifiedSteps"],
+                          "changeWalkthrough.unverifiedSteps", maximum=32)
+            for index, step in enumerate(steps or []):
+                check(_pr_aid_string, step, f"changeWalkthrough.unverifiedSteps[{index}]",
+                      maximum=1000)
         proof = check(
             _pr_aid_array,
             walkthrough.get("proof"),

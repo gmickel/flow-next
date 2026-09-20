@@ -41,6 +41,22 @@ The PR body still travels with the PR; the local aid files do not.
 
 ## Sparse authoring
 
+Three optional authored fields are additive within `changeWalkthrough`.
+The stored `schemaVersion` remains `1` and the artifact path above is unchanged.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `userImpact` | string | What changes for a user or operator. |
+| `blastRadius` | string | Who or what the change touches and why it is safe or risky. |
+| `unverifiedSteps` | array of strings | Verification steps nobody ran, each with a note explaining the gap. |
+
+`userImpact` and `blastRadius` allow empty strings and up to 4,000 characters
+each. `unverifiedSteps` allows an empty array or up to 32 non-empty strings of
+up to 1,000 characters each. Omit fields with no authored content. Existing
+artifacts without them remain valid. Wrong types are rejected with the field's
+path; unknown fields remain rejected. All four input entry points below
+preserve these fields during sparse expansion and storage.
+
 Validate, write, render --file, and html-input --file accept rows with only
 judgment fields. Missing `changeType`, `additions`, and `deletions` are filled
 from the bound diff. An omitted `diffUrl` becomes
