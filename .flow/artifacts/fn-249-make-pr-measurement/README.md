@@ -65,3 +65,76 @@ Notes, negative findings included:
 - n = 3 per point: a difference smaller than the run-to-run spread above (about
   10,000 tokens, 75 s) is not evidence of a change.
 - Headless print mode; an interactive session carries more context.
+
+## Recomputed authored bytes (2026-09-20)
+
+Strict, proven omissions save **40,957 bytes (2.5553%)** across the 39 tracked
+artifacts in this clone. This is much smaller than the Goal's 57% mechanical
+field estimate. That estimate described 111 artifacts; this measurement uses
+only the 39 returned by the current index, with 2,236 file rows.
+
+| Measure | Bytes |
+|---|---:|
+| Complete artifacts as stored | 1,602,803 |
+| Sparse inputs plus unchanged artifacts without an identity solution | 1,561,846 |
+| Proven reduction | 40,957 |
+
+| Omitted field | Occurrences | Bytes saved |
+|---|---:|---:|
+| `changeType` | 155 | 5,687 |
+| `additions` | 155 | 4,478 |
+| `deletions` | 155 | 4,361 |
+| `diffUrl` | 0 | 0 |
+| `sourceRefs` | 0 | 0 |
+| `rIds` | 118 | 5,148 |
+| `taskIds` | 132 | 13,644 |
+| `attentionClass` | 177 | 7,639 |
+| Whole rows added by flowctl | 0 | 0 |
+
+Method and limits:
+
+- [`authored_bytes.py`](authored_bytes.py) selects JSON files beneath
+  `*/pr-cognitive-aid/` from `git ls-files .flow/artifacts`, reads UTF-8, and
+  compares complete and sparse inputs using flowctl's canonical serialization
+  (sorted keys, two-space indentation, UTF-8, final newline). In this corpus,
+  canonical complete bytes equal the actual stored bytes. Formatting changes
+  earn no savings; every retained value and array order must remain identical.
+- The script calls the branch's own expansion function for each proposed
+  omission and for the final sparse input. It retains fields unless expansion
+  reproduces the complete canonical bytes without errors. It tries whole empty
+  rows first, then the fields in table order; byte attribution includes their
+  JSON syntax and indentation and has no double counting. All 2,236 stored rows
+  have non-empty summaries, so none can disappear. On these artifacts the
+  remaining field omissions are independent, yielding the smallest input by
+  omission of the supported fields wherever identity is possible. It does not
+  rewrite groups, sources, judgments, or stored artifacts.
+- Historical metadata comes from flowctl's own copy-aware diff reader and parser,
+  substituting the recorded head for `HEAD` in its Git reads. There is no
+  checkout, fetch, or invented metadata. Lazy fetching is disabled. Git cannot
+  read 22 recorded ranges in this clone. For those artifacts the script passes
+  no metadata, retains additions/deletions/change type and whole rows, and still
+  proves any independent reference or attention omission. The result is a
+  conservative locally provable figure, not a prediction for a complete clone.
+- **29 artifacts have no identical expansion even as complete input.** They
+  omit `diffUrl` on 1,172 rows, and this branch's expansion adds it. No supported
+  omission can suppress that addition. The script explicitly reports these as
+  having no identity solution and carries their original size into the total
+  with zero savings; it does not claim their unchanged inputs round-trip.
+  This historical compatibility finding is retained for the host; product
+  changes are outside this measurement unit.
+- The other 10 artifacts shrink. Existing diff links differ from the derived
+  anchors and must remain. No source-reference omission reproduces the stored
+  arrays. This measures expansion identity, not full historical validation or
+  current-head eligibility. It does not measure tokens, calls, or time.
+
+Rerun from the repository root:
+
+```bash
+python3 .flow/artifacts/fn-249-make-pr-measurement/authored_bytes.py
+```
+
+The JSON output includes aggregate and per-artifact counts, unavailable-diff
+errors, added fields/rows preventing identity, and the per-field breakdown.
+The indexed corpus and locally available Git objects determine the result.
+The baseline runs and `measure.sh` were neither changed nor executed for this
+figure. The after-input timing measurement remains pending.
