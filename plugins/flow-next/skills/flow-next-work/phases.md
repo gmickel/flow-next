@@ -439,6 +439,8 @@ ran review). Content lives in those files — read them, never a restatement.
 
 ### 3d. Join, Integrate, and Verify
 
+**Before accepting any worker return**, use the existing `$FLOWCTL show <task-id> --json` read below (or the handover path's status read) and check the host's background-task list or process table only for commands attributable to that task's lane by its workspace (on the single-worker path the sole lane is the conductor's checkout, so a command started there during the dispatch is that worker's); unattributable commands are not that worker's, and `in_progress` alone triggers nothing: a confirmed parallel-wave or host-deferred handover with no attributable live command proceeds through its existing gates (3d.0 first where applicable). For any `in_progress` return with an attributable live command, a confirmed handover included, wait within the dispatch `TIMEBOX`, then dispatch a re-anchoring continuation worker into the same workspace after the command exits, without counting the early return as a failed attempt; past `TIMEBOX`, the existing stand-down and 2-strike rules below govern, and with no live command the existing not-done diagnosis applies.
+
 **Parallel wave or reviewer-overlap dispatch** (3a `Dispatch count` > 1, or an
 overlapped one-task wave): read
 [references/wave-join.md](references/wave-join.md) and execute it — it owns the
@@ -466,7 +468,7 @@ never a third budget. (Known risk, accepted: a slow-but-healthy lane can be
 stood down; the strike cap bounds that cost to one bounded retry, never
 correctness.)
 
-If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task failure strike counter. **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
+If status is not `done` (and the 3d.0 gate did not apply or already ran, subject to the early-return exemption above), the worker failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task failure strike counter. **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
