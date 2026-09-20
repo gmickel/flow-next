@@ -86,6 +86,19 @@ claim files are inert. No post-merge checkout, commit, push or local state write
 remains. Issue IDs above come from the recorded history; implementation PRs and
 incident PRs are labeled where no separate originating issue was recorded.
 
+### Fixed
+
+- **A worker no longer reports back while its own test run is still going.** A
+  worker could start a long gate in the background and end its turn, so work
+  received a result that did not exist yet. The worker now waits for every
+  command it started and reads its exit code before returning, including a
+  command the host moved to the background. Before accepting a return, work
+  checks the task status and whether the worker left a command running; if it
+  did, work waits within the dispatch TIMEBOX and sends a re-anchoring continuation worker into the same
+  workspace after command exit, without counting the early return as a failed
+  attempt. The worker also inspects another tree state in a temporary worktree
+  instead of `git stash`.
+
 ## [flow-next 5.6.1] - 2026-09-20
 
 ### Fixed
