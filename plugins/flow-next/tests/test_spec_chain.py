@@ -192,15 +192,17 @@ class ChainCliTestCase(unittest.TestCase):
                          f"dependency {parent} closed locally but not recorded at origin/main; fetch the base or land it")
         self.assertNotIn("push it", out["reason"])
 
-    def test_brief_blocks_branch_closed_dependency_without_remote_read(self) -> None:
+    def test_brief_reads_local_status_without_git_or_remote(self) -> None:
+        # brief keeps its zero-git contract: a parent closed on its own branch
+        # reads unblocked there, as the schedulers' chain-parent waiver does,
+        # and a broken remote cannot affect it.
         parent, child = self.closed_parent_branch()
         self.push_branch(parent)
-        # A broken remote must not affect brief's local-only base gate.
         git(self.repo, "remote", "set-url", "origin", str(self.tmp / "nowhere.git"))
         res = self.flowctl("brief", "--full")
         self.assertEqual(res.returncode, 0, res.stderr)
         out = json.loads(res.stdout)
-        self.assertNotIn(child + ".1", json.dumps(out["actionable_tasks"]["items"]))
+        self.assertIn(child + ".1", json.dumps(out["actionable_tasks"]["items"]))
 
     def test_base_resolution_cache_is_success_only_and_cwd_scoped(self) -> None:
         scripts_dir = str(Path(__file__).resolve().parents[1] / "scripts")

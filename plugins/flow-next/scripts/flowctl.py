@@ -35618,7 +35618,7 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
 
 
 _SPEC_BASE_CACHE: dict[Path, tuple[str, str]] = {}
-_spec_base_notice_printed = False
+_SPEC_BASE_NOTICE_CWDS: set[Path] = set()
 
 
 def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
@@ -35628,7 +35628,6 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
     resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
     With no base ref the local close stands, with one stderr notice per process.
     """
-    global _spec_base_notice_printed
     if spec_data.get("status") != "done":
         return False, "", ""
     diagnostic = ""
@@ -35657,9 +35656,9 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
                     "no base ref resolved; tried refs/remotes/origin/HEAD, "
                     + ", ".join(candidates) + "; using local status"
                 )
-                if not _spec_base_notice_printed:
+                if cwd not in _SPEC_BASE_NOTICE_CWDS:
                     print(f"note: {diagnostic}", file=sys.stderr)
-                    _spec_base_notice_printed = True
+                    _SPEC_BASE_NOTICE_CWDS.add(cwd)
                 return True, "", diagnostic
         base_ref, base = cached
         diagnostic = (
@@ -35785,9 +35784,7 @@ def evaluate_spec_chain(
         other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
         if parent not in (other.get("depends_on_epics", []) or []):
             continue
-        landed, err, diagnostic = spec_landed_at_base(flow_dir, other_id, other)
-        if diagnostic:
-            diagnostics.append(diagnostic)
+        landed, err, _ = spec_landed_at_base(flow_dir, other_id, other)
         if err:
             set_reason(f"base query failed: {err}")
             return result
@@ -38126,10 +38123,12 @@ def _brief_memory_enabled(flow_dir: Path) -> bool:
 def _brief_spec_blocked_by(
     flow_dir: Path, spec_id: str, spec_data: dict, specs_by_id: dict[str, dict]
 ) -> list[str]:
-    """Use the scheduler's landed-at-base evidence for spec dependencies.
+    """Spec-level dep gate from local status: deps missing or not done.
 
-    Stay strict about chain parents: sharing the scheduler's waiver would
-    add a remote read to brief, which only reads local evidence.
+    brief never shells out, so it does not read the schedulers' landed-at-base
+    evidence. A dependency closed on its own branch and not yet merged reads
+    unblocked here; the schedulers usually agree through the chain-parent
+    waiver, and `spec chain` is the authority when they do not.
     """
     blocked: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
@@ -38148,8 +38147,7 @@ def _brief_spec_blocked_by(
                 blocked.append(dep)
                 continue
             specs_by_id[dep] = dep_data
-        landed, _, _ = spec_landed_at_base(flow_dir, dep, dep_data)
-        if not landed:
+        if dep_data.get("status") != "done":
             blocked.append(dep)
     return blocked
 

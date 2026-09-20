@@ -879,7 +879,7 @@ Output:
 }
 ```
 
-Spec-level deps gate the whole spec. `ready`, `next`, `ready --all`, and `brief` share the landed-at-base evidence rule described in [`spec chain`](#spec-chain), including the no-base fallback and notice. Missing dependencies and unreadable base evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` keeps the strict base gate because applying that waiver would add a remote read. Task-level `depends_on` is unchanged.
+Spec-level deps gate the whole spec. `ready`, `next`, and `ready --all` share the landed-at-base evidence rule described in [`spec chain`](#spec-chain), including the no-base fallback and notice. Missing dependencies and unreadable base evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` runs no git subprocess, so it reads a dependency's local status: a dependency closed on its own branch and not yet merged reads unblocked there, which matches the schedulers whenever the chain-parent waiver applies, and `spec chain` is the authority otherwise. Task-level `depends_on` is unchanged.
 
 ```json
 {

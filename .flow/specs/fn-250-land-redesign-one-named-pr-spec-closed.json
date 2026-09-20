@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-250-land-redesign-one-named-pr-spec-closed",
   "impl_review_rounds": {
-    "fn-250-land-redesign-one-named-pr-spec-closed.1": 2
+    "fn-250-land-redesign-one-named-pr-spec-closed.1": 3
   },
   "next_task": 1,
   "no_plan": true,
@@ -71,8 +71,19 @@
     }
   ],
   "review_hash_epoch": {},
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-250-land-redesign-one-named-pr-spec-closed.1": 1
+  },
+  "review_reservations": {
+    "e8fdd4c1a600453c8a3c102bcfc44905": {
+      "artifact_sha256": "81f5d2e42ea5436723f9fdc385e6fc8b3c6934a08768f880627c2e2683ce683e",
+      "counter_scope": "impl:fn-250-land-redesign-one-named-pr-spec-closed.1",
+      "epoch": 0,
+      "exclusive": true,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-250-land-redesign-one-named-pr-spec-closed.1": 0
   },
@@ -90,5 +101,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T15:42:13.936767Z"
+  "updated_at": "2026-09-20T15:53:24.735397Z"
 }
