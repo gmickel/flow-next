@@ -27,6 +27,12 @@ unsupported, invalid, forked, or ambiguous chain remains evidence but supplies
 no current verification or ship claim. Select a labeled fallback; never merge
 legacy fields into a partial v1 view.
 
+Make-pr's resolve step reuses a valid current generation at the same base and
+head, including one written from sparse input. A same-head successor that
+explicitly supersedes the tip publishes a deliberate correction to authored
+content. A moved head, missing artifact, or failed validation requires composing
+again.
+
 Aid generations and their `.write.lock` files are ignored by the managed
 `.flow/.gitignore` block after `flowctl init` refreshes it. HTML lenses and
 other artifact kinds remain trackable. Already tracked aid files require a

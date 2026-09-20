@@ -14,6 +14,10 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- PR aids written from sparse input remain reusable at make-pr's resolve step
+  when base and head match. Explicit same-head successors still publish
+  deliberate corrections to authored content.
+
 - Broad staging now leaves new PR aid generations and write locks local after
   `flowctl init` refreshes the managed ignore block. HTML lenses and other
   artifacts remain trackable. In repositories that already track aid files,
