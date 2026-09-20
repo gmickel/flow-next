@@ -2,8 +2,7 @@
 
 Pins the round-trip diet so future edits cannot silently regress it:
 
-  * land workflow Phase 0: exactly ONE `config get` invocation (the `land`
-    subtree capture) — was 7 sequential per-key reads (R3).
+  * R9 retires land Phase 0 shell capture; named-PR contracts cover its replacement.
   * plan steps.md: exactly ONE `config get` (the Step 0 root snapshot); the
     Route B create path contains no `spec set-branch` and no `task set-spec`
     invocation (R4), plus the committed before/after invocation-count fixture
@@ -73,32 +72,6 @@ def both_copies(rel: str):
     assert canonical.exists(), f"missing canonical file: {rel}"
     assert mirrored.exists(), f"missing codex mirror copy: {rel}"
     return [canonical, mirrored]
-
-
-class LandConfigDietTestCase(unittest.TestCase):
-    def test_land_phase0_exactly_one_config_get(self):
-        for path in both_copies("flow-next-land/workflow.md"):
-            text = read(path)
-            phase0 = section(text, "## Phase 0", "## Phase 1")
-            self.assertEqual(
-                len(CONFIG_GET.findall(phase0)), 1,
-                f"{path}: land Phase 0 must make exactly ONE config get invocation",
-            )
-            # The one call is the subtree capture, and it is the only one anywhere.
-            self.assertIn("config get land --json", phase0)
-            # Explicit status-branch capture: `|| echo '{}'` would APPEND to partial
-            # JSON a failing flowctl printed, yielding two documents per jq lookup.
-            self.assertIn("if ! LAND_CFG=", phase0,
-                          f"{path}: land capture must use the explicit status branch")
-            self.assertNotRegex(
-                phase0, r'LAND_CFG="\$\([^)]*\|\|',
-                f"{path}: appending-fallback LAND_CFG capture reintroduced")
-            self.assertEqual(len(CONFIG_GET.findall(text)), 1,
-                             f"{path}: land workflow has stray config get calls")
-            # The old bare cfg() helper (7 per-key startups) must not come back.
-            # (lcfg() — the captured-subtree lookup — is the replacement and is fine.)
-            self.assertNotRegex(text, r"(?<![A-Za-z_])cfg\(\)\s*\{",
-                                f"{path}: per-key cfg() helper reintroduced")
 
 
 class PlanDietTestCase(unittest.TestCase):
@@ -459,10 +432,6 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
             self.assertIn("PILOT_VERDICT=<ADVANCED|NO_WORK|", read(path))
         for path in both_copies("flow-next-land/SKILL.md"):
             text = read(path)
-            self.assertIn(
-                "Every tick ends with exactly one terminal line, the last line",
-                text,
-            )
             self.assertIn("LAND_VERDICT=<verdict|NO_WORK>", text)
 
 

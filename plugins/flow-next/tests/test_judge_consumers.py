@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 
 PLUGIN = Path(__file__).resolve().parents[1]
@@ -127,18 +126,6 @@ class JudgeConsumerTests(unittest.TestCase):
                                   env=env, capture_output=True, text=True, check=True)
             self.assertEqual(proc.stdout.strip(), expected)
 
-    @unittest.skipIf(sys.platform == "win32" or not shutil.which("bash") or not shutil.which("jq"), "requires POSIX bash and jq")
-    def test_land_records_lines_only_for_existing_live_ledger(self):
-        block = fence("skills/flow-next-land/workflow.md", "fence:clean-review-ledger")
-        with tempfile.TemporaryDirectory() as directory:
-            ledger = Path(directory) / "ledger.json"
-            for initial, dry, expected in [({"pr1": {}}, "0", {"pr1": {"clean_review": ["clean-review: jev(clean 0.91)"]}}),
-                                           ({"pr1": {}}, "1", {"pr1": {}}), ({}, "0", {})]:
-                ledger.write_text(json.dumps(initial))
-                env = dict(os.environ, LEDGER=str(ledger), PR_URL="pr1", LAND_DRY_RUN=dry,
-                           CLEAN_REVIEW_LINES="clean-review: jev(clean 0.91)\n")
-                subprocess.run(["bash", "-c", block], env=env, check=True)
-                self.assertEqual(json.loads(ledger.read_text()), expected)
 
     def tier(self, choice="mechanical", confidence=0.88, **overrides):
         args = dict(result=result("tier", {"tier": {"choice": choice, "confidence": confidence, "probabilities": {choice: confidence}}}),
@@ -189,40 +176,6 @@ class JudgeConsumerTests(unittest.TestCase):
         out = self.tier(choice="long_running", confidence=0.86)
         self.assertIsNone(out["selected_model"])
         self.assertIn("bridge recommended", out["tier_line"])
-
-    @unittest.skipIf(sys.platform == "win32" or not shutil.which("bash") or not shutil.which("jq"), "requires POSIX bash and jq")
-    def test_land_counts_judge_clean_and_preserves_regex_fallback(self):
-        block = fence("skills/flow-next-land/workflow.md", "CLEAN_REVIEW_LINES=")
-        with tempfile.TemporaryDirectory() as directory:
-            tmp = Path(directory)
-            stub = tmp / "flowctl"
-            stub.write_text('#!/bin/sh\nprintf "%s\\n" "$JUDGE_FIXTURE"\n')
-            stub.chmod(0o755)
-            sha = "abcdef012345678901234567890123456789012345"
-            cases = [
-                ("Bugbot found no new issues", True, True),
-                ("clean marker", False, False),
-                ("clean marker", None, True),
-                ("no regex match", None, False),
-            ]
-            for body, clean, expected in cases:
-                answer = ({"available": False, "reason": "no_key"} if clean is None else
-                          result("clean-review", {"review": {"choice": "clean" if clean else "wrapper_or_status", "confidence": 0.91}}))
-                env = dict(os.environ, FLOWCTL=str(stub), JUDGE_FIXTURE=json.dumps(answer),
-                           REVIEW_SIGNAL="silence", CLEAN_REVIEW_PATTERN="clean marker", GATE_HEAD=sha,
-                           AUTOMATED_REVIEWERS="", AUTO_REVIEW_CURRENT="0", REVIEW_EVENT_AT="",
-                           OWNER_REPO="o/r", PR_NUMBER="1", COMMENT_BODY=body + " " + sha)
-                script = 'gh() { printf "reviewbot[bot]\\t2026-09-17T00:00:00Z\\t%s\\n" "$COMMENT_BODY"; }\n'
-                proc = subprocess.run(["bash", "-c", script + block + '\nprintf "COUNT=%s\\n" "$AUTO_REVIEW_CURRENT"'],
-                                      env=env, capture_output=True, text=True, check=True)
-                self.assertIn("COUNT=" + str(int(expected)), proc.stdout)
-                self.assertIn("clean-review: " + ("jev-unavailable(no_key)->regex" if clean is None else "jev("), proc.stdout)
-                # Explicit empty pattern disables the entire comment path.
-                env["CLEAN_REVIEW_PATTERN"] = ""
-                proc = subprocess.run(["bash", "-c", script + block + '\nprintf "COUNT=%s\\n" "$AUTO_REVIEW_CURRENT"'],
-                                      env=env, capture_output=True, text=True, check=True)
-                self.assertIn("COUNT=0", proc.stdout)
-                self.assertNotIn("clean-review:", proc.stdout)
 
 
 if __name__ == "__main__":

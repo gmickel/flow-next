@@ -20,7 +20,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ROOT / "plugins/flow-next/scripts"
 WORKFLOW = ROOT / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
-sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(ROOT / "plugins/flow-next/scripts"))
 
 
 class MakePrCloseTests(unittest.TestCase):

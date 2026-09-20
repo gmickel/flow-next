@@ -23,7 +23,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_land_chain_fixtures import ChainWorld, fence, git
+from chain_fixture_support import ChainWorld, fence, git
 
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent

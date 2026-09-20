@@ -459,13 +459,19 @@ class TrackerCallerOracleTests(unittest.TestCase):
 
         for caller in self.callers.values():
             text = self._current_text(caller)
+            if caller["id"] == "land.merged":
+                # R8 forbids facade receipts after merge; preserve the immutable
+                # historical oracle, but check the new API boundary here.
+                self.assertIn("status.providers.apply_status", text)
+                self.assertIn("wire.parent_read", text)
+                continue
             self.assertIn("sync active --json", text, caller["id"])
             self.assertIn("tracker sync", text, caller["id"])
             self.assertIn(f"--event {caller['event']}", text, caller["id"])
             for value in self.oracle["per_event_enum"]:
                 self.assertIn(value, text, f"{caller['id']}: {value}")
 
-        synthesized_comments = EVENTS - {"work.firstClaim"}
+        synthesized_comments = EVENTS - {"work.firstClaim", "land.merged"}
         for caller_id in synthesized_comments:
             text = self._current_text(self.callers[caller_id])
             self.assertRegex(text.lower(), r"synthesi[sz]es?", caller_id)

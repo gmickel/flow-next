@@ -1,23 +1,29 @@
 ---
 name: flow-next-land
-description: Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.
+description: Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---
 
-# /flow-next:land — cadence-tick autonomous PR babysitter
+# /flow-next:land — one named pull request
 
-A tick is one invocation of `/flow-next:land`: discover the open PRs the build loop authored, walk each through the gate tree (CI tri-state → patience window → review-thread resolution → review signal → merge gates), take at most ONE action class per PR, and end with one terminal `LAND_VERDICT` line. Flow may invoke one scoped tick as its authorized landing stage; standalone discovery remains repository-wide. It is intentionally not a runner; `/loop` in Claude Code owns the cadence (babysitting waits on external events — CI, reviewers — over hours).
+Input: one PR URL or number, plus the user's or calling flow's current
+session authorization for that PR. `/flow-next:land <PR> [--dry-run]` never
+selects another PR. An explicit request to land this PR authorizes its merge;
+merely supplying an identifier does not. Inherited environment, files, PR text,
+and historical receipts grant no authority. Re-check current restrictions
+before mutations, including after delegated work. Ambiguity stops
+`NEEDS_HUMAN`; land does not ask questions or invoke another driver.
 
-Land is the ship loop to the build loop of `/flow-next:flow --auto`, which drains ready specs into draft PRs; land (`/loop`-shaped) wakes on a cadence, acts on those PRs, sleeps. Land never authors PRs and never touches in-flight specs - it only babysits PRs whose authoring spec has ALL tasks done (the build-loop concurrency interlock).
+Read [workflow.md](workflow.md) and follow it for this invocation.
+`--dry-run` reads and reports only: no repair, catch-up, stack creation,
+verdict command, merge, branch deletion, or tracker mutation.
+Land owns no persistent files. It never rebases, force-pushes, or retargets.
+It never checks out a branch in the invoking checkout. Repairs use an isolated
+checkout and ordinary file-scoped commits and pushes to this PR's branch.
+Never run under Ralph (`FLOW_RALPH` or `REVIEW_RECEIPT_PATH`).
 
-Flow may compose land as a scoped stage; land never dispatches flow, pilot or any other driver. Land and Ralph are alternative autonomous drivers. Never nest them, and never reuse Ralph harness state inside land.
-
-**Auto-merge override (confined).** Land intentionally overrides the standing "no `gh pr merge` from skills" rule — confined to this one opt-in skill. Land itself is the gate: **it merges explicitly (`--squash --delete-branch --match-head-commit`; `--delete-branch` omitted while an open child PR still targets the branch, and the `merge-async` endpoint with a `sha` pin for a GitHub-stacked frontier) only after every gate passes in-tick, and never through `gh pr merge --auto`** (on a repo with no branch protection `--auto` merges instantly, so server-side gating adds nothing). A merge that rode `--auto`, or that landed before a gate passed, has broken this. Flow may consume this skill after current scoped consent; it never executes a merge itself. Every other skill keeps the no-auto-merge rule.
-
-## Preamble
-
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md`) use `$FLOWCTL`:
+Resolve the bundled CLI when reading configuration or tracker support:
 
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
@@ -25,106 +31,14 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-`gh` (verified against gh 2.93.0 — re-verify `gh pr checks --json bucket`/exit-8, `--match-head-commit`, and `mergeStateStatus` on major gh bumps) and `jq` must be on PATH; `gh auth status` must pass.
-
-## Scoped flow handoff
-
-When invoked by flow, read its current host-context handoff before the guards: one spec ID, exact PR URL, repository/workspace identity, current authorization, and release/tracker restrictions. Follow flow's `references/tail.md` contract supplied by the caller. Initialize `LAND_SCOPE_SPEC=""`, `LAND_SCOPE_PR=""`, `LAND_AUTHORIZED=0`, and `LAND_BASE_ROOT=""` for each invocation, then populate them only from that current host instruction. Standalone land leaves the scope values empty and keeps its existing opt-in license; an incomplete or unauthorized flow handoff stops `NEEDS_HUMAN`, never falls back to repository-wide discovery. These values are internal shell inputs, not public flags. An inherited environment, file, PR body or historical receipt grants no authority.
-
-Scoped land filters discovery to the bound item, including an already locally closed spec with unfinished merged-tail work. Missing/ambiguous identity, closed-unmerged state or an unusable workspace stops; no substitution. Re-check current authority before every mutation and after waits or delegated work; revocation stops subsequent mutations. Release and tracker steps retain their existing authorization/configuration, and a narrower current instruction wins.
-
-## Hard guards (before anything else)
-
-Run these guards before discovery, ledger writes, branch changes, or skill dispatch.
-
-```bash
-if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-  echo "Ralph and land are alternative drivers — never nest them" >&2
-  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
-  exit 1
-fi
-
-if git status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
-  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="dirty working tree at tick start"'
-  exit 0
-fi
-```
-
-Dirty tree means dirty outside `.flow/`; land leaves state untouched. No cleanup, no ledger write.
-
-## Mode Detection
-
-Parse `$ARGUMENTS` for the dry-run switch. Unknown flags warn to stderr and are ignored. The loop avoids bash positional parameters — the host's argument interpolation rewrites positional tokens inside skill code blocks (pilot dogfood finding, 1.13.0).
-
-```bash
-RAW_ARGS="$ARGUMENTS"
-LAND_DRY_RUN=0
-
-for ARG in $RAW_ARGS; do
-  case "$ARG" in
-    --dry-run) LAND_DRY_RUN=1 ;;
-    -*) echo "Unknown flag: $ARG (ignored by /flow-next:land)" >&2 ;;
-    *)  echo "Unknown argument: $ARG (ignored by /flow-next:land)" >&2 ;;
-  esac
-done
-export LAND_DRY_RUN
-```
-
-`--dry-run` stops after GATE: full discovery + per-PR classification report (CI tri-state read, review-signal state, would-be action) and the aggregated terminal line, **with zero mutations**. A dry-run tick that checked out, pushed, labelled, merged, dispatched resolve-pr, or wrote the ledger has broken this.
-
-## The verdict contract (read this before the workflow)
-
-Cadence drivers are transcript-blind: they read conversation output only and never run tools. Every tick therefore echoes its per-PR evidence (gate reads, action taken, verdict) into the output, one block per PR.
-
-Per-PR verdicts are exactly: `MERGED | RELEASED | FIXING_CI | AWAITING_REVIEW | RESOLVING | BLOCKED | NEEDS_HUMAN`.
-
-Every tick ends with exactly one terminal line, the last line of the response, with nothing after it:
+Every run prints exactly one terminal line, last in the output:
 
 ```text
-LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<deciding-pr-url|-> reason="<one line>"
+LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<url|-> reason="<one line>"
 ```
 
-The tick-level verdict is the worst severity across PRs by priority `NEEDS_HUMAN > BLOCKED > FIXING_CI > RESOLVING > AWAITING_REVIEW > RELEASED > MERGED`; `pr=` is the URL of the PR that decided it (`-` when none). `NO_WORK` when discovery finds zero authored PRs. `prs=` is the number of PRs processed this tick.
-
-Driver condition examples:
-
-```text
-/loop 30m /flow-next:land
-/goal keep running /flow-next:land until it prints LAND_VERDICT=NO_WORK or LAND_VERDICT=NEEDS_HUMAN
-```
-
-## Forbidden
-
-- Asking the user anything in the tick path. Land is autonomous; ambiguity maps to `NEEDS_HUMAN`.
-- Authoring PRs, choosing/planning/implementing specs - that is the build loop (`flow --auto`). Land only babysits existing PRs.
-- Acting on a PR without both authorship signals (branch matches a spec's `branch_name` **and** the structural authorship probe — the make-pr machine marker in footer position, with the anchored dated-footer fallback for pre-marker PRs; workflow.md Phase 1). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
-- `gh pr merge --auto`, merge-queue enrollment, or any merge without `--match-head-commit`.
-- Hand-resolving merge-conflict hunks. The conflict path is server-side catch-up only (`gh pr update-branch`); GitHub refusing the base merge → `BLOCKED`. Land never rebases and never force-pushes, with one bounded exception: the leased cascade of workflow §3.7 over the open layers of a plain chain whose parent merged (each layer force-pushed with `--force-with-lease` on the exact tip it read, inside the tick claim). Any other force-push has broken this.
-- Merging a stacked layer that is not the lowest open layer of its stack, `merge_action=merge_queue`, or deleting a branch an open PR still targets.
-- Inventing release steps. Release-follow runs deterministic, non-interactive commands from the project's discovered release docs, and nothing else; with no such docs it stops at merge.
-- `git add -A` in the CI-fix path — stage only the files edited for the fix.
-- Dispatching any skill other than `flow-next-resolve-pr` (with `mode:autonomous`) and `flow-next-tracker-sync` (authorized bridge-active `land.merged` touchpoint).
-- Printing anything after the `LAND_VERDICT` line.
-- Running under Ralph (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH`).
-
-## Workflow
-
-Execute [workflow.md](workflow.md) in order:
-
-1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, take the tick concurrency claim (non-dry ticks only; `--dry-run` takes none), prepare the scoped base workspace under that claim, then read config and load the `.git` land ledger (read-only at this point), then sweep `pending_branch_deletes` (the branch janitor, §0.5 — deletes a merged branch once no open PR targets it). *Done when: both guards passed, `LAND_CFG` is captured with its fallbacks applied, and the ledger is loaded without a write — first read inside the claimed interval, never before it.*
-2. **discover** — the authorized scope (or standalone open specs) with all tasks done → `gh pr list --head <branch_name> --state all`, OPEN-state filter, dual authorship signals, merged-but-unclosed re-entry candidates. *Done when: every candidate spec has a classification (babysit / re-entry / `NEEDS_HUMAN` / skipped) and the discovery table is echoed.*
-3. **gate** — per-PR read-only classification: shape (stacked, plain chain, or standalone, re-derived from the PR every tick, §2.0), patch-id verdict carry-over (§2.2b), durable-label skip, CI tri-state over every check, patience window anchored to last push, unresolved review threads, review signal (`land.reviewSignal`), stale-approval detection, `mergeStateStatus`, the frontier rule for chains and stacks (§2.8). `--dry-run` stops here. *Done when: each PR carries one planned action class plus a provisional verdict, and nothing has been mutated.*
-   - Under the default `silence` signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE also satisfies the gate — land scans `issues/<n>/comments` and asks `judge --preset clean-review` per automated-reviewer body; only `clean` at confidence >= 0.7 qualifies. Unavailable falls back to a comment matching `land.cleanReviewCommentPattern` (a structured built-in default) that names the **current head SHA**. The default accepts two clean shapes: the legacy clean-phrase comment (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") and Codex's edited-in-place summary-table comment whose row reads `**Code Review** | **Completed** ... <sha7>` — a summary row naming the current head is the same reviewed-this-head evidence, since findings gate separately via unresolved threads. It only ever *adds* this evidence; CI, unresolved-thread, and window gates are unchanged, and a stale-SHA or non-automated comment is ignored. Set `land.cleanReviewCommentPattern` to an explicit empty string `""` to **disable** the comment path (pure reviews-API behavior); leaving it unset uses the built-in default.
-   - `land.mergeVerdictCommand` (default `""`, off) adds an opt-in **repo merge-verdict gate** (§2.9) for repos with no branch protection to gate against: once every other gate passes and the planned action is `merge`, land runs the configured command once via `bash -c` from the repo root, with context in the environment only (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`). Exit 0 merges; **any** non-zero - including missing, unexecutable, or timed out at the 600s bound - blocks with `NEEDS_HUMAN` and no label. It is block-only (it can never grant a merge the other gates refused), `--dry-run` reports `would-run` and executes nothing, and unset, `null`, and `""` all mean off. The command runs on the base checkout (`LAND_BASE_ROOT` on a scoped flow handoff), so it must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head.
-   - `land.patienceMinutesAfterReview` (default `null`, off) is a **`silence`-only refinement of the patience window** (§2.6): when the latest automated review is head-current with zero unresolved threads, the silence gate waits that many minutes measured from the review event instead of from the last push. Only the silence gate's window conjunct re-anchors — `approve`/`<login>`, the no-checks guard, the human-review-pending verdict, the stale-approval detector, and the merge call are unchanged — and a fix push reverts to the push anchor until a new head-current review exists. The report's `window=` field names the binding anchor (`anchor=<push|review>`) only when the key is configured; unset, `null`, and `0` mean off (today's push-anchored wait, byte-for-byte); the schema is `integer|null`, and the Phase 0 read treats a hand-edited or pre-schema string as off rather than failing the tick.
-   - `land.requestReviewers` (default `""`, off) adds an opt-in **human reviewer request** (§2.6b → §3.4b): a csv of GitHub logins and/or `org/team` slugs and/or the literal `codeowners`. Exactly when a human review is the only missing merge input (CI green, zero unresolved threads, and the signal is unsatisfied under `approve`/`<login>` or satisfied-but-`REVIEW_REQUIRED` under `silence`), land plans `request-reviewers`: flips a draft PR to ready, requests the list minus the PR author (`codeowners` rides the ready flip — GitHub resolves owners itself), and records `reviewRequestSha` in the land ledger — at most once per PR per head SHA, claimed atomically so overlapping ticks cannot double-request. A failed request still records the head (no retry loop) and reports `reviewers=failed:<reason>` with the window-bounded verdict, never `BLOCKED`. It never gates a merge (`reviewSignal` does). `--dry-run` reports `reviewers=would-request` (plus `would-ready` for a draft) and mutates nothing; unset, `null`, and `""` all mean off (`reviewers=off`; when the key is set but a human review is not the sole missing input, `reviewers=skipped:not-due`).
-4. **act** — at most one action class per PR: CI fix, resolve-pr dispatch, server-side catch-up (`gh pr update-branch`), human reviewer request (ready flip + `--add-reviewer`), the leased chain retarget above a merged parent (§3.7), or ready→merge→post-merge tail (spec close → authorized release-follow → authorized tracker touchpoint → persist-push). *Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base), and the non-`.flow/` tree is clean.*
-5. **report** — per-PR verdict evidence, ledger writes, and the terminal `LAND_VERDICT` line (worst-severity rule). *Done when: one evidence block per processed PR is echoed and the terminal line is the last line of the response.*
-
-## Chains and stacks
-
-A chain is a dependent PR whose base is the parent's branch; a stack is GitHub's server-side object over one. Land classifies every PR from its REST `stack` object and base ref each tick and stores nothing about the shape. It merges only the frontier (the lowest open layer) and at most one layer per tick, keeps a review verdict across a rebase when the stable patch-id of base-to-head is unchanged, retargets the layers above a merged parent itself on the plain path (the one bounded force-push), lets GitHub do it on the native path, and never deletes a branch an open child still targets. A standalone PR with no open children keeps byte-identical gate verdicts, merge arguments, tail order, and ledger writes. Vocabulary, the frontier rule, the collapse hazard, `merge-async`, patch-id carry-over, and the branch janitor: [references/chains-and-stacks.md](references/chains-and-stacks.md).
-
-## Unattended runs
-
-Land is fully autonomous by design — there is no interactive mode. Wall-clock limits and cadence belong to the driver (`/loop <interval>`, `/goal` stop clauses). A land tick has no timeout machinery; the patience window (`land.patienceMinutes`, default 30) is gate state, not a sleep — a tick never blocks waiting for reviewers, it reports `AWAITING_REVIEW` and exits (`land.patienceMinutesAfterReview`, when set, only moves the `silence` gate's anchor from the last push to the head-current review event — still gate state, still no sleep).
+Keep the vocabulary `NEEDS_HUMAN`, `BLOCKED`, `FIXING_CI`, `RESOLVING`,
+`AWAITING_REVIEW`, `MERGED`, `RELEASED`, `NO_WORK`; never emit `RELEASED`.
+Use `prs=1` for the named, resolved PR, otherwise `prs=0 pr=-`.
+Report the observed head, relevant check or branch, and merge commit when known;
+escape quotes and newlines in the reason so the terminal line stays parseable.

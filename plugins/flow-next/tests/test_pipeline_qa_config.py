@@ -216,10 +216,10 @@ class PipelineQaConfigTestCase(unittest.TestCase):
     def test_setting_pipeline_key_does_not_clobber_other_defaults(self) -> None:
         self._run_config_set_cli("pipeline.qa", "on")
         self.assertEqual(
-            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
         )
         self.assertEqual(
-            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+            self._run_config_get_cli("land.patienceMinutes")["value"], 30
         )
         self.assertIs(
             self._run_config_get_cli("artifacts.html.enabled")["value"], False

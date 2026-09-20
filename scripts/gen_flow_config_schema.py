@@ -304,83 +304,14 @@ DESCRIPTIONS: dict[str, str] = {
         "Non-null only when all required destination fields, required "
         "normalized slots, and capability booleans are present."
     ),
-    "land": "/flow-next:land babysit-loop settings (fn-60).",
-    "land.release": (
-        "Run the post-merge release-follow step (the project's own release "
-        "docs; no-ops when none are discovered). false = stop at merge."
-    ),
+    "land": "/flow-next:land settings for one named pull request. Unknown legacy keys are ignored.",
     "land.patienceMinutes": (
-        "Reviewer patience window in minutes, anchored to the LAST push (a "
-        "land-authored CI-fix push restarts it)."
-    ),
-    "land.reviewSignal": (
-        "Merge review-signal: silence (automated review present + zero "
-        "unresolved threads + window elapsed), approve (formal "
-        "reviewDecision == APPROVED), or a GitHub login (that reviewer's "
-        "latest review must be clean)."
-    ),
-    "land.automatedReviewers": (
-        "CSV allowlist of reviewer logins land counts as automated, "
-        "supplementing the [bot]-suffix rule. Empty = suffix rule only."
-    ),
-    "land.reviewTrigger": (
-        "One-shot comment land posts to summon a reviewer bot on a draft PR "
-        "with zero automated reviews (e.g. @codex review - bots don't "
-        "auto-review drafts). Empty = never post."
-    ),
-    "land.cleanReviewCommentPattern": (
-        "ERE for the silence-signal clean-review COMMENT path: a bot's "
-        "no-findings issue comment naming the current head SHA also "
-        "satisfies the gate. The default matches either a clean phrase "
-        "plus the Reviewed commit marker, or Codex's summary-table "
-        "Code Review / Completed row. null/missing falls back to the built-in "
-        "default; set to an empty string to disable the comment scan (the "
-        "only real off-switch). A persisted value equal to a retired "
-        "built-in default is auto-upgraded to the current built-in at read "
-        "time; custom values and the empty string are never touched."
-    ),
-    "land.ciFixBudget": (
-        "CI-fix attempts per PR before land durably labels it "
-        "flow-next:needs-human and skips it on later ticks."
+        "Minutes since the last push to wait when no human authorized the merge in-session."
     ),
     "land.mergeVerdictCommand": (
-        "Opt-in repo merge-verdict gate: a shell command land runs once per "
-        "merge attempt, after every other gate is satisfied and only when "
-        "the planned action is merge. Exit 0 = green; any non-zero exit - "
-        "including a missing/unexecutable command, the 600s timeout, or "
-        "signal death - blocks the merge (fail-closed, never skipped). "
-        "Context arrives as environment only (FLOW_HEAD_SHA, FLOW_BASE_REF, "
-        "FLOW_PR_NUMBER, FLOW_SPEC_ID); it runs on the base checkout, so it "
-        "must key on FLOW_HEAD_SHA and refuse when it cannot see that head. "
-        "Never executed under --dry-run. Unset, null, and an empty string "
-        "all mean OFF."
-    ),
-    "land.requestReviewers": (
-        "Opt-in human reviewer request: csv of GitHub logins and/or "
-        "org/team slugs, and/or the literal token `codeowners` (GitHub "
-        "auto-requests code owners on the ready-for-review flip). When set, "
-        "land requests them (minus the PR author) exactly when a human "
-        "review is the only missing merge input, flips a draft PR to ready "
-        "at that moment, and records the request one-shot per PR per head "
-        "SHA in the land ledger. Never gates a merge (reviewSignal does). "
-        "Unset, null, and an empty string all mean OFF."
-    ),
-    "land.patienceMinutesAfterReview": (
-        "Opt-in patience window (minutes) measured from the latest "
-        "head-current automated review instead of the last push (fn-219). "
-        "Applies only under the silence reviewSignal and only while that "
-        "review is head-current with zero unresolved threads; a fix push "
-        "moves the head and the push-anchored patienceMinutes window "
-        "governs again until the bot re-reviews. approve and <login> "
-        "signals, the no-checks guard, and the merge command are untouched. "
-        "Active only as a positive integer: unset, null, and 0 mean OFF "
-        "(today's push-anchored wait, byte-for-byte; 0 is off on purpose - "
-        "a zero grace period is the strict-silence anti-pattern the window "
-        "exists to prevent). Negative integers and non-integer values are "
-        "schema-invalid (minimum 0); the land read treats any non-positive "
-        "or hand-edited non-integer value as off rather than failing the "
-        "tick. Opt-in because the window is the human-objection "
-        "grace period. See docs/running-lean.md."
+        "Optional merge-verdict command run once after the other merge gates pass. "
+        "Any non-zero result, including missing, unexecutable or timed-out commands, "
+        "blocks merging. Unset, null and empty string disable it."
     ),
     "makePr": "/flow-next:make-pr export settings.",
     "makePr.derivedPaths": (
@@ -673,18 +604,9 @@ def _build_table() -> list[tuple[str, dict]]:
         ),
         ("tracker.resolved.scopeResolvedAt", _scope_resolved_at_fragment()),
         ("tracker.resolved.resolvedAt", {"type": ["string", "null"]}),
-        ("land", {"kind": "object", "open": False}),
-        ("land.release", {"type": "boolean"}),
+        ("land", {"kind": "object", "open": True}),
         ("land.patienceMinutes", {"type": "integer"}),
-        ("land.reviewSignal", {"type": "string"}),
-        ("land.automatedReviewers", {"type": "string"}),
-        ("land.reviewTrigger", {"type": "string"}),
-        ("land.ciFixBudget", {"type": "integer"}),
-        ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
         ("land.mergeVerdictCommand", {"type": ["string", "null"]}),
-        ("land.requestReviewers", {"type": ["string", "null"]}),
-        # minimum 0: 0 is the documented OFF state, negatives are invalid.
-        ("land.patienceMinutesAfterReview", {"type": ["integer", "null"], "minimum": 0}),
         ("makePr", {"kind": "object", "open": False}),
         (
             "makePr.derivedPaths",

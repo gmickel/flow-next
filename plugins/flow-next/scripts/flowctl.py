@@ -1415,102 +1415,8 @@ def get_default_config() -> dict:
         # (REMOVED_CONFIG_KEYS below) and runs unchanged. The
         # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
         # DISTINCT namespace and are untouched.
-        # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
-        # `config get land.*` returns the seeded default (never a missing
-        # key) on a fresh repo; every leaf is non-null EXCEPT
-        # patienceMinutesAfterReview, whose seeded default is an explicit
-        # null (its documented off state).
-        # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
-        # itself only stores/serves them.
-        "land": {
-            # Follow the project's release instructions after merge.
-            # Also no-ops when no release docs/scripts are discovered.
-            "release": True,
-            # Patience window (minutes) for automated reviewers, anchored
-            # to the LAST push — a land-authored CI-fix push restarts it.
-            "patienceMinutes": 30,
-            # fn-219 — opt-in silence-signal refinement: when set, and only
-            # while the latest automated review is head-current with zero
-            # unresolved threads, the silence gate's window is re-anchored
-            # to that review event (this many minutes measured from it)
-            # instead of the last push. null / 0 = OFF (today's push-anchored
-            # wait, byte-for-byte); the schema is integer|null, and the land
-            # read treats a hand-edited or pre-schema string as off rather
-            # than failing the tick. A fix push moves
-            # the head, so the review stops being head-current and the push
-            # anchor governs again until the bot re-reviews.
-            "patienceMinutesAfterReview": None,
-            # Merge review signal: silence (default) | approve | <github-login>.
-            #   silence  — ≥1 automated review + zero unresolved threads +
-            #              no new threads within the patience window.
-            #   approve  — formal reviewDecision == APPROVED.
-            #   <login>  — that reviewer's latest review is APPROVED/clean.
-            "reviewSignal": "silence",
-            # CSV allowlist of automated-reviewer logins, supplementing the
-            # `[bot]`-suffix rule. Default empty = suffix rule only.
-            "automatedReviewers": "",
-            # One-shot comment land posts to summon a reviewer bot when a
-            # DRAFT PR has zero automated reviews (bots like Codex do not
-            # auto-review drafts; pilot's PRs are born draft). Empty =
-            # never post; e.g. "@codex review".
-            "reviewTrigger": "",
-            # Max CI-fix attempts per PR before the durable
-            # `flow-next:needs-human` label + skip.
-            "ciFixBudget": 3,
-            # fn-65.1 — STRUCTURED built-in ERE for the `silence`-signal
-            # clean-review COMMENT path: a review bot (e.g. Codex) posts an
-            # issue comment instead of a formal APPROVE on a no-findings
-            # pass, e.g. "Didn't find any major issues. Reviewed commit:
-            # `8ff0e50f`". Two accepted clean shapes (fn-213): the legacy
-            # clean phrase, which requires BOTH the phrase AND the
-            # `Reviewed commit` marker; and Codex's edited-in-place
-            # summary-table row (`<!-- codex-pull-request-review-summary -->`
-            # comment), which requires the literal bold `**Code Review**`
-            # followed by `**Completed**` in one body. A bare "no issues" or
-            # "code review completed" mention without its structure never
-            # satisfies the gate; the workflow additionally extracts a
-            # head-current SHA token before counting it.
-            #   Config contract (workflow.md §2.6 cfg read):
-            #     null/missing (pre-seed flowctl copy) → fall back to THIS
-            #                                            built-in default
-            #     explicit ""  → comment scan DISABLED (pure reviews-API)
-            #     other value  → use it
-            # The empty-disables arm is the only real off-switch — an
-            # "empty → default fallback" would make the feature
-            # un-disableable. A persisted value equal to a RETIRED default
-            # (init materialized the pre-fn-213 string) is aliased to this
-            # built-in at read time — see RETIRED_CLEAN_REVIEW_PATTERNS.
-            "cleanReviewCommentPattern": (
-                r"(Didn'?t find any( major)? issues"
-                r"|No( major)? issues found).*Reviewed commit"
-                r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
-            ),
-            # fn-188 — OPT-IN repo merge-verdict gate (#330): a shell
-            # command land runs once per merge attempt, at the decision
-            # point, after every other gate is satisfied. Exit 0 = green;
-            # non-zero (including missing/unexecutable, timeout, signal
-            # death) BLOCKS the merge — fail-closed, never skip. Context
-            # reaches the command as environment only (FLOW_HEAD_SHA,
-            # FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); the configured
-            # string is never built from PR-derived text. Never executed
-            # under --dry-run.
-            #   Config contract (workflow.md §2.9):
-            #     unset / null / "" → OFF (today's behavior byte-for-byte)
-            #     other value       → run it as the merge gate of record
-            # NOTE the asymmetry with cleanReviewCommentPattern above,
-            # where null and "" mean DIFFERENT things: here all three
-            # off-states collapse to OFF. Do not copy that pattern here.
-            "mergeVerdictCommand": "",
-            # fn-200 — OPT-IN human reviewer request (#359): csv of GitHub
-            # logins and/or org/team slugs, and/or the literal token
-            # `codeowners`. When set, land requests them (minus the PR
-            # author) exactly when a human review is the only missing
-            # merge input, flipping a draft PR to ready at the same moment;
-            # one-shot per PR per head SHA via the land ledger. Never gates
-            # a merge (reviewSignal does). Seeded "" so `config get`
-            # returns a value, not null; unset / null / "" all mean OFF.
-            "requestReviewers": "",
-        },
+        # One named PR: only the merge command and push-anchored patience remain.
+        "land": {"patienceMinutes": 30, "mergeVerdictCommand": ""},
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a
         # fresh repo via the defaults MERGE (load_flow_config), NOT by
@@ -1649,46 +1555,6 @@ def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
     new_tracker = dict(tracker)
     new_tracker["specIds"] = norm
     new_cfg["tracker"] = new_tracker
-    return new_cfg
-
-
-# fn-213 — retired built-in defaults of land.cleanReviewCommentPattern.
-# `init` materializes the current default into .flow/config.json, so a repo
-# seeded before a default rotation keeps the OLD byte-string on disk and the
-# persisted value would override the improved built-in forever (later `init`
-# runs only add missing keys). Read-time aliasing: a persisted value that is
-# byte-identical to a retired default is treated as "use the current
-# built-in" on the MERGED tree. A customized pattern and the explicit ""
-# off-switch are never touched, and the `--raw` provenance probe still shows
-# the on-disk bytes. Rotating the default again: move the outgoing string
-# into this tuple in the same change.
-RETIRED_CLEAN_REVIEW_PATTERNS: tuple[str, ...] = (
-    # pre-fn-213 default (fn-65.1): legacy clean phrase only, no
-    # summary-table shape.
-    r"(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
-)
-
-
-def _with_retired_clean_review_pattern_upgraded(cfg: dict) -> dict:
-    """Return cfg with a retired land.cleanReviewCommentPattern default aliased.
-
-    Applies only when the merged value is byte-identical to a retired
-    built-in default (RETIRED_CLEAN_REVIEW_PATTERNS); custom patterns and
-    the explicit ``""`` off-switch pass through untouched. Copy-on-write so
-    a shared defaults dict is never mutated.
-    """
-    land = cfg.get("land")
-    if not isinstance(land, dict):
-        return cfg
-    raw_val = land.get("cleanReviewCommentPattern")
-    if raw_val not in RETIRED_CLEAN_REVIEW_PATTERNS:
-        return cfg
-    new_cfg = dict(cfg)
-    new_land = dict(land)
-    new_land["cleanReviewCommentPattern"] = get_default_config()["land"][
-        "cleanReviewCommentPattern"
-    ]
-    new_cfg["land"] = new_land
     return new_cfg
 
 
@@ -1837,14 +1703,7 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    # fn-213: same retired-default aliasing as load_flow_config so the
-    # snapshot's merged view stays byte-equal to load_flow_config().
-    return ConfigSnapshot(
-        raw,
-        _with_retired_clean_review_pattern_upgraded(
-            _with_tracker_spec_ids_normalized(merged)
-        ),
-    )
+    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -20307,12 +20166,7 @@ def cmd_init(args: argparse.Namespace) -> None:
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
-            # fn-213: a persisted retired cleanReviewCommentPattern default is
-            # upgraded on re-init too (read-time aliasing already covers every
-            # read; this just makes the file match what reads return).
-            merged = deep_merge(
-                stamped_defaults, _with_retired_clean_review_pattern_upgraded(raw)
-            )
+            merged = deep_merge(stamped_defaults, raw)
             if merged != raw:
                 atomic_write_json(config_path, merged)
                 actions.append("upgraded config.json (added missing keys)")
@@ -23965,23 +23819,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
 # --- Optional System One judge (fn-247): self-contained for copied flowctl. ---
 
 JUDGE_MODEL = "jev-latest"
-JUDGE_PRESETS = {'clean-review': {'required': ['body'],
-                  'questions': {'review': {'type': 'choice',
-                                           'instructions': 'What kind of automated review body is '
-                                                           'this?',
-                                           'criteria': {'clean': 'a completed review that reports '
-                                                                 'no findings / no issues on the '
-                                                                 'reviewed commit',
-                                                        'findings': 'a completed review that '
-                                                                    'raises at least one concern, '
-                                                                    'suggestion, or defect',
-                                                        'wrapper_or_status': 'a summary, status, '
-                                                                             'quota, stale-marker, '
-                                                                             'or boilerplate body '
-                                                                             'that neither clears '
-                                                                             'nor raises anything '
-                                                                             'itself'}}}},
- 'route': {'required': ['view',
+JUDGE_PRESETS = {'route': {'required': ['view',
                         'view_meaning',
                         'repo',
                         'status',
@@ -24287,7 +24125,7 @@ def judge_validate_state(preset: str, state: dict) -> None:
     missing = [key for key in required if key not in state]
     if missing:
         raise ValueError("missing required state field: " + ", ".join(missing))
-    text_fields = {"clean-review": ["body"], "qa-gate": ["acceptance"], "fork-gate": ["text"],
+    text_fields = {"qa-gate": ["acceptance"], "fork-gate": ["text"],
                    "memory-rerank": ["query"], "tier": ["task_title", "task_body", "acceptance", "repo"],
                    "route": ["view_meaning", "repo"] + (["intent"] if state.get("view") == "intent" else ["spec_title", "spec_body"])}
     for key in text_fields[preset]:
@@ -24360,12 +24198,7 @@ def judge_validate_answers(questions: dict, payload: dict) -> dict:
 
 def judge_decide(preset: str, state: dict, answers: dict, route_decision: dict | None = None) -> dict:
     decision = {"value": None, "rule": "", "met": False}
-    if preset == "clean-review":
-        answer = answers["review"]
-        decision.update(value=answer["choice"] == "clean" and answer["confidence"] >= 0.7,
-                        rule="clean confidence>=0.7")
-        decision["met"] = decision["value"]
-    elif preset == "qa-gate":
+    if preset == "qa-gate":
         ui = answers["ui_observable_criteria"]["noul"]
         target = bool(state["startable_target_fact"])
         value = "qa_runs" if ui >= 0.5 and target else "qa_skipped"
