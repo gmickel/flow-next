@@ -23,6 +23,12 @@ WORKFLOW = ROOT / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
 sys.path.insert(0, str(ROOT / "plugins/flow-next/scripts"))
 
 
+@unittest.skipIf(
+    os.name == "nt",
+    "These tests execute make-pr's bash fences against PATH shims for git, gh "
+    "and flowctl; Windows CreateProcess never consults a script shim, and the "
+    "fence logic under test is OS-independent.",
+)
 class MakePrCloseTests(unittest.TestCase):
     def setUp(self):
         scratch = ROOT / ".flow/tmp"
@@ -91,7 +97,7 @@ fi
             flowctl = self.executable("flowctl-fail", '#!/bin/bash\nif [[ "$1 $2" == "spec close" ]]; then echo "injected close failure" >&2; exit 9; fi\nexec ' + shlex.quote(str(SCRIPTS / "flowctl")) + ' "$@"\n')
         else:
             flowctl = SCRIPTS / "flowctl"
-        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", WORKFLOW.read_text(), re.S) if "# --- §0.5:" in f)
+        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", WORKFLOW.read_text(encoding="utf-8"), re.S) if "# --- §0.5:" in f)
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), RALPH=str(int(ralph)), NO_MERMAID="0", WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
         # Observe the exact head seen by the artifact/export phase and PR creation.
         tail = '''
@@ -106,7 +112,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
     def test_r2_close_commit_precedes_artifact_and_pr_and_binds_branch(self):
         for branch in (None, "old-branch", "feature"):
             with self.subTest(branch=branch):
-                spec = json.loads((self.repo / self.spec_rel).read_text())
+                spec = json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))
                 spec.update(status="open", branch_name=branch)
                 (self.repo / self.spec_rel).write_text(json.dumps(spec))
                 self.git("add", self.spec_rel)
@@ -117,10 +123,10 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 head = self.git("rev-parse", "HEAD")
                 self.assertNotEqual(head, before, "all-done create must commit the close")
                 for phase in ("artifact", "create"):
-                    self.assertEqual((self.root / f"{phase}-head").read_text().strip(), head)
-                    state = json.loads((self.root / f"{phase}-spec.json").read_text())
+                    self.assertEqual((self.root / f"{phase}-head").read_text(encoding="utf-8").strip(), head)
+                    state = json.loads((self.root / f"{phase}-spec.json").read_text(encoding="utf-8"))
                     self.assertEqual((state["status"], state["branch_name"]), ("done", "feature"))
-                context = json.loads((self.root / "context.json").read_text())
+                context = json.loads((self.root / "context.json").read_text(encoding="utf-8"))
                 self.assertEqual(context["head"], head)
                 self.assertEqual(context["commits_ahead"], int(self.git("rev-list", "--count", "main..HEAD")))
                 self.assertEqual(json.loads(self.git("show", f"HEAD:{self.task_rel}"))["status"], "done")
@@ -133,8 +139,8 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         before = self.git("rev-parse", "HEAD")
         result = self.execute()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "create-head").read_text().strip(), before)
-        self.assertEqual(json.loads((self.root / "create-spec.json").read_text())["status"], "open")
+        self.assertEqual((self.root / "create-head").read_text(encoding="utf-8").strip(), before)
+        self.assertEqual(json.loads((self.root / "create-spec.json").read_text(encoding="utf-8"))["status"], "open")
         self.assertIn(self.task_id, result.stderr)
         self.assertRegex(result.stderr.lower(), r"(?:not clos|stay[s]? open|remain[s]? open)")
         # The existing autonomous refusal is untouched: nothing opens, nothing closes.
@@ -179,13 +185,13 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
-        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text())["status"], "done")
+        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "done")
         self.assertFalse((self.root / "artifact-head").exists())
         self.assertFalse((self.root / "create-head").exists())
         self.assertIn("injected staging failure", result.stderr)
 
     def test_r2_dirty_tree_stops_without_consuming_existing_changes(self):
-        task = json.loads((self.repo / self.task_rel).read_text())
+        task = json.loads((self.repo / self.task_rel).read_text(encoding="utf-8"))
         task["title"] = "Uncommitted task work"
         (self.repo / self.task_rel).write_text(json.dumps(task))
         self.git("add", self.task_rel)
@@ -193,7 +199,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.git("diff", "--cached"), before)
-        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text())["status"], "open")
+        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "open")
         self.assertFalse((self.root / "create-head").exists())
 
     def test_r2_unrelated_dirty_and_untracked_files_survive_close(self):
@@ -201,7 +207,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         self.git("add", "change.txt")
         staged = self.git("diff", "--cached")
         config = self.repo / ".flow/config.json"
-        config.write_text(config.read_text() + "\n")
+        config.write_text(config.read_text(encoding="utf-8") + "\n")
         config_bytes = config.read_bytes()
         artifact = self.repo / f".flow/artifacts/{self.spec_id}/pr.html"
         artifact.parent.mkdir(parents=True)
@@ -210,7 +216,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git("diff", "--cached"), staged)
         self.assertEqual(config.read_bytes(), config_bytes)
-        self.assertEqual(artifact.read_text(), "local lens")
+        self.assertEqual(artifact.read_text(encoding="utf-8"), "local lens")
         changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
         self.assertEqual(set(changed), {self.spec_rel, self.task_rel})
         self.assertTrue((self.root / "create-head").exists())
@@ -237,9 +243,9 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         before = self.git("rev-parse", "HEAD")
         result = self.execute()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual((self.root / "create-head").read_text().strip(), before)
-        self.assertEqual(json.loads((self.root / "create-spec.json").read_text())["status"], "open")
-        self.assertFalse(json.loads((self.root / "context.json").read_text())["spec_closed"])
+        self.assertEqual((self.root / "create-head").read_text(encoding="utf-8").strip(), before)
+        self.assertEqual(json.loads((self.root / "create-spec.json").read_text(encoding="utf-8"))["status"], "open")
+        self.assertFalse(json.loads((self.root / "context.json").read_text(encoding="utf-8"))["spec_closed"])
 
     def test_r2_html_fallback_preserves_closed_head(self):
         self.call("spec_close", id=self.spec_id)
@@ -249,7 +255,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         artifact = self.repo / f".flow/artifacts/{self.spec_id}/pr.html"
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text("<html>Fallback lens</html>")
-        lens = WORKFLOW.with_name("html-lens.md").read_text()
+        lens = WORKFLOW.with_name("html-lens.md").read_text(encoding="utf-8")
         fence = next(f for f in re.findall(r"```bash\n(.*?)\n\s*```", lens, re.S) if "LENS_OK=true" in f)
         env = dict(os.environ, SPEC_ID=self.spec_id, HTML_AID_STATUS="missing", PHASE0_CONTEXT=json.dumps({"spec_closed": True, "head": before}))
         result = subprocess.run(["bash", "-c", "set -e\n" + fence + '\nprintf "%s" "$LINK_MODE"'], cwd=self.repo, env=env, capture_output=True, text=True)
@@ -259,7 +265,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
 
     def test_r2_head_move_stops_before_push(self):
         document = WORKFLOW.with_name("create-and-finalize.md")
-        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", document.read_text(), re.S) if "PUSH_OUT=$(git push" in f)
+        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", document.read_text(encoding="utf-8"), re.S) if "PUSH_OUT=$(git push" in f)
         real_git = subprocess.run(["which", "git"], capture_output=True, text=True, check=True).stdout.strip()
         self.executable("git", '#!/bin/bash\nif [[ "$1" == push ]]; then touch "$OBSERVATIONS/pushed"; exit 7; fi\nexec ' + shlex.quote(real_git) + ' "$@"\n')
         for context in ({"head": self.git("rev-parse", "main"), "branch": "feature"}, {"head": self.git("rev-parse", "HEAD"), "branch": "other"}):
@@ -275,7 +281,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         result = self.execute(update=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
-        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text())["status"], "open")
+        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "open")
 
 
 if __name__ == "__main__":

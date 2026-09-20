@@ -25,7 +25,7 @@ from flowctl_tracker.wire import parent_read  # noqa: E402
 class LandTrackerApiTests(unittest.TestCase):
     def test_r8_existing_api_preserves_mapping_without_local_writes(self):
         prose = "\n".join(
-            path.read_text() for path in
+            path.read_text(encoding="utf-8") for path in
             (ROOT / "skills/flow-next-land").rglob("*.md")
         )
         self.assertTrue("apply_status" in prose, "land must use receipt-free apply_status")
@@ -72,7 +72,7 @@ class LandTrackerApiTests(unittest.TestCase):
 
     def test_r8_provider_failure_is_available_to_verdict_reason(self):
         prose = "\n".join(
-            path.read_text() for path in
+            path.read_text(encoding="utf-8") for path in
             (ROOT / "skills/flow-next-land").rglob("*.md")
         )
         self.assertTrue("apply_status" in prose, "land must bind the tested provider API")

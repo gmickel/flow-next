@@ -11,7 +11,7 @@ LAND = Path(__file__).resolve().parents[1] / "skills" / "flow-next-land"
 
 class NamedPullRequestContractTest(unittest.TestCase):
     def section(self, heading):
-        text = (LAND / "workflow.md").read_text()
+        text = (LAND / "workflow.md").read_text(encoding="utf-8")
         marker = "## " + heading
         self.assertIn(marker, text)
         return text.split(marker, 1)[1].split("\n## ", 1)[0]

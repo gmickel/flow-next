@@ -30593,17 +30593,33 @@ def _note_completion_review_reset(
         )
 
 
-def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> None:
-    """Reopen a closed spec after a successful task creation or start."""
+def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> Optional[Path]:
+    """Reopen a closed spec after a successful task creation or start.
+
+    Returns the rewritten spec path, or None when the spec was already open.
+    """
     spec_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_path.exists():
-        return
+        return None
     spec_data = load_json(spec_path)
     if spec_data.get("status") != "done":
-        return
+        return None
     spec_data["status"] = "open"
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_path, spec_data)
+    return spec_path
+
+
+def _note_spec_reopened(reopened: Optional[Path], spec_id: str, payload: Optional[dict]) -> None:
+    """Report a reopen the way close reports its writes, so callers commit it."""
+    if reopened is None:
+        return
+    if payload is not None:
+        payload["reopened_spec"] = spec_id
+        payload["modified_paths"] = [*payload.get("modified_paths", []), str(reopened)]
+    else:
+        print(f"Spec {spec_id} reopened")
+        print_tracked_write_advisory(reopened)
 
 
 def cmd_task_create(args: argparse.Namespace) -> None:
@@ -30806,13 +30822,14 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
-        _reopen_spec_for_task_change(flow_dir, spec_id)
+        reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
 
         # fn-205 follow-up: new tasks change the review surface — a
         # policy-excused `not_required` no longer holds.
         review_reset = _reset_excused_completion_review(flow_dir, spec_id)
         if use_json:
             payload: dict = {"tasks": created_summaries}
+            _note_spec_reopened(reopened, spec_id, payload)
             _note_completion_review_reset(
                 review_reset, spec_id, payload, use_json=True
             )
@@ -30820,6 +30837,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         else:
             for summary in created_summaries:
                 print(f"Task {summary['id']} created: {summary['title']}")
+            _note_spec_reopened(reopened, spec_id, None)
             _note_completion_review_reset(
                 review_reset, spec_id, None, use_json=False
             )
@@ -30962,7 +30980,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
-    _reopen_spec_for_task_change(flow_dir, spec_id)
+    reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
 
     # fn-205 follow-up: a new task changes the review surface — a
     # policy-excused `not_required` no longer holds.
@@ -30977,10 +30995,12 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             "spec_path": task_data["spec_path"],
             "message": f"Task {task_id} created",
         }
+        _note_spec_reopened(reopened, spec_id, payload)
         _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
         json_output(payload)
     else:
         print(f"Task {task_id} created: {args.title}")
+        _note_spec_reopened(reopened, spec_id, None)
         _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
@@ -35617,7 +35637,7 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
     return bool(tasks) and all(t.get("status") == "done" for t in tasks)
 
 
-_SPEC_BASE_CACHE: dict[Path, tuple[str, str]] = {}
+_SPEC_BASE_CACHE: dict[Path, tuple[str, str, bool]] = {}
 _SPEC_BASE_NOTICE_CWDS: set[Path] = set()
 
 
@@ -35627,6 +35647,8 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
     Resolve origin's default branch, then the chain-base cascade. Successful
     resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
     With no base ref the local close stands, with one stderr notice per working directory.
+    A checkout of the base branch itself has nothing left to merge, so the
+    local close stands there too (work done directly on the base).
     """
     if spec_data.get("status") != "done":
         return False, "", ""
@@ -35648,7 +35670,15 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
                     cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
                 )
                 if probe.returncode == 0:
-                    cached = (candidate, probe.stdout.strip())
+                    here = subprocess.run(
+                        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+                        cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                    )
+                    on_base = (
+                        here.returncode == 0
+                        and here.stdout.strip() == candidate.removeprefix("origin/")
+                    )
+                    cached = (candidate, probe.stdout.strip(), on_base)
                     _SPEC_BASE_CACHE[cwd] = cached
                     break
             if cached is None:
@@ -35660,7 +35690,9 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
                     print(f"note: {diagnostic}", file=sys.stderr)
                     _SPEC_BASE_NOTICE_CWDS.add(cwd)
                 return True, "", diagnostic
-        base_ref, base = cached
+        base_ref, base, on_base = cached
+        if on_base:
+            return True, "", ""
         diagnostic = (
             f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
             "fetch the base or land it"
@@ -36488,18 +36520,19 @@ def cmd_start(args: argparse.Namespace) -> None:
         store.save_runtime(args.id, runtime_updates)
 
     # Open specs remain untouched; only resuming closed work changes the spec.
-    _reopen_spec_for_task_change(get_flow_dir(), task_def["spec"])
+    reopened = _reopen_spec_for_task_change(get_flow_dir(), task_def["spec"])
 
     if args.json:
-        json_output(
-            {
-                "id": args.id,
-                "status": "in_progress",
-                "message": f"Task {args.id} started",
-            }
-        )
+        payload = {
+            "id": args.id,
+            "status": "in_progress",
+            "message": f"Task {args.id} started",
+        }
+        _note_spec_reopened(reopened, task_def["spec"], payload)
+        json_output(payload)
     else:
         print(f"Task {args.id} started")
+        _note_spec_reopened(reopened, task_def["spec"], None)
 
 
 def cmd_done(args: argparse.Namespace) -> None:

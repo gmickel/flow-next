@@ -216,11 +216,12 @@ class ChainCliTestCase(unittest.TestCase):
         previous = Path.cwd()
         self.addCleanup(os.chdir, previous)
         os.chdir(self.repo)
+        git(self.repo, "checkout", "-q", "-b", "feature")  # off the base: the base read decides
         parent = self.spec("parent", done=True, status="done")
         with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
             for _ in range(2):
                 self.assertFalse(mod.spec_landed_at_base(self.repo / ".flow", parent, {"status": "done"})[0])
-            self.assertEqual(sum(c.args[0][1] == "symbolic-ref" for c in run.call_args_list), 1)
+            self.assertEqual(sum(c.args[0][-1] == "refs/remotes/origin/HEAD" for c in run.call_args_list), 1)
         other = self.tmp / "other"
         other.mkdir()
         git(other, "init", "-q", "-b", "develop")
@@ -228,10 +229,18 @@ class ChainCliTestCase(unittest.TestCase):
         with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
             for _ in range(2):
                 self.assertTrue(mod.spec_landed_at_base(other / ".flow", parent, {"status": "done"})[0])
-            self.assertEqual(sum(c.args[0][1] == "symbolic-ref" for c in run.call_args_list), 2)
+            self.assertEqual(sum(c.args[0][-1] == "refs/remotes/origin/HEAD" for c in run.call_args_list), 2)
         self.assertNotIn(other, mod._SPEC_BASE_CACHE)
 
+    def test_close_on_the_base_branch_itself_stands(self) -> None:
+        # Work done directly on the base has nothing left to merge.
+        parent = self.spec("parent", done=True, status="done")
+        child = self.spec("child", deps=[parent])
+        _, out = self.chain(child)
+        self.assertEqual((out["eligible"], out["parent"]), (True, None))
+
     def test_done_parent_absent_at_base_is_not_landed(self) -> None:
+        git(self.repo, "checkout", "-q", "-b", "feature")
         parent = self.spec("parent", done=True, status="done")
         child = self.spec("child", deps=[parent])
         _, out = self.chain(child)
@@ -294,6 +303,9 @@ class ChainCliTestCase(unittest.TestCase):
         self.assertTrue(out["eligible"])
 
     def test_closed_unmerged_sibling_still_occupies_chain(self) -> None:
+        # Seen from a branch that carries the sibling's close (on the base
+        # itself the sibling still reads open and occupies the chain as before).
+        git(self.repo, "checkout", "-q", "-b", "feature")
         parent = self.spec("parent", done=True)
         self.push_branch(parent)
         sibling = self.spec("first child", done=True, status="done", deps=[parent])

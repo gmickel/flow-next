@@ -15,7 +15,7 @@ RETIRED = {
 
 class LandUpgradeDocsTest(unittest.TestCase):
     def test_r11_upgrade_contract(self):
-        reference = (DOCS / "flowctl.md").read_text()
+        reference = (DOCS / "flowctl.md").read_text(encoding="utf-8")
         upgrade = reference.split("## Landing upgrade", 1)[1].split("\n## ", 1)[0]
         for heading in ("### Repository-wide recipe", "### Review gate",
                         "### Retired keys", "### Retired behaviors"):
@@ -29,10 +29,10 @@ class LandUpgradeDocsTest(unittest.TestCase):
         for token in ("headRefOid", "headRefName", "branch_name", "status", "done",
                       "AGENTS.md", "branch protection", "land.mergeVerdictCommand"):
             self.assertIn(token, upgrade)
-        recovery = (DOCS / "troubleshooting.md").read_text()
+        recovery = (DOCS / "troubleshooting.md").read_text(encoding="utf-8")
         for token in ("rebase --onto", "--force-with-lease", "gh pr edit"):
             self.assertIn(token, recovery)
-        unreleased = (ROOT / "CHANGELOG.md").read_text().split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+        unreleased = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[1].split("\n## ", 1)[0]
         self.assertIn("major", unreleased)
         self.assertIn("#landing-upgrade", unreleased)
         for key in RETIRED:

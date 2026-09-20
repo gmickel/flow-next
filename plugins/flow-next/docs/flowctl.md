@@ -441,7 +441,7 @@ Output (exhaustive shape):
 }
 ```
 
-A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
+A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. On a checkout of the base branch itself the local close stands, since work done directly on the base has nothing left to merge. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
 
 `eligible` is true when every dependency is landed (`parent`, `parent_branch`, and `parent_branch_on_remote` are `null`; no remote read), or when exactly one unlanded dependency has all tasks done, its branch exists on origin, and no other unlanded sibling naming that parent has a branch on origin. A minted implicit task counts; zero tasks still means in progress. A locally closed but unlanded sibling still occupies the chain.
 
@@ -482,8 +482,9 @@ rewritten. Tracked files left modified also produce a stderr advisory.
 Make-pr binds the spec's `branch_name` to the PR head branch and commits the
 close before composing its head-bound aid and opening the PR. Incomplete
 interactive draft PRs keep the spec open and cannot land. Dry-run and body-only
-updates never close. Creating or starting a task on a closed spec reopens it;
-finishing that follow-up does not close it automatically.
+updates never close. Creating or starting a task on a closed spec reopens it and reports the
+rewritten spec file (`reopened_spec`, `modified_paths`) so the caller commits
+it with the task; finishing that follow-up does not close it automatically.
 
 ```bash
 flowctl spec close fn-1 [--json]

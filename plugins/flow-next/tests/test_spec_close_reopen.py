@@ -68,7 +68,7 @@ class SpecCloseReopenTests(unittest.TestCase):
         return task
 
     def status(self):
-        return json.loads(self.spec_path.read_text())["status"]
+        return json.loads(self.spec_path.read_text(encoding="utf-8"))["status"]
 
     def snapshot(self):
         return {str(p.relative_to(self.repo)): p.read_bytes()
@@ -81,7 +81,7 @@ class SpecCloseReopenTests(unittest.TestCase):
         # A task already committed done has no local runtime state at all.
         committed_task = self.create("Already committed")
         committed_path = self.repo / ".flow/tasks" / f"{committed_task}.json"
-        committed = json.loads(committed_path.read_text())
+        committed = json.loads(committed_path.read_text(encoding="utf-8"))
         committed["status"] = "done"
         committed_path.write_text(json.dumps(committed))
         tasks.append(committed_task)
@@ -93,7 +93,7 @@ class SpecCloseReopenTests(unittest.TestCase):
         os.chdir(clone)
         self.assertFalse((clone / ".git/flow-state").exists())
         for task in tasks:
-            stored = json.loads((clone / ".flow/tasks" / f"{task}.json").read_text())
+            stored = json.loads((clone / ".flow/tasks" / f"{task}.json").read_text(encoding="utf-8"))
             self.assertEqual(stored["status"], "done")
             self.assertNotEqual(stored.get("assignee"), "local")
         shown = self.call("show", id=self.spec_id)
@@ -121,7 +121,7 @@ class SpecCloseReopenTests(unittest.TestCase):
     def test_close_reports_only_rewritten_paths_including_legacy_spec(self):
         changed, unchanged = self.create("Changed"), self.create("Already done")
         task_path = self.repo / ".flow/tasks" / f"{unchanged}.json"
-        data = json.loads(task_path.read_text())
+        data = json.loads(task_path.read_text(encoding="utf-8"))
         data["status"] = "done"
         task_path.write_text(json.dumps(data))
         before = task_path.read_bytes()
@@ -149,7 +149,7 @@ class SpecCloseReopenTests(unittest.TestCase):
     def test_start_without_spec_or_epic_fails_before_any_write(self):
         task = self.create()
         path = self.repo / ".flow/tasks" / f"{task}.json"
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         data.pop("spec", None)
         data.pop("epic", None)
         path.write_text(json.dumps(data))
@@ -164,7 +164,7 @@ class SpecCloseReopenTests(unittest.TestCase):
         task = self.closed()
         # Emulate an existing committed completion in an older clone, too.
         path = self.repo / ".flow/tasks" / f"{task}.json"
-        stored = json.loads(path.read_text())
+        stored = json.loads(path.read_text(encoding="utf-8"))
         stored["status"] = "done"
         path.write_text(json.dumps(stored))
         self.flow.save_task_runtime(task, {"status": "todo"})
@@ -181,6 +181,19 @@ class SpecCloseReopenTests(unittest.TestCase):
         self.closed()
         self.create("Follow-up")
         self.assertEqual(self.status(), "open")
+
+    def test_r3_reopen_reports_the_spec_file_it_rewrote(self):
+        # A caller that commits only the new task would leave `done` at the
+        # head; the reopen names its write the way close does.
+        self.closed()
+        out = self.call("task_create", spec=self.spec_id, epic=None, title="Follow-up",
+                        priority=None, deps=None, acceptance_file=None)
+        self.assertEqual(out["reopened_spec"], self.spec_id)
+        self.assertEqual(out["modified_paths"], [str(self.spec_path)])
+        again = self.call("task_create", spec=self.spec_id, epic=None, title="Second",
+                          priority=None, deps=None, acceptance_file=None)
+        self.assertNotIn("reopened_spec", again)
+        self.assertNotIn("modified_paths", again)
 
     def test_r3_bulk_create_reopens_closed_spec(self):
         self.closed()

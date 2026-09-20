@@ -17,7 +17,8 @@ versioning remains a separate maintainer step.
 - Chain dependencies count as landed only when the base records the spec as
   closed. A close on an unmerged parent branch keeps its children chained.
 - `spec close` reports every rewritten file in `modified_paths`, so callers can
-  commit the complete close. make-pr never closes a spec that has no tasks, and
+  commit the complete close. A task create or start that reopens a closed spec
+  reports the spec file the same way. make-pr never closes a spec that has no tasks, and
   land reads a closed spec with no task files as unfinished.
 
 - Replace bare or scheduled repo-wide land calls with the [repository-wide
