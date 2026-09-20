@@ -87,7 +87,7 @@
     "impl:fn-249-make-pr-aid-artifact-flowctl-fills-the.1": 0
   },
   "spec_path": ".flow/specs/fn-249-make-pr-aid-artifact-flowctl-fills-the.md",
-  "status": "open",
+  "status": "done",
   "title": "make-pr aid artifact: flowctl fills the diff metadata",
   "tracker": {
     "baseHashFlow": null,
@@ -100,5 +100,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T18:51:56.550648Z"
+  "updated_at": "2026-09-20T18:53:43.655994Z"
 }

@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-249-make-pr-aid-artifact-flowctl-fills-the",
   "spec_path": ".flow/tasks/fn-249-make-pr-aid-artifact-flowctl-fills-the.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement make-pr aid artifact: flowctl fills the diff metadata",
   "updated_at": "2026-09-20T17:12:36.632470Z"
 }
