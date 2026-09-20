@@ -294,7 +294,7 @@ Two event kinds drive 3d, and **admission (3a) is recomputed immediately after
 handling EACH event** - never deferred to the end of a task's review tail:
 
 **Worker-return event** (that task only):
-Before accepting the return or integrating, apply [phases.md Phase 3d](../phases.md#3d-join-integrate-and-verify)'s task-status, lane-attributed live-command check and terminal-handover exception. If its early-return wait applies, retain the task's slot, recompute admission at 3a and keep handling other events while the command runs; handle the return after it exits through the re-anchoring continuation worker in the same workspace, with Phase 3d's early-return strike exemption and dispatch `TIMEBOX` bound (then its existing TIMEBOX stand-down and 2-strike rules).
+Before accepting the return or integrating, apply [phases.md Phase 3d](../phases.md#3d-join-integrate-and-verify)'s task-status, lane-attributed live-command check (a handover with an attributable live command still waits). If its early-return wait applies, retain the task's slot, recompute admission at 3a and keep handling other events while the command runs; handle the return after it exits through the re-anchoring continuation worker in the same workspace, with Phase 3d's early-return strike exemption and dispatch `TIMEBOX` bound (then its existing TIMEBOX stand-down and 2-strike rules).
 
 1. Read [wave-join.md](wave-join.md) and execute its handover +
    integration steps: confirm the handover; integrate that task's workspace
