@@ -14,6 +14,12 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- Chain dependencies count as landed only when the base records the spec as
+  closed. A close on an unmerged parent branch keeps its children chained.
+- `spec close` reports every rewritten file in `modified_paths`, so callers can
+  commit the complete close. make-pr never closes a spec that has no tasks, and
+  land reads a closed spec with no task files as unfinished.
+
 - Replace bare or scheduled repo-wide land calls with the [repository-wide
   recipe](plugins/flow-next/docs/flowctl.md#landing-upgrade). For each open PR,
   read specs at its remote head, select all whose `branch_name` equals its head

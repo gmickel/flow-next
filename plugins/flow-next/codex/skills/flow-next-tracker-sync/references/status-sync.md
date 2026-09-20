@@ -125,11 +125,10 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 
 > **Why rows 4–6 sit above rows 7–8.** A PR signal — open or merged — is stronger
 > evidence of where the work *is* than the local task ledger. In the normal make-pr
-> path the spec is still `open` with all tasks `done` (flow-next-work/phases.md:488
-> says not to close the spec before the PR; land later discovers `status==open &&
-> tasks==done`). Evaluating the open-PR row (4) before the broad "some task done →
-> in-progress" row (7) is what moves that issue to **In Review** on the make-pr push
-> (flow-next-make-pr/workflow.md:1685-1690) instead of leaving it at In Progress.
+> path, make-pr closes the completed spec on the PR branch before opening the PR.
+> The open-PR row (4) keeps that closed spec **In Review** until merge evidence
+> permits a terminal state. It also takes precedence over the broad "some task
+> done → in-progress" row (7) for PRs whose specs remain incomplete.
 
 **Terminal (`done`/`verified`) is impossible without a `MERGED` probe result.** The
 old map mapped `spec done + completion ship → verified` and `spec done,

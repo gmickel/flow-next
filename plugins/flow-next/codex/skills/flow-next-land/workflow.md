@@ -19,7 +19,8 @@ Do not repair, merge again, or delete a branch on that replay.
 Read every `.flow/specs/*.json` blob at the full `headRefOid` from the PR's
 head repository, using GitHub's tree/contents API, never local spec state.
 Select every spec whose `branch_name` equals `headRefName`; several matches
-are legitimate. A closed spec has `status: done`. If any matching spec is
+are legitimate. A closed spec has `status: done` and at least one
+`.flow/tasks/<spec-id>.*.json` blob in the same tree. If any matching spec is
 open, stop `BLOCKED`, reason `work not finished` naming every open match;
 change nothing. If none match, stop `NO_WORK`, reason `no matching spec`.
 Missing or malformed blobs, incomplete tree reads, or API errors stop

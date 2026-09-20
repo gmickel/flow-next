@@ -51,6 +51,11 @@ LEGACY_CONFIG = {
         "delegateConsent": True,
         "delegateDecision": "auto",
     },
+    "land": {
+        "release": True, "reviewSignal": "silence", "automatedReviewers": "",
+        "reviewTrigger": "", "ciFixBudget": 3, "cleanReviewCommentPattern": "",
+        "requestReviewers": "", "patienceMinutesAfterReview": None,
+    },
     "models": {
         "roles": {"review": {"codex": "gpt-5.6-terra:medium"}},
         "verifiedAt": "2026-07-19",

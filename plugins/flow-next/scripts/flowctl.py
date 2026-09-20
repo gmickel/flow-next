@@ -1743,6 +1743,14 @@ REMOVED_CONFIG_KEYS: tuple[str, ...] = (
     "models.roles",
     "models.verifiedAt",
     "models.verifiedWith",
+    "land.release",
+    "land.reviewSignal",
+    "land.automatedReviewers",
+    "land.reviewTrigger",
+    "land.ciFixBudget",
+    "land.cleanReviewCommentPattern",
+    "land.requestReviewers",
+    "land.patienceMinutesAfterReview",
 )
 
 _removed_config_advisory_printed = False
@@ -1769,12 +1777,18 @@ def removed_config_keys_present(
 
 def removed_config_keys_note(keys: list[str]) -> str:
     """The one advisory line for a config still carrying removed keys."""
+    guidance = []
+    if any(key.startswith("land.") for key in keys):
+        guidance.append("See docs/flowctl.md#landing-upgrade for landing replacements.")
+    if any(not key.startswith("land.") for key in keys):
+        guidance.append(
+            "Routing uses the model-routing block /flow-next:setup writes into "
+            "CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage`."
+        )
     return (
         f"note: .flow/config.json still carries removed "
-        f"key(s): {', '.join(keys)}; flowctl ignores them. Routing "
-        f"is now the model-routing block /flow-next:setup writes "
-        f"into CLAUDE.md / AGENTS.md plus the recipes in "
-        f"`flowctl usage` - route work there and delete these keys."
+        f"key(s): {', '.join(keys)}; flowctl ignores them. "
+        + " ".join(guidance) + " Remove these keys from .flow/config.json."
     )
 
 
@@ -23602,6 +23616,8 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
                   'is too late for understood work'),
  'all_done_make_pr': ('Apply the QA gate, then make the pull request.',
                       'QA runs or records `skipped(reason)`; make-pr is never skipped on this route'),
+ 'closed_spec_no_pr': ('Ask the host to inspect the closed spec without an observed pull request.',
+                       'Never open a replacement pull request for a closed spec'),
  'existing_pr_tail': ('Apply the existing pull request landing and consent rules.',
                       'Review-only convergence keeps its limited scope. PR existence is not consent; land '
                       'owns convergence and merge gates')}
@@ -23806,7 +23822,13 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
         if tokens:
             signal += "; dependency scan: " + ", ".join(tokens)
     alternatives = ", ".join(f"{key} {probability:.2f}" for key, probability in candidates[1:3])
-    next_step = JUDGE_ROUTE_PRESENTATION.get(value, ("host decides", "host decides"))[0]
+    presentation_key = (
+        "closed_spec_no_pr"
+        if lifecycle and lifecycle["rule"] == "closed spec without observed PR"
+        else value
+    )
+    presentation = JUDGE_ROUTE_PRESENTATION.get(presentation_key, ("host decides", "host decides"))
+    next_step = presentation[0]
     if decision.get("research_recommended"):
         next_step = "Read the unfamiliar dependency documentation first; then " + next_step
     if decision.get("defect_repro") == "provided":
@@ -23814,7 +23836,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
     return [
         f"Next: {next_step}",
         f"Route: {route}", f"Signal: {signal}",
-        f"Skip/narrow: {JUDGE_ROUTE_PRESENTATION.get(value, ('host decides', 'host decides'))[1]}",
+        f"Skip/narrow: {presentation[1]}",
         f"Why not the alternatives: {alternatives or 'lifecycle precedence' if lifecycle else alternatives or 'host decides'}",
     ]
 
@@ -35595,6 +35617,58 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
     return bool(tasks) and all(t.get("status") == "done" for t in tasks)
 
 
+def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str]:
+    """A local close is landed only when the base also carries the close.
+
+    The base is origin's default branch, then make-pr's chain-base cascade;
+    only local git objects are read. A missing spec at a readable base is
+    unmerged and a failed read of an existing base fails closed. With no base
+    ref at all, the local close stands.
+    """
+    if spec_data.get("status") != "done":
+        return False, ""
+    try:
+        repo_root = get_repo_root()
+        base = None
+        head = subprocess.run(
+            ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+        )
+        candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
+        for candidate in (*candidates, "origin/main", "main", "origin/master", "master"):
+            probe = subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if probe.returncode == 0:
+                base = probe.stdout.strip()
+                break
+        if base is None:
+            # No base to merge into (no git repo, or no default branch yet):
+            # the local close is the only record there is.
+            return True, ""
+        flow_path = flow_dir.relative_to(repo_root).as_posix()
+        paths = [f"{flow_path}/{directory}/{spec_id}.json" for directory in (SPECS_JSON_DIR, EPICS_DIR)]
+        tree = subprocess.run(
+            ["git", "ls-tree", "--name-only", base, "--", *paths],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+        present = set(tree.stdout.splitlines())
+        path = next((path for path in paths if path in present), None)
+        if path is None:
+            return False, ""
+        blob = subprocess.run(
+            ["git", "show", f"{base}:{path}"],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+        data = json.loads(blob.stdout)
+        if not isinstance(data, dict):
+            return False, f"base spec {spec_id} is not an object"
+        return data.get("status") == "done", ""
+    except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+        return False, f"base read failed: {exc}"
+
+
 def evaluate_spec_chain(
     flow_dir: Path,
     spec_id: str,
@@ -35634,7 +35708,13 @@ def evaluate_spec_chain(
                 code=2, use_json=use_json,
             )
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") == "done":
+        landed, err = spec_landed_at_base(flow_dir, dep, dep_data)
+        if err:
+            result["parent"] = dep
+            result["parent_branch"] = dep_data.get("branch_name") or None
+            result["reason"] = f"base query failed: {err}"
+            return result
+        if landed:
             continue
         if spec_tasks_all_done(flow_dir, dep, use_json=use_json):
             candidates.append(dep)
@@ -35675,9 +35755,13 @@ def evaluate_spec_chain(
         if other_id in (spec_id, parent):
             continue
         other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
-        if other.get("status") == "done":
-            continue
         if parent not in (other.get("depends_on_epics", []) or []):
+            continue
+        landed, err = spec_landed_at_base(flow_dir, other_id, other)
+        if err:
+            result["reason"] = f"base query failed: {err}"
+            return result
+        if landed:
             continue
         if (other.get("branch_name") or "") in heads:
             result["reason"] = f"parent {parent} already chained by {other_id}"
@@ -35697,12 +35781,9 @@ def spec_blocked_by_deps(
 ) -> list[str]:
     """Spec-level admission gate shared by `ready --spec`, `next`, `ready --all`.
 
-    A dependency is blocking when its spec is missing or not ``done`` — except
-    the chain parent `evaluate_spec_chain` names (fn-152 R2a): an open parent
-    with every task done and its branch on origin counts as satisfied, so a
-    chained spec dispatches its tasks. The chain predicate is consulted only
-    when at least one dependency is open and none is missing, which keeps
-    every other spec on the byte-identical pre-chain path (no remote read).
+    A dependency is blocking until its close is present at the base, except
+    the eligible chain parent named by `evaluate_spec_chain` (fn-152 R2a).
+    Missing dependencies and unreadable base evidence stay blocking.
     """
     blocked: list[str] = []
     missing = False
@@ -35715,7 +35796,8 @@ def spec_blocked_by_deps(
             missing = True
             continue
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") != "done":
+        landed, _ = spec_landed_at_base(flow_dir, dep, dep_data)
+        if not landed:
             blocked.append(dep)
     if blocked and not missing:
         chain = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json, remote_heads=remote_heads)
@@ -36252,6 +36334,8 @@ def cmd_start(args: argparse.Namespace) -> None:
     # Load task definition for dependency info (outside lock)
     # Normalize to handle legacy "deps" field
     task_def = normalize_task(load_task_definition(args.id, use_json=args.json))
+    if not task_def.get("spec"):
+        error_exit(f"Task {args.id} has neither spec nor epic", use_json=args.json)
     depends_on = task_def.get("depends_on", []) or []
 
     # Validate all dependencies are done (outside lock - this is read-only check)
@@ -36646,6 +36730,7 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
         )
 
     spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+    modified_paths = [spec_path]
     # Validate the whole spec before publishing any final task status. Keep
     # runtime claims and evidence local; only the status must travel with git.
     for task_file, definition, status in final_tasks:
@@ -36653,6 +36738,7 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
             definition["status"] = status
             canonicalize_task_for_write(definition)
             atomic_write_json(task_file, definition)
+            modified_paths.append(task_file)
 
     spec_data["status"] = "done"
     spec_data["updated_at"] = now_iso()
@@ -36660,10 +36746,14 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 
     if args.json:
         json_output(
-            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed"}
+            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed",
+             "modified_paths": [str(path) for path in modified_paths]}
         )
     else:
         print(f"Spec {args.id} closed")
+
+    for path in modified_paths:
+        print_tracked_write_advisory(path)
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
@@ -36691,7 +36781,7 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 # invocation regardless of how many commits are recorded — one
 # `cat-file --batch-check` fed all tokens over stdin, one `rev-list HEAD`
 # membership walk that stops as soon as every candidate oid is accounted for.
-# `validate` runs on every land-loop tick; a per-SHA spawn loop would claw
+# `validate` can run repeatedly; a per-SHA spawn loop would claw
 # back the fn-109 wins. Deliberately NOT entangled with the export payload's
 # `merge-base --is-ancestor` gate-receipt probe (different question).
 
@@ -49444,8 +49534,7 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     }
     receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
     try:
-        # Symlink containment BEFORE any filesystem side effect (repo
-        # convention - cf. land's setup_stale guard): a committed symlink at
+        # Symlink containment BEFORE any filesystem side effect: a committed symlink at
         # .flow, .flow/tmp, or green-receipts would redirect the mkdir AND
         # the write outside the workspace during an unattended run. resolve()
         # follows symlinks in the existing components of a not-yet-created

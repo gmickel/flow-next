@@ -172,15 +172,74 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         self.assertFalse((self.root / "artifact-head").exists())
         self.assertFalse((self.root / "create-head").exists())
 
+    def test_r2_failed_staging_retains_written_close_without_opening(self):
+        real_git = subprocess.run(["which", "git"], capture_output=True, text=True, check=True).stdout.strip()
+        self.executable("git", '#!/bin/bash\nfor arg in "$@"; do if [[ "$arg" == add ]]; then echo "injected staging failure" >&2; exit 7; fi; done\nexec ' + shlex.quote(real_git) + ' "$@"\n')
+        before = self.git("rev-parse", "HEAD")
+        result = self.execute()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text())["status"], "done")
+        self.assertFalse((self.root / "artifact-head").exists())
+        self.assertFalse((self.root / "create-head").exists())
+        self.assertIn("injected staging failure", result.stderr)
+
     def test_r2_dirty_tree_stops_without_consuming_existing_changes(self):
-        (self.repo / "change.txt").write_text("uncommitted work\n")
-        self.git("add", "change.txt")
+        task = json.loads((self.repo / self.task_rel).read_text())
+        task["title"] = "Uncommitted task work"
+        (self.repo / self.task_rel).write_text(json.dumps(task))
+        self.git("add", self.task_rel)
         before = self.git("diff", "--cached")
         result = self.execute()
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.git("diff", "--cached"), before)
         self.assertEqual(json.loads((self.repo / self.spec_rel).read_text())["status"], "open")
         self.assertFalse((self.root / "create-head").exists())
+
+    def test_r2_unrelated_dirty_and_untracked_files_survive_close(self):
+        (self.repo / "change.txt").write_text("uncommitted work\n")
+        self.git("add", "change.txt")
+        staged = self.git("diff", "--cached")
+        config = self.repo / ".flow/config.json"
+        config.write_text(config.read_text() + "\n")
+        config_bytes = config.read_bytes()
+        artifact = self.repo / f".flow/artifacts/{self.spec_id}/pr.html"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("local lens")
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("diff", "--cached"), staged)
+        self.assertEqual(config.read_bytes(), config_bytes)
+        self.assertEqual(artifact.read_text(), "local lens")
+        changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
+        self.assertEqual(set(changed), {self.spec_rel, self.task_rel})
+        self.assertTrue((self.root / "create-head").exists())
+
+    def test_r2_legacy_split_layout_closes_and_commits_reported_paths(self):
+        legacy = self.repo / f".flow/epics/{self.spec_id}.json"
+        legacy.parent.mkdir(exist_ok=True)
+        (self.repo / self.spec_rel).rename(legacy)
+        self.git("add", ".flow")
+        self.git("commit", "-qm", "Legacy metadata layout")
+        self.spec_rel = legacy.relative_to(self.repo).as_posix()
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.git("show", f"HEAD:{self.spec_rel}"))["status"], "done")
+        changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
+        self.assertEqual(set(changed), {self.spec_rel, self.task_rel})
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_r2_taskless_spec_opens_without_close(self):
+        self.spec_id = self.call("spec_create", title="Taskless PR", branch="feature")["id"]
+        self.spec_rel = f".flow/specs/{self.spec_id}.json"
+        self.git("add", ".flow")
+        self.git("commit", "-qm", "Taskless spec")
+        before = self.git("rev-parse", "HEAD")
+        result = self.execute()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "create-head").read_text().strip(), before)
+        self.assertEqual(json.loads((self.root / "create-spec.json").read_text())["status"], "open")
+        self.assertFalse(json.loads((self.root / "context.json").read_text())["spec_closed"])
 
     def test_r2_html_fallback_preserves_closed_head(self):
         self.call("spec_close", id=self.spec_id)

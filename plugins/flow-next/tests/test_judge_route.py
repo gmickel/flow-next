@@ -102,6 +102,10 @@ class JudgeRouteTests(unittest.TestCase):
             route = f.judge_route_lifecycle(state)
             self.assertEqual(route["value"], "host")
             self.assertEqual(route["rule"], "closed spec without observed PR")
+            lines = f.judge_route_explain({"available": True, "decision": route}, state)
+            presentation = f.JUDGE_ROUTE_PRESENTATION["closed_spec_no_pr"]
+            self.assertEqual(lines[0], f"Next: {presentation[0]}")
+            self.assertEqual(lines[3], f"Skip/narrow: {presentation[1]}")
 
     def test_missing_branch_is_nothing_to_probe(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -177,7 +181,7 @@ class JudgeRouteTests(unittest.TestCase):
         indices = {"discovery": 0, "theme": 3, "build": 4, "capture_brief": 5, "defect": 6,
                    "cleanup": 7, "slowness": 8, "hillclimb": 9, "question": 10, "fork": 11,
                    "tiny": 12, "refine": 13, "plan_review": 14, "work_no_plan_default": 15,
-                   "plan": 15, "work_planned": 16, "all_done_make_pr": 17, "existing_pr_tail": 18}
+                   "plan": 15, "work_planned": 16, "all_done_make_pr": 17, "existing_pr_tail": 18, "closed_spec_no_pr": 19}
         for kind, index in indices.items():
             self.assertEqual(f.JUDGE_ROUTE_PRESENTATION[kind][1], rows[index][3])
 

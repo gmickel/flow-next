@@ -163,8 +163,9 @@ DESCRIPTIONS: dict[str, str] = {
     "tracker.perEvent.land.merged": (
         "Post-merge touchpoint for /flow-next:land. Active-by-default "
         "whenever the bridge is active (a real merge is the only event that "
-        "legitimately projects terminal Done); this leaf only tunes the "
-        "optional verdict comment, never the merge-gated status write."
+        "legitimately projects terminal Done); this leaf does not gate the "
+        "merge-gated status write. Land writes no local sync receipt, timestamp, "
+        "or verdict comment. A closed spec on an open PR remains In Review."
     ),
     "tracker.charts": (
         "Optional chart lifecycle projection (fn-135). String-enum off|on, "

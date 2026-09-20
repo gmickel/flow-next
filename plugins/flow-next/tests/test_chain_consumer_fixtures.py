@@ -262,6 +262,16 @@ class ChainDetectTestCase(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn(f"NEEDS_HUMAN: parent {parent} PR #1 closed unmerged; the chain is broken", got["_stderr"])
 
+    def test_closed_unmerged_parent_without_remote_history_still_stops(self) -> None:
+        parent, child, _ = parent_child(self.w)
+        closed = self.w.flowctl("spec", "close", parent)
+        self.assertEqual(closed["status"], "done")
+        git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/A")
+        rc, got = self.detect(child)
+        self.assertEqual(rc, 2, got)
+        self.assertIn(parent, got["_stderr"])
+        self.assertIn("NEEDS_HUMAN", got["_stderr"])
+
     def test_merged_parent_whose_chain_base_cannot_be_refreshed_is_unresolved(self) -> None:
         parent, child, a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")

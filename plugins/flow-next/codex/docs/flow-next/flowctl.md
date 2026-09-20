@@ -457,9 +457,12 @@ flowctl spec set-title fn-1 --title "New title" [--json]
 ### spec close
 
 Close the spec and write each task's final `status: done` into its tracked
-JSON definition. Any incomplete task refuses the close before files change.
+JSON definition. A spec with any incomplete task refuses the close
+before files change.
 Runtime status still takes precedence where present; a fresh clone reads the
 committed final statuses. This command writes files; the caller commits them.
+JSON output includes `modified_paths`, naming the spec file and every task file
+rewritten. Tracked files left modified also produce a stderr advisory.
 
 Make-pr binds the spec's `branch_name` to the PR head branch and commits the
 close before composing its head-bound aid and opening the PR. Incomplete

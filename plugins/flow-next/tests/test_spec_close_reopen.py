@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -116,6 +116,48 @@ class SpecCloseReopenTests(unittest.TestCase):
             self.flow.cmd_spec_close(argparse.Namespace(id=self.spec_id, json=True))
         self.assertNotEqual(raised.exception.code, 0)
         self.assertIn(incomplete, json.loads(out.getvalue())["error"])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_close_reports_only_rewritten_paths_including_legacy_spec(self):
+        changed, unchanged = self.create("Changed"), self.create("Already done")
+        task_path = self.repo / ".flow/tasks" / f"{unchanged}.json"
+        data = json.loads(task_path.read_text())
+        data["status"] = "done"
+        task_path.write_text(json.dumps(data))
+        before = task_path.read_bytes()
+        legacy = self.repo / ".flow/epics" / self.spec_path.name
+        legacy.parent.mkdir()
+        self.spec_path.rename(legacy)
+        self.flow.save_task_runtime(changed, {"status": "done"})
+        result = self.call("spec_close", id=self.spec_id)
+        self.assertEqual(set(result["modified_paths"]), {
+            str(legacy), str(self.repo / ".flow/tasks" / f"{changed}.json")})
+        self.assertEqual(task_path.read_bytes(), before)
+
+    def test_plain_close_advises_about_each_tracked_write(self):
+        task = self.create()
+        self.git("add", ".flow")
+        self.git("commit", "-qm", "Before close")
+        self.flow.save_task_runtime(task, {"status": "done"})
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            self.flow.cmd_spec_close(argparse.Namespace(id=self.spec_id, json=False))
+        self.assertIn(f".flow/specs/{self.spec_id}.json", err.getvalue())
+        self.assertIn(f".flow/tasks/{task}.json", err.getvalue())
+        self.assertEqual(len(err.getvalue().splitlines()), 2)
+
+    def test_start_without_spec_or_epic_fails_before_any_write(self):
+        task = self.create()
+        path = self.repo / ".flow/tasks" / f"{task}.json"
+        data = json.loads(path.read_text())
+        data.pop("spec", None)
+        data.pop("epic", None)
+        path.write_text(json.dumps(data))
+        before = self.snapshot()
+        out = io.StringIO()
+        with redirect_stdout(out), self.assertRaises(SystemExit):
+            self.flow.cmd_start(argparse.Namespace(id=task, json=True, force=False, note=None))
+        self.assertIn("neither spec nor epic", json.loads(out.getvalue())["error"])
         self.assertEqual(self.snapshot(), before)
 
     def test_r1_runtime_state_overrides_committed_done(self):

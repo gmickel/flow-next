@@ -76,6 +76,25 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         self.assertEqual(set(schema["properties"]["land"]["properties"]), set(expected))
         self.assertTrue(schema["properties"]["land"]["additionalProperties"])
 
+    def test_retired_keys_advise_on_config_get_and_set(self):
+        keys = [key for key in self.flowctl.REMOVED_CONFIG_KEYS if key.startswith("land.")]
+        self.assertEqual(len(keys), 8)
+        for operation in ("get", "set"):
+            for key in keys:
+                with self.subTest(operation=operation, key=key):
+                    self.flowctl._removed_config_advisory_printed = False
+                    (self.tmpdir / ".flow/config.json").write_text(
+                        json.dumps({"land": {key.split(".")[1]: "legacy"}}))
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        if operation == "get":
+                            self._run_config_get_cli(key)
+                        else:
+                            self._run_config_set_cli(key, "legacy")
+                    self.assertIn(key, err.getvalue())
+                    self.assertIn("landing-upgrade", err.getvalue())
+                    self.assertEqual(len(err.getvalue().splitlines()), 1)
+
     def test_r9_retired_keys_load_without_error_or_rewriting(self):
         retired = {"release": False, "reviewSignal": "approve", "automatedReviewers": "bot",
                    "reviewTrigger": "review", "ciFixBudget": 99, "cleanReviewCommentPattern": r"(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
