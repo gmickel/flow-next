@@ -47,8 +47,11 @@ from the bound diff. An omitted `diffUrl` becomes
 `/<owner>/<repo>/blob/<headSha>/<path>`, with the path URL-encoded and slashes
 preserved. The repository identity comes from the local origin remote and the
 SHA from the artifact's `headSha`. Without a resolvable identity or bound diff
-metadata for the row, the optional field stays absent; it also stays absent if
-the derived URL exceeds the v1 length bound. Readers receive either that literal
+metadata for the row, the optional field stays absent; it also stays absent for
+a deleted path, which has no blob at the head, and if the derived URL exceeds
+the v1 length bound. The path shape is the one the pull-request forge that
+make-pr opens against serves; a reader on another forge should treat the link
+as advisory. Readers receive either that literal
 string shape or no `diffUrl` key, which renders as a dash. Supplied links retain
 the existing URL-safety validation; they need not equal the derived link.
 Explicit counts and change types must match the bound diff. Row references

@@ -11,7 +11,7 @@
   ],
   "id": "fn-249-make-pr-aid-artifact-flowctl-fills-the",
   "impl_review_rounds": {
-    "fn-249-make-pr-aid-artifact-flowctl-fills-the.1": 1
+    "fn-249-make-pr-aid-artifact-flowctl-fills-the.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -44,9 +44,43 @@
       "task": "fn-249-make-pr-aid-artifact-flowctl-fills-the.1",
       "timestamp": "2026-09-20T18:15:51.934279Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "088e9a190adc079174a6d0f821794e4c3b7828cc89025c2dc404588c66bedf59",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f04d11cae0e16c361405e436faeb0759f5db6be0",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1551,
+      "output_sha256": "9247436f217878bc2cea8bbe79ef1fd9c56bc1aba1b0bbf53dcf337ade6edf35",
+      "reservation_id": "39ade07d20f54c6aac5116b5d5436817",
+      "round_consumed": true,
+      "scope": "impl:fn-249-make-pr-aid-artifact-flowctl-fills-the.1",
+      "superseded_by": null,
+      "task": "fn-249-make-pr-aid-artifact-flowctl-fills-the.1",
+      "timestamp": "2026-09-20T18:31:12.934875Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-249-make-pr-aid-artifact-flowctl-fills-the.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -66,5 +100,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T18:15:52.237952Z"
+  "updated_at": "2026-09-20T18:31:13.234284Z"
 }

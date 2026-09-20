@@ -151,10 +151,14 @@ class SparseInputTests(unittest.TestCase):
                         del row[key]
                     before = copy.deepcopy(sparse)
                     diff = artifact_diff_files(complete)
-                    self.assertEqual(self.validate_input(sparse, diff), complete)
+                    expected = copy.deepcopy(complete)
+                    if status == "deleted" and field in ("diffUrl", "all"):
+                        # No blob exists at the head for a deleted path: the link stays absent.
+                        del expected["changeWalkthrough"]["groups"][2]["files"][0]["diffUrl"]
+                    self.assertEqual(self.validate_input(sparse, diff), expected)
                     with tempfile.TemporaryDirectory() as tmp:
                         path = self.write(Path(tmp), sparse, diff)
-                        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), complete)
+                        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), expected)
                     self.assertEqual(sparse, before)
 
     def test_r1_missing_metadata_names_row_and_underivable_field(self):

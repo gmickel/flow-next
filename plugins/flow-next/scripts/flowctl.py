@@ -29334,7 +29334,8 @@ def _expand_pr_cognitive_aid_input(
                             )
                         else:
                             record[field_name] = metadata[index]
-                if "diffUrl" not in record and metadata is not None:
+                # A deleted path has no blob at the head, so no head-bound link resolves.
+                if "diffUrl" not in record and metadata is not None and record.get("changeType") != "deleted":
                     if not origin_checked:
                         blob_prefix = _pr_aid_blob_prefix(result.get("headSha"))
                         origin_checked = True
