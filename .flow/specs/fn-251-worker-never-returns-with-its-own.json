@@ -79,7 +79,7 @@
     "impl:fn-251-worker-never-returns-with-its-own.1": 0
   },
   "spec_path": ".flow/specs/fn-251-worker-never-returns-with-its-own.md",
-  "status": "open",
+  "status": "done",
   "title": "Worker never returns with its own commands still running",
   "tracker": {
     "baseHashFlow": null,
@@ -92,5 +92,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T14:32:28.019103Z"
+  "updated_at": "2026-09-20T15:08:55.814460Z"
 }
