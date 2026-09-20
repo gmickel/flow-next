@@ -20083,6 +20083,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # per-axis review text, dispatch meta) — per-run runtime artifacts, same
     # class as receipts/; a `git add -A` must never commit them.
     "review-fanout/",
+    # Head-bound aid generations and their writer lock stay per-clone. Keep
+    # HTML lenses, other artifact kinds, and measurement records trackable.
+    "artifacts/*/pr-cognitive-aid/*.json",
+    "artifacts/*/pr-cognitive-aid/.write.lock",
 ]
 
 

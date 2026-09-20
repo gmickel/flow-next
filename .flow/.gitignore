@@ -13,5 +13,7 @@ pilot-runs/
 .cache/
 create-first/
 review-fanout/
+artifacts/*/pr-cognitive-aid/*.json
+artifacts/*/pr-cognitive-aid/.write.lock
 # End of auto-managed block. User patterns below this line are preserved.
 locks/

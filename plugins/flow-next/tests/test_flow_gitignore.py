@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 spec = importlib.util.spec_from_file_location("flowctl", ROOT / "scripts" / "flowctl.py")
 flowctl = importlib.util.module_from_spec(spec)
@@ -125,6 +126,75 @@ class TestCmdInitWritesGitignore(unittest.TestCase):
             with mock.patch.object(flowctl, "get_flow_dir", return_value=tmp / ".flow"):
                 flowctl.cmd_init(ns)
         return captured
+
+    def test_aid_ignore_refresh_and_broad_stage(self) -> None:
+        """R6: init keeps aid state local without hiding durable artifacts."""
+        user_patterns = "\n# user café\n*.private\n!artifacts/keep.private\n"
+        for mode in ("fresh", "existing", "hand-edited"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                repo = Path(tmp)
+
+                def git(*args: str) -> subprocess.CompletedProcess:
+                    return subprocess.run(
+                        ["git", *args], cwd=repo, capture_output=True,
+                        text=True, encoding="utf-8", check=True,
+                    )
+
+                git("init", "-q")
+                flow_dir = repo / ".flow"
+                flow_dir.mkdir()
+                tracked = ".flow/artifacts/fn-1/pr-cognitive-aid/old.json"
+                paths = {
+                    tracked: False,  # refresh must never untrack existing files
+                    ".flow/artifacts/fn-1/pr-cognitive-aid/new.json": True,
+                    ".flow/artifacts/fn-2/pr-cognitive-aid/another.json": True,
+                    ".flow/artifacts/fn-1/pr-cognitive-aid/.write.lock": True,
+                    ".flow/artifacts/fn-1/pr.html": False,
+                    ".flow/artifacts/fn-1/spec.html": False,
+                    ".flow/artifacts/fn-1/other-kind/result.json": False,
+                    ".flow/artifacts/fn-1/other-kind/.write.lock": False,
+                    ".flow/artifacts/fn-1/pr-cognitive-aid/notes.md": False,
+                    ".flow/artifacts/fn-249-make-pr-measurement/results.json": False,
+                    ".flow/artifacts/fn-249-make-pr-measurement/baseline.md": False,
+                    ".flow/artifacts/notes.json": False,
+                    ".flow/artifacts/keep.private": False,
+                }
+                if mode != "fresh":
+                    paths[".flow/artifacts/secret.private"] = True
+                for path in paths:
+                    target = repo / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("{}\n", encoding="utf-8")
+                git("add", "--", tracked)
+                if mode != "fresh":
+                    block = "\n".join([
+                        flowctl.FLOW_GITIGNORE_AUTO_HEADER,
+                        "receipts/",
+                        *(["artifacts/"] if mode == "hand-edited" else []),
+                        flowctl.FLOW_GITIGNORE_AUTO_FOOTER,
+                    ])
+                    (flow_dir / ".gitignore").write_text(
+                        block + user_patterns, encoding="utf-8"
+                    )
+                self._run_init(repo)
+                if mode != "fresh":
+                    content = (flow_dir / ".gitignore").read_text(encoding="utf-8")
+                    self.assertEqual(
+                        content.split(flowctl.FLOW_GITIGNORE_AUTO_FOOTER, 1)[1],
+                        user_patterns,
+                    )
+                for path, ignored in paths.items():
+                    with self.subTest(path=path):
+                        result = subprocess.run(
+                            ["git", "check-ignore", "-q", "--", path], cwd=repo,
+                            capture_output=True, text=True, encoding="utf-8",
+                        )
+                        self.assertEqual(result.returncode, 0 if ignored else 1)
+                git("add", "-A")
+                staged = set(git("ls-files").stdout.splitlines())
+                self.assertEqual(staged, {p for p, ignored in paths.items() if not ignored}
+                                 | {".flow/.gitignore", ".flow/meta.json", ".flow/config.json"})
+                self.assertFalse(flowctl._ensure_flow_gitignore(flow_dir))
 
     def test_fresh_init_writes_gitignore_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

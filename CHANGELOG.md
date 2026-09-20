@@ -14,6 +14,20 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- Broad staging now leaves new PR aid generations and write locks local after
+  `flowctl init` refreshes the managed ignore block. HTML lenses and other
+  artifacts remain trackable. In repositories that already track aid files,
+  maintainers should run this one-time cleanup from the repository root and
+  commit the index change (local files are kept):
+
+  ```sh
+  flowctl init
+  git rm --cached --ignore-unmatch -- '.flow/artifacts/*/pr-cognitive-aid/*.json' '.flow/artifacts/*/pr-cognitive-aid/.write.lock'
+  ```
+
+  Flowctl never untracks files itself. Ignored aids remain per-clone; see the
+  [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md#storage-and-identity).
+
 - Chain dependencies count as landed only when the base records the spec as
   closed. A close on an unmerged parent branch keeps its children chained.
 - `spec close` reports every rewritten file in `modified_paths`, so callers can

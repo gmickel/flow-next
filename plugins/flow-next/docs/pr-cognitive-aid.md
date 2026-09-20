@@ -24,6 +24,15 @@ unsupported, invalid, forked, or ambiguous chain remains evidence but supplies
 no current verification or ship claim. Select a labeled fallback; never merge
 legacy fields into a partial v1 view.
 
+Aid generations and their `.write.lock` files are ignored by the managed
+`.flow/.gitignore` block after `flowctl init` refreshes it. HTML lenses and
+other artifact kinds remain trackable. Already tracked aid files require a
+one-time maintainer untracking step; flowctl never removes them from the index.
+
+Ignored aids are per-clone state. A PR created on another host or clone has no
+stored walkthrough available to a projector reading this clone's artifact home.
+The PR body still travels with the PR; the local aid files do not.
+
 ## Sparse authoring
 
 Validate and write accept rows with only judgment fields. Missing Git change
