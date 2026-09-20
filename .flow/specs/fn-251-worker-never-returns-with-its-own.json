@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-251-worker-never-returns-with-its-own",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-20T14:32:28.019096Z",
   "created_at": "2026-09-20T13:19:40.351114Z",
   "default_impl": null,
   "default_review": null,
@@ -92,5 +92,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T14:29:45.340566Z"
+  "updated_at": "2026-09-20T14:32:28.019103Z"
 }
