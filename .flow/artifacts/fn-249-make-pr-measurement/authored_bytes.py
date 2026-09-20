@@ -46,7 +46,9 @@ def historical_diff(artifact):
         return None, str(error)
 
 
-def measure(path, diff_cache):
+def measure(path, diff_cache, mode="strict"):
+    if mode not in ("strict", "assumptionsAB"):
+        raise ValueError(f"unknown measurement mode: {mode}")
     raw = (ROOT / path).read_text(encoding="utf-8")
     complete = json.loads(raw)
     target = encoded(complete)
@@ -55,6 +57,13 @@ def measure(path, diff_cache):
     if key not in diff_cache:
         diff_cache[key] = historical_diff(complete)
     metadata, unavailable = diff_cache[key]
+    if mode == "assumptionsAB" and metadata is None:
+        # Assumption A: these values were verified when written, not re-proven here.
+        metadata = {
+            row["path"]: (row["changeType"], row["additions"], row["deletions"])
+            for group in complete["changeWalkthrough"]["groups"]
+            for row in group["files"]
+        }
     saved = dict.fromkeys((*FIELDS, "wholeRows"), 0)
     counts = dict.fromkeys(saved, 0)
 
@@ -63,6 +72,16 @@ def measure(path, diff_cache):
         expanded = flowctl._expand_pr_cognitive_aid_input(
             candidate, metadata, _errors=errors
         )
+        if mode == "assumptionsAB":
+            # Assumption B permits only URLs added where the stored row lacked one.
+            # Ordered canonical comparison still checks every other leaf and row.
+            for before_group, after_group in zip(
+                complete["changeWalkthrough"]["groups"],
+                expanded["changeWalkthrough"]["groups"], strict=False,
+            ):
+                for before_row, after_row in zip(before_group["files"], after_group["files"], strict=False):
+                    if "diffUrl" not in before_row:
+                        after_row.pop("diffUrl", None)
         return not errors and encoded(expanded) == target
 
     result = {
@@ -70,7 +89,7 @@ def measure(path, diff_cache):
         "completeBytes": len(target), "diffUnavailable": unavailable,
     }
     if not identical(sparse):
-        # Never manufacture metadata or rewrite old artifacts to make them fit.
+        # Carry the original size when this mode cannot prove identity.
         result["limit"] = "complete input itself does not expand identically"
         errors = []
         expanded = flowctl._expand_pr_cognitive_aid_input(
@@ -128,17 +147,7 @@ def measure(path, diff_cache):
     return result
 
 
-def main():
-    # Historical objects must already be local, even in a partial clone.
-    os.environ["GIT_NO_LAZY_FETCH"] = "1"
-    paths = subprocess.run(
-        ["git", "ls-files", "-z", ".flow/artifacts"], cwd=ROOT,
-        check=True, capture_output=True, encoding="utf-8",
-    ).stdout.split("\0")
-    paths = sorted(path for path in paths
-                   if "/pr-cognitive-aid/" in path and path.endswith(".json"))
-    cache = {}
-    rows = [measure(path, cache) for path in paths]
+def summarize(rows):
     complete = sum(row["completeBytes"] for row in rows)
     sparse = sum(row["sparseBytes"] for row in rows)
     report = {
@@ -154,6 +163,23 @@ def main():
             "savedBytes": sum(row["savedBytes"][field] for row in rows),
         } for field in (*FIELDS, "wholeRows")},
         "records": rows,
+    }
+    return report
+
+
+def main():
+    # Historical objects must already be local, even in a partial clone.
+    os.environ["GIT_NO_LAZY_FETCH"] = "1"
+    paths = subprocess.run(
+        ["git", "ls-files", "-z", ".flow/artifacts"], cwd=ROOT,
+        check=True, capture_output=True, encoding="utf-8",
+    ).stdout.split("\0")
+    paths = sorted(path for path in paths
+                   if "/pr-cognitive-aid/" in path and path.endswith(".json"))
+    cache = {}
+    report = {
+        mode: summarize([measure(path, cache, mode=mode) for path in paths])
+        for mode in ("strict", "assumptionsAB")
     }
     print(json.dumps(report, indent=2, ensure_ascii=False))
 

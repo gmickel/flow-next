@@ -91,7 +91,25 @@ only the 39 returned by the current index, with 2,236 file rows.
 | `attentionClass` | 177 | 7,639 |
 | Whole rows added by flowctl | 0 | 0 |
 
-Method and limits:
+**Conditional figure under assumptions A and B**
+
+| Measure | Bytes |
+|---|---:|
+| Complete artifacts as stored | 1,602,803 |
+| Sparse inputs under assumptions A and B | 1,335,726 |
+| Conditional reduction (16.6631%) | 267,077 |
+
+Assumption A uses each row's stored `changeType`, `additions` and `deletions`
+when Git cannot read its recorded range; verification against the live diff
+when the artifact was written is assumed, not re-proven here.
+Assumption B judges expansion identity modulo `diffUrl` values added to rows
+whose stored form had none; every other leaf still matches byte for byte,
+and a stored `diffUrl` differing from the derived anchor stays in the sparse input.
+Neither figure counts rows an agent would now simply not write, since every
+stored row has a summary, so the input-side saving from unlisted paths is not
+measurable from stored artifacts.
+
+Strict-mode method and limits:
 
 - [`authored_bytes.py`](authored_bytes.py) selects JSON files beneath
   `*/pr-cognitive-aid/` from `git ls-files .flow/artifacts`, reads UTF-8, and
@@ -133,8 +151,9 @@ Rerun from the repository root:
 python3 .flow/artifacts/fn-249-make-pr-measurement/authored_bytes.py
 ```
 
-The JSON output includes aggregate and per-artifact counts, unavailable-diff
-errors, added fields/rows preventing identity, and the per-field breakdown.
+The single JSON output reports both `strict` and `assumptionsAB` modes, each
+with aggregate and per-artifact counts, unavailable-diff errors, added fields/rows
+preventing identity, and the per-field breakdown.
 The indexed corpus and locally available Git objects determine the result.
 The baseline runs and `measure.sh` were neither changed nor executed for this
 figure. The after-input timing measurement remains pending.
