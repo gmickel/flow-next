@@ -441,7 +441,7 @@ Output (exhaustive shape):
 }
 ```
 
-A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per process names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
+A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
 
 `eligible` is true when every dependency is landed (`parent`, `parent_branch`, and `parent_branch_on_remote` are `null`; no remote read), or when exactly one unlanded dependency has all tasks done, its branch exists on origin, and no other unlanded sibling naming that parent has a branch on origin. A minted implicit task counts; zero tasks still means in progress. A locally closed but unlanded sibling still occupies the chain.
 

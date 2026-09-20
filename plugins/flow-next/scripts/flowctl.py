@@ -35626,7 +35626,7 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
 
     Resolve origin's default branch, then the chain-base cascade. Successful
     resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
-    With no base ref the local close stands, with one stderr notice per process.
+    With no base ref the local close stands, with one stderr notice per working directory.
     """
     if spec_data.get("status") != "done":
         return False, "", ""
