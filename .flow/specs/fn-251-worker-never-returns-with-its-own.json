@@ -8,12 +8,48 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-251-worker-never-returns-with-its-own",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-251-worker-never-returns-with-its-own.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "f5da3b0d358cdf630056b8a2e4039632a19f93b7bdcd25dff509848208b81587",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "564375ec617d92a836fbefae24f684f0c8c789e9",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 3667,
+      "output_sha256": "60e1d232503ecc9e10702e4627577cf99ee90e242ad4982e11fe6853ca97f9bb",
+      "reservation_id": "c8a6670518c44e548965e7e5647ac19c",
+      "round_consumed": true,
+      "scope": "impl:fn-251-worker-never-returns-with-its-own.1",
+      "superseded_by": null,
+      "task": "fn-251-worker-never-returns-with-its-own.1",
+      "timestamp": "2026-09-20T14:20:00.714095Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-251-worker-never-returns-with-its-own.1": 0
+  },
   "spec_path": ".flow/specs/fn-251-worker-never-returns-with-its-own.md",
   "status": "open",
   "title": "Worker never returns with its own commands still running",
@@ -28,5 +64,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T13:46:05.725443Z"
+  "updated_at": "2026-09-20T14:20:01.057604Z"
 }

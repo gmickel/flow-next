@@ -14,7 +14,9 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
   command it started and reads its exit code before returning, including a
   command the host moved to the background. Before accepting a return, work
   checks the task status and whether the worker left a command running; if it
-  did, work waits and resumes the same worker without counting a failed
+  did and the return is not a confirmed handover, work waits within the
+  dispatch TIMEBOX and sends a re-anchoring continuation worker into the same
+  workspace after command exit, without counting the early return as a failed
   attempt. The worker also inspects another tree state in a temporary worktree
   instead of `git stash`.
 
