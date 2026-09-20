@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-249-make-pr-aid-artifact-flowctl-fills-the",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-20T18:51:56.550642Z",
   "created_at": "2026-09-20T13:08:16.595275Z",
   "default_impl": null,
   "default_review": null,
@@ -100,5 +100,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T18:31:13.234284Z"
+  "updated_at": "2026-09-20T18:51:56.550648Z"
 }
