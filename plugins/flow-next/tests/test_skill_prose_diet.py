@@ -260,9 +260,11 @@ class MakePrFenceTestCase(unittest.TestCase):
                 f"{path}: make-pr Phase 0 must run as exactly THREE bash fences",
             )
             # §0.5 semantics intact: single show capture doubles as validation,
-            # and the autonomous hard-error on open tasks survives.
+            # and the autonomous hard-error on open tasks survives. fn-250 R2
+            # adds the spec-close fence to the same phase.
             self.assertIn('SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json', phase0)
             self.assertIn("Autonomous context cannot open PRs for incomplete specs", phase0)
+            self.assertIn("# fence:spec-close", phase0)
             # The old validation-only show must not come back.
             self.assertNotIn('show "$SPEC_ID" --json >/dev/null', phase0)
             # Interactive asks happen OUTSIDE fences: the fence exits with a

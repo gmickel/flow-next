@@ -312,7 +312,7 @@ class ChainRewriteTestCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="fn152-rewrite-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.w = ConsumerWorld(self.tmp)
-        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite")
+        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite").split("# fence:spec-close", 1)[0]
         self.parent, self.child, self.a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")
         self.main_tip = self.w.squash_merge("A")

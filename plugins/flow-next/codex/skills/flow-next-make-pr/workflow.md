@@ -275,10 +275,9 @@ Every task under the spec should be `done` before opening a PR. The cognitive-ai
 
 | Context | Behavior |
 |---------|----------|
-| `OPEN_COUNT == 0` | Proceed silently. |
-| `OPEN_COUNT > 0` AND `DRY_RUN == 1` | Warn on stderr but proceed (`--dry-run` is for inspection — body should still render). |
+| `OPEN_COUNT == 0` | On a real create, close and commit in §0.6c before exporting the aid. |
 | `OPEN_COUNT > 0` AND (`RALPH == 1` OR `AUTONOMOUS == 1`) | Hard-error with the open-task list. Autonomous loops should not open PRs for incomplete specs. |
-| `OPEN_COUNT > 0` AND interactive | **Warn on stderr and proceed** (no prompt — autonomous create). The open items make the PR a **draft** via the §4.2 heuristic, which is exactly the "open a draft early" workflow; the warning names the open tasks + suggests `/flow-next:work` so the user can finish + flip to `--ready`. |
+| `OPEN_COUNT > 0` otherwise (interactive, `--dry-run`) | **Warn on stderr and proceed without closing** (no prompt). The spec stays open, and the open items make the PR a **draft** via the §4.2 heuristic; the warning names the open tasks. |
 
 ### 0.6 — Existing-PR refusal
 
@@ -298,6 +297,7 @@ if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
   echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2
   exit 1
 fi
+SPEC_ID=$(printf '%s' "$SPEC_JSON" | jq -r '.id')
 OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
 OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
 
@@ -307,7 +307,7 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
     exit 2
   else
     # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
-    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
   fi
 fi
 
@@ -378,6 +378,41 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
   CHAIN_PARENT=""
 fi
 
+# --- §0.6c: close completed spec before export and PR creation ---
+# fence:spec-close
+SPEC_CLOSED=0
+if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$OPEN_COUNT" -eq 0 ]]; then
+  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
+  [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
+  [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || {
+    echo "Error: commit pending changes before make-pr closes the spec" >&2; exit 1;
+  }
+  if [[ "$(printf '%s' "$SPEC_JSON" | jq -r '.branch_name // empty')" != "$CURRENT_BRANCH" ]]; then
+    "$FLOWCTL" spec set-branch "$SPEC_ID" --branch "$CURRENT_BRANCH" --json || {
+      echo "Error: spec branch update failed; PR not opened" >&2; exit 1;
+    }
+  fi
+  "$FLOWCTL" spec close "$SPEC_ID" --json || {
+    echo "Error: spec close failed; PR not opened (see reason above)" >&2; exit 1;
+  }
+  CLOSE_PATHS=(".flow/specs/$SPEC_ID.json")
+  while IFS= read -r TASK_ID; do
+    CLOSE_PATHS+=(".flow/tasks/$TASK_ID.json")
+  done < <(printf '%s' "$SPEC_JSON" | jq -r '.tasks[]?.id')
+  git -C "$REPO_ROOT" add -- "${CLOSE_PATHS[@]}" || {
+    echo "Error: staging spec close failed; PR not opened" >&2; exit 1;
+  }
+  if ! git -C "$REPO_ROOT" diff --cached --quiet -- "${CLOSE_PATHS[@]}"; then
+    git -C "$REPO_ROOT" commit -m "chore(flow): close $SPEC_ID" -- "${CLOSE_PATHS[@]}" || {
+      echo "Error: spec close commit failed; PR not opened" >&2; exit 1;
+    }
+  fi
+  HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
+  COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD)..HEAD")
+  SPEC_CLOSED=1
+fi
+# fence:spec-close-end
+
 # --- §0.7: capture pre-flight context (same fence continues) ---
 PHASE0_CONTEXT=$(jq -n \
   --arg spec "$SPEC_ID" \
@@ -386,6 +421,7 @@ PHASE0_CONTEXT=$(jq -n \
   --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
   --argjson commits_ahead "$COMMITS_AHEAD" \
   --argjson open_tasks "$OPEN_COUNT" \
+  --argjson spec_closed "$SPEC_CLOSED" \
   --argjson dry_run "$DRY_RUN" \
   --argjson ralph "$RALPH" \
   --argjson autonomous "$AUTONOMOUS" \
@@ -396,7 +432,7 @@ PHASE0_CONTEXT=$(jq -n \
   --arg parent_pr "${PARENT_PR:-}" \
   --arg parent_pr_state "${PARENT_PR_STATE:-}" \
   '{spec:$spec, base:$base, head:$head, branch:$branch,
-    commits_ahead:$commits_ahead, open_tasks:$open_tasks,
+    commits_ahead:$commits_ahead, open_tasks:$open_tasks, spec_closed:($spec_closed==1),
     dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
     no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
     draft_force:$draft_force,
@@ -404,6 +440,8 @@ PHASE0_CONTEXT=$(jq -n \
 ```
 
 Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values. `chain_parent`, `parent_pr`, and `parent_pr_state` are empty strings on a non-chained branch; the §4.2 draft matrix and the §4.6 stack link read them back from the context (`jq -r '.chain_parent // empty'`).
+
+**§0.6c close rules.** The close commit is the last commit before opening the PR. `PHASE0_CONTEXT.head` is refreshed before export and aid composition; later rendering must preserve it. A failed close or commit leaves local changes for recovery and stops before opening the PR. `--update` only refreshes the existing body and never closes.
 
 **§0.6b rewrite rules.** The merged-parent rewrite is the only history rewrite outside land, bounded to a branch with no open or merged PR, on a create run only. The boundary is the ancestor SHA the chain rung detected, never a scratch value: switching branches between work and make-pr, a missing `.flow/tmp/spec_base`, or a fresh clone changes nothing. A rebase conflict aborts the rebase (HEAD restored) and exits 2 naming the files; a lease failure restores the pre-rebase HEAD and exits 2 `NEEDS_HUMAN: <branch> moved on origin during rewrite`. `--dry-run` prints `would rebase <branch> onto <chain_base> from <boundary>` on stderr and renders against the current diff; `--update` never rewrites (a merged parent under `--update` is land's retarget case).
 
@@ -414,11 +452,11 @@ Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values. `chain_parent`
 - `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2) and validated via `flowctl show <spec-id> --json` (spec exists).
 - `BASE_REF` resolved through the cascade (`--base` → chain parent branch when the parent PR is open or absent → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2) and validated via `git rev-parse --verify --quiet`. Chain detection ran from history (merge-base against each dependency's branch tip or merged-PR head, not on the chain base); a merged parent set `CHAIN_REWRITE=1` and the §0.6b fence rewrote the branch on a create run (never under `--dry-run` / `--update`); a closed-unmerged parent or an unreachable parent history exited 2 `NEEDS_HUMAN`.
 - HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
-- Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt) — interactively and under `--dry-run` alike. Ralph/autonomous hard-errors (exit 2).
+- Incomplete tasks: a stderr warning + **proceed as draft without closing** (no prompt), interactively and under `--dry-run` alike. Ralph/autonomous hard-errors (exit 2). A real create with all tasks done sets the spec branch to the PR head branch, closes, and commits the spec and task statuses before Phase 1. Dry-run and body-only `--update` never close.
 - Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty — no OPEN PR on the current branch (CLOSED/MERGED PRs never trigger refusal).
 - `PHASE0_CONTEXT` JSON built (spec / base / head / branch / commits_ahead / open_tasks / flags / draft_force) and ready for Phase 1.
 
-**Failure modes:** gh missing / unauthenticated → exit 1 + install / `gh auth login` instructions (both skipped under `--dry-run`); spec or base unresolved under Ralph/autonomous → exit 2; base ref invalid, HEAD == BASE, unrelated histories (no merge-base), or 0 commits since merge-base → exit 1; open tasks under Ralph/autonomous → exit 2; OPEN PR exists → exit 1 + `/flow-next:resolve-pr` hint.
+**Failure modes:** gh missing / unauthenticated → exit 1 + install / `gh auth login` instructions (both skipped under `--dry-run`); spec or base unresolved under Ralph/autonomous → exit 2; base ref invalid, HEAD == BASE, unrelated histories (no merge-base), or 0 commits since merge-base → exit 1; open tasks under Ralph/autonomous → exit 2; branch update, close, staging or commit failure → stop before export/create and report the underlying error; OPEN PR exists → exit 1 + `/flow-next:resolve-pr` hint.
 
 ---
 
