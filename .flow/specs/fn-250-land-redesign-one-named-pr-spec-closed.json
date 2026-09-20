@@ -131,7 +131,7 @@
     "impl:fn-250-land-redesign-one-named-pr-spec-closed.1": 0
   },
   "spec_path": ".flow/specs/fn-250-land-redesign-one-named-pr-spec-closed.md",
-  "status": "open",
+  "status": "done",
   "title": "Land redesign: one named PR, spec closed at the PR head",
   "tracker": {
     "baseHashFlow": null,
@@ -144,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T16:19:16.161499Z"
+  "updated_at": "2026-09-20T16:20:23.196341Z"
 }

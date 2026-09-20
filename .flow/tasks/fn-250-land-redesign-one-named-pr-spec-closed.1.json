@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-250-land-redesign-one-named-pr-spec-closed",
   "spec_path": ".flow/tasks/fn-250-land-redesign-one-named-pr-spec-closed.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Land redesign: one named PR, spec closed at the PR head",
   "updated_at": "2026-09-20T13:52:55.276083Z"
 }
