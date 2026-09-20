@@ -165,7 +165,7 @@ class SparseInputTests(unittest.TestCase):
                 self.assertEqual(len(expanded), len(groups))
                 target = step_indexes[-2] if fill_last_step else step_indexes[-1]
                 self.assertEqual(expanded[target]["files"][-1]["path"], omitted)
-                for old, new in zip(groups, expanded):
+                for old, new in zip(groups, expanded, strict=True):
                     self.assertEqual({k: v for k, v in old.items() if k != "files"},
                                      {k: v for k, v in new.items() if k != "files"})
                     self.assertEqual(new["files"][:len(old["files"])], old["files"])

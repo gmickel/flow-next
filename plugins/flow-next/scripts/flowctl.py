@@ -29529,28 +29529,28 @@ def validate_pr_cognitive_aid(
                 refs_valid = False
         r_ids = strings(record.get("rIds", []), f"{path}.rIds")
         task_ids = strings(record.get("taskIds", []), f"{path}.taskIds")
-        for field, ids in (("rIds", r_ids), ("taskIds", task_ids)):
+        for ref_field, ids in (("rIds", r_ids), ("taskIds", task_ids)):
             for index, identifier in enumerate(ids or []):
                 if identifier is None:
                     continue
-                if field == "rIds" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(identifier):
-                    fail(f"{path}.{field}[{index}]", "must be a canonical R-ID")
+                if ref_field == "rIds" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(identifier):
+                    fail(f"{path}.{ref_field}[{index}]", "must be a canonical R-ID")
                     continue
                 if (
-                    field == "taskIds"
+                    ref_field == "taskIds"
                     and spec_id is not None
                     and (not is_task_id(identifier) or spec_id_from_task(identifier) != spec_id)
                 ):
-                    fail(f"{path}.{field}[{index}]", "must identify a task of artifact.specId")
+                    fail(f"{path}.{ref_field}[{index}]", "must identify a task of artifact.specId")
                     continue
                 if refs_valid and sources is not None and not any(
-                    source_by_id.get(source_id, {}).get("kind") == ("rid" if field == "rIds" else "task")
+                    source_by_id.get(source_id, {}).get("kind") == ("rid" if ref_field == "rIds" else "task")
                     and source_by_id.get(source_id, {}).get("ref") == identifier
                     for source_id in refs or []
                 ):
                     fail(
-                        f"{path}.{field}",
-                        f"{identifier} lacks a same-record {'rid' if field == 'rIds' else 'task'} sourceRef",
+                        f"{path}.{ref_field}",
+                        f"{identifier} lacks a same-record {'rid' if ref_field == 'rIds' else 'task'} sourceRef",
                     )
         return refs if refs_valid and sources is not None else None
 

@@ -134,7 +134,7 @@ class TestCmdInitWritesGitignore(unittest.TestCase):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
                 repo = Path(tmp)
 
-                def git(*args: str) -> subprocess.CompletedProcess:
+                def git(*args: str, repo: Path = repo) -> subprocess.CompletedProcess:
                     return subprocess.run(
                         ["git", *args], cwd=repo, capture_output=True,
                         text=True, encoding="utf-8", check=True,
