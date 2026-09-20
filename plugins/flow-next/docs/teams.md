@@ -464,7 +464,7 @@ What `.flow/` looks like with N developers in parallel:
 
 ## Autonomous work in a team
 
-Use `/flow-next:flow --auto` to drive one ready spec at a time to its draft PR. Add `--until=merge` for the selected spec to continue through land under the team's authorized merge policy, or run land independently. Release and tracker actions retain their existing authorization and configuration. Repeat the invocation per item, or run `flow --auto --tick` under a host loop where sessions are short. Keep overlapping runs in separate clones or isolated workspaces and give each a clear scope.
+Use `/flow-next:flow --auto` to drive one ready spec at a time to its draft PR. Add `--until=merge` for the selected spec to continue through land under the team's authorized merge policy, or run land independently. The configured tracker touchpoint runs after a confirmed merge; release preparation is a separate step following the repository's release documentation. Repeat the invocation per item, or run `flow --auto --tick` under a host loop where sessions are short. Keep overlapping runs in separate clones or isolated workspaces and give each a clear scope.
 
 Humans approve the intent and the conditions for merging. The spec and PR remain the handover surfaces whether the run is supervised or unattended. Use the [orchestration guide](orchestration.md#chaining-the-loops) for driver recipes.
 

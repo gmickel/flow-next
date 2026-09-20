@@ -12,6 +12,7 @@ Run:
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
@@ -63,10 +65,12 @@ class ChainCliTestCase(unittest.TestCase):
 
     def spec(self, title: str, *, tasks: int = 1, done: bool = False, status: str | None = None, deps: list[str] = ()) -> str:
         res = self.flowctl("spec", "create", "--title", title)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         spec_id = json.loads(res.stdout)["id"]
         self.flowctl("spec", "set-branch", spec_id, "--branch", spec_id)
         for i in range(tasks):
             res = self.flowctl("task", "create", "--spec", spec_id, "--title", f"{title} task {i}")
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
             task_id = json.loads(res.stdout)["id"]
             if done:
                 self.patch(self.repo / ".flow" / "tasks" / f"{task_id}.json", status="done")
@@ -100,8 +104,148 @@ class ChainCliTestCase(unittest.TestCase):
 
     def test_all_dependencies_done_is_eligible_with_null_parent(self) -> None:
         parent = self.spec("parent", done=True, status="done")
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "closed parent at base")
+        git(self.repo, "push", "-q", "origin", "main")
         rc, out = self.chain(self.spec("child", deps=[parent]))
         self.assertEqual((rc, out["eligible"], out["parent"], out["reason"]), (0, True, None, "no open dependency"))
+
+    def closed_parent_branch(self) -> tuple[str, str]:
+        parent = self.spec("parent", done=True)
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "open parent at base")
+        git(self.repo, "push", "-q", "origin", "main")
+        git(self.repo, "checkout", "-q", "-b", parent)
+        closed = self.flowctl("spec", "close", parent)
+        self.assertEqual(closed.returncode, 0, closed.stdout + closed.stderr)
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "close on parent branch")
+        child = self.spec("child", deps=[parent])
+        return parent, child
+
+    def assert_dependency_blocked(self, parent: str, child: str) -> None:
+        ready = json.loads(self.flowctl("ready", "--spec", child).stdout)
+        self.assertEqual((ready["ready"], ready["blocked_by_specs"]), ([], [parent]))
+        nxt = json.loads(self.flowctl("next").stdout)
+        self.assertEqual(nxt["blocked_specs"], {child: [parent]})
+        rows = {r["id"]: r for r in json.loads(self.flowctl("ready", "--all").stdout)["specs"]}
+        self.assertEqual(rows[child]["blockedBy"], [parent])
+
+    def test_branch_closed_parent_stays_chained_and_unpushed_parent_blocks(self) -> None:
+        parent, child = self.closed_parent_branch()
+        rc, out = self.chain(child)
+        self.assertEqual((rc, out["eligible"], out["parent"]), (0, False, parent))
+        self.assert_dependency_blocked(parent, child)
+        # Publishing the branch permits the existing chain admission waiver,
+        # but must not erase the parent before it has merged.
+        self.push_branch(parent)
+        _, out = self.chain(child)
+        self.assertEqual((out["eligible"], out["parent"]), (True, parent))
+
+    def test_base_closed_parent_is_unchained_and_unblocked(self) -> None:
+        parent, child = self.closed_parent_branch()
+        git(self.repo, "push", "-q", "origin", "HEAD:main")
+        _, out = self.chain(child)
+        self.assertEqual((out["eligible"], out["parent"]), (True, None))
+        ready = json.loads(self.flowctl("ready", "--spec", child).stdout)
+        self.assertEqual(len(ready["ready"]), 1)
+        self.assertNotIn("blocked_by_specs", ready)
+        nxt = json.loads(self.flowctl("next").stdout)
+        self.assertEqual((nxt["status"], nxt["spec"]), ("work", child))
+        rows = {r["id"]: r for r in json.loads(self.flowctl("ready", "--all").stdout)["specs"]}
+        self.assertEqual(rows[child]["blockedBy"], [])
+
+    def test_no_base_ref_lets_the_local_close_stand(self) -> None:
+        # A repo with no default branch to merge into (or no git at all) has
+        # no base evidence to wait for; the pre-chain reading of done applies.
+        parent, child = self.closed_parent_branch()
+        self.push_branch(parent)
+        git(self.repo, "update-ref", "-d", "refs/heads/main")
+        git(self.repo, "update-ref", "-d", "refs/remotes/origin/main")
+        second = self.spec("second closed parent", done=True, status="done")
+        self.flowctl("spec", "add-dep", child, second)
+        res = self.flowctl("spec", "chain", child)
+        out = json.loads(res.stdout)
+        self.assertEqual((res.returncode, out["eligible"], out["parent"]), (0, True, None))
+        self.assertEqual(res.stderr.count("note: no base ref resolved"), 1)
+        for token in ("refs/remotes/origin/HEAD", "origin/main", "main",
+                      "origin/master", "master", "using local status"):
+            self.assertIn(token, res.stderr)
+            self.assertIn(token, out["reason"])
+        ready = json.loads(self.flowctl("ready", "--spec", child).stdout)
+        self.assertEqual(len(ready["ready"]), 1)
+
+    def test_stale_base_with_deleted_parent_branch_names_base(self) -> None:
+        parent = self.spec("parent", done=True, status="done")
+        child = self.spec("child", deps=[parent])
+        git(self.repo, "checkout", "-q", "-b", parent)
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "closed parent")
+        self.push_branch(parent)
+        # Model a merge and branch deletion elsewhere, without refreshing
+        # this checkout's origin/main (where the parent is absent).
+        git(self.origin, "update-ref", "refs/heads/main", git(self.repo, "rev-parse", "HEAD"))
+        git(self.origin, "update-ref", "-d", f"refs/heads/{parent}")
+        _, out = self.chain(child)
+        self.assertFalse(out["eligible"])
+        self.assertEqual(out["reason"],
+                         f"dependency {parent} closed locally but not recorded at origin/main; fetch the base or land it")
+        self.assertNotIn("push it", out["reason"])
+
+    def test_brief_reads_local_status_without_git_or_remote(self) -> None:
+        # brief keeps its zero-git contract: a parent closed on its own branch
+        # reads unblocked there, as the schedulers' chain-parent waiver does,
+        # and a broken remote cannot affect it.
+        parent, child = self.closed_parent_branch()
+        self.push_branch(parent)
+        git(self.repo, "remote", "set-url", "origin", str(self.tmp / "nowhere.git"))
+        res = self.flowctl("brief", "--full")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        out = json.loads(res.stdout)
+        self.assertIn(child + ".1", json.dumps(out["actionable_tasks"]["items"]))
+
+    def test_base_resolution_cache_is_success_only_and_cwd_scoped(self) -> None:
+        scripts_dir = str(Path(__file__).resolve().parents[1] / "scripts")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        self.addCleanup(sys.path.remove, scripts_dir)
+        spec = importlib.util.spec_from_file_location("flowctl_chain_cache", FLOWCTL_PY)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        self.addCleanup(sys.modules.pop, spec.name)
+        spec.loader.exec_module(mod)
+        previous = Path.cwd()
+        self.addCleanup(os.chdir, previous)
+        os.chdir(self.repo)
+        git(self.repo, "checkout", "-q", "-b", "feature")  # off the base: the base read decides
+        parent = self.spec("parent", done=True, status="done")
+        with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
+            for _ in range(2):
+                self.assertFalse(mod.spec_landed_at_base(self.repo / ".flow", parent, {"status": "done"})[0])
+            self.assertEqual(sum(c.args[0][-1] == "refs/remotes/origin/HEAD" for c in run.call_args_list), 1)
+        other = self.tmp / "other"
+        other.mkdir()
+        git(other, "init", "-q", "-b", "develop")
+        os.chdir(other)
+        with mock.patch.object(mod.subprocess, "run", wraps=subprocess.run) as run:
+            for _ in range(2):
+                self.assertTrue(mod.spec_landed_at_base(other / ".flow", parent, {"status": "done"})[0])
+            self.assertEqual(sum(c.args[0][-1] == "refs/remotes/origin/HEAD" for c in run.call_args_list), 2)
+        self.assertNotIn(other, mod._SPEC_BASE_CACHE)
+
+    def test_close_on_the_base_branch_itself_stands(self) -> None:
+        # Work done directly on the base has nothing left to merge.
+        parent = self.spec("parent", done=True, status="done")
+        child = self.spec("child", deps=[parent])
+        _, out = self.chain(child)
+        self.assertEqual((out["eligible"], out["parent"]), (True, None))
+
+    def test_done_parent_absent_at_base_is_not_landed(self) -> None:
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        parent = self.spec("parent", done=True, status="done")
+        child = self.spec("child", deps=[parent])
+        _, out = self.chain(child)
+        self.assertEqual((out["eligible"], out["parent"]), (False, parent))
+        self.assert_dependency_blocked(parent, child)
 
     def test_open_parent_with_all_tasks_done_and_branch_on_origin_is_eligible(self) -> None:
         parent = self.spec("parent", done=True)
@@ -157,6 +301,31 @@ class ChainCliTestCase(unittest.TestCase):
         git(self.tmp, "--git-dir", str(self.origin), "update-ref", "-d", f"refs/heads/{sibling}")
         _, out = self.chain(self.spec("third child", deps=[parent]))
         self.assertTrue(out["eligible"])
+
+    def test_closed_unmerged_sibling_still_occupies_chain(self) -> None:
+        # Seen from a branch that carries the sibling's close (on the base
+        # itself the sibling still reads open and occupies the chain as before).
+        git(self.repo, "checkout", "-q", "-b", "feature")
+        parent = self.spec("parent", done=True)
+        self.push_branch(parent)
+        sibling = self.spec("first child", done=True, status="done", deps=[parent])
+        self.push_branch(sibling)
+        _, out = self.chain(self.spec("second child", deps=[parent]))
+        self.assertEqual((out["eligible"], out["parent"]), (False, parent))
+        self.assertIn(sibling, out["reason"])
+
+    def test_legacy_base_close_is_landing_evidence(self) -> None:
+        parent = self.spec("parent", done=True, status="done")
+        canonical = self.repo / ".flow" / "specs" / f"{parent}.json"
+        legacy = self.repo / ".flow" / "epics" / f"{parent}.json"
+        legacy.parent.mkdir(exist_ok=True)
+        canonical.rename(legacy)
+        git(self.repo, "add", ".flow")
+        git(self.repo, "commit", "-q", "-m", "closed legacy parent at base")
+        git(self.repo, "push", "-q", "origin", "main")
+        legacy.rename(canonical)
+        _, out = self.chain(self.spec("child", deps=[parent]))
+        self.assertEqual((out["eligible"], out["parent"]), (True, None))
 
     def test_remote_failure_is_distinct_from_an_absent_branch(self) -> None:
         parent = self.spec("parent", done=True)

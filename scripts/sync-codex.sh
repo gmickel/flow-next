@@ -1773,7 +1773,7 @@ generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derive
 # the stub forwards to flow-next-flow --auto --tick. Remove this line, the stub dir, and
 # the commands/pilot.md shim in the release after flow --auto ships.
 generate_openai_yaml "flow-next-pilot" "Flow Pilot (deprecated alias)" "Deprecated alias for flow-next-flow --auto --tick; invoke the flow skill with --auto instead" "#3B82F6" false
-generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" true
+generate_openai_yaml "flow-next-land" "Flow Land" "Resolve and merge one named, authorized PR; terminal LAND_VERDICT line" "#3B82F6" true
 
 # Review skills (red, implicit)
 generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" true
@@ -1837,7 +1837,7 @@ DIET = {
     "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
     "flow-next-work": "Execute a flow-next spec or task end-to-end with worker subagents, gates, and commits. Use when asked to work on, implement, or execute fn-N.",
     "flow-next-pilot": "Deprecated alias for flow-next-flow --auto --tick (one hop, PILOT_VERDICT line); removed next release. Invoke the flow skill with --auto instead.",
-    "flow-next-land": "Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.",
+    "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
     "flow-next-refine": "Refine a spec or task before building: deep Q&A (business, technical, both) or a read-only research pass over external docs. Use to refine or interrogate requirements or read up on a new library.",

@@ -6,6 +6,8 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
 ## Contents
 
+- [Landing upgrade](#landing-upgrade)
+
 - [Available Commands](#available-commands)
 - [Multi-User Safety](#multi-user-safety)
 - [File Structure](#file-structure)
@@ -420,7 +422,7 @@ flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 
 ### spec chain
 
-Chain eligibility of a dependent spec (fn-152): may this spec start now, and on which parent's branch. Read-only; the single owner of the rule every consumer applies (`flow --auto` selection in ready and backlog mode, attended flow's next-item ladder, `/flow-next:work` at branch creation, and flowctl's own task-admission gate below). Never calls `gh`; at most one `git ls-remote --heads origin` per invocation, and none when the spec has no dependencies.
+Chain eligibility of a dependent spec: may this spec start now, and on which parent's branch. The chain consumers and task-admission gates share this read-only predicate. Base resolution reads `refs/remotes/origin/HEAD`, then probes its target and `origin/main`, `main`, `origin/master`, `master` in order with local `git rev-parse`. A successful ref and commit are cached per working directory for the process. Each locally done dependency and each locally done sibling examined uses `git ls-tree` and, when its spec exists, `git show` to read base evidence. These object reads may repeat across admission and chain checks. There is at most one existing `git ls-remote --heads origin` per invocation, shared across specs and needed only for a chain candidate. No fetch occurs; with no dependencies there is no chain git read.
 
 ```bash
 flowctl spec chain fn-2 [--json]
@@ -439,7 +441,25 @@ Output (exhaustive shape):
 }
 ```
 
-`eligible` is true when every dependency is `done` (`parent`, `parent_branch`, `parent_branch_on_remote` are `null`, `reason` is `no open dependency`; no remote read), or when exactly one dependency is open with all of its tasks done (a `no_plan` spec's minted implicit task counts; a zero-task spec is still in progress), every other dependency is `done`, that parent's `branch_name` exists on `origin`, and no other open spec naming the same parent already has its branch on origin. Otherwise `eligible` is false with `parent` still naming the candidate parent where one exists and one of these reasons: `dependency <id> in progress`, `two open parents: <id>, <id>; chains are linear`, `parent branch <b> not on origin; push it or land the parent first` (`parent_branch_on_remote: false`), `parent <id> already chained by <sibling-id>`, or `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch). Exit 0 on any evaluation including `eligible: false`; exit 2 when the spec does not exist or a dependency names a missing spec (the `validate` rule).
+A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. On a checkout of the base branch itself the local close stands, since work done directly on the base has nothing left to merge. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
+
+`eligible` is true when every dependency is landed (`parent`, `parent_branch`, and `parent_branch_on_remote` are `null`; no remote read), or when exactly one unlanded dependency has all tasks done, its branch exists on origin, and no other unlanded sibling naming that parent has a branch on origin. A minted implicit task counts; zero tasks still means in progress. A locally closed but unlanded sibling still occupies the chain.
+
+The `reason` vocabulary is below. Base diagnostics are retained alongside the evaluation reason when several conditions apply.
+
+- `no open dependency`
+- `parent open, all tasks done, branch on origin`
+- `parent closed locally, all tasks done, branch on origin`
+- `dependency <id> in progress`
+- `two open parents: <id>, <id>; chains are linear`
+- `parent branch <b> not on origin; push it or land the parent first` for a locally open parent (`parent_branch_on_remote: false`)
+- `dependency <id> closed locally but not recorded at <base>; fetch the base or land it`, including a locally closed parent whose branch is gone from origin
+- `parent <id> already chained by <sibling-id>`
+- `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch)
+- `base query failed: <error>` (unreadable base evidence blocks admission)
+- `no base ref resolved; tried <refs>; using local status` (the fallback notice)
+
+Exit 0 on any evaluation including `eligible: false`; exit 2 when the spec does not exist or a dependency names a missing spec (the `validate` rule).
 
 ### spec set-title
 
@@ -451,7 +471,20 @@ flowctl spec set-title fn-1 --title "New title" [--json]
 
 ### spec close
 
-Close spec (requires all tasks done).
+Close the spec and write each task's final `status: done` into its tracked
+JSON definition. A spec with any incomplete task refuses the close
+before files change.
+Runtime status still takes precedence where present; a fresh clone reads the
+committed final statuses. This command writes files; the caller commits them.
+JSON output includes `modified_paths`, naming the spec file and every task file
+rewritten. Tracked files left modified also produce a stderr advisory.
+
+Make-pr binds the spec's `branch_name` to the PR head branch and commits the
+close before composing its head-bound aid and opening the PR. Incomplete
+interactive draft PRs keep the spec open and cannot land. Dry-run and body-only
+updates never close. Creating or starting a task on a closed spec reopens it and reports the
+rewritten spec file (`reopened_spec`, `modified_paths`) so the caller commits
+it with the task; finishing that follow-up does not close it automatically.
 
 ```bash
 flowctl spec close fn-1 [--json]
@@ -702,7 +735,7 @@ flowctl show fn-1.2 [--json]   # Task only
 
 Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ - absent on-disk key reads `false`, so consumers always see a stable boolean).
 
-Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file - a snapshot that can be arbitrarily stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only - no status semantics change, and the field is never persisted.
+Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file - a snapshot finalized by spec close; older or still-open work can be stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only - no status semantics change, and the field is never persisted.
 
 ### specs
 
@@ -847,7 +880,7 @@ Output:
 }
 ```
 
-Spec-level deps gate the whole spec (same rule as `next` and `ready --all`): when the spec's `depends_on_epics` include a spec that is missing or not `done`, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. One exception (fn-152): the **chain parent** [`spec chain`](#spec-chain) names — an open dependency with every task done and its branch on origin — counts as satisfied, so a chained spec dispatches its tasks; every other not-done dependency still empties the frontier, and task-level `depends_on` is unchanged.
+Spec-level deps gate the whole spec. `ready`, `next`, and `ready --all` share the landed-at-base evidence rule described in [`spec chain`](#spec-chain), including the no-base fallback and notice. Missing dependencies and unreadable base evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` runs no git subprocess, so it reads a dependency's local status: a dependency closed on its own branch and not yet merged reads unblocked there, which matches the schedulers whenever the chain-parent waiver applies, and `spec chain` is the authority otherwise. Task-level `depends_on` is unchanged.
 
 ```json
 {
@@ -995,15 +1028,12 @@ flowctl validate --all [--json]
 ```
 
 The **epic/task status mismatch** finding ("Epic marked done but task X is
-...") is durability-aware (fn-192, #347): task status is runtime-only and
-never travels with git, so on a fresh clone every done spec's tasks read as
-their committed snapshot (`todo`). When the status came from that snapshot
-and it carries no runtime progress markers, the finding is a WARNING
-(`committed snapshot; runtime state absent, status may be stale`) and does
-not fail the run; a runtime-sourced mismatch, or a legacy repo whose tracked
-definition carries real progress, stays an error. `validate` on a fresh
-clone is therefore meaningful again - including the work skill's own Phase 5
-`validate --spec` verify step.
+...") is durability-aware (fn-192, #347). Closing now persists final task
+statuses, so fresh clones of newly closed specs read done. Older closed specs
+can still contain a stale committed `todo` snapshot. Without runtime progress
+markers that legacy mismatch is a WARNING (`committed snapshot; runtime state
+absent, status may be stale`); runtime-sourced mismatches and tracked definitions
+with real progress remain errors.
 
 Validate also reports **orphaned evidence commits** (fn-180, #302): a warning
 per `evidence.commits[]` entry that exists in the object store but is no
@@ -1013,8 +1043,7 @@ behind. Reachable commits are silent; tokens that are not commits in this repo
 corrupt exactly the evidence the record exists to hold. Read-only: validate
 never rewrites a recorded SHA and the warning never fails the run. Cost: two
 batched git reads per invocation regardless of commit or spec count
-(`cat-file --batch-check` + one streamed `rev-list`), so the land loop can
-call it freely.
+(`cat-file --batch-check` + one streamed `rev-list`), independent of spec count.
 
 Single spec output:
 ```json
@@ -1061,7 +1090,7 @@ flowctl judge --preset route --spec <spec-id> --explain --json
 flowctl judge --preset qa-gate --spec <spec-id> --json
 ```
 
-Presets: `clean-review`, `route`, `qa-gate`, `fork-gate`, `memory-rerank`, `tier`.
+Presets: `route`, `qa-gate`, `fork-gate`, `memory-rerank`, `tier`.
 The [judge reference](judge.md) specifies their questions, required state, floors,
 route precedence, and fallback behavior. The command reads `TYPESAFE_API_KEY`
 from the environment at call time. `judge.enabled=false` disables it.
@@ -1146,23 +1175,15 @@ flowctl config set memory.enabled false [--json]
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
 | `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** - so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active - make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge - see [`tracker-sync.md`](tracker-sync.md)). But the `/flow-next:tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`**). |
 | `tracker.perEvent.qa` | string | `off` | **`/flow-next:qa` verdict post.** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** - `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and - unlike the other events - NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
-| `tracker.perEvent.land.merged` | string | `off` | **`/flow-next:land` post-merge touchpoint (1.14.0+), and the sole `Done` driver.** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) - status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **Active by default whenever the bridge is active.** - a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort - a tracker failure never blocks land's tail or changes the PR's verdict. |
+| `tracker.perEvent.land.merged` | string | `off` | After a confirmed merge, land uses the tracker API in memory to project the terminal status for each matching spec whenever the bridge is active. This leaf does not gate terminal status. No repository write or verdict comment is needed. A failed touchpoint preserves `MERGED` and names the merge commit; rerunning the merged PR retries only that touchpoint. |
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
 | `tracker.perTracker.repo` / `project` / `host` | string | `null` | Tracker-specific repo/project linkage. **GitHub** writes `repo` (`owner/name`). **GitLab** writes `project` (the group/sub-group/project path, e.g. `group/subgroup/project`; URL-encoded once for the API, never double-encoded) and, for self-managed hosts, `host`. Written by the `/flow-next:tracker-sync` discovery ceremony on confirmation. |
 | `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` / `{}` / `true` | **Jira linkage.** `baseUrl`, `projectKey`, `authScheme`, and `apiVersion` default to `null`; `statusMap` defaults to `{}`; `sslVerify` defaults to `true`. The resolver pins `tracker.resolved.destination.apiVersion` to `2` for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact, and migration rewrites a legacy configured `3` to `2`. `baseUrl` is the site base; `projectKey` is the JQL scope; `authScheme` is `cloud-basic` or `bearer-pat`; `statusMap` maps normalized slots to Jira transition targets. `sslVerify=false` is an explicit opt-out for a self-hosted certificate. Written by the discovery ceremony on confirmation (references/jira.md). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. Strict enum: invalid CLI writes are rejected, and malformed persisted values return runtime `INVALID_INPUT` before status claims or lifecycle sequence work. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
 | `tracker.readyState` | string | `null` | **Readiness projection (1.12.0+).** The tracker workflow state that means "ready for work" - a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` - a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready - a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag - **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
-| `land.release` | bool | `true` | **`/flow-next:land` (1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
-| `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
-| `land.patienceMinutesAfterReview` | int or `null` | `null` | **Opt-in `silence`-only refinement of the patience window.** Set with `flowctl config set land.patienceMinutesAfterReview 15`. Active only as a positive integer: unset, `null`, and `0` mean OFF (`0` is off on purpose - a zero grace period is the strict-silence anti-pattern the window exists to prevent). Any other value is invalid under the published schema (`integer|null`); the land read treats a hand-edited or pre-schema string (`""`, non-numeric) as off rather than failing the tick - defensive handling, not a documented value. When active AND `land.reviewSignal` is `silence` AND the latest automated review event is head-current (a reviews-API automated review whose `commit_id` is the current head **or** that was submitted after the last push - some bots attach re-reviews to older commits - or a qualifying clean-review comment naming the current head) AND there are zero unresolved threads, the silence gate's wait is this many minutes measured from that review event **instead of** from the last push. Replace, not min: a review at push+25m with a 20-minute after-review window waits until push+45m, not push+30m - the window is grace *after the reviewer spoke*. Every other window consumer keeps the push anchor: the `approve` / `<login>` signals (the key has no effect under them), the no-checks-registered guard, the human-review-pending verdict, the stale-approval detector, and the merge call. A fix push moves the head, the review stops being head-current, and the gate falls back to the push anchor until the bot re-reviews - no ledger state; an unparseable review timestamp also falls back to the push anchor, and a value shorter than the bot's review time is harmless (the push window governs until a head-current review exists). When the key is configured the report's window field names the binding anchor - `window=<age>/<limit>m anchor=<push|review>`, `anchor=push` on a configured-but-not-due tick; unset keeps the field byte-for-byte. |
-| `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
-| `land.automatedReviewers` | string | `""` | CSV allowlist of reviewer logins land counts as automated, supplementing the `[bot]`-suffix rule. |
-| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews. Recommended opt-in text: `"@codex review - focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings and process-compliance findings are welcome as FYI, not merge-gating; decisions recorded in the spec are settled."` Bots do not auto-review drafts. Empty = never post. Bot comments are outside the review detector and Ralph-guard blast radius. |
-| `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit\|\*\*Code Review\*\*.*\*\*Completed\*\*` | **`/flow-next:land` clean-review comment signal (2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here - it accepts two clean shapes: the legacy clean phrase, which requires BOTH the phrase AND the `Reviewed commit` marker; and Codex's edited-in-place summary-table comment (`<!-- codex-pull-request-review-summary -->`), which requires the literal bold `**Code Review**` followed by `**Completed**` in one body. A bare "no issues" or "code review completed" mention without its structure never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior - the only real off-switch). A persisted value byte-identical to a *retired* built-in default (materialized by an older `init`) is auto-upgraded to the current built-in at read time; custom values and `""` are never touched. |
-| `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
-| `land.mergeVerdictCommand` | string | `""` | **Opt-in repo merge-verdict gate.** A shell command land runs as the merge gate of record, once per merge attempt - reached only after every other gate (CI, review threads, QA receipt, merge state) is satisfied and the planned action is `merge`. Verdict is the **exit code only**: `0` = green, any non-zero = `NEEDS_HUMAN` with action `none`. **Fail-closed**: a missing/unexecutable command, the 600s timeout, and signal death all *block* - never skip. Context arrives as **environment only** (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`); the configured string is never built from PR-derived text. It runs with cwd = repo root on the **base checkout** (land does not check out the PR branch for it), so the command must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head. **Never executed under `--dry-run`** (the classification report says `would-run: <command>`). **Unset, `null`, and `""` all mean OFF** - note this differs from `land.cleanReviewCommentPattern`, where `null` and `""` mean different things. Intended for repos with no server-side branch protection (free-plan private repos), where no required status check exists. |
-| `land.requestReviewers` | string | `""` | **Opt-in human reviewer request.** CSV of GitHub logins and/or `org/team` slugs and/or the literal token `codeowners`. Fires exactly when a human review is the **sole missing merge input** - CI green, zero unresolved threads, and either the `approve`/`<login>` signal is still unsatisfied (no review yet, or a stale/dismissed one) or the `silence` signal is satisfied but `reviewDecision == REVIEW_REQUIRED` (a merge GitHub would refuse). Land then plans the Phase 3 action class `§3.4b request-reviewers`: flips a draft PR to ready (so "ready" keeps meaning "a human may review now"), requests the list minus the PR author (`codeowners` rides the ready flip - GitHub resolves owners itself; no local CODEOWNERS parsing), and records `reviewRequestSha` in the land ledger - **one-shot per PR per head SHA**, claimed atomically so overlapping ticks cannot double-request; a land-authored CI-fix push moves the head and re-arms only if the human's review is again missing. A failed `gh pr ready` / `--add-reviewer` still records the head (one attempt, no retry loop) and reports `reviewers=failed:<reason>` with the window-bounded verdict (`AWAITING_REVIEW` / `NEEDS_HUMAN`), never `BLOCKED`. **Never gates a merge** - `land.reviewSignal` does; a team that wants a human look on every PR sets `reviewSignal: approve`. `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus `would-ready` for a draft) from Phase 2 alone and mutates nothing. Evidence field on the `signal=` line: `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`. **Unset, `null`, and `""` all mean OFF** (`reviewers=off` - reserved for that case; a configured key whose predicate is false reports `reviewers=skipped:not-due`; every other gate, action, and ledger write unchanged). |
+| `land.patienceMinutes` | int | `30` | Minutes since the last push to wait when calling flow authorizes merging without a human's current in-session merge authorization. A human's current authorization waives the wait. Unknown push time holds. |
+| `land.mergeVerdictCommand` | string or `null` | `""` | Optional command, run once per invocation after the other merge gates pass, with a 600-second bound. Exit 0 allows merging; any non-zero result, missing/unexecutable command or timeout blocks. Runs in the invoking repository without switching its checkout; judge the remote `FLOW_HEAD_SHA`, not local HEAD. Environment also supplies `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID` (empty for multiple matches), and space-separated `FLOW_SPEC_IDS`. Dry-run never executes it. Unset, null and empty disable it. See [Landing upgrade](#landing-upgrade). |
 | `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped - markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** - with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
 | `pipeline.qa` | `off \| on \| auto` | `off` | **Optional live QA stage (2.2.0+; `auto` since the flow release).** Set with `flowctl config set pipeline.qa <off\|on\|auto>`; what each value does, and the skip line a skipped stage records, is in [`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md), which attended flow and `flow --auto` both read. This is a **string-enum** knob, **NOT a bool**; **any other value, including bool `true`, is OFF**. flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
 | `pipeline.chainStages` | `off \| on` | `off` | **Deprecated; removed with the `/flow-next:pilot` alias in the next release.** A long-horizon `flow --auto` run already runs `qa` and `make-pr` as consecutive hops, so the key has nothing left to chain there. It is honoured in tick mode (`flow --auto --tick`, and the pilot alias) and ignored with one stderr notice in long-horizon mode. The tick-mode semantics for this release: enable with `flowctl config set pipeline.chainStages on` - a **string-enum** knob in the `pipeline.qa` register, **NOT a bool**: only the literal `on` activates it; `off`, `null`, bool `true`, or any other value is OFF, and a snapshot read error resolves to off (fail-closed: the safe degradation is the one-stage tick). The chain table is closed and has one row, `qa → make-pr`. With it `on`, a tick whose `qa` stage verified a fresh terminal `qa_outcome` (SHIP, NA, BLOCKED, or NEEDS_WORK - exactly the set the unchained next tick would make-pr on) dispatches `make-pr` in the same tick instead of waiting for the next driver interval and a full re-anchor; the terminal line reads `stage=qa+make-pr` and carries make-pr's verdict, and `--dry-run` reports `chain=<off|on>` plus a precondition-checked `would-chain=`. `plan → plan-review` is deliberately NOT a row: the plan dispatch already embeds the plan-review loop, so a successful plan tick already classifies `work` next and there is no idle interval to remove. Nothing else chains - `plan-review → work` and `work → qa`/`make-pr` cross a stage that can fail into human territory. **OFF by default** - with it off the tick is byte-for-byte unchanged; with `pipeline.qa` off the switch has nothing to chain, so it earns its keep only on repos running the QA stage. No gate, verdict, or merge license changes: the chained PR stays a draft; landing requires separate scoped authority through flow's merge destination or standalone land. flowctl only stores the knob; the chain is host-agent skill wiring. |
@@ -2148,7 +2169,7 @@ Callers fail closed on both outcomes.
 
 Exit `0` (tier-B) only for a non-empty diff where every path is SAFE. Empty diffs and any forcing path exit `1`; errors exit `2+`. `--json` emits per-path `{path, class, reason}` entries for evidence lines. Tier-B runs configured lint/format gates only, and nothing else.
 
-Lint and format commands are always-run and never receipted in v1. Remote CI gates, including land's tri-state and GitHub Actions, are out of scope: a green receipt never means CI can be skipped. Receipts under `.flow/tmp/` are per checkout, so worktree-mode workers never share them across worktrees, correctly because their HEADs differ. Scope guard: every predicate is commit-hash equality, worktree cleanliness, receipt age, or path membership. There is no semantic skipping: fn-83's deterministic-plan-sync-skip ban remains in force; see decision record `plan-sync-skip-gate-not-viable-2026-07-03`.
+Lint and format commands are always-run and never receipted in v1. Remote CI gates, including land's checks and GitHub Actions, are out of scope: a green receipt never means CI can be skipped. Receipts under `.flow/tmp/` are per checkout, so worktree-mode workers never share them across worktrees, correctly because their HEADs differ. Scope guard: every predicate is commit-hash equality, worktree cleanliness, receipt age, or path membership. There is no semantic skipping: fn-83's deterministic-plan-sync-skip ban remains in force; see decision record `plan-sync-skip-gate-not-viable-2026-07-03`.
 
 **Known fail-open: CI-guarded generated docs (#334).** The classifier sees file shape, not what CI reads. A repo that generates a doc from code and asserts it in CI (`docs/config-reference.md` emitted by a script with a `--check` job, an OpenAPI `.md`, a templated README) has a code artifact wearing a `.md` name under a safe prefix: a diff touching only that file classifies tier-B and the work loop skips the test/smoke gates on exactly the change those gates exist to catch. Blast radius is the local gate diet - land, `flow --auto`, and remote CI never consume the tier - **but "the repo's own CI check still fires" holds only where the repo's CI trigger filter actually covers the path.** Measured in this repository 2026-08-13: `agent_docs/**` classified tier-B (a SAFE prefix) while `test-flow-next.yml`'s `paths:` filter listed only `agent_docs/**.py`, so a conduct-checklist edit that breaks a prose pin in `test_two_axis_audit_contract` ran no gate locally AND triggered no workflow - the two skips compose into a genuine hole rather than one layer covering the other. The remedies are therefore two, and both are needed:
 
@@ -2697,3 +2718,103 @@ Exit codes: 0=success, 1=general error, 2=tool/parse error, 3=sandbox configurat
 - File conflicts: Refuses to overwrite existing specs/tasks
 - Dependency violations: Same-spec only, must exist, no cycles
 - Status violations: Can't start non-todo, can't close with incomplete tasks
+
+## Landing upgrade
+
+Completed work now travels with the PR. Make-pr closes the spec and commits
+final task statuses before opening it; merging carries that close to the base,
+including a protected base. Creating or starting a follow-up task reopens the
+spec. A closed spec with an open PR still projects as in review in the tracker;
+only confirmed merge evidence permits terminal status.
+
+This is a **major-version upgrade**. Before adopting it, change scheduled
+repo-wide invocations to the recipe below, move stricter review requirements
+to one of the three supported gates, and run releases separately using your
+repository's release documentation. The maintainer cuts the major release;
+these notes do not change version manifests.
+
+### Repository-wide recipe
+
+The caller owns enumeration and cadence. For each open pull request:
+
+1. Read its full `headRefOid`, `headRefName`, and head repository. Read all
+   `.flow/specs/*.json` blobs from that exact remote head, with complete
+   pagination. Local task state and the PR footer are not eligibility evidence.
+2. Select every spec whose `branch_name` equals `headRefName`. Require at least
+   one match and require **every** match to have `status: done`. Skip no-match
+   PRs and unfinished specs. Stop on unreadable or incomplete evidence.
+3. With current merge authorization for this PR, invoke `/flow-next:land <PR>`
+   (Codex: `$flow-next-land <PR>`). A candidate list grants no merge authority.
+   Land re-reads the head and all gates; a head move requires fresh selection.
+4. Handle its last `LAND_VERDICT` line. Wait at the driver's cadence for pending
+   CI or review, then invoke the same named PR again. A chain runs lowest open
+   layer first, one layer per invocation. Refresh the candidate list between
+   passes. Never substitute a new PR for one that disappeared or closed unmerged.
+
+For example, give your driver this instruction: "Enumerate open PRs; for each
+with at least one head-branch-matching spec and all such specs closed at that
+head, land that PR within my current merge authorization. Report holds and
+conflicts; wait at the driver cadence before trying pending PRs again."
+
+Land checks conflicts, threads and CI in that order, reporting a conflict for
+manual recovery rather than rebasing it. CI gets one focused fix or one flake
+rerun; an identical repeat is not a flake. It keeps no ledger or claim file.
+
+### Review gate
+
+The default gate requires green checks, a nonblocking GitHub `reviewDecision`,
+and zero unresolved threads. If no reviews are required and nobody reviewed,
+those conditions can allow the authorized merge. Tighten this in three ways:
+
+1. Put your additional requirement in the repository instruction file, such as
+   `AGENTS.md` or `CLAUDE.md`, so the host applies it before merging.
+2. Configure branch protection to require approvals and checks on the server.
+3. Set `land.mergeVerdictCommand` to your repository's executable gate. It must
+   judge `FLOW_HEAD_SHA`; the invoking checkout may be on another branch.
+   A non-zero result, unavailable command or timeout blocks the merge.
+
+`land.patienceMinutes` still defaults to 30 minutes since the last push when
+calling flow authorizes the merge without a human's current in-session merge
+authorization. A human's current authorization waives that wait. The command
+and environment contract is in the [configuration table](#config).
+
+### Retired keys
+
+Existing configuration files still load. Land prints one notice naming ignored
+keys and leaves the file unchanged. Remove these entries during your config
+maintenance; only `land.patienceMinutes` and `land.mergeVerdictCommand` remain
+active. Provenance below distinguishes recorded issues from implementation PRs
+where no separate issue is recorded.
+
+| Retired key | Former behavior and provenance |
+|---|---|
+| `land.release` | Release-follow. Issue FLOW-9, implementation PR #172. Release separately. |
+| `land.reviewSignal` | Silence, approval or named-reviewer signal selection. Issue FLOW-9, PR #172. Use the review gate above. |
+| `land.automatedReviewers` | Automated-reviewer allowlist for the silence signal. Issue FLOW-9, PR #172. |
+| `land.reviewTrigger` | One-shot reviewer-bot summon comment. Issue FLOW-9, PR #172. Request reviewers separately. |
+| `land.ciFixBudget` | Ledger-backed fix budget and durable needs-human label. Issue FLOW-9, PR #172; portability problem #368. |
+| `land.cleanReviewCommentPattern` | Clean-review comment regex and old-default migration. PR #177 (incident PR #176), extended by PR #386 (incident PR #385); no separate issue recorded. |
+| `land.requestReviewers` | One-shot human reviewer requests per head. Issue #359, PR #360. Request reviewers separately. |
+| `land.patienceMinutesAfterReview` | Review-event-anchored patience. PR #394; no separate issue recorded. The retained window is push-anchored. |
+
+### Retired behaviors
+
+| Retired behavior | Origin or reported issue; replacement |
+|---|---|
+| Repo-wide discovery, two-signal authorship probe and footer gate, local all-tasks-done eligibility, multi-PR worst-verdict aggregation | Issue FLOW-9 / PR #172; marker hardening #274. Use the head-bound recipe above and one verdict per named PR. |
+| Ledger, durable CI-budget labels and skip state | FLOW-9 / PR #172; budget portability #368. Inspect the PR's commits/check attempts; one fix or rerun. Old land files are inert and need no migration. |
+| Tick claim and PID reaper | PR #378; no separate issue recorded. The caller owns cadence; land holds no claim between invocations. |
+| Post-merge spec close, base checkout, release, persist-push, rollback and re-entry | FLOW-9 / PR #172; lifecycle issue #345 / PR #350 and ignored-receipt staging issue #367 / PR #372. Close on the PR branch before opening; after merge only the configured tracker API touchpoint remains. |
+| Plain-chain leased force-push cascade, patch-id review carry-over, resumable cascade, persisted merge-async UUID and pending-branch-delete janitor | Issue FLOW-83 / PR #432. Use native stacks when available; otherwise recover one conflicted child manually. Branch deletion requires a fresh proof that no open PR targets it. |
+| Silence signal, clean-review classification, comment-pattern scan and stale-approval loop heuristics | FLOW-9 / PR #172; clean-comment PR #177, summary-table PR #386 and classifier PR #450 (no separate issues recorded). Use GitHub checks, review decision and unresolved threads. The unused `clean-review` judge preset is removed. |
+| Reviewer-bot summons and human reviewer requests | FLOW-9 / PR #172 and issue #359 / PR #360. Repository owners arrange review requests outside land. |
+| Merge-identity override `FLOW_PR_MERGE_CMD` | Issue #337 / PR #350; shell-argument fix #406 / PR #430. Land uses the authenticated standard merge API. This was environment-only, never a supported `land.*` key. |
+| After-review patience window | PR #394, no separate issue recorded. Use retained push-anchored patience and current authorization. |
+| Release-follow and emitted `RELEASED` verdict | FLOW-9 / PR #172. Release separately. `RELEASED` stays in the parser vocabulary but is never emitted. |
+| Flow source/base-checkout handoff, land-ledger reads and post-merge persistence destination | PR #429, no separate issue recorded. Flow passes the named PR and current authorization; confirmed merge ends the run. |
+
+The terminal grammar remains `LAND_VERDICT=<verdict|NO_WORK> prs=<n>
+pr=<url|-> reason="<one line>"`. Repeating an already merged PR retries only
+its configured tracker touchpoint; a failure reports the merge commit and
+preserves `MERGED`. There is no post-merge repository write to recover.
+For conflicted children, use the [manual single-layer recovery](troubleshooting.md#land-on-a-chain-chain-broken-a-retarget-conflict-or-a-pending-merge-async-fn-149).

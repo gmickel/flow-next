@@ -224,7 +224,7 @@ class ArtifactsConfigTestCase(unittest.TestCase):
             self._run_config_get_cli("pipeline.qa")["value"], "off"
         )
         self.assertEqual(
-            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+            self._run_config_get_cli("land.patienceMinutes")["value"], 30
         )
 
 

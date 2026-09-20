@@ -170,7 +170,7 @@ The heredoc form survives simple bodies but fails on (a) backtick-wrapped code r
 1. **Collapse the Review plan's low-risk buckets** — in `## Review plan`, replace the enumerated Spot-check + Safe-to-skim file lists with grouped counts (`- [ ] ⚪ <N> files — mechanical/generated (see diff)`). Keep the Must-review items and the How-to-review block intact — they carry the judgment-risk signal; the skim enumeration is the droppable part.
 2. **Trim TL;DR** to 3 bullets if currently 4-5 — keep only the top-priority headline + top 2 task-derived bullets.
 3. **Collapse mermaid section** to overview-only — replace multi-diagram structure with one `graph TB` overview + the lead prose paragraph.
-4. **Last resort: spill to `.flow/pr-bodies/<spec-id>.md`** — write the full body to that path, replace PR body with: `# <spec-title>\n\nFull cognitive-aid body exceeds 65K char limit. Read at \`.flow/pr-bodies/<spec-id>.md\` (committed alongside this PR).` Then `git add .flow/pr-bodies/ && git commit -m "chore: spill PR body for <spec-id>"` before push.
+4. **After a spec close** (`PHASE0_CONTEXT.spec_closed=true`): retain the full body locally under `.flow/tmp/`, compose a shorter evidence-backed body within the cap, and recheck its size. Do not commit a spill file or advertise it as remotely available; preserve the close head. **Otherwise, last resort: spill to `.flow/pr-bodies/<spec-id>.md`** — write the full body to that path, replace PR body with: `# <spec-title>\n\nFull cognitive-aid body exceeds 65K char limit. Read at \`.flow/pr-bodies/<spec-id>.md\` (committed alongside this PR).` Then `git add .flow/pr-bodies/ && git commit -m "chore: spill PR body for <spec-id>"` before push.
 
 ```bash
 BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d ' ')
@@ -208,6 +208,15 @@ if [[ -z "$HEAD_BRANCH" ]]; then
   echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
   exit 1
 fi
+
+# fence:closed-head-check
+if [[ "$(printf '%s' "$PHASE0_CONTEXT" | jq -r '.spec_closed // false')" == "true" ]]; then
+  if [[ "$(git rev-parse HEAD)" != "$(printf '%s' "$PHASE0_CONTEXT" | jq -r '.head')" || "$HEAD_BRANCH" != "$(printf '%s' "$PHASE0_CONTEXT" | jq -r '.branch')" ]]; then
+    echo "Error: PR head changed after spec close; rerun make-pr before opening the PR" >&2
+    exit 1
+  fi
+fi
+# fence:closed-head-check-end
 
 # Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
 # push (zero-byte upload) is much smaller than the bug surface of a "skipped because

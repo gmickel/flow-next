@@ -1415,102 +1415,8 @@ def get_default_config() -> dict:
         # (REMOVED_CONFIG_KEYS below) and runs unchanged. The
         # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
         # DISTINCT namespace and are untouched.
-        # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
-        # `config get land.*` returns the seeded default (never a missing
-        # key) on a fresh repo; every leaf is non-null EXCEPT
-        # patienceMinutesAfterReview, whose seeded default is an explicit
-        # null (its documented off state).
-        # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
-        # itself only stores/serves them.
-        "land": {
-            # Follow the project's release instructions after merge.
-            # Also no-ops when no release docs/scripts are discovered.
-            "release": True,
-            # Patience window (minutes) for automated reviewers, anchored
-            # to the LAST push — a land-authored CI-fix push restarts it.
-            "patienceMinutes": 30,
-            # fn-219 — opt-in silence-signal refinement: when set, and only
-            # while the latest automated review is head-current with zero
-            # unresolved threads, the silence gate's window is re-anchored
-            # to that review event (this many minutes measured from it)
-            # instead of the last push. null / 0 = OFF (today's push-anchored
-            # wait, byte-for-byte); the schema is integer|null, and the land
-            # read treats a hand-edited or pre-schema string as off rather
-            # than failing the tick. A fix push moves
-            # the head, so the review stops being head-current and the push
-            # anchor governs again until the bot re-reviews.
-            "patienceMinutesAfterReview": None,
-            # Merge review signal: silence (default) | approve | <github-login>.
-            #   silence  — ≥1 automated review + zero unresolved threads +
-            #              no new threads within the patience window.
-            #   approve  — formal reviewDecision == APPROVED.
-            #   <login>  — that reviewer's latest review is APPROVED/clean.
-            "reviewSignal": "silence",
-            # CSV allowlist of automated-reviewer logins, supplementing the
-            # `[bot]`-suffix rule. Default empty = suffix rule only.
-            "automatedReviewers": "",
-            # One-shot comment land posts to summon a reviewer bot when a
-            # DRAFT PR has zero automated reviews (bots like Codex do not
-            # auto-review drafts; pilot's PRs are born draft). Empty =
-            # never post; e.g. "@codex review".
-            "reviewTrigger": "",
-            # Max CI-fix attempts per PR before the durable
-            # `flow-next:needs-human` label + skip.
-            "ciFixBudget": 3,
-            # fn-65.1 — STRUCTURED built-in ERE for the `silence`-signal
-            # clean-review COMMENT path: a review bot (e.g. Codex) posts an
-            # issue comment instead of a formal APPROVE on a no-findings
-            # pass, e.g. "Didn't find any major issues. Reviewed commit:
-            # `8ff0e50f`". Two accepted clean shapes (fn-213): the legacy
-            # clean phrase, which requires BOTH the phrase AND the
-            # `Reviewed commit` marker; and Codex's edited-in-place
-            # summary-table row (`<!-- codex-pull-request-review-summary -->`
-            # comment), which requires the literal bold `**Code Review**`
-            # followed by `**Completed**` in one body. A bare "no issues" or
-            # "code review completed" mention without its structure never
-            # satisfies the gate; the workflow additionally extracts a
-            # head-current SHA token before counting it.
-            #   Config contract (workflow.md §2.6 cfg read):
-            #     null/missing (pre-seed flowctl copy) → fall back to THIS
-            #                                            built-in default
-            #     explicit ""  → comment scan DISABLED (pure reviews-API)
-            #     other value  → use it
-            # The empty-disables arm is the only real off-switch — an
-            # "empty → default fallback" would make the feature
-            # un-disableable. A persisted value equal to a RETIRED default
-            # (init materialized the pre-fn-213 string) is aliased to this
-            # built-in at read time — see RETIRED_CLEAN_REVIEW_PATTERNS.
-            "cleanReviewCommentPattern": (
-                r"(Didn'?t find any( major)? issues"
-                r"|No( major)? issues found).*Reviewed commit"
-                r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
-            ),
-            # fn-188 — OPT-IN repo merge-verdict gate (#330): a shell
-            # command land runs once per merge attempt, at the decision
-            # point, after every other gate is satisfied. Exit 0 = green;
-            # non-zero (including missing/unexecutable, timeout, signal
-            # death) BLOCKS the merge — fail-closed, never skip. Context
-            # reaches the command as environment only (FLOW_HEAD_SHA,
-            # FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); the configured
-            # string is never built from PR-derived text. Never executed
-            # under --dry-run.
-            #   Config contract (workflow.md §2.9):
-            #     unset / null / "" → OFF (today's behavior byte-for-byte)
-            #     other value       → run it as the merge gate of record
-            # NOTE the asymmetry with cleanReviewCommentPattern above,
-            # where null and "" mean DIFFERENT things: here all three
-            # off-states collapse to OFF. Do not copy that pattern here.
-            "mergeVerdictCommand": "",
-            # fn-200 — OPT-IN human reviewer request (#359): csv of GitHub
-            # logins and/or org/team slugs, and/or the literal token
-            # `codeowners`. When set, land requests them (minus the PR
-            # author) exactly when a human review is the only missing
-            # merge input, flipping a draft PR to ready at the same moment;
-            # one-shot per PR per head SHA via the land ledger. Never gates
-            # a merge (reviewSignal does). Seeded "" so `config get`
-            # returns a value, not null; unset / null / "" all mean OFF.
-            "requestReviewers": "",
-        },
+        # One named PR: only the merge command and push-anchored patience remain.
+        "land": {"patienceMinutes": 30, "mergeVerdictCommand": ""},
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a
         # fresh repo via the defaults MERGE (load_flow_config), NOT by
@@ -1649,46 +1555,6 @@ def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
     new_tracker = dict(tracker)
     new_tracker["specIds"] = norm
     new_cfg["tracker"] = new_tracker
-    return new_cfg
-
-
-# fn-213 — retired built-in defaults of land.cleanReviewCommentPattern.
-# `init` materializes the current default into .flow/config.json, so a repo
-# seeded before a default rotation keeps the OLD byte-string on disk and the
-# persisted value would override the improved built-in forever (later `init`
-# runs only add missing keys). Read-time aliasing: a persisted value that is
-# byte-identical to a retired default is treated as "use the current
-# built-in" on the MERGED tree. A customized pattern and the explicit ""
-# off-switch are never touched, and the `--raw` provenance probe still shows
-# the on-disk bytes. Rotating the default again: move the outgoing string
-# into this tuple in the same change.
-RETIRED_CLEAN_REVIEW_PATTERNS: tuple[str, ...] = (
-    # pre-fn-213 default (fn-65.1): legacy clean phrase only, no
-    # summary-table shape.
-    r"(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
-)
-
-
-def _with_retired_clean_review_pattern_upgraded(cfg: dict) -> dict:
-    """Return cfg with a retired land.cleanReviewCommentPattern default aliased.
-
-    Applies only when the merged value is byte-identical to a retired
-    built-in default (RETIRED_CLEAN_REVIEW_PATTERNS); custom patterns and
-    the explicit ``""`` off-switch pass through untouched. Copy-on-write so
-    a shared defaults dict is never mutated.
-    """
-    land = cfg.get("land")
-    if not isinstance(land, dict):
-        return cfg
-    raw_val = land.get("cleanReviewCommentPattern")
-    if raw_val not in RETIRED_CLEAN_REVIEW_PATTERNS:
-        return cfg
-    new_cfg = dict(cfg)
-    new_land = dict(land)
-    new_land["cleanReviewCommentPattern"] = get_default_config()["land"][
-        "cleanReviewCommentPattern"
-    ]
-    new_cfg["land"] = new_land
     return new_cfg
 
 
@@ -1837,14 +1703,7 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    # fn-213: same retired-default aliasing as load_flow_config so the
-    # snapshot's merged view stays byte-equal to load_flow_config().
-    return ConfigSnapshot(
-        raw,
-        _with_retired_clean_review_pattern_upgraded(
-            _with_tracker_spec_ids_normalized(merged)
-        ),
-    )
+    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -1884,6 +1743,14 @@ REMOVED_CONFIG_KEYS: tuple[str, ...] = (
     "models.roles",
     "models.verifiedAt",
     "models.verifiedWith",
+    "land.release",
+    "land.reviewSignal",
+    "land.automatedReviewers",
+    "land.reviewTrigger",
+    "land.ciFixBudget",
+    "land.cleanReviewCommentPattern",
+    "land.requestReviewers",
+    "land.patienceMinutesAfterReview",
 )
 
 _removed_config_advisory_printed = False
@@ -1910,12 +1777,18 @@ def removed_config_keys_present(
 
 def removed_config_keys_note(keys: list[str]) -> str:
     """The one advisory line for a config still carrying removed keys."""
+    guidance = []
+    if any(key.startswith("land.") for key in keys):
+        guidance.append("See docs/flowctl.md#landing-upgrade for landing replacements.")
+    if any(not key.startswith("land.") for key in keys):
+        guidance.append(
+            "Routing uses the model-routing block /flow-next:setup writes into "
+            "CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage`."
+        )
     return (
         f"note: .flow/config.json still carries removed "
-        f"key(s): {', '.join(keys)}; flowctl ignores them. Routing "
-        f"is now the model-routing block /flow-next:setup writes "
-        f"into CLAUDE.md / AGENTS.md plus the recipes in "
-        f"`flowctl usage` - route work there and delete these keys."
+        f"key(s): {', '.join(keys)}; flowctl ignores them. "
+        + " ".join(guidance) + " Remove these keys from .flow/config.json."
     )
 
 
@@ -20307,12 +20180,7 @@ def cmd_init(args: argparse.Namespace) -> None:
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
-            # fn-213: a persisted retired cleanReviewCommentPattern default is
-            # upgraded on re-init too (read-time aliasing already covers every
-            # read; this just makes the file match what reads return).
-            merged = deep_merge(
-                stamped_defaults, _with_retired_clean_review_pattern_upgraded(raw)
-            )
+            merged = deep_merge(stamped_defaults, raw)
             if merged != raw:
                 atomic_write_json(config_path, merged)
                 actions.append("upgraded config.json (added missing keys)")
@@ -23748,9 +23616,11 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
                   'is too late for understood work'),
  'all_done_make_pr': ('Apply the QA gate, then make the pull request.',
                       'QA runs or records `skipped(reason)`; make-pr is never skipped on this route'),
- 'existing_pr_tail': ('Apply the existing pull request tail and consent rules.',
+ 'closed_spec_no_pr': ('Ask the host to inspect the closed spec without an observed pull request.',
+                       'Never open a replacement pull request for a closed spec'),
+ 'existing_pr_tail': ('Apply the existing pull request landing and consent rules.',
                       'Review-only convergence keeps its limited scope. PR existence is not consent; land '
-                      'owns all convergence, merge and tail gates')}
+                      'owns convergence and merge gates')}
 
 
 # Live routing consumes the same spec/task inventory as `show`; no state store.
@@ -23865,6 +23735,10 @@ def judge_route_lifecycle(state: dict) -> dict | None:
         return decision("host", "pr_probe_failed")
     if state["pr_exists"]:
         return decision("existing_pr_tail", "observed PR")
+    if state.get("status") == "done":
+        # Closing precedes PR creation; absence cannot distinguish a failed open
+        # from a disappeared PR. Let the host report it, never create a replacement.
+        return decision("host", "closed spec without observed PR")
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
@@ -23948,7 +23822,13 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
         if tokens:
             signal += "; dependency scan: " + ", ".join(tokens)
     alternatives = ", ".join(f"{key} {probability:.2f}" for key, probability in candidates[1:3])
-    next_step = JUDGE_ROUTE_PRESENTATION.get(value, ("host decides", "host decides"))[0]
+    presentation_key = (
+        "closed_spec_no_pr"
+        if lifecycle and lifecycle["rule"] == "closed spec without observed PR"
+        else value
+    )
+    presentation = JUDGE_ROUTE_PRESENTATION.get(presentation_key, ("host decides", "host decides"))
+    next_step = presentation[0]
     if decision.get("research_recommended"):
         next_step = "Read the unfamiliar dependency documentation first; then " + next_step
     if decision.get("defect_repro") == "provided":
@@ -23956,7 +23836,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
     return [
         f"Next: {next_step}",
         f"Route: {route}", f"Signal: {signal}",
-        f"Skip/narrow: {JUDGE_ROUTE_PRESENTATION.get(value, ('host decides', 'host decides'))[1]}",
+        f"Skip/narrow: {presentation[1]}",
         f"Why not the alternatives: {alternatives or 'lifecycle precedence' if lifecycle else alternatives or 'host decides'}",
     ]
 
@@ -23965,23 +23845,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
 # --- Optional System One judge (fn-247): self-contained for copied flowctl. ---
 
 JUDGE_MODEL = "jev-latest"
-JUDGE_PRESETS = {'clean-review': {'required': ['body'],
-                  'questions': {'review': {'type': 'choice',
-                                           'instructions': 'What kind of automated review body is '
-                                                           'this?',
-                                           'criteria': {'clean': 'a completed review that reports '
-                                                                 'no findings / no issues on the '
-                                                                 'reviewed commit',
-                                                        'findings': 'a completed review that '
-                                                                    'raises at least one concern, '
-                                                                    'suggestion, or defect',
-                                                        'wrapper_or_status': 'a summary, status, '
-                                                                             'quota, stale-marker, '
-                                                                             'or boilerplate body '
-                                                                             'that neither clears '
-                                                                             'nor raises anything '
-                                                                             'itself'}}}},
- 'route': {'required': ['view',
+JUDGE_PRESETS = {'route': {'required': ['view',
                         'view_meaning',
                         'repo',
                         'status',
@@ -24287,7 +24151,7 @@ def judge_validate_state(preset: str, state: dict) -> None:
     missing = [key for key in required if key not in state]
     if missing:
         raise ValueError("missing required state field: " + ", ".join(missing))
-    text_fields = {"clean-review": ["body"], "qa-gate": ["acceptance"], "fork-gate": ["text"],
+    text_fields = {"qa-gate": ["acceptance"], "fork-gate": ["text"],
                    "memory-rerank": ["query"], "tier": ["task_title", "task_body", "acceptance", "repo"],
                    "route": ["view_meaning", "repo"] + (["intent"] if state.get("view") == "intent" else ["spec_title", "spec_body"])}
     for key in text_fields[preset]:
@@ -24360,12 +24224,7 @@ def judge_validate_answers(questions: dict, payload: dict) -> dict:
 
 def judge_decide(preset: str, state: dict, answers: dict, route_decision: dict | None = None) -> dict:
     decision = {"value": None, "rule": "", "met": False}
-    if preset == "clean-review":
-        answer = answers["review"]
-        decision.update(value=answer["choice"] == "clean" and answer["confidence"] >= 0.7,
-                        rule="clean confidence>=0.7")
-        decision["met"] = decision["value"]
-    elif preset == "qa-gate":
+    if preset == "qa-gate":
         ui = answers["ui_observable_criteria"]["noul"]
         target = bool(state["startable_target_fact"])
         value = "qa_runs" if ui >= 0.5 and target else "qa_skipped"
@@ -30734,6 +30593,35 @@ def _note_completion_review_reset(
         )
 
 
+def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> Optional[Path]:
+    """Reopen a closed spec after a successful task creation or start.
+
+    Returns the rewritten spec path, or None when the spec was already open.
+    """
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_path.exists():
+        return None
+    spec_data = load_json(spec_path)
+    if spec_data.get("status") != "done":
+        return None
+    spec_data["status"] = "open"
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_path, spec_data)
+    return spec_path
+
+
+def _note_spec_reopened(reopened: Optional[Path], spec_id: str, payload: Optional[dict]) -> None:
+    """Report a reopen the way close reports its writes, so callers commit it."""
+    if reopened is None:
+        return
+    if payload is not None:
+        payload["reopened_spec"] = spec_id
+        payload["modified_paths"] = [*payload.get("modified_paths", []), str(reopened)]
+    else:
+        print(f"Spec {spec_id} reopened")
+        print_tracked_write_advisory(reopened)
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec.
 
@@ -30934,11 +30822,14 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
+        reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
+
         # fn-205 follow-up: new tasks change the review surface — a
         # policy-excused `not_required` no longer holds.
         review_reset = _reset_excused_completion_review(flow_dir, spec_id)
         if use_json:
             payload: dict = {"tasks": created_summaries}
+            _note_spec_reopened(reopened, spec_id, payload)
             _note_completion_review_reset(
                 review_reset, spec_id, payload, use_json=True
             )
@@ -30946,6 +30837,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         else:
             for summary in created_summaries:
                 print(f"Task {summary['id']} created: {summary['title']}")
+            _note_spec_reopened(reopened, spec_id, None)
             _note_completion_review_reset(
                 review_reset, spec_id, None, use_json=False
             )
@@ -31088,6 +30980,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
+    reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
+
     # fn-205 follow-up: a new task changes the review surface — a
     # policy-excused `not_required` no longer holds.
     review_reset = _reset_excused_completion_review(flow_dir, spec_id)
@@ -31101,10 +30995,12 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             "spec_path": task_data["spec_path"],
             "message": f"Task {task_id} created",
         }
+        _note_spec_reopened(reopened, spec_id, payload)
         _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
         json_output(payload)
     else:
         print(f"Task {task_id} created: {args.title}")
+        _note_spec_reopened(reopened, spec_id, None)
         _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
@@ -35694,7 +35590,7 @@ class RemoteHeads:
     `spec chain` (fn-152 R2) reads the remote at most once per invocation, and
     the spec-level admission gates (`ready --all`, `next`) share one read
     across every spec they evaluate. Nothing is read until a chain candidate
-    actually needs it, so a backlog with no open dependency never spawns git.
+    actually needs it; done dependencies still require local base-object reads.
     """
 
     def __init__(self) -> None:
@@ -35741,6 +35637,89 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
     return bool(tasks) and all(t.get("status") == "done" for t in tasks)
 
 
+_SPEC_BASE_CACHE: dict[Path, tuple[str, str, bool]] = {}
+_SPEC_BASE_NOTICE_CWDS: set[Path] = set()
+
+
+def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
+    """Return (landed, error, diagnostic) from local base evidence.
+
+    Resolve origin's default branch, then the chain-base cascade. Successful
+    resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
+    With no base ref the local close stands, with one stderr notice per working directory.
+    A checkout of the base branch itself has nothing left to merge, so the
+    local close stands there too (work done directly on the base).
+    """
+    if spec_data.get("status") != "done":
+        return False, "", ""
+    diagnostic = ""
+    try:
+        repo_root = get_repo_root()
+        cwd = Path.cwd()
+        cached = _SPEC_BASE_CACHE.get(cwd)
+        if cached is None:
+            head = subprocess.run(
+                ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
+            candidates = list(dict.fromkeys([*candidates, "origin/main", "main", "origin/master", "master"]))
+            for candidate in candidates:
+                probe = subprocess.run(
+                    ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                )
+                if probe.returncode == 0:
+                    here = subprocess.run(
+                        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+                        cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                    )
+                    on_base = (
+                        here.returncode == 0
+                        and here.stdout.strip() == candidate.removeprefix("origin/")
+                    )
+                    cached = (candidate, probe.stdout.strip(), on_base)
+                    _SPEC_BASE_CACHE[cwd] = cached
+                    break
+            if cached is None:
+                diagnostic = (
+                    "no base ref resolved; tried refs/remotes/origin/HEAD, "
+                    + ", ".join(candidates) + "; using local status"
+                )
+                if cwd not in _SPEC_BASE_NOTICE_CWDS:
+                    print(f"note: {diagnostic}", file=sys.stderr)
+                    _SPEC_BASE_NOTICE_CWDS.add(cwd)
+                return True, "", diagnostic
+        base_ref, base, on_base = cached
+        if on_base:
+            return True, "", ""
+        diagnostic = (
+            f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+            "fetch the base or land it"
+        )
+        flow_path = flow_dir.relative_to(repo_root).as_posix()
+        paths = [f"{flow_path}/{directory}/{spec_id}.json" for directory in (SPECS_JSON_DIR, EPICS_DIR)]
+        tree = subprocess.run(
+            ["git", "ls-tree", "--name-only", base, "--", *paths],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+        present = set(tree.stdout.splitlines())
+        path = next((path for path in paths if path in present), None)
+        if path is None:
+            return False, "", diagnostic
+        blob = subprocess.run(
+            ["git", "show", f"{base}:{path}"],
+            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+        data = json.loads(blob.stdout)
+        if not isinstance(data, dict):
+            return False, f"base spec {spec_id} is not an object", ""
+        landed = data.get("status") == "done"
+        return landed, "", "" if landed else diagnostic
+    except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+        return False, f"base read failed: {exc}", ""
+
+
 def evaluate_spec_chain(
     flow_dir: Path,
     spec_id: str,
@@ -35768,6 +35747,11 @@ def evaluate_spec_chain(
         "parent_branch_on_remote": None,
         "reason": "",
     }
+    diagnostics: list[str] = []
+
+    def set_reason(reason: str) -> None:
+        result["reason"] = "; ".join(dict.fromkeys(item for item in [*diagnostics, reason] if item))
+
     candidates: list[str] = []
     in_progress: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
@@ -35780,7 +35764,15 @@ def evaluate_spec_chain(
                 code=2, use_json=use_json,
             )
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") == "done":
+        landed, err, diagnostic = spec_landed_at_base(flow_dir, dep, dep_data)
+        if diagnostic:
+            diagnostics.append(diagnostic)
+        if err:
+            result["parent"] = dep
+            result["parent_branch"] = dep_data.get("branch_name") or None
+            set_reason(f"base query failed: {err}")
+            return result
+        if landed:
             continue
         if spec_tasks_all_done(flow_dir, dep, use_json=use_json):
             candidates.append(dep)
@@ -35788,14 +35780,14 @@ def evaluate_spec_chain(
             in_progress.append(dep)
     if in_progress:
         result["parent"] = candidates[0] if candidates else None
-        result["reason"] = f"dependency {in_progress[0]} in progress"
+        set_reason(f"dependency {in_progress[0]} in progress")
         return result
     if len(candidates) >= 2:
-        result["reason"] = f"two open parents: {', '.join(candidates)}; chains are linear"
+        set_reason(f"two open parents: {', '.join(candidates)}; chains are linear")
         return result
     if not candidates:
         result["eligible"] = True
-        result["reason"] = "no open dependency"
+        set_reason("no open dependency")
         return result
     parent = candidates[0]
     parent_data = normalize_epic(
@@ -35806,11 +35798,12 @@ def evaluate_spec_chain(
     result["parent_branch"] = parent_branch or None
     heads, err = (remote_heads or RemoteHeads())()
     if heads is None:
-        result["reason"] = f"remote query failed: {err}"
+        set_reason(f"remote query failed: {err}")
         return result
     if not parent_branch or parent_branch not in heads:
         result["parent_branch_on_remote"] = False
-        result["reason"] = (
+        set_reason(
+            "" if parent_data.get("status") == "done" else
             f"parent branch {parent_branch or '<unset>'} not on origin; "
             "push it or land the parent first"
         )
@@ -35821,15 +35814,21 @@ def evaluate_spec_chain(
         if other_id in (spec_id, parent):
             continue
         other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
-        if other.get("status") == "done":
-            continue
         if parent not in (other.get("depends_on_epics", []) or []):
             continue
+        landed, err, _ = spec_landed_at_base(flow_dir, other_id, other)
+        if err:
+            set_reason(f"base query failed: {err}")
+            return result
+        if landed:
+            continue
         if (other.get("branch_name") or "") in heads:
-            result["reason"] = f"parent {parent} already chained by {other_id}"
+            set_reason(f"parent {parent} already chained by {other_id}")
             return result
     result["eligible"] = True
-    result["reason"] = "parent open, all tasks done, branch on origin"
+    set_reason("parent closed locally, all tasks done, branch on origin"
+               if parent_data.get("status") == "done" else
+               "parent open, all tasks done, branch on origin")
     return result
 
 
@@ -35843,12 +35842,9 @@ def spec_blocked_by_deps(
 ) -> list[str]:
     """Spec-level admission gate shared by `ready --spec`, `next`, `ready --all`.
 
-    A dependency is blocking when its spec is missing or not ``done`` — except
-    the chain parent `evaluate_spec_chain` names (fn-152 R2a): an open parent
-    with every task done and its branch on origin counts as satisfied, so a
-    chained spec dispatches its tasks. The chain predicate is consulted only
-    when at least one dependency is open and none is missing, which keeps
-    every other spec on the byte-identical pre-chain path (no remote read).
+    A dependency is blocking until its close is present at the base, except
+    the eligible chain parent named by `evaluate_spec_chain` (fn-152 R2a).
+    Missing dependencies and unreadable base evidence stay blocking.
     """
     blocked: list[str] = []
     missing = False
@@ -35861,7 +35857,8 @@ def spec_blocked_by_deps(
             missing = True
             continue
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") != "done":
+        landed, _, _ = spec_landed_at_base(flow_dir, dep, dep_data)
+        if not landed:
             blocked.append(dep)
     if blocked and not missing:
         chain = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json, remote_heads=remote_heads)
@@ -36398,6 +36395,8 @@ def cmd_start(args: argparse.Namespace) -> None:
     # Load task definition for dependency info (outside lock)
     # Normalize to handle legacy "deps" field
     task_def = normalize_task(load_task_definition(args.id, use_json=args.json))
+    if not task_def.get("spec"):
+        error_exit(f"Task {args.id} has neither spec nor epic", use_json=args.json)
     depends_on = task_def.get("depends_on", []) or []
 
     # Validate all dependencies are done (outside lock - this is read-only check)
@@ -36520,20 +36519,20 @@ def cmd_start(args: argparse.Namespace) -> None:
         # Write inside lock
         store.save_runtime(args.id, runtime_updates)
 
-    # NOTE: We no longer update epic timestamp on task start/done.
-    # Epic timestamp only changes on epic-level operations (set-plan, close).
-    # This reduces merge conflicts in multi-user scenarios.
+    # Open specs remain untouched; only resuming closed work changes the spec.
+    reopened = _reopen_spec_for_task_change(get_flow_dir(), task_def["spec"])
 
     if args.json:
-        json_output(
-            {
-                "id": args.id,
-                "status": "in_progress",
-                "message": f"Task {args.id} started",
-            }
-        )
+        payload = {
+            "id": args.id,
+            "status": "in_progress",
+            "message": f"Task {args.id} started",
+        }
+        _note_spec_reopened(reopened, task_def["spec"], payload)
+        json_output(payload)
     else:
         print(f"Task {args.id} started")
+        _note_spec_reopened(reopened, task_def["spec"], None)
 
 
 def cmd_done(args: argparse.Namespace) -> None:
@@ -36775,11 +36774,14 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
     incomplete = []
+    final_tasks = []
     for task_file in tasks_dir.glob(f"{args.id}.*.json"):
         task_id = task_file.stem
         if not is_task_id(task_id):
             continue  # Skip non-task files (e.g., fn-1.2-review.json)
         task_data = load_task_with_state(task_id, use_json=args.json)
+        definition = load_task_definition(task_id, use_json=args.json)
+        final_tasks.append((task_file, definition, task_data["status"]))
         if task_data["status"] != "done":
             incomplete.append(f"{task_data['id']} ({task_data['status']})")
 
@@ -36790,16 +36792,30 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
         )
 
     spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+    modified_paths = [spec_path]
+    # Validate the whole spec before publishing any final task status. Keep
+    # runtime claims and evidence local; only the status must travel with git.
+    for task_file, definition, status in final_tasks:
+        if definition.get("status") != status:
+            definition["status"] = status
+            canonicalize_task_for_write(definition)
+            atomic_write_json(task_file, definition)
+            modified_paths.append(task_file)
+
     spec_data["status"] = "done"
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
-            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed"}
+            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed",
+             "modified_paths": [str(path) for path in modified_paths]}
         )
     else:
         print(f"Spec {args.id} closed")
+
+    for path in modified_paths:
+        print_tracked_write_advisory(path)
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
@@ -36827,7 +36843,7 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 # invocation regardless of how many commits are recorded — one
 # `cat-file --batch-check` fed all tokens over stdin, one `rev-list HEAD`
 # membership walk that stops as soon as every candidate oid is accounted for.
-# `validate` runs on every land-loop tick; a per-SHA spawn loop would claw
+# `validate` can run repeatedly; a per-SHA spawn loop would claw
 # back the fn-109 wins. Deliberately NOT entangled with the export payload's
 # `merge-base --is-ancestor` gate-receipt probe (different question).
 
@@ -38140,7 +38156,13 @@ def _brief_memory_enabled(flow_dir: Path) -> bool:
 def _brief_spec_blocked_by(
     flow_dir: Path, spec_id: str, spec_data: dict, specs_by_id: dict[str, dict]
 ) -> list[str]:
-    """Spec-level dep gate: deps missing or not done (cmd_ready semantics)."""
+    """Spec-level dep gate from local status: deps missing or not done.
+
+    brief never shells out, so it does not read the schedulers' landed-at-base
+    evidence. A dependency closed on its own branch and not yet merged reads
+    unblocked here; the schedulers usually agree through the chain-parent
+    waiver, and `spec chain` is the authority when they do not.
+    """
     blocked: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
         if dep == spec_id:
@@ -49580,8 +49602,7 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     }
     receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
     try:
-        # Symlink containment BEFORE any filesystem side effect (repo
-        # convention - cf. land's setup_stale guard): a committed symlink at
+        # Symlink containment BEFORE any filesystem side effect: a committed symlink at
         # .flow, .flow/tmp, or green-receipts would redirect the mkdir AND
         # the write outside the workspace during an unattended run. resolve()
         # follows symlinks in the existing components of a not-yet-created

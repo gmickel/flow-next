@@ -3,7 +3,7 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-With a TypeSafe API key, flow-next answers narrow routing, review, and memory
+With a TypeSafe API key, flow-next answers narrow routing, task-tier, and memory
 questions in one HTTP request per decision point. Code supplies the state and
 applies fixed decision rules; the host handles uncertain answers. Existing
 review, QA, and merge gates still run according to their own contracts.
@@ -30,7 +30,7 @@ when the key is absent.
 flowctl config get judge.enabled
 flowctl config set judge.enabled false
 flowctl config set judge.enabled true
-flowctl judge --preset clean-review --state-file review.json --json
+flowctl judge --preset qa-gate --spec fn-1 --json
 flowctl memory search "windows subprocess" --rerank --json
 ```
 
@@ -42,7 +42,6 @@ fallback. The model is fixed to `jev-latest`; floors are preset constants.
 
 | Preset | Questions | Decision |
 |---|---|---|
-| `clean-review` | Choice over `clean`, `findings`, `wrapper_or_status` | Count a clean review only for `clean` at confidence >= 0.7. Unavailable uses the existing regex, including its null-versus-empty behavior. |
 | `route` | Kind Choice, 12 anchored Nouls, fork pair, QA Noul | Lifecycle first; intent/brief kind at confidence >= 0.7; otherwise host with top-three candidates. |
 | `qa-gate` | UI-observable Noul | Run under `pipeline.qa=auto` only at >= 0.5 AND a startable target resolved by code. A skipped stage names the failing half. |
 | `fork-gate` | Fork-present Noul and observable/preference Choice | Below 0.5 means no fork and no question; otherwise classify at confidence >= 0.5. `none_of_the_above` or low confidence returns to the host. |
@@ -60,18 +59,6 @@ QA input and documented target in code. No preset predicts whether review, QA, o
 Question IDs and instruction text below match the bundled preset registry.
 The route preset reuses the fork and QA questions shown under their standalone
 presets. `entry_N` substitutes the zero-based BM25 hit index, from 0 through 14.
-
-### clean-review
-
-| ID | Type | Instruction text |
-|---|---|---|
-| `review` | choice | What kind of automated review body is this? |
-
-Choice criteria:
-
-- `clean`: a completed review that reports no findings / no issues on the reviewed commit
-- `findings`: a completed review that raises at least one concern, suggestion, or defect
-- `wrapper_or_status`: a summary, status, quota, stale-marker, or boilerplate body that neither clears nor raises anything itself
 
 ### route
 
@@ -131,7 +118,7 @@ Choice criteria:
 - `intelligent`: intelligent: design judgment, a cross-module change, ambiguous or negotiable acceptance, tradeoffs a senior engineer would want to weigh; the strongest available model in the session
 - `long_running`: long_running: a multi-hour implementation spanning many files or subsystems that needs a long uninterrupted run in an isolated harness (a bridged external CLI on its own branch), not a turn in the session
 
-Required standalone state fields: `body` for clean-review; `acceptance` and
+Required standalone state fields: `acceptance` and
 `startable_target_fact` for QA; `text` for fork; `query` and `entries` for
 memory. Route and tier fields are listed in the transport contract below.
 
@@ -177,7 +164,7 @@ Done summaries read the model that actually ran from the worker's return.
 
 `flowctl judge` returns `available: false` and exit 0 for `no_key`, `disabled`,
 `http_<status>`, `transport`, `timeout`, `bad_answer`, or `over_budget`. The caller
-records the reason and takes its previous regex, host, static model, or BM25
+records the reason and takes its previous host, static model, or BM25
 path. A response missing a question or a sent option is `bad_answer`.
 Unknown presets and invalid state files are command errors and exit nonzero.
 See the [CLI contract](flowctl.md#judge) for the JSON envelope.
@@ -200,8 +187,6 @@ contains `task_title`, `task_body`, `acceptance`, `touches_count`,
 Callers expose which path they took:
 
 ```text
-clean-review: jev(clean 0.91)
-clean-review: jev-unavailable(no_key)->regex
 Route: defect (jev 0.91)
 Route: host (jev below floor: build 0.52, tiny 0.31, defect 0.10)
 Route: host (jev-unavailable(timeout))
@@ -229,7 +214,7 @@ estimates, not a current price quote or a production latency guarantee.
 
 | Site | Evaluation result and bound |
 |---|---|
-| Clean review | 100/100 against the eyeball label; the regex recognized 5/12 in its comparison set. |
+| Clean review (retired preset; historical result) | 100/100 against the eyeball label; the regex recognized 5/12 in its comparison set. |
 | Kind | 0.95 raw agreement on 196 stable samples; the 0.7 floor gave 85% held-out coverage at 95% agreement. |
 | QA | 0.88 against a 0.71 baseline once code supplied the startable-target fact. |
 | Fork | 0.88 against 0.76; invented forks fell from 12 to 1. |

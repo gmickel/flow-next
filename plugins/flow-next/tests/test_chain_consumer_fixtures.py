@@ -23,7 +23,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_land_chain_fixtures import ChainWorld, fence, git
+from chain_fixture_support import ChainWorld, fence, git
 
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
@@ -262,6 +262,16 @@ class ChainDetectTestCase(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn(f"NEEDS_HUMAN: parent {parent} PR #1 closed unmerged; the chain is broken", got["_stderr"])
 
+    def test_closed_unmerged_parent_without_remote_history_still_stops(self) -> None:
+        parent, child, _ = parent_child(self.w)
+        closed = self.w.flowctl("spec", "close", parent)
+        self.assertEqual(closed["status"], "done")
+        git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/A")
+        rc, got = self.detect(child)
+        self.assertEqual(rc, 2, got)
+        self.assertIn(parent, got["_stderr"])
+        self.assertIn("NEEDS_HUMAN", got["_stderr"])
+
     def test_merged_parent_whose_chain_base_cannot_be_refreshed_is_unresolved(self) -> None:
         parent, child, a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")
@@ -312,7 +322,7 @@ class ChainRewriteTestCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="fn152-rewrite-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.w = ConsumerWorld(self.tmp)
-        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite")
+        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite").split("# fence:spec-close", 1)[0]
         self.parent, self.child, self.a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")
         self.main_tip = self.w.squash_merge("A")

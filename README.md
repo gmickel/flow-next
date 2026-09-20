@@ -24,7 +24,7 @@ Flow-Next runs inside your coding agent. Give it anything you need to fix, impro
 | "Extract the pricing rules into their own module" | Pins a characterization test first, so the refactor is proven to keep behaviour. |
 | "Work ticket WOR-17" | Reads the issue through the access you already have and routes on what it says. |
 | "Why does the parser reject empty headers?" | Answers with citations from git history and the project's decision memory. Writes nothing. |
-| `/flow-next:flow --auto` | The same pipeline unattended: routes, builds, reviews, opens the PR, and with `--until=merge` babysits CI and review threads and merges when the receipts say so. |
+| `/flow-next:flow --auto` | The same pipeline unattended: routes, builds, reviews, opens the PR, and with `--until=merge` babysits CI and review threads and merges the named PR when current authorization and GitHub checks, reviews, and threads allow it. |
 
 Every stage prints `ran`, `skipped(<reason>)`, or `failed(<reason>)`. The model that wrote the diff never reviews it. Specs, decisions, task state, and receipts live under `.flow/` in your repository and stay readable if you stop using Flow-Next. `flow --explain <anything>` prints the route it would take and why, and writes nothing.
 
@@ -104,6 +104,14 @@ Use installation commands in your terminal or the host's plugin interface as sho
 3. Read the PR it opens. Each stage line reads `ran`, `skipped(<reason>)`, or `failed(<reason>)`, and the PR body maps each change to the acceptance criterion it satisfies.
 
 [Your first 30 minutes](https://flow-next.dev/first-30-minutes/) walks the same three steps on a two-file Python example, including the review setup and the output to inspect. You need your agent access, Python 3.11+, and the project's own tools; review and PR plumbing also use `jq` and `gh`.
+
+## Land a pull request
+
+`/flow-next:land <PR>` resolves feedback and CI for one named PR and squash merges when currently authorized. The completed spec and final task statuses are committed by make-pr before the PR opens; the merge carries them to the base. Land reads every matching spec at the PR head and requires all to be closed.
+
+For several PRs, enumerate open PRs and inspect each head: select it only when at least one spec has `branch_name` equal to its head branch and every such spec is closed (`status: done`), then invoke land for each selected PR with current merge authorization. Re-read each PR before its invocation; land never discovers a repository-wide batch.
+
+A repository can tighten the review gate in its instruction file, in branch protection, or with `land.mergeVerdictCommand`. See the runtime [landing and manual rebase guidance](plugins/flow-next/docs/troubleshooting.md) and [major-upgrade notes](plugins/flow-next/docs/flowctl.md#landing-upgrade). Release preparation follows the repository's release documentation as a separate step.
 
 ## Where to read more
 
