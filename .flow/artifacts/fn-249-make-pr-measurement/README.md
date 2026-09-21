@@ -1,6 +1,6 @@
 # make-pr measurement record
 
-Measurement record for fn-249 R8 and fn-252 R11. Three points on one fixed pull
+Measurement record for fn-249 R8 and fn-252 R11. Four points on one fixed pull
 request, same model, same method:
 
 | Point | make-pr under test | Status |
@@ -8,6 +8,7 @@ request, same model, same method:
 | p0-baseline | main at `7ce9dcdd` (5.6.1), before either spec | recorded 2026-09-20 |
 | p1-after-input | after fn-249 (sparse aid input), branch head `3fc36c96` | recorded 2026-09-20 |
 | p2-after-briefing | after fn-252 (briefing body), branch head `2968cbbe` | recorded 2026-09-21 |
+| p3-after-readable | after #458 (full-render body, several specs), integration branch `e9092520` | recorded 2026-09-21 |
 
 ## Method
 
@@ -163,6 +164,41 @@ gain at p1, and this record does not separate its share of p2.
 Isolation at p2: the runs picked scratch paths under `/tmp`, which the harness
 does not park. Runs 1 and 2 both used `/tmp/fn248-export.json`; run 2 wrote it
 with its own export before reading it. No run read another run's artifact input.
+
+## p3-after-readable (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the integration
+branch at `e9092520`, after #458 removed the 40-line body bound (the body now
+renders all authored content) and added the several-spec path.
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 10,206 | 16 | 117.0 |
+| 2 | 11,908 | 19 | 141.4 |
+| 3 | 11,787 | 19 | 137.5 |
+| **Median** | **11,787** | **19** | **137.5** |
+
+| Median | p0 | p1 | p2 | p3 | p3 vs p0 |
+|---|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | 11,787 | -45.5% |
+| Tool calls | 22 | 20 | 15 | 19 | -3 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | 137.5 | -45.2% |
+
+**Result: the gain holds.** A longer, fully rendered body costs about 870 tokens
+and 8 s over p2 at the median, against a saving of about 9,800 tokens and 114 s
+over the baseline. flowctl renders the body, so its length costs the agent only
+what it repeats in its final message (6,376 to 7,147 characters here against
+3,022 to 4,648 at p2).
+
+What the streams show: every run loaded the plugin from the integration
+worktree, read the two short skill files, called `pr-cognitive-aid render`, and
+returned the seven briefing sections. The extra tool calls against p2 are
+repeated `validate` calls: run 1 needed two, runs 2 and 3 four each, and runs 2
+and 3 rendered twice. Run 2 opened `flowctl.py` to learn the artifact's shape.
+That matches what the first real several-spec dry run reported: the authoring
+guidance leaves the object shape to be discovered through validation errors.
+The cost now sits in authoring round trips, not in instruction text or body
+length.
 
 ## Limits
 
