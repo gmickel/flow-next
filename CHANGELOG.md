@@ -34,8 +34,8 @@ versioning remains a separate maintainer step.
 
 - Chain dependencies first count as landed when the default base records the
   spec as closed. Otherwise, a locally closed dependency stays chained when
-  either its remote-tracking or local branch tip is in HEAD's ancestry;
-  non-ancestor tips count as squash-landed. A branch deleted from both refs,
+  its spec records a close at HEAD's merge-base with either its remote-tracking
+  or local branch, even after that branch advances. Otherwise it counts as landed. A branch deleted from both refs,
   or no recorded branch, also counts as landed. True merges onto a non-default
   base conservatively stay chained. Base-checkout and no-base fallbacks remain.
 - `spec close` reports every rewritten file in `modified_paths`, so callers can
