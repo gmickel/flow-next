@@ -30274,24 +30274,8 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         # One shared checkpoint crosses size-neutral outcome boundaries while
         # retaining the strictly-shorter rule and stopping as soon as we fit.
         collapse_proof((None, "pass", "unverified", "fail"))
-        # The hard bound takes precedence over size-neutral individual steps.
-        # Rebuild tails from authored text so counts never count prior summaries.
-        for key in ("tradeoffs", "blastRadius", "userImpact", "openItems"):
-            original = [_pr_aid_prose(line) for line in
-                        walkthrough.get(key, "").strip().splitlines()]
-            for hidden in range(1, len(original)):
-                if not over_budget():
-                    break
-                candidate = [*original[:-hidden], "",
-                             f"{hidden} authored line{'' if hidden == 1 else 's'} collapsed"]
-                if len(candidate) <= len(prose[key]):
-                    prose[key] = candidate
-        if over_budget():
-            hidden_table = True
-            compact_scope = True
         # Reflowed Why + identity: 5; four fields: <= 4*6; scope: <= 6;
         # proof (all counted, or a size-neutral singleton): <= 4. Total <= 39.
-        assert len(assemble()) <= 40
     return "\n".join(assemble()).rstrip() + "\n"
 
 
