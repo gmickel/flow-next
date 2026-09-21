@@ -29,8 +29,7 @@ open, stop `BLOCKED`, reason `work not finished` naming every open selection;
 change nothing. If the selected set is empty, stop `NO_WORK`, reason `no matching spec`.
 Missing or malformed blobs, incomplete tree reads (including `truncated: true`), or API errors stop
 `NEEDS_HUMAN`; they are not evidence of no match. Repeat this head-bound
-selection after any head move. A merged replay reads its original head (and, on the
-no-match path, the merge commit's first parent as its base) to
+selection after any head move. A merged replay reads its original head to
 recover matching tracker links, without re-opening the landing gates; a lookup
 failure there is a touchpoint failure and retains the confirmed `MERGED`.
 
