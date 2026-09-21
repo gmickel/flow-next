@@ -187,7 +187,7 @@ fi
 ## Finalize
 After successful creation or update, optionally write a grounded `knowledge/architecture-patterns` memory
 entry under `--memory`, with tag `spec-<SPEC_ID>` as its idempotency key; skip if that tag already exists.
-Memory failure is non-fatal. Do not write memory by default or during dry-run.
+Its prose follows [docs/prose.md](../../docs/flow-next/prose.md) when present. Memory failure is non-fatal; never write by default or in dry-run.
 
 When the bridge is active, invoke the inline tracker-sync wrapper with the prepared snapshots and optional
 private breadcrumb, making one lifecycle call:
