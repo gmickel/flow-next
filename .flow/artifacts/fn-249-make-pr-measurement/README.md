@@ -7,7 +7,7 @@ request, same model, same method:
 |---|---|---|
 | p0-baseline | main at `7ce9dcdd` (5.6.1), before either spec | recorded 2026-09-20 |
 | p1-after-input | after fn-249 (sparse aid input), branch head `3fc36c96` | recorded 2026-09-20 |
-| p2-after-briefing | after fn-252 (briefing body) | pending |
+| p2-after-briefing | after fn-252 (briefing body), branch head `2968cbbe` | recorded 2026-09-21 |
 
 ## Method
 
@@ -105,6 +105,64 @@ attempt) and that is covered by tests, not by this timing. It does not make an
 ordinary make-pr run on a mid-sized pull request cheaper. The cost sits in the
 instructions read and the body rendered, which the sibling briefing spec changes;
 p2 is where a difference should show if there is one.
+
+**Correction (2026-09-21).** The bullet above that says the authored characters
+"did not shrink" is wrong. That metric summed every tool call mentioning aid
+keywords, re-validation calls included. The composing call alone was 11,311 /
+11,292 / 11,887 characters with 25 rows at p0 and 8,400 / 6,033 / 8,995 with 11
+to 18 rows at p1, about 30% less, and no p1 call mentions `changeType`,
+`additions`, `deletions` or `diffUrl`: the p1 runs did author sparse rows. Total
+output tokens and wall clock still did not improve, so the headline null result
+stands; what changes is the explanation. Sparse input shrank the composing call,
+and the saving was lost in the rest of the run.
+
+Isolation note: runs chose scratch directories under the harness root that were
+shared across runs (`pr449-makepr` was used by p0 run 2 and p1 runs 2 and 3).
+Checked in the streams: no run read or listed another run's files. The harness
+now parks such leftovers before each run (`measure.sh` in this directory is the
+fixed copy).
+
+## p2-after-briefing (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the fn-252
+branch at `2968cbbe`, after its four review rounds.
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 11,069 | 15 | 133.3 |
+| 2 | 10,717 | 15 | 129.3 |
+| 3 | 10,918 | 15 | 125.4 |
+| **Median** | **10,918** | **15** | **129.3** |
+
+| Median | p0 | p1 | p2 | p2 vs p0 |
+|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | -49.5% |
+| Tool calls | 22 | 20 | 15 | -7 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | -48.5% |
+
+**Result: about half the output tokens and half the wall clock of the baseline,
+well outside the run-to-run spread.** The p2 runs span 352 tokens and 7.9 s; the
+earlier points spanned about 10,000 tokens and 75 s.
+
+Checked in the streams before trusting the numbers:
+
+- Every init event loads the plugin from the fn-252 worktree.
+- Runs 2 and 3 read the shortened `workflow.md` and `pr-cognitive-aid.md` with
+  the file tool; run 1 made no file-tool read. No run opened a deleted reference.
+- Every run called `pr-cognitive-aid render` and its result carries the seven
+  briefing sections. The rendered body in run 3 is 34 lines.
+- No call mentions `changeType`, `additions`, `deletions` or `diffUrl`.
+- All three runs repeat the body in their final message, which at p0 and p1
+  cost 6,000 to 7,000 tokens per repeat. The body is now short enough that the
+  repeat no longer moves the total (final messages of 3,022 to 4,648 characters).
+
+Reading: the gain comes from fn-252 (596 instruction lines loaded instead of
+about 2,900, and a 40-line body instead of a long one). fn-249 alone showed no
+gain at p1, and this record does not separate its share of p2.
+
+Isolation at p2: the runs picked scratch paths under `/tmp`, which the harness
+does not park. Runs 1 and 2 both used `/tmp/fn248-export.json`; run 2 wrote it
+with its own export before reading it. No run read another run's artifact input.
 
 ## Limits
 
