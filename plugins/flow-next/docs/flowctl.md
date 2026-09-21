@@ -422,7 +422,7 @@ flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 
 ### spec chain
 
-Chain eligibility of a dependent spec: may this spec start now, and on which parent's branch. The chain consumers and task-admission gates share this read-only predicate. Base resolution reads `refs/remotes/origin/HEAD`, then probes its target and `origin/main`, `main`, `origin/master`, `master` in order with local `git rev-parse`. A successful ref and commit are cached per working directory for the process. Each locally done dependency and each locally done sibling examined uses `git ls-tree` and, when its spec exists, `git show` to read base evidence. These object reads may repeat across admission and chain checks. There is at most one existing `git ls-remote --heads origin` per invocation, shared across specs and needed only for a chain candidate. No fetch occurs; with no dependencies there is no chain git read.
+Chain eligibility of a dependent spec: may this spec start now, and on which parent's branch. The chain consumers and task-admission gates share this read-only predicate. Base resolution reads `refs/remotes/origin/HEAD`, then probes its target and `origin/main`, `main`, `origin/master`, `master` in order with local `git rev-parse`. A successful ref and commit are cached per working directory for the process. Each locally done dependency and each locally done sibling examined uses `git ls-tree` and, when its spec exists, `git show` to read base evidence. When base evidence does not prove landing, local `git show-ref` and `git merge-base --is-ancestor` check the dependency branch. These object reads may repeat across admission and chain checks. There is at most one existing `git ls-remote --heads origin` per invocation, shared across specs and needed only for a chain candidate. No fetch occurs; with no dependencies there is no chain git read.
 
 ```bash
 flowctl spec chain fn-2 [--json]
@@ -441,7 +441,9 @@ Output (exhaustive shape):
 }
 ```
 
-A dependency is **landed** when it is closed locally and its spec at the resolved base also has `status: done`. A local close alone can be an unmerged branch. On a checkout of the base branch itself the local close stands, since work done directly on the base has nothing left to merge. Base evidence comes from local refs and may be stale. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used. The same diagnostic appears in the JSON `reason`.
+For a locally closed dependency, **landing evidence is checked in order**: first, a spec with `status: done` at the resolved default base proves it landed. A checkout of the base branch itself still accepts the local close. If no base ref resolves, the local close stands; one stderr notice per working directory names the refs tried and says local status is being used, also in the JSON `reason`.
+
+Otherwise, check the dependency's `branch_name` using both `origin/<branch_name>` and the local `<branch_name>`. If either existing tip is an ancestor of `HEAD`, the dependency stays unlanded: its branch is in this branch's history and its close is not recorded at the base. If the existing tips are not ancestors, the close counts as landed through a squash merge, including onto a non-default integration branch. If neither ref exists (the branch was deleted), or no `branch_name` is recorded, it also counts as landed. A true merge into a non-default branch carries the parent's tip into `HEAD`, so it conservatively stays unlanded until base evidence proves otherwise. All these checks read local git objects without fetching; refs may be stale, and read failures other than missing refs block.
 
 `eligible` is true when every dependency is landed (`parent`, `parent_branch`, and `parent_branch_on_remote` are `null`; no remote read), or when exactly one unlanded dependency has all tasks done, its branch exists on origin, and no other unlanded sibling naming that parent has a branch on origin. A minted implicit task counts; zero tasks still means in progress. A locally closed but unlanded sibling still occupies the chain.
 
@@ -453,7 +455,7 @@ The `reason` vocabulary is below. Base diagnostics are retained alongside the ev
 - `dependency <id> in progress`
 - `two open parents: <id>, <id>; chains are linear`
 - `parent branch <b> not on origin; push it or land the parent first` for a locally open parent (`parent_branch_on_remote: false`)
-- `dependency <id> closed locally but not recorded at <base>; fetch the base or land it`, including a locally closed parent whose branch is gone from origin
+- `dependency <id> closed locally but not recorded at <base>; dependency branch <ref> is in this branch's history; fetch the base or land it`
 - `parent <id> already chained by <sibling-id>`
 - `remote query failed: <first stderr line>` (`parent_branch_on_remote: null`; a failed query is never reported as an absent branch)
 - `base query failed: <error>` (unreadable base evidence blocks admission)
@@ -880,7 +882,7 @@ Output:
 }
 ```
 
-Spec-level deps gate the whole spec. `ready`, `next`, and `ready --all` share the landed-at-base evidence rule described in [`spec chain`](#spec-chain), including the no-base fallback and notice. Missing dependencies and unreadable base evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` runs no git subprocess, so it reads a dependency's local status: a dependency closed on its own branch and not yet merged reads unblocked there, which matches the schedulers whenever the chain-parent waiver applies, and `spec chain` is the authority otherwise. Task-level `depends_on` is unchanged.
+Spec-level deps gate the whole spec. `ready`, `next`, and `ready --all` share the ordered landing rule described in [`spec chain`](#spec-chain): first accept a close recorded at the default base, retaining the base-checkout and no-base fallback (with notice). Otherwise, either dependency branch tip (`origin/<branch_name>` or local `<branch_name>`) in HEAD's ancestry keeps it unlanded. Non-ancestor tips count as squash-landed; a branch deleted from both refs or an unset `branch_name` also counts as landed. True merges into a non-default integration branch conservatively remain unlanded because the parent tip is an ancestor. These are local object reads with no fetch. Missing dependencies and unreadable git evidence block. When blocked, `ready` returns empty `ready`/`in_progress`/`blocked` lists plus `blocked_by_specs`. The schedulers waive the one eligible chain parent named by `spec chain`; all other unlanded dependencies still block. `brief` runs no git subprocess, so it reads a dependency's local status: a dependency closed on its own branch and not yet merged reads unblocked there, which matches the schedulers whenever the chain-parent waiver applies, and `spec chain` is the authority otherwise. Task-level `depends_on` is unchanged.
 
 ```json
 {
