@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-252-make-pr-body-a-short-briefing-rendered",
   "spec_path": ".flow/tasks/fn-252-make-pr-body-a-short-briefing-rendered.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement make-pr body: a short briefing rendered from the aid artifact",
   "updated_at": "2026-09-20T19:17:37.210050Z"
 }

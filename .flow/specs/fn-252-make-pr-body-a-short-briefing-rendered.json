@@ -134,7 +134,7 @@
     "impl:fn-252-make-pr-body-a-short-briefing-rendered.1": 0
   },
   "spec_path": ".flow/specs/fn-252-make-pr-body-a-short-briefing-rendered.md",
-  "status": "open",
+  "status": "done",
   "title": "make-pr body: a short briefing rendered from the aid artifact",
   "tracker": {
     "baseHashFlow": null,
@@ -147,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-21T05:23:11.493530Z"
+  "updated_at": "2026-09-21T05:31:32.524110Z"
 }
