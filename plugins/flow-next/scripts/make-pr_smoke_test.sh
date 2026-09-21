@@ -796,31 +796,15 @@ PY_BRIEFING
 fi
 
 # =============================================================================
-# T11: Mermaid trigger logic — cross_module_changes signal feeds skill
+# T11: Structural-change evidence remains available to the author.
+# fn-252 removes the automatic Mermaid trigger list and fixed diagram caps;
+# the export contract survives independently of the optional sketch choice.
 # =============================================================================
-echo -e "${YELLOW}--- T11: mermaid trigger — cross_module_changes non-empty ---${NC}"
-# T11 is the export-side of the mermaid trigger. The skill emits the codefence
-# only when this signal is non-empty (and `--no-mermaid` not set). Already
-# proven in T3 that the fixture's cross-module imports surface as
-# cross_module_changes >= 1. Re-check explicitly + cross-check the
-# canonical mermaid-rules.md ships the trigger list.
-
+echo -e "${YELLOW}--- T11: structural-change export evidence ---${NC}"
 T11_XM="$(json_get "$T1_OUT" "len(d['diff_summary']['cross_module_changes']) >= 1")"
 [[ "$T11_XM" == "True" ]] \
   && ok "T11" "cross_module_changes signal flows from fixture to export" \
-  || fail "T11" "fixture's cross-module import not detected (mermaid trigger broken)"
-
-MERMAID_RULES="$PLUGIN_ROOT/skills/flow-next-make-pr/mermaid-rules.md"
-if [[ -f "$MERMAID_RULES" ]]; then
-  M_TEXT="$(cat "$MERMAID_RULES")"
-  assert_grep "T11" "cross_module_changes" "$M_TEXT" "mermaid-rules.md references cross_module_changes trigger"
-  assert_grep "T11" "flowchart LR" "$M_TEXT" "mermaid-rules.md references flowchart LR shape"
-  # Hard caps
-  assert_grep "T11" "12 nodes" "$M_TEXT" "mermaid-rules.md documents 12-node cap"
-  assert_grep "T11" "3 diagrams" "$M_TEXT" "mermaid-rules.md documents 3-diagram cap"
-else
-  skip "T11" "mermaid-rules.md not on disk (Task 5 not landed)"
-fi
+  || fail "T11" "fixture's cross-module import not detected"
 
 # =============================================================================
 # T12: Deleted public-export files surface in public_exports_changed

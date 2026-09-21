@@ -3,7 +3,7 @@
 This reference carries the QA discipline `/flow-next:qa` borrows from Ray Fernando's
 `running-bug-review-board` (BRB) skill. It is deliberately **lean** — flow-next already
 owns most of the surrounding machinery (the spec as intent, the bug memory track,
-receipts, the make-pr R-ID table, tracker-sync), so this is the discipline, not
+receipts, the make-pr briefing, tracker-sync), so this is the discipline, not
 the 18-reference port.
 
 > The session-hygiene rules, persona-suffix discipline, write-path-first /

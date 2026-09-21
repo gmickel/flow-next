@@ -814,7 +814,7 @@ class MakePrIntegrationTests(unittest.TestCase):
         )
         self.assertLess(
             workflow.index("## Phase 1.5b: HTML render lens"),
-            workflow.index("## Phase 2: Render body header sections"),
+            workflow.index("## Phase 2:"),
         )
         self.assertIn(
             "This phase ends before PR creation", artifact_reference

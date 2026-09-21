@@ -1,143 +1,69 @@
 # PR cognitive-aid artifact
 
-Run this phase after `export-cognitive-aid` and before the optional HTML lens
-and final PR-body composition. The existing host agent owns every judgment:
-thesis, logical groups, summaries, order, and source attribution. This phase
-adds no model call. `flowctl` fills diff metadata, validates, persists, and renders.
+After the close commit and export, the existing host authors one v1 object from `EXPORT_PAYLOAD`, task
+evidence and review receipts. No extra model call. Use the export's `MERGE_BASE` and `HEAD_SHA` throughout.
 
-## 1. Resolve or compose
-
-Use the export-time code-under-review identity:
+## Resolve, compose, validate
 
 ```bash
-CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
-CURRENT_AID_STATUS=$(printf '%s' "$CURRENT_AID" | jq -r '.status')
-CURRENT_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.artifact.artifactId // empty')
-LATEST_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.latestArtifactId // empty')
+CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
 ```
+Reuse status `current` exactly. Otherwise write one object to a private 0600 `AID_INPUT` tempfile outside the
+repository:
 
-When status is `current`, reuse that exact generation; do not compose a
-parallel story. Render it in step 3.
+- Identity: `schemaVersion: 1`, unique portable `artifactId`, `specId`, `baseSha`,
+  `headSha`, UTC `generatedAt`; `supersedesArtifactId` names `latestArtifactId` if present.
+- `sources[]` records have `id`, `kind`, `ref`; kinds `spec`, `task`, `rid`, `review_receipt`, `qa_receipt`,
+  `diff_metadata`, `commit`, bound to this spec, its tasks, canonical R-IDs,
+  receipts, commits and `$MERGE_BASE..$HEAD_SHA`. Include every declared R-ID, even uncovered.
+- `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
+  `userImpact` says what changes for a user or operator; `blastRadius` names who
+  or what is touched and why safe or risky; `tradeoffs` records rejected alternatives
+  reviewers would ask about; `openItems` records unfinished work.
+- Findings the spec requires to be recorded in the PR belong in Open items or Tradeoffs.
+- `proof[]`: sourced `label`, `value`, `sourceRefs`, optional `outcome`.
+  Draw from task evidence and review receipts: `pass` only for a gate run green,
+  `fail` for failure, `unverified` for inconclusive or never-run steps, explaining
+  the gap in `value`; no separate steps-not-verified field. Old outcome-less cells
+  remain plain evidence, never gain a tick.
+- QA receipts use `qa_outcome`, not the projected `verdict`: SHIP maps to pass,
+  NEEDS_WORK to fail, BLOCKED/NA to unverified with their reason. Surface open
+  findings in `openItems`, advisory only. Verify receipt head freshness against
+  code, allowing only leading QA-receipt, lens and spec-close bookkeeping commits;
+  stale/malformed receipts cannot justify a pass.
+- Ordered `groups[]`: optional `problem`, optional `principle`, 1–7 `step`,
+  optional `kept`, optional `verify`; author `ordinal`, `title`, `summary`, `sourceRefs`, `rIds`, `taskIds`.
+  `files` is required on every group even when it is `[]`.
+- Author rows only for paths worth describing from `diff_summary.files[]`, with
+  `path`, `summary`, and `attentionClass` unless a state/lockfile/mirror pattern
+  supplies it. Explicit classes win; canonical means must read, mechanical and
+  generated mean safe to skim. References inherit from groups unless supplied;
+  R-ID/task links need matching sources and files cite bound diff metadata.
+- Omit mechanical `changeType`, `additions`, `deletions`, `diffUrl`; supplied
+  values must validate. Flowctl-added empty-summary rows render in the counted
+  “not described” line, not individual file rows. Never copy raw diff content.
 
-Otherwise, compose exactly one JSON object from the already-loaded
-`EXPORT_PAYLOAD`. Write it to a private temporary file (mode 0600) outside the
-repository. The object follows `pr_cognitive_aid` schema version 1:
+Validate/write accept sparse input, as do `render --file` and `html-input --file`. The persisted object
+remains complete. Correct validation errors together; never truncate values to evade validation or overwrite
+an existing generation.
+```bash
+# Dry-run: validation only, no repository writes.
+"$FLOWCTL" pr-cognitive-aid validate --file "$AID_INPUT" --json
+# Real create/update: validate and atomically persist.
+"$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json
+```
+Run only the matching command. Reused artifacts need neither.
 
-- Identity: `schemaVersion`, a portable unique `artifactId`, `specId`,
-  `baseSha=$MERGE_BASE`, `headSha=$HEAD_SHA`, UTC `generatedAt`, and
-  `supersedesArtifactId=$LATEST_AID_ID` when a prior chain tip exists.
-- One bounded `sources[]` table. Allowed kinds: `spec`, `task`, `rid`,
-  `review_receipt`, `qa_receipt`, `diff_metadata`, `commit`.
-- `changeWalkthrough.thesis`, grounded `proof[]`, and ordered `groups[]`.
-  Logical order: optional `problem`, optional `principle`, 1-7 `step`, optional
-  `kept`, optional `verify`. Never invent an optional group.
-- Source refs are bound, not labels: `spec` equals `specId`; `task` belongs to
-  that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
-  `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
-- Author only judgment: thesis, proof, groups, sources, and file path/summary.
-  Write rows only for files worth a sentence, from `diff_summary.files[]`.
-- Rows inherit group refs unless explicit; each semantic claim needs sources.
-  `rIds`/`taskIds` need matching sources; files cite bound `diff_metadata`.
-- Omit `changeType`, `additions`, `deletions`, `diffUrl`; flowctl fills them.
-  Explicit counts/types must match; links must be HTTPS or relative. No raw diff.
-- Supply `attentionClass` (`canonical|generated|mechanical`) unless a known
-  state/lockfile/mirror pattern decides it; explicit classes win. Unlisted paths
-  get empty-summary rows in existing steps, canonical unless a pattern applies.
-
-The validator enforces the full v1 payload, string, path, URL, provenance,
-group, file, and byte bounds. Never pre-truncate to make invalid input pass.
-
-## 2. Validate and persist before body creation
-
-For `--dry-run`, validate without state change:
+## Render
 
 ```bash
-"$FLOWCTL" pr-cognitive-aid validate --file "$AID_INPUT" --json >/dev/null
+PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA") || PR_AID_MARKDOWN=""
+# For a newly composed dry-run input, use instead:
+PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT") || PR_AID_MARKDOWN=""
 ```
-
-For a real create/update, validation and immutable atomic publication are one
-operation:
-
-```bash
-"$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json >/dev/null
-```
-
-The generation lands at
-`.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`. Never overwrite
-or delete a prior generation. Failure is non-fatal for PR creation: print one
-stderr note, set `PR_AID_CURRENT=false`, and use the existing legacy compact
-body fields. Never partially render the rejected object.
-
-## 3. Deterministic Markdown
-
-For a reused/persisted generation:
-
-```bash
-PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA") || PR_AID_MARKDOWN=""
-```
-
-For `--dry-run`, render the validated temporary file:
-
-```bash
-PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT") \
-  || PR_AID_MARKDOWN=""
-```
-
-Non-empty output is inserted as one contiguous body section before Critical
-changes. It is either:
-
-- compact: thesis, proof, and one flat canonical-file table; or
-- full when canonical additions+deletions are at least 200 or canonical file
-  count is at least 6: complete legend, evidenced logical groups, file tables,
-  and generated/mechanical rows collapsed inside their original group.
-
-The rendered section never replaces or absorbs the separate risk-ranked
-`## Review plan`, and never includes raw diff excerpts.
-
-## 4. One truth, tracker boundary unchanged
-
-Immediately before `gh pr create`, assert `git rev-parse HEAD` still equals the
-artifact `headSha`; on mismatch, treat it as stale and use the labeled fallback.
-
-When `PR_AID_MARKDOWN` is non-empty, the current v1 object is authoritative for
-the thesis, proof metrics, R-ID/task links, verification claims, walkthrough
-order, and file membership. Suppress the legacy Verification section, and
-suppress the legacy R-ID coverage section ONLY when
-`tasks_summary.uncovered_r_ids` is empty (fully evidenced coverage - the state
-the artifact can fully express); their content is then rendered from the
-artifact inside the walkthrough. **When any criterion is unevidenced or
-undeclared, the legacy R-ID coverage section RENDERS alongside the artifact**
-(PR #327 finding): `rid` source refs bind an R-ID to a commit, so the artifact
-expresses evidenced coverage only - it has no claimed-not-evidenced or
-undeclared counterpart, and the §2.3 table is the sole carrier of the
-per-criterion `⏳` / `⚠️` state. Derive the summary block's coverage ratio from
-the artifact links when the table is suppressed, from `tasks_summary`
-otherwise. Existing fields are fallback-only for the claims the artifact does
-carry; never merge stale/legacy values into those claims. The
-declared-coverage abort and the plan-gate qualifier clauses (workflow §2.7,
-§2.1) keep reading `tasks_summary.undeclared_r_ids` / `uncovered_r_ids` on this
-path too; that is not a legacy merge, because no artifact value is being
-overridden.
-Other established sections remain: boundaries, Critical changes, How to review,
-Review plan, decisions, memory, glossary/strategy, open items, QA, and footer.
-
-This phase ends before PR creation. Do not move or alter the post-creation
-`makePr` tracker facade in `create-and-finalize.md`: `$PR_URL` must exist first;
-the body tracker reference, explicit `--pr-url`, body-preserving In Review
-reconcile, native link or deduplicated fallback, optional breadcrumb,
-receipt-backed audit, and single bounded retro-fire all remain intact. Never
-restore the retired tracker-runner dispatch.
-
-## Done when
-
-- Current matching v1 generation reused, or a new valid generation composed
-  from the existing payload and validated before final body creation.
-- Real run persisted one immutable generation; dry-run wrote no repository
-  state.
-- Markdown selected exactly one compact/full path and stayed separate from the
-  Review plan.
-- Rejection selected the labeled legacy fallback without mixing fields.
-- No new model/network invocation; tracker creation/facade ordering unchanged.
+The renderer owns the seven-section briefing, omission, coverage and collapse. Do not merge export
+fields into its output or choose a size-based form. Invalid, stale or unsupported artifacts render nothing:
+print one stderr note, set `PR_AID_CURRENT=false`, and use a labeled fallback with the export's goal, task
+summaries, recorded verification and open items; never rejected fields. On success set `PR_AID_CURRENT=true`;
+keep the immutable artifact local so it cannot move its own head. This phase ends before PR creation.
+[create-and-finalize.md](create-and-finalize.md) creates the PR, then runs the tracker facade with `$PR_URL`.
