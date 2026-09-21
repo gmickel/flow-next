@@ -8,23 +8,35 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## [flow-next 6.0.0] - 2026-09-21
 
-Pull requests are now written for the person who has to review them, and landing
-one is a small loop you can read in a few minutes. A reviewer opening an
-agent-made pull request gets the review steps in order, the few files that must
-be read with a link and a purpose on each, and a verification checklist that
-ticks only what passed. Producing that body got faster, not slower: on a fixed
-pull request the median make-pr run fell from 21,627 to 8,174 output tokens and
-from 251 to 100 seconds (three cold runs per point, one fixture; tool calls fell
-from 22 to 13, which is the firmer signal). Landing changed shape: you name one
-pull request, land repairs it (review threads, one CI fix, catch-up) and merges
-only when you authorized the merge in the current session. A finished spec is
-closed on the pull-request branch before the pull request opens, so the close
-reaches a protected base through the merge itself.
+A pull request from flow-next now reads like a briefing for the person reviewing
+it, and make-pr produces it 60% faster. The body opens with why the change
+exists, then walks the review in order: each step says what to check and lists
+up to ten files that must be read, each a link with its purpose and the
+requirement it serves. Everything else is counted in one line. Verification is
+a checklist that ticks only what passed.
 
-This is a **major** release. Repo-wide landing, land's ledger and fix budget,
-release-follow, reviewer requests and the merge-command override are removed;
-the upgrade notes below give the replacement for each. Eight retired `land.*`
-keys still load, with one notice, and are ignored.
+On a fixed 23-file pull request the median make-pr run went from 251 seconds to
+100, from 22 tool calls to 13, and from 21,627 output tokens to 8,174 (three
+cold runs per point). The agent now writes only judgment, flowctl fills in the
+rest of the diff, and an ordinary run loads under 600 lines of instructions
+where it loaded about 2,900.
+
+Landing is a loop you can read in five minutes. Name one pull request:
+`/flow-next:land <PR>` resolves its review threads, fixes CI once, catches the
+branch up, and merges when you authorized the merge in the session. Land's
+instructions went from 1,741 lines to under 200, and it keeps no state between
+runs. A finished spec closes on the pull-request branch, so the close reaches a
+protected base through the merge itself. A branch that closes several specs
+gets one body and lands as one pull request. This release landed itself that
+way: 175 files, four specs, one pull request.
+
+**What changes when you upgrade.** This is a **major** release. A bare or
+scheduled `/flow-next:land` no longer finds pull requests, so replace it with a
+loop over named ones ([recipe](https://flow-next.dev/autonomy/land/#the-land-loop)).
+Eight `land.*` keys are retired; they still load, with one notice, and are
+ignored. Release-follow, reviewer requests and the merge-command override are
+gone, and so is make-pr's `--no-mermaid` flag. The upgrade notes below give the
+replacement for each.
 
 ### Changed
 
@@ -40,20 +52,19 @@ keys still load, with one notice, and are ignored.
   for a user or operator. Scope gives the size of the change, then the review steps in order: each step says what
   to check there and lists up to ten files that must be read, as links that wrap, each with its purpose and the
   requirement it serves. Mechanical, generated and undescribed files are counted in one line, with the few
-  must-read files nobody described named by path. Coverage reads `R1 → group 1`. Verification is a checklist that
-  ticks only what passed; failed and unverified gates stay unticked with their note. Blast radius, tradeoffs and
-  open items follow, and an empty section is omitted. There is no length budget: a hard 40-line cap was tried and
-  dropped, because on a 174-file pull request it hid 12 of 13 must-read files behind counts. The body still came
-  out far shorter, about 800 to 1,000 words for a 23-file pull request whose old walkthrough section alone ran to
-  1,136. This resolves the body-length report in #447, which measured bodies at 2,700 to 3,700 words. Thanks to
-  @flecamos for the report.
-  Under the hood: `flowctl` renders the body in one pass from the aid artifact, and the agent authors only
-  judgment (the skill carries a validated skeleton of the artifact, so a real run is one `write` and one render).
-  The compact and full forms, their size threshold, the machine-identity rows, the per-row evidence column, the
-  review-plan section, the generated-by footer and the `--no-mermaid` flag are gone; artifact id, base and head
-  ride in one HTML comment. A row's own requirement ids set its tag while coverage keeps every citation. Mentions
-  in authored prose are made inert so `@dataclass` pings nobody; issue and pull-request numbers stay live links.
-  The HTML lens and `html-input` are unchanged.
+  must-read files nobody described named by path. Coverage reads `R1 → group 1`. Verification ticks only what
+  passed; failed and unverified gates stay unticked with their note. Blast radius, tradeoffs and open items
+  follow, and an empty section is omitted. The body is as long as its authored content and no longer: about 800
+  to 1,000 words for a 23-file pull request, and about 1,900 for one with 175 files and four specs, where the old
+  form ran 2,700 to 3,700 words for 25 to 39 files. A house style in your `AGENTS.md` or `CLAUDE.md` shortens it
+  further. This resolves the body-length report in #447. Thanks to @flecamos for the report.
+  Under the hood: `flowctl` renders the body in one pass from the aid artifact, and the skill carries a validated
+  skeleton of that artifact, so a real run is one `write` and one render. The compact and full forms, their size
+  threshold, the machine-identity rows, the per-row evidence column, the review-plan section, the generated-by
+  footer and the `--no-mermaid` flag are gone; artifact id, base and head ride in one HTML comment. A row's own
+  requirement ids set its tag while coverage keeps every citation. Mentions in authored prose are made inert so
+  `@dataclass` pings nobody; issue and pull-request numbers stay live links. The HTML lens and `html-input` are
+  unchanged.
 - The aid artifact accepts four optional authored strings (`userImpact`,
   `blastRadius`, `tradeoffs`, `openItems`) and an optional `outcome` (`pass`,
   `fail`, `unverified`) on each proof cell. The renderer ticks only `pass`;
