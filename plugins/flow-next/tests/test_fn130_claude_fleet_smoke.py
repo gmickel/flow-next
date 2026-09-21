@@ -21,7 +21,7 @@ SPEC.loader.exec_module(MODULE)
 class ClaudeFleetSmokeHarnessTests(unittest.TestCase):
     @staticmethod
     def harness_source():
-        return SCRIPT.read_text() + ORACLES.read_text()
+        return SCRIPT.read_text(encoding="utf-8") + ORACLES.read_text(encoding="utf-8")
 
     def test_case_roster_covers_every_optimized_user_workflow(self):
         self.assertEqual(
@@ -67,7 +67,7 @@ class ClaudeFleetSmokeHarnessTests(unittest.TestCase):
 
     def test_external_writes_are_guarded(self):
         source = self.harness_source()
-        self.assertIn("--dry-run --base main --no-mermaid", source)
+        self.assertIn('"command": f"/flow-next:make-pr {spec_id} --dry-run --base main",', source)
         self.assertIn('"no_live_pr_create"', source)
         self.assertIn("strict_empty_mcp", source)
         self.assertIn("no_tracker_receipt_write", source)

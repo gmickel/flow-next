@@ -7,6 +7,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 """
 
 import argparse
+import copy
 import errno
 import hashlib
 import heapq
@@ -1415,102 +1416,8 @@ def get_default_config() -> dict:
         # (REMOVED_CONFIG_KEYS below) and runs unchanged. The
         # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
         # DISTINCT namespace and are untouched.
-        # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
-        # `config get land.*` returns the seeded default (never a missing
-        # key) on a fresh repo; every leaf is non-null EXCEPT
-        # patienceMinutesAfterReview, whose seeded default is an explicit
-        # null (its documented off state).
-        # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
-        # itself only stores/serves them.
-        "land": {
-            # Follow the project's release instructions after merge.
-            # Also no-ops when no release docs/scripts are discovered.
-            "release": True,
-            # Patience window (minutes) for automated reviewers, anchored
-            # to the LAST push — a land-authored CI-fix push restarts it.
-            "patienceMinutes": 30,
-            # fn-219 — opt-in silence-signal refinement: when set, and only
-            # while the latest automated review is head-current with zero
-            # unresolved threads, the silence gate's window is re-anchored
-            # to that review event (this many minutes measured from it)
-            # instead of the last push. null / 0 = OFF (today's push-anchored
-            # wait, byte-for-byte); the schema is integer|null, and the land
-            # read treats a hand-edited or pre-schema string as off rather
-            # than failing the tick. A fix push moves
-            # the head, so the review stops being head-current and the push
-            # anchor governs again until the bot re-reviews.
-            "patienceMinutesAfterReview": None,
-            # Merge review signal: silence (default) | approve | <github-login>.
-            #   silence  — ≥1 automated review + zero unresolved threads +
-            #              no new threads within the patience window.
-            #   approve  — formal reviewDecision == APPROVED.
-            #   <login>  — that reviewer's latest review is APPROVED/clean.
-            "reviewSignal": "silence",
-            # CSV allowlist of automated-reviewer logins, supplementing the
-            # `[bot]`-suffix rule. Default empty = suffix rule only.
-            "automatedReviewers": "",
-            # One-shot comment land posts to summon a reviewer bot when a
-            # DRAFT PR has zero automated reviews (bots like Codex do not
-            # auto-review drafts; pilot's PRs are born draft). Empty =
-            # never post; e.g. "@codex review".
-            "reviewTrigger": "",
-            # Max CI-fix attempts per PR before the durable
-            # `flow-next:needs-human` label + skip.
-            "ciFixBudget": 3,
-            # fn-65.1 — STRUCTURED built-in ERE for the `silence`-signal
-            # clean-review COMMENT path: a review bot (e.g. Codex) posts an
-            # issue comment instead of a formal APPROVE on a no-findings
-            # pass, e.g. "Didn't find any major issues. Reviewed commit:
-            # `8ff0e50f`". Two accepted clean shapes (fn-213): the legacy
-            # clean phrase, which requires BOTH the phrase AND the
-            # `Reviewed commit` marker; and Codex's edited-in-place
-            # summary-table row (`<!-- codex-pull-request-review-summary -->`
-            # comment), which requires the literal bold `**Code Review**`
-            # followed by `**Completed**` in one body. A bare "no issues" or
-            # "code review completed" mention without its structure never
-            # satisfies the gate; the workflow additionally extracts a
-            # head-current SHA token before counting it.
-            #   Config contract (workflow.md §2.6 cfg read):
-            #     null/missing (pre-seed flowctl copy) → fall back to THIS
-            #                                            built-in default
-            #     explicit ""  → comment scan DISABLED (pure reviews-API)
-            #     other value  → use it
-            # The empty-disables arm is the only real off-switch — an
-            # "empty → default fallback" would make the feature
-            # un-disableable. A persisted value equal to a RETIRED default
-            # (init materialized the pre-fn-213 string) is aliased to this
-            # built-in at read time — see RETIRED_CLEAN_REVIEW_PATTERNS.
-            "cleanReviewCommentPattern": (
-                r"(Didn'?t find any( major)? issues"
-                r"|No( major)? issues found).*Reviewed commit"
-                r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
-            ),
-            # fn-188 — OPT-IN repo merge-verdict gate (#330): a shell
-            # command land runs once per merge attempt, at the decision
-            # point, after every other gate is satisfied. Exit 0 = green;
-            # non-zero (including missing/unexecutable, timeout, signal
-            # death) BLOCKS the merge — fail-closed, never skip. Context
-            # reaches the command as environment only (FLOW_HEAD_SHA,
-            # FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); the configured
-            # string is never built from PR-derived text. Never executed
-            # under --dry-run.
-            #   Config contract (workflow.md §2.9):
-            #     unset / null / "" → OFF (today's behavior byte-for-byte)
-            #     other value       → run it as the merge gate of record
-            # NOTE the asymmetry with cleanReviewCommentPattern above,
-            # where null and "" mean DIFFERENT things: here all three
-            # off-states collapse to OFF. Do not copy that pattern here.
-            "mergeVerdictCommand": "",
-            # fn-200 — OPT-IN human reviewer request (#359): csv of GitHub
-            # logins and/or org/team slugs, and/or the literal token
-            # `codeowners`. When set, land requests them (minus the PR
-            # author) exactly when a human review is the only missing
-            # merge input, flipping a draft PR to ready at the same moment;
-            # one-shot per PR per head SHA via the land ledger. Never gates
-            # a merge (reviewSignal does). Seeded "" so `config get`
-            # returns a value, not null; unset / null / "" all mean OFF.
-            "requestReviewers": "",
-        },
+        # One named PR: only the merge command and push-anchored patience remain.
+        "land": {"patienceMinutes": 30, "mergeVerdictCommand": ""},
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a
         # fresh repo via the defaults MERGE (load_flow_config), NOT by
@@ -1649,46 +1556,6 @@ def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
     new_tracker = dict(tracker)
     new_tracker["specIds"] = norm
     new_cfg["tracker"] = new_tracker
-    return new_cfg
-
-
-# fn-213 — retired built-in defaults of land.cleanReviewCommentPattern.
-# `init` materializes the current default into .flow/config.json, so a repo
-# seeded before a default rotation keeps the OLD byte-string on disk and the
-# persisted value would override the improved built-in forever (later `init`
-# runs only add missing keys). Read-time aliasing: a persisted value that is
-# byte-identical to a retired default is treated as "use the current
-# built-in" on the MERGED tree. A customized pattern and the explicit ""
-# off-switch are never touched, and the `--raw` provenance probe still shows
-# the on-disk bytes. Rotating the default again: move the outgoing string
-# into this tuple in the same change.
-RETIRED_CLEAN_REVIEW_PATTERNS: tuple[str, ...] = (
-    # pre-fn-213 default (fn-65.1): legacy clean phrase only, no
-    # summary-table shape.
-    r"(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
-)
-
-
-def _with_retired_clean_review_pattern_upgraded(cfg: dict) -> dict:
-    """Return cfg with a retired land.cleanReviewCommentPattern default aliased.
-
-    Applies only when the merged value is byte-identical to a retired
-    built-in default (RETIRED_CLEAN_REVIEW_PATTERNS); custom patterns and
-    the explicit ``""`` off-switch pass through untouched. Copy-on-write so
-    a shared defaults dict is never mutated.
-    """
-    land = cfg.get("land")
-    if not isinstance(land, dict):
-        return cfg
-    raw_val = land.get("cleanReviewCommentPattern")
-    if raw_val not in RETIRED_CLEAN_REVIEW_PATTERNS:
-        return cfg
-    new_cfg = dict(cfg)
-    new_land = dict(land)
-    new_land["cleanReviewCommentPattern"] = get_default_config()["land"][
-        "cleanReviewCommentPattern"
-    ]
-    new_cfg["land"] = new_land
     return new_cfg
 
 
@@ -1837,14 +1704,7 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    # fn-213: same retired-default aliasing as load_flow_config so the
-    # snapshot's merged view stays byte-equal to load_flow_config().
-    return ConfigSnapshot(
-        raw,
-        _with_retired_clean_review_pattern_upgraded(
-            _with_tracker_spec_ids_normalized(merged)
-        ),
-    )
+    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -1884,6 +1744,14 @@ REMOVED_CONFIG_KEYS: tuple[str, ...] = (
     "models.roles",
     "models.verifiedAt",
     "models.verifiedWith",
+    "land.release",
+    "land.reviewSignal",
+    "land.automatedReviewers",
+    "land.reviewTrigger",
+    "land.ciFixBudget",
+    "land.cleanReviewCommentPattern",
+    "land.requestReviewers",
+    "land.patienceMinutesAfterReview",
 )
 
 _removed_config_advisory_printed = False
@@ -1910,12 +1778,18 @@ def removed_config_keys_present(
 
 def removed_config_keys_note(keys: list[str]) -> str:
     """The one advisory line for a config still carrying removed keys."""
+    guidance = []
+    if any(key.startswith("land.") for key in keys):
+        guidance.append("See docs/flowctl.md#landing-upgrade for landing replacements.")
+    if any(not key.startswith("land.") for key in keys):
+        guidance.append(
+            "Routing uses the model-routing block /flow-next:setup writes into "
+            "CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage`."
+        )
     return (
         f"note: .flow/config.json still carries removed "
-        f"key(s): {', '.join(keys)}; flowctl ignores them. Routing "
-        f"is now the model-routing block /flow-next:setup writes "
-        f"into CLAUDE.md / AGENTS.md plus the recipes in "
-        f"`flowctl usage` - route work there and delete these keys."
+        f"key(s): {', '.join(keys)}; flowctl ignores them. "
+        + " ".join(guidance) + " Remove these keys from .flow/config.json."
     )
 
 
@@ -20209,6 +20083,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # per-axis review text, dispatch meta) — per-run runtime artifacts, same
     # class as receipts/; a `git add -A` must never commit them.
     "review-fanout/",
+    # Head-bound aid generations and their writer lock stay per-clone. Keep
+    # HTML lenses, other artifact kinds, and measurement records trackable.
+    "artifacts/*/pr-cognitive-aid/*.json",
+    "artifacts/*/pr-cognitive-aid/.write.lock",
 ]
 
 
@@ -20307,12 +20185,7 @@ def cmd_init(args: argparse.Namespace) -> None:
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
-            # fn-213: a persisted retired cleanReviewCommentPattern default is
-            # upgraded on re-init too (read-time aliasing already covers every
-            # read; this just makes the file match what reads return).
-            merged = deep_merge(
-                stamped_defaults, _with_retired_clean_review_pattern_upgraded(raw)
-            )
+            merged = deep_merge(stamped_defaults, raw)
             if merged != raw:
                 atomic_write_json(config_path, merged)
                 actions.append("upgraded config.json (added missing keys)")
@@ -23748,9 +23621,11 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
                   'is too late for understood work'),
  'all_done_make_pr': ('Apply the QA gate, then make the pull request.',
                       'QA runs or records `skipped(reason)`; make-pr is never skipped on this route'),
- 'existing_pr_tail': ('Apply the existing pull request tail and consent rules.',
+ 'closed_spec_no_pr': ('Ask the host to inspect the closed spec without an observed pull request.',
+                       'Never open a replacement pull request for a closed spec'),
+ 'existing_pr_tail': ('Apply the existing pull request landing and consent rules.',
                       'Review-only convergence keeps its limited scope. PR existence is not consent; land '
-                      'owns all convergence, merge and tail gates')}
+                      'owns convergence and merge gates')}
 
 
 # Live routing consumes the same spec/task inventory as `show`; no state store.
@@ -23865,6 +23740,10 @@ def judge_route_lifecycle(state: dict) -> dict | None:
         return decision("host", "pr_probe_failed")
     if state["pr_exists"]:
         return decision("existing_pr_tail", "observed PR")
+    if state.get("status") == "done":
+        # Closing precedes PR creation; absence cannot distinguish a failed open
+        # from a disappeared PR. Let the host report it, never create a replacement.
+        return decision("host", "closed spec without observed PR")
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
@@ -23948,7 +23827,13 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
         if tokens:
             signal += "; dependency scan: " + ", ".join(tokens)
     alternatives = ", ".join(f"{key} {probability:.2f}" for key, probability in candidates[1:3])
-    next_step = JUDGE_ROUTE_PRESENTATION.get(value, ("host decides", "host decides"))[0]
+    presentation_key = (
+        "closed_spec_no_pr"
+        if lifecycle and lifecycle["rule"] == "closed spec without observed PR"
+        else value
+    )
+    presentation = JUDGE_ROUTE_PRESENTATION.get(presentation_key, ("host decides", "host decides"))
+    next_step = presentation[0]
     if decision.get("research_recommended"):
         next_step = "Read the unfamiliar dependency documentation first; then " + next_step
     if decision.get("defect_repro") == "provided":
@@ -23956,7 +23841,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
     return [
         f"Next: {next_step}",
         f"Route: {route}", f"Signal: {signal}",
-        f"Skip/narrow: {JUDGE_ROUTE_PRESENTATION.get(value, ('host decides', 'host decides'))[1]}",
+        f"Skip/narrow: {presentation[1]}",
         f"Why not the alternatives: {alternatives or 'lifecycle precedence' if lifecycle else alternatives or 'host decides'}",
     ]
 
@@ -23965,23 +23850,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
 # --- Optional System One judge (fn-247): self-contained for copied flowctl. ---
 
 JUDGE_MODEL = "jev-latest"
-JUDGE_PRESETS = {'clean-review': {'required': ['body'],
-                  'questions': {'review': {'type': 'choice',
-                                           'instructions': 'What kind of automated review body is '
-                                                           'this?',
-                                           'criteria': {'clean': 'a completed review that reports '
-                                                                 'no findings / no issues on the '
-                                                                 'reviewed commit',
-                                                        'findings': 'a completed review that '
-                                                                    'raises at least one concern, '
-                                                                    'suggestion, or defect',
-                                                        'wrapper_or_status': 'a summary, status, '
-                                                                             'quota, stale-marker, '
-                                                                             'or boilerplate body '
-                                                                             'that neither clears '
-                                                                             'nor raises anything '
-                                                                             'itself'}}}},
- 'route': {'required': ['view',
+JUDGE_PRESETS = {'route': {'required': ['view',
                         'view_meaning',
                         'repo',
                         'status',
@@ -24287,7 +24156,7 @@ def judge_validate_state(preset: str, state: dict) -> None:
     missing = [key for key in required if key not in state]
     if missing:
         raise ValueError("missing required state field: " + ", ".join(missing))
-    text_fields = {"clean-review": ["body"], "qa-gate": ["acceptance"], "fork-gate": ["text"],
+    text_fields = {"qa-gate": ["acceptance"], "fork-gate": ["text"],
                    "memory-rerank": ["query"], "tier": ["task_title", "task_body", "acceptance", "repo"],
                    "route": ["view_meaning", "repo"] + (["intent"] if state.get("view") == "intent" else ["spec_title", "spec_body"])}
     for key in text_fields[preset]:
@@ -24360,12 +24229,7 @@ def judge_validate_answers(questions: dict, payload: dict) -> dict:
 
 def judge_decide(preset: str, state: dict, answers: dict, route_decision: dict | None = None) -> dict:
     decision = {"value": None, "rule": "", "met": False}
-    if preset == "clean-review":
-        answer = answers["review"]
-        decision.update(value=answer["choice"] == "clean" and answer["confidence"] >= 0.7,
-                        rule="clean confidence>=0.7")
-        decision["met"] = decision["value"]
-    elif preset == "qa-gate":
+    if preset == "qa-gate":
         ui = answers["ui_observable_criteria"]["noul"]
         target = bool(state["startable_target_fact"])
         value = "qa_runs" if ui >= 0.5 and target else "qa_skipped"
@@ -29268,21 +29132,6 @@ def _pr_aid_object(value: Any, path: str) -> dict[str, Any]:
     return value
 
 
-def _pr_aid_keys(
-    value: dict[str, Any],
-    path: str,
-    *,
-    required: set[str],
-    optional: set[str] = frozenset(),
-) -> None:
-    missing = required - set(value)
-    if missing:
-        _pr_aid_fail(path, f"missing fields: {', '.join(sorted(missing))}")
-    unknown = set(value) - required - optional
-    if unknown:
-        _pr_aid_fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
-
-
 def _pr_aid_array(
     value: Any, path: str, *, maximum: int, minimum: int = 0
 ) -> list[Any]:
@@ -29357,17 +29206,6 @@ def _pr_aid_url(value: Any, path: str) -> str:
     return result
 
 
-def _pr_aid_string_array(value: Any, path: str) -> list[str]:
-    values = _pr_aid_array(value, path, maximum=32)
-    result = [
-        _pr_aid_string(item, f"{path}[{index}]", maximum=160)
-        for index, item in enumerate(values)
-    ]
-    if len(set(result)) != len(result):
-        _pr_aid_fail(path, "must not contain duplicates")
-    return result
-
-
 def _pr_aid_nonnegative_int(value: Any, path: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         _pr_aid_fail(path, "must be a non-negative integer")
@@ -29379,6 +29217,143 @@ def _pr_aid_serialized_text(artifact: Any) -> str:
     return json.dumps(artifact, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _pr_aid_pattern_attention(repo_path: str) -> Optional[str]:
+    """Only known state, lockfile names, and the generated mirror imply attention."""
+    parts = repo_path.split("/")
+    if (len(parts) == 3 and parts[:2] in ([".flow", "tasks"], [".flow", "specs"])
+            and parts[-1].endswith(".json")):
+        return "mechanical"
+    if parts[-1] in {
+        "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock",
+        "bun.lock", "bun.lockb", "Cargo.lock", "Gemfile.lock", "poetry.lock",
+        "uv.lock", "Pipfile.lock", "composer.lock",
+    }:
+        return "mechanical"
+    if repo_path.startswith("plugins/flow-next/codex/"):
+        return "generated"
+    return None
+
+
+def _pr_aid_blob_prefix(head_sha: Any) -> Optional[str]:
+    """Resolve a head-bound repository-relative link using the local origin."""
+    if not isinstance(head_sha, str) or not _PR_COGNITIVE_AID_SHA_RE.fullmatch(head_sha):
+        return None
+    rc, remote, _ = _export_run_git(["remote", "get-url", "origin"])
+    if rc:
+        return None
+    match = re.fullmatch(
+        r"(?:https?://[^/]+/|ssh://[^/]+/|[^/@:]+@[^/:]+:)"
+        r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
+        remote.strip(),
+    )
+    if not match or any(part in (".", "..") for part in match.groups()):
+        return None
+    return f"/{match[1]}/{match[2]}/blob/{head_sha}/"
+
+
+def _expand_pr_cognitive_aid_input(
+    artifact: Any,
+    expected_diff_files: Optional[dict[str, tuple[str, int, int]]],
+    *,
+    _errors: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    """Fill input fields, collecting failures alongside the stored-v1 checks."""
+    errors = _errors if _errors is not None else []
+
+    def expand() -> Any:
+        # Structural errors belong to validation; only expand reachable rows.
+        if not isinstance(artifact, dict):
+            return artifact
+        if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+            errors.append(
+                f"pr_cognitive_aid: encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes"
+            )
+            return artifact
+        result = copy.deepcopy(artifact)
+        walkthrough = result.get("changeWalkthrough")
+        if not isinstance(walkthrough, dict):
+            return result
+        groups = walkthrough.get("groups")
+        if not isinstance(groups, list):
+            return result
+        # Use existing step slots, last first: never invent an eighth step or
+        # an optional kept/verify claim. Explicit empty refs avoid inheriting
+        # claims the host did not make for these paths.
+        if expected_diff_files is not None:
+            listed = {
+                row["path"] for group in groups if isinstance(group, dict)
+                and isinstance(group.get("files"), list)
+                for row in group["files"] if isinstance(row, dict)
+                and isinstance(row.get("path"), str)
+            }
+            steps = [group for group in reversed(groups) if isinstance(group, dict)
+                     and group.get("kind") == "step" and isinstance(group.get("files"), list)]
+            sources = result.get("sources")
+            diff_refs = [source["id"] for source in sources if isinstance(source, dict)
+                         and source.get("kind") == "diff_metadata"
+                         and isinstance(source.get("id"), str)] if isinstance(sources, list) else []
+            for repo_path in sorted(set(expected_diff_files) - listed):
+                if not steps:
+                    break  # Structural validation owns the missing step error.
+                group = next((group for group in steps if len(group["files"]) < 200), steps[0])
+                group["files"].append({
+                    "path": repo_path, "summary": "", "restOfDiff": True,
+                    "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
+                    "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
+                })
+        blob_prefix = None
+        origin_checked = False
+        for group_index, group in enumerate(groups):
+            if not isinstance(group, dict) or not isinstance(group.get("files"), list):
+                continue
+            for file_index, record in enumerate(group["files"]):
+                file_path = f"changeWalkthrough.groups[{group_index}].files[{file_index}]"
+                if not isinstance(record, dict):
+                    continue
+                try:
+                    repo_path = _pr_aid_repo_path(record.get("path"), f"{file_path}.path")
+                except PrCognitiveAidValidationError:
+                    # Validation reports this once and skips the dependent row checks.
+                    continue
+                if "attentionClass" not in record:
+                    attention = _pr_aid_pattern_attention(repo_path)
+                    if attention is not None:
+                        record["attentionClass"] = attention
+                metadata = (
+                    expected_diff_files.get(repo_path)
+                    if expected_diff_files is not None else None
+                )
+                if expected_diff_files is not None and metadata is None:
+                    errors.append(f"{file_path}.path: does not belong to the bound Git diff")
+                    continue
+                for index, field_name in enumerate(("changeType", "additions", "deletions")):
+                    if field_name not in record:
+                        if metadata is None or metadata[index] is None:
+                            errors.append(
+                                f"{file_path}.{field_name}: cannot derive omitted field: no diff metadata available"
+                            )
+                        else:
+                            record[field_name] = metadata[index]
+                # A deleted path has no blob at the head, so no head-bound link resolves.
+                if "diffUrl" not in record and metadata is not None and record.get("changeType") != "deleted":
+                    if not origin_checked:
+                        blob_prefix = _pr_aid_blob_prefix(result.get("headSha"))
+                        origin_checked = True
+                    if blob_prefix is not None:
+                        diff_url = blob_prefix + urllib.parse.quote(repo_path, safe="/")
+                        if len(diff_url) <= 2048:
+                            record["diffUrl"] = diff_url
+                for field_name in ("sourceRefs", "rIds", "taskIds"):
+                    if field_name not in record and field_name in group:
+                        record[field_name] = copy.deepcopy(group[field_name])
+        return result
+
+    result = expand()
+    if _errors is None and errors:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
+    return result
+
+
 def validate_pr_cognitive_aid(
     artifact: Any,
     *,
@@ -29386,349 +29361,420 @@ def validate_pr_cognitive_aid(
     expected_base_sha: Optional[str] = None,
     expected_head_sha: Optional[str] = None,
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
+    _errors: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    """Validate one v1 artifact without coercion, truncation, or I/O."""
-    artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
-    _pr_aid_keys(
-        artifact,
-        "pr_cognitive_aid",
-        required={
-            "schemaVersion",
-            "artifactId",
-            "specId",
-            "baseSha",
-            "headSha",
-            "generatedAt",
-            "sources",
-            "changeWalkthrough",
-        },
-        optional={"supersedesArtifactId"},
-    )
-    encoded = _pr_aid_serialized_text(artifact).encode("utf-8")
-    if len(encoded) > PR_COGNITIVE_AID_MAX_BYTES:
-        _pr_aid_fail(
-            "pr_cognitive_aid",
-            f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
-        )
+    """Validate v1 fields in traversal order, collecting independent violations."""
+    errors = _errors if _errors is not None else []
+    suppressed: set[str] = set()
+
+    def failed(path: str) -> bool:
+        return path in suppressed or any(error.startswith(path + ":") for error in errors)
+
+    def fail(path: str, message: str) -> None:
+        errors.append(f"{path}: {message}")
+
+    def check(validator: Any, value: Any, path: str, **kwargs: Any) -> Any:
+        if failed(path):
+            return None
+        try:
+            return validator(value, path, **kwargs)
+        except PrCognitiveAidValidationError as exc:
+            errors.append(str(exc))
+            if validator is _pr_aid_array and isinstance(value, list):
+                return value
+            return None
+
+    def keys(value: dict[str, Any], path: str, *, required: set[str],
+             optional: set[str] = frozenset()) -> None:
+        missing = required - set(value)
+        report_missing = {
+            key for key in missing
+            if not failed(f"{path}.{key}" if path != "pr_cognitive_aid" else key)
+        }
+        if report_missing:
+            fail(path, f"missing fields: {', '.join(sorted(report_missing))}")
+        suppressed.update(f"{path}.{key}" if path != "pr_cognitive_aid" else key for key in missing)
+        unknown = set(value) - required - optional
+        if unknown:
+            fail(path, f"unknown fields: {', '.join(sorted(unknown))}")
+
+    def strings(value: Any, path: str) -> Optional[list[str]]:
+        values = check(_pr_aid_array, value, path, maximum=32)
+        if values is None:
+            return None
+        result = []
+        for index, item in enumerate(values):
+            text = check(_pr_aid_string, item, f"{path}[{index}]", maximum=160)
+            result.append(text)
+        valid = [item for item in result if item is not None]
+        if len(set(valid)) != len(valid):
+            fail(path, "must not contain duplicates")
+        return result
+
+    root = check(_pr_aid_object, artifact, "pr_cognitive_aid")
+    if root is None:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
+    keys(artifact, "pr_cognitive_aid", required={
+        "schemaVersion", "artifactId", "specId", "baseSha", "headSha",
+        "generatedAt", "sources", "changeWalkthrough",
+    }, optional={"supersedesArtifactId", "specIds"})
+    if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
+        fail("pr_cognitive_aid", f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes")
     schema_version = artifact.get("schemaVersion")
-    if (
-        not isinstance(schema_version, int)
-        or isinstance(schema_version, bool)
+    if not failed("schemaVersion") and (
+        not isinstance(schema_version, int) or isinstance(schema_version, bool)
         or schema_version != PR_COGNITIVE_AID_SCHEMA_VERSION
     ):
-        _pr_aid_fail("schemaVersion", "unsupported schema version")
-    artifact_id = _pr_aid_artifact_id(artifact.get("artifactId"), "artifactId")
-    spec_id = _pr_aid_string(artifact.get("specId"), "specId", maximum=160)
-    if not is_spec_id(spec_id):
-        _pr_aid_fail("specId", "must be a canonical Flow spec ID")
-    base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
-    head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
-    generated_at = _pr_aid_string(
-        artifact.get("generatedAt"), "generatedAt", maximum=160
-    )
-    try:
-        parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-    except ValueError:
-        _pr_aid_fail("generatedAt", "must be an ISO-8601 timestamp")
-    if parsed_generated_at.tzinfo is None:
-        _pr_aid_fail("generatedAt", "must include a timezone")
-    supersedes = artifact.get("supersedesArtifactId")
-    if supersedes is not None:
-        supersedes = _pr_aid_artifact_id(supersedes, "supersedesArtifactId")
-        if supersedes == artifact_id:
-            _pr_aid_fail("supersedesArtifactId", "must not reference itself")
-    if expected_spec_id is not None and spec_id != expected_spec_id:
-        _pr_aid_fail("specId", f"does not match expected {expected_spec_id}")
-    if expected_base_sha is not None and base_sha != expected_base_sha:
-        _pr_aid_fail("baseSha", "does not match the current merge base")
-    if expected_head_sha is not None and head_sha != expected_head_sha:
-        _pr_aid_fail("headSha", "does not match the current PR head")
+        fail("schemaVersion", "unsupported schema version")
+    artifact_id = check(_pr_aid_artifact_id, artifact.get("artifactId"), "artifactId")
+    spec_id = check(_pr_aid_string, artifact.get("specId"), "specId", maximum=160)
+    if spec_id is not None and not is_spec_id(spec_id):
+        fail("specId", "must be a canonical Flow spec ID")
+        spec_id = None
+    spec_ids = [spec_id]
+    if "specIds" in artifact:
+        spec_ids = strings(artifact["specIds"], "specIds") or []
+        if spec_id not in spec_ids:
+            fail("specIds", "must include artifact.specId")
+        for index, member in enumerate(spec_ids):
+            if member is not None and not is_spec_id(member):
+                fail(f"specIds[{index}]", "must be a canonical Flow spec ID")
+    multi_spec = len(spec_ids) > 1
 
-    sources = _pr_aid_array(
-        artifact.get("sources"), "sources", minimum=1, maximum=128
+    def valid_rid(value: str) -> bool:
+        if not multi_spec:
+            return bool(_PR_COGNITIVE_AID_RID_RE.fullmatch(value))
+        short, separator, rid = value.partition(":")
+        return bool(separator and _PR_COGNITIVE_AID_RID_RE.fullmatch(rid)
+                    and sum(spec_short_id(member) == short
+                            for member in spec_ids if member is not None and is_spec_id(member)) == 1)
+
+    spec_scope = "artifact.specIds" if multi_spec else "artifact.specId"
+    rid_message = "must be a qualified R-ID of exactly one specIds member" if multi_spec else "must be a canonical R-ID"
+    base_sha = check(_pr_aid_sha, artifact.get("baseSha"), "baseSha")
+    head_sha = check(_pr_aid_sha, artifact.get("headSha"), "headSha")
+    generated_at = check(
+        _pr_aid_string,
+        artifact.get("generatedAt"),
+        "generatedAt",
+        maximum=160,
     )
+    if generated_at is not None:
+        try:
+            parsed_generated_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        except ValueError:
+            fail("generatedAt", "must be an ISO-8601 timestamp")
+        else:
+            if parsed_generated_at.tzinfo is None:
+                fail("generatedAt", "must include a timezone")
+    if artifact.get("supersedesArtifactId") is not None:
+        supersedes = check(
+            _pr_aid_artifact_id,
+            artifact["supersedesArtifactId"],
+            "supersedesArtifactId",
+        )
+        if supersedes is not None and supersedes == artifact_id:
+            fail("supersedesArtifactId", "must not reference itself")
+    for path, actual, expected, message in (
+        ("specId", spec_id, expected_spec_id, f"does not match expected {expected_spec_id}"),
+        ("baseSha", base_sha, expected_base_sha, "does not match the current merge base"),
+        ("headSha", head_sha, expected_head_sha, "does not match the current PR head"),
+    ):
+        if actual is not None and expected is not None and actual != expected:
+            fail(path, message)
+
+    sources = check(_pr_aid_array, artifact.get("sources"), "sources", minimum=1, maximum=128)
     source_by_id: dict[str, dict[str, Any]] = {}
-    for index, raw_source in enumerate(sources):
-        source_path = f"sources[{index}]"
-        source = _pr_aid_object(raw_source, source_path)
-        _pr_aid_keys(
-            source,
-            source_path,
-            required={"id", "kind", "ref"},
-            optional={"digest"},
-        )
-        source_id = _pr_aid_identifier(source.get("id"), f"{source_path}.id")
-        if source_id in source_by_id:
-            _pr_aid_fail(f"{source_path}.id", "duplicate source ID")
-        kind = _pr_aid_string(source.get("kind"), f"{source_path}.kind", maximum=160)
-        if kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
-            _pr_aid_fail(f"{source_path}.kind", "unsupported source kind")
-        source_ref = _pr_aid_string(
-            source.get("ref"), f"{source_path}.ref", maximum=1024
-        )
-        if kind == "spec" and source_ref != spec_id:
-            _pr_aid_fail(f"{source_path}.ref", "must identify artifact.specId")
-        if kind == "task":
-            if not is_task_id(source_ref) or spec_id_from_task(source_ref) != spec_id:
-                _pr_aid_fail(
-                    f"{source_path}.ref", "must identify a task of artifact.specId"
-                )
-        if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(source_ref):
-            _pr_aid_fail(f"{source_path}.ref", "must be a canonical R-ID")
-        if kind == "diff_metadata" and source_ref != f"{base_sha}..{head_sha}":
-            _pr_aid_fail(
-                f"{source_path}.ref", "must identify artifact baseSha..headSha"
-            )
-        if kind == "commit":
-            _pr_aid_sha(source_ref, f"{source_path}.ref")
-        digest = source.get("digest")
-        if digest is not None:
-            digest = _pr_aid_string(digest, f"{source_path}.digest", maximum=160)
-            if not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
-                _pr_aid_fail(f"{source_path}.digest", "must be a SHA-256 digest")
-        source_by_id[source_id] = source
-
-    walkthrough = _pr_aid_object(
-        artifact.get("changeWalkthrough"), "changeWalkthrough"
-    )
-    _pr_aid_keys(
-        walkthrough,
-        "changeWalkthrough",
-        required={"thesis", "proof", "groups"},
-    )
-    _pr_aid_string(
-        walkthrough.get("thesis"), "changeWalkthrough.thesis", maximum=4000
-    )
+    invalid_source_ids: set[str] = set()
+    for index, raw_source in enumerate(sources or []):
+        path = f"sources[{index}]"
+        source = check(_pr_aid_object, raw_source, path)
+        if source is None:
+            continue
+        keys(source, path, required={"id", "kind", "ref"}, optional={"digest"})
+        source_id = check(_pr_aid_identifier, source.get("id"), f"{path}.id")
+        if source_id is not None and source_id in source_by_id:
+            fail(f"{path}.id", "duplicate source ID")
+        kind = check(_pr_aid_string, source.get("kind"), f"{path}.kind", maximum=160)
+        if kind is not None and kind not in PR_COGNITIVE_AID_SOURCE_KINDS:
+            fail(f"{path}.kind", "unsupported source kind")
+        ref = check(_pr_aid_string, source.get("ref"), f"{path}.ref", maximum=1024)
+        if ref is not None:
+            if kind == "spec" and spec_id is not None and ref not in spec_ids:
+                fail(f"{path}.ref", f"must identify {spec_scope}")
+            if (
+                kind == "task"
+                and spec_id is not None
+                and (not is_task_id(ref) or spec_id_from_task(ref) not in spec_ids)
+            ):
+                fail(f"{path}.ref", f"must identify a task of {spec_scope}")
+            if kind == "rid" and not valid_rid(ref):
+                fail(f"{path}.ref", rid_message)
+            if (
+                kind == "diff_metadata"
+                and base_sha is not None
+                and head_sha is not None
+                and ref != f"{base_sha}..{head_sha}"
+            ):
+                fail(f"{path}.ref", "must identify artifact baseSha..headSha")
+            if kind == "commit":
+                check(_pr_aid_sha, ref, f"{path}.ref")
+        if source.get("digest") is not None:
+            digest = check(_pr_aid_string, source["digest"], f"{path}.digest", maximum=160)
+            if digest is not None and not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
+                fail(f"{path}.digest", "must be a SHA-256 digest")
+        if source_id is not None:
+            source_by_id[source_id] = source
+            if any(failed(f"{path}.{field}") for field in ("id", "kind", "ref")):
+                invalid_source_ids.add(source_id)
 
     def validate_refs(
-        record: dict[str, Any], record_path: str, *, require_grounding: bool
-    ) -> tuple[list[str], list[str], list[str]]:
-        refs = _pr_aid_string_array(
-            record.get("sourceRefs"), f"{record_path}.sourceRefs"
+        record: dict[str, Any], path: str, *, require_grounding: bool
+    ) -> Optional[list[str]]:
+        refs = strings(record.get("sourceRefs"), f"{path}.sourceRefs")
+        refs_valid = refs is not None and not any(
+            error.startswith(f"{path}.sourceRefs[") for error in errors
         )
-        if require_grounding and not refs:
-            _pr_aid_fail(
-                f"{record_path}.sourceRefs", "must ground the semantic summary"
-            )
-        for ref_index, source_id in enumerate(refs):
-            if source_id not in source_by_id:
-                _pr_aid_fail(
-                    f"{record_path}.sourceRefs[{ref_index}]",
-                    "does not resolve to sources[]",
-                )
-        r_ids = _pr_aid_string_array(
-            record.get("rIds", []), f"{record_path}.rIds"
-        )
-        task_ids = _pr_aid_string_array(
-            record.get("taskIds", []), f"{record_path}.taskIds"
-        )
-        for r_index, r_id in enumerate(r_ids):
-            if not _PR_COGNITIVE_AID_RID_RE.fullmatch(r_id):
-                _pr_aid_fail(
-                    f"{record_path}.rIds[{r_index}]", "must be a canonical R-ID"
-                )
-        for task_index, task_id in enumerate(task_ids):
-            if not is_task_id(task_id) or spec_id_from_task(task_id) != spec_id:
-                _pr_aid_fail(
-                    f"{record_path}.taskIds[{task_index}]",
-                    "must identify a task of artifact.specId",
-                )
-        referenced_sources = [source_by_id[source_id] for source_id in refs]
-        for r_id in r_ids:
-            if not any(
-                source.get("kind") == "rid" and source.get("ref") == r_id
-                for source in referenced_sources
-            ):
-                _pr_aid_fail(
-                    f"{record_path}.rIds",
-                    f"{r_id} lacks a same-record rid sourceRef",
-                )
-        for task_id in task_ids:
-            if not any(
-                source.get("kind") == "task" and source.get("ref") == task_id
-                for source in referenced_sources
-            ):
-                _pr_aid_fail(
-                    f"{record_path}.taskIds",
-                    f"{task_id} lacks a same-record task sourceRef",
-                )
-        return refs, r_ids, task_ids
+        if refs_valid and require_grounding and not refs:
+            fail(f"{path}.sourceRefs", "must ground the semantic summary")
+        for index, source_id in enumerate(refs or []):
+            if source_id is None:
+                continue
+            if source_id in invalid_source_ids:
+                refs_valid = False
+            if sources is not None and source_id not in source_by_id:
+                fail(f"{path}.sourceRefs[{index}]", "does not resolve to sources[]")
+                refs_valid = False
+        r_ids = strings(record.get("rIds", []), f"{path}.rIds")
+        task_ids = strings(record.get("taskIds", []), f"{path}.taskIds")
+        for ref_field, ids in (("rIds", r_ids), ("taskIds", task_ids)):
+            for index, identifier in enumerate(ids or []):
+                if identifier is None:
+                    continue
+                if ref_field == "rIds" and not valid_rid(identifier):
+                    fail(f"{path}.{ref_field}[{index}]", rid_message)
+                    continue
+                if (
+                    ref_field == "taskIds"
+                    and spec_id is not None
+                    and (not is_task_id(identifier) or spec_id_from_task(identifier) not in spec_ids)
+                ):
+                    fail(f"{path}.{ref_field}[{index}]", f"must identify a task of {spec_scope}")
+                    continue
+                if refs_valid and sources is not None and not any(
+                    source_by_id.get(source_id, {}).get("kind") == ("rid" if ref_field == "rIds" else "task")
+                    and source_by_id.get(source_id, {}).get("ref") == identifier
+                    for source_id in refs or []
+                ):
+                    fail(
+                        f"{path}.{ref_field}",
+                        f"{identifier} lacks a same-record {'rid' if ref_field == 'rIds' else 'task'} sourceRef",
+                    )
+        return refs if refs_valid and sources is not None else None
 
-    proof = _pr_aid_array(
-        walkthrough.get("proof"), "changeWalkthrough.proof", maximum=16
-    )
-    for index, raw_cell in enumerate(proof):
-        cell_path = f"changeWalkthrough.proof[{index}]"
-        cell = _pr_aid_object(raw_cell, cell_path)
-        _pr_aid_keys(
-            cell,
-            cell_path,
-            required={"label", "value", "sourceRefs"},
+    walkthrough = check(_pr_aid_object, artifact.get("changeWalkthrough"), "changeWalkthrough")
+    if walkthrough is not None:
+        keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"},
+             optional={"userImpact", "blastRadius", "tradeoffs", "openItems"})
+        check(
+            _pr_aid_string,
+            walkthrough.get("thesis"),
+            "changeWalkthrough.thesis",
+            maximum=4000,
         )
-        _pr_aid_string(cell.get("label"), f"{cell_path}.label", maximum=160)
-        _pr_aid_string(cell.get("value"), f"{cell_path}.value", maximum=160)
-        validate_refs(cell, cell_path, require_grounding=True)
-
-    groups = _pr_aid_array(
-        walkthrough.get("groups"),
-        "changeWalkthrough.groups",
-        minimum=1,
-        maximum=11,
-    )
-    kind_positions = {
-        kind: index for index, kind in enumerate(PR_COGNITIVE_AID_GROUP_KINDS)
-    }
-    kind_counts = {kind: 0 for kind in PR_COGNITIVE_AID_GROUP_KINDS}
-    last_kind_position = -1
-    last_ordinal = -1
-    ordinals: set[int] = set()
-    files_seen: dict[str, tuple[Any, ...]] = {}
-    for group_index, raw_group in enumerate(groups):
-        group_path = f"changeWalkthrough.groups[{group_index}]"
-        group = _pr_aid_object(raw_group, group_path)
-        _pr_aid_keys(
-            group,
-            group_path,
-            required={
-                "ordinal",
-                "kind",
-                "title",
-                "summary",
-                "sourceRefs",
-                "rIds",
-                "taskIds",
-                "files",
-            },
+        for field in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+            if field in walkthrough:
+                check(_pr_aid_string, walkthrough[field], f"changeWalkthrough.{field}",
+                      maximum=4000, allow_empty=True)
+        proof = check(
+            _pr_aid_array,
+            walkthrough.get("proof"),
+            "changeWalkthrough.proof",
+            maximum=16,
         )
-        ordinal = _pr_aid_nonnegative_int(
-            group.get("ordinal"), f"{group_path}.ordinal"
-        )
-        if ordinal in ordinals:
-            _pr_aid_fail(f"{group_path}.ordinal", "duplicate ordinal")
-        if ordinal <= last_ordinal:
-            _pr_aid_fail(f"{group_path}.ordinal", "must increase in render order")
-        last_ordinal = ordinal
-        ordinals.add(ordinal)
-        kind = _pr_aid_string(group.get("kind"), f"{group_path}.kind", maximum=160)
-        if kind not in kind_positions:
-            _pr_aid_fail(f"{group_path}.kind", "unsupported group kind")
-        if kind_positions[kind] < last_kind_position:
-            _pr_aid_fail(f"{group_path}.kind", "violates logical group order")
-        last_kind_position = kind_positions[kind]
-        kind_counts[kind] += 1
-        _pr_aid_string(group.get("title"), f"{group_path}.title", maximum=160)
-        summary = _pr_aid_string(
-            group.get("summary"), f"{group_path}.summary", maximum=1000
-        )
-        validate_refs(group, group_path, require_grounding=bool(summary))
-        files = _pr_aid_array(
-            group.get("files", []), f"{group_path}.files", maximum=200
-        )
-        for file_index, raw_file in enumerate(files):
-            file_path = f"{group_path}.files[{file_index}]"
-            file_record = _pr_aid_object(raw_file, file_path)
-            _pr_aid_keys(
-                file_record,
-                file_path,
-                required={
-                    "path",
-                    "changeType",
-                    "attentionClass",
-                    "summary",
-                    "sourceRefs",
-                    "rIds",
-                    "taskIds",
-                },
-                optional={"additions", "deletions", "diffUrl"},
-            )
-            repo_path = _pr_aid_repo_path(
-                file_record.get("path"), f"{file_path}.path"
-            )
-            change_type = _pr_aid_string(
-                file_record.get("changeType"),
-                f"{file_path}.changeType",
-                maximum=160,
-            )
-            if change_type not in PR_COGNITIVE_AID_CHANGE_TYPES:
-                _pr_aid_fail(f"{file_path}.changeType", "unsupported Git change type")
-            attention = _pr_aid_string(
-                file_record.get("attentionClass"),
-                f"{file_path}.attentionClass",
-                maximum=160,
-            )
-            if attention not in PR_COGNITIVE_AID_ATTENTION_CLASSES:
-                _pr_aid_fail(
-                    f"{file_path}.attentionClass", "unsupported attention class"
-                )
-            file_summary = _pr_aid_string(
-                file_record.get("summary"), f"{file_path}.summary", maximum=500
-            )
-            file_refs, _, _ = validate_refs(
-                file_record, file_path, require_grounding=bool(file_summary)
-            )
-            if not any(
-                source_by_id[source_id]["kind"] == "diff_metadata"
-                for source_id in file_refs
-            ):
-                _pr_aid_fail(
-                    f"{file_path}.sourceRefs",
-                    "must cite the artifact diff_metadata source",
-                )
-            additions = file_record.get("additions")
-            deletions = file_record.get("deletions")
-            if additions is not None:
-                additions = _pr_aid_nonnegative_int(
-                    additions, f"{file_path}.additions"
-                )
-            if deletions is not None:
-                deletions = _pr_aid_nonnegative_int(
-                    deletions, f"{file_path}.deletions"
-                )
-            diff_url = file_record.get("diffUrl")
-            if diff_url is not None:
-                _pr_aid_url(diff_url, f"{file_path}.diffUrl")
-            membership = (
-                ordinal,
-                change_type,
-                attention,
-                additions,
-                deletions,
-                diff_url,
-            )
-            if repo_path in files_seen:
-                if files_seen[repo_path] != membership:
-                    _pr_aid_fail(
-                        f"{file_path}.path", "conflicts with duplicate file membership"
-                    )
-                _pr_aid_fail(f"{file_path}.path", "duplicate file membership")
-            files_seen[repo_path] = membership
-            if expected_diff_files is not None:
-                expected_file = expected_diff_files.get(repo_path)
-                actual_file = (change_type, additions, deletions)
-                if expected_file is None:
-                    _pr_aid_fail(
-                        f"{file_path}.path", "does not belong to the bound Git diff"
-                    )
-                if actual_file != expected_file:
-                    _pr_aid_fail(
-                        file_path,
-                        "changeType/additions/deletions do not match the bound Git diff",
-                    )
-            if len(files_seen) > 500:
-                _pr_aid_fail("changeWalkthrough.groups", "exceeds 500 unique files")
-    if not 1 <= kind_counts["step"] <= 7:
-        _pr_aid_fail("changeWalkthrough.groups", "must contain exactly 1-7 step groups")
-    for optional_kind in ("problem", "principle", "kept", "verify"):
-        if kind_counts[optional_kind] > 1:
-            _pr_aid_fail(
-                "changeWalkthrough.groups",
-                f"must contain at most one {optional_kind} group",
-            )
-    if expected_diff_files is not None and set(files_seen) != set(expected_diff_files):
-        _pr_aid_fail(
+        for index, raw_cell in enumerate(proof or []):
+            path = f"changeWalkthrough.proof[{index}]"
+            cell = check(_pr_aid_object, raw_cell, path)
+            if cell is None:
+                continue
+            keys(cell, path, required={"label", "value", "sourceRefs"}, optional={"outcome"})
+            if "outcome" in cell:
+                outcome = check(_pr_aid_string, cell["outcome"], f"{path}.outcome", maximum=160)
+                if outcome is not None and outcome not in ("pass", "fail", "unverified"):
+                    fail(f"{path}.outcome", "unsupported proof outcome")
+            check(_pr_aid_string, cell.get("label"), f"{path}.label", maximum=160)
+            check(_pr_aid_string, cell.get("value"), f"{path}.value", maximum=160)
+            validate_refs(cell, path, require_grounding=True)
+        groups = check(
+            _pr_aid_array,
+            walkthrough.get("groups"),
             "changeWalkthrough.groups",
-            "file membership does not cover the bound Git diff exactly",
+            minimum=1,
+            maximum=11,
         )
+        kind_positions = {kind: index for index, kind in enumerate(PR_COGNITIVE_AID_GROUP_KINDS)}
+        kind_counts = dict.fromkeys(PR_COGNITIVE_AID_GROUP_KINDS, 0)
+        last_kind_position = last_ordinal = -1
+        ordinals: set[int] = set()
+        files_seen: dict[str, tuple[Any, ...]] = {}
+        complete_membership = groups is not None
+        complete_kinds = groups is not None
+        for group_index, raw_group in enumerate(groups or []):
+            path = f"changeWalkthrough.groups[{group_index}]"
+            group = check(_pr_aid_object, raw_group, path)
+            if group is None:
+                complete_membership = complete_kinds = False
+                continue
+            keys(
+                group,
+                path,
+                required={"ordinal", "kind", "title", "summary", "sourceRefs", "rIds", "taskIds", "files"},
+            )
+            ordinal = check(_pr_aid_nonnegative_int, group.get("ordinal"), f"{path}.ordinal")
+            if ordinal is not None:
+                if ordinal in ordinals:
+                    fail(f"{path}.ordinal", "duplicate ordinal")
+                if ordinal <= last_ordinal:
+                    fail(f"{path}.ordinal", "must increase in render order")
+                last_ordinal = ordinal
+                ordinals.add(ordinal)
+            kind = check(_pr_aid_string, group.get("kind"), f"{path}.kind", maximum=160)
+            if kind not in kind_positions:
+                if kind is not None:
+                    fail(f"{path}.kind", "unsupported group kind")
+                complete_kinds = False
+            else:
+                if kind_positions[kind] < last_kind_position:
+                    fail(f"{path}.kind", "violates logical group order")
+                last_kind_position = kind_positions[kind]
+                kind_counts[kind] += 1
+            check(_pr_aid_string, group.get("title"), f"{path}.title", maximum=160)
+            summary = check(
+                _pr_aid_string,
+                group.get("summary"),
+                f"{path}.summary",
+                maximum=1000,
+            )
+            if summary is not None and not summary.strip():
+                fail(f"{path}.summary", "must not be whitespace-only")
+            validate_refs(group, path, require_grounding=bool(summary))
+            files = check(_pr_aid_array, group.get("files", []), f"{path}.files", maximum=200)
+            if files is None:
+                complete_membership = False
+            for file_index, raw_file in enumerate(files or []):
+                file_path = f"{path}.files[{file_index}]"
+                record = check(_pr_aid_object, raw_file, file_path)
+                if record is None:
+                    complete_membership = False
+                    continue
+                repo_path = check(_pr_aid_repo_path, record.get("path"), f"{file_path}.path")
+                if repo_path is None:
+                    complete_membership = False
+                    continue
+                keys(
+                    record,
+                    file_path,
+                    required={
+                        "path", "changeType", "attentionClass", "summary",
+                        "sourceRefs", "rIds", "taskIds",
+                    },
+                    optional={"additions", "deletions", "diffUrl", "restOfDiff"},
+                )
+                change_type = check(
+                    _pr_aid_string,
+                    record.get("changeType"),
+                    f"{file_path}.changeType",
+                    maximum=160,
+                )
+                if change_type is not None and change_type not in PR_COGNITIVE_AID_CHANGE_TYPES:
+                    fail(f"{file_path}.changeType", "unsupported Git change type")
+                attention = check(
+                    _pr_aid_string,
+                    record.get("attentionClass"),
+                    f"{file_path}.attentionClass",
+                    maximum=160,
+                )
+                if attention is not None and attention not in PR_COGNITIVE_AID_ATTENTION_CLASSES:
+                    fail(f"{file_path}.attentionClass", "unsupported attention class")
+                summary = check(
+                    _pr_aid_string,
+                    record.get("summary"),
+                    f"{file_path}.summary",
+                    maximum=500,
+                    allow_empty=True,
+                )
+                if summary and not summary.strip():
+                    fail(f"{file_path}.summary", "must not be whitespace-only")
+                if "restOfDiff" in record and type(record["restOfDiff"]) is not bool:
+                    fail(f"{file_path}.restOfDiff", "must be a boolean")
+                refs = validate_refs(record, file_path, require_grounding=bool(summary))
+                if refs is not None and not any(
+                    source_by_id.get(source_id, {}).get("kind") == "diff_metadata"
+                    for source_id in refs
+                ):
+                    fail(
+                        f"{file_path}.sourceRefs",
+                        "must cite the artifact diff_metadata source",
+                    )
+                additions = record.get("additions")
+                deletions = record.get("deletions")
+                if additions is not None:
+                    additions = check(
+                        _pr_aid_nonnegative_int,
+                        additions,
+                        f"{file_path}.additions",
+                    )
+                if deletions is not None:
+                    deletions = check(
+                        _pr_aid_nonnegative_int,
+                        deletions,
+                        f"{file_path}.deletions",
+                    )
+                diff_url = record.get("diffUrl")
+                if diff_url is not None:
+                    check(_pr_aid_url, diff_url, f"{file_path}.diffUrl")
+                membership = (ordinal, change_type, attention, additions, deletions, diff_url)
+                if repo_path in files_seen:
+                    fail(
+                        f"{file_path}.path",
+                        "conflicts with duplicate file membership"
+                        if files_seen[repo_path] != membership
+                        else "duplicate file membership",
+                    )
+                files_seen[repo_path] = membership
+                if expected_diff_files is not None:
+                    expected = expected_diff_files.get(repo_path)
+                    if expected is None:
+                        fail(f"{file_path}.path", "does not belong to the bound Git diff")
+                    elif not any(
+                        failed(f"{file_path}.{field}")
+                        for field in ("changeType", "additions", "deletions")
+                    ) and (change_type, additions, deletions) != expected:
+                        fail(
+                            file_path,
+                            "changeType/additions/deletions do not match the bound Git diff",
+                        )
+                if len(files_seen) > 500:
+                    fail("changeWalkthrough.groups", "exceeds 500 unique files")
+        if complete_kinds and not 1 <= kind_counts["step"] <= 7:
+            fail("changeWalkthrough.groups", "must contain exactly 1-7 step groups")
+        for optional_kind in ("problem", "principle", "kept", "verify"):
+            if kind_counts[optional_kind] > 1:
+                fail(
+                    "changeWalkthrough.groups",
+                    f"must contain at most one {optional_kind} group",
+                )
+        if (
+            complete_membership
+            and expected_diff_files is not None
+            and set(files_seen) != set(expected_diff_files)
+        ):
+            fail(
+                "changeWalkthrough.groups",
+                "file membership does not cover the bound Git diff exactly",
+            )
+    if errors:
+        raise PrCognitiveAidValidationError("\n".join(dict.fromkeys(errors)))
     return artifact
 
 
@@ -29958,12 +30004,15 @@ def write_pr_cognitive_aid(
     expected_diff_files: Optional[dict[str, tuple[str, int, int]]] = None,
 ) -> Path:
     """Validate and atomically create one immutable generation."""
+    errors: list[str] = []
+    artifact = _expand_pr_cognitive_aid_input(artifact, expected_diff_files, _errors=errors)
     artifact = validate_pr_cognitive_aid(
         artifact,
         expected_spec_id=spec_id,
         expected_base_sha=base_sha,
         expected_head_sha=head_sha,
         expected_diff_files=expected_diff_files,
+        _errors=errors,
     )
     home = _pr_cognitive_aid_home(flow_dir, spec_id)
     target = home / f"{artifact['artifactId']}.json"
@@ -30021,201 +30070,211 @@ def write_pr_cognitive_aid(
     return target
 
 
+_PR_AID_URL_RE = re.compile(r"https?://\S+")
+_PR_AID_ENTITIES = str.maketrans({"`": "&#96;", "|": "&#124;"})
+
+
 def _pr_aid_plain_text(value: Any) -> str:
-    escaped = html.escape(str(value), quote=True).replace("`", "&#96;")
-    for character in ("\\", "*", "[", "]", ">"):
-        escaped = escaped.replace(character, f"\\{character}")
-    return escaped.replace("\n", " ")
+    """Neutralize authored prose for a forge body; URLs stay clickable.
+
+    The forge resolves mentions after decoding entities, so a mention is broken
+    with a zero-width space, never entity-encoded.
+    """
+    def words(text: str) -> str:
+        escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
+        for character in ("\\", "*", "_", "[", "]", "~"):
+            escaped = escaped.replace(character, f"\\{character}")
+        # The forge's mention boundary is an ASCII word character; emails keep theirs.
+        # Issue and pull-request numbers stay live links: a reviewer wants them.
+        return re.sub(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
+
+    text = " ".join(str(value).strip().splitlines())
+    parts, position = [], 0
+    for match in _PR_AID_URL_RE.finditer(text):
+        parts.append(words(text[position:match.start()]))
+        parts.append(html.escape(match.group(0).replace("|", "%7C").replace("`", "%60"), quote=False))
+        position = match.end()
+    parts.append(words(text[position:]))
+    return "".join(parts)
 
 
 def _pr_aid_prose(value: Any) -> str:
     escaped = _pr_aid_plain_text(value)
-    if re.match(
-        r"^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s|`{3,}|~{3,}|-{3,}\s*$|"
-        r"\*{3,}\s*$|_{3,}\s*$)",
-        escaped,
-    ):
+    if re.match(r"^\s*(?:#{1,6}\s|[-+]\s|\d+[.)]\s|(?:-+|=+)\s*$)", escaped):
         first = len(escaped) - len(escaped.lstrip())
-        escaped = (
-            escaped[:first]
-            + "&#"
-            + str(ord(escaped[first]))
-            + ";"
-            + escaped[first + 1 :]
-        )
+        escaped = escaped[:first] + f"&#{ord(escaped[first])};" + escaped[first + 1:]
     return escaped
 
 
-def _pr_aid_markdown_cell(value: Any) -> str:
-    return _pr_aid_plain_text(value).replace("|", "\\|")
-
-
-def _pr_aid_links(record: dict[str, Any]) -> str:
-    parts = [
-        *(f"source:{item}" for item in record.get("sourceRefs", [])),
-        *(f"R-ID:{item}" for item in record.get("rIds", [])),
-        *(f"task:{item}" for item in record.get("taskIds", [])),
-    ]
-    return _pr_aid_markdown_cell(", ".join(parts) or "—")
-
-
-def _pr_aid_file_row(file_record: dict[str, Any]) -> str:
-    additions = file_record.get("additions")
-    deletions = file_record.get("deletions")
-    stats = (
-        "—"
-        if additions is None and deletions is None
-        else f"+{additions or 0}/-{deletions or 0}"
-    )
-    diff_url = file_record.get("diffUrl")
-    diff = (
-        f"[diff]({html.escape(diff_url, quote=True)})" if diff_url else "—"
-    )
-    change_badges = {
-        "added": "NEW",
-        "modified": "MODIFIED",
-        "deleted": "DELETED",
-        "renamed": "RENAMED",
-        "copied": "COPIED",
-    }
-    return (
-        f"| `{change_badges[file_record['changeType']]}` | "
-        f"`{file_record['attentionClass'].upper()}` | "
-        f"`{_pr_aid_markdown_cell(file_record['path'])}` | "
-        f"{_pr_aid_markdown_cell(file_record['summary'])} | {stats} | {diff} | "
-        f"{_pr_aid_links(file_record)} |"
-    )
+PR_AID_DESCRIBED_ROWS_PER_GROUP = 10
 
 
 def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
-    """Render the validated v1 object with deterministic compact/full rules."""
+    """Render one briefing in a single pass using only the validated artifact."""
     artifact = validate_pr_cognitive_aid(artifact)
     walkthrough = artifact["changeWalkthrough"]
     groups = walkthrough["groups"]
-    files = [file_record for group in groups for file_record in group.get("files", [])]
-    canonical_files = [
-        file_record
-        for file_record in files
-        if file_record["attentionClass"] == "canonical"
-    ]
-    human_review_lines = sum(
-        (file_record.get("additions") or 0) + (file_record.get("deletions") or 0)
-        for file_record in canonical_files
-    )
-    full = human_review_lines >= 200 or len(canonical_files) >= 6
-    lines = [
-        "## The change, top to bottom",
-        "",
-        _pr_aid_prose(walkthrough["thesis"]),
-        "",
-        "| Proof | Value | Sources |",
-        "|---|---|---|",
-        f"| Artifact | `{artifact['artifactId']}` | artifact identity |",
-        f"| Base commit | `{artifact['baseSha']}` | artifact currentness |",
-        f"| Head commit | `{artifact['headSha']}` | artifact identity |",
-        f"| Human-review lines | {human_review_lines} | deterministic file stats |",
-        f"| Canonical files | {len(canonical_files)} | deterministic membership |",
-        f"| Total files | {len(files)} | deterministic membership |",
-    ]
-    if walkthrough["proof"]:
-        for cell in walkthrough["proof"]:
-            lines.append(
-                f"| {_pr_aid_markdown_cell(cell['label'])} | "
-                f"{_pr_aid_markdown_cell(cell['value'])} | "
-                f"{_pr_aid_links(cell)} |"
-            )
-    lines.append("")
-    if not full:
-        lines.extend(
-            [
-                "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
-                "|---|---|---|---|---:|---|---|",
-                *(_pr_aid_file_row(file_record) for file_record in canonical_files),
-                "",
-            ]
-        )
-        return "\n".join(lines).rstrip() + "\n"
+    sources = {source["id"]: source for source in artifact["sources"]}
 
-    lines.extend(
-        [
-            "**Legend:** `WHY` `PRINCIPLE` `STEP` `KEPT` `VERIFY` · "
-            "`NEW` `MODIFIED` `DELETED` `RENAMED` `COPIED` · "
-            "`CANONICAL` `GENERATED` `MECHANICAL`",
-            "",
-        ]
-    )
-    first_open_step = next(
-        (
-            group["ordinal"]
-            for group in groups
-            if group["kind"] == "step"
-            and any(
-                file_record["attentionClass"] == "canonical"
-                for file_record in group.get("files", [])
-            )
-        ),
-        None,
-    )
-    kind_badges = {
-        "problem": "WHY",
-        "principle": "PRINCIPLE",
-        "step": "STEP",
-        "kept": "KEPT",
-        "verify": "VERIFY",
-    }
-    for group in groups:
-        open_attr = " open" if group["ordinal"] == first_open_step else ""
-        lines.extend(
-            [
-                f"<details{open_attr}>",
-                f"<summary><code>{kind_badges[group['kind']]}</code> "
-                f"{group['ordinal']}. {_pr_aid_plain_text(group['title'])} — "
-                f"{_pr_aid_plain_text(group['summary'])}</summary>",
-                "",
-                f"Evidence: {_pr_aid_links(group)}",
-                "",
-            ]
+    def requirements(record: dict[str, Any]) -> list[str]:
+        return list(dict.fromkeys([
+            *record.get("rIds", []),
+            *(sources[ref]["ref"] for ref in record["sourceRefs"]
+              if sources[ref]["kind"] == "rid"),
+        ]))
+
+    declared = list(dict.fromkeys(
+        source["ref"] for source in artifact["sources"] if source["kind"] == "rid"
+    ))
+    coverage = {rid: [group for group in groups
+                      if any(rid in requirements(record)
+                             for record in [group, *group["files"]])]
+                for rid in declared}
+    numbers = {id(group): index for index, group in enumerate(groups, start=1)}
+
+    def evidenced_by(evidence: list[dict[str, Any]]) -> str:
+        return ("group " if len(evidence) == 1 else "groups ") + ", ".join(
+            str(numbers[id(group)]) for group in evidence)
+
+    coverage_line = ""
+    table = []
+    if declared:
+        coverage_line = "Coverage: " + "; ".join(
+            f"{rid} → " + (evidenced_by(evidence) if evidence else "uncovered")
+            for rid, evidence in coverage.items()
         )
-        group_files = group.get("files", [])
-        run_start = 0
-        while run_start < len(group_files):
-            secondary = (
-                group_files[run_start]["attentionClass"] != "canonical"
-            )
-            run_end = run_start + 1
-            while (
-                run_end < len(group_files)
-                and (
-                    group_files[run_end]["attentionClass"] != "canonical"
-                )
-                == secondary
-            ):
-                run_end += 1
-            run = group_files[run_start:run_end]
-            if secondary:
-                lines.extend(
-                    [
-                        "<details>",
-                        f"<summary>Generated/mechanical files ({len(run)})</summary>",
-                        "",
-                    ]
-                )
-            lines.extend(
-                [
-                    "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
-                    "|---|---|---|---|---:|---|---|",
-                    *(_pr_aid_file_row(file_record) for file_record in run),
-                    "",
-                ]
-            )
-            if secondary:
-                lines.extend(["</details>", ""])
-            run_start = run_end
-        lines.extend(["</details>", ""])
+        if len(artifact.get("specIds", [])) > 1:
+            per_spec = []
+            for member in artifact["specIds"]:
+                short = spec_short_id(member)
+                entries = [f"{rid.split(':', 1)[1]} → " +
+                           (evidenced_by(evidence) if evidence else "uncovered")
+                           for rid, evidence in coverage.items() if rid.startswith(short + ":")]
+                if entries:
+                    per_spec.append(f"Coverage {short}: " + "; ".join(entries))
+            coverage_line = "\n\n".join(per_spec)
+        if any(not evidence for evidence in coverage.values()):
+            table = ["| Requirement | Groups |", "|---|---|"] + [
+                f"| {rid} | " + (evidenced_by(evidence).replace("|", "\\|")
+                                 if evidence else "unevidenced") + " |"
+                for rid, evidence in coverage.items()
+            ]
+
+    def counted(files: list[dict[str, Any]]) -> str:
+        counts = {"mechanical": 0, "generated": 0, "not described": 0, "more described": 0}
+        for record in files:
+            attention = record["attentionClass"]
+            category = (attention if attention != "canonical" else
+                        "more described" if record["summary"].strip() else "not described")
+            counts[category] += 1
+        return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
+                         for kind, count in counts.items() if count)
+
+    def file_link(record: dict[str, Any]) -> str:
+        path = " ".join(record["path"].splitlines())
+        # A delimiter longer than any run in the path keeps code spans literal.
+        delimiter = "`" * (max((len(run) for run in re.findall(r"`+", path)), default=0) + 1)
+        label = f"{delimiter} {path} {delimiter}"
+        if record.get("diffUrl"):
+            url = urllib.parse.quote(record["diffUrl"], safe="/:#?=&%+@~.-_")
+            return f"[{label}]({url})"
+        return label
+
+    multi_spec = len(artifact.get("specIds", [])) > 1
+    declaring_specs = {rid.split(":", 1)[0] for rid in declared}
+
+    def group_declares(group: dict[str, Any]) -> bool:
+        if not multi_spec:
+            return bool(declared)
+        cited = {rid.split(":", 1)[0] for rid in requirements(group)}
+        for ref in group["sourceRefs"]:
+            source = sources[ref]
+            if source["kind"] in ("spec", "task"):
+                cited.add(spec_short_id(source["ref"].split(".", 1)[0]))
+        return bool(cited & declaring_specs)
+
+    trees = []
+    leftovers = []
+    for group in groups:
+        described, remaining = [], []
+        for record in group["files"]:
+            if record.get("restOfDiff"):
+                leftovers.append(record)
+                continue
+            if (record["attentionClass"] != "canonical" or not record["summary"].strip()
+                    or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
+                remaining.append(record)
+                continue
+            rids = record.get("rIds") or requirements(record) or requirements(group)
+            marker = record["changeType"] + " " if record["changeType"] in ("added", "deleted", "renamed") else ""
+            tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
+            row = f"- {marker}{file_link(record)} : {_pr_aid_plain_text(record['summary'])}{tag}"
+            described.append(row)
+        trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
+                      "summary": _pr_aid_prose(group["summary"]),
+                      "rows": described,
+                      "remaining": remaining})
+
+    proof = []
+    for cell in walkthrough["proof"]:
+        outcome = cell.get("outcome")
+        prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
+        status = f"{outcome}: " if outcome in ("fail", "unverified") else ""
+        proof.append(f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
+                      f"{_pr_aid_plain_text(cell['value'])}")
+    fields = [("userImpact", "What changes for a user or operator"),
+              ("blastRadius", "Blast radius"), ("tradeoffs", "Tradeoffs"),
+              ("openItems", "Open items")]
+    prose = {key: [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
+             for key, _ in fields}
+    why = [_pr_aid_prose(line) for line in walkthrough["thesis"].strip().splitlines()]
+
+    def section(title: str, content: list[str]) -> list[str]:
+        return [f"## {title}", "", *content, ""] if content else []
+
+    files = [record for group in groups for record in group["files"]]
+    additions = sum(record.get("additions") or 0 for record in files)
+    deletions = sum(record.get("deletions") or 0 for record in files)
+    generated = sum(record["attentionClass"] == "generated" for record in files)
+    mechanical = sum(record["attentionClass"] == "mechanical" for record in files)
+    scope = [f"{len(files)} files changed; +{additions}/-{deletions} lines; "
+             f"{generated} generated, {mechanical} mechanical."]
+    for tree in trees:
+        if scope:
+            scope.append("")
+        scope.extend([f"**{tree['title']}**", "", tree["summary"]])
+        rows = tree["rows"]
+        if rows:
+            scope.extend(["", *rows])
+        if tree["remaining"]:
+            scope.extend(["", counted(tree["remaining"])])
+    if leftovers:
+        canonical = [record for record in leftovers if record["attentionClass"] == "canonical"]
+        counts = counted([record for record in leftovers if record["attentionClass"] != "canonical"])
+        if canonical:
+            paths = ("not described: " + ", ".join(file_link(record) for record in canonical)
+                     if len(canonical) <= 5 else f"{len(canonical)} not described files")
+            counts = "; ".join(filter(None, (counts, paths)))
+        scope.extend(["", "Rest of diff: " + counts])
+    if coverage_line:
+        if scope:
+            scope.append("")
+        scope.append(coverage_line)
+    if table:
+        scope.extend(["", *table])
+    lines = [*section("Why", why),
+             *section(fields[0][1], prose["userImpact"]),
+             *section("Scope", scope),
+             *section("Blast radius", prose["blastRadius"]),
+             *section("Verification", proof),
+             *section("Tradeoffs", prose["tradeoffs"]),
+             *section("Open items", prose["openItems"])]
+    identity = artifact["artifactId"].replace("--", "&#45;&#45;")
+    lines.append(f"<!-- artifact={identity} base={artifact['baseSha']} head={artifact['headSha']} -->")
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _pr_aid_read_input(path_arg: str) -> Any:
+def _pr_aid_read_input(path_arg: str, *, use_json: bool = True) -> Any:
     try:
         if path_arg == "-":
             raw_bytes = sys.stdin.buffer.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
@@ -30224,19 +30283,19 @@ def _pr_aid_read_input(path_arg: str) -> Any:
                 raw_bytes = handle.read(PR_COGNITIVE_AID_MAX_BYTES + 1)
     except OSError as exc:
         error_exit(
-            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=True, code=2
+            f"Cannot read PR cognitive-aid artifact: {exc}", use_json=use_json, code=2
         )
     if len(raw_bytes) > PR_COGNITIVE_AID_MAX_BYTES:
         error_exit(
             f"PR cognitive-aid artifact exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes",
-            use_json=True,
+            use_json=use_json,
             code=2,
         )
     try:
         return json.loads(raw_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         error_exit(
-            f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=True, code=2
+            f"PR cognitive-aid artifact invalid JSON: {exc}", use_json=use_json, code=2
         )
 
 
@@ -30251,16 +30310,28 @@ def _pr_aid_cli_shas(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def cmd_pr_cognitive_aid_validate(args: argparse.Namespace) -> None:
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=args.json)
     try:
-        artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
-        base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
-        head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = None
+        errors: list[str] = []
+        try:
+            record = _pr_aid_object(artifact, "pr_cognitive_aid")
+            base_sha = _pr_aid_sha(record.get("baseSha"), "baseSha")
+            head_sha = _pr_aid_sha(record.get("headSha"), "headSha")
+        except PrCognitiveAidValidationError:
+            # Schema validation reports bad bindings with the other errors.
+            pass
+        else:
+            expected_diff_files = _pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            )
+            artifact = _expand_pr_cognitive_aid_input(
+                artifact, expected_diff_files, _errors=errors
+            )
         artifact = validate_pr_cognitive_aid(
             artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            expected_diff_files=expected_diff_files,
+            _errors=errors,
         )
     except PrCognitiveAidValidationError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
@@ -30274,7 +30345,7 @@ def cmd_pr_cognitive_aid_write(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
     base_sha, head_sha = _pr_aid_cli_shas(args)
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=args.json)
     try:
         expected_diff_files = _pr_aid_live_diff_files(
             get_repo_root(), base_sha, head_sha
@@ -30326,16 +30397,20 @@ def cmd_pr_cognitive_aid_current(args: argparse.Namespace) -> None:
 
 def cmd_pr_cognitive_aid_render(args: argparse.Namespace) -> None:
     if args.file:
-        artifact = _pr_aid_read_input(args.file)
+        artifact = _pr_aid_read_input(args.file, use_json=False)
         try:
             artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
             base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
             head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+            expected_diff_files = _pr_aid_live_diff_files(
+                get_repo_root(), base_sha, head_sha
+            )
+            errors: list[str] = []
+            artifact = _expand_pr_cognitive_aid_input(
+                artifact, expected_diff_files, _errors=errors
+            )
             artifact = validate_pr_cognitive_aid(
-                artifact,
-                expected_diff_files=_pr_aid_live_diff_files(
-                    get_repo_root(), base_sha, head_sha
-                ),
+                artifact, expected_diff_files=expected_diff_files, _errors=errors
             )
             print(render_pr_cognitive_aid_markdown(artifact), end="")
         except PrCognitiveAidValidationError as exc:
@@ -30391,16 +30466,20 @@ def render_pr_cognitive_aid_html_input(artifact: Any) -> str:
 
 
 def cmd_pr_cognitive_aid_html_input(args: argparse.Namespace) -> None:
-    artifact = _pr_aid_read_input(args.file)
+    artifact = _pr_aid_read_input(args.file, use_json=False)
     try:
         artifact = _pr_aid_object(artifact, "pr_cognitive_aid")
         base_sha = _pr_aid_sha(artifact.get("baseSha"), "baseSha")
         head_sha = _pr_aid_sha(artifact.get("headSha"), "headSha")
+        expected_diff_files = _pr_aid_live_diff_files(
+            get_repo_root(), base_sha, head_sha
+        )
+        errors: list[str] = []
+        artifact = _expand_pr_cognitive_aid_input(
+            artifact, expected_diff_files, _errors=errors
+        )
         artifact = validate_pr_cognitive_aid(
-            artifact,
-            expected_diff_files=_pr_aid_live_diff_files(
-                get_repo_root(), base_sha, head_sha
-            ),
+            artifact, expected_diff_files=expected_diff_files, _errors=errors
         )
         print(render_pr_cognitive_aid_html_input(artifact), end="")
     except PrCognitiveAidValidationError as exc:
@@ -30734,6 +30813,35 @@ def _note_completion_review_reset(
         )
 
 
+def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> Optional[Path]:
+    """Reopen a closed spec after a successful task creation or start.
+
+    Returns the rewritten spec path, or None when the spec was already open.
+    """
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_path.exists():
+        return None
+    spec_data = load_json(spec_path)
+    if spec_data.get("status") != "done":
+        return None
+    spec_data["status"] = "open"
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_path, spec_data)
+    return spec_path
+
+
+def _note_spec_reopened(reopened: Optional[Path], spec_id: str, payload: Optional[dict]) -> None:
+    """Report a reopen the way close reports its writes, so callers commit it."""
+    if reopened is None:
+        return
+    if payload is not None:
+        payload["reopened_spec"] = spec_id
+        payload["modified_paths"] = [*payload.get("modified_paths", []), str(reopened)]
+    else:
+        print(f"Spec {spec_id} reopened")
+        print_tracked_write_advisory(reopened)
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec.
 
@@ -30934,11 +31042,14 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
+        reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
+
         # fn-205 follow-up: new tasks change the review surface — a
         # policy-excused `not_required` no longer holds.
         review_reset = _reset_excused_completion_review(flow_dir, spec_id)
         if use_json:
             payload: dict = {"tasks": created_summaries}
+            _note_spec_reopened(reopened, spec_id, payload)
             _note_completion_review_reset(
                 review_reset, spec_id, payload, use_json=True
             )
@@ -30946,6 +31057,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         else:
             for summary in created_summaries:
                 print(f"Task {summary['id']} created: {summary['title']}")
+            _note_spec_reopened(reopened, spec_id, None)
             _note_completion_review_reset(
                 review_reset, spec_id, None, use_json=False
             )
@@ -31088,6 +31200,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
+    reopened = _reopen_spec_for_task_change(flow_dir, spec_id)
+
     # fn-205 follow-up: a new task changes the review surface — a
     # policy-excused `not_required` no longer holds.
     review_reset = _reset_excused_completion_review(flow_dir, spec_id)
@@ -31101,10 +31215,12 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             "spec_path": task_data["spec_path"],
             "message": f"Task {task_id} created",
         }
+        _note_spec_reopened(reopened, spec_id, payload)
         _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
         json_output(payload)
     else:
         print(f"Task {task_id} created: {args.title}")
+        _note_spec_reopened(reopened, spec_id, None)
         _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
@@ -34573,97 +34689,119 @@ def _export_deferred_findings(
     return deferred_findings
 
 
-def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
-    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
-    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+def spec_short_id(spec_id: str) -> str:
+    """Return the shared native or tracker-keyed requirement qualifier."""
+    parsed = parse_any_id(spec_id)
+    if parsed is None or parsed[3] is not None:
+        raise ValueError(f"Invalid spec ID: {spec_id}")
+    return f"{parsed[1]}-{parsed[2]}"
 
-    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
-    parsing). Body-rendering happens in the skill — this command emits
-    the structured payload only. Per the architecture rule, no LLM
-    judgment lives here.
 
-    Exit codes:
-      1: missing spec / generic failure
-      2: invalid args (missing --base, etc.)
-      3: corrupt spec JSON
-    """
-    use_json = bool(getattr(args, "json", False))
-
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Casefold first so uppercase tracker display handles (WOR-17) survive
-    # the validity check — resolve_spec_id_arg below canonicalizes fully.
-    spec_id = casefold_handle(getattr(args, "id", None))
-    if not spec_id or not is_spec_id(spec_id):
-        error_exit(
-            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
-            f"(e.g., fn-1, fn-1-add-auth)",
-            use_json=use_json,
-            code=2,
-        )
-    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
-    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
-
-    base_ref = getattr(args, "base", None)
-    if not base_ref:
-        error_exit(
-            "--base is required (e.g., --base origin/main)",
-            use_json=use_json,
-            code=2,
-        )
-
-    flow_dir = get_flow_dir()
-    spec_json_path = find_spec_json_path(flow_dir, spec_id)
-    if not spec_json_path.exists():
-        error_exit(
-            f"Spec {spec_id} not found at {spec_json_path}",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
-    # its own error path — but we want a corrupt-spec exit code of 3
-    # (distinct from "missing"), so do the read ourselves first.
-    try:
-        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=3,
-        )
-    except OSError as exc:
-        error_exit(
-            f"Failed to read spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=1,
-        )
-    if not isinstance(raw_spec, dict):
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
-            f"{type(raw_spec).__name__}",
-            use_json=use_json,
-            code=3,
-        )
-    spec_data = normalize_epic(raw_spec)
-
-    # Resolve merge base.
-    merge_base_sha = _export_resolve_merge_base(base_ref)
-    if merge_base_sha is None:
-        error_exit(
-            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
-            f"--base ref (e.g., origin/main).",
-            use_json=use_json,
-            code=1,
-        )
-
+def specs_closed_in_range(
+    flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
+) -> list[str]:
+    """Return newly closed specs whose task files the range touches, plus the host."""
     repo_root = get_repo_root()
+    closed = {host_spec_id} if host_spec_id else set()
+    try:
+        relative = flow_dir.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return list(closed)  # External Flow state has no repo-local range.
+    spec_dirs = {(relative / directory).as_posix() for directory in (SPECS_DIR, EPICS_DIR)}
+    tasks_dir = (relative / TASKS_DIR).as_posix()
+    rc, out, err = _export_run_git(
+        ["diff", "--name-only", "--no-renames", "-z", base_commit, "HEAD", "--",
+         *sorted(spec_dirs), tasks_dir], cwd=repo_root,
+    )
+    if rc:
+        raise ValueError(f"Cannot read closed specs: {err.strip()}")
+    changed_paths = [path for path in out.split("\0") if path]
+    touched_tasks = {Path(path).stem.rsplit(".", 1)[0] for path in changed_paths
+                     if Path(path).parent.as_posix() == tasks_dir}
+    paths = [path for path in changed_paths if path.endswith(".json")]
+    spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
+                  and Path(path).stem != host_spec_id
+                  and touched_tasks]
+    if not spec_paths:
+        return list(closed)
 
+    def record(revision: str, path: str) -> dict[str, Any]:
+        # Absence is read from the tree, never from git's localized stderr.
+        rc, listed, err = _export_run_git(["ls-tree", "--name-only", revision, "--", path], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        if not listed.strip():
+            return {}
+        rc, text, err = _export_run_git(["show", f"{revision}:{path}"], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        value = json.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError(f"Expected object in {revision}:{path}")
+        return value
+
+    # Include deleted paths: a rename must compare identities, not filenames.
+    base_specs = [record(base_commit, path) for path in spec_paths]
+    # Identity is the short id: a slug rename of a spec done at base is not a new close.
+    already_done = {spec_short_id(item["id"]) for item in base_specs
+                    if item.get("status") == "done" and isinstance(item.get("id"), str) and is_spec_id(item["id"])}
+    candidates = set()
+    for path in spec_paths:
+        head = record("HEAD", path)
+        sid = head.get("id")
+        if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and spec_short_id(sid) not in already_done:
+            def read_close(commit: str, short: str = spec_short_id(sid)) -> tuple[bool, str]:
+                # By identity, not by today's path: the record may have moved
+                # between the spec directories or changed slug since that commit.
+                rc, listed, err = _export_run_git(
+                    ["ls-tree", "--name-only", commit, "--", *(d + "/" for d in sorted(spec_dirs))],
+                    cwd=repo_root,
+                )
+                if rc:
+                    raise ValueError(f"Cannot read closed specs: {err.strip()}")
+                for name in listed.splitlines():
+                    stem = Path(name).stem
+                    if (name.endswith(".json") and is_spec_id(stem) and spec_short_id(stem) == short
+                            and record(commit, name).get("status") == "done"):
+                        return True, ""
+                return False, ""
+
+            try:
+                stacked_ref, error = _spec_close_in_head_history(repo_root, head, read_close)
+            except subprocess.CalledProcessError as exc:
+                raise ValueError(f"Cannot read closed specs: {exc}") from exc
+            if error:
+                raise ValueError(f"Cannot read closed specs: {error}")
+            if not stacked_ref:
+                candidates.add(sid)
+    # Work happened here when the range touches one of the spec's task files (record
+    # or body). A record-only close touches the spec file alone and stays out. The
+    # tracked task status is not consulted: it is persisted late and can read stale.
+    closed.update(candidates & touched_tasks)
+    return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
+
+
+def cmd_spec_closed_in_range(args: argparse.Namespace) -> None:
+    """List committed range members without changing Flow state."""
+    use_json = getattr(args, "json", False)
+    try:
+        repo_root = get_repo_root()
+        rc, base, err = _export_run_git(["merge-base", args.base, "HEAD"], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot resolve closed-spec base: {err.strip()}")
+        ids = specs_closed_in_range(get_flow_dir(), base.strip())
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if use_json:
+        json_output({"spec_ids": ids})
+    else:
+        for spec_id in ids:
+            print(spec_id)
+
+
+def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json: bool) -> tuple:
+    """Build the same spec, task and evidence summary for each range member."""
+    spec_id = spec_data["id"]
     # --- Spec markdown parsing ---
     spec_md_path = flow_dir / SPECS_DIR / f"{spec_id}.md"
     spec_text = ""
@@ -34834,6 +34972,107 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "undeclared_r_ids": undeclared,
     }
 
+    return spec_section, task_entries, tasks_summary, task_created_ats, spec_text
+
+
+def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
+    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
+    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+
+    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
+    parsing). Body-rendering happens in the skill — this command emits
+    the structured payload only. Per the architecture rule, no LLM
+    judgment lives here.
+
+    Exit codes:
+      1: missing spec / generic failure
+      2: invalid args (missing --base, etc.)
+      3: corrupt spec JSON
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Casefold first so uppercase tracker display handles (WOR-17) survive
+    # the validity check — resolve_spec_id_arg below canonicalizes fully.
+    spec_id = casefold_handle(getattr(args, "id", None))
+    if not spec_id or not is_spec_id(spec_id):
+        error_exit(
+            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
+            f"(e.g., fn-1, fn-1-add-auth)",
+            use_json=use_json,
+            code=2,
+        )
+    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
+    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
+
+    base_ref = getattr(args, "base", None)
+    if not base_ref:
+        error_exit(
+            "--base is required (e.g., --base origin/main)",
+            use_json=use_json,
+            code=2,
+        )
+
+    flow_dir = get_flow_dir()
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        error_exit(
+            f"Spec {spec_id} not found at {spec_json_path}",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
+    # its own error path — but we want a corrupt-spec exit code of 3
+    # (distinct from "missing"), so do the read ourselves first.
+    try:
+        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=3,
+        )
+    except OSError as exc:
+        error_exit(
+            f"Failed to read spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=1,
+        )
+    if not isinstance(raw_spec, dict):
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
+            f"{type(raw_spec).__name__}",
+            use_json=use_json,
+            code=3,
+        )
+    spec_data = normalize_epic(raw_spec)
+
+    # Resolve merge base.
+    merge_base_sha = _export_resolve_merge_base(base_ref)
+    if merge_base_sha is None:
+        error_exit(
+            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
+            f"--base ref (e.g., origin/main).",
+            use_json=use_json,
+            code=1,
+        )
+
+    repo_root = get_repo_root()
+
+    spec_section, task_entries, tasks_summary, task_created_ats, spec_text = (
+        _export_spec_summary(flow_dir, spec_data, use_json=use_json)
+    )
+    acceptance_criteria = spec_section["spec_sections"]["acceptance_criteria"]
+    acceptance_criteria_residue = spec_section["spec_sections"]["acceptance_criteria_residue"]
+    uncovered = tasks_summary["uncovered_r_ids"]
+
     # --- Memory during spec lifecycle ---
     # fn-49.2: pass earliest-task and branch-name fallback inputs so the
     # time-window filter approximates the spec lifetime even when
@@ -34895,6 +35134,23 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "removed_export_refs": removed_export_refs,
         "deferred_findings": deferred_findings,
     }
+
+    try:
+        closed_specs = specs_closed_in_range(flow_dir, merge_base_sha, spec_id)
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if len(closed_specs) > 1:
+        payload["specs"] = []
+        for member in closed_specs:
+            if member == spec_id:
+                section, tasks, summary = spec_section, task_entries, tasks_summary
+            else:
+                data = normalize_epic(load_json_or_exit(find_spec_json_path(flow_dir, member), "spec", use_json=use_json))
+                section, tasks, summary, _, _ = _export_spec_summary(flow_dir, data, use_json=use_json)
+            payload["specs"].append({
+                **section, "short_id": spec_short_id(member),
+                "tasks": tasks, "tasks_summary": summary,
+            })
 
     if use_json:
         json_output(payload)
@@ -35694,7 +35950,7 @@ class RemoteHeads:
     `spec chain` (fn-152 R2) reads the remote at most once per invocation, and
     the spec-level admission gates (`ready --all`, `next`) share one read
     across every spec they evaluate. Nothing is read until a chain candidate
-    actually needs it, so a backlog with no open dependency never spawns git.
+    actually needs it; done dependencies still require local base-object reads.
     """
 
     def __init__(self) -> None:
@@ -35741,6 +35997,130 @@ def spec_tasks_all_done(flow_dir: Path, spec_id: str, *, use_json: bool) -> bool
     return bool(tasks) and all(t.get("status") == "done" for t in tasks)
 
 
+_SPEC_BASE_CACHE: dict[Path, tuple[str, str, bool]] = {}
+_SPEC_BASE_NOTICE_CWDS: set[Path] = set()
+
+
+def _spec_close_in_head_history(repo_root: Path, spec_data: dict, read_spec_close) -> tuple[str, str]:
+    """Return the branch ref proving a close in HEAD ancestry, or a read error."""
+    branch = spec_data.get("branch_name")
+    if branch:
+        for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+            exists = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", ref],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if exists.returncode == 1:  # Missing ref, not an unreadable object.
+                continue
+            exists.check_returncode()
+            ancestry = subprocess.run(
+                ["git", "merge-base", ref, "HEAD"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if ancestry.returncode == 1:  # Unrelated histories prove nothing.
+                continue
+            ancestry.check_returncode()
+            closed, error = read_spec_close(ancestry.stdout.strip())
+            if error:
+                return "", error
+            if closed:
+                return ref, ""
+    return "", ""
+
+
+def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
+    """Return (landed, error, diagnostic) from base evidence, then ancestry.
+
+    Resolve origin's default branch, then the chain-base cascade. Successful
+    resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
+    With no base ref the local close stands, with one stderr notice per working directory.
+    A checkout of the base branch itself has nothing left to merge, so the
+    local close stands there too (work done directly on the base).
+    """
+    if spec_data.get("status") != "done":
+        return False, "", ""
+    diagnostic = ""
+    try:
+        repo_root = get_repo_root()
+        cwd = Path.cwd()
+        cached = _SPEC_BASE_CACHE.get(cwd)
+        if cached is None:
+            head = subprocess.run(
+                ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
+            candidates = list(dict.fromkeys([*candidates, "origin/main", "main", "origin/master", "master"]))
+            for candidate in candidates:
+                probe = subprocess.run(
+                    ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                )
+                if probe.returncode == 0:
+                    here = subprocess.run(
+                        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+                        cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                    )
+                    on_base = (
+                        here.returncode == 0
+                        and here.stdout.strip() == candidate.removeprefix("origin/")
+                    )
+                    cached = (candidate, probe.stdout.strip(), on_base)
+                    _SPEC_BASE_CACHE[cwd] = cached
+                    break
+            if cached is None:
+                diagnostic = (
+                    "no base ref resolved; tried refs/remotes/origin/HEAD, "
+                    + ", ".join(candidates) + "; using local status"
+                )
+                if cwd not in _SPEC_BASE_NOTICE_CWDS:
+                    print(f"note: {diagnostic}", file=sys.stderr)
+                    _SPEC_BASE_NOTICE_CWDS.add(cwd)
+                return True, "", diagnostic
+        base_ref, base, on_base = cached
+        if on_base:
+            return True, "", ""
+        flow_path = flow_dir.relative_to(repo_root).as_posix()
+        paths = [f"{flow_path}/{directory}/{spec_id}.json" for directory in (SPECS_JSON_DIR, EPICS_DIR)]
+
+        def read_spec_close(commit: str) -> tuple[bool, str]:
+            tree = subprocess.run(
+                ["git", "ls-tree", "--name-only", commit, "--", *paths],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+            )
+            present = set(tree.stdout.splitlines())
+            path = next((path for path in paths if path in present), None)
+            if path is not None:
+                blob = subprocess.run(
+                    ["git", "show", f"{commit}:{path}"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+                )
+                data = json.loads(blob.stdout)
+                if not isinstance(data, dict):
+                    return False, f"base spec {spec_id} is not an object"
+                return data.get("status") == "done", ""
+            return False, ""
+
+        closed, error = read_spec_close(base)
+        if error:
+            return False, error, ""
+        if closed:
+            return True, "", ""
+        ref, error = _spec_close_in_head_history(repo_root, spec_data, read_spec_close)
+        if error:
+            return False, error, ""
+        if ref:
+            return False, "", (
+                f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+                f"dependency branch {ref} is in this branch's history; "
+                "fetch the base or land it"
+            )
+        # Squash landing, deleted branch, or no recorded branch.
+        return True, "", ""
+    except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+        return False, f"base read failed: {exc}", ""
+
+
 def evaluate_spec_chain(
     flow_dir: Path,
     spec_id: str,
@@ -35768,6 +36148,11 @@ def evaluate_spec_chain(
         "parent_branch_on_remote": None,
         "reason": "",
     }
+    diagnostics: list[str] = []
+
+    def set_reason(reason: str) -> None:
+        result["reason"] = "; ".join(dict.fromkeys(item for item in [*diagnostics, reason] if item))
+
     candidates: list[str] = []
     in_progress: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
@@ -35780,7 +36165,15 @@ def evaluate_spec_chain(
                 code=2, use_json=use_json,
             )
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") == "done":
+        landed, err, diagnostic = spec_landed_at_base(flow_dir, dep, dep_data)
+        if diagnostic:
+            diagnostics.append(diagnostic)
+        if err:
+            result["parent"] = dep
+            result["parent_branch"] = dep_data.get("branch_name") or None
+            set_reason(f"base query failed: {err}")
+            return result
+        if landed:
             continue
         if spec_tasks_all_done(flow_dir, dep, use_json=use_json):
             candidates.append(dep)
@@ -35788,14 +36181,14 @@ def evaluate_spec_chain(
             in_progress.append(dep)
     if in_progress:
         result["parent"] = candidates[0] if candidates else None
-        result["reason"] = f"dependency {in_progress[0]} in progress"
+        set_reason(f"dependency {in_progress[0]} in progress")
         return result
     if len(candidates) >= 2:
-        result["reason"] = f"two open parents: {', '.join(candidates)}; chains are linear"
+        set_reason(f"two open parents: {', '.join(candidates)}; chains are linear")
         return result
     if not candidates:
         result["eligible"] = True
-        result["reason"] = "no open dependency"
+        set_reason("no open dependency")
         return result
     parent = candidates[0]
     parent_data = normalize_epic(
@@ -35806,11 +36199,12 @@ def evaluate_spec_chain(
     result["parent_branch"] = parent_branch or None
     heads, err = (remote_heads or RemoteHeads())()
     if heads is None:
-        result["reason"] = f"remote query failed: {err}"
+        set_reason(f"remote query failed: {err}")
         return result
     if not parent_branch or parent_branch not in heads:
         result["parent_branch_on_remote"] = False
-        result["reason"] = (
+        set_reason(
+            "" if parent_data.get("status") == "done" else
             f"parent branch {parent_branch or '<unset>'} not on origin; "
             "push it or land the parent first"
         )
@@ -35821,15 +36215,21 @@ def evaluate_spec_chain(
         if other_id in (spec_id, parent):
             continue
         other = normalize_epic(load_json_or_exit(other_file, f"Spec {other_id}", use_json=use_json))
-        if other.get("status") == "done":
-            continue
         if parent not in (other.get("depends_on_epics", []) or []):
             continue
+        landed, err, _ = spec_landed_at_base(flow_dir, other_id, other)
+        if err:
+            set_reason(f"base query failed: {err}")
+            return result
+        if landed:
+            continue
         if (other.get("branch_name") or "") in heads:
-            result["reason"] = f"parent {parent} already chained by {other_id}"
+            set_reason(f"parent {parent} already chained by {other_id}")
             return result
     result["eligible"] = True
-    result["reason"] = "parent open, all tasks done, branch on origin"
+    set_reason("parent closed locally, all tasks done, branch on origin"
+               if parent_data.get("status") == "done" else
+               "parent open, all tasks done, branch on origin")
     return result
 
 
@@ -35843,12 +36243,9 @@ def spec_blocked_by_deps(
 ) -> list[str]:
     """Spec-level admission gate shared by `ready --spec`, `next`, `ready --all`.
 
-    A dependency is blocking when its spec is missing or not ``done`` — except
-    the chain parent `evaluate_spec_chain` names (fn-152 R2a): an open parent
-    with every task done and its branch on origin counts as satisfied, so a
-    chained spec dispatches its tasks. The chain predicate is consulted only
-    when at least one dependency is open and none is missing, which keeps
-    every other spec on the byte-identical pre-chain path (no remote read).
+    A dependency is blocking until its close is present at the base, except
+    the eligible chain parent named by `evaluate_spec_chain` (fn-152 R2a).
+    Missing dependencies and unreadable base evidence stay blocking.
     """
     blocked: list[str] = []
     missing = False
@@ -35861,7 +36258,8 @@ def spec_blocked_by_deps(
             missing = True
             continue
         dep_data = normalize_epic(load_json_or_exit(dep_path, f"Spec {dep}", use_json=use_json))
-        if dep_data.get("status") != "done":
+        landed, _, _ = spec_landed_at_base(flow_dir, dep, dep_data)
+        if not landed:
             blocked.append(dep)
     if blocked and not missing:
         chain = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json, remote_heads=remote_heads)
@@ -36398,6 +36796,8 @@ def cmd_start(args: argparse.Namespace) -> None:
     # Load task definition for dependency info (outside lock)
     # Normalize to handle legacy "deps" field
     task_def = normalize_task(load_task_definition(args.id, use_json=args.json))
+    if not task_def.get("spec"):
+        error_exit(f"Task {args.id} has neither spec nor epic", use_json=args.json)
     depends_on = task_def.get("depends_on", []) or []
 
     # Validate all dependencies are done (outside lock - this is read-only check)
@@ -36520,20 +36920,20 @@ def cmd_start(args: argparse.Namespace) -> None:
         # Write inside lock
         store.save_runtime(args.id, runtime_updates)
 
-    # NOTE: We no longer update epic timestamp on task start/done.
-    # Epic timestamp only changes on epic-level operations (set-plan, close).
-    # This reduces merge conflicts in multi-user scenarios.
+    # Open specs remain untouched; only resuming closed work changes the spec.
+    reopened = _reopen_spec_for_task_change(get_flow_dir(), task_def["spec"])
 
     if args.json:
-        json_output(
-            {
-                "id": args.id,
-                "status": "in_progress",
-                "message": f"Task {args.id} started",
-            }
-        )
+        payload = {
+            "id": args.id,
+            "status": "in_progress",
+            "message": f"Task {args.id} started",
+        }
+        _note_spec_reopened(reopened, task_def["spec"], payload)
+        json_output(payload)
     else:
         print(f"Task {args.id} started")
+        _note_spec_reopened(reopened, task_def["spec"], None)
 
 
 def cmd_done(args: argparse.Namespace) -> None:
@@ -36775,11 +37175,14 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
     incomplete = []
+    final_tasks = []
     for task_file in tasks_dir.glob(f"{args.id}.*.json"):
         task_id = task_file.stem
         if not is_task_id(task_id):
             continue  # Skip non-task files (e.g., fn-1.2-review.json)
         task_data = load_task_with_state(task_id, use_json=args.json)
+        definition = load_task_definition(task_id, use_json=args.json)
+        final_tasks.append((task_file, definition, task_data["status"]))
         if task_data["status"] != "done":
             incomplete.append(f"{task_data['id']} ({task_data['status']})")
 
@@ -36790,16 +37193,30 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
         )
 
     spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+    modified_paths = [spec_path]
+    # Validate the whole spec before publishing any final task status. Keep
+    # runtime claims and evidence local; only the status must travel with git.
+    for task_file, definition, status in final_tasks:
+        if definition.get("status") != status:
+            definition["status"] = status
+            canonicalize_task_for_write(definition)
+            atomic_write_json(task_file, definition)
+            modified_paths.append(task_file)
+
     spec_data["status"] = "done"
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
-            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed"}
+            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed",
+             "modified_paths": [str(path) for path in modified_paths]}
         )
     else:
         print(f"Spec {args.id} closed")
+
+    for path in modified_paths:
+        print_tracked_write_advisory(path)
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
@@ -36827,7 +37244,7 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 # invocation regardless of how many commits are recorded — one
 # `cat-file --batch-check` fed all tokens over stdin, one `rev-list HEAD`
 # membership walk that stops as soon as every candidate oid is accounted for.
-# `validate` runs on every land-loop tick; a per-SHA spawn loop would claw
+# `validate` can run repeatedly; a per-SHA spawn loop would claw
 # back the fn-109 wins. Deliberately NOT entangled with the export payload's
 # `merge-base --is-ancestor` gate-receipt probe (different question).
 
@@ -38140,7 +38557,13 @@ def _brief_memory_enabled(flow_dir: Path) -> bool:
 def _brief_spec_blocked_by(
     flow_dir: Path, spec_id: str, spec_data: dict, specs_by_id: dict[str, dict]
 ) -> list[str]:
-    """Spec-level dep gate: deps missing or not done (cmd_ready semantics)."""
+    """Spec-level dep gate from local status: deps missing or not done.
+
+    brief never shells out, so it does not read the schedulers' landed-at-base
+    evidence. A dependency closed on its own branch and not yet merged reads
+    unblocked here; the schedulers usually agree through the chain-parent
+    waiver, and `spec chain` is the authority when they do not.
+    """
     blocked: list[str] = []
     for dep in spec_data.get("depends_on_epics", []) or []:
         if dep == spec_id:
@@ -49580,8 +50003,7 @@ def cmd_gate_receipt(args: argparse.Namespace) -> None:
     }
     receipt_path = _gate_receipt_path(repo_root, head_sha, args.gate_id)
     try:
-        # Symlink containment BEFORE any filesystem side effect (repo
-        # convention - cf. land's setup_stale guard): a committed symlink at
+        # Symlink containment BEFORE any filesystem side effect: a committed symlink at
         # .flow, .flow/tmp, or green-receipts would redirect the mkdir AND
         # the write outside the workspace during an unattended run. resolve()
         # follows symlinks in the existing components of a not-yet-created
@@ -55973,6 +56395,10 @@ def main() -> None:
     spec_sub = p_spec.add_subparsers(dest="spec_cmd", required=True)
     _add_spec_subparsers(spec_sub, noun="spec", dest="spec_cmd")
     _add_spec_skeleton(spec_sub)
+    p_closed_range = spec_sub.add_parser("closed-in-range", help="List specs completed in a committed range")
+    p_closed_range.add_argument("--base", required=True, help="Base ref (uses its merge base with HEAD)")
+    p_closed_range.add_argument("--json", action="store_true", help="JSON output")
+    p_closed_range.set_defaults(func=cmd_spec_closed_in_range)
 
     # scope — fn-44.1 helper plumbing. Read-only token-safe parsers
     # consumed by `/flow-next:refine` (T2) and `/flow-next:capture`

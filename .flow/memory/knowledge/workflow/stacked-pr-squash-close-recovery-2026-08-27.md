@@ -18,15 +18,16 @@ Squash also orphans the stack's history: the stacked branch still contains the b
 2. Force-push with lease; open a **successor PR** against main (the old PR number is lost — link it with "Supersedes #N" in the body).
 3. Squash-orphaned bookkeeping follows: task evidence commits and rebaseline-evidence baseline SHAs recorded on the stack point at commits the squash removed — repoint receipts at the squash SHA and regenerate evidence against a reachable baseline (codex flagged all three on #374).
 
-## Superseded by the chain rules (2026-09-13)
+## Superseded by the chain rules (updated 2026-09-20)
 
-The manual successor-PR playbook above is history. Dependent specs now build as **chains** (fn-152) and land drains them (fn-149):
+The manual successor-PR playbook above records the earlier incident. Dependent specs build as **chains** and use native stacks where supported:
 
-- `flowctl spec chain <id>` decides when a dependent spec may start (parent open, all tasks done, branch on origin; linear only). Work branches from the parent's remote tip; make-pr targets the parent's branch and links a GitHub stack. Rules: `plugins/flow-next/skills/flow-next-make-pr/workflow.md` §0.3, `flow-next-work/phases.md` Phase 2.
-- Land never deletes a branch while an open PR targets it (`pending_branch_deletes`), merges only the frontier, and retargets the layers above a merged parent itself with a leased force-push. Rules: `plugins/flow-next/skills/flow-next-land/references/chains-and-stacks.md`.
+- `flowctl spec chain <id>` decides when a dependent spec may start (parent not landed at the base, all tasks done, branch on origin; linear only). Work branches from the parent's remote tip; make-pr targets the parent's branch and links a GitHub stack. Rules: `plugins/flow-next/skills/flow-next-make-pr/workflow.md` §0.3, `flow-next-work/phases.md` Phase 2.
+- Land links open children into a native stack before merging and merges only the lowest open layer, one layer per run. GitHub retargets and rebases stack children. Land never deletes a branch while an open PR targets it and never rebases, force-pushes, or retargets a child.
+- Without stacks, a conflicted child needs a separately authorized manual single-layer rebase after the parent merges. Follow `plugins/flow-next/docs/troubleshooting.md` §"Land on a chain"; inspect the parent's pre-merge tip, rebase only the child, and re-read its checks and reviews before landing.
 - The merged-parent window before a child has a PR is make-pr's rebase-onto from the detected boundary (create run only), so no successor PR is needed.
 
 ## Avoiding it next time
 
-- Do not hand-build a dependent PR on a feature branch outside the chain rules; let work and make-pr build it so land can drain it.
+- Do not hand-build a dependent PR on a feature branch outside the chain rules; let work and make-pr build it, then land each lowest open layer.
 - Related GitHub sharp edge from the same run: a comma list after one closing keyword ("Fixes #A, #B, #C") auto-closes only #A — each issue needs its own keyword ("Fixes #A, fixes #B, fixes #C").

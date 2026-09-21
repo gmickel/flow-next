@@ -13,7 +13,7 @@ render format, these tests lock the behaviour):
   whole open-spec rows (count line kept) → excess unreadable lines to
   aggregate count. One `[truncated: … — use --full]` marker per tier.
 - Titles 80-char end-ellipsis; goals/summaries/paths 120-char.
-- Readiness = cmd_ready semantics (task-deps + parent-spec-deps).
+- Readiness = task-deps + parent-spec-deps from local status (no git).
   Closed-parent orphans still appear.
 - Evidence: commits/tests/prs must be non-empty lists → true; default-empty
   dict, missing dict, or non-list values (string/dict) → false.

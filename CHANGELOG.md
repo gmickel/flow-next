@@ -4,6 +4,159 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+Completed specs now arrive on the base with their pull requests, including on
+protected branches. Make-pr commits the close and final task statuses before
+opening the PR; land handles one named, currently authorized PR and finishes
+when its merge is confirmed. This breaking change requires a **major** release;
+versioning remains a separate maintainer step.
+
+### Changed
+
+- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec. Land selects the specs a pull request closes when no branch name matches, reading recursive head and base trees and requiring a task entry changed against base; a truncated read needs human attention. Land repairs the pull request it is given; merging still needs session authorization. A null push date falls back to the head's earliest check-suite creation time, then its committer date.
+
+- The obsolete make-pr `--no-mermaid` flag is removed.
+
+- make-pr bodies now keep the full authored briefing in one rendering pass
+  from the aid artifact: Why, What changes for a
+  user or operator, Scope, Blast radius, Verification, Tradeoffs and Open
+  items, each omitted when empty. Scope starts with file/churn and generated/mechanical totals, then numbered groups
+  including fileless guidance, with linked list rows and up to 10 described files
+  per group in review order. A row's own requirement IDs determine its tags while
+  coverage keeps every citation; extra described,
+  mechanical, generated and undescribed files are counted separately. Sparse leftovers
+  belong to the whole diff, naming up to five canonical paths; coverage names group numbers.
+  Whitespace-only summaries fail validation; prose mentions are neutralized, while issue and pull-request numbers stay live links. Authored
+  fields and proof cells stay complete. The skill supplies a validated artifact
+  skeleton and writes directly before one render. Coverage appears only for declared requirements. The compact and full forms, their size
+  threshold, the machine-identity proof rows, the per-row evidence column, the
+  review-plan section and the generated-by footer are gone; artifact id, base
+  and head ride in one HTML comment. Stored sparse expansions add a rest-of-diff marker; the HTML lens and
+  `html-input` presentation are unchanged. This resolves the body-length report in #447,
+  which measured bodies at 2,700 to 3,700 words. Thanks to @flecamos for the
+  report.
+- The aid artifact accepts four optional authored strings (`userImpact`,
+  `blastRadius`, `tradeoffs`, `openItems`) and an optional `outcome` (`pass`,
+  `fail`, `unverified`) on each proof cell. The renderer ticks only `pass`;
+  cells without an outcome render as plain items. The additions are additive:
+  the schema version stays 1 and stored artifacts remain valid. See the
+  [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md).
+- make-pr leaves already-closed specs untouched and composes the aid artifact
+  after any spec-close commit, so the
+  artifact's head equals the pull request's head. An explicit `--base <branch>`
+  now resolves against `origin/<branch>`, so a stale local base no longer
+  widens the export. The make-pr instruction text an ordinary run loads drops
+  from about 2,900 lines to under 600.
+
+- PR aids written from sparse input remain reusable at make-pr's resolve step
+  when base and head match. Explicit same-head successors still publish
+  deliberate corrections to authored content.
+
+- Broad staging now leaves new PR aid generations and write locks local after
+  `flowctl init` refreshes the managed ignore block. HTML lenses and other
+  artifacts remain trackable. In repositories that already track aid files,
+  maintainers should run this one-time cleanup from the repository root and
+  commit the index change (local files are kept):
+
+  ```sh
+  flowctl init
+  git rm --cached --ignore-unmatch -- '.flow/artifacts/*/pr-cognitive-aid/*.json' '.flow/artifacts/*/pr-cognitive-aid/.write.lock'
+  ```
+
+  Flowctl never untracks files itself. Ignored aids remain per-clone; see the
+  [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md#storage-and-identity).
+
+- Chain dependencies first count as landed when the default base records the
+  spec as closed. Otherwise, a locally closed dependency stays chained when
+  its spec records a close at HEAD's merge-base with either its remote-tracking
+  or local branch, even after that branch advances. Otherwise it counts as landed. A branch deleted from both refs,
+  or no recorded branch, also counts as landed. True merges onto a non-default
+  base conservatively stay chained. Base-checkout and no-base fallbacks remain.
+- `spec close` reports every rewritten file in `modified_paths`, so callers can
+  commit the complete close. A task create or start that reopens a closed spec
+  reports the spec file the same way. make-pr never closes a spec that has no tasks, and
+  land reads a closed spec with no task files as unfinished.
+
+- Replace bare or scheduled repo-wide land calls with the [repository-wide
+  recipe](plugins/flow-next/docs/flowctl.md#landing-upgrade). For each open PR,
+  read specs at its remote head, select all whose `branch_name` equals its head
+  branch, require at least one match and all matches closed, then invoke land
+  for that PR with current authorization.
+- Tighten the default review gate through the repository instruction file,
+  branch protection, or `land.mergeVerdictCommand`. Green checks, a nonblocking
+  GitHub review decision and zero unresolved threads can permit a merge when
+  no reviewer has posted and no review is required. Bot-comment signals no
+  longer gate landing. `land.patienceMinutes` remains push-anchored for caller
+  authorization without human in-session authorization; human authorization
+  waives the wait.
+- Recover a conflicted chain child with the [manual single-layer
+  rebase](plugins/flow-next/docs/troubleshooting.md#land-on-a-chain-chain-broken-a-retarget-conflict-or-a-pending-merge-async-fn-149).
+  Land uses native stacks when available, merges only the lowest open layer,
+  and never deletes a branch an open PR still targets.
+- Create or start a follow-up task to reopen a closed spec. Finishing that task
+  does not close it automatically. A closed spec on an open PR remains in review
+  in the tracker; only a confirmed merge permits terminal status. A merged rerun
+  repeats only the configured tracker touchpoint. Its failure preserves `MERGED`
+  and reports the merge commit. Run releases separately from land.
+
+### Upgrade notes: retired keys
+
+
+Existing configuration files still load. Land prints one notice naming ignored
+keys and leaves the file unchanged. Remove these entries during your config
+maintenance; only `land.patienceMinutes` and `land.mergeVerdictCommand` remain
+active. Provenance below distinguishes recorded issues from implementation PRs
+where no separate issue is recorded.
+
+| Retired key | Former behavior and provenance |
+|---|---|
+| `land.release` | Release-follow. Issue FLOW-9, implementation PR #172. Release separately. |
+| `land.reviewSignal` | Silence, approval or named-reviewer signal selection. Issue FLOW-9, PR #172. Use the review gate above. |
+| `land.automatedReviewers` | Automated-reviewer allowlist for the silence signal. Issue FLOW-9, PR #172. |
+| `land.reviewTrigger` | One-shot reviewer-bot summon comment. Issue FLOW-9, PR #172. Request reviewers separately. |
+| `land.ciFixBudget` | Ledger-backed fix budget and durable needs-human label. Issue FLOW-9, PR #172; portability problem #368. |
+| `land.cleanReviewCommentPattern` | Clean-review comment regex and old-default migration. PR #177 (incident PR #176), extended by PR #386 (incident PR #385); no separate issue recorded. |
+| `land.requestReviewers` | One-shot human reviewer requests per head. Issue #359, PR #360. Request reviewers separately. |
+| `land.patienceMinutesAfterReview` | Review-event-anchored patience. PR #394; no separate issue recorded. The retained window is push-anchored. |
+
+### Upgrade notes: retired behaviors
+
+
+| Retired behavior | Origin or reported issue; replacement |
+|---|---|
+| Repo-wide discovery, two-signal authorship probe and footer gate, local all-tasks-done eligibility, multi-PR worst-verdict aggregation | Issue FLOW-9 / PR #172; marker hardening #274. Use the head-bound recipe above and one verdict per named PR. |
+| Ledger, durable CI-budget labels and skip state | FLOW-9 / PR #172; budget portability #368. Inspect the PR's commits/check attempts; one fix or rerun. Old land files are inert and need no migration. |
+| Tick claim and PID reaper | PR #378; no separate issue recorded. The caller owns cadence; land holds no claim between invocations. |
+| Post-merge spec close, base checkout, release, persist-push, rollback and re-entry | FLOW-9 / PR #172; lifecycle issue #345 / PR #350 and ignored-receipt staging issue #367 / PR #372. Close on the PR branch before opening; after merge only the configured tracker API touchpoint remains. |
+| Plain-chain leased force-push cascade, patch-id review carry-over, resumable cascade, persisted merge-async UUID and pending-branch-delete janitor | Issue FLOW-83 / PR #432. Use native stacks when available; otherwise recover one conflicted child manually. Branch deletion requires a fresh proof that no open PR targets it. |
+| Silence signal, clean-review classification, comment-pattern scan and stale-approval loop heuristics | FLOW-9 / PR #172; clean-comment PR #177, summary-table PR #386 and classifier PR #450 (no separate issues recorded). Use GitHub checks, review decision and unresolved threads. The unused `clean-review` judge preset is removed. |
+| Reviewer-bot summons and human reviewer requests | FLOW-9 / PR #172 and issue #359 / PR #360. Repository owners arrange review requests outside land. |
+| Merge-identity override `FLOW_PR_MERGE_CMD` | Issue #337 / PR #350; shell-argument fix #406 / PR #430. Land uses the authenticated standard merge API. This was environment-only, never a supported `land.*` key. |
+| After-review patience window | PR #394, no separate issue recorded. Use retained push-anchored patience and current authorization. |
+| Release-follow and emitted `RELEASED` verdict | FLOW-9 / PR #172. Release separately. `RELEASED` stays in the parser vocabulary but is never emitted. |
+| Flow source/base-checkout handoff, land-ledger reads and post-merge persistence destination | PR #429, no separate issue recorded. Flow passes the named PR and current authorization; confirmed merge ends the run. |
+
+
+The `LAND_VERDICT` terminal grammar and verdict vocabulary remain compatible;
+`RELEASED` is retained for parsers but is no longer emitted. Old land ledger and
+claim files are inert. No post-merge checkout, commit, push or local state write
+remains. Issue IDs above come from the recorded history; implementation PRs and
+incident PRs are labeled where no separate originating issue was recorded.
+
+### Fixed
+
+- **A worker no longer reports back while its own test run is still going.** A
+  worker could start a long gate in the background and end its turn, so work
+  received a result that did not exist yet. The worker now waits for every
+  command it started and reads its exit code before returning, including a
+  command the host moved to the background. Before accepting a return, work
+  checks the task status and whether the worker left a command running; if it
+  did, work waits within the dispatch TIMEBOX and sends a re-anchoring continuation worker into the same
+  workspace after command exit, without counting the early return as a failed
+  attempt. The worker also inspects another tree state in a temporary worktree
+  instead of `git stash`.
+
 ## [flow-next 5.6.1] - 2026-09-20
 
 ### Fixed
@@ -81,7 +234,7 @@ The reviewer's journey changes in one place. Instead of one large PR after a ser
 
 - One read-only predicate, `flowctl spec chain <id>`, owns chain eligibility (parent open, all tasks done, branch on origin, linear, one `git ls-remote` at most, a failed remote read never reported as an absent branch); flowctl's spec-level task-admission gate (`ready --spec`, `next`, `ready --all`) treats the chain parent as satisfied, and every skill consumer calls the predicate instead of duplicating it. `pilot-log append` gains an optional `--reason` so the backlog decision-log row carries the `chained on <parent>; ` prefix.
 - Make-pr detects a chain from history, the merge-base of HEAD with the parent's branch tip or merged-PR head, never from a scratch file; a merged parent is rewritten onto the chain base from that boundary on a create run only (`--dry-run` and `--update` never rewrite); stack linking uses the [stacks REST API](https://docs.github.com/en/rest/pulls/stacks) with integer-typed payloads (the [gh-stack extension](https://github.com/github/gh-stack) is never required) and degrades to a plain chain layer with one stderr line on 404, 409, 422, or a transport error.
-- Land's ledger gains one evidence binding per PR (verdict head, base, patch-id, window anchor), a pending merge-async uuid, a top-level `pending_branch_deletes` map swept at the start of every tick, and a `cascade` record that survives a lost lease or a lost write; an unread children count keeps the branch. The Codex mirror and the glossary (`chain`, `stack`, `layer`, `frontier`) are updated; the 2026-08-27 recovery memory now points at the chain rules. Details: [`chains-and-stacks.md`](plugins/flow-next/skills/flow-next-land/references/chains-and-stacks.md).
+- Land's ledger gains one evidence binding per PR (verdict head, base, patch-id, window anchor), a pending merge-async uuid, a top-level `pending_branch_deletes` map swept at the start of every tick, and a `cascade` record that survives a lost lease or a lost write; an unread children count keeps the branch. The Codex mirror and the glossary (`chain`, `stack`, `layer`, `frontier`) are updated; the 2026-08-27 recovery memory now points at the chain rules. Details: [current chain recovery](plugins/flow-next/docs/troubleshooting.md#land-on-a-chain-chain-broken-a-retarget-conflict-or-a-pending-merge-async-fn-149).
 - Tests: flowctl chain states and admission gates over a bare origin; fence fixtures for every consumer under `set -e` with a stubbed `gh`; land fixtures for every shape, a three-layer chain with multi-commit squash parents, lease and lost-write resumption, the stale pin, and the janitor across four ticks; the merge-fence shell test now states its children count.
 
 ## [flow-next 5.2.2] - 2026-09-13

@@ -298,7 +298,13 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
     def test_runtime_sourced_status_mismatch_stays_error(self) -> None:
         """R5(ii): runtime store answered -> still an error, exit 1."""
         spec_id, task_id = self._done_spec_with_open_task("Runtime Sourced")
-        self._run("start", task_id, "--json", check=True)
+        # Starting now reopens the spec (fn-250 R3). Inject the legacy
+        # inconsistent runtime state directly to retain this validation gate.
+        state_tasks = self.tmpdir / ".git" / "flow-state" / "tasks"
+        state_tasks.mkdir(parents=True, exist_ok=True)
+        (state_tasks / f"{task_id}.state.json").write_text(
+            json.dumps({"status": "in_progress"}), encoding="utf-8"
+        )
 
         result = self._run("validate", "--all", "--json")
         self.assertEqual(result.returncode, 1)

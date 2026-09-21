@@ -21,8 +21,7 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import flowctl  # noqa: E402
 
@@ -721,59 +720,8 @@ class PersistenceAndCurrentnessTests(unittest.TestCase):
 
 
 class MarkdownAndBudgetTests(unittest.TestCase):
-    def test_compact_form_uses_only_canonical_files(self) -> None:
-        rendered = flowctl.render_pr_cognitive_aid_markdown(
-            artifact(canonical_files=2, churn=20)
-        )
-        self.assertIn("## The change, top to bottom", rendered)
-        self.assertIn("src/change_0.py", rendered)
-        self.assertNotIn("generated.md", rendered)
-        self.assertNotIn("**Legend:**", rendered)
-
-    def test_full_form_has_complete_legend_groups_and_collapsed_noise(self) -> None:
-        rendered = flowctl.render_pr_cognitive_aid_markdown(
-            artifact(canonical_files=6, churn=1)
-        )
-        for badge in (
-            "WHY",
-            "PRINCIPLE",
-            "STEP",
-            "KEPT",
-            "VERIFY",
-            "NEW",
-            "MODIFIED",
-            "DELETED",
-            "RENAMED",
-            "COPIED",
-            "CANONICAL",
-            "GENERATED",
-            "MECHANICAL",
-        ):
-            self.assertIn(f"`{badge}`", rendered)
-        self.assertEqual(rendered.count("<details open>"), 1)
-        self.assertIn("<summary>Generated/mechanical files (2)</summary>", rendered)
-        self.assertIn("Tracker facade", rendered)
-        self.assertIn("Verification and ship", rendered)
-        self.assertNotIn("@@", rendered)
-
-    def test_badges_order_provenance_metrics_and_plain_text_are_deterministic(self) -> None:
-        value = artifact(canonical_files=6, churn=1)
-        files = value["changeWalkthrough"]["groups"][2]["files"]
-        files[0]["changeType"] = "added"
-        files[0]["summary"] = "</summary>`[misleading](https://bad.test)"
-        files.insert(0, files.pop(-2))
-        rendered = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("| `NEW` |", rendered)
-        self.assertIn("Human-review lines", rendered)
-        self.assertIn("Canonical files", rendered)
-        self.assertIn("Total files", rendered)
-        self.assertIn("source:diff", rendered)
-        self.assertIn("R-ID:R6", rendered)
-        self.assertIn("task:fn-136-cognitive-aid.1", rendered)
-        self.assertIn("&lt;/summary&gt;", rendered)
-        self.assertIn("&#96;", rendered)
-        self.assertLess(rendered.index("generated.md"), rendered.index("change_0.py"))
-
+    # fn-252 replaces compact/full tables and their badge/provenance assertions
+    # with artifact-only briefing behavior in test_pr_cognitive_aid_briefing.py.
     def test_thesis_cannot_inject_markdown_block_structure(self) -> None:
         cases = {
             "heading": "## Review plan",
@@ -866,10 +814,10 @@ class MakePrIntegrationTests(unittest.TestCase):
         )
         self.assertLess(
             workflow.index("## Phase 1.5b: HTML render lens"),
-            workflow.index("## Phase 2: Render body header sections"),
+            workflow.index("## Phase 2:"),
         )
         self.assertIn(
-            "This phase ends before PR creation", artifact_reference
+            "[create-and-finalize.md](create-and-finalize.md)", artifact_reference
         )
         self.assertNotIn("skill: flow-next-tracker-sync", artifact_reference)
         self.assertIn('PR_URL=""', finalize)

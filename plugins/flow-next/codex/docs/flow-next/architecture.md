@@ -143,8 +143,10 @@ The auto-managed `.flow/.gitignore` (written by `flowctl init`) excludes per-run
 
 Two kinds of per-run state deliberately live **outside** the working tree, so `git add -A`, branch switches, and worker test hygiene can never sweep or destroy them:
 
-- **Runtime state dir** - task claims and lifecycle state live in the git common dir at `.git/flow-state/`, which every worktree of a repo shares. `FLOW_STATE_DIR` is the documented per-process override for concurrent same-repo pipelines; an orchestrator-set state dir must itself sit outside the repo tree. See [`flowctl.md`](flowctl.md) (Worktree sharing). The strikes ledger of `flow --auto` sits beside it at `<git-common-dir>/flow-next/`.
+- **Runtime state dir** - task claims and in-progress lifecycle state live in the git common dir at `.git/flow-state/`, which every worktree of a repo shares. `FLOW_STATE_DIR` is the documented per-process override for concurrent same-repo pipelines; an orchestrator-set state dir must itself sit outside the repo tree. See [`flowctl.md`](flowctl.md) (Worktree sharing). The strikes ledger of `flow --auto` sits beside it at `<git-common-dir>/flow-next/`.
 - **Run-notes dir** - `/flow-next:work` on its default rolling route ([`references/rolling-scheduler.md`](../../skills/flow-next-work/references/rolling-scheduler.md)) creates one shared notes directory per run at `<state-root>/flow-notes/<spec-id>-<run-id>/`, where `<state-root>` is `FLOW_STATE_DIR`'s parent when set, else the git common dir. Scouts and workers write markdown notes there (exploration findings, integration warnings); every consumer reads it **by pointer** - its content is never embedded into a dispatch prompt. The conductor deletes it on clean run completion; a dir abandoned by an interrupted run is inert prose and safe to remove by hand. Advisory surface: creation failure degrades the run to no notes surface, never blocks it.
+
+Closing a spec persists each task's final status in its tracked JSON file. Runtime state still wins where present; a fresh clone reads the committed task status. Creating or starting a task reopens a closed spec, and completing that follow-up does not close it automatically. Make-pr commits closure before opening a completed spec's PR; the squash merge carries the close to the base.
 
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 

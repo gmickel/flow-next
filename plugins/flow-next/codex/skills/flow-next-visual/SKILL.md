@@ -182,7 +182,7 @@ assignSeat(seats: Seat[], policy: Policy) -> SeatId | null
 
 **7. Compact table** — short enumerable facts only (R-ID coverage, per-task file ownership). Explanations live in the surrounding prose, never in cells.
 
-**8. Mermaid — LAST resort.** Only when interaction or sequence genuinely needs it (renders graphically on forges, degrades to source in terminals); when warranted, sequence and state diagrams are the two forms that earn their keep. A text shape that carries the same point wins every time. When emitted, the existing make-pr mermaid rules apply (reserved words, quoting, caps) — see [../flow-next-make-pr/mermaid-rules.md](../flow-next-make-pr/mermaid-rules.md).
+**8. Mermaid — LAST resort.** Only when interaction or sequence genuinely needs it (renders graphically on forges, degrades to source in terminals); when warranted, sequence and state diagrams are the two forms that earn their keep. A text shape that carries the same point wins every time. Use valid identifiers, quote labels containing punctuation, and check syntax before emitting.
 
 **Whole-block rule.** Show a complete block instead of a diff when most of it is new, when omitted context would hide ownership or order, or when the reader needs a copyable target shape.
 

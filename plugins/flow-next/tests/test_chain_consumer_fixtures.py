@@ -23,7 +23,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_land_chain_fixtures import ChainWorld, fence, git
+from chain_fixture_support import ChainWorld, fence, git
 
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
@@ -38,7 +38,7 @@ _POSIX = unittest.skipIf(
 )
 
 DETECT_OUT = ["BASE_REF", "CHAIN_PARENT", "CHAIN_PARENT_BRANCH", "CHAIN_BOUNDARY", "PARENT_PR", "PARENT_PR_STATE", "CHAIN_REWRITE", "REWRITE_ONTO", "COMMITS_AHEAD"]
-REWRITE_ENV = {"SPEC_ID": "x", "OPEN_COUNT": "0", "RALPH": "0", "AUTONOMOUS": "0", "NO_MERMAID": "0", "WRITE_MEMORY": "0", "DRAFT_FORCE": "", "HEAD_SHA": "unset", "COMMITS_AHEAD": "0"}
+REWRITE_ENV = {"SPEC_ID": "x", "OPEN_COUNT": "0", "RALPH": "0", "AUTONOMOUS": "0", "WRITE_MEMORY": "0", "DRAFT_FORCE": "", "HEAD_SHA": "unset", "COMMITS_AHEAD": "0"}
 
 
 class ConsumerWorld(ChainWorld):
@@ -125,7 +125,7 @@ class WorkBranchTestCase(unittest.TestCase):
         self.assertEqual((got["BASE_BRANCH"], got["CHAIN_PARENT"]), ("origin/A", parent))
         self.assertEqual(git(self.w.work, "branch", "--show-current"), "B")
         self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), a_tip)
-        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text().strip(), a_tip)
+        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text(encoding="utf-8").strip(), a_tip)
         self.assertEqual(git(self.w.work, "branch", "--list", "A"), "")   # never creates a local branch named after the parent
 
     def test_new_branch_carries_the_specs_tracked_files_the_parent_tip_lacks(self) -> None:
@@ -161,7 +161,7 @@ class WorkBranchTestCase(unittest.TestCase):
         parent, child, a_tip = parent_child(self.w)
         rc, got = self.run_branch(child, "B", "current")
         self.assertEqual((rc, got["BASE_BRANCH"]), (0, "origin/A"))
-        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text().strip(), a_tip)
+        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text(encoding="utf-8").strip(), a_tip)
         git(self.w.work, "checkout", "-q", "-b", "stray", "main")
         rc, got = self.run_branch(child, "stray", "current")
         self.assertEqual(rc, 2)
@@ -187,6 +187,17 @@ class ChainDetectTestCase(unittest.TestCase):
     def detect(self, spec: str, *, base: str = "", dry_run: str = "0") -> tuple[int, dict[str, str]]:
         env = {"REPO_ROOT": str(self.w.work), "FLOWCTL": str(self.w.bin / "flowctl"), "SPEC_ID": spec, "BASE_REF": base, "DRY_RUN": dry_run, "RALPH": "0", "AUTONOMOUS": "0"}
         return self.w.run_rc(self.fence, env, DETECT_OUT, cwd=self.w.work)
+
+    def test_explicit_base_uses_remote_tracking_when_local_branch_is_stale(self) -> None:
+        self.w.branch("advanced", "main", [("upstream.txt", "upstream\n")])
+        git(self.w.work, "push", "-q", "origin", "advanced:main")
+        self.w.branch("feature", "advanced", [("feature.txt", "feature\n")])
+        spec = self.w.spec("explicit base", "feature")
+        self.assertNotEqual(git(self.w.work, "rev-parse", "main"),
+                            git(self.w.work, "rev-parse", "origin/main"))
+        rc, got = self.detect(spec, base="main")
+        self.assertEqual(rc, 0, got["_stderr"])
+        self.assertEqual((got["BASE_REF"], got["COMMITS_AHEAD"]), ("origin/main", "1"))
 
     def test_open_parent_branch_resolves_the_base_and_the_boundary(self) -> None:
         parent, child, a_tip = parent_child(self.w)
@@ -262,6 +273,21 @@ class ChainDetectTestCase(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn(f"NEEDS_HUMAN: parent {parent} PR #1 closed unmerged; the chain is broken", got["_stderr"])
 
+    def test_closed_unmerged_parent_without_remote_history_still_stops(self) -> None:
+        parent, child, _ = parent_child(self.w)
+        git(self.w.work, "checkout", "-q", "A")
+        closed = self.w.flowctl("spec", "close", parent)
+        self.assertEqual(closed["status"], "done")
+        git(self.w.work, "add", "-f", ".flow/specs", ".flow/tasks")
+        git(self.w.work, "commit", "-q", "-m", "record parent close")
+        git(self.w.work, "checkout", "-q", "B")
+        git(self.w.work, "merge", "-q", "--no-edit", "A")
+        git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/A")
+        rc, got = self.detect(child)
+        self.assertEqual(rc, 2, got)
+        self.assertIn(parent, got["_stderr"])
+        self.assertIn("NEEDS_HUMAN", got["_stderr"])
+
     def test_merged_parent_whose_chain_base_cannot_be_refreshed_is_unresolved(self) -> None:
         parent, child, a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")
@@ -312,7 +338,7 @@ class ChainRewriteTestCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="fn152-rewrite-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.w = ConsumerWorld(self.tmp)
-        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite")
+        self.fence = fence(MAKE_PR / "workflow.md", "chain-rewrite").split("# fence:spec-close", 1)[0]
         self.parent, self.child, self.a_tip = parent_child(self.w)
         self.w.add_pr(1, "A", "main", state="MERGED")
         self.main_tip = self.w.squash_merge("A")
@@ -429,7 +455,9 @@ class StackLinkTestCase(unittest.TestCase):
         self.w.add_pr(1, "A", "main")
         self.w.add_pr(7, "B", "A")
         self.body = self.tmp / "body.md"
-        self.body.write_text("# title\n\n> **Spec:** x\n> **Branch:** `B` → `A`\n> **Tasks:** 1 completed\n\nrest\n", encoding="utf-8")
+        # fn-252 retires Branch/Tasks headers; stack linkage appends to the briefing.
+        self.briefing = "## Why\n\nReview the feature.\n"
+        self.body.write_text(self.briefing, encoding="utf-8")
         git(self.w.work, "remote", "set-url", "origin", "https://github.com/o/r.git")
 
     def link(self, **extra: str) -> tuple[int, dict[str, str]]:
@@ -450,7 +478,7 @@ class StackLinkTestCase(unittest.TestCase):
         self.assertNotIn("-f", posts[0])
         self.assertEqual(got["STACK_LINE"], "**Stack:** #11, layer 2 of 2")
         body = self.w.reload()["prs"]["7"]["body"]
-        self.assertIn("> **Branch:** `B` → `A`\n> **Stack:** #11, layer 2 of 2\n> **Tasks:**", body)
+        self.assertEqual(body, self.briefing + "\n> **Stack:** #11, layer 2 of 2\n")
         self.assertEqual(body.count("Stack:"), 1)
 
     def test_adds_to_the_parents_existing_stack(self) -> None:
@@ -486,14 +514,14 @@ class StackLinkTestCase(unittest.TestCase):
         rc, got = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
         self.assertEqual(rc, 0, got["_stderr"])
         body = self.body.read_text(encoding="utf-8")
-        self.assertIn("> **Branch:** `B` → `A`\n> **Stack:** #11, layer 2 of 3\n", body)
+        self.assertEqual(body, self.briefing + "\n> **Stack:** #11, layer 2 of 3\n")
         rc, _ = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
         self.assertEqual(self.body.read_text(encoding="utf-8").count("Stack:"), 1)   # idempotent
         self.w.world["prs"]["7"]["stack"] = None
         self.w.save()
-        self.body.write_text("> **Branch:** `B` → `A`\n", encoding="utf-8")
+        self.body.write_text(self.briefing, encoding="utf-8")
         rc, _ = self.w.run_rc(refresh, {"UPDATE_MODE": "1", "UPDATE_PR_NUMBER": "7", "BODY_FILE": str(self.body)}, ["STACK_LINE"], cwd=self.w.work)
-        self.assertEqual((rc, self.body.read_text(encoding="utf-8")), (0, "> **Branch:** `B` → `A`\n"))
+        self.assertEqual((rc, self.body.read_text(encoding="utf-8")), (0, self.briefing))
         self.assertEqual([c for c in self.w.calls("api") if "--method" in c], [])
 
     def test_non_github_remote_and_missing_parent_pr_make_no_call(self) -> None:

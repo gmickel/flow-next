@@ -22,7 +22,7 @@ An extra reviewer adds a review pass. A fix adds implementation and re-review. L
 | Who is watching | You are, at the keyboard | Nobody, until morning |
 | What the layers do | Give you a capability on demand | Stand in for the judgment you are not there to apply |
 | Default posture | Run lean; add a layer when the work asks for it | Run gated; the gates are what make the run trustworthy |
-| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:flow --auto` + `/flow-next:land`, repeated by a human, a host loop, or a scheduler |
+| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:flow --auto` + `/flow-next:land <PR>`, repeated by a human, a host loop, or a scheduler |
 
 **Neither is the real mode.** They are two answers to one question: *who applies judgment at each handover?* When you are present, you are the reviewer, the tracker, and the QA - a review backend, a bidirectional tracker sync, and a live QA stage are then buying you convenience, not safety, and you should switch each one on only where the convenience is worth its cost. When nobody is present, those same layers stop being convenience: they are the only thing standing between an unattended loop and an unreviewed merge, and running without them is the actual risk.
 
@@ -63,7 +63,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
 | [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
 | [Pre-capture discovery](#pre-capture-discovery) | none | manual | `/flow-next:chart`, `/flow-next:prospect` |
-| [Autonomous loops](#autonomous-loops) | none to enable; `land.patienceMinutesAfterReview` tunes the ship loop (`pipeline.chainStages` is deprecated) | manual (tuner off) | `/flow-next:flow --auto`, `/flow-next:land` |
+| [Autonomous loops](#autonomous-loops) | none to enable; `land.patienceMinutes` sets the wait after the last push when flow authorizes without a human's in-session merge authorization (`pipeline.chainStages` is deprecated) | manual (30-minute patience) | `/flow-next:flow --auto`, `/flow-next:land <PR>` |
 | [GitHub scouts](#github-scouts) | `scouts.github` | off | ask a scout in conversation |
 | [Ralph](#ralph-deprecated) | none | off, **deprecated** | see below |
 
@@ -164,7 +164,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
 - **Earns its keep when:** there is a queue of blessed, fully specified work and nobody who wants to sit through it.
 - **Lean invocation:** `/flow-next:work` is the human-driven equivalent and needs no loop primitive at all.
-- **Optional idle removal:** a long-horizon `flow --auto` run removes every driver re-anchor between stages by construction, so `pipeline.chainStages` is deprecated; for this release it still runs `make-pr` in the same tick as a fresh terminal `qa` verdict under `--tick` (and the pilot alias), is ignored with one notice in long-horizon mode, and is removed with the alias next release. `land.patienceMinutesAfterReview` (off by default) measures land's `silence` window from the head-current review event instead of the last push - it trades push-anchored grace for review-anchored grace, replacing the push window rather than taking the shorter of the two, so an early review shortens today's wait and a late review lengthens it. Neither changes a gate, a verdict, or the merge license. Patience-after-review stays opt-in because the push window is the human-objection grace period: how much of that grace a repo keeps after the reviewer has spoken is its call, not a default.
+- **Optional idle removal:** a long-horizon `flow --auto` run removes every driver re-anchor between stages by construction, so `pipeline.chainStages` is deprecated; for this release it still runs `make-pr` in the same tick as a fresh terminal `qa` verdict under `--tick` (and the pilot alias), is ignored with one notice in long-horizon mode, and is removed with the alias next release.
 
 ### GitHub scouts
 
@@ -177,7 +177,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 ### Ralph (deprecated)
 
-**Deprecated.** `/flow-next:flow --auto` to build and `/flow-next:land` to ship, repeated by a host loop or `cron`, do what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for `flow --auto` + land. Details and the full comparison: [`ralph.md`](ralph.md).
+**Deprecated.** `/flow-next:flow --auto` to build and `/flow-next:land <PR>` to ship, repeated by a host loop or `cron`, do what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for `flow --auto` + land. Details and the full comparison: [`ralph.md`](ralph.md).
 
 ### Implementation offload (no layer to enable)
 

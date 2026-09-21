@@ -146,7 +146,9 @@ bundled call, no content judgment involved. The eval question flips from "does i
   *Proven: `repo-scout` exp 1 → ~40–50% smaller output, 83% → 100% on the eval set, accuracy held.*
 - **Prompt trim** — remove instructions/examples that don't move the score
   (simplify-while-holding). Pure **input** savings on every invocation — the biggest single-prompt
-  prizes are `make-pr` (~31k tok), `audit`/`capture`/`impl-review` (~14–15k each).
+  measurements included `make-pr` (~31k tok before artifact rendering) and
+  `audit`/`capture`/`impl-review` (~14–15k each). Re-measure the current load graph
+  before choosing a target.
 
 ## Accuracy guard — why a trim can't quietly lose accuracy
 
@@ -180,7 +182,7 @@ for these must measure *fidelity + respect-for-override*, never "is the skill's 
 | Hot-path agents | `repo-scout` ✅, `context-scout` ✅ (2.8k), plan scouts ✅, `flow-gap-analyst` ✅, `quality-auditor` ✅ | Output budget | low (generic mutation) — **pool now harvested** |
 | Always-loaded skill weight | hot-path `SKILL.md` + force-loaded companions (fn-82 ✅: work, pilot, tracker-sync, review pair, interview, audit, qa, prospect, capture, make-pr) | gating (default-OFF machinery) → intra-skill dedupe → archaeology | low→medium (gating/archaeology safe; dedupe keeps imperative repetition; eval-guard accuracy-critical folds) |
 | Accuracy-critical | `capture`, `impl/plan/completion-review` (use `~/work/slop-testbed`) | accuracy-first, token 2nd | medium |
-| Heavy prompts | `make-pr` (~28k after fold), `audit`, `interview`, `prospect` | Prompt trim | higher — strong behavioral evals required |
+| Heavy prompts | `audit`, `interview`, `prospect`; historical make-pr baseline ~28k after fold | Prompt trim | higher — strong behavioral evals required |
 
 **Empirical note (which scouts the output-budget lever actually pays on):** the lever pays on the
 **free-form, local** scouts whose prose flows into the planner — `repo-scout` ✅ and `context-scout`
@@ -211,12 +213,15 @@ Two findings from running the loop on `capture` (R5) and `make-pr` (R6):
   table one indirection away. **Do not trim routing/taxonomy/guardrail tables out of the phase that
   uses them**, even when a copy exists elsewhere. The ratchet caught it — which is the whole point of
   R3 (real accuracy evals make the guarantee real).
-- **`make-pr` (~31k) is mostly load-bearing** — 5 phases, ~11 conditional body sections, 10
+- **Historical `make-pr` (~31k) trim** — the evaluated version had 5 phases, ~11 conditional body sections, 10
   hallucination guardrails, mermaid rules, push/retry, memory templating. The only cleanly-safe trim
   was **~170 tokens of `fn-42.N` build-scaffolding archaeology** (stale "implemented in fn-42.3" task
   refs in headings/parentheticals/a table column) — render-irrelevant by construction, body held
   5/5. Its verbose *render prose* is accuracy-shaping (same proximity rule), so deeper trims are an
   **accuracy-risky per-section backlog** (one eval-guarded experiment per section), not a one-shot.
+  That result applies to the evaluated hand-assembled body. The current skill
+  authors an artifact and delegates briefing rendering to flowctl; the retired
+  body-section instructions are no longer part of its load graph.
 
 Takeaway: lead with the **output-budget** lever on free-form scouts (big, low-risk wins); treat
 prompt-trims on accuracy-critical/heavy skills as **archaeology-first, then careful per-section

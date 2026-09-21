@@ -26,7 +26,6 @@ VALUES = ("off", "pull", "push", "reconcile", "comment")
 WORK_EVENTS = {"work.firstClaim", "work.done", "completionReview"}
 DIRECT_EVENTS = {"capture", "interview", "plan"}
 COMMENT_EVENTS = {"resolvePr", "qa"}
-UNCONDITIONAL_EVENTS = {"makePr", "land.merged"}
 CHART_EVENTS = {"chart"}
 FAKE_FLOWCTL = ORACLE_PATH.parent / "fake_flowctl.py"
 
@@ -157,18 +156,6 @@ def _inject_before_last_fi(source: str, body: str) -> str:
     return source[:position] + "\n" + textwrap.indent(body, "  ") + source[position:]
 
 
-def _indented_shell_block(path: Path, start: str) -> str:
-    """Extract one indented bash statement through its first matching outer `fi`."""
-    text = path.read_text(encoding="utf-8")
-    match = re.search(
-        rf"(?ms)^   {re.escape(start)}.*?^   fi[ \t]*$",
-        text,
-    )
-    if match is None:
-        raise AssertionError(f"{path}: missing shell block starting {start!r}")
-    return textwrap.dedent(match.group(0))
-
-
 def _shell_if_block_around(
     path: Path, sentinel: str, start_token: str = "ACTIVE=0"
 ) -> str:
@@ -197,7 +184,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         if cls.bash is None:
             raise unittest.SkipTest("tracker caller execution requires bash")
         oracle = json.loads(ORACLE_PATH.read_text(encoding="utf-8"))
-        cls.callers = {row["id"]: row for row in oracle["callers"]}
+        # R8 uses a repository-write-free API touchpoint, not the retired shell
+        # facade gate. Its real helper contract lives in test_land_tracker_api.py.
+        cls.callers = {row["id"]: row for row in oracle["callers"]
+                       if row["id"] != "land.merged"}
         cls.values = tuple(oracle["per_event_enum"])
         cls.sources = {
             caller_id: (
@@ -308,10 +298,8 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             # shared matrix still walks off|pull|push|reconcile|comment;
             # none of those literals are "on", so the chart gate stays silent.
             return None
-        if caller_id in UNCONDITIONAL_EVENTS:
-            if caller_id == "makePr":
-                return "reconcile"
-            return "push" if merged else "comment"
+        if caller_id == "makePr":
+            return "reconcile"
         if value == "off":
             return None
         if caller_id in DIRECT_EVENTS:
@@ -332,11 +320,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             row["event"],
         ]
         argv.extend(self._input_argv(op))
-        if caller_id == "land.merged" and op == "push":
-            argv.extend([
-                "--comment-file",
-                (self.root / "comment.md").as_posix(),
-            ])
         if caller_id == "makePr" and op == "reconcile":
             argv.extend(["--pr-url", "https://example.test/pull/141"])
         if caller_id == "work.firstClaim":
@@ -368,12 +351,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
     def _wrapper_body(self, caller_id: str, op_expression: str) -> str:
         row = self.callers[caller_id]
         modifier = ' STATUS_ARGS=(--status-only)' if caller_id == "work.firstClaim" else ' STATUS_ARGS=()'
-        comment_modifier = (
-            ' [ "$HARNESS_OP" != "push" ] || '
-            'INPUT_ARGS+=(--comment-file "$BODY_FILE")'
-            if caller_id == "land.merged"
-            else ""
-        )
         pr_modifier = (
             ' [ "$HARNESS_OP" != "reconcile" ] || '
             'INPUT_ARGS+=(--pr-url "$PR_URL")'
@@ -398,7 +375,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 '  comment) INPUT_ARGS=(--body-file "$BODY_FILE") ;;',
                 "esac",
                 modifier,
-                comment_modifier,
                 pr_modifier,
                 f'FACADE_RESULT=$("$FLOWCTL" tracker sync "$SPEC_ID" --op "$HARNESS_OP" '
                 f'--event {row["event"]} "${{INPUT_ARGS[@]}}" "${{STATUS_ARGS[@]}}")',
@@ -571,37 +547,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             active=active,
         )
 
-    def _run_land(
-        self,
-        *,
-        value: str,
-        active: bool,
-        merged: bool,
-    ) -> subprocess.CompletedProcess[str]:
-        path = self.sources["land.merged"]
-        active_fence = _indented_shell_block(path, "TRACKER_FIRE=0")
-        merge_fence = _indented_shell_block(path, 'MERGED_CONFIRMED="$(gh pr list')
-        dispatch = "\n".join(
-            [
-                'if [ "$TRACKER_FIRE" = "1" ]; then',
-                '  if [ "$TRACKER_TERMINAL_OK" = "1" ]; then',
-                '    HARNESS_OP="push"',
-                "  else",
-                '    HARNESS_OP="comment"',
-                "  fi",
-                textwrap.indent(
-                    self._wrapper_body("land.merged", '"$HARNESS_OP"'),
-                    "  ",
-                ),
-                "fi",
-            ]
-        )
-        return self._run_shell(
-            "\n".join((active_fence, merge_fence, dispatch)),
-            value=value,
-            active=active,
-            merged=merged,
-        )
 
     def _run_caller(
         self,
@@ -615,8 +560,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
             return self._run_work(caller_id, value=value, active=active)
         if caller_id == "makePr":
             return self._run_make_pr(value=value, active=active)
-        if caller_id == "land.merged":
-            return self._run_land(value=value, active=active, merged=merged)
         return self._run_standard(caller_id, value=value, active=active)
 
     def _config_calls(self) -> list[list[str]]:
@@ -683,28 +626,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                     [self._facade_argv("qa", "comment")],
                 )
 
-    def test_land_status_is_unconditional_and_merge_evidence_selects_operation(self) -> None:
-        for value in VALUES:
-            for merged, op in ((True, "push"), (False, "comment")):
-                with self.subTest(value=value, merged=merged):
-                    self._reset_observations()
-                    result = self._run_caller(
-                        "land.merged",
-                        value=value,
-                        active=True,
-                        merged=merged,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(
-                        self._facade_calls(),
-                        [self._facade_argv("land.merged", op)],
-                    )
-
-    def test_land_facade_calls_use_the_current_loop_spec(self) -> None:
-        source = self.sources["land.merged"].read_text(encoding="utf-8")
-        self.assertEqual(source.count('"$FLOWCTL" tracker sync "$spec"'), 2)
-        self.assertNotIn('"$FLOWCTL" tracker sync "$SPEC_ID"', source)
-        self.assertIn('--comment-file "$COMMENT_FILE"', source)
 
     def test_current_active_argv_is_a_declared_delta_from_the_oracle(self) -> None:
         for caller_id, row in self.callers.items():
@@ -728,8 +649,6 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 self.assertIn("<spec-id>", old_argv)
                 if row["resolved_facade_op"] == "configured_value":
                     oracle_operation = "operation:<configured-value>"
-                elif caller_id == "land.merged":
-                    oracle_operation = "operation:<push-if-merged-else-comment>"
                 else:
                     oracle_operation = f"operation:{expected_op}"
                 self.assertIn(oracle_operation, old_argv)

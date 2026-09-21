@@ -177,6 +177,7 @@ spec add-dep
 spec chain
 spec clear-no-plan
 spec close
+spec closed-in-range
 spec create
 spec export-cognitive-aid
 spec ready

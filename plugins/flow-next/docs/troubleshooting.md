@@ -305,15 +305,55 @@ rm -rf ~/.claude/plugins/cache/<marketplace>   # then reload Claude Code
 
 ## Land on a chain: `chain broken`, a retarget conflict, or a pending merge-async (fn-149)
 
-Land babysits dependent PRs (a PR based on its parent's branch, with or without a GitHub stack) one frontier at a time; three verdicts name the human's part.
+Land accepts one named PR and merges only the lowest open layer. It links open
+children into a native stack before merging where supported. GitHub handles
+stack retargeting; land never rebases, force-pushes or retargets a child.
 
-**`NEEDS_HUMAN: chain broken; parent #<n> closed unmerged`.** The child's commits include the parent's work, so land never retargets it on its own. Decide whether the parent's change lives on: reopen and land the parent, or rebase the child onto the chain base by hand (dropping or keeping the parent's commits) and retarget its PR with `gh pr edit <child> --base <chain base>`; the next tick re-gates it as standalone.
+**A child needs a rebase.** When stacks are unavailable or catch-up conflicts,
+land reports the exact branch and stops. After the parent is confirmed merged,
+recover only that child in a clean, dedicated checkout. Confirm the intended
+base and the parent's **pre-merge tip** from its PR history. For a squash merge,
+that tip is the boundary to drop; the parent's squash commit is not the boundary.
+Verify that the boundary is an ancestor of the child and inspect the commits
+above it before rewriting. Do not guess if the parent was already rewritten.
 
-**`BLOCKED: retarget of #<n> onto <base> conflicts in <files>`.** After the parent merged, land rebased the layer above it in a throwaway worktree and hit a conflict; nothing was pushed and no cascade record exists, so the chain is exactly as before. Resolve it yourself: `git rebase --onto <chain base> <parent's pre-merge tip> <layer>`, push with `--force-with-lease`, and edit the PR base. Land absorbs the head move by patch-id and continues with the layers above on the next tick. `RESOLVING` with `lease on <layer> failed` is different: the cascade record is kept and the next tick resumes it without touching a layer that already carries its rewrite.
+The following is a manual, separately authorized recovery, not a land step.
+Replace all placeholders with verified values:
 
-**`RESOLVING: merge-async still pending past the 600s budget`.** GitHub accepted the stack merge but had not finished it inside the tick's polling budget. The ledger keeps the merge's uuid; the next tick polls it (GitHub retains the result for 24 hours) and never submits a second merge while a uuid is stored. `merge-async refused a stale head pin` is the server refusing to merge a head the gates never judged (a lower layer merged from the UI between the read and the submit); land re-reads the head next tick. `merge-async does not enforce a head pin` means the R16 stale-pin regression observed a merge despite a stale pin: native submission is disabled and the frontier is merged from the stack UI.
+```bash
+git fetch origin
+git switch <child-branch>
+git status --short                       # require a clean checkout
+git rev-parse origin/<child-branch>      # record as <expected-child-sha>
+git merge-base --is-ancestor <parent-pre-merge-tip> HEAD
+git log --oneline <parent-pre-merge-tip>..HEAD
+git rebase --onto origin/<intended-base> <parent-pre-merge-tip> <child-branch>
+# Resolve the reported files, git add those files, then git rebase --continue.
+# To abandon recovery and restore the original branch: git rebase --abort.
+# Run the child's focused checks before publishing.
+git push --force-with-lease=refs/heads/<child-branch>:<expected-child-sha> origin HEAD:refs/heads/<child-branch>
+gh pr edit <child-PR> --base <intended-base>
+```
 
-The branch janitor reports `janitor: <branch> kept (<n> open child PR(s))` until every child is retargeted, then deletes it; a 403 keeps the entry for a later tick and needs the branch-delete permission `--delete-branch` needed.
+If the lease fails, inspect the remote changes; do not overwrite them or retry
+with a freshly guessed lease. Re-read the PR head, matching closed specs, checks
+and reviews, then explicitly land this child. A prior comment on an old head
+has no patch-id carry-over. Do not cascade this rewrite through grandchildren;
+each remaining layer needs its own inspection and authorization. Keep a parent
+branch while any open PR still targets it.
+
+**A parent closed unmerged.** Decide whether to reopen the parent or preserve
+its changes in the child before choosing a rebase boundary. Dropping its commits
+as if they had merged can lose work. Land makes neither decision for you.
+
+**A stack merge is pending.** `RESOLVING` means success is unconfirmed. Re-read
+the named PR and its current stack state before another invocation. Land stores
+no merge UUID or polling ledger. A moved head requires fresh gating; only a
+confirmed `MERGED` state with a merge commit is success. Branch deletion follows
+confirmation and a fresh check that no open PR still targets that branch.
+
+See [Landing upgrade](flowctl.md#landing-upgrade) for the repository-wide recipe,
+review gates and retired configuration.
 
 ## See also
 

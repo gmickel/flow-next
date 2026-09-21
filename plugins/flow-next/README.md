@@ -11,6 +11,6 @@ This is the plugin source directory. The canonical README for flow-next lives at
 - Skills catalog (all 31 skills) → [`docs/skills.md`](docs/skills.md)
 - Adopting in a team → [`docs/teams.md`](docs/teams.md)
 - `flowctl` CLI reference → [`docs/flowctl.md`](docs/flowctl.md)
-- Going autonomous (pilot / land / Ralph) → [root README → Going autonomous](../../README.md#going-autonomous) · [`docs/ralph.md`](docs/ralph.md)
+- Going autonomous (pilot / land / Ralph) → [root README → Land a pull request](../../README.md#land-a-pull-request) · [`docs/ralph.md`](docs/ralph.md)
 - Architecture + `.flow/` layout → [`docs/architecture.md`](docs/architecture.md)
 - Full doc index → [`docs/README.md`](docs/README.md)

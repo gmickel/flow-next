@@ -33,7 +33,6 @@ INTERVIEW_SKILL = PLUGIN / "skills" / "flow-next-refine" / "SKILL.md"
 
 MAKE_PR_DIR = PLUGIN / "skills" / "flow-next-make-pr"
 MAKE_PR_WORKFLOW = MAKE_PR_DIR / "workflow.md"
-MERMAID_RULES = MAKE_PR_DIR / "mermaid-rules.md"
 
 CONDUCT_VISUAL = REPO_ROOT / "agent_docs" / "conduct" / "visual.md"
 CONDUCT_README = REPO_ROOT / "agent_docs" / "conduct" / "README.md"
@@ -182,21 +181,13 @@ class VisualCloserOffers(unittest.TestCase):
 
 
 class MakePrSketchClause(unittest.TestCase):
-    """R5: the sketch is licensed in mermaid-rules and reachable from Phase 3."""
+    """fn-252 keeps structural sketches inline and retires diagram recipes."""
 
-    def test_sketch_section_lives_in_mermaid_rules(self) -> None:
-        rules = _read(MERMAID_RULES)
-        self.assertIn("Diff-fenced structural sketches", rules)
-        self.assertIn("```diff", rules)
-        # Licensed situations, inherited guardrails, and --no-mermaid semantics.
-        self.assertRegex(rules, re.compile(r"collapse-to-one", re.I))
-        self.assertRegex(rules, re.compile(r"marginal", re.I))
-        self.assertIn("--no-mermaid", rules)
-
-    def test_phase_three_reaches_the_sketch_clause(self) -> None:
+    def test_workflow_keeps_structural_sketch_contract(self) -> None:
         workflow = _read(MAKE_PR_WORKFLOW)
-        self.assertIn("mermaid-rules.md", workflow)
-        self.assertRegex(workflow, re.compile(r"sketch", re.I))
+        self.assertIn("linked file lists", workflow)
+        self.assertNotIn("mermaid-rules.md", workflow)
+        self.assertFalse((MAKE_PR_DIR / "mermaid-rules.md").exists())
 
 
 class VisualConductChecklist(unittest.TestCase):

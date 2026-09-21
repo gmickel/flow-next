@@ -18,7 +18,7 @@ The files below stay in the repository because something at runtime reads them: 
 | [`tracker-sync.md`](tracker-sync.md) | Capture, make-pr, and work read the retro-fire rule; `flowctl_tracker` code and the config schema cite the fn-64 ordering rule |
 | [`memory-schema.md`](memory-schema.md) | The qa skill maps bug categories through it |
 | [`html-artifacts.md`](html-artifacts.md) | The html-lens references in capture, make-pr, and plan; the fixture-contract test reads it |
-| [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The consumer contract for the PR walkthrough; the fixture-contract test pins it against the make-pr skill copy |
+| [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The consumer contract for the stored PR walkthrough and its rendered briefing |
 | [`review-findings.md`](review-findings.md) | The structured findings contract; its test pins the schema fields, bounds, and identity grammar |
 | [`judge.md`](judge.md) | The setup workflow links it for key handling; the config schema descriptions point at it |
 | [`running-lean.md`](running-lean.md) | Seven config schema descriptions point at it for the cost of each optional layer |
@@ -26,7 +26,7 @@ The files below stay in the repository because something at runtime reads them: 
 | [`teams.md`](teams.md) | `templates/spec.md` cites the symmetric interview pattern; the count test pins the commands table |
 | [`architecture.md`](architecture.md) | The `.flow/` layout and the review bookkeeping authority; the chart inventory and review-findings tests read it |
 | [`platforms.md`](platforms.md) | The canonical supported-platforms sentence and the platform matrix; the Cursor, Ralph, and tracker distribution tests pin its sections |
-| [`troubleshooting.md`](troubleshooting.md) | The land skill's chains reference and the bug report template link into it |
+| [`troubleshooting.md`](troubleshooting.md) | Landing upgrades, manual chain recovery, and bug report troubleshooting |
 | [`ralph.md`](ralph.md) | The `ralph-guard` hook cites it; the Ralph docs-truth test pins the opt-in and control-surface facts |
 | [`sync-codex.md`](sync-codex.md) | The Ralph docs-truth test checks no hook-generation step returns |
 | [`glossary.md`](glossary.md) | How the repo-root `GLOSSARY.md` file is shaped, resolved, and edited with `flowctl glossary`; no site page covers the file mechanics yet |

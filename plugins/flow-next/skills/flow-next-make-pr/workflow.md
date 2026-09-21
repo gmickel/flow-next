@@ -1,151 +1,35 @@
 # /flow-next:make-pr workflow
 
-Execute these phases in order. Each gates on the prior. Stop on user-blocking error — never plow through with bad state.
-
-## Preamble
-
-```bash
-set -e
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TODAY="$(date -u +%Y-%m-%d)"
-```
-
-`jq`, `python3` (or `python`), `gh`, and `git` must be on PATH. Mode + flags come from the SKILL.md mode-detection block (`DRAFT_FORCE`, `NO_MERMAID`, `WRITE_MEMORY`, `DRY_RUN`, `BASE_REF`, `SPEC_ID`, `AUTONOMOUS`).
-
-If `.flow/` does not exist, print `No .flow/ directory — this command runs inside a flow-next-managed repo.` and exit 1.
-
----
-
+Run in order; preserve variables. Require `.flow/`, git, jq and Python. Failed preflight, close, staging or close commit stops before export and PR creation; never skip close.
+Use `set -e`, the resolved `FLOWCTL`, and `REPO_ROOT=$(git rev-parse --show-toplevel)`.
 ## Phase 0: Pre-flight
 
-**Goal:** every external dependency is resolved (gh installed + authed; spec id known; base ref valid; branch ahead of base; tasks done; no existing OPEN PR) before any rendering work starts. Phase 0 has the heaviest external-state dependencies; failing fast here keeps Phases 1-4 deterministic.
-
-**Fence discipline:** on the happy path Phase 0 runs as exactly THREE bash fences — §0.0–0.1 (context + gh), §0.2–0.4 (spec id, base ref, branch validity), §0.5–0.7 (single `flowctl show` capture + tasks-done + existing-PR + context). The subsection headers below describe the parts of each fence; do not split them back into per-subsection calls. **Interactive-ask exemption:** a Bash fence cannot pause for `AskUserQuestion`. When the §0.2–0.4 fence prints a `NEED_INPUT:` line and exits, ask the user OUTSIDE the fence, then RE-RUN that same fence with the supplied `SPEC_ID` / `BASE_REF` preset — the re-run does not count against the three-fence happy path (Ralph/autonomous never reaches it; those contexts hard-error inside the fence instead).
-
-### 0.0 — Detect Ralph / autonomous context
-
-Detect once, route deterministically downstream. Per spec R24, the skill is **not** Ralph-blocked — autonomous loops opening draft PRs is the intended use.
-
-`AUTONOMOUS` comes from SKILL.md mode detection (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`). It is a separate flag — autonomous drivers (e.g. `/flow-next:flow --auto`) are NOT Ralph; neither signal here may ever set `RALPH`, and `FLOW_AUTONOMOUS` activates no ralph-guard hooks.
-
-When `RALPH=1` or `AUTONOMOUS=1`:
-
-- Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask in an autonomous context). (Interactive mode resolves the same gaps with its usual Phase 0 info prompts — not a confirm gate.)
-- Phase 4 forces `--draft` regardless of `--ready` (autonomous loops never open ready-to-merge PRs) — the one autonomous-vs-interactive difference now that the confirm gate is gone for both.
-- **Ralph only** (`RALPH=1`): Phase 5 emits the `PR_URL=` line on stdout for the harness to capture.
-  This and every receipt/harness semantic stay keyed on `RALPH` alone — `AUTONOMOUS` never triggers them.
-
-There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is deterministic.
-
-### 0.1 — gh pre-flight
-
-`gh` is the only PR-creation primitive the skill supports — no manual `git push` fallback for missing `gh`.
-
-Skip both checks under `--dry-run`. Rationale: dry-run renders the PR body to stdout and exits before any `git push` / `gh pr create` (Phase 4.0), so requiring `gh` to be installed + authed there blocks the documented inspection path on machines / CI jobs that only want to preview the body. The same checks fire on the real path because Phase 4.6 invokes `gh pr create` unconditionally.
-
+Run the fences; an information prompt may interrupt and rerun its fence. Dry-run skips installation/auth checks.
+Explicit `--base <branch>` uses `origin/<branch>`, refreshed on real runs. Chain detection uses shared history; first match wins.
+Merged-parent rewrites require create, a clean tree, ancestry and lease guards; dry-run reports and update never rewrites.
 ```bash
-# --- §0.0: Ralph / autonomous context ---
 RALPH=0
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
   RALPH=1
 fi
-
-# --- §0.1: gh pre-flight (skipped under --dry-run) ---
 if [[ "$DRY_RUN" != "1" ]]; then
   if ! command -v gh >/dev/null 2>&1; then
-    cat <<'EOF' >&2
-Error: gh CLI not installed. /flow-next:make-pr requires gh for PR creation.
-
-Install:
-  macOS: brew install gh
-  Linux: see https://github.com/cli/cli#installation
-  Windows: winget install --id GitHub.cli
-
-Then authenticate:
-  gh auth login --hostname github.com
-EOF
-    exit 1
-  fi
-
+    echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login --hostname github.com." >&2; exit 1; fi
   if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-    cat <<'EOF' >&2
-Error: gh CLI not authenticated for github.com. Run:
-
-  gh auth login --hostname github.com
-
-If you already authed and this still fails, check `gh auth status` for hostname mismatches.
-EOF
-    exit 1
-  fi
+    echo "Error: gh CLI not authenticated; run gh auth login --hostname github.com." >&2; exit 1; fi
 fi
 ```
-
-### 0.2 — Resolve spec id
-
-Resolution order:
-
-1. **Explicit `$SPEC_ID` argument** — if non-empty after flag parsing, use it directly.
-2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` `branch_name` field. Markdown sidecars live at `.flow/specs/<id>.md`. (Pre-1.0 `.flow/epics/` repos: port first per `flowctl usage` "Pre-1.0 layout porting".)
-3. **Ask** — interactive only. Ralph hard-errors.
-
-### 0.3 — Base-branch detection cascade
-
-Cascade: `--base` → chain parent branch (parent PR open) → `origin/main` → `main` → `origin/master` → `master` → ask (interactive) / exit 2 (Ralph/autonomous); the detected-or-supplied ref is then validated via `git rev-parse --verify --quiet`.
-
-**Chain rung (fn-152).** A spec that depends on another spec may have been built on that parent's branch (work branches a chained spec from the parent's remote tip; see `flow-next-work/phases.md` Phase 2). The rung tests **history, never scheduling state or a scratch file**: for each dependency `D` in `depends_on_epics` order, obtain a ref into `D`'s history (`origin/<D.branch_name>` after a fetch while the branch exists on origin, otherwise the head of `D`'s merged PR via `refs/pull/<n>/head`), compute `MB = git merge-base HEAD <D_ref>`, and call the branch chained on `D` when `MB` is **not** an ancestor of the chain base (the default-branch rung's result): the two branches share commits the chain base does not have. `MB` is the boundary of the parent's work inside this branch, whether the parent advanced after the fork, was squash-merged, or both; a parent merged with a merge commit or fast-forward yields an `MB` on the chain base, so the branch is correctly not chained. The first chained `D` wins. An explicit `--base` stays above the rung (no detection runs). Outcomes by parent PR state:
-
-| Parent PR | Base | Then |
-|---|---|---|
-| open | `origin/<parent_branch>` | after `gh pr create`, link into the parent's GitHub stack (`create-and-finalize.md` §4.6) |
-| none yet | `origin/<parent_branch>` | no link (nothing to link to); the body's stack line is omitted |
-| merged | the parent PR's base (`origin/<chain_base>`) | **create run only:** rewrite the branch onto it from the boundary (§0.6b fence) so the PR does not double-count the parent's pre-squash commits; `--dry-run` and `--update` never rewrite |
-| closed unmerged | — | exit 2 `NEEDS_HUMAN: parent <id> PR #<n> closed unmerged; the chain is broken` |
-
-A dependency that is open with all tasks done but whose history cannot be reached (no branch on origin and no merged PR), or a merged one whose PR head cannot be fetched, is **unresolved**; so is a merged parent whose chain base cannot be refreshed from origin (a stale base would drop the parent's landed work from the child on rewrite): exit 2 `NEEDS_HUMAN: cannot establish the chain boundary for <D>; parent history unreachable`, never a guess. A repo with no dependency edges never enters the rung and takes the default cascade byte-identically.
-
-### 0.4 — Branch validity
-
-HEAD must be a real commit, distinct from base, share a merge-base with base, and have at least one commit since that merge-base. **The base is NOT required to be an ancestor of HEAD** — feature branches commonly fork from older `main` while `origin/main` advances; `gh pr create` happily handles this case (GitHub computes the diff against the merge-base, not against `BASE_REF` head). The strict-ancestor check would falsely reject the everyday "branch is behind base on linear history but has its own commits" scenario.
-
-The combined §0.2–0.4 fence:
-
+Resolve `SPEC_ID` from the argument or the first current-branch `branch_name` match in
+`.flow/specs/*.json`; with no match leave it empty for the range fallback below.
 ```bash
-# --- §0.2: resolve spec id ---
-if [[ -z "$SPEC_ID" ]]; then
-  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
-  if [[ -n "$CURRENT_BRANCH" ]]; then
-    # Match against `.flow/specs/*.json` `branch_name` field. flowctl's spec
-    # store writes branch_name on spec create; jq across specs/ finds the match.
-    SPEC_ID=$(
-      find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null \
-      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
-          'select(.branch_name == $b) | .id' {} 2>/dev/null \
-      | head -1)
+# fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
+if [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
+  BASE_BRANCH="${BASE_REF#origin/}"
+  if [[ "$DRY_RUN" != "1" ]]; then
+    git -C "$REPO_ROOT" fetch -q origin "refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" || { echo "Error: cannot refresh origin/$BASE_BRANCH" >&2; exit 1; }
   fi
+  BASE_REF="origin/$BASE_BRANCH"
 fi
-
-if [[ -z "$SPEC_ID" ]]; then
-  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
-    echo "Error: no spec id supplied and no .flow/specs/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
-    exit 2
-  fi
-  # Interactive: STOP this fence — a Bash call cannot pause for AskUserQuestion.
-  # Ask outside the fence ("No spec detected from current branch. Provide a spec id
-  # (fn-N-slug) or abort?" — options: 1. Type spec id  2. Abort; abort exits 1),
-  # then RE-RUN this fence with SPEC_ID preset (interactive-ask exemption above).
-  # §0.5's single `flowctl show` capture validates the typed id.
-  echo "NEED_INPUT: SPEC_ID (no branch_name match for '$CURRENT_BRANCH')"
-  exit 3
-fi
-
-# Spec existence is validated by §0.5's single `flowctl show` capture —
-# no separate validation-only `show >/dev/null` call here.
-
-# --- §0.3: base-branch detection cascade ---
-# fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF (explicit --base or empty), DRY_RUN; gh on PATH unless --dry-run
 CHAIN_BASE=""
 for candidate in origin/main main origin/master master; do
   if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
@@ -153,21 +37,26 @@ for candidate in origin/main main origin/master master; do
     break
   fi
 done
-# Chain rung (fn-152): history, not scheduling state. Skipped under an explicit --base.
+if [[ -z "$SPEC_ID" ]]; then
+  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
+  SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
+  if [[ -z "$SPEC_ID" ]]; then
+    [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]] && exit 2
+    echo "NEED_INPUT: SPEC_ID"; exit 3
+  fi
+fi
 CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
 if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
-  # The ancestry test below reads the chain base; refresh it first so a parent merged
-  # elsewhere since the last fetch (merge commit or fast-forward) is seen as landed.
   [[ "$CHAIN_BASE" == origin/* ]] && { git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2; }
+  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
+    # Closed-set membership excludes closes inherited from a stacked parent branch.
+    if printf '%s' "$CLOSED_IDS" | jq -e --arg dep "$DEP" '.spec_ids | index($dep) != null' >/dev/null; then continue; fi
     DEP_JSON=$("$FLOWCTL" show "$DEP" --json 2>/dev/null) || continue
     DEP_BRANCH=$(printf '%s' "$DEP_JSON" | jq -r '.branch_name // empty')
     [[ -z "$DEP_BRANCH" ]] && continue
     DEP_REF=""
-    if git -C "$REPO_ROOT" fetch -q origin "refs/heads/$DEP_BRANCH:refs/remotes/origin/$DEP_BRANCH" 2>/dev/null; then
-      DEP_REF="refs/remotes/origin/$DEP_BRANCH"
-    fi
-    # Parent PR state: open first, else merged, else closed. A failed read never becomes a guess on a real run.
+    if git -C "$REPO_ROOT" fetch -q origin "refs/heads/$DEP_BRANCH:refs/remotes/origin/$DEP_BRANCH" 2>/dev/null; then DEP_REF="refs/remotes/origin/$DEP_BRANCH"; fi
     if DEP_PR_LIST=$(gh pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
       DEP_PR_JSON=$(printf '%s' "$DEP_PR_LIST" | jq -c '(map(select(.state=="OPEN")) + map(select(.state=="MERGED")) + map(select(.state=="CLOSED"))) | .[0] // empty')
     elif [[ "$DRY_RUN" == "1" ]]; then
@@ -179,6 +68,7 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     fi
     DEP_PR_STATE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.state // empty')
     DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
+    if [[ "$DEP_PR_STATE" == "MERGED" && "$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')" == "$(git -C "$REPO_ROOT" branch --show-current)" ]]; then continue; fi
     if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
       if git -C "$REPO_ROOT" fetch -q origin "refs/pull/$DEP_PR_NUMBER/head:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
         DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
@@ -188,12 +78,15 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
       fi
     fi
     if [[ -z "$DEP_REF" ]]; then
-      DEP_UNREACHABLE=$(printf '%s' "$DEP_JSON" | jq '(.status != "done") and ([.tasks[]?] | length > 0) and ([.tasks[]? | select(.status != "done")] | length == 0)')
-      if [[ "$DEP_UNREACHABLE" == "true" ]]; then
-        echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
-        exit 2
+      DEP_COMPLETE=$(printf '%s' "$DEP_JSON" | jq '([.tasks[]?] | length > 0) and ([.tasks[]? | select(.status != "done")] | length == 0)')
+      if [[ "$DEP_COMPLETE" == "true" ]]; then
+        DEP_CHAIN=$("$FLOWCTL" spec chain "$SPEC_ID" --json) || {
+          echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; chain probe failed" >&2; exit 2;
+        }
+        if [[ "$(printf '%s' "$DEP_CHAIN" | jq --arg dep "$DEP" '(.parent == $dep) or (.eligible != true)')" == "true" ]]; then
+          echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable ($(printf '%s' "$DEP_CHAIN" | jq -r '.reason'))" >&2; exit 2; fi
       fi
-      continue   # a long-done dependency with neither branch nor PR left: not a chain
+      continue   # shared chain evidence permits a landed dependency with no history left
     fi
     MB=$(git -C "$REPO_ROOT" merge-base HEAD "$DEP_REF" 2>/dev/null) || continue
     if git -C "$REPO_ROOT" merge-base --is-ancestor "$MB" "$CHAIN_BASE" 2>/dev/null; then
@@ -211,8 +104,6 @@ if [[ -n "$CHAIN_PARENT" ]]; then
     MERGED)
       PARENT_PR_BASE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')
       : "${PARENT_PR_BASE:=${CHAIN_BASE#origin/}}"
-      # The rewrite target must be the CURRENT tip of the chain base (it carries the parent's squash);
-      # a stale local ref would drop the parent's work from the child, so a failed refresh is unresolved.
       git -C "$REPO_ROOT" fetch -q origin "refs/heads/$PARENT_PR_BASE:refs/remotes/origin/$PARENT_PR_BASE" 2>/dev/null \
         || { echo "NEEDS_HUMAN: cannot refresh chain base $PARENT_PR_BASE from origin; no rewrite" >&2; exit 2; }
       REWRITE_ONTO="origin/$PARENT_PR_BASE"; BASE_REF="$REWRITE_ONTO"; CHAIN_REWRITE=1 ;;
@@ -222,137 +113,67 @@ if [[ -n "$CHAIN_PARENT" ]]; then
   esac
 fi
 [[ -z "$BASE_REF" ]] && BASE_REF="$CHAIN_BASE"
-
 if [[ -z "$BASE_REF" ]]; then
   if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
-    echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
-    exit 2
-  fi
-  # Interactive: STOP this fence — ask for the base ref outside it (AskUserQuestion,
-  # no frozen options — accept a typed branch name; on abort exit 1), then RE-RUN
-  # this fence with BASE_REF preset (interactive-ask exemption above). The re-run's
-  # final validation below rejects an invalid typed ref.
+    echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2; exit 2; fi
   echo "NEED_INPUT: BASE_REF (origin/main, main, origin/master, master all missing)"
   exit 3
 fi
-
-# Final validation — base must exist whether detected or supplied.
 if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
-  echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
-  exit 1
-fi
-
-# --- §0.4: branch validity (same fence continues) ---
+  echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2; exit 1; fi
 HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null) || {
   echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
-
 BASE_SHA=$(git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" 2>/dev/null)
-
 if [[ "$HEAD_SHA" == "$BASE_SHA" ]]; then
-  echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2
-  exit 1
-fi
-
-# Resolve the merge-base. Required for a valid PR — without one the branches
-# are unrelated histories and gh pr create will fail.
+  echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2; exit 1; fi
 MERGE_BASE=$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null) || {
   echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
   exit 1; }
-
-# Confirm at least one commit exists on the branch since the merge-base.
-# Use <merge-base>..HEAD (NOT <BASE_REF>..HEAD) so a branch that's behind base
-# on linear history is still accepted as long as it has its own commits.
 COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$MERGE_BASE..HEAD")
 if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
-  echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
-  exit 1
-fi
+  echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2; exit 1; fi
 ```
-
-### 0.5 — Tasks-done validation
-
-Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table reports *evidenced* coverage from done tasks; criteria claimed by still-open tasks render as `⏳ claimed, not yet evidenced` (§2.3) rather than as gaps — a draft-early PR stays renderable. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
-
-| Context | Behavior |
-|---------|----------|
-| `OPEN_COUNT == 0` | Proceed silently. |
-| `OPEN_COUNT > 0` AND `DRY_RUN == 1` | Warn on stderr but proceed (`--dry-run` is for inspection — body should still render). |
-| `OPEN_COUNT > 0` AND (`RALPH == 1` OR `AUTONOMOUS == 1`) | Hard-error with the open-task list. Autonomous loops should not open PRs for incomplete specs. |
-| `OPEN_COUNT > 0` AND interactive | **Warn on stderr and proceed** (no prompt — autonomous create). The open items make the PR a **draft** via the §4.2 heuristic, which is exactly the "open a draft early" workflow; the warning names the open tasks + suggests `/flow-next:work` so the user can finish + flip to `--ready`. |
-
-### 0.6 — Existing-PR refusal
-
-**Critical: filter on `.state == "OPEN"`.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for both CLOSED and MERGED PRs — a "JSON returned = refuse" check would false-positive on reused branches (branch had a previous PR closed without merge, or merged + pushed-again-to). Filter via jq so closed/merged PRs don't trigger refusal.
-
-**`--update` mode inverts this check.** After resolve-pr / land fix rounds, the created PR body goes stale — the R-ID coverage SHAs, Review-plan buckets, churn numbers, and SHA-pinned blob links all describe a diff that no longer exists (worst on the most-reviewed PRs). `--update` (parsed from `$ARGUMENTS` alongside `--dry-run`/`--ready` → `UPDATE_MODE=1`) re-renders Phases 1-3 against the CURRENT payload and `gh pr edit`s the EXISTING open PR's body (§4.6). So under `--update` an existing OPEN PR is REQUIRED — its number is the edit target — and its absence is the error. resolve-pr / land may invoke `/flow-next:make-pr <spec-id> --update` after committing fixes to refresh the cognitive aid.
-
-`gh pr view` exit 1 with stderr "no pull requests found" = clean to proceed. CLOSED/MERGED PRs with rc=0 are filtered out by the `select(.state == "OPEN")` clause — `EXISTING` will be empty, refusal won't fire.
-
-### 0.7 — Capture pre-flight context for downstream phases
-
-The combined §0.5–0.7 fence:
-
 ```bash
 # --- §0.5: tasks-done validation (single show capture = spec-existence validation) ---
 if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
-  echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2
-  exit 1
-fi
+  echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2; exit 1; fi
+SPEC_ID=$(printf '%s' "$SPEC_JSON" | jq -r '.id')
 OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
+TASK_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]?] | length')
 OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
-
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
   if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
     echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
     exit 2
   else
-    # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
-    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
   fi
 fi
-
-# --- §0.6: existing-PR refusal (or --update target resolution) ---
+if [[ "$TASK_COUNT" -eq 0 ]]; then
+  echo "Note: $SPEC_ID has no tasks; the spec remains open and is not closed." >&2
+fi
 EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
 UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
-
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
-  # --update REFRESHES the existing open PR's body — an OPEN PR is required as the target.
   if [[ -z "$EXISTING" ]]; then
-    echo "Error: --update needs an existing OPEN pull request on this branch; none found. Run /flow-next:make-pr (without --update) to create one first." >&2
-    exit 1
-  fi
+    echo "Error: --update needs an existing OPEN pull request on this branch; none found. Run /flow-next:make-pr (without --update) to create one first." >&2; exit 1; fi
   echo "Update mode: refreshing PR #$UPDATE_PR_NUMBER body against the current diff." >&2
 elif [[ -n "$EXISTING" ]]; then
-  cat <<EOF >&2
-Error: branch already has an OPEN pull request: $EXISTING
-
-This skill creates new PRs only. To refresh the existing PR's body after fix rounds,
-re-run with --update:
-
-  /flow-next:make-pr <spec-id> --update
-
-To address review feedback, use /flow-next:resolve-pr. For a fresh PR, close the open
-one first: gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
-EOF
+  echo "Error: branch already has an OPEN PR: $EXISTING; use --update or /flow-next:resolve-pr." >&2
   exit 1
 fi
-
-# --- §0.6b: merged-parent rewrite (create run only; same fence continues) ---
 # fence:chain-rewrite — inputs: REPO_ROOT, BASE_REF, CHAIN_REWRITE, CHAIN_PARENT, CHAIN_BOUNDARY, REWRITE_ONTO, DRY_RUN, UPDATE_MODE; gh on PATH unless --dry-run
 if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
   HEAD_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "would rebase $HEAD_BRANCH onto ${REWRITE_ONTO#origin/} from $CHAIN_BOUNDARY" >&2
   elif [[ "${UPDATE_MODE:-0}" != "1" ]]; then
-    # Preconditions, all inside this fence: no open or merged PR on this branch, boundary in HEAD's
-    # ancestry, clean tree, and origin (when the branch is there) at exactly the pre-rebase HEAD.
     PRIOR_PRS=$(gh pr list --head "$HEAD_BRANCH" --state all --json number,state --jq '[.[] | select(.state=="OPEN" or .state=="MERGED")] | length' 2>/dev/null) || PRIOR_PRS=""
     [[ "$PRIOR_PRS" == "0" ]] || { echo "NEEDS_HUMAN: $HEAD_BRANCH already has an open or merged PR, or the probe failed; no rewrite" >&2; exit 2; }
     git -C "$REPO_ROOT" merge-base --is-ancestor "$CHAIN_BOUNDARY" HEAD 2>/dev/null || { echo "NEEDS_HUMAN: chain boundary $CHAIN_BOUNDARY is not an ancestor of HEAD" >&2; exit 2; }
     [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || { echo "NEEDS_HUMAN: working tree not clean; commit or stash before the merged-parent rewrite" >&2; exit 2; }
     PRE_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)
-    # A failed remote read is not "branch not on origin": it would skip the lease and leave origin stale.
     REMOTE_LS=$(git -C "$REPO_ROOT" ls-remote origin "refs/heads/$HEAD_BRANCH" 2>/dev/null) \
       || { echo "NEEDS_HUMAN: cannot read origin for $HEAD_BRANCH; no rewrite" >&2; exit 2; }
     REMOTE_SHA=$(printf '%s' "$REMOTE_LS" | cut -f1)
@@ -373,928 +194,87 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
     HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
     COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD)..HEAD")
   fi
-  # Rewritten (or about to be) onto the chain base: the PR is a standalone bottom layer, not a
-  # chained layer - the draft exception and the stack link do not apply.
   CHAIN_PARENT=""
 fi
-
-# --- §0.7: capture pre-flight context (same fence continues) ---
-PHASE0_CONTEXT=$(jq -n \
-  --arg spec "$SPEC_ID" \
-  --arg base "$BASE_REF" \
-  --arg head "$HEAD_SHA" \
-  --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
-  --argjson commits_ahead "$COMMITS_AHEAD" \
-  --argjson open_tasks "$OPEN_COUNT" \
-  --argjson dry_run "$DRY_RUN" \
-  --argjson ralph "$RALPH" \
-  --argjson autonomous "$AUTONOMOUS" \
-  --argjson no_mermaid "$NO_MERMAID" \
-  --argjson write_memory "$WRITE_MEMORY" \
-  --arg draft_force "$DRAFT_FORCE" \
-  --arg chain_parent "${CHAIN_PARENT:-}" \
-  --arg parent_pr "${PARENT_PR:-}" \
-  --arg parent_pr_state "${PARENT_PR_STATE:-}" \
-  '{spec:$spec, base:$base, head:$head, branch:$branch,
-    commits_ahead:$commits_ahead, open_tasks:$open_tasks,
-    dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
-    no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
-    draft_force:$draft_force,
-    chain_parent:$chain_parent, parent_pr:$parent_pr, parent_pr_state:$parent_pr_state}')
+# fence:spec-close
+SPEC_CLOSED=0
+if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
+  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
+  [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
+  SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"
+  [[ -f "$REPO_ROOT/$SPEC_CLOSE_PATH" ]] || SPEC_CLOSE_PATH=".flow/epics/$SPEC_ID.json"
+  PRE_CLOSE_PATHS=("$SPEC_CLOSE_PATH")
+  while IFS= read -r TASK_ID; do
+    PRE_CLOSE_PATHS+=(".flow/tasks/$TASK_ID.json")
+  done < <(printf '%s' "$SPEC_JSON" | jq -r '.tasks[]?.id')
+  CLOSE_DIRTY=$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no -- "${PRE_CLOSE_PATHS[@]}") || {
+    echo "Error: cannot inspect spec close paths; PR not opened" >&2; exit 1;
+  }
+  [[ -z "$CLOSE_DIRTY" ]] || {
+    echo "Error: pending changes in spec close paths; commit them before make-pr closes the spec; PR not opened" >&2; exit 1;
+  }
+  if [[ "$(printf '%s' "$SPEC_JSON" | jq -r '.branch_name // empty')" != "$CURRENT_BRANCH" ]]; then
+    "$FLOWCTL" spec set-branch "$SPEC_ID" --branch "$CURRENT_BRANCH" --json || {
+      echo "Error: spec branch update failed; PR not opened" >&2; exit 1;
+    }
+  fi
+  if ! CLOSE_JSON=$("$FLOWCTL" spec close "$SPEC_ID" --json); then
+    printf '%s\n' "$CLOSE_JSON" >&2
+    echo "Error: spec close failed; PR not opened (see reason above)" >&2; exit 1;
+  fi
+  CLOSE_PATHS=()
+  while IFS= read -r CLOSE_PATH; do
+    CLOSE_PATHS+=("$CLOSE_PATH")
+  done < <(printf '%s' "$CLOSE_JSON" | jq -r '.modified_paths[]')
+  git -C "$REPO_ROOT" add -- "${CLOSE_PATHS[@]}" || {
+    echo "Error: spec close already written locally; staging failed; PR not opened" >&2; exit 1;
+  }
+  if ! git -C "$REPO_ROOT" diff --cached --quiet -- "${CLOSE_PATHS[@]}"; then
+    git -C "$REPO_ROOT" commit -m "chore(flow): close $SPEC_ID" -- "${CLOSE_PATHS[@]}" || {
+      echo "Error: spec close already written locally; commit failed; PR not opened" >&2; exit 1;
+    }
+  fi
+  HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD)
+  COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD)..HEAD")
+  SPEC_CLOSED=1
+fi
+# fence:spec-close-end
+PHASE0_CONTEXT=$(jq -n --arg head "$HEAD_SHA" --arg branch "$(git -C "$REPO_ROOT" branch --show-current)" \
+  --argjson commits_ahead "$COMMITS_AHEAD" --argjson spec_closed "$SPEC_CLOSED" --arg chain_parent "$CHAIN_PARENT" --arg parent_pr "$PARENT_PR" --arg parent_pr_state "$PARENT_PR_STATE" \
+  '{head:$head, branch:$branch, commits_ahead:$commits_ahead, spec_closed:($spec_closed==1), chain_parent:$chain_parent, parent_pr:$parent_pr, parent_pr_state:$parent_pr_state}')
 ```
 
-Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values. `chain_parent`, `parent_pr`, and `parent_pr_state` are empty strings on a non-chained branch; the §4.2 draft matrix and the §4.6 stack link read them back from the context (`jq -r '.chain_parent // empty'`).
-
-**§0.6b rewrite rules.** The merged-parent rewrite is the only history rewrite outside land, bounded to a branch with no open or merged PR, on a create run only. The boundary is the ancestor SHA the chain rung detected, never a scratch value: switching branches between work and make-pr, a missing `.flow/tmp/spec_base`, or a fresh clone changes nothing. A rebase conflict aborts the rebase (HEAD restored) and exits 2 naming the files; a lease failure restores the pre-rebase HEAD and exits 2 `NEEDS_HUMAN: <branch> moved on origin during rewrite`. `--dry-run` prints `would rebase <branch> onto <chain_base> from <boundary>` on stderr and renders against the current diff; `--update` never rewrites (a merged parent under `--update` is land's retarget case).
-
-### Done when
-
-- Ralph context detected (`RALPH=1` if `FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set). Autonomous context detected (`AUTONOMOUS=1` if the `mode:autonomous` token was parsed or `FLOW_AUTONOMOUS=1`) — never sets `RALPH`; prompt sites hard-error under `RALPH || AUTONOMOUS`.
-- When `DRY_RUN != 1`: `gh` installed AND `gh auth status --hostname github.com` succeeds. Skipped under `--dry-run` (Phase 4.0 short-circuits before any `gh pr create`, so requiring `gh` there blocks the documented inspection path on machines / CI jobs that only render the body). Setting `FLOW_PR_CREATE_CMD` (the §4.6 create seam, #277) does NOT lift this requirement — the seam swaps only the create call; `gh pr view` / `gh pr edit` and the §4.6b repair still need `gh`.
-- `SPEC_ID` resolved (positional arg → branch-match against `.flow/specs/*.json` `branch_name` → interactive prompt / Ralph-or-autonomous exit 2) and validated via `flowctl show <spec-id> --json` (spec exists).
-- `BASE_REF` resolved through the cascade (`--base` → chain parent branch when the parent PR is open or absent → `origin/main` → `main` → `origin/master` → `master` → ask / Ralph-or-autonomous exit 2) and validated via `git rev-parse --verify --quiet`. Chain detection ran from history (merge-base against each dependency's branch tip or merged-PR head, not on the chain base); a merged parent set `CHAIN_REWRITE=1` and the §0.6b fence rewrote the branch on a create run (never under `--dry-run` / `--update`); a closed-unmerged parent or an unreachable parent history exited 2 `NEEDS_HUMAN`.
-- HEAD resolves; HEAD ≠ BASE; `git merge-base BASE HEAD` succeeds (shared history); `COMMITS_AHEAD >= 1` since that merge-base. (Base is NOT required to be an ancestor of HEAD — see §0.4 / §0.5.)
-- Open-task validation: silent when all done; otherwise a stderr warning + **proceed as draft** (no prompt) — interactively and under `--dry-run` alike. Ralph/autonomous hard-errors (exit 2).
-- Existing-PR refusal check: `gh pr view --json url,state,number | jq -r 'select(.state == "OPEN") | .url'` returns empty — no OPEN PR on the current branch (CLOSED/MERGED PRs never trigger refusal).
-- `PHASE0_CONTEXT` JSON built (spec / base / head / branch / commits_ahead / open_tasks / flags / draft_force) and ready for Phase 1.
-
-**Failure modes:** gh missing / unauthenticated → exit 1 + install / `gh auth login` instructions (both skipped under `--dry-run`); spec or base unresolved under Ralph/autonomous → exit 2; base ref invalid, HEAD == BASE, unrelated histories (no merge-base), or 0 commits since merge-base → exit 1; open tasks under Ralph/autonomous → exit 2; OPEN PR exists → exit 1 + `/flow-next:resolve-pr` hint.
-
----
-
+Already-closed specs stay untouched. Otherwise completed specs close on the head branch before Phase 1. Incomplete or
+task-less specs have no close commit and still compose interactively. For `OPEN_COUNT > 0`,
+Ralph/autonomous hard-errors (exit 2). Dry-run and body-only updates never close. Under `--update` an
+existing OPEN PR is REQUIRED; closed/merged PRs do not prevent a create. Preserve `PHASE0_CONTEXT.head`.
 ## Phase 1: Gather inputs
 
-**Goal:** call `flowctl spec export-cognitive-aid <SPEC_ID> --base <BASE_REF> --json` once and load the structured payload. The schema is documented in the spec under "Architecture & Data Models".
-
-This phase is implemented in dependent tasks. Scaffold-task notes:
-
-- Single subprocess call (latency + atomicity per the spec's Decision Context).
-- Payload includes the nine current top-level fields: `spec`, `tasks[]`, `tasks_summary`, `memory_during_epic`, `glossary_changes[]`, `strategy_alignment`, `diff_summary`, `removed_export_refs[]`, and `deferred_findings[]`. The historical name `memory_during_epic` remains part of the payload schema; there is no legacy top-level `epic` alias.
-- The export is one atomic full-payload read. It has no section filter; downstream phases reuse the in-memory payload.
-
-### Done when
-
-- `flowctl spec export-cognitive-aid <SPEC_ID> --base <BASE_REF> --json` returned successfully; payload parsed into an in-memory dict matching the spec's "Architecture & Data Models" schema.
-- All nine top-level payload fields above are present and accounted for before rendering.
-
----
-
+Capture `EXPORT_PAYLOAD` from `$FLOWCTL spec export-cognitive-aid "$SPEC_ID"
+--base "$BASE_REF" --json` once, after close. Refresh `HEAD_SHA` and `MERGE_BASE`
+from this head and base. For each entry in `specs` (otherwise the host), stop for empty goal/context AND
+empty task summaries. Only the host aborts for nonempty criteria ALL in `tasks_summary.undeclared_r_ids`
+(`Undeclared R-ID coverage`); siblings render those requirements as uncovered. No requirements is valid.
 ## Phase 1.5: Structured PR cognitive-aid
 
-Read [pr-cognitive-aid.md](pr-cognitive-aid.md) in full and execute it before
-the optional HTML lens and final body composition. This is the shared v1 object
-behind the GitHub walkthrough: the existing host composes from
-`EXPORT_PAYLOAD`; flowctl validates, atomically persists, selects by
-merge-base/head, and renders. It adds no model/network call.
-
-When a supported current artifact renders, insert its contiguous
-`## The change, top to bottom` section before Critical changes. Its thesis,
-proof, R-ID/task links, verification claims, order, and file membership are
-authoritative: suppress the legacy Verification section - and the legacy R-ID
-coverage section ONLY when `tasks_summary.uncovered_r_ids` is empty (with any
-unevidenced or undeclared criterion that table renders beside the walkthrough;
-§2.0 item 4 / pr-cognitive-aid.md §4 own the rule) - and derive the summary
-coverage ratio from the artifact when the table is suppressed. The legacy
-fields are fallback-only for those claims. **Plan-gate status is not superseded:** the artifact's `rid` source refs bind R-IDs to commits, so by
-construction it can only express *evidenced* coverage — it has no
-claimed-not-evidenced counterpart. The §2.7 coverage abort therefore runs on
-the export payload's `tasks_summary.undeclared_r_ids` before any artifact
-rendering (artifact-independent), and the §2.1 qualifier clauses still come
-from `tasks_summary`. Reading them there is not a legacy-field merge — same
-carve-out as the acceptance-criteria residue count, for the same reason: the
-artifact carries no counterpart value to be stale about. Keep Critical changes,
-How to review, and the risk-ranked Review plan separate. Artifact rejection
-prints one note and preserves the existing compact body without mixing stale or
-rejected fields.
-
-Done when:
-
-- `pr-cognitive-aid.md` Done-when checklist passes.
-- The artifact is composed/validated before optional HTML and final PR-body
-  creation.
-- `create-and-finalize.md` remains the later `$PR_URL` + tracker-facade boundary.
-
----
-
-## Phase 1.5b: HTML render lens (opt-in) — PR artifact
-
-**Gate before loading the enabled-path instructions.** This config read is the
-ONLY addition when the mode is off:
+Read [pr-cognitive-aid.md](pr-cognitive-aid.md) and execute it on every entry path, including dry-run and
+update, before optional HTML or body delivery.
+## Phase 1.5b: HTML render lens (opt-in)
 
 ```bash
 HTML_LENS=$("$FLOWCTL" config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
-# --dry-run promises NO state change (§4.0) — no artifact, no commit, no body line.
 [[ "$DRY_RUN" == "1" ]] && HTML_LENS=false
 ```
 
-When `HTML_LENS=true`, **read [html-lens.md](html-lens.md) in full and
-execute it end-to-end** before Phase 2. When false (off, unset, or
-`--dry-run`), do not read `html-lens.md` or the shared disclosure reference;
-write no artifact, add no body line, and print no artifact-related output.
+When true, read [html-lens.md](html-lens.md) in full and execute it end-to-end. When false,
+do not read `html-lens.md` or the shared disclosure reference; emit no artifact, commit, body line or output. The lens is
+unchanged; retain its optional Render lens line when it succeeds.
+## Phase 2: Deliver the briefing
 
-### Done when
+Use rendered `BODY_FILE` unchanged; append the enabled lens line before `Ref` / Stack lines.
+The renderer's numbered groups and linked file lists supply the structural sketch; the lens's old summary-block references mean this position.
 
-- Off/unset/`--dry-run`: exactly one config read; neither HTML reference loaded;
-  no artifact, commit, body line, or output change.
-- Enabled: every `html-lens.md` Done-when item passes before Phase 2.
+For dry-run, print `BODY_FILE` and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
+complete it.
 
----
-
-## Phase 2: Render body header sections
-
-**Goal:** turn the structured payload from Phase 1 into the **header half** of the PR body — the sections a reviewer reads *first* to decide where to focus. Header half = Title + summary block + TL;DR + R-ID coverage table + Critical changes + How to review this PR + Review plan. The context half (Decisions / Memory / Glossary / Open items) lands in §Phase 2 (cont). The mermaid `## Structural changes` section lands in §Phase 3.
-
-Body prose follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
-
-The host agent's reasoning IS the renderer. **There is no Python renderer to call** — the agent reads the payload and emits markdown directly. flowctl provided the structured input; the skill turns it into prose. This is the "harness's own model is the QA layer" part of the spec.
-
-### 2.0 — Section order (load-bearing)
-
-The body sections appear in this exact order. Skip any section whose source content is empty (see §2.6 Section-omission rule). Never reorder — reviewers learn the shape and skim accordingly.
-
-1. **Title** + summary block (spec id link, branch / base, task counts, R-ID coverage ratio).
-2. **TL;DR** — 3-5 plain-language bullets covering the headline change.
-3. **Not in this PR (by design)** — the spec's scope boundaries (§2.2b), so scope objections don't become review threads. Only when `spec.spec_sections.boundaries[]` is non-empty.
-4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section ONLY when `tasks_summary.uncovered_r_ids` is empty — the artifact expresses evidenced coverage only, so whenever any criterion is unevidenced or undeclared this table renders alongside the artifact as the sole carrier of the per-criterion `⏳`/`⚠️` state.
-5. **Verification** — per-task test evidence + the honest "no test changed alongside X" gap fact (§2.3b), so the reviewer sees what was actually checked. Only when any `tasks[].evidence.tests[]` is non-empty. On supported/current cognitive-aid output, omit this legacy section; the artifact renders its proof and provenance.
-6. **The change, top to bottom** — the contiguous deterministic v1 artifact rendering from Phase 1.5b when supported/current; omitted on labeled legacy fallback.
-7. **Critical changes** — ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible.
-8. **How to review this PR** — the trust-calibration coaching block (§2.4c): what the pipeline verified mechanically (tests / gates / R-ID coverage / cross-model review) vs what the human must judge, so the reviewer trusts the buckets below. Always rendered (like Critical changes).
-9. **Review plan** — the risk-ranked, budgeted read-order (§2.4d): Must review (~X%) / Spot-check / Safe to skim, so the reviewer spends the next 30 minutes on the ~20-30% that carries real judgment risk and skips the rest with confidence. Only when `diff_summary.files[]` has ≥2 files.
-10. **Structural changes** — mermaid codefences + prose summary (see §Phase 3).
-11. **Decisions made** — `knowledge/decisions/` entries written during the spec.
-12. **Memory left behind** — `bug/*` + `knowledge/architecture-patterns/*` entries.
-13. **Glossary / strategy notes** — added/renamed terms + tracks served.
-14. **Open items** — spec open questions + deferred review findings + spec-completion-review flags.
-15. **Live QA** — the `qa_verdict` receipt summary (outcome + open P0/P1 + BLOCKED/NA reason + R-ID coverage), only when the receipt is present (§2.11b).
-16. **Footer breadcrumb** — `Generated by /flow-next:make-pr from <spec-id> against <base-ref> on <YYYY-MM-DD>`.
-
-(The footer is always section "last"; the numbering shifts when optional sections — Not-in-this-PR, Verification, Review plan, Live QA — are omitted, but section *order* is fixed. The three review-surfacing constructs are complementary, not redundant: **Critical changes** = the ≤7 highest-risk highlights; **How to review this PR** = the trust frame (what the pipeline already verified vs the human's job); **Review plan** = every changed area risk-bucketed into Must review / Spot-check / Safe to skim with a hard focus budget. Together they get the reviewer to the ~20-30% that carries judgment risk — the older per-category "Where to look" list is folded into the Review plan's per-item what-to-check questions.)
-
-### 2.1 — Title + summary block
-
-**Title** — computed from the spec title (truncate to 72 chars + ellipsis if longer; first sentence of `spec.spec_sections.goal_and_context` truncated to 70 + `…` as fallback when spec title is empty). The body itself uses the spec title as a `# <title>` H1.
-
-**Summary block** — a single blockquote directly under the H1, four lines:
-
-```markdown
-> **Spec:** [<spec-id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/specs/<spec-id>.md)
-> **Branch:** `<branch>` → `<base>`
-> **Tasks:** <done> completed (<open> open if any — flagged in Open items)
-> **R-ID coverage:** <covered>/<total> evidenced<, <M> claimed not yet evidenced><, <N> undeclared>
-```
-
-**Stack line (chained layer only, written after creation).** When the §4.6 stack link succeeds on a GitHub remote, exactly one more blockquote line is inserted directly under the Branch line, sourced from the stacks API response: `> **Stack:** #<stack number>, layer <position> of <size>`. No other stack text appears anywhere in the body (the §2.5 guardrail against invented references applies); a non-chained PR, a chained layer whose parent has no PR, and a failed link all omit the line.
-
-(The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
-
-**Render-lens line (only when Phase 1.5b recorded one).** Append it as a fifth blockquote line, in the exact `LINK_MODE=repo` / `LINK_MODE=local` shapes given in [html-lens.md](html-lens.md) step 6 — never a blob link that 404s. With the mode off/unset (or `--dry-run`, or Phase 1.5b failed) this line is absent entirely and `html-lens.md` was never read.
-
-All four values come from the payload directly:
-
-- `<spec-id>` from `spec.id`
-- `<branch>` from `PHASE0_CONTEXT.branch`, `<base>` from `PHASE0_CONTEXT.base`
-- `<done>` / `<open>` from `tasks_summary.done` / `tasks_summary.open`
-- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. The ratio keeps its evidenced (done-task) semantics — merge-gate meaning unchanged. Append the two optional qualifier clauses so a plan gate reads honestly instead of as a false 0%: `<M>` = `len(uncovered_r_ids) - len(undeclared_r_ids)` (claimed by a task that is not done yet), `<N>` = `len(tasks_summary.undeclared_r_ids)`. Omit each clause when its count is zero — an all-done spec renders the bare `<covered>/<total> evidenced` as before, and a fully-declared all-todo spec renders `0/<total> evidenced, <total> claimed not yet evidenced` rather than an unqualified `0/<total>`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read; never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
-
-A 2-line natural-language summary appears between the H1 and the blockquote, drawn from `spec.spec_sections.goal_and_context` first paragraph, truncated to ~240 characters with sentence-boundary respect. Never invent — if `goal_and_context` is empty the summary is omitted.
-
-### 2.2 — TL;DR composition
-
-Render `## TL;DR` as 3-5 markdown bullets, each one a single-line plain-language statement. Source priority order:
-
-1. **First sentence of `spec.spec_sections.goal_and_context`** — paraphrased into a single bullet; this is the headline change.
-2. **Top 5 tasks by lines-changed** (`tasks[].evidence.commits` mapped to `git log` churn — host agent uses the diff's `high_churn_files` as a hint for which tasks shipped the most content). For each surviving task, take `tasks[].done_summary` first sentence, paraphrase to one line.
-3. **Stop at 5 bullets total.** If the spec shipped fewer than 4 substantive changes, ship 3 bullets — never pad.
-
-TL;DR rules:
-
-- Bullets are plain English, not jargon; readers include reviewers who didn't write the spec.
-- Never include R-IDs in TL;DR bullets — R-IDs go in the coverage table.
-- Never quote raw diff content; talk ABOUT the change.
-- If a `done_summary` is empty for a task, skip it — don't fabricate.
-
-If `goal_and_context` is empty AND no tasks have `done_summary`, the body is unrenderable — abort with stderr `Empty spec content (no goal_and_context, no done_summary fields populated). Run /flow-next:work to populate task done_summaries first.` exit 1. See §2.7 Abort conditions.
-
-### 2.2b — Not in this PR (by design) section
-
-Render `## Not in this PR (by design)` when `spec.spec_sections.boundaries[]` is non-empty — the spec's own scope statements, surfaced so a reviewer's scope objection ("why didn't you also do X?") is answered before it becomes a review thread. Placed directly after TL;DR because scope objections form on the first skim, not at the bottom.
-
-- Up to **5 bullets**, each a `boundaries[]` entry **verbatim**, first-sentence-truncated to ~140 chars + `…` (mechanical, the same truncation op as the acceptance-criterion 120-char rule). If more than 5, render the first 5 + a final `…and <N> more (see spec)` line linking the spec blob (§2.4b).
-- **Verbatim read-only mirror — never invent a boundary, never soften or editorialize one.** Each bullet is a plain statement of what is intentionally out of scope: `- <boundary text>`. This section is a projection of `spec_sections.boundaries[]` and nothing else; empty array → section omitted entirely (§2.6).
-
-### 2.3 — R-ID coverage table
-
-Render `## R-ID coverage` as a markdown table. Exact column order, exact header text:
-
-```markdown
-| R-ID | Acceptance criterion | Task | Evidence |
-|------|----------------------|------|----------|
-| R1 | <criterion text, ≤120 chars + … if truncated> | [fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>) |
-| R2 | <…> | [fn-N.K](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.K.md), [fn-N.L](…) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>), [`<sha7>`](…) |
-| R5 | <…> | [fn-N.P](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.P.md) | ⏳ claimed, not yet evidenced |
-| R7 | <…> | ⚠️ uncovered | — |
-```
-
-**Three coverage states (declared vs evidenced).** A criterion is *evidenced* when a **done** task claims it (`tasks_summary.uncovered_r_ids` is the evidenced-gap set), *claimed but not yet evidenced* when only non-done tasks claim it, and *undeclared* when no task claims it at all (`tasks_summary.undeclared_r_ids`). The claimed-not-evidenced state is a plan gate, NOT a gap: render it honestly, never as `⚠️ uncovered` and never as 0%.
-
-| State | Payload test | Task column | Evidence column |
-|-------|--------------|-------------|-----------------|
-| Evidenced | R-ID ∉ `uncovered_r_ids` | claiming done task link(s) | commit link(s), or `—` when the done task recorded no commit |
-| Claimed, not yet evidenced | R-ID ∈ `uncovered_r_ids` but ∉ `undeclared_r_ids` | claiming task link(s) — same blob links, no warning marker | `⏳ claimed, not yet evidenced` |
-| Undeclared | R-ID ∈ `undeclared_r_ids` | `⚠️ uncovered` | `—` |
-
-Field rules:
-
-- **R-ID column** — every entry from `spec.spec_sections.acceptance_criteria[].id` in spec order. NEVER renumber; gaps in numbering (R1, R3, R5 — R2 deleted post-creation) are preserved verbatim per the R-ID renumber-forbidden rule. **Provenance chip:** when `acceptance_criteria[].tag` is `inferred` (weak provenance — the criterion was inferred by planning, not stated verbatim or paraphrased from the user's spec), append ` · inferred` in that row's R-ID cell (e.g. `R15 · inferred`) so the reviewer knows which criteria deserve a second look. `verbatim` / `paraphrase` / absent tags render no chip.
-- **Acceptance criterion column** — `spec.spec_sections.acceptance_criteria[].text` truncated to 120 characters. If truncated, append `…` (single ellipsis character, not three dots). Never edit content; truncation is mechanical at byte boundary respecting word boundaries when feasible.
-- **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. Task status does NOT filter this column: a claiming task that is still `todo`/`in_progress` renders its link exactly like a done one (that is the plan-gate state above). Only when NO task claims the R-ID — it is in `tasks_summary.undeclared_r_ids` — does the cell render `⚠️ uncovered`.
-- **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. When every claiming task is non-done, emit `⏳ claimed, not yet evidenced` — never a commit link, never `—`, never `⚠️`. For undeclared R-IDs, emit a single `—`.
-- **Orphaned-SHA marking.** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Use the warnings from any PARSEABLE validate JSON regardless of exit code - a structural error elsewhere in the spec must not discard the orphan set; only absent or unparseable output degrades to no orphan set, links rendering as before (the marking degrades, the body never blocks).
-
-After the table, append at most two follow-up lines — the warning line only for the undeclared set:
-
-```markdown
-⚠️ **<N> undeclared acceptance criterion(a):** R<i>, R<j>, R<k>. No task's `satisfies` claims these — reviewer should confirm they are intentional gaps before merge.
-⏳ **<M> criterion(a) claimed but not yet evidenced:** R<x>, R<y> — the claiming task(s) are not done yet. Expected at a plan gate; not a coverage gap.
-```
-
-Emit the `⚠️` line when `tasks_summary.undeclared_r_ids` is non-empty, and the `⏳` line when `uncovered_r_ids` minus `undeclared_r_ids` is non-empty; both may appear, either may be absent. This makes a real gap explicit without dressing planned-but-unbuilt work up as one — the reviewer's eye lands on `⚠️` only where a criterion is genuinely unclaimed.
-
-If `tasks_summary.undeclared_r_ids` length equals `len(acceptance_criteria)` (no task claims ANY spec R-ID) the body is unrenderable — abort with stderr `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` exit 1. See §2.7. **An all-todo, fully-declared spec is NOT this condition** — it renders with `⏳` rows; the abort catches a spec whose tasks never declared coverage, which `/flow-next:work` cannot fix.
-
-### 2.3b — Verification section
-
-Render `## Verification` when any `tasks[].evidence.tests[]` is non-empty — the reviewer's dominant question is "do I trust this?", and this is the only place the body says what was actually run. Placed directly after R-ID coverage (verification evidence belongs beside the coverage claim).
-
-- **One line per task** whose `evidence.tests[]` is non-empty: `**<task-id>** — <entry> · <entry> · …`. Each item is a `tasks[].evidence.tests[]` entry rendered **verbatim** (worker-authored free text — a read-only mirror exactly like `done_summary`; never paraphrase, and never summarize a `NEEDS_WORK`→`SHIP` review history down to "passed"). A task with empty `tests[]` is omitted from the list — never fabricate a test claim for it.
-- **Honest test-gap fact (a fact, never an inference).** After the per-task lines, if a high-churn or public-interface **source** file has NO accompanying test-file change in the diff, add ONE line: `Test files in this diff: \`<test paths>\`. No test-file change accompanies: \`<path>\` (+<a>/-<d>).` Derive strictly from `diff_summary.files[]` path patterns (a path containing `test`, `spec`, `__tests__`, `_test.`, or `.test.` is a test file) + per-file churn. **Say "no test file changed alongside" (fact); NEVER "untested" (an inference the agent cannot make — the change may be covered by an existing, unmodified test).** If every changed source file has a companion test change, omit the gap line.
-- Omitted entirely (§2.6) when every task's `tests[]` is empty.
-
-### 2.4 — Critical changes section (5-tier priority)
-
-Render `## Critical changes` as a bulleted list, **capped at 7 bullets total**. The host agent identifies critical changes by walking `diff_summary` fields in **this exact priority order**, taking bullets in tier order until the cap is hit:
-
-| Tier | Trigger condition | Source field | Bullet template |
-|------|-------------------|--------------|-----------------|
-| 1 | High-churn files | `diff_summary.high_churn_files[]` (top 5 by `additions+deletions`, already pre-sorted) | `**High-churn:** \`<path>\` (+<additions>/-<deletions> lines)` |
-| 2 | Cross-module changes (new dependency edges) | `diff_summary.cross_module_changes[]` (array of strings already shaped as `module-A imports module-B (new)`) | `**Cross-module:** <verbatim entry from array>` |
-| 3 | Public interface changes (potentially breaking) | `diff_summary.public_exports_changed[]` (array of `{file, added[], removed[]}`) | `**Public interface:** \`<file>\` adds \`<sym>\` / removes \`<sym>\`` — see weakening rule below |
-| 4 | Security-sensitive paths | `diff_summary.security_sensitive_paths[]` (array of paths) | `**Security-sensitive:** changes to \`<path>\` (review carefully)` |
-| 5 | Behavior-visible (user-facing surfaces) | `diff_summary.files[]` filtered to paths matching `commands/`, `routes/`, `pages/`, `app/`, `cli/`, `hooks/`, `bin/` | `**Behavior-visible:** \`<path>\` (+<additions>/-<deletions>) — affects <user-facing surface noun>` |
-
-Allocation rule:
-
-1. Walk tiers 1 → 5 in order.
-2. Within each tier, take entries in their array order (already pre-sorted by flowctl: tier 1 sorted by churn descending; tier 2 in cross-module-detection order; tier 3 in file-discovery order; tier 4 alphabetical; tier 5 host agent picks the highest-churn matches first).
-3. Stop when the bullet count hits 7 — even if higher-priority tiers are exhausted but lower tiers have unused entries. The cap is hard.
-4. If `public_exports_changed[].removed[]` is non-empty for any file, that bullet emits FIRST within tier 3 (potentially-breaking changes get reviewer attention before additions).
-
-**Empty-content fallback rule.** If every tier's source array is empty (heuristic: `<5` files in `diff_summary.files[]`, `<50` total LOC across `lines_added + lines_removed`, no module-boundary signal in `cross_module_changes`, no public-export signal in `public_exports_changed`), the section is **still included** with a single lead bullet:
-
-```markdown
-- Limited churn — review the R-ID coverage table for surface area and the linked task evidence commits for full context.
-```
-
-This is the one section that doesn't honor the §2.6 omission rule — even a tiny PR benefits from explicit "there's no critical-changes signal here" framing rather than a missing heading the reviewer thinks was forgotten.
-
-**No-weakening rule (load-bearing).** Every entry in `public_exports_changed[].removed[]` is **potentially breaking**. The bullet says "potentially breaking" or `removes \`<sym>\`` exactly. Never paraphrase as "non-breaking", "internal-only", "minor", or "trivial". The agent does not have whole-codebase visibility; calling something non-breaking requires a global call-graph the agent doesn't have. The reviewer makes that call.
-
-**File path rule.** Every path in a Critical changes bullet must appear in `diff_summary.files[]`. The agent never invents paths from the spec or from imagined structure. If a tier wants to surface a file that isn't in `diff_summary.files[]`, that bullet is dropped — not approximated.
-
-### 2.4b — Linkable file references (load-bearing — applies to Critical changes, Review plan, R-ID coverage, Decisions, anywhere a path appears)
-
-**Relative links DO NOT work in PR/issue bodies.** GitHub resolves a relative link in a PR *description* against the current **page URL** (`…/pull/<N>/…`) — producing a broken `…/pull/<N>/<relpath>` link, NOT the repo file. (This is the opposite of markdown *files inside the repo*, where relative links resolve against the file's location — which is where the wrong assumption came from. Validated wrong on PR #153.) Bare-code-span paths (`` `path` ``) are also not auto-linked — they render as inline code only.
-
-**Every file/path reference in the body MUST be an absolute `https://github.com/<owner>/<repo>/…` URL.** Pick the URL **by purpose — diff for code, blob for artifacts:**
-
-| Reference | Render as | Why |
-|-----------|-----------|-----|
-| **Code under review** (Critical changes, Review plan must-review items) | `` [`<path>`](https://github.com/<owner>/<repo>/commit/<sha>#<anchor>) `` — per-commit **diff** + file anchor | reviewer wants the *change*; `<sha>` = the commit that changed the file (from `tasks[].evidence.commits[]`); `<anchor>` lands on that file's diff |
-| **Artifact to read** (`.flow/specs/*`, `.flow/tasks/*`, `.flow/memory/*`, a doc cited for context) | `` [`<path>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>) `` — **blob**, SHA-pinned | read in full, not as a diff; SHA-pin so links survive branch deletion after merge |
-| **Evidence column** (R-ID table) | `` [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha>) `` — whole-commit diff | "this commit satisfied the R-ID" |
-| **Any orphaned evidence SHA** (Phase 1 validate warnings — §2.3 orphan rule) | `` `<sha7>` (orphaned by a history rewrite) `` — bare annotated code, NEVER a `commit/` or `#diff-` link | applies to EVERY link derived from `tasks[].evidence.commits[]`: the Evidence column, Critical-changes anchors, Review-plan anchors — the object was often never pushed, so any link 404s |
-| **Line ref** (rare) | `` [`<path>:L<n>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>#L<n>) `` — blob + line, SHA-pinned | precise line; deep-links work on fresh load |
-
-**Lookup + the code-diff `<anchor>` (the host agent runs this once per PR).** The anchor is GitHub's per-file diff id: `diff-` + the lowercase SHA-256 hex of the file-path string.
-
-```bash
-GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)   # "owner/repo"
-HEAD_SHA=$(git rev-parse HEAD)                                    # SHA-pin blob links (survive branch delete)
-BLOB_BASE="https://github.com/${GH_NWO}/blob/${HEAD_SHA}"
-COMMIT_BASE="https://github.com/${GH_NWO}/commit"
-file_anchor() { printf 'diff-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)"; }
-# code ref → ${COMMIT_BASE}/${sha}#$(file_anchor "$path")
-# artifact → ${BLOB_BASE}/${path}
-# evidence → ${COMMIT_BASE}/${sha}
-```
-
-**Anchor caveat (do NOT try to "fix" it).** The `#diff-<hash>` anchor lands on the file's diff on a **fresh page load / new tab (Cmd-click)**; on a plain *same-tab* click GitHub lazy-renders large commit diffs and won't auto-scroll — it still opens the correct commit diff, just without the jump. This is a GitHub limitation. **You cannot force new-tab** — GitHub strips `target="_blank"`/`rel` from PR-body markdown (verified). Reviewers Cmd-click focus links, so keep the anchor; it degrades gracefully to the whole-commit diff.
-
-If `gh repo view` / `git rev-parse` fails (no remote, missing auth), **render paths as bare inline code** (`` `path` ``) rather than emit a broken relative link — an unlinked path beats a 404.
-
-**Where this applies:**
-
-- **§2.3 R-ID coverage table** — Task column → blob (artifact); Evidence column → whole-commit diff.
-- **§2.4 Critical changes** — every code path → code-diff link (commit + anchor). Bare `` `<path>` `` or a relative link is forbidden here.
-- **§2.4d Review plan** — every must-review code path → code-diff link (commit + anchor); the symbol anchor rides the `#diff-<hash>` file anchor.
-- **§2.8 Decisions made** — the memory-entry id → blob (`.flow/memory/<id>.md`), SHA-pinned. If a decision cites a code path, that path → code-diff link.
-- **Mermaid prose summary** (§3) — paths in the prose follow this rule (absolute). Mermaid node labels CANNOT carry markdown links (plain-text), so paths inside diagrams stay bare.
-
-**One bare exception:** plain `path` strings that are JSON *field references* in the prose (`` `diff_summary.files[]` ``, `` `tasks[].satisfies[]` ``) are not user-facing file paths — leave them as inline code, unlinked.
-
-**Anti-patterns:**
-
-```markdown
-- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py)   ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
-- `plugins/flow-next/scripts/flowctl.py` (~line 12001)                              ← inline code, no link at all
-```
-
-Correct:
-
-```markdown
-- **Must review:** [`plugins/flow-next/scripts/flowctl.py`](https://github.com/owner/repo/commit/<sha>#diff-<sha256(path)>) — Does the schema cover...
-- **Read:** [`.flow/specs/fn-1-foo.md`](https://github.com/owner/repo/blob/<head-sha>/.flow/specs/fn-1-foo.md)
-```
-
-### 2.4c — How to review this PR (trust calibration)
-
-Render `## How to review this PR` directly after Critical changes and directly BEFORE the Review plan — a short (**≤ ~8 lines**) coaching block that calibrates the reviewer's trust: what the pipeline already verified mechanically, and therefore what the human's job actually is. This is the single highest-impact section the eval measured (trust-calibration 5→9 on a real shipped PR): the risk buckets below only pay off when the reviewer knows which machine checks already ran. Always rendered — the trust frame is valuable even on a one-file PR where the Review plan itself is omitted.
-
-Render shape (these are rendered *lines*, not sub-headings):
-
-```markdown
-## How to review this PR
-
-The pipeline already verified this — you don't re-check it from scratch:
-- **Tests / gates:** <verbatim evidence from the `## Verification` section, e.g. `fn-93.1 — unit + smoke green`; or `no test evidence recorded on this PR`>
-- **R-ID coverage:** <covered>/<total> acceptance criteria evidenced<; M claimed but not yet evidenced><; N undeclared — see the table above>
-- **Cross-model review:** <e.g. `N findings deferred, M suppressed by the review gate`; or `no cross-model review recorded on this PR`>
-
-Your job — the calls the pipeline can't make:
-- Line-review the **Must review** bucket below — the ~20-30% that carries real judgment risk.
-- Spot-check the verified claims above; sample, don't re-run everything.
-- Own what machines can't judge: product intent, API taste, risk appetite.
-```
-
-**Single-file PRs (Review plan omitted per §2.4d's ≥2-files gate):** the first "your job" line must NOT reference a bucket that isn't rendered — replace it with a direct pointer to the one file: `- Line-review [\`<path>\`](<commit-diff link per §2.4b>) — it is the whole review surface.` The other lines stay. Never point at a section the omission rules removed (§2.6).
-
-Field rules:
-
-- **Supported/current cognitive aid:** tests, R-ID coverage, and review evidence
-  draw only from the artifact proof and provenance already rendered in
-  `## The change, top to bottom`. Never read `tasks[].evidence`,
-  `tasks_summary`, or legacy review fields for this block.
-- **Labeled legacy fallback:** mechanically-verified summary draws from two
-  export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b
-  Verification renders) and R-ID coverage (acceptance-criteria count minus
-  `tasks_summary.uncovered_r_ids`, with the §2.1 claimed-not-evidenced and
-  undeclared qualifiers when non-zero — never report a plan gate as an
-  unqualified 0%). `deferred_findings[]` is an open-items
-  signal, not proof that a cross-model review ran. The export carries no
-  review-verdict or suppression field, so the cross-model line says
-  `no cross-model review recorded on this PR` rather than inferring one.
-- **No-overclaim rule (load-bearing).** Cite ONLY verification present in the payload. Absent verification is stated honestly, never implied: no test evidence → "no test evidence recorded on this PR"; no review-verdict field → "no cross-model review recorded on this PR". NEVER write "reviewed by a second model" / "fully tested" without an authoritative signal — the reviewer must be able to trust every line of this block literally. (This is §2.5 rule 11 — the same no-invented-claims discipline the Review plan rests on.)
-- **≤ ~8 rendered lines** (priorities, not a hard cap): a coaching frame, not a report. It sets up the buckets; it does NOT restate the Review plan's per-file detail (no repetition between this block and the buckets — the eval flagged length only when the two duplicated each other).
-- **No-evidence payloads (specless / manual PRs)** — all three signals may be absent; the block then honestly states each absence and still frames "your job". The eval verified this degrades cleanly (honesty stayed high with zero evidence).
-
-**What this section MUST NOT do:**
-
-- MUST NOT claim any verification the payload doesn't carry (no-overclaim rule — §2.5 rule 11).
-- MUST NOT repeat the Review plan's per-file buckets — it frames them, it doesn't restate them.
-- MUST NOT editorialize the pipeline's confidence ("thoroughly reviewed", "high-quality change"). State what ran; let the reviewer judge.
-
-### 2.4d — Review plan (risk-ranked, budgeted)
-
-Render `## Review plan` when `diff_summary.files[]` has ≥2 files — the bucketed read-order that tells the reviewer which slice of the diff carries the real judgment risk (the ~20-30% worth careful reading) and, just as important, which 70-80% is safe to skim and WHY. This section replaces the older per-category "Where to look" reviewer-focus list, folding its what-to-check questions into the must-review items: where **Critical changes** flags the ≤7 highest-risk highlights, Review plan places EVERY changed area into exactly one of three **risk** buckets, and the **How to review this PR** block above frames the trust the buckets rest on. Buckets without that coaching frame + budget regress — the eval measured must-review ballooning to ~55% of the diff, defeating the whole point; the coaching block, focus budget, and per-item what-to-check below are load-bearing, not decoration.
-
-Three buckets, rendered in this order, each an H3 with a churn-estimated percentage:
-
-- `### Must review (~X%)` — the judgment-risk slice: line-review this.
-- `### Spot-check` — real code, low risk: read the shape, sample the details.
-- `### Safe to skim (~Y%)` — mechanical / generated / derived: confirm the generator ran, don't line-review.
-
-**Bucket percentages** — estimate `~X%` / `~Y%` from `diff_summary` churn (each bucket's summed `additions+deletions` over total changed lines), rounded to the nearest ~5%. The number is a budget signal, not an audit — never present it as exact.
-
-**Must-review items — one checkbox line each, four parts (WHY + WHAT + symbol anchor):**
-
-```markdown
-- [ ] 🔴 [`<path/area>`](https://github.com/<owner>/<repo>/commit/<sha>#<anchor>) — <WHY risky, one clause> — <WHAT to check: one concrete reviewer-answerable question?> — open `<function/symbol>`
-```
-
-- **`<path/area>`** — a code path from `diff_summary.files[]`, rendered as a commit-diff link per §2.4b (code under review → `commit/<sha>#<anchor>`). Never invented (§2.5 rule 1).
-- **WHY risky** — one clause tracing to a payload signal: high churn (`high_churn_files[]`), a public-interface change (`public_exports_changed[]`), a security-sensitive path (`security_sensitive_paths[]`), a new cross-module edge (`cross_module_changes[]`), or a user-facing surface (`commands/ routes/ pages/ app/ cli/ hooks/ bin/`). **No invented risk** — every WHY names the signal it came from (§2.5 rule 11).
-- **WHAT to check** — one concrete question the reviewer can answer *by reading that file* (e.g. "Does the new export stay backward-compatible with existing callers?", "Is the trust boundary preserved on this path?"). A question, not a label; ends with `?`. This is the old Where-to-look focus question, now anchored to the specific must-review file.
-- **symbol anchor** — the specific function/symbol to open so the reviewer lands on the exact code: from `public_exports_changed[].added` / `.removed`, or the `changed_symbols` field when present. When no symbol signal exists, name the file's most-churned area in words rather than invent a symbol — degrade gracefully (§2.5 rule 2 forbids fabricated symbol names).
-
-**Focus budget (load-bearing).** Must-review targets **≤ ~30%** of changed lines. When the risk signals would push it past that, carve the mechanical subset OUT explicitly into Safe to skim and name what you moved and why (e.g. "the +400-line generated fixture is mechanical — moved to skim"). The budget is the discipline that keeps Must review meaning "worth your judgment", not "everything that changed" — a must-review bucket over ~30% with no explicit carve-out is the failure the eval caught.
-
-**Derived-file rule (load-bearing).** Generated mirrors, byte-identical dual copies, and task-state files ALWAYS land in Safe to skim with the derivation named — never counted as review risk, even when they carry high churn:
-
-- generated mirror (e.g. a `codex/` sync path) → "regenerated by `sync-codex.sh`, guard-verified — skim"
-- byte-identical dual copy (e.g. a vendored snapshot beside its source of truth) → "byte-identical copy, parity-tested — skim"
-- task-state / receipt files under `.flow/` → "task-state, not hand-written code — skim"
-
-When the export carries `derived_files` / `derived` fields on `diff_summary.files[]`, consume those; until then name the derivation from repo knowledge (CLAUDE.md / docs). A derived file with real churn is STILL Safe to skim — the derivation, not the line count, decides the bucket.
-
-**Spot-check + Safe-to-skim rendering** — GitHub task-list checkboxes (`- [ ]`) so the reviewer's progress persists. Prefix each bucket's list with its emoji + label once as the H3. On large diffs do NOT enumerate every safe-to-skim file — group with a count and the reason: `- [ ] ⚪ 12 docs/changelog files — mechanical`.
-
-- **Every `diff_summary.files[]` path appears in exactly one bucket; a path is never invented** (§2.5 rule 1).
-- **Tiny-PR collapse.** When the whole diff is `< ~100` changed lines, the three-bucket split is dishonest overhead: emit a single `### Must review` bucket listing everything, no forced percentages, no carve-outs. A small PR is read in full — say so honestly rather than manufacture a spot-check / skim split.
-- Omitted (§2.6) when `diff_summary.files[]` has fewer than 2 files (a one-file PR needs no plan).
-
-**What this section MUST NOT do:**
-
-- MUST NOT invent a risk claim. Every WHY traces to a `diff_summary` signal (§2.5 rule 11). "This looks fragile" with no payload anchor → drop it, or move the file to Spot-check.
-- MUST NOT count a derived file as review risk — the derived-file rule is absolute, churn notwithstanding.
-- MUST NOT let Must review exceed ~30% without an explicit carve-out naming what moved to Safe to skim.
-- MUST NOT use a label where a question belongs in the WHAT-to-check clause (questions activate reviewer cognition; labels don't).
-- MUST NOT pre-judge the answer to its own what-to-check question (§2.5 rule 4 no-weakening applies — never "probably fine").
-
-### 2.5 — Hallucination guardrails (load-bearing)
-
-Phase 2 body rendering is the surface where hallucination risk peaks: the agent has rich structured input AND open-ended natural-language output, which is exactly the shape that produces fluent-sounding fabrication. These rules are load-bearing — every claim in the rendered body must trace back to a structured field in the export payload. **Honest "unclear" / "uncovered" beats plausible "wrong".**
-
-The 11 rules below are not advisory. They define what the body MAY and MAY NOT contain. The skill prose, smoke tests, and review prompts all reference these rules by number.
-
-1. **No hallucinated file references.** Every `<path>` in the body comes from `diff_summary.files[]`. Never fabricate paths from the spec text, from acceptance criteria, or from intent. If you want to mention a file that isn't in the diff, you can't — drop the claim.
-2. **No hallucinated symbol names.** Every `<symbol>` named in Critical changes comes from `diff_summary.public_exports_changed[]`. Never derive from spec language ("the new validate function") if `validate` doesn't appear in the diff signal — that suggests it's an internal helper, not a public export.
-3. **No hallucinated SHAs.** Every `<sha>` in the R-ID coverage table comes from `tasks[].evidence.commits[]`. Don't shorten differently than 7 chars; don't fabricate when an evidence array is empty.
-4. **No "non-breaking" weakening.** Every `public_exports_changed[].removed` entry is potentially breaking. Never reclassify as "non-breaking", "internal", "minor", "trivial", or "harmless removal." The agent doesn't have global call-graph visibility. Reviewer judgment, not author judgment.
-5. **No copy-pasted diff content.** The body talks ABOUT the diff (paths, churn, structure, modules). It NEVER quotes code. GitHub renders the diff below the body — duplication is wasted reviewer attention, AND privacy / secret-leakage risk: an LLM-generated body that quotes diff content could surface a secret the linter caught but the body grabbed.
-6. **No inflated scope.** Every claim in the body must trace to either (a) the R-ID coverage table or (b) a task's `done_summary`. If you can't anchor a claim to one of those, drop it. "We also improved overall reliability" with no concrete trace = drop.
-7. **No R-ID misattribution.** `tasks[].satisfies[]` is the source of truth. NEVER infer R-ID coverage from task titles ("This task is about validation, must be satisfying R3"). NEVER infer from commit messages alone. No task claims the R-ID → undeclared → ⚠️. A non-done task claims it → `⏳ claimed, not yet evidenced` — never a ⚠️, and never an evidence link the task has not produced.
-8. **No stale references.** Cross-check against `diff_summary.files[].status`. A file with `status == "D"` (deleted) cannot appear in the body as if it still exists. A file with `status == "R"` (renamed) appears under its new path; the old path is mentioned only if the rename itself is the load-bearing change.
-9. **No invented "why".** The Decision Context section is a read-only mirror of `.flow/memory/knowledge/decisions/` + the spec's `## Decision Context`. NEVER paraphrase, never extend, never narrate a plausible-sounding rationale to fill a gap. If no decision exists for a structural change, the body says so honestly: `*No decision-track memory entry for this change. Decision context unclear — surface in PR comments if needed.*`
-10. **Trace every claim.** The meta-rule: every sentence in the body must trace to a structured field in the export payload (spec / tasks / memory / glossary / strategy / diff / reviews) or to a verbatim spec quote. If you can't point to which field a claim came from, drop the claim.
-11. **No invented risk claims.** Every WHY-risky clause in the Review plan (§2.4d) and every "verified" claim in the How-to-review block (§2.4c) traces to a payload signal — a `diff_summary` risk signal (`high_churn_files` / `public_exports_changed` / `security_sensitive_paths` / `cross_module_changes` / a user-facing surface prefix) for risk, or `tasks[].evidence` / `tasks_summary` for verification. NEVER narrate risk the payload doesn't support ("this looks fragile", "probably a hot path") and NEVER claim verification the payload doesn't carry (no-overclaim rule). If no signal anchors the risk, the file is not must-review; if no signal anchors the verification, say it is absent. Same discipline as rule 1 (paths) and rule 9 (why), applied to the risk-surfacing sections.
-
-When data is missing, surface that honestly:
-
-- No `done_summary` for a task → row in TL;DR is dropped, not invented.
-- No evidence commits for a task → `—` in the table, not a guess from `git log`.
-- No decisions in `memory_during_spec.decisions` → Decisions section says "*No decision-track memory entries for this spec.*" (omission honored per §2.6 — section is dropped entirely if empty per the section-omission rule, BUT if the body still emits the section heading for any reason, an honest empty-state note replaces invented content).
-
-### 2.6 — Section-omission rule
-
-Empty content → omit the entire section heading. Never emit an empty placeholder.
-
-| Section | Emitted when | Omitted when |
-|---------|--------------|--------------|
-| Title + summary block | Always | Never (if the skill reaches Phase 2 the title is renderable from `PHASE0_CONTEXT`) |
-| TL;DR | ≥1 bullet derivable | Aborts via §2.7 if zero bullets derivable |
-| Not in this PR (by design) | `spec_sections.boundaries[]` non-empty | Empty array |
-| R-ID coverage table | ≥1 R-ID in spec | Aborts via §2.7 if every R-ID is *undeclared* (a plan gate — every R-ID declared, none evidenced yet — still renders) |
-| Verification | any `tasks[].evidence.tests[]` non-empty | Every task's `tests[]` empty |
-| Critical changes | Always (with fallback bullet per §2.4) | Never |
-| How to review this PR | Always (trust frame — even a one-file PR) | Never |
-| Review plan | `diff_summary.files[]` has ≥2 files | Fewer than 2 changed files |
-| Structural changes (mermaid) | Trigger conditions fire | When `--no-mermaid` OR no triggers |
-| Decisions made | `memory_during_spec.decisions[]` non-empty | Empty array |
-| Memory left behind | `memory_during_spec.bugs[]` OR `architecture_patterns[]` non-empty | Both empty |
-| Glossary / strategy notes | `glossary_changes` non-empty OR `strategy_alignment.tracks_served` non-empty | Both empty |
-| Open items | spec `## Open Questions` non-empty OR `deferred_findings` non-empty | All empty |
-| Footer breadcrumb | Always | Never |
-
-The omission rule preserves skim-readability — a heading with no content trains the reviewer to ignore future headings ("oh, /flow-next:make-pr always emits empty sections, I can skip them"). One real signal per heading.
-
-### 2.7 — Abort conditions
-
-The skill aborts before producing a body when the content would be unrenderable:
-
-| Condition | Stderr message | Exit code |
-|-----------|----------------|-----------|
-| `goal_and_context` empty AND every task has empty `done_summary` | `Empty spec content (no goal_and_context, no done_summary fields populated). Run /flow-next:work to populate task done_summaries first.` | 1 |
-| Every R-ID undeclared (`tasks_summary.undeclared_r_ids` length == `len(acceptance_criteria)`) AND `len(acceptance_criteria) > 0` | `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` | 1 |
-
-These are guard conditions, not warnings — a body with empty TL;DR or a coverage table no task even claims is the cognitive-aid equivalent of a blank PR description, and shipping it would defeat the skill's purpose.
-
-**The coverage abort is keyed on DECLARED coverage, never on evidenced coverage.** It exists to catch a spec whose tasks never wrote `satisfies` frontmatter — the one state where the table has nothing to render and the advice ("go declare coverage") is actionable. A plan-gate spec (every task `todo`, every criterion declared) has `uncovered_r_ids == every R-ID` and `undeclared_r_ids == []`: it RENDERS, with `⏳ claimed, not yet evidenced` rows (§2.3). Keying on `uncovered_r_ids` there aborted a renderable body with advice the user could not follow — `/flow-next:work` was already the next step, and running it was impossible while make-pr refused to open the draft.
-
-`acceptance_criteria` legitimately empty (zero R-IDs because the spec is intentionally minimal) is **not** an abort — the R-ID coverage table is omitted via §2.6 and the body proceeds with a TL;DR + Critical changes pair only. This is the small-spec escape hatch.
-
-### Done when
-
-- Body section order locked (§2.0): H1 title + summary block → TL;DR → R-ID coverage → Critical changes → How to review this PR → Review plan → (Structural changes, §Phase 3) → context sections (§Phase 2 cont) → footer breadcrumb. Sections never reorder.
-- Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio — plus the optional ≈240-char `goal_and_context` summary and the Phase 1.5 render-lens blockquote line when one was recorded (absent entirely when the mode is off, under `--dry-run`, or when Phase 1.5 failed).
-- `## TL;DR` renders 3-5 plain-English bullets sourced from `goal_and_context` + top tasks' `done_summary`, never from invented content. Never includes R-IDs, never quotes raw diff content, never pads when fewer than 4 substantive changes shipped.
-- `## R-ID coverage` table renders every R-ID from `acceptance_criteria` in spec order (gaps preserved verbatim — never renumber), columns exactly `R-ID | Acceptance criterion | Task | Evidence`; Task column derives ONLY from `tasks[].satisfies[]` — never inferred from titles or commit messages, and never filtered by task status; the three coverage states render distinctly — evidenced (commit links), `⏳ claimed, not yet evidenced` (a claiming task that is not done), `⚠️ uncovered` for `undeclared_r_ids` only — plus the matching follow-up line(s) under the table.
-- `## Critical changes` renders ≤7 bullets in 5-tier priority order (high-churn → cross-module → public-interface with `removed[]` items FIRST within tier 3 → security-sensitive → behavior-visible), with the limited-churn fallback bullet for low-signal diffs (the one section never omitted entirely).
-- `## How to review this PR` (§2.4c) renders the trust-calibration block: mechanically-verified summary (tests / R-ID coverage / cross-model review, each drawn from the payload) + honest "no … recorded on this PR" for any absent signal + the "your job" framing. ≤ ~8 lines, no-overclaim rule honored, always rendered.
-- `## Review plan` (§2.4d) renders the three risk buckets (`### Must review (~X%)` / `### Spot-check` / `### Safe to skim (~Y%)`) covering every `diff_summary.files[]` path exactly once; must-review items carry WHY (payload-traced) + WHAT-to-check (a question) + a symbol anchor; must-review ≤ ~30% with explicit carve-outs; derived files always safe-to-skim with the derivation named; tiny-PR (<~100 lines) collapses to a single honest Must-review bucket. Only when ≥2 changed files.
-- No-weakening rule honored: every `public_exports_changed[].removed` entry surfaced as "potentially breaking" / `removes \`<sym>\`` — NEVER paraphrased as "non-breaking", "internal-only", "minor", or "trivial".
-- All 11 hallucination guardrails (§2.5) hold for the rendered output — no fabricated paths (every `<path>` ∈ `diff_summary.files[]`), symbols, SHAs (every `<sha>` ∈ `tasks[].evidence.commits[]`), or risk/verification claims (every WHY + every "verified" traces to a payload signal — rule 11); every claim traces to a payload field.
-- Section-omission rule (§2.6) honored — empty headings never emitted.
-- Abort conditions (§2.7) checked before writing any body content; unrenderable bodies exit 1 with a clear stderr message rather than emitting fabricated content. (Zero R-IDs in the spec is NOT an abort — the coverage table is omitted and the body proceeds with the TL;DR + Critical changes pair. A plan gate — all tasks todo, every criterion declared — is NOT an abort either: the coverage abort keys on `undeclared_r_ids`, never on `uncovered_r_ids`.)
-
----
-
-## Phase 2 (cont): Render body context sections
-
-**Goal:** turn the structured payload from Phase 1 into the **context half** of the PR body — the sections a reviewer reads *after* deciding where to focus, to anchor judgment in the surrounding intent. Context half = Decisions made + Memory left behind + Glossary / strategy notes + Open items. The header half (TL;DR / R-ID coverage / Critical changes / How to review this PR / Review plan) lands in §Phase 2; the mermaid section lands in §Phase 3.
-
-These four sections are **read-only mirrors of structured fields**. The host agent never paraphrases, never extends, never narrates a plausible-sounding rationale to fill a gap. The §2.5 hallucination guardrails (esp. rule 9 "no invented why" and rule 10 "trace every claim") apply here with extra force — the context sections are where fluent fabrication is most tempting. Treat them as text to reformat, not text to embellish.
-
-### 2.8 — Decisions made section (R15)
-
-Render `## Decisions made` when `memory_during_spec.decisions[]` is non-empty. Each entry from the array becomes one bullet; bullet shape is fixed:
-
-```markdown
-- **<title>** ([<id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md)) — <first_sentence>. Alternatives considered: <alternatives_considered>.
-```
-
-Field rules:
-
-- **`<title>`** — `decisions[].title` verbatim. No editing, no truncation.
-- **`<id>`** — `decisions[].id` verbatim (e.g. `knowledge/decisions/use-deterministic-export-2026-05-07`). Memory IDs are file-path-shaped.
-- **Link target** — blob, SHA-pinned (per §2.4b — `.flow/memory/<id>.md` is an artifact to read): `https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenate it after `.flow/memory/`. (A bare relative `.flow/memory/<id>.md` is BROKEN in a PR body — see §2.4b.)
-- **`<first_sentence>`** — `decisions[].first_sentence` verbatim. flowctl already extracted this via `_export_first_sentence`. Never re-extract, never paraphrase.
-- **`<alternatives_considered>`** — `decisions[].alternatives_considered` from the export. **Caveat: this field arrives as a stringified Python list** (e.g. `"['option-a', 'option-b']"`) because flowctl wraps the frontmatter list with `str()` during export. The host agent renders it readably:
-  - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
-  - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
-  - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
-- **No truncation.** Decision entries are by-design prose-heavy; reviewer needs the full alternatives list to weigh the choice.
-
-If `memory_during_spec.decisions[]` is empty, the section heading is omitted entirely per §2.6. **No fallback "no decisions" line.** Section either has bullets or doesn't appear.
-
-**What this section MUST NOT do:**
-
-- MUST NOT paraphrase, extend, or rewrite `first_sentence`. Read-only mirror.
-- MUST NOT invent decision context for changes that have no memory entry. If a change in the diff lacks a `knowledge/decisions/` entry, the body says nothing about its rationale — the reviewer surfaces it in PR comments if needed.
-- MUST NOT add commentary like "this is a good decision" / "the team weighed alternatives carefully". The bullet is `title + id + first_sentence + alternatives` — nothing else.
-- MUST NOT include `decision_status` (proposed / accepted / superseded) — v1 keeps the bullet shape narrow. Future enhancement if reviewer feedback wants it.
-
-### 2.9 — Memory left behind section (R16)
-
-Render `## Memory left behind` when `memory_during_spec.bugs[]` OR `memory_during_spec.architecture_patterns[]` is non-empty. Two sub-lists when both are populated; one sub-list when only one is. (Omission per the §2.13 table.)
-
-Sub-list structure:
-
-```markdown
-**Bugs captured during this spec:**
-
-- `<id>` — <winning_hypothesis_first_sentence>
-- `<id>` — <winning_hypothesis_first_sentence>
-
-**Architecture patterns captured during this spec:**
-
-- `<id>` — <first_sentence>
-```
-
-Field rules:
-
-- **`<id>`** — `bugs[].id` or `architecture_patterns[].id` verbatim, formatted as inline code (so the path is visually distinct from the description and easy to copy for `flowctl memory read <id>`).
-- **`<winning_hypothesis_first_sentence>`** — `bugs[].winning_hypothesis_first_sentence` verbatim.
-- **`<first_sentence>`** — `architecture_patterns[].first_sentence` verbatim.
-- **No file links** — unlike the Decisions section, memory entries here don't link to file paths. Reviewer who wants more reads via `flowctl memory read <id>` (the id is already copy-pasteable). This keeps the section visually scannable; the Decisions section uses links because alternatives-considered context is harder to find without one.
-- **No truncation.** First-sentence shapes are already pre-bounded by the `_export_first_sentence` helper.
-
-If only one sub-array is populated, emit only that sub-list with its bold preamble. The bold preambles are load-bearing — they tell the reviewer **why** these entries appear in the PR body (not "look at all the memory we wrote" but "future debuggers searching for these symptoms will find this PR").
-
-**Section purpose framing** — this section answers the methodology's question "what did this spec teach?" Memory entries written during a spec are the most discoverable record of pitfalls, conventions, and patterns established by the work. Surfacing them in the PR body lets the reviewer (a) verify the captured insight is accurate and (b) find the entries later via `memory-scout` without reconstructing the spec from commit history.
-
-**What this section MUST NOT do:**
-
-- MUST NOT paraphrase or expand `winning_hypothesis_first_sentence` / `first_sentence`. Read-only mirror.
-- MUST NOT invent memory entries that aren't in the export payload (rule 7 of §2.5 — no fictitious memory IDs).
-- MUST NOT include legacy-track entries (`legacy/pitfalls#N`) — those surface in `memory list` but `_export_memory_during_spec` deliberately excludes them. v1 only renders bugs + architecture_patterns from the categorized tree.
-- MUST NOT recommend memory-store cleanup ("consider deleting these entries"). That's the job of `/flow-next:audit`, not the PR body.
-
-### 2.10 — Glossary / strategy notes section (R17)
-
-Render `## Glossary / strategy notes` when `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served[]` is non-empty OR `strategy_alignment.drift_flagged[]` is non-empty. (Omission per the §2.13 table.)
-
-The section combines two distinct signals (glossary mutation + strategy alignment) under one heading because (a) both are repo-doc plumbing the reviewer typically skims, (b) each is usually 1-3 lines, and (c) two separate empty-most-of-the-time headings train reviewers to stop looking. One combined heading keeps the signal density per heading high.
-
-#### Glossary clauses
-
-Each non-empty array becomes one bold-prefix line:
-
-```markdown
-**Glossary:** added `<term>`, `<term>`; renamed `<old>` → `<new>` (<N> files); removed `<term>`.
-```
-
-Field rules:
-
-- **`added`** — `glossary_changes.added[]` is an array of `{term, definition_first_sentence}`. Surface only the term (the first-sentence is reserved for `flowctl glossary read <term>`); render as backticked terms, comma-separated.
-- **`renamed`** — `glossary_changes.renamed[]` is reserved for v2 per the `_export_glossary_diff` docstring (`renamed detection (heuristic on definition similarity) is a 2026-Q2 stretch goal per the spec; v1 emits an empty list`). v1 will always have an empty rename array; the clause never emits in v1. **Keep the rename clause in skill prose** so v2 doesn't have to re-document the shape — when the export starts populating `renamed[]`, the skill renders without code changes. (Defer-by-prose, not defer-by-omission.)
-- **`removed`** — `glossary_changes.removed[]` is an array of strings (term names). Render as backticked terms, comma-separated.
-- **Clause omission** — each of the three clauses (added / renamed / removed) is dropped if its source array is empty. The line emits whatever non-empty clauses remain, joined by `;`. If the line would be empty, no glossary line emits.
-
-#### Strategy clauses
-
-Strategy gets one or two lines depending on populated arrays:
-
-```markdown
-**Strategy:** served tracks `<track-1>`, `<track-2>`, `<track-3>`.
-**Strategy drift:** `<track>` — <reason>; `<track>` — <reason>.
-```
-
-Field rules:
-
-- **`tracks_served`** — `strategy_alignment.tracks_served[]` array of strings. Render backticked, comma-separated. If empty array, the served-tracks line is omitted.
-- **`drift_flagged`** — `strategy_alignment.drift_flagged[]` is an array of `{track, reason}`. Each entry → `\`<track>\` — <reason>`, joined by `;`. If empty array, the drift line is omitted.
-- **Heading-level interaction** — if neither glossary nor strategy contributions emit any line, the entire `## Glossary / strategy notes` heading is omitted. If only one of glossary/strategy emits content, the heading still appears with whatever content there is.
-
-**Section purpose framing** — the methodology's "shared vocabulary survives the team" principle: glossary changes are ratifications of (or departures from) the project's canonical wording, and strategy alignment is the explicit anchor between this spec's work and the repo-wide direction. Reviewer scans this section to catch (a) accidental glossary drift (a renamed term that downstream specs still use), (b) strategy misalignment (an active-track spec that surfaced `## Strategy drift flagged for review` during sync). Both are easy to fix at PR time, much harder to retrofit later.
-
-**What this section MUST NOT do:**
-
-- MUST NOT invent glossary terms not in `glossary_changes`.
-- MUST NOT paraphrase `drift_flagged[].reason` — already prose-shaped by sync output / spec authoring.
-- MUST NOT recommend strategy edits ("consider revising STRATEGY.md to add this track"). v1 surfaces drift as read-only. The reviewer / user runs `/flow-next:strategy` if they want to act.
-- MUST NOT cite STRATEGY.md verbatim — `tracks_served` is the parsed signal; the full strategy doc is not part of the export payload by design (would inflate body for low signal).
-
-### 2.11 — Open items section (R18)
-
-Render `## Open items` when ANY of the three sources below produce content. Section omitted only when ALL are empty.
-
-Three sources, in order — each surfaces in the same checkbox bullet list with provenance breadcrumbs distinguishing origin:
-
-#### Source A — Spec open questions
-
-`spec.spec_sections.open_questions[]` from the export payload (already parsed via `_export_parse_open_questions` in flowctl). Each entry → one bullet:
-
-```markdown
-- [ ] <question text> — open question from spec
-```
-
-Field rules:
-
-- **`<question text>`** — array entry verbatim (the export already strips `- ` prefix and trailing whitespace).
-- **Provenance breadcrumb** — exact phrase ` — open question from spec` appended after the question. The em-dash is significant; reviewer's eye learns the breadcrumb shape.
-
-#### Source B — Deferred impl-review findings (branch-slug sink)
-
-`deferred_findings[]` from the export payload. v1 schema has at most one element with shape `{path: ".flow/review-deferred/<branch-slug>.md", items: [{raw: "- [ ] ..."}]}`. The `items[]` carries no per-task attribution — flowctl wrote the sink keyed by branch slug, not task id. Each `items[].raw` is a verbatim deferred-finding bullet.
-
-Each entry → one bullet:
-
-```markdown
-- [ ] <stripped item text> — deferred from impl-review (`<sink-relpath>`)
-```
-
-Field rules:
-
-- **`<stripped item text>`** — `items[].raw` with the leading `- [ ] ` (or `- [x] `) marker stripped, so the renderer can re-emit a `- [ ]` checkbox at body level. If `raw` already starts with `- [` then strip that prefix; otherwise emit `raw` verbatim. (The export captures `raw` with its original prefix in `deferred_findings[]`.)
-- **`<sink-relpath>`** — `deferred_findings[0].path` rendered as backticked relative path (e.g. `\`.flow/review-deferred/fn-42-foo.md\``).
-- **Provenance breadcrumb** — exact phrase ` — deferred from impl-review (<sink-relpath>)`. Branch-slug sink is the provenance because v1 has no per-task attribution; surfacing the sink path lets the reviewer drill in.
-- **Multiple sinks** — schema allows the array to grow if v2 splits per-task, but v1 only ever returns at most one element. Loop over `deferred_findings[]` regardless to be forward-compatible.
-
-#### Source C — Spec-completion-review-flagged items
-
-Completion-review state is not in the export-cognitive-aid payload. Read it directly from the spec JSON via flowctl:
-
-```bash
-SPEC_REVIEW_STATUS=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_review_status // "unknown"')
-SPEC_REVIEW_AT=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_reviewed_at // empty')
-```
-
-If `SPEC_REVIEW_STATUS == "needs_work"`, emit a single bullet:
-
-```markdown
-- [ ] Spec-completion-review verdict was `needs_work` (last reviewed <SPEC_REVIEW_AT>) — flagged by spec-completion-review
-```
-
-Field rules:
-
-- **Provenance breadcrumb** — exact phrase ` — flagged by spec-completion-review`.
-- **Findings detail** — v1 surfaces only the verdict + timestamp. The granular findings live in the `/flow-next:spec-completion-review` receipt; reviewer drills in via that surface. v2 may aggregate findings into the bullet once the receipt format is stable.
-- **`unknown` / `passed` status** — no bullet emitted. This source contributes content only when the spec-completion-review explicitly flagged needs-work.
-
-#### Section ordering + omission
-
-Bullets emit in source order: A (spec open questions) → B (deferred review findings) → C (spec-completion-review flag). Within each source, preserve the array's natural order (no re-sorting). If all three sources are empty, the heading is omitted entirely per §2.6 — never an empty `## Open items` placeholder.
-
-**Section purpose framing** — the methodology's "explicit deferral over silent omission" principle: things flagged but not yet resolved deserve checkbox visibility, not burial in the spec / sink / receipt. Reviewer scans this section to decide whether the PR is mergeable as-is or whether a follow-up spec / task captures the remaining work. Each provenance breadcrumb tells the reviewer where to dig if they want context.
-
-**What this section MUST NOT do:**
-
-- MUST NOT invent open items not present in the three sources. The body is read-only mirroring.
-- MUST NOT collapse multiple deferred findings into a single bullet ("3 deferred findings — see sink"). Each finding gets its own checkbox so reviewers can track resolution per item.
-- MUST NOT paraphrase question text. Open questions are already prose-shaped by the spec author; rephrasing introduces drift.
-- MUST NOT include findings the reviewer already accepted via `/flow-next:impl-review --interactive` "Acknowledge" — the interactive walkthrough records those separately and they don't appear in the deferred sink.
-
-### 2.11b — Live QA section (only when a `qa_verdict` receipt is present)
-
-Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipts/qa-<spec-id>.json` (the `/flow-next:qa` skill's default committed path; written when QA ran - via the opt-in QA stage of `flow --auto` or a manual `/flow-next:qa` pass). With no receipt the section is omitted entirely (the §2.6 rule — most specs have no QA pass, so this is the common case and the body is byte-identical to today). This is the **R7 surfacing owner**: the QA stage advances even on `NEEDS_WORK`, so the findings reach a human only if make-pr renders them here.
-
-**Gate before loading the receipt-path instructions.** This presence probe is the ONLY addition when no QA receipt exists:
-
-```bash
-QA_ACTIVE=0
-QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json"
-if [ -f "$QA_RECEIPT" ]; then
-  # NO pipelines in the probe — a failed producer masked by a healthy consumer
-  # fails CLOSED. Capture raw first, rc-checked; parse separately.
-  QA_RAW="$(cat "$QA_RECEIPT" 2>/dev/null)" || QA_ACTIVE=1          # read ERROR ⇒ ACTIVE (fail open)
-  if [ "$QA_ACTIVE" = "0" ]; then
-    QA_PROBE="$(printf '%s' "$QA_RAW" | jq -r '.qa_outcome // empty' 2>/dev/null)" || QA_ACTIVE=1   # parse ERROR ⇒ ACTIVE
-    [ -n "$QA_PROBE" ] && QA_ACTIVE=1
-  fi
-fi
-if [ "$QA_ACTIVE" = "1" ]; then
-  echo "GATE ACTIVE — STOP. Read references/live-qa-section.md before continuing."
-fi
-```
-
-When the sentinel prints, STOP and Read [references/live-qa-section.md](references/live-qa-section.md) in full before any further step — it carries the guarded receipt read, the bookkeeping-commit freshness peel, the section body shape, the field rules (`qa_outcome` never the `verdict` projection), and the MUST-NOT list. When it does not print, emit no `## Live QA` heading, no sentinel line, and no QA-related output; the §2.13 omission row already records that state.
-
-### 2.13 — Section-omission rule (extended for context sections)
-
-The §2.6 omission rule extends to all four context sections. Recap with the additions:
-
-| Section | Emitted when | Omitted when |
-|---------|--------------|--------------|
-| Decisions made | `memory_during_spec.decisions[]` non-empty | Empty array |
-| Memory left behind | `memory_during_spec.bugs[]` OR `architecture_patterns[]` non-empty | Both empty |
-| Glossary / strategy notes | `glossary_changes` has any non-empty array OR `strategy_alignment.tracks_served` non-empty OR `strategy_alignment.drift_flagged` non-empty | All empty |
-| Open items | spec `open_questions` non-empty OR `deferred_findings` non-empty OR `completion_review_status == "needs_work"` | All empty |
-| Live QA | `.flow/review-receipts/qa-<spec-id>.json` exists and parses (§2.11b) | No receipt / unparseable receipt (the common case — QA didn't run) |
-
-### 2.13b — Footer breadcrumb (section 11 of body order)
-
-The body's final line is a single italicized provenance breadcrumb. **Always emitted** — the breadcrumb is an honest disclosure that the body was generated by a skill, anchored to its inputs (spec id + base ref + date). Reviewers learn to look for the breadcrumb when deciding whether to grep the rendered body or re-run the skill.
-
-```markdown
----
-
-*Generated by `/flow-next:make-pr` from [<spec-id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/specs/<spec-id>.md) against `<base-ref>` on <YYYY-MM-DD>.*
-<!-- flow-next:make-pr spec=<spec-id> base=<base-ref> -->
-```
-
-The trailing HTML comment is the **machine marker** (issue #274): invisible in
-rendered markdown, immune to the italics/backticks/link styling of the visible
-line, and never formed accidentally by prose that merely *mentions* the token -
-land's authorship probe matches this structural marker, not body prose. Emit it
-verbatim on its own line directly after the visible breadcrumb, with the bare
-spec id and bare base ref (no backticks, no links).
-
-Field rules:
-
-- **`<spec-id>`** — `spec.id`.
-- **`<base-ref>`** — `PHASE0_CONTEXT.base` (e.g. `origin/main`, `main`, `develop`). Backticked.
-- **`<YYYY-MM-DD>`** — UTC date at body-render time, from `date -u +%Y-%m-%d`.
-- **Em-dash separator (`---`)** — separates the breadcrumb visually from the last content section.
-- **No truncation, no abbreviation.** The breadcrumb is one line. If the values would exceed 80 chars combined, that's still acceptable — visibility beats brevity.
-- **No `Phase 4 dry-run: ...` qualifier under `--dry-run`** — the breadcrumb is identical regardless of whether `gh pr create` ran. The body content IS the artefact; whether it lands on stdout or in a PR doesn't change its provenance.
-
-The breadcrumb is rendered during Phase 2 so it survives all downstream phases (mermaid generation, push, PR create) without a re-render. It also survives `--dry-run` (covered in §4.0) — the dry-run output emits the in-memory body string, which already contains the breadcrumb because Phase 2 rendered it before Phase 4 ran.
-
-### 2.14 — Honest-empty-state escape hatch
-
-The §2.5 rule 9 ("no invented why") means the agent never narrates rationale to fill empty Decisions / Open items. But the user might still want to know why a section is missing. The skill handles this by **never emitting an honest-empty-state line in the body** — the body is silent on missing sections, and the reviewer who notices an absent section infers correctly: no decisions captured (run `/flow-next:audit` to verify), no open items flagged.
-
-This is the explicit choice the §2.5 hallucination guardrails force. Body content is structured-mirror only; the absence of a section is itself the signal. **Do not emit sentinel lines like "*No decisions for this spec*" or "*No open items*"** — those clutter the body without adding signal, and create the misleading impression that the skill ran some search and confirmed empty (when it just read empty arrays).
-
-The one exception is the §2.4 Critical changes "Limited churn" fallback bullet — that one stays because Critical changes always renders (so there's no omission to infer from), and the bullet tells the reviewer where to look instead.
-
-### Done when
-
-- `## Decisions made` renders one bullet per `memory_during_spec.decisions[]` entry, with title + memory link + first sentence + alternatives-considered (parsed from stringified-list shape). Section omitted entirely when array empty.
-- `## Memory left behind` renders bug + architecture-pattern sub-lists with bold preamble per sub-list. Section omitted when both arrays empty. One sub-list shown when only one populated.
-- `## Glossary / strategy notes` renders glossary clauses (added / renamed-deferred-to-v2 / removed) and strategy clauses (tracks served / drift flagged). Each clause omits when its source array is empty; section heading omits when all contributions empty.
-- `## Open items` aggregates spec open questions + branch-slug-sink deferred findings + spec-completion-review needs-work flag, each as a checkbox bullet with provenance breadcrumb. Source order A → B → C. Section omitted when all three sources empty.
-- `## Live QA` (§2.11b) renders the `qa_verdict` receipt summary — `qa_outcome` (NOT the `verdict` projection) + the persisted `open_p0p1` objects + BLOCKED/NA reason + `rid_coverage` — only when `.flow/review-receipts/qa-<spec-id>.json` is present and parses. Advisory (never changes draft/ready state). Section omitted when no receipt exists (the common case).
-- (The reviewer-focus questions the old Where-to-look section carried now live inside the Review plan's must-review items as the per-item WHAT-to-check clause — §2.4d. There is no standalone Where-to-look section.)
-- All four context sections honor the §2.5 hallucination guardrails: no invented file paths, no fabricated decisions, no synthesized open items, no editorialized rationale.
-- Each section has its "What this section MUST NOT do" callout in the rendered prose. Echo-chamber risk mitigated via explicit boundaries.
-- §2.14 honest-empty-state rule honored: no sentinel "*No decisions*" / "*No open items*" lines emitted. Absence of section IS the signal.
-
----
-
-## Phase 3: Mermaid generation
-
-**Goal:** when the diff signals warrant it, emit a `## Structural changes` section with one to three mermaid codefences — or, in the two situations `mermaid-rules.md` §8 licenses, a diff-fenced structural sketch that complements or replaces a diagram — each preceded by a one-paragraph prose summary in plain language. The diagrams are supplementary; the prose is load-bearing — forges that don't render mermaid still convey the change. When triggers don't fire OR `--no-mermaid` is set, the section is omitted entirely (never an empty placeholder).
-
-The host agent reads `mermaid-rules.md` (sibling file in this skill) before emitting any codefence and validates each rendered diagram against the §6 checklist there. **No deterministic Python renderer.** flowctl's `spec export-cognitive-aid` payload provides the structured signals (`cross_module_changes`, `public_exports_changed`, `modules_touched`, `diff_summary.files`); the agent picks shape, picks nodes, emits codefence, validates.
-
-### 3.0 — `--no-mermaid` short-circuit
-
-Phase 3 is bypassed entirely when `$NO_MERMAID == 1`. **No diagrams emitted.** Prose summaries are also skipped — Phase 3's whole job is the diagram + prose pair, and emitting prose without diagrams under `--no-mermaid` produces a degenerate section that confuses the reader ("why is there structural-change prose with no structural diagram?").
-
-```bash
-if [[ "$NO_MERMAID" == "1" ]]; then
-  : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
-  return 0  # or equivalent skip control in the host agent's render loop
-fi
-```
-
-R14 invariant: `--no-mermaid` produces a body with NO `## Structural changes` section, regardless of how many trigger conditions would have fired.
-
-### 3.1 — Trigger evaluation (5 conditions, ANY fires → emit section)
-
-The host agent evaluates the five trigger conditions below against the export payload. If **any** fires, Phase 3 produces a `## Structural changes` section. If **none** fire, the section is omitted (no heading, no prose, no diagrams).
-
-| # | Trigger | Source field | Default shape (if this is the only trigger) |
-|---|---------|--------------|---------------------------------------------|
-| 1 | `cross_module_changes[]` non-empty (new dependency edges between modules) | `diff_summary.cross_module_changes[]` | `flowchart LR` |
-| 2 | `public_exports_changed[]` non-empty (added or removed public symbols) | `diff_summary.public_exports_changed[]` | `flowchart LR` if function-shaped; `classDiagram` if class-shaped; `sequenceDiagram` if route-handler-shaped |
-| 3 | New top-level directory (file added in path that didn't exist on `base_ref`) | `diff_summary.modules_touched[]` cross-checked against `git ls-tree $BASE_REF --name-only` | `graph TB` |
-| 4 | Removed top-level directory (all files of dir in `--diff-filter=D`) | `diff_summary.files[]` filtered to `status == "D"` and grouped by top-level dir | `graph TB` |
-| 5 | High-fan-out spec — `>15 files in >3 distinct modules` | `len(diff_summary.files) > 15 AND len(diff_summary.modules_touched) > 3` | `graph TB` |
-
-When **multiple triggers fire**, the host agent picks shape per the diagram (one diagram per logical concern) but stays under the §3.2 caps (`mermaid-rules.md` §4). Triggers 1+2 commonly co-occur (a refactor that adds a new module and exports new functions from it) — the agent emits one `flowchart LR` showing both the new module and its imports.
-
-### 3.1a — Skip rules (within trigger evaluation)
-
-Even when a trigger fires, Phase 3 is **skipped** (section omitted, no diagrams, no prose) when any of these apply:
-
-- **Pure additive within one module + <50 LOC.** Tiny additions get a critical-changes bullet, not a diagram. Heuristic: `len(diff_summary.modules_touched) == 1 AND lines_added < 50 AND lines_removed == 0`.
-- **Repo has no detectable module structure.** Flat-layout repos (no `src/`, `plugins/`, `app/`, `lib/`, `pkg/`, `cmd/`, `internal/`, `cli/`, `routes/`, `commands/`, `skills/`, `agents/`) — diagrams of "the whole repo" are noise. Heuristic: `diff_summary.modules_touched[]` contains only the empty-string root or only single-segment paths that aren't in the known-module-prefix list.
-- **No-mermaid override.** The `--no-mermaid` flag short-circuited at §3.0 — covered there but recapped here for completeness.
-
-When skip rules engage, the host agent emits a stderr breadcrumb: `Phase 3 skipped: <reason>`. Useful for the user to debug "why didn't I get a diagram?" without re-running.
-
-### 3.2 — Emission rules (read [mermaid-rules.md](mermaid-rules.md) before the first codefence)
-
-At least one trigger fired and no skip rule applies — a codefence WILL be emitted. **STOP and read [`mermaid-rules.md`](mermaid-rules.md) in full now**, before writing any diagram. It carries the rules this phase runs on: reserved words (§1), special-character escapes (§2), shape selection per diagram (§3), the hard caps + allocation rule (§4 — 3 diagrams / 12 nodes / 25 edges / 12K chars per codefence), the prose-summary-precedes-diagram rule (§5, R13, load-bearing), the pre-emission validation checklist + re-render loop (§6), the Phase-3 hallucination guardrails (§7 — no invented modules / edges / symbols), and the diff-fenced structural sketch as an alternate emission (§8 — licensed when the §4 collapse-to-one rule would fire or a trigger fires marginally, i.e. the diagram would have <4 nodes; same §7 guardrails and §5 prose rule, outside the 3-diagram cap, equally suppressed by `--no-mermaid`). Do not emit a codefence from memory; the failure mode is silent (the diagram renders as a code block, not as a diagram).
-
-When zero triggers fire, a skip rule engages, or `--no-mermaid` is set, that file is never read — §3.6 below is the whole of Phase 3 on those paths.
-
-### 3.6 — Section omission
-
-When zero triggers fire (§3.1) OR a skip rule engages (§3.1a) OR `--no-mermaid` is set (§3.0), the entire `## Structural changes` heading is omitted. **Never an empty heading.** This is the same §2.6 omission rule the rest of the body honors — empty headings train reviewers to skip future headings.
-
-Phase 3 has no fallback bullet equivalent to Critical changes' "Limited churn" line. Critical changes always renders because the section is mandatory; Structural changes is optional. The signal of "no diagram" is the absence of the heading; reviewers who notice the absence infer correctly: no module-boundary, no public-interface, no fan-out — the diff is structurally local.
-
-### Done when
-
-- `--no-mermaid` short-circuits before any trigger evaluation; the body has no `## Structural changes` heading.
-- Trigger evaluation walks the 5 conditions ((1) `cross_module_changes[]` non-empty, (2) `public_exports_changed[]` non-empty, (3) new top-level dir, (4) removed top-level dir, (5) >15 files in >3 modules) and the skip rules; emits Phase 3 only when ≥1 trigger fires AND no skip rule applies. When a skip rule engages, the stderr breadcrumb `Phase 3 skipped: <reason>` is emitted.
-- Hard caps enforced on mermaid codefences (max 3 diagrams, max 12 nodes, max 25 edges, max 12K chars per codefence). Excess collapses to a `graph TB` overview; node excess groups by module/abstraction. §8 sketches sit outside these caps.
-- Shape selection picks from the 4 documented shapes (`flowchart LR` / `classDiagram` / `sequenceDiagram` / `graph TB`) per the `mermaid-rules.md` §3 rules — or, in the two situations §8 licenses (collapse-to-one would fire; a trigger fires marginally with a <4-node diagram), a diff-fenced structural sketch (file tree or call tree), which does not count against the 3-diagram cap.
-- Every codefence is preceded by a 3-5 sentence plain-language prose summary anchored to `diff_summary.files[]` paths. The diagram is supplementary; prose is load-bearing.
-- Each mermaid codefence passes the `mermaid-rules.md` §6 validation checklist (9 rules: quotes balanced, no reserved-word bare ids, no emoji, no MathJax, no relative click links, no inheritance cycles, no subgraph/node-id collisions, arrow-char preference, ≤12K chars) before being emitted. Re-render loop on any failure — never emit a known-broken codefence. Diff-fenced sketches follow §8's own rules instead: §7 guardrails + §5 prose rule, equally suppressed by `--no-mermaid`.
-- `mermaid-rules.md` ref file present with: §1 reserved words, §2 special-character escapes + HTML-entity fallback (decimal codes only), §3 shape selection + decision matrix, §4 hard caps + allocation rule, §5 prose-summary rule, §6 validation checklist, §7 Phase-3 hallucination guardrails, §8 diff-fenced structural sketches.
-- Section omission honored: zero triggers OR skip rule OR `--no-mermaid` → no `## Structural changes` heading at all.
-- Hallucination guardrails honored: no invented modules / edges / symbols; "fewer nodes, more honest" over "context nodes for clarity."
-
----
-
-## Phase 4: Push + create PR
-
-**Goal:** turn the rendered body into an open PR. Compute title + draft flag, persist the body to disk, then push the branch and run `gh pr create` directly — **no confirm prompt** — with the body delivered via `--body-file` (NOT a heredoc). `--dry-run` is the preview path and short-circuits before any state change. `--memory` is deferred to Phase 5.
-
-The host agent owns the body string at this point — Phases 2/3 produced it. Phase 4 takes that string, writes it to a tempfile, decides title + draft, then hands the file to `gh` — **no confirm prompt** (see §4.5). **No code in this phase rewrites body content.** If the body is too long for `gh pr create`, the truncation policy in §4.4 fires before invocation.
-
-**Sub-section ordering.** `--dry-run` (§4.0) short-circuits before any state change; otherwise the phase flows straight through to push + `gh pr create` (§4.6) with no interactive gate. Phase 4 layout:
-
-1. **§4.0** — `--dry-run` short-circuit (R22) — earliest exit; no state change at all (the inspection path).
-2. **§4.1** — PR title format (R21) — compute `PR_TITLE` from spec.
-3. **§4.2** — Draft-vs-ready matrix (R24) — compute `DRAFT_FLAG` from Ralph context + open items + force flags.
-4. **§4.3** — Body delivery via `--body-file` (R20) — persist rendered body to tempfile.
-5. **§4.4** — Body length cap + truncation policy — enforce 65K cap before invoking `gh`.
-6. **§4.5** — No confirm gate (autonomous create) — flows straight into §4.6; flags, not a prompt, are the escape hatches.
-7. **§4.6** — Push branch + `gh pr create` retry loop — runs directly after §4.4 (§4.6a links the PR to the tracker issue first).
-8. **§4.7** — Failure recovery hints — stderr text per error class on `gh pr create` failure.
-
-### 4.0 — `--dry-run` short-circuit (R22)
-
-When `$DRY_RUN == 1`, Phase 4 emits the rendered body to stdout and exits 0. **No `git push`, no `gh pr create`, no `--memory` side effect.** This makes the skill safe to compose with `pbcopy` / inspection / smoke tests.
-
-The body string is owned by the host agent at this point — Phases 2/3 produced it. The dry-run path emits the in-memory body directly without persisting to disk; subsequent sub-sections (§4.3 onwards) are skipped.
-
-```bash
-if [[ "$DRY_RUN" == "1" ]]; then
-  printf '%s\n' "$BODY_CONTENT"
-  echo "" >&2
-  echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
-  exit 0
-fi
-```
-
-`--dry-run` is the exclusive output for Phase 4 — `--memory` does NOT fire under `--dry-run` (writing memory for a PR that wasn't opened produces orphan entries that pollute future `memory-scout` results). The footer breadcrumb still appears in the dry-run output because it's part of the body Phase 2 already rendered.
-
-**Create + finalize (§4.1 → Phase 5) — loaded on demand.** If §4.0 did NOT short-circuit (this is a real create/update, not `--dry-run`), **read [create-and-finalize.md](create-and-finalize.md)** and execute it end-to-end: PR title (§4.1), body persist + truncation (§4.2-4.4), tracker linkage + `gh pr create` / `--update` `gh pr edit` + retry (§4.6), failure hints (§4.7), then Phase 5 (receipt, footer, `PR_URL=` emission). Under `--dry-run` the run already exited at §4.0 — never read that file for a preview.
-
-## Anti-patterns (cross-phase)
-
-This skill is the autonomous-loop terminus, which means it's also the most-tempting surface for "improvements" that defeat its purpose. The patterns below are explicitly forbidden — both in current implementation AND in any future v2 enhancement that lands on this skill.
-
-1. **Letting the agent open the PR without making the PR reviewable.** The skill exists to produce a cognitive-aid body; opening a PR with an empty body or a body that doesn't trace to flow-next state would be the first failure mode. Every section in the body must trace to a structured field; abort conditions (§2.7) prevent unrenderable bodies from reaching `gh pr create`.
-
-2. **Auto-merging the PR.** Out of scope per methodology #9 — merge is a human decision. The skill creates and exits. **Never invoke `gh pr merge`**, never suggest the user run it as a next step, never offer an `--auto-merge` flag.
-
-3. **Including raw diff content in the body.** Privacy + duplication. The body talks ABOUT the diff (paths, churn, modules); GitHub renders the diff below the body. Any body that quotes code is one secret-leak away from a security incident. Hallucination guardrail rule 5 (§2.5) — non-negotiable.
-
-4. **Generating `gh pr merge` invocations.** Recapped from #2 because it's the most-likely v2 footgun: "wouldn't it be nice if the skill could --auto-merge after CI passes?" No. The skill is a one-shot artefact producer.
-
-5. **Inflating scope claims beyond what the diff supports.** Hallucination guardrail rule 6 (§2.5). Every TL;DR / Critical-changes / Where-to-look claim must trace to a payload field. "We also improved overall reliability" with no concrete trace = drop.
-
-6. **Heredoc body delivery.** §4.3 — `--body-file` is the only reliable form when LLM-generated content contains backticks, `$`, or escaped quotes. v2 alternative ("just escape the bad characters") is a strict downgrade; don't reintroduce the heredoc form even with quoting.
-
-7. **Silent fallback to `git push` + manual `curl` to GitHub API.** When `gh` is missing, the skill exits with install instructions (§0.1). Don't try to be clever — half-baked PR creation produces broken PRs that the user has to clean up manually.
-
-8. **Ralph-blocking the skill.** Per spec R24, the skill is **not** Ralph-blocked. Don't add a `FLOW_RALPH=1` exit-2 guard. Ralph's autonomous-loop opens draft PRs for human review; that's the entire point.
-
-9. **Writing memory entries without `--memory`.** Default off. The user opts in for structurally-significant specs. Auto-writing on every PR floods `memory-scout` with low-signal entries.
-
-10. **Renumbering R-IDs in the coverage table.** The R-ID renumber-forbidden invariant is repo-wide; the body mirrors it. R1, R3, R5 (R2 deleted post-creation) renders verbatim — never as R1, R2, R3.
-
-These anti-patterns are documented in skill prose (not just in the spec) so v2 enhancements have to consciously violate them. If a future enhancement seems to require any of the above, stop and reconsider the design — chances are the value is achievable without crossing these lines.
-
----
-## Manual smoke
-
-The skill itself is markdown — no unit-test surface. Phase 0 validation is exercised via the smoke test and by manual invocation in a real session. The expected-behavior list (gh preflight, base-ref, spec-detection, tasks-done, existing-PR state filtering, Ralph, and every `artifacts.html.enabled` combination) lives in [references/manual-smoke.md](references/manual-smoke.md) — a maintainer checklist, never read on a render path.
+[Manual smoke](references/manual-smoke.md) is a maintainer checklist, never loaded at runtime.

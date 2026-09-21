@@ -1,0 +1,349 @@
+# make-pr measurement record
+
+Measurement record for fn-249 R8 and fn-252 R11. Five points on one fixed pull
+request, same model, same method:
+
+| Point | make-pr under test | Status |
+|---|---|---|
+| p0-baseline | main at `7ce9dcdd` (5.6.1), before either spec | recorded 2026-09-20 |
+| p1-after-input | after fn-249 (sparse aid input), branch head `3fc36c96` | recorded 2026-09-20 |
+| p2-after-briefing | after fn-252 (briefing body), branch head `2968cbbe` | recorded 2026-09-21 |
+| p3-after-readable | after #458 (full-render body, several specs), integration branch `e9092520` | recorded 2026-09-21 |
+| p4-after-polish | after #460 (linked rows, rendered group summaries, artifact skeleton in the skill), integration branch `928123a8` | recorded 2026-09-21 |
+
+## Method
+
+- **Fixture:** pull request #449 (fn-248, capture template gate), merged. 23 changed
+  files, +331 / -25, one spec, one task, seven requirement ids. Head
+  `81990b699b4f352fdb31af5a7da98095311973a2`, base
+  `07905c2c36b6f96eea815e120e117fff6d2bc8dc`. A scratch worktree is checked out at
+  the head on a local branch named after the spec, so make-pr sees the state it
+  saw when the pull request was opened: spec open, task done.
+- **Invocation:** one headless run of `/flow-next:make-pr <spec> --dry-run --base <base sha>`
+  per sample. `--dry-run` executes the whole authoring path (gather, compose the
+  aid artifact, validate, render the body) and stops before push and create, so
+  the network cost of `gh pr create` is excluded and the run is repeatable.
+- **Model held constant:** `claude-fable-5-1` for every run at every point.
+- **Plugin under test:** loaded from the repository path with `--plugin-dir`; user
+  settings are excluded (`--setting-sources project,local`), so the installed
+  plugin copy never serves the skill. The session's init event is checked for the
+  plugin path.
+- **Cold start each run:** the fixture is hard-reset to the head, `.flow/artifacts`
+  and `.flow/tmp` are cleaned, and any scratch directory a previous run left
+  under the user cache is parked. No run can reuse a prior run's artifact. This
+  means the reuse-at-unchanged-head rule of fn-249 R7 is deliberately not what is
+  measured; every sample pays for one full authoring pass.
+- **Runs are sequential**, nothing else heavy running on the machine.
+- **Metrics:** `output_tokens` is the session total from the final result event;
+  `tool_calls` counts `tool_use` blocks in the stream; `wall_clock_s` is measured
+  around the process. Three runs per point, medians reported.
+- **Harness:** [`measure.sh`](measure.sh). Raw per-run lines: `<point>/runs.jsonl`.
+  Stream logs are not committed.
+
+## p0-baseline (2026-09-20)
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 31,698 | 22 | 325.3 |
+| 2 | 21,389 | 22 | 251.1 |
+| 3 | 21,627 | 18 | 249.6 |
+| **Median** | **21,627** | **22** | **251.1** |
+
+Notes, negative findings included:
+
+- Run 1 repeated the whole rendered body (28 KB) in its final message; runs 2 and 3
+  printed it once and summarized. That accounts for about 10,000 of run 1's output
+  tokens. The spread is part of today's behavior and is kept.
+- In all three runs the agent composed the aid artifact through shell heredocs or a
+  throwaway script, never the Write tool, so authored bytes are not visible as file
+  writes in the stream. Run 3's artifact was 25 KB of JSON and its body 27,457 bytes.
+- Run 2 reported one self-correction after printing the body (a wrong count fixed
+  and re-rendered).
+- A dry run persists no aid artifact in the repository.
+
+## p1-after-input (2026-09-20)
+
+Same fixture, model, harness and cold start. Plugin under test: the fn-249
+branch at `3fc36c96`, after its review fixes (all four aid entry points expand
+sparse input, so the dry run renders the walkthrough; checked in every stream).
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 25,653 | 18 | 273.3 |
+| 2 | 18,031 | 22 | 212.3 |
+| 3 | 29,223 | 20 | 309.8 |
+| **Median** | **25,653** | **20** | **273.3** |
+
+| Median | p0 | p1 | Change |
+|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | +18.6% |
+| Tool calls | 22 | 20 | -2 |
+| Wall clock (s) | 251.1 | 273.3 | +8.8% |
+
+**Result: no measurable improvement; the medians moved the wrong way, inside the
+run-to-run spread.** This is a null result and is kept as one.
+
+What the streams show:
+
+- The spread is dominated by whether a run repeats the whole rendered body in its
+  final message. One of three runs did at p0 (28 KB final message); two of three
+  did at p1 (25 KB and 28 KB). Each repeat costs roughly 6,000 to 7,000 output
+  tokens. Subtracting an estimate of the final message (characters / 4) gives
+  medians of about 20,600 tokens at p0 and 19,500 at p1: equal within noise. That
+  subtraction is an estimate made after seeing the data and is not a finding.
+- The characters the agent spent authoring the aid artifact did not shrink:
+  12,349 / 13,793 / 13,919 at p0 and 12,560 / 13,420 / 12,333 at p1. At p0 the
+  agents were already avoiding the transcription this spec removes: every run
+  composed the artifact with a throwaway script that read the mechanical fields
+  out of the export, so they were never typed. On this 23-file fixture the
+  judgment text (thesis, groups, per-file summaries) is nearly all of what is
+  authored, which matches the recomputed strict figure below (3.2%).
+- p1 runs split the authoring across more, smaller tool calls (5 to 7 against 2
+  to 3) with the same total.
+
+What this does and does not license: sparse input removes a failure class (a
+first write rejected over a value an agent cannot know, corrected one error per
+attempt) and that is covered by tests, not by this timing. It does not make an
+ordinary make-pr run on a mid-sized pull request cheaper. The cost sits in the
+instructions read and the body rendered, which the sibling briefing spec changes;
+p2 is where a difference should show if there is one.
+
+**Correction (2026-09-21).** The bullet above that says the authored characters
+"did not shrink" is wrong. That metric summed every tool call mentioning aid
+keywords, re-validation calls included. The composing call alone was 11,311 /
+11,292 / 11,887 characters with 25 rows at p0 and 8,400 / 6,033 / 8,995 with 11
+to 18 rows at p1, about 30% less, and no p1 call mentions `changeType`,
+`additions`, `deletions` or `diffUrl`: the p1 runs did author sparse rows. Total
+output tokens and wall clock still did not improve, so the headline null result
+stands; what changes is the explanation. Sparse input shrank the composing call,
+and the saving was lost in the rest of the run.
+
+Isolation note: runs chose scratch directories under the harness root that were
+shared across runs (`pr449-makepr` was used by p0 run 2 and p1 runs 2 and 3).
+Checked in the streams: no run read or listed another run's files. The harness
+now parks such leftovers before each run (`measure.sh` in this directory is the
+fixed copy).
+
+## p2-after-briefing (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the fn-252
+branch at `2968cbbe`, after its four review rounds.
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 11,069 | 15 | 133.3 |
+| 2 | 10,717 | 15 | 129.3 |
+| 3 | 10,918 | 15 | 125.4 |
+| **Median** | **10,918** | **15** | **129.3** |
+
+| Median | p0 | p1 | p2 | p2 vs p0 |
+|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | -49.5% |
+| Tool calls | 22 | 20 | 15 | -7 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | -48.5% |
+
+**Result: about half the output tokens and half the wall clock of the baseline,
+well outside the run-to-run spread.** The p2 runs span 352 tokens and 7.9 s; the
+earlier points spanned about 10,000 tokens and 75 s.
+
+Checked in the streams before trusting the numbers:
+
+- Every init event loads the plugin from the fn-252 worktree.
+- Runs 2 and 3 read the shortened `workflow.md` and `pr-cognitive-aid.md` with
+  the file tool; run 1 made no file-tool read. No run opened a deleted reference.
+- Every run called `pr-cognitive-aid render` and its result carries the seven
+  briefing sections. The rendered body in run 3 is 34 lines.
+- No call mentions `changeType`, `additions`, `deletions` or `diffUrl`.
+- All three runs repeat the body in their final message, which at p0 and p1
+  cost 6,000 to 7,000 tokens per repeat. The body is now short enough that the
+  repeat no longer moves the total (final messages of 3,022 to 4,648 characters).
+
+Reading: the gain comes from fn-252 (596 instruction lines loaded instead of
+about 2,900, and a 40-line body instead of a long one). fn-249 alone showed no
+gain at p1, and this record does not separate its share of p2.
+
+Isolation at p2: the runs picked scratch paths under `/tmp`, which the harness
+does not park. Runs 1 and 2 both used `/tmp/fn248-export.json`; run 2 wrote it
+with its own export before reading it. No run read another run's artifact input.
+
+## p3-after-readable (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the integration
+branch at `e9092520`, after #458 removed the 40-line body bound (the body now
+renders all authored content) and added the several-spec path.
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 10,206 | 16 | 117.0 |
+| 2 | 11,908 | 19 | 141.4 |
+| 3 | 11,787 | 19 | 137.5 |
+| **Median** | **11,787** | **19** | **137.5** |
+
+| Median | p0 | p1 | p2 | p3 | p3 vs p0 |
+|---|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | 11,787 | -45.5% |
+| Tool calls | 22 | 20 | 15 | 19 | -3 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | 137.5 | -45.2% |
+
+**Result: the gain holds.** A longer, fully rendered body costs about 870 tokens
+and 8 s over p2 at the median, against a saving of about 9,800 tokens and 114 s
+over the baseline. flowctl renders the body, so its length costs the agent only
+what it repeats in its final message (6,376 to 7,147 characters here against
+3,022 to 4,648 at p2).
+
+What the streams show: every run loaded the plugin from the integration
+worktree, read the two short skill files, called `pr-cognitive-aid render`, and
+returned the seven briefing sections. The extra tool calls against p2 are
+repeated `validate` calls: run 1 needed two, runs 2 and 3 four each, and runs 2
+and 3 rendered twice. Run 2 opened `flowctl.py` to learn the artifact's shape.
+That matches what the first real several-spec dry run reported: the authoring
+guidance leaves the object shape to be discovered through validation errors.
+The cost now sits in authoring round trips, not in instruction text or body
+length.
+
+## p4-after-polish (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the integration
+branch at `928123a8`, after #460 (file rows as a linked list, group summaries
+rendered, and a validated artifact skeleton plus the authoring limits in the
+skill).
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 7,946 | 13 | 100.1 |
+| 2 | 9,075 | 14 | 218.6 |
+| 3 | 8,174 | 11 | 96.9 |
+| **Median** | **8,174** | **13** | **100.1** |
+
+| Median | p0 | p1 | p2 | p3 | p4 | p4 vs p0 |
+|---|---|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | 11,787 | 8,174 | -62.2% |
+| Tool calls | 22 | 20 | 15 | 19 | 13 | -9 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | 137.5 | 100.1 | -60.1% |
+
+**Result: the lowest point so far on all three measures.** Tool calls fell from
+19 to 13 against p3, which is what the skeleton was for: authors no longer
+discover the artifact's shape through validation errors.
+
+Read with care:
+
+- Run 2's wall clock (218.6 s) is an outlier outside the model: 105 s of it is
+  API time, in line with the other runs, and its tokens and calls are ordinary.
+  The median is unaffected; a mean would not be.
+- Part of the token drop is not the skill: no p4 run repeated the rendered body
+  in its final message (2,026 to 2,781 characters against 6,376 to 7,147 at p3).
+  Whether a run echoes the body has moved totals by thousands of tokens at every
+  point in this record, so the comparison of tool calls is the firmer signal.
+- Every run loaded the plugin from the integration worktree, read the two short
+  skill files, and got back a rendered body with the size line and ten or eleven
+  linked rows. Runs still made two or three `validate` calls each (a dry run
+  validates; a real run calls `write` once); one error seen was a head SHA taken
+  from somewhere other than the export.
+
+## Limits
+
+- One fixture. A larger or chained pull request may behave differently.
+- n = 3 per point: a difference smaller than the run-to-run spread above (about
+  10,000 tokens, 75 s) is not evidence of a change.
+- Headless print mode; an interactive session carries more context.
+
+## Recomputed authored bytes (2026-09-20)
+
+Strict, proven omissions save **51,595 bytes (3.2190%)** across the 39 tracked
+artifacts in this clone. This is much smaller than the Goal's 57% mechanical
+field estimate. That estimate described 111 artifacts; this measurement uses
+only the 39 returned by the current index, with 2,236 file rows.
+
+| Measure | Bytes |
+|---|---:|
+| Complete artifacts as stored | 1,602,803 |
+| Sparse inputs plus unchanged artifacts without an identity solution | 1,551,208 |
+| Proven reduction | 51,595 |
+
+| Omitted field | Occurrences | Bytes saved |
+|---|---:|---:|
+| `changeType` | 155 | 5,687 |
+| `additions` | 155 | 4,478 |
+| `deletions` | 155 | 4,361 |
+| `diffUrl` | 0 | 0 |
+| `sourceRefs` | 0 | 0 |
+| `rIds` | 191 | 7,644 |
+| `taskIds` | 257 | 19,608 |
+| `attentionClass` | 227 | 9,817 |
+| Whole rows added by flowctl | 0 | 0 |
+
+The pre-review expansion saved 40,957 bytes (2.5553%). It always added a
+path-hash fragment, even without bound metadata, preventing identity for 29
+artifacts (1,172 missing links). That result remains a negative baseline. After
+the review fix, links use `/<owner>/<repo>/blob/<headSha>/<path>` and require
+both local origin identity and bound metadata. This clone resolves
+`gmickel/flow-next`; unavailable historical ranges now leave omitted links
+absent, allowing more independent reference and attention omissions. The
+conditional figure below is unchanged. Neither result approaches the original
+57% estimate.
+
+**Conditional figure under assumptions A and B**
+
+| Measure | Bytes |
+|---|---:|
+| Complete artifacts as stored | 1,602,803 |
+| Sparse inputs under assumptions A and B | 1,335,726 |
+| Conditional reduction (16.6631%) | 267,077 |
+
+Assumption A uses each row's stored `changeType`, `additions` and `deletions`
+when Git cannot read its recorded range; verification against the live diff
+when the artifact was written is assumed, not re-proven here.
+Assumption B judges expansion identity modulo `diffUrl` values added to rows
+whose stored form had none; every other leaf still matches byte for byte,
+and a stored `diffUrl` differing from the derived head-bound blob link stays in the sparse input.
+Neither figure counts rows an agent would now simply not write, since every
+stored row has a summary, so the input-side saving from unlisted paths is not
+measurable from stored artifacts.
+
+Strict-mode method and limits:
+
+- [`authored_bytes.py`](authored_bytes.py) selects JSON files beneath
+  `*/pr-cognitive-aid/` from `git ls-files .flow/artifacts`, reads UTF-8, and
+  compares complete and sparse inputs using flowctl's canonical serialization
+  (sorted keys, two-space indentation, UTF-8, final newline). In this corpus,
+  canonical complete bytes equal the actual stored bytes. Formatting changes
+  earn no savings; every retained value and array order must remain identical.
+- The script calls the branch's own expansion function for each proposed
+  omission and for the final sparse input. It retains fields unless expansion
+  reproduces the complete canonical bytes without errors. It tries whole empty
+  rows first, then the fields in table order; byte attribution includes their
+  JSON syntax and indentation and has no double counting. All 2,236 stored rows
+  have non-empty summaries, so none can disappear. On these artifacts the
+  remaining field omissions are independent, yielding the smallest input by
+  omission of the supported fields wherever identity is possible. It does not
+  rewrite groups, sources, judgments, or stored artifacts.
+- Historical metadata comes from flowctl's own copy-aware diff reader and parser,
+  substituting the recorded head for `HEAD` in its Git reads. There is no
+  checkout, fetch, or invented metadata. Lazy fetching is disabled. Git cannot
+  read 22 recorded ranges in this clone. For those artifacts the script passes
+  no metadata, retains additions/deletions/change type and whole rows, and still
+  proves any independent reference or attention omission. The result is a
+  conservative locally provable figure, not a prediction for a complete clone.
+- **14 artifacts have no identical expansion even as complete input.** They
+  omit `diffUrl` on 843 rows, and this branch's expansion adds it. No supported
+  omission can suppress that addition. The script explicitly reports these as
+  having no identity solution and carries their original size into the total
+  with zero savings; it does not claim their unchanged inputs round-trip.
+  This historical compatibility limit remains part of the result.
+- The other 25 artifacts shrink. Existing diff links differ from the derived
+  head-bound blob links and must remain. No source-reference omission reproduces the stored
+  arrays. This measures expansion identity, not full historical validation or
+  current-head eligibility. It does not measure tokens, calls, or time.
+
+Rerun from the repository root:
+
+```bash
+python3 .flow/artifacts/fn-249-make-pr-measurement/authored_bytes.py
+```
+
+The single JSON output reports both `strict` and `assumptionsAB` modes, each
+with aggregate and per-artifact counts, unavailable-diff errors, added fields/rows
+preventing identity, and the per-field breakdown.
+The indexed corpus and locally available Git objects determine the result.
+The baseline runs and `measure.sh` were neither changed nor executed for this
+figure. The after-input timing measurement is recorded above under p1-after-input.

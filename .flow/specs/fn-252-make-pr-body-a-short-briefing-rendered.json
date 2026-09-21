@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-252-make-pr-body-a-short-briefing-rendered",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-21T05:23:11.493523Z",
   "created_at": "2026-09-20T13:36:02.221808Z",
   "default_impl": null,
   "default_review": null,
@@ -11,14 +11,130 @@
     "fn-250-land-redesign-one-named-pr-spec-closed"
   ],
   "id": "fn-252-make-pr-body-a-short-briefing-rendered",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-252-make-pr-body-a-short-briefing-rendered.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "9d6b85abca0629ad14dd8a02568c712fddde0311981c2c5f5bb12217590b9c12",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4411bcb5a1bea655c0ea9a11de284b3eacf81051",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 4358,
+      "output_sha256": "e572147e900184d8f0bafa47fdb9fa8416b7cd092d5cbca9adfe418db0dda447",
+      "reservation_id": "b54de9285ed5417b94da52fbb565ef66",
+      "round_consumed": true,
+      "scope": "impl:fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "superseded_by": null,
+      "task": "fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "timestamp": "2026-09-21T04:28:44.633565Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "5731abb86d50e9f22961c9e75456a9841e56dc2dd401a0b52c06321bffc114de",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "13bc759317f87a1aaedbc0c8dbd9e77d7090b917",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1928,
+      "output_sha256": "083683ec7aa39e320e680bae4b377114cc8331fa8f6e152fc6f8ea48bc20d969",
+      "reservation_id": "f6287ba5b6ec4b609bfdc805533fc3e2",
+      "round_consumed": true,
+      "scope": "impl:fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "superseded_by": null,
+      "task": "fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "timestamp": "2026-09-21T04:45:34.272569Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "0ad10490cd22a11fb320edd7f3e6551f48217803c18d4e82e1e7a0c209061290",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4070c45dbdd0793d29650a3b83f49096a5de5a3f",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1583,
+      "output_sha256": "338d81d3655fbb9f973fd2f51e9d4722fda73a26dbfdd823393d513d4fb821f2",
+      "reservation_id": "131d2aaa5a6341de8d1b53a3d9cfdb3f",
+      "round_consumed": true,
+      "scope": "impl:fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "superseded_by": null,
+      "task": "fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "timestamp": "2026-09-21T05:01:21.453617Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "7c99c80d84917b6aaa4fc5be3b13fe95d48c3cd5c045d414a34542c0448e8d7c",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d0f06f2f1055573c30f36df98d4343bb88b05675",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1288,
+      "output_sha256": "a2240c5489cf9e35c58dc928bc22e16ffe0aaf16c7d471ed838725a783ea3428",
+      "reservation_id": "f446364ccd3d4afca6878dfacfe775b4",
+      "round_consumed": true,
+      "scope": "impl:fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "superseded_by": null,
+      "task": "fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "timestamp": "2026-09-21T05:16:43.295931Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-252-make-pr-body-a-short-briefing-rendered.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-252-make-pr-body-a-short-briefing-rendered.1": 0
+  },
   "spec_path": ".flow/specs/fn-252-make-pr-body-a-short-briefing-rendered.md",
-  "status": "open",
+  "status": "done",
   "title": "make-pr body: a short briefing rendered from the aid artifact",
   "tracker": {
     "baseHashFlow": null,
@@ -31,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T13:46:06.380172Z"
+  "updated_at": "2026-09-21T05:31:32.524110Z"
 }

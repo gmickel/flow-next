@@ -380,7 +380,7 @@ Direct execution through `/flow-next:work <id> --no-plan` is the default for a r
 
 Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Attended and unattended flow read the same routing references; `/flow-next:pilot` is its one-release alias for `flow --auto --tick`.
 
-Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [CI-fix budget and patience window](../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to refine, an ambiguous diff gets the full review.
+Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [single CI fix and patience window](../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to refine, an ambiguous diff gets the full review.
 
 **Overriding a decider** is one surface each: `--no-plan` or `flowctl spec set-no-plan` for the fork, a task id instead of a spec id for the wave route, `--no-triage` for the gate, `--review=<backend>` or `flowctl task set-backend` for the reviewer, and a sentence for anything else ("use 1 reviewer instead of 3").
 
@@ -437,7 +437,7 @@ Notes that keep this honest:
 - **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
 - **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
-**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; `flow --auto` and land dispatch plain `/flow-next:work` and inherit it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../skills/flow-next-work/references/rolling-scheduler.md).
+**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; `flow --auto` dispatches plain `/flow-next:work` and inherits it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../skills/flow-next-work/references/rolling-scheduler.md).
 
 ### The wrapper pattern: self-healing bridges for unattended loops
 
@@ -469,57 +469,56 @@ The grammar and the tier meanings are [above](#the-routing-block); the block is 
 
 ## Chaining the loops
 
-Flow can carry one selected spec through landing, using land's existing convergence, merge gates, and post-merge tail:
+Flow can carry one selected spec through landing, using land's existing convergence, merge gates:
 
 ```text
 /flow-next:flow fn-N --until=merge
 /flow-next:flow --auto fn-N --until=merge
 ```
 
-Destination and interaction mode are independent. Default unattended flow stops before merge; a plain attended rerun with an existing PR offers landing and asks once unless current scoped authority already exists. Declining or not answering causes no landing mutation. Consent remains active across retries and waits for this spec and PR; a fresh session needs the flag again or current explicit authority. Release and tracker actions keep their existing authorization and configuration. See the [tail contract](../skills/flow-next-flow/references/tail.md).
+Destination and interaction mode are independent. Default unattended flow stops before merge; a plain attended rerun with an existing PR offers landing and asks once unless current scoped authority already exists. Declining or not answering causes no landing mutation. Consent remains active across retries and waits for this spec and PR; a fresh session needs the flag again or current explicit authority. The configured tracker touchpoint follows merge; release preparation is separate. See the [landing contract](../skills/flow-next-flow/references/tail.md).
 
-Flow invoking one land tick as its landing stage is the confined exception to driver nesting. Recursive flow, pilot, and Ralph dispatch remain prohibited; land never invokes a second driver. The route fixes the selected spec and PR, respects land's checkout and ownership guards, and stops on an ambiguous target or lost authority. An already merged PR resumes only its remaining authorized tail.
+Flow invoking one land tick as its landing stage is the confined exception to driver nesting. Recursive flow, pilot, and Ralph dispatch remain prohibited; land never invokes a second driver. The route fixes the selected spec and PR, passes the PR and current authorization as ordinary arguments, and stops on an ambiguous or missing target or lost authority. A confirmed merge ends the run; a merged-PR land replay repeats only the tracker touchpoint.
 
 You can also compose the two standalone invocations under your own scoped policy. Both keep their existing verdict names. This default pre-merge recipe routes to land explicitly:
 
 ```text
 Run /flow-next:flow --auto --review=codex.
-  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land.
-  Repeat until flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK, or on any NEEDS_HUMAN.
+  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land <reported-PR> with current authorization for that PR.
+  Repeat until flow prints NO_WORK; stop on BLOCKED or NEEDS_HUMAN.
 ```
 
 On a host without stable long sessions, run one hop per loop interval with `--tick` under the host's loop primitive:
 
 ```text
 /loop 30m - one tick: run /flow-next:flow --auto --tick --review=codex.
-  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
-  Stop when flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK, or on any NEEDS_HUMAN.
+  If it prints PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land <reported-PR> with current authorization in the same tick.
+  Stop when flow prints NO_WORK, or on BLOCKED or NEEDS_HUMAN.
 ```
 
 `DEFERRED_TO_LAND` exists exactly for this hand-off - every remaining spec has an open PR that land owns. Compose model routing into the same driver and you have a multi-model spec-to-merged-PR pipeline in one prompt:
 
 ```text
 /loop 30m - one tick: run /flow-next:flow --auto --tick --review=codex --depth=deep.
-  If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
+  If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land <reported-PR> with current authorization in the same tick.
   Send implementation tasks to the implementer tier,
   keep UI tasks on the session model, reviews come from codex.
-  Stop when flow prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
-  or on any NEEDS_HUMAN.
+  Stop when flow prints NO_WORK, or on BLOCKED or NEEDS_HUMAN.
 ```
 
 `/flow-next:pilot` in an existing driver prompt keeps working for one release as an alias for `flow --auto --tick`; it prints one deprecation line to stderr and the verdict grammar is unchanged, so no driver needs rewriting on the day of the upgrade.
 
 ### Within one invocation vs across driver invocations
 
-A long-horizon `flow --auto` run advances the item hop after hop inside one invocation (route, run the routed stage, re-evaluate). By default it stops when a PR exists, the item is deferred to land, a question is parked, or a human is needed. With `--until=merge`, it can continue through land ticks and CI or review waits at land's cadence; external waits spend no pilot strikes or repair attempts. A tick performs at most one landing tick. Existing blockers and `NEEDS_HUMAN` still stop the run. Every hop ends with receipts, an evidence echo, and a ledger write, so a run cut mid-way resumes from disk on the next invocation; nothing is resumed from transcript. `--tick` runs exactly one hop and stops, and the loop interval becomes the seam between stages; the verdict line names every dispatched stage joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict, so existing verdict parsers keep working in both shapes. For landing, read the reason and evidence alongside the verdict name. They retain the original `LAND_VERDICT` and distinguish progress, waiting, blockage, a confirmed merge, and any incomplete tail. `ADVANCED` alone is not proof that the merge destination is complete.
+A long-horizon `flow --auto` run advances the item hop after hop inside one invocation (route, run the routed stage, re-evaluate). By default it stops when a PR exists, the item is deferred to land, a question is parked, or a human is needed. With `--until=merge`, it can continue through land ticks and CI or review waits at the driver's cadence; external waits spend no pilot strikes or repair attempts. A tick performs at most one landing tick. Existing blockers and `NEEDS_HUMAN` still stop the run. Every hop ends with receipts, an evidence echo, and a ledger write, so a run cut mid-way resumes from disk on the next invocation; nothing is resumed from transcript. `--tick` runs exactly one hop and stops, and the loop interval becomes the seam between stages; the verdict line names every dispatched stage joined by `+` (`stage=work+qa+make-pr`) and carries the last hop's verdict, so existing verdict parsers keep working in both shapes. For landing, read the reason and evidence alongside the verdict name. They retain the original `LAND_VERDICT` and distinguish progress, waiting, blockage, a confirmed merge, and any tracker failure. `ADVANCED` alone is not proof that the merge destination is complete.
 
 `pipeline.chainStages` is deprecated because its one row (`qa → make-pr` in one tick) is what every hop boundary now does. For this release the key is honoured in tick mode and ignored with one stderr notice in long-horizon mode; it is removed together with the pilot alias in the next release. Config-table entry: [`flowctl.md`](flowctl.md#config).
 
-On the land side, `land.patienceMinutesAfterReview` (`null` by default) lets the repo choose a review-anchored objection window instead of the push-anchored one: under the default `silence` signal, once the latest automated review is head-current with zero unresolved threads, the patience window is measured from that review event with this key's limit instead of from the last push with `land.patienceMinutes`. It replaces the push window rather than taking the shorter of the two, so relative to today's wait an early review shortens it and a late review lengthens it. It stays opt-in because the push-anchored window is the human-objection grace period - time for a person to read what the bot said and object - and each repo decides how much of that grace it wants once the reviewer has spoken. It refines only the silence gate: the `approve`/`<login>` signals, every other window consumer, and the merge license are unchanged, and a fix push falls back to the push anchor until the bot re-reviews.
+Land uses `land.patienceMinutes` after the last push only when flow authorizes the merge without a human's in-session merge authorization. The repository can tighten its review gate through instructions, branch protection, or `land.mergeVerdictCommand`; see the [landing upgrade](flowctl.md#landing-upgrade).
 
-**Dependent-spec chains.** A spec that depends on another spec no longer waits for the parent's PR to merge. A **chain** is flow-next's term for a dependent PR whose base is the parent spec's branch instead of the default branch; it exists on any code host because it is only a branch and a base ref. A **stack** is GitHub's server-side object over a chain (the stack map in the merge box, sequential merge, auto-retarget of the layers above); it is an enhancement, present only when the host is GitHub and the link call succeeded. A **layer** is one PR in either; the **frontier** is the bottom open layer, the only one that can merge next. When a parent spec's tasks are all done and its branch is on origin, the dependent spec becomes selectable (`flowctl spec chain`, the one predicate every consumer calls), `/flow-next:work` branches it from the parent's remote tip, and `/flow-next:make-pr` opens its PR against the parent's branch and, on GitHub, links it into the parent's stack. Chains are linear only: a spec with two open parents parks, and a second child of an already-chained parent parks until the first child's PR merges. Nothing is configured; the dependency graph is the only input, and a spec with no open parent behaves exactly as before. The model is human review: each layer carries its own clean diff, and a person merges from the bottom, from GitHub's stack UI or by letting land drive the chain. The one cost the serial model never paid: a parent reworked heavily after its child branched leaves the child needing a rebase (land's retarget handles the merge case), or discarded if the parent dies. Chained layers with nothing open are created ready rather than draft, because a draft cannot be merged from the stack UI.
+**Dependent-spec chains.** A spec that depends on another spec no longer waits for the parent's PR to merge. A **chain** is flow-next's term for a dependent PR whose base is the parent spec's branch instead of the default branch; it exists on any code host because it is only a branch and a base ref. A **stack** is GitHub's server-side object over a chain (the stack map in the merge box, sequential merge, auto-retarget of the layers above); it is an enhancement, present only when the host is GitHub and the link call succeeded. A **layer** is one PR in either; the **frontier** is the bottom open layer, the only one that can merge next. When a parent spec's tasks are all done and its branch is on origin, the dependent spec becomes selectable (`flowctl spec chain`, the one predicate every consumer calls), `/flow-next:work` branches it from the parent's remote tip, and `/flow-next:make-pr` opens its PR against the parent's branch and, on GitHub, links it into the parent's stack. Chains are linear only: a spec with two open parents parks, and a second child of an already-chained parent parks until the first child's PR merges. Nothing is configured; the dependency graph is the only input, and a spec with no open parent behaves exactly as before. The model is human review: each layer carries its own clean diff, and a person merges from the bottom, from GitHub's stack UI or by letting land drive the chain. The one cost the serial model never paid: a parent reworked heavily after its child branched leaves the child needing a rebase (see the [manual single-layer recovery](troubleshooting.md)), or discarded if the parent dies. Chained layers with nothing open are created ready rather than draft, because a draft cannot be merged from the stack UI.
 
-Land drains a chain of dependent PRs (a PR whose base is its parent's branch, with or without a GitHub stack over it) one frontier at a time. Each tick classifies every PR from its REST `stack` object and base ref, merges only the lowest open layer (`merge-async` with a `sha` pin on a stack, `gh pr merge` on a plain chain), keeps a review verdict across a server-side or land-side rebase when the stable patch-id of base-to-head is unchanged, retargets the layers above a merged parent itself on the plain path with one leased force-push per layer, and deletes a merged branch only once no open PR targets it. Chain state is read from the PR and git every tick; the ledger holds only the evidence binding, a pending `merge-async` uuid, the branch-delete map, and an in-flight cascade record. A standalone PR keeps byte-identical behaviour. Reference: [`../skills/flow-next-land/references/chains-and-stacks.md`](../skills/flow-next-land/references/chains-and-stacks.md).
+Land accepts one named PR and links its open children into a native stack before merging where supported. Only the lowest open layer merges, with a full head pin and `merge-async` on stacks. It deletes the merged branch only after no open PR targets it. Land never rebases or retargets children: where stacks are unavailable, a conflicted child needs the documented manual rebase. It retains no cascade record, patch-id evidence, pending merge UUID, or deletion list between runs. Reference: [merge one layer](../skills/flow-next-land/workflow.md#merge-one-layer).
 
 Loop internals: [`../skills/flow-next-flow/auto.md`](../skills/flow-next-flow/auto.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the deprecated hardened harness.
 

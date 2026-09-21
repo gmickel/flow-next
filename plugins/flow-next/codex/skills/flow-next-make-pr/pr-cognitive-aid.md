@@ -1,143 +1,75 @@
 # PR cognitive-aid artifact
 
-Run this phase after `export-cognitive-aid` and before the optional HTML lens
-and final PR-body composition. The existing host agent owns every judgment:
-thesis, logical groups, summaries, order, and source attribution. This phase
-adds no model call. `flowctl` only validates, persists, selects, and renders.
+After close and export, the host authors one v1 object from `EXPORT_PAYLOAD` and evidence; no extra model call.
+Use `diff_summary.merge_base_sha` / `diff_summary.head_sha` as `MERGE_BASE` / `HEAD_SHA`.
+Per-task evidence is under `specs[].tasks[]` (or the host's `tasks`), not `tasks_summary`.
 
-## 1. Resolve or compose
-
-Use the export-time code-under-review identity:
+## Resolve, compose, validate
 
 ```bash
-CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
-CURRENT_AID_STATUS=$(printf '%s' "$CURRENT_AID" | jq -r '.status')
-CURRENT_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.artifact.artifactId // empty')
-LATEST_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.latestArtifactId // empty')
+CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
 ```
+Reuse `current` exactly; otherwise author a private 0600 `AID_INPUT` tempfile outside the repository.
+Replace skeleton identities, paths and evidence with export values; declare every R-ID, even uncovered:
+```json
+{"schemaVersion":1,"artifactId":"aid-001","specId":"fn-136-cognitive-aid","specIds":["fn-136-cognitive-aid"],"baseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","headSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generatedAt":"2026-09-21T12:00:00Z",
+ "sources":[{"id":"spec","kind":"spec","ref":"fn-136-cognitive-aid"},{"id":"task","kind":"task","ref":"fn-136-cognitive-aid.1"},{"id":"rid","kind":"rid","ref":"R6"},{"id":"row-rid","kind":"rid","ref":"R7"},{"id":"review","kind":"review_receipt","ref":".flow/receipts/review.json"},{"id":"qa","kind":"qa_receipt","ref":".flow/receipts/qa.json"},{"id":"diff","kind":"diff_metadata","ref":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},{"id":"commit","kind":"commit","ref":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
+ "changeWalkthrough":{"thesis":"Keep review grounded in the changed files.","userImpact":"Reviewers get a reading order.","blastRadius":"Read the validator first.","tradeoffs":"Keep provenance in the artifact.","openItems":"Live verification remains unverified.",
+ "groups":[{"ordinal":1,"kind":"problem","title":"Review context","summary":"Check the intended review boundary.","sourceRefs":["spec"],"rIds":[],"taskIds":[],"files":[]},{"ordinal":2,"kind":"step","title":"Validate and render","summary":"Check validation before reviewing output.","sourceRefs":["spec","task","rid","row-rid","diff"],"rIds":["R6"],"taskIds":["fn-136-cognitive-aid.1"],"files":[{"path":"src/change_0.py","summary":"Validates the briefing.","attentionClass":"canonical","rIds":["R7"]}]}],
+ "proof":[{"label":"Review","value":"Passed at the bound head","sourceRefs":["review"],"outcome":"pass"},{"label":"Render time","value":"12 ms","sourceRefs":["task"]}]}}
+```
+Use a unique portable `artifactId`; optional `supersedesArtifactId` names `latestArtifactId`.
+Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` before citing full 40-hex commit refs.
 
-When status is `current`, reuse that exact generation; do not compose a
-parallel story. Render it in step 3.
+- When export has `specs`, set `specIds` to their IDs in export order; keep `specId` as host. Declare every
+  spec's requirements with qualified refs and `rIds` (`fn-250:R4`). At least one group per spec in review order
+  (two allowed above ten must-read files), short ID in each title, using its task/evidence summary; no-spec commits get a group.
+  Past the seven-step cap, merge the smallest specs into one group whose title names each short ID.
+- `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
+  `userImpact` describes user/operator changes; `blastRadius` names scope, reading order and what is unproven;
+  `tradeoffs` records rejected alternatives; `openItems` records unfinished work.
+- Unevidenced work belongs in `openItems`; required PR findings belong there or in Tradeoffs.
+- `proof[]` has at most 16 cells with `label` and `value` (each at most 160 characters), `sourceRefs`, and optional `outcome`.
+  Use `pass` for a known green gate, `fail` for failure, `unverified` for inconclusive or never-run steps with the gap in `value`.
+  A passed gate without a stored receipt cites the merge commit or pull request that carried it (a `review_receipt` ref can be its URL).
+  Omit `outcome` only for a recorded fact that is neither passed nor failed, such as a measurement; it renders as a plain item.
+- QA receipts use `qa_outcome`, not the projected `verdict`: SHIP maps to pass,
+  NEEDS_WORK to fail, BLOCKED/NA to unverified with their reason. Open findings go in `openItems`, advisory only.
+  Verify head freshness against code, allowing only leading QA-receipt, lens and spec-close bookkeeping commits;
+  stale/malformed receipts cannot justify a pass.
+- At most 11 ordered `groups[]`: optional `problem`, optional `principle`, 1–7 `step`,
+  optional `kept`, optional `verify`; author `ordinal`, `title`, `summary`, `sourceRefs`, `rIds`, `taskIds`.
+  Group order is review order; `files` is required even when `[]`. Group `summary` renders "what to check here" in one or two sentences.
+  Each file belongs to exactly one group: use the first whose review needs it, cite other specs' requirement IDs on its row and name those specs in its summary.
+- Describe files a reviewer must read from `diff_summary.files[]`; let the rest be counted. Use
+  `path`, `summary`, and `attentionClass` unless a state/lockfile/mirror pattern supplies it. Explicit classes win.
+  Canonical means must read; mechanical/generated mean safe to skim.
+  Unlisted canonical paths appear under Rest of diff; spec/task markdown under `.flow/` is canonical: describe it or class it mechanical.
+  Every id in a record's `rIds`/`taskIds` needs its source id in that record's effective `sourceRefs`.
+  For an id its group does not cite, add the source to the group's `sourceRefs`, or give the row complete `sourceRefs`, including its task and diff sources.
+  A row inherits group references unless it supplies its own; its nonempty `rIds` alone determine displayed tags.
+- Omit mechanical `changeType`, `additions`, `deletions`, `diffUrl`; supplied
+  values must validate. Added empty-summary rows count as “not described”. Never copy raw diff content.
 
-Otherwise, compose exactly one JSON object from the already-loaded
-`EXPORT_PAYLOAD`. Write it to a private temporary file (mode 0600) outside the
-repository. The object follows `pr_cognitive_aid` schema version 1:
-
-- Identity: `schemaVersion`, a portable unique `artifactId`, `specId`,
-  `baseSha=$MERGE_BASE`, `headSha=$HEAD_SHA`, UTC `generatedAt`, and
-  `supersedesArtifactId=$LATEST_AID_ID` when a prior chain tip exists.
-- One bounded `sources[]` table. Allowed kinds: `spec`, `task`, `rid`,
-  `review_receipt`, `qa_receipt`, `diff_metadata`, `commit`.
-- `changeWalkthrough.thesis`, grounded `proof[]`, and ordered `groups[]`.
-  Logical order: optional `problem`, optional `principle`, 1-7 `step`, optional
-  `kept`, optional `verify`. Never invent an optional group.
-- Source refs are bound, not labels: `spec` equals `specId`; `task` belongs to
-  that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
-  `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
-- Each proof/group/file semantic claim carries non-empty `sourceRefs`.
-  Group/file `rIds` and `taskIds` also carry a same-record source reference to
-  the matching `rid` or `task` source. File claims do not inherit group claims.
-- Each file comes only from `diff_summary.files[]`, cites the bound
-  `diff_metadata` source, and keeps its upstream group and array order.
-  `changeType` is Git state (`added|modified|deleted|renamed|copied`);
-  `attentionClass` is review attention
-  (`canonical|generated|mechanical`). Never collapse these dimensions.
-- No raw diff text. `diffUrl` may be HTTPS or repository-relative only.
-
-The validator enforces the full v1 payload, string, path, URL, provenance,
-group, file, and byte bounds. Never pre-truncate to make invalid input pass.
-
-## 2. Validate and persist before body creation
-
-For `--dry-run`, validate without state change:
-
+Sparse input works with validate/write and both `--file` readers; storage stays complete. Fix errors together; never truncate or overwrite.
+Use `validate` only for dry-run; real runs call `write` directly, which validates.
 ```bash
-"$FLOWCTL" pr-cognitive-aid validate --file "$AID_INPUT" --json >/dev/null
+"$FLOWCTL" pr-cognitive-aid validate --file "$AID_INPUT" --json
+"$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json
 ```
+Run only the matching command; reused artifacts need neither.
 
-For a real create/update, validation and immutable atomic publication are one
-operation:
+## Render
 
+Create a private 0600 `BODY_FILE` tempfile. Render once, redirecting stdout directly to it:
 ```bash
-"$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json >/dev/null
+"$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" > "$BODY_FILE"
+# Newly composed dry-run input: use this instead.
+"$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT" > "$BODY_FILE"
 ```
-
-The generation lands at
-`.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`. Never overwrite
-or delete a prior generation. Failure is non-fatal for PR creation: print one
-stderr note, set `PR_AID_CURRENT=false`, and use the existing legacy compact
-body fields. Never partially render the rejected object.
-
-## 3. Deterministic Markdown
-
-For a reused/persisted generation:
-
-```bash
-PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" \
-  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA") || PR_AID_MARKDOWN=""
-```
-
-For `--dry-run`, render the validated temporary file:
-
-```bash
-PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT") \
-  || PR_AID_MARKDOWN=""
-```
-
-Non-empty output is inserted as one contiguous body section before Critical
-changes. It is either:
-
-- compact: thesis, proof, and one flat canonical-file table; or
-- full when canonical additions+deletions are at least 200 or canonical file
-  count is at least 6: complete legend, evidenced logical groups, file tables,
-  and generated/mechanical rows collapsed inside their original group.
-
-The rendered section never replaces or absorbs the separate risk-ranked
-`## Review plan`, and never includes raw diff excerpts.
-
-## 4. One truth, tracker boundary unchanged
-
-Immediately before `gh pr create`, assert `git rev-parse HEAD` still equals the
-artifact `headSha`; on mismatch, treat it as stale and use the labeled fallback.
-
-When `PR_AID_MARKDOWN` is non-empty, the current v1 object is authoritative for
-the thesis, proof metrics, R-ID/task links, verification claims, walkthrough
-order, and file membership. Suppress the legacy Verification section, and
-suppress the legacy R-ID coverage section ONLY when
-`tasks_summary.uncovered_r_ids` is empty (fully evidenced coverage - the state
-the artifact can fully express); their content is then rendered from the
-artifact inside the walkthrough. **When any criterion is unevidenced or
-undeclared, the legacy R-ID coverage section RENDERS alongside the artifact**
-(PR #327 finding): `rid` source refs bind an R-ID to a commit, so the artifact
-expresses evidenced coverage only - it has no claimed-not-evidenced or
-undeclared counterpart, and the §2.3 table is the sole carrier of the
-per-criterion `⏳` / `⚠️` state. Derive the summary block's coverage ratio from
-the artifact links when the table is suppressed, from `tasks_summary`
-otherwise. Existing fields are fallback-only for the claims the artifact does
-carry; never merge stale/legacy values into those claims. The
-declared-coverage abort and the plan-gate qualifier clauses (workflow §2.7,
-§2.1) keep reading `tasks_summary.undeclared_r_ids` / `uncovered_r_ids` on this
-path too; that is not a legacy merge, because no artifact value is being
-overridden.
-Other established sections remain: boundaries, Critical changes, How to review,
-Review plan, decisions, memory, glossary/strategy, open items, QA, and footer.
-
-This phase ends before PR creation. Do not move or alter the post-creation
-`makePr` tracker facade in `create-and-finalize.md`: `$PR_URL` must exist first;
-the body tracker reference, explicit `--pr-url`, body-preserving In Review
-reconcile, native link or deduplicated fallback, optional breadcrumb,
-receipt-backed audit, and single bounded retro-fire all remain intact. Never
-restore the retired tracker-runner dispatch.
-
-## Done when
-
-- Current matching v1 generation reused, or a new valid generation composed
-  from the existing payload and validated before final body creation.
-- Real run persisted one immutable generation; dry-run wrote no repository
-  state.
-- Markdown selected exactly one compact/full path and stayed separate from the
-  Review plan.
-- Rejection selected the labeled legacy fallback without mixing fields.
-- No new model/network invocation; tracker creation/facade ordering unchanged.
+The renderer keeps authored sections and every group's title and summary; at most 10 described rows per group, with extra rows counted.
+Keep essential guidance above row 11; no body budget or preview loop. Never merge export fields into rendered output.
+Invalid, stale or unsupported artifacts render nothing: print a stderr note and set `PR_AID_CURRENT=false`.
+Write a labeled fallback from the export's goal, tasks, verification and open items to `BODY_FILE`, excluding rejected fields.
+On success set `PR_AID_CURRENT=true`.
+Keep the immutable artifact local. Next, [create-and-finalize.md](create-and-finalize.md) creates the PR and runs the tracker facade with `$PR_URL`.
