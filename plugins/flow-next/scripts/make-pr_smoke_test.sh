@@ -768,7 +768,8 @@ body = flowctl.render_pr_cognitive_aid_markdown(artifact)
 assert re.findall(r"^## (.+)$", body, re.M) == [
     "Why", "What changes for a user or operator", "Scope", "Blast radius",
     "Verification", "Tradeoffs", "Open items"]
-assert len(body.splitlines()) <= 40
+for field in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+    assert walkthrough[field] in body
 assert body == flowctl.render_pr_cognitive_aid_markdown(artifact)
 assert "Coverage:" in body
 assert "<details" not in body

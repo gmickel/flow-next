@@ -1,19 +1,12 @@
 # /flow-next:make-pr workflow
 
-Run in order; preserve variables across tool calls. Require `.flow/`, git, jq and Python. A failed preflight,
-close, staging or close commit stops before export, artifact composition and PR creation. Never recover by
-skipping close.
+Run in order; preserve variables. Require `.flow/`, git, jq and Python. Failed preflight, close, staging or close commit stops before export and PR creation; never skip close.
 Use `set -e`, the resolved `FLOWCTL`, and `REPO_ROOT=$(git rev-parse --show-toplevel)`.
-
-
 ## Phase 0: Pre-flight
 
-Run the following three fences; an information prompt may interrupt and rerun its fence. Dry-run skips gh
-installation/auth checks. An explicit `--base <branch>` resolves against `origin/<branch>`; fetch that branch
-on real runs and stop if it cannot be resolved, rather than exporting against a stale local branch. Chain
-detection uses shared history, never task scheduling; the first matching dependency wins. A merged parent
-rewrites only on create, with the existing clean-tree, ancestry and lease guards. Dry-run reports it; update
-never rewrites.
+Run the fences; an information prompt may interrupt and rerun its fence. Dry-run skips installation/auth checks.
+Explicit `--base <branch>` uses `origin/<branch>`, refreshed on real runs. Chain detection uses shared history; first match wins.
+Merged-parent rewrites require create, a clean tree, ancestry and lease guards; dry-run reports and update never rewrites.
 ```bash
 RALPH=0
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
@@ -26,9 +19,8 @@ if [[ "$DRY_RUN" != "1" ]]; then
     echo "Error: gh CLI not authenticated; run gh auth login --hostname github.com." >&2; exit 1; fi
 fi
 ```
-Resolve `SPEC_ID` from the argument, otherwise match the current branch against
-`.flow/specs/*.json` `branch_name` (first match). With no match, `NEED_INPUT: SPEC_ID`
-asks interactively; Ralph/autonomous exit 2. The next fence uses that resolved ID.
+Resolve `SPEC_ID` from the argument or the first current-branch `branch_name` match in
+`.flow/specs/*.json`; with no match leave it empty for the range fallback below.
 ```bash
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
 if [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
@@ -45,10 +37,21 @@ for candidate in origin/main main origin/master master; do
     break
   fi
 done
+if [[ -z "$SPEC_ID" ]]; then
+  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
+  SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
+  if [[ -z "$SPEC_ID" ]]; then
+    [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]] && exit 2
+    echo "NEED_INPUT: SPEC_ID"; exit 3
+  fi
+fi
 CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
 if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
   [[ "$CHAIN_BASE" == origin/* ]] && { git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2; }
+  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
+    # Closed-set membership excludes closes inherited from a stacked parent branch.
+    if printf '%s' "$CLOSED_IDS" | jq -e --arg dep "$DEP" '.spec_ids | index($dep) != null' >/dev/null; then continue; fi
     DEP_JSON=$("$FLOWCTL" show "$DEP" --json 2>/dev/null) || continue
     DEP_BRANCH=$(printf '%s' "$DEP_JSON" | jq -r '.branch_name // empty')
     [[ -z "$DEP_BRANCH" ]] && continue
@@ -65,6 +68,7 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     fi
     DEP_PR_STATE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.state // empty')
     DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
+    if [[ "$DEP_PR_STATE" == "MERGED" && "$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')" == "$(git -C "$REPO_ROOT" branch --show-current)" ]]; then continue; fi
     if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
       if git -C "$REPO_ROOT" fetch -q origin "refs/pull/$DEP_PR_NUMBER/head:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
         DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
@@ -194,7 +198,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
 fi
 # fence:spec-close
 SPEC_CLOSED=0
-if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 ]]; then
+if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
   SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"
@@ -240,24 +244,21 @@ PHASE0_CONTEXT=$(jq -n --arg head "$HEAD_SHA" --arg branch "$(git -C "$REPO_ROOT
   '{head:$head, branch:$branch, commits_ahead:$commits_ahead, spec_closed:($spec_closed==1), chain_parent:$chain_parent, parent_pr:$parent_pr, parent_pr_state:$parent_pr_state}')
 ```
 
-Completed specs close on the head branch, staging only `modified_paths`, before Phase 1. Incomplete or
+Already-closed specs stay untouched. Otherwise completed specs close on the head branch before Phase 1. Incomplete or
 task-less specs have no close commit and still compose interactively. For `OPEN_COUNT > 0`,
 Ralph/autonomous hard-errors (exit 2). Dry-run and body-only updates never close. Under `--update` an
 existing OPEN PR is REQUIRED; closed/merged PRs do not prevent a create. Preserve `PHASE0_CONTEXT.head`.
-
 ## Phase 1: Gather inputs
 
 Capture `EXPORT_PAYLOAD` from `$FLOWCTL spec export-cognitive-aid "$SPEC_ID"
 --base "$BASE_REF" --json` once, after close. Refresh `HEAD_SHA` and `MERGE_BASE`
-from this head and base. Stop for empty goal/context AND empty task summaries, or when nonempty acceptance
-criteria are ALL in `tasks_summary.undeclared_r_ids` (`Undeclared R-ID coverage`). Unevidenced but declared
-criteria remain renderable.
-
+from this head and base. For each entry in `specs` (otherwise the host), stop for empty goal/context AND
+empty task summaries. Only the host aborts for nonempty criteria ALL in `tasks_summary.undeclared_r_ids`
+(`Undeclared R-ID coverage`); siblings render those requirements as uncovered. No requirements is valid.
 ## Phase 1.5: Structured PR cognitive-aid
 
 Read [pr-cognitive-aid.md](pr-cognitive-aid.md) and execute it on every entry path, including dry-run and
 update, before optional HTML or body delivery.
-
 ## Phase 1.5b: HTML render lens (opt-in)
 
 ```bash
@@ -268,7 +269,6 @@ HTML_LENS=$("$FLOWCTL" config get artifacts.html.enabled --json | jq -r 'if .val
 When true, read [html-lens.md](html-lens.md) in full and execute it end-to-end. When false,
 do not read `html-lens.md` or the shared disclosure reference; emit no artifact, commit, body line or output. The lens is
 unchanged; retain its optional Render lens line when it succeeds.
-
 ## Phase 2: Deliver the briefing
 
 Use `PR_AID_MARKDOWN` as the body, without hand-rendering or editing sections. Add only the enabled

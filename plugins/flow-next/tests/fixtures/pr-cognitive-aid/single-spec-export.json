@@ -1,0 +1,61 @@
+{
+  "success": true,
+  "spec": {
+    "id": "fn-250-spec",
+    "title": "Spec 250",
+    "status": "done",
+    "branch_name": "",
+    "spec_path": "",
+    "created_at": "",
+    "spec_sections": {
+      "goal_and_context": "Goal 250.",
+      "architecture_overview": "",
+      "acceptance_criteria": [
+        {
+          "id": "R1",
+          "text": "Requirement 250.",
+          "tag": ""
+        }
+      ],
+      "acceptance_criteria_residue": 0,
+      "boundaries": [],
+      "decision_context": [],
+      "open_questions": []
+    }
+  },
+  "tasks": [
+    {
+      "id": "fn-250-spec.1",
+      "status": "done",
+      "title": "Task",
+      "satisfies": [
+        "R1"
+      ],
+      "done_summary": "Implemented.",
+      "evidence": {
+        "commits": [],
+        "tests": [
+          "unit"
+        ],
+        "files_touched": [],
+        "files": []
+      }
+    }
+  ],
+  "tasks_summary": {
+    "total": 1,
+    "done": 1,
+    "open": 0,
+    "uncovered_r_ids": [],
+    "undeclared_r_ids": []
+  },
+  "memory_during_epic": {},
+  "glossary_changes": {},
+  "strategy_alignment": {
+    "tracks_served": [],
+    "drift_flagged": []
+  },
+  "diff_summary": {},
+  "removed_export_refs": [],
+  "deferred_findings": {}
+}

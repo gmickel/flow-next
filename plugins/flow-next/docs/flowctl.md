@@ -34,6 +34,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [spec set-no-plan / spec clear-no-plan](#spec-set-no-plan-spec-clear-no-plan)
   - [spec add-dep / spec rm-dep](#spec-add-dep-spec-rm-dep)
   - [spec set-backend](#spec-set-backend)
+  - [spec closed-in-range](#spec-closed-in-range)
   - [spec export-cognitive-aid](#spec-export-cognitive-aid)
   - [spec skeleton](#spec-skeleton)
   - [task create](#task-create)
@@ -550,6 +551,13 @@ Options:
 
 Format: `backend:model` where backend is a CLI name and model is backend-specific.
 
+### spec closed-in-range
+
+`flowctl spec closed-in-range --base <ref> [--json]` lists the closed set defined
+below, without adding a host. It resolves the merge base of the ref and HEAD and
+reads local committed objects only; it never writes or fetches. Text prints one ID
+per line in set order; JSON returns `{"spec_ids": [...]}` in the same order.
+
 ### spec export-cognitive-aid
 
 Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and diff stats into one structured payload (consumed by `/flow-next:make-pr`).
@@ -557,6 +565,25 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and d
 ```bash
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 ```
+
+The closed set includes specs in the Flow specs or legacy epics directory that
+are `done` at HEAD, absent or not `done` at the merge base by JSON `id`, and whose
+task files the range touches (record or body), plus the host spec.
+Record-only closes are excluded. A sibling is also excluded when its recorded
+branch exists locally or under `origin` and its spec is already done at that
+branch's merge base with HEAD: the close belongs to HEAD's own branch history.
+Squash landings, deleted branches and missing `branch_name` remain eligible.
+True merge commits are conservatively excluded, consistent with `spec chain`.
+These ancestry reads apply only to sibling candidates. One local `git diff --name-only` selects changed
+spec and task files; candidate ancestry supplies the additional close evidence. No fetch or working-tree status
+is used. IDs sort by numeric spec number, then full ID. External Flow directories
+fall back to a single-spec export.
+When several specs belong, the additive `specs` array contains each spec's
+`id`, `short_id` (for example `fn-250`), title and `spec_sections` (including
+goal/context and acceptance criteria with IDs and text), `tasks` with evidence,
+and `tasks_summary`, using the host's summary builder. One spec leaves the
+export bytes unchanged. Make-pr without a branch match selects the highest
+numbered closed spec as host, or requests a spec ID when the closed set is empty.
 
 **Deterministic traceability slice.** Four additive fields supply make-pr with traceability data - all reproducible from repo state at export time, no LLM judgment (the host authors the artifact, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
 
@@ -1316,22 +1343,16 @@ overwrites an existing generation. `current` returns a labeled
 non-current states. `render` emits one deterministic Markdown briefing for a
 validated file or the supported current generation, regardless of diff size.
 Empty sections disappear; grouped file trees and proof-cell checklists carry
-the review content. To meet 40 lines (including blanks), collapse stops as soon
-as the body fits: no-outcome proof cells, pass cells, later groups' file rows,
-the requirement table, the whole scope, then authored lines beyond the first
-(tradeoffs, blast radius, user/operator change, open items), and finally
-unverified cells followed by fail cells. Proof cells collapse from the end.
-In ordinary collapse, a step is applied only when it shortens the rendered
-body, including blank lines and counted summaries; otherwise content stays.
-The 40-line bound takes precedence: a final pass shares one checkpoint across
-no-outcome, pass, unverified and fail proof cells, hiding only as many as needed
-into one line with exact counts per outcome. Group
-counts stay below titles and file trees, with a preceding blank line; the
-next group title follows directly. Why and coverage remain. Thesis
-reflow precedes all collapse; a thesis whose lines plus its four scaffolding
-lines exceed 40 stays complete, with other content counted. See the
-[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,
-proof outcomes and collapse behavior.
+the review content. One pass preserves the thesis's authored line breaks,
+all four authored fields, group titles in review order, coverage, the applicable
+requirement table and every proof cell. There is no body line budget. Each group
+shows at most 10 described canonical rows in author order; extra rows count as
+“N more described files”, separately from mechanical, generated and not-described
+files. Blank lines precede counts and coverage and separate counts from the next
+group title. With no declared requirements, coverage, the table and requirement
+tags are omitted; declared but uncovered requirements remain named. See the
+[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order
+and proof outcomes.
 
 `--diff-files` binds membership, Git state, and churn to a JSON map produced
 from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,

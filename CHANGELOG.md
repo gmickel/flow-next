@@ -14,14 +14,17 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec; single-spec briefings stay unchanged.
+
 - The obsolete make-pr `--no-mermaid` flag is removed.
 
-- make-pr bodies are now one short briefing that flowctl renders from the aid
-  artifact, at most 40 lines for any pull-request size: Why, What changes for a
+- make-pr bodies now keep the full authored briefing in one rendering pass
+  from the aid artifact: Why, What changes for a
   user or operator, Scope, Blast radius, Verification, Tradeoffs and Open
   items, each omitted when empty. Scope shows numbered diff-fenced file trees
-  with a purpose and requirement on each described file, one counted line for
-  the rest, and one coverage line. The compact and full forms, their size
+  with up to 10 described files per group in review order; extra described,
+  mechanical, generated and undescribed files are counted separately. Authored
+  fields and proof cells stay complete. Coverage appears only for declared requirements. The compact and full forms, their size
   threshold, the machine-identity proof rows, the per-row evidence column, the
   review-plan section and the generated-by footer are gone; artifact id, base
   and head ride in one HTML comment. The stored artifact, the HTML lens and
@@ -34,7 +37,8 @@ versioning remains a separate maintainer step.
   cells without an outcome render as plain items. The additions are additive:
   the schema version stays 1 and stored artifacts remain valid. See the
   [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md).
-- make-pr composes the aid artifact after the spec-close commit, so the
+- make-pr leaves already-closed specs untouched and composes the aid artifact
+  after any spec-close commit, so the
   artifact's head equals the pull request's head. An explicit `--base <branch>`
   now resolves against `origin/<branch>`, so a stale local base no longer
   widens the export. The make-pr instruction text an ordinary run loads drops

@@ -202,8 +202,7 @@ class CrossRenderParityTests(unittest.TestCase):
             f"<!-- artifact={artifact['artifactId']} base={artifact['baseSha']} head={artifact['headSha']} -->"
         ])
 
-    def test_maximum_fixture_is_a_bounded_briefing(self) -> None:
-        self.assertLessEqual(len(self.rendered.splitlines()), 40)
+    def test_maximum_fixture_renders_briefing(self) -> None:
         self.assertIn("## Why", self.rendered)
         self.assertIn("Coverage:", self.rendered)
         self.assertNotIn("<details", self.rendered)

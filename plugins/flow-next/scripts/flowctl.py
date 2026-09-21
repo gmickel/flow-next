@@ -29417,7 +29417,7 @@ def validate_pr_cognitive_aid(
     keys(artifact, "pr_cognitive_aid", required={
         "schemaVersion", "artifactId", "specId", "baseSha", "headSha",
         "generatedAt", "sources", "changeWalkthrough",
-    }, optional={"supersedesArtifactId"})
+    }, optional={"supersedesArtifactId", "specIds"})
     if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
         fail("pr_cognitive_aid", f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes")
     schema_version = artifact.get("schemaVersion")
@@ -29431,6 +29431,26 @@ def validate_pr_cognitive_aid(
     if spec_id is not None and not is_spec_id(spec_id):
         fail("specId", "must be a canonical Flow spec ID")
         spec_id = None
+    spec_ids = [spec_id]
+    if "specIds" in artifact:
+        spec_ids = strings(artifact["specIds"], "specIds") or []
+        if spec_id not in spec_ids:
+            fail("specIds", "must include artifact.specId")
+        for index, member in enumerate(spec_ids):
+            if member is not None and not is_spec_id(member):
+                fail(f"specIds[{index}]", "must be a canonical Flow spec ID")
+    multi_spec = len(spec_ids) > 1
+
+    def valid_rid(value: str) -> bool:
+        if not multi_spec:
+            return bool(_PR_COGNITIVE_AID_RID_RE.fullmatch(value))
+        short, separator, rid = value.partition(":")
+        return bool(separator and _PR_COGNITIVE_AID_RID_RE.fullmatch(rid)
+                    and sum(spec_short_id(member) == short
+                            for member in spec_ids if member is not None and is_spec_id(member)) == 1)
+
+    spec_scope = "artifact.specIds" if multi_spec else "artifact.specId"
+    rid_message = "must be a qualified R-ID of exactly one specIds member" if multi_spec else "must be a canonical R-ID"
     base_sha = check(_pr_aid_sha, artifact.get("baseSha"), "baseSha")
     head_sha = check(_pr_aid_sha, artifact.get("headSha"), "headSha")
     generated_at = check(
@@ -29480,16 +29500,16 @@ def validate_pr_cognitive_aid(
             fail(f"{path}.kind", "unsupported source kind")
         ref = check(_pr_aid_string, source.get("ref"), f"{path}.ref", maximum=1024)
         if ref is not None:
-            if kind == "spec" and spec_id is not None and ref != spec_id:
-                fail(f"{path}.ref", "must identify artifact.specId")
+            if kind == "spec" and spec_id is not None and ref not in spec_ids:
+                fail(f"{path}.ref", f"must identify {spec_scope}")
             if (
                 kind == "task"
                 and spec_id is not None
-                and (not is_task_id(ref) or spec_id_from_task(ref) != spec_id)
+                and (not is_task_id(ref) or spec_id_from_task(ref) not in spec_ids)
             ):
-                fail(f"{path}.ref", "must identify a task of artifact.specId")
-            if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(ref):
-                fail(f"{path}.ref", "must be a canonical R-ID")
+                fail(f"{path}.ref", f"must identify a task of {spec_scope}")
+            if kind == "rid" and not valid_rid(ref):
+                fail(f"{path}.ref", rid_message)
             if (
                 kind == "diff_metadata"
                 and base_sha is not None
@@ -29531,15 +29551,15 @@ def validate_pr_cognitive_aid(
             for index, identifier in enumerate(ids or []):
                 if identifier is None:
                     continue
-                if ref_field == "rIds" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(identifier):
-                    fail(f"{path}.{ref_field}[{index}]", "must be a canonical R-ID")
+                if ref_field == "rIds" and not valid_rid(identifier):
+                    fail(f"{path}.{ref_field}[{index}]", rid_message)
                     continue
                 if (
                     ref_field == "taskIds"
                     and spec_id is not None
-                    and (not is_task_id(identifier) or spec_id_from_task(identifier) != spec_id)
+                    and (not is_task_id(identifier) or spec_id_from_task(identifier) not in spec_ids)
                 ):
-                    fail(f"{path}.{ref_field}[{index}]", "must identify a task of artifact.specId")
+                    fail(f"{path}.{ref_field}[{index}]", f"must identify a task of {spec_scope}")
                     continue
                 if refs_valid and sources is not None and not any(
                     source_by_id.get(source_id, {}).get("kind") == ("rid" if ref_field == "rIds" else "task")
@@ -30059,8 +30079,11 @@ def _pr_aid_prose(value: Any) -> str:
     return escaped
 
 
+PR_AID_DESCRIBED_ROWS_PER_GROUP = 10
+
+
 def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
-    """Render one bounded briefing using only the validated artifact."""
+    """Render one briefing in a single pass using only the validated artifact."""
     artifact = validate_pr_cognitive_aid(artifact)
     walkthrough = artifact["changeWalkthrough"]
     groups = walkthrough["groups"]
@@ -30096,22 +30119,29 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             f"{rid} → " + (evidenced_by(evidence) if evidence else "uncovered")
             for rid, evidence in coverage.items()
         )
+        if len(artifact.get("specIds", [])) > 1:
+            per_spec = []
+            for member in artifact["specIds"]:
+                short = spec_short_id(member)
+                entries = [f"{rid.split(':', 1)[1]} → " +
+                           (evidenced_by(evidence) if evidence else "uncovered")
+                           for rid, evidence in coverage.items() if rid.startswith(short + ":")]
+                if entries:
+                    per_spec.append(f"Coverage {short}: " + "; ".join(entries))
+            coverage_line = "\n\n".join(per_spec)
         if any(not evidence for evidence in coverage.values()):
             table = ["| Requirement | Groups |", "|---|---|"] + [
                 f"| {rid} | " + (evidenced_by(evidence).replace("|", "\\|")
                                  if evidence else "unevidenced") + " |"
                 for rid, evidence in coverage.items()
             ]
-    elif any(group["files"] for group in groups):
-        coverage_line = "Coverage: requirements undeclared"
-        table = ["| Requirement | Groups |", "|---|---|", "| Undeclared | No requirement IDs |"]
 
     def counted(files: list[dict[str, Any]]) -> str:
-        counts = {"mechanical": 0, "generated": 0, "not described": 0, "described": 0}
+        counts = {"mechanical": 0, "generated": 0, "not described": 0, "more described": 0}
         for record in files:
             attention = record["attentionClass"]
             category = (attention if attention != "canonical" else
-                        "described" if record["summary"].strip() else "not described")
+                        "more described" if record["summary"].strip() else "not described")
             counts[category] += 1
         return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
                          for kind, count in counts.items() if count)
@@ -30119,21 +30149,35 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def tree_text(value: str) -> str:
         return " ".join(value.splitlines())
 
+    multi_spec = len(artifact.get("specIds", [])) > 1
+    declaring_specs = {rid.split(":", 1)[0] for rid in declared}
+
+    def group_declares(group: dict[str, Any]) -> bool:
+        if not multi_spec:
+            return bool(declared)
+        cited = {rid.split(":", 1)[0] for rid in requirements(group)}
+        for ref in group["sourceRefs"]:
+            source = sources[ref]
+            if source["kind"] in ("spec", "task"):
+                cited.add(spec_short_id(source["ref"].split(".", 1)[0]))
+        return bool(cited & declaring_specs)
+
     trees = []
     for group in groups:
         if not group["files"]:
             continue
         described, remaining = [], []
         for record in group["files"]:
-            if record["attentionClass"] != "canonical" or not record["summary"].strip():
+            if (record["attentionClass"] != "canonical" or not record["summary"].strip()
+                    or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
                 remaining.append(record)
                 continue
             rids = requirements(record) or requirements(group)
             # Fenced text is literal; flatten newlines so authored content cannot close the fence.
             sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
-            row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])} "
-                   f"[{', '.join(rids) if rids else 'requirement undeclared'}]")
-            described.append((record, row))
+            tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
+            row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])}{tag}")
+            described.append(row)
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
                       "rows": described,
                       "remaining": remaining})
@@ -30143,152 +30187,45 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         outcome = cell.get("outcome")
         prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
         status = f"{outcome}: " if outcome in ("fail", "unverified") else ""
-        proof.append((cell, f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
-                      f"{_pr_aid_plain_text(cell['value'])}"))
-    hidden_proof: list[dict[str, Any]] = []
+        proof.append(f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
+                      f"{_pr_aid_plain_text(cell['value'])}")
     fields = [("userImpact", "What changes for a user or operator"),
               ("blastRadius", "Blast radius"), ("tradeoffs", "Tradeoffs"),
               ("openItems", "Open items")]
     prose = {key: [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
              for key, _ in fields}
     why = [_pr_aid_prose(line) for line in walkthrough["thesis"].strip().splitlines()]
-    thesis_over_budget = len(why) + 4 > 40  # Why heading, blanks and identity.
-    compact_scope = False
-    hidden_table = False
 
     def section(title: str, content: list[str]) -> list[str]:
         return [f"## {title}", "", *content, ""] if content else []
 
-    # Rows only ever move from a tree's tail into its remainder, so a tree's
-    # counted line is determined by its position and remainder length.
-    counted_memo: dict[tuple[int, int], str] = {}
-
-    def counted_once(key: tuple[int, int], records: list[dict[str, Any]]) -> str:
-        if key not in counted_memo:
-            counted_memo[key] = counted(records)
-        return counted_memo[key]
-
-    def assemble() -> list[str]:
-        scope = []
-        if compact_scope and trees:
-            scope = [f"{len(trees)} group{'' if len(trees) == 1 else 's'} collapsed: " + counted_once(
-                (-1, 0), [record for group in groups for record in group["files"]])]
-            if hidden_table and table:
-                scope[0] += f"; {len(table) - 2} requirement rows collapsed"
-        else:
-            for position, tree in enumerate(trees):
-                remaining = tree["remaining"]
-                rows = [row for _, row in tree["rows"]]
-                scope.append(f"**{tree['title']}**")
-                if rows:
-                    rows[-1] = rows[-1].replace("├──", "└──", 1)
-                    scope.extend(["```diff", *rows, "```"])
-                if remaining:
-                    scope.extend(["", counted_once((position, len(remaining)), remaining)])
-        if coverage_line:
-            if scope:
-                scope.append("")
-            scope.append(coverage_line)
-        if table and not (compact_scope and trees and hidden_table):
-            scope.extend(["", f"{len(table) - 2} requirement rows collapsed"]
-                         if hidden_table else ["", *table])
-        verification = [row for _, row in proof]
-        if hidden_proof:
-            counts: dict[str, int] = {}
-            for cell in hidden_proof:
-                status = cell.get("outcome", "no outcome")
-                counts[status] = counts.get(status, 0) + 1
-            if verification:
-                verification.append("")
-            verification.append("Proof cells collapsed: " + ", ".join(
-                f"{count} {status}" for status, count in counts.items()))
-        lines = [*section("Why", why),
-                 *section(fields[0][1], prose["userImpact"]),
-                 *section("Scope", scope),
-                 *section("Blast radius", prose["blastRadius"]),
-                 *section("Verification", verification),
-                 *section("Tradeoffs", prose["tradeoffs"]),
-                 *section("Open items", prose["openItems"])]
-        identity = artifact["artifactId"].replace("--", "&#45;&#45;")
-        lines.append(f"<!-- artifact={identity} base={artifact['baseSha']} head={artifact['headSha']} -->")
-        return lines
-
-    def over_budget() -> bool:
-        return thesis_over_budget or len(assemble()) > 40
-
-    # Reflow before hiding evidence; an intrinsically oversized thesis stays full.
-    if not thesis_over_budget and len(assemble()) > 40:
-        why = [_pr_aid_prose(walkthrough["thesis"])]
-
-    def shorter_than(before: int) -> bool:
-        return thesis_over_budget or len(assemble()) < before
-
-    def collapse_proof(outcomes: tuple[Any, ...]) -> None:
-        saved_proof, saved_hidden = proof[:], hidden_proof[:]
-        before = current = len(assemble())  # one assemble per candidate
-        for outcome in outcomes:
-            for index in range(len(proof) - 1, -1, -1):
-                if proof[index][0].get("outcome") == outcome and (
-                        thesis_over_budget or current > 40):
-                    hidden_proof.append(proof.pop(index)[0])
-                    current = len(assemble())
-                    if thesis_over_budget or current < before:
-                        saved_proof, saved_hidden = proof[:], hidden_proof[:]
-                        before = current
-        proof[:] = saved_proof
-        hidden_proof[:] = saved_hidden
-
-    collapse_proof((None, "pass"))
-    # Preserve the earliest authored review steps, dropping only the rows needed.
-    for tree in reversed(trees):
-        saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
-        before = current = len(assemble())
-        while tree["rows"] and (thesis_over_budget or current > 40):
-            record, _ = tree["rows"].pop()
-            tree["remaining"].append(record)
-            current = len(assemble())
-            if thesis_over_budget or current < before:
-                saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
-                before = current
-        tree["rows"], tree["remaining"] = saved_rows, saved_remaining
-    # Scope scaffolding and the optional detail table carry less attention than
-    # authored warnings; their counted forms bound artifacts with many groups.
-    if over_budget() and table:
-        before = len(assemble())
-        hidden_table = True
-        hidden_table = shorter_than(before)
-    if over_budget() and trees:
-        before = len(assemble())
-        compact_scope = True
-        compact_scope = shorter_than(before)
-    for key in ("tradeoffs", "blastRadius", "userImpact", "openItems"):
-        original = prose[key][:]
-        if thesis_over_budget and original:
-            prose[key] = [f"{len(original)} authored line"
-                          f"{'' if len(original) == 1 else 's'} collapsed"]
-            continue
-        saved = original
-        before = len(assemble())
-        for hidden in range(1, len(original)):
-            if not over_budget():
-                break
-            prose[key] = [*original[:-hidden], "",
-                          f"{hidden} authored line{'' if hidden == 1 else 's'} collapsed"]
-            if shorter_than(before):
-                saved = prose[key]
-                before = len(assemble())
-        prose[key] = saved
-    if thesis_over_budget or not any(
-        cell.get("outcome") in (None, "pass") for cell, _ in proof
-    ):
-        collapse_proof(("unverified", "fail"))
-    if not thesis_over_budget and over_budget():
-        # One shared checkpoint crosses size-neutral outcome boundaries while
-        # retaining the strictly-shorter rule and stopping as soon as we fit.
-        collapse_proof((None, "pass", "unverified", "fail"))
-        # Reflowed Why + identity: 5; four fields: <= 4*6; scope: <= 6;
-        # proof (all counted, or a size-neutral singleton): <= 4. Total <= 39.
-    return "\n".join(assemble()).rstrip() + "\n"
+    scope = []
+    for tree in trees:
+        if scope:
+            scope.append("")
+        scope.append(f"**{tree['title']}**")
+        rows = tree["rows"]
+        if rows:
+            rows[-1] = rows[-1].replace("├──", "└──", 1)
+            scope.extend(["```diff", *rows, "```"])
+        if tree["remaining"]:
+            scope.extend(["", counted(tree["remaining"])])
+    if coverage_line:
+        if scope:
+            scope.append("")
+        scope.append(coverage_line)
+    if table:
+        scope.extend(["", *table])
+    lines = [*section("Why", why),
+             *section(fields[0][1], prose["userImpact"]),
+             *section("Scope", scope),
+             *section("Blast radius", prose["blastRadius"]),
+             *section("Verification", proof),
+             *section("Tradeoffs", prose["tradeoffs"]),
+             *section("Open items", prose["openItems"])]
+    identity = artifact["artifactId"].replace("--", "&#45;&#45;")
+    lines.append(f"<!-- artifact={identity} base={artifact['baseSha']} head={artifact['headSha']} -->")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _pr_aid_read_input(path_arg: str, *, use_json: bool = True) -> Any:
@@ -34706,97 +34643,120 @@ def _export_deferred_findings(
     return deferred_findings
 
 
-def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
-    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
-    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+def spec_short_id(spec_id: str) -> str:
+    """Return the shared native or tracker-keyed requirement qualifier."""
+    parsed = parse_any_id(spec_id)
+    if parsed is None or parsed[3] is not None:
+        raise ValueError(f"Invalid spec ID: {spec_id}")
+    return f"{parsed[1]}-{parsed[2]}"
 
-    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
-    parsing). Body-rendering happens in the skill — this command emits
-    the structured payload only. Per the architecture rule, no LLM
-    judgment lives here.
 
-    Exit codes:
-      1: missing spec / generic failure
-      2: invalid args (missing --base, etc.)
-      3: corrupt spec JSON
-    """
-    use_json = bool(getattr(args, "json", False))
-
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Casefold first so uppercase tracker display handles (WOR-17) survive
-    # the validity check — resolve_spec_id_arg below canonicalizes fully.
-    spec_id = casefold_handle(getattr(args, "id", None))
-    if not spec_id or not is_spec_id(spec_id):
-        error_exit(
-            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
-            f"(e.g., fn-1, fn-1-add-auth)",
-            use_json=use_json,
-            code=2,
-        )
-    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
-    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
-
-    base_ref = getattr(args, "base", None)
-    if not base_ref:
-        error_exit(
-            "--base is required (e.g., --base origin/main)",
-            use_json=use_json,
-            code=2,
-        )
-
-    flow_dir = get_flow_dir()
-    spec_json_path = find_spec_json_path(flow_dir, spec_id)
-    if not spec_json_path.exists():
-        error_exit(
-            f"Spec {spec_id} not found at {spec_json_path}",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
-    # its own error path — but we want a corrupt-spec exit code of 3
-    # (distinct from "missing"), so do the read ourselves first.
-    try:
-        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=3,
-        )
-    except OSError as exc:
-        error_exit(
-            f"Failed to read spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=1,
-        )
-    if not isinstance(raw_spec, dict):
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
-            f"{type(raw_spec).__name__}",
-            use_json=use_json,
-            code=3,
-        )
-    spec_data = normalize_epic(raw_spec)
-
-    # Resolve merge base.
-    merge_base_sha = _export_resolve_merge_base(base_ref)
-    if merge_base_sha is None:
-        error_exit(
-            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
-            f"--base ref (e.g., origin/main).",
-            use_json=use_json,
-            code=1,
-        )
-
+def specs_closed_in_range(
+    flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
+) -> list[str]:
+    """Return newly closed specs whose task files the range touches, plus the host."""
     repo_root = get_repo_root()
+    closed = {host_spec_id} if host_spec_id else set()
+    try:
+        relative = flow_dir.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return list(closed)  # External Flow state has no repo-local range.
+    spec_dirs = {(relative / directory).as_posix() for directory in (SPECS_DIR, EPICS_DIR)}
+    tasks_dir = (relative / TASKS_DIR).as_posix()
+    rc, out, err = _export_run_git(
+        ["diff", "--name-only", "--no-renames", "-z", base_commit, "HEAD", "--",
+         *sorted(spec_dirs), tasks_dir], cwd=repo_root,
+    )
+    if rc:
+        raise ValueError(f"Cannot read closed specs: {err.strip()}")
+    changed_paths = [path for path in out.split("\0") if path]
+    paths = [path for path in changed_paths if path.endswith(".json")]
+    spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
+                  and Path(path).stem != host_spec_id]
+    if not spec_paths:
+        return list(closed)
 
+    def record(revision: str, path: str) -> dict[str, Any]:
+        # Absence is read from the tree, never from git's localized stderr.
+        rc, listed, err = _export_run_git(["ls-tree", "--name-only", revision, "--", path], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        if not listed.strip():
+            return {}
+        rc, text, err = _export_run_git(["show", f"{revision}:{path}"], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        value = json.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError(f"Expected object in {revision}:{path}")
+        return value
+
+    # Include deleted paths: a rename must compare identities, not filenames.
+    base_specs = [record(base_commit, path) for path in spec_paths]
+    # Identity is the short id: a slug rename of a spec done at base is not a new close.
+    already_done = {spec_short_id(item["id"]) for item in base_specs
+                    if item.get("status") == "done" and isinstance(item.get("id"), str) and is_spec_id(item["id"])}
+    candidates = set()
+    for path in spec_paths:
+        head = record("HEAD", path)
+        sid = head.get("id")
+        if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and spec_short_id(sid) not in already_done:
+            def read_close(commit: str, short: str = spec_short_id(sid)) -> tuple[bool, str]:
+                # By identity, not by today's path: the record may have moved
+                # between the spec directories or changed slug since that commit.
+                rc, listed, err = _export_run_git(
+                    ["ls-tree", "--name-only", commit, "--", *(d + "/" for d in sorted(spec_dirs))],
+                    cwd=repo_root,
+                )
+                if rc:
+                    raise ValueError(f"Cannot read closed specs: {err.strip()}")
+                for name in listed.splitlines():
+                    stem = Path(name).stem
+                    if (name.endswith(".json") and is_spec_id(stem) and spec_short_id(stem) == short
+                            and record(commit, name).get("status") == "done"):
+                        return True, ""
+                return False, ""
+
+            try:
+                stacked_ref, error = _spec_close_in_head_history(repo_root, head, read_close)
+            except subprocess.CalledProcessError as exc:
+                raise ValueError(f"Cannot read closed specs: {exc}") from exc
+            if error:
+                raise ValueError(f"Cannot read closed specs: {error}")
+            if not stacked_ref:
+                candidates.add(sid)
+    # Work happened here when the range touches one of the spec's task files (record
+    # or body). A record-only close touches the spec file alone and stays out. The
+    # tracked task status is not consulted: it is persisted late and can read stale.
+    for path in changed_paths:
+        if Path(path).parent.as_posix() == tasks_dir:
+            sid = Path(path).stem.rsplit(".", 1)[0]
+            if sid in candidates:
+                closed.add(sid)
+    return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
+
+
+def cmd_spec_closed_in_range(args: argparse.Namespace) -> None:
+    """List committed range members without changing Flow state."""
+    use_json = getattr(args, "json", False)
+    try:
+        repo_root = get_repo_root()
+        rc, base, err = _export_run_git(["merge-base", args.base, "HEAD"], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot resolve closed-spec base: {err.strip()}")
+        ids = specs_closed_in_range(get_flow_dir(), base.strip())
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if use_json:
+        json_output({"spec_ids": ids})
+    else:
+        for spec_id in ids:
+            print(spec_id)
+
+
+def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json: bool) -> tuple:
+    """Build the same spec, task and evidence summary for each range member."""
+    spec_id = spec_data["id"]
     # --- Spec markdown parsing ---
     spec_md_path = flow_dir / SPECS_DIR / f"{spec_id}.md"
     spec_text = ""
@@ -34967,6 +34927,107 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "undeclared_r_ids": undeclared,
     }
 
+    return spec_section, task_entries, tasks_summary, task_created_ats, spec_text
+
+
+def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
+    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
+    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+
+    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
+    parsing). Body-rendering happens in the skill — this command emits
+    the structured payload only. Per the architecture rule, no LLM
+    judgment lives here.
+
+    Exit codes:
+      1: missing spec / generic failure
+      2: invalid args (missing --base, etc.)
+      3: corrupt spec JSON
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Casefold first so uppercase tracker display handles (WOR-17) survive
+    # the validity check — resolve_spec_id_arg below canonicalizes fully.
+    spec_id = casefold_handle(getattr(args, "id", None))
+    if not spec_id or not is_spec_id(spec_id):
+        error_exit(
+            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
+            f"(e.g., fn-1, fn-1-add-auth)",
+            use_json=use_json,
+            code=2,
+        )
+    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
+    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
+
+    base_ref = getattr(args, "base", None)
+    if not base_ref:
+        error_exit(
+            "--base is required (e.g., --base origin/main)",
+            use_json=use_json,
+            code=2,
+        )
+
+    flow_dir = get_flow_dir()
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        error_exit(
+            f"Spec {spec_id} not found at {spec_json_path}",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
+    # its own error path — but we want a corrupt-spec exit code of 3
+    # (distinct from "missing"), so do the read ourselves first.
+    try:
+        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=3,
+        )
+    except OSError as exc:
+        error_exit(
+            f"Failed to read spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=1,
+        )
+    if not isinstance(raw_spec, dict):
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
+            f"{type(raw_spec).__name__}",
+            use_json=use_json,
+            code=3,
+        )
+    spec_data = normalize_epic(raw_spec)
+
+    # Resolve merge base.
+    merge_base_sha = _export_resolve_merge_base(base_ref)
+    if merge_base_sha is None:
+        error_exit(
+            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
+            f"--base ref (e.g., origin/main).",
+            use_json=use_json,
+            code=1,
+        )
+
+    repo_root = get_repo_root()
+
+    spec_section, task_entries, tasks_summary, task_created_ats, spec_text = (
+        _export_spec_summary(flow_dir, spec_data, use_json=use_json)
+    )
+    acceptance_criteria = spec_section["spec_sections"]["acceptance_criteria"]
+    acceptance_criteria_residue = spec_section["spec_sections"]["acceptance_criteria_residue"]
+    uncovered = tasks_summary["uncovered_r_ids"]
+
     # --- Memory during spec lifecycle ---
     # fn-49.2: pass earliest-task and branch-name fallback inputs so the
     # time-window filter approximates the spec lifetime even when
@@ -35028,6 +35089,23 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "removed_export_refs": removed_export_refs,
         "deferred_findings": deferred_findings,
     }
+
+    try:
+        closed_specs = specs_closed_in_range(flow_dir, merge_base_sha, spec_id)
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if len(closed_specs) > 1:
+        payload["specs"] = []
+        for member in closed_specs:
+            if member == spec_id:
+                section, tasks, summary = spec_section, task_entries, tasks_summary
+            else:
+                data = normalize_epic(load_json_or_exit(find_spec_json_path(flow_dir, member), "spec", use_json=use_json))
+                section, tasks, summary, _, _ = _export_spec_summary(flow_dir, data, use_json=use_json)
+            payload["specs"].append({
+                **section, "short_id": spec_short_id(member),
+                "tasks": tasks, "tasks_summary": summary,
+            })
 
     if use_json:
         json_output(payload)
@@ -35878,6 +35956,33 @@ _SPEC_BASE_CACHE: dict[Path, tuple[str, str, bool]] = {}
 _SPEC_BASE_NOTICE_CWDS: set[Path] = set()
 
 
+def _spec_close_in_head_history(repo_root: Path, spec_data: dict, read_spec_close) -> tuple[str, str]:
+    """Return the branch ref proving a close in HEAD ancestry, or a read error."""
+    branch = spec_data.get("branch_name")
+    if branch:
+        for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+            exists = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", ref],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if exists.returncode == 1:  # Missing ref, not an unreadable object.
+                continue
+            exists.check_returncode()
+            ancestry = subprocess.run(
+                ["git", "merge-base", ref, "HEAD"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if ancestry.returncode == 1:  # Unrelated histories prove nothing.
+                continue
+            ancestry.check_returncode()
+            closed, error = read_spec_close(ancestry.stdout.strip())
+            if error:
+                return "", error
+            if closed:
+                return ref, ""
+    return "", ""
+
+
 def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
     """Return (landed, error, diagnostic) from base evidence, then ancestry.
 
@@ -35956,32 +36061,15 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
             return False, error, ""
         if closed:
             return True, "", ""
-        branch = spec_data.get("branch_name")
-        if branch:
-            for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
-                exists = subprocess.run(
-                    ["git", "show-ref", "--verify", "--quiet", ref],
-                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-                )
-                if exists.returncode == 1:  # Missing ref, not an unreadable object.
-                    continue
-                exists.check_returncode()
-                ancestry = subprocess.run(
-                    ["git", "merge-base", ref, "HEAD"],
-                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-                )
-                if ancestry.returncode == 1:  # Unrelated histories prove nothing.
-                    continue
-                ancestry.check_returncode()
-                closed, error = read_spec_close(ancestry.stdout.strip())
-                if error:
-                    return False, error, ""
-                if closed:
-                    return False, "", (
-                        f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
-                        f"dependency branch {ref} is in this branch's history; "
-                        "fetch the base or land it"
-                    )
+        ref, error = _spec_close_in_head_history(repo_root, spec_data, read_spec_close)
+        if error:
+            return False, error, ""
+        if ref:
+            return False, "", (
+                f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+                f"dependency branch {ref} is in this branch's history; "
+                "fetch the base or land it"
+            )
         # Squash landing, deleted branch, or no recorded branch.
         return True, "", ""
     except (subprocess.CalledProcessError, OSError, ValueError) as exc:
@@ -56262,6 +56350,10 @@ def main() -> None:
     spec_sub = p_spec.add_subparsers(dest="spec_cmd", required=True)
     _add_spec_subparsers(spec_sub, noun="spec", dest="spec_cmd")
     _add_spec_skeleton(spec_sub)
+    p_closed_range = spec_sub.add_parser("closed-in-range", help="List specs completed in a committed range")
+    p_closed_range.add_argument("--base", required=True, help="Base ref (uses its merge base with HEAD)")
+    p_closed_range.add_argument("--json", action="store_true", help="JSON output")
+    p_closed_range.set_defaults(func=cmd_spec_closed_in_range)
 
     # scope — fn-44.1 helper plumbing. Read-only token-safe parsers
     # consumed by `/flow-next:refine` (T2) and `/flow-next:capture`

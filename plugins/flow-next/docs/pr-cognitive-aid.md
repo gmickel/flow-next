@@ -39,6 +39,29 @@ Ignored aids are per-clone state. A PR created on another host or clone has no
 stored walkthrough available to a projector reading this clone's artifact home.
 The PR body still travels with the PR; the local aid files do not.
 
+## Several specs in one PR
+
+Optional `specIds` lists 1–32 canonical spec IDs without duplicates and includes
+`specId`, which still binds the expected host and storage path. Schema version
+stays 1. With several IDs, spec sources may name any member and task sources
+may name tasks of any member. Every `rid` source ref and `rIds` entry must use
+`fn-250:R4`: short spec ID, colon, bare requirement ID. The short ID must resolve
+to exactly one listed spec. Bare IDs are invalid in this mode. Without `specIds`,
+or with one member, existing validation and rendering remain unchanged and
+qualified IDs are invalid. Sparse expansion preserves `specIds`.
+
+Row tags and per-criterion tables retain qualified IDs. Coverage has one line
+per spec in `specIds` order, for example `Coverage fn-250: R1 → 1; R2 → 1, 2`.
+Specs without declared requirements have no coverage line; declared but
+uncovered requirements remain visible.
+
+Membership requires a spec newly done at HEAD and at least one of its task files changed in the range; the host is always included, while record-only sibling closes are excluded. Siblings whose recorded branch has a done spec at its merge base with HEAD are also excluded, including true merge commits; squash landings, deleted branches, and absent branch names remain eligible.
+The undeclared-requirements abort applies only to the host; sibling requirements remain visible as uncovered.
+Under several specs, an undeclared row tag appears only when its group cites a spec that declares requirements.
+Land matches a PR to a spec by branch name, so a several-spec PR is not landed by it and is merged by hand.
+The HTML lens fallback inputs read the host spec only.
+Two listed specs sharing a number within the same ID prefix cannot be qualified unambiguously.
+
 ## Sparse authoring
 
 Four optional authored fields are additive within `changeWalkthrough`.
@@ -151,13 +174,14 @@ a placeholder:
 | Open items | `changeWalkthrough.openItems`. |
 
 Scope uses one numbered, diff-fenced file tree per group. Each described file carries its
-one-line purpose and requirement IDs. Remaining files collapse to a counted
+one-line purpose and requirement IDs. Remaining files render in a counted
 line that distinguishes mechanical files from files not described; an empty
 summary never implies safe-to-skim status. A group with no described files
 shows its title and that count. One coverage line maps requirement IDs to the
 numbers of the groups that evidence them and names uncovered requirements; a
 requirement evidenced only by groups without files names those groups. A per-criterion
-table appears only when a requirement is unevidenced or undeclared. Requirement
+table appears only when a declared requirement is unevidenced. With no declared
+requirements, coverage, the table and requirement tags are omitted. Requirement
 sources in `sources[]` supply the declared set, including requirements cited
 by no group.
 
@@ -168,27 +192,14 @@ checkbox. Old artifacts therefore keep their evidence without gaining a pass
 claim. Proof cells with no outcome are still valid, and absent proof cells
 omit the section entirely.
 
-The renderer fits ordinary briefings within 40 lines, counting blank lines.
-Before collapsing anything, it reflows a multiline thesis if needed, unless
-that thesis plus its Why heading, two blank lines and identity comment already
-exceeds 40 lines. That exceptional thesis remains in full; other content is
-counted. Why and the coverage line never collapse.
-
-Collapse stops as soon as the body fits: proof cells without outcomes first,
-then pass cells, each from the end; described file rows from later groups
-before earlier groups; the requirement table; the whole scope; then lines
-beyond the first in tradeoffs, blast radius, user/operator change and open
-items; finally unverified cells, then fail cells, each from the end.
-In ordinary collapse, a step is applied only when it shortens the rendered
-body, including blank lines and counted summaries. Candidates accumulate
-until their counted form saves lines; otherwise the authored content stays.
-The 40-line bound takes precedence: if still over budget, a final pass uses
-one shared checkpoint across no-outcome, pass, unverified and fail proof cells,
-hiding only as many as needed into one line with exact counts per outcome.
-Proof counts distinguish each outcome. Counted lines and coverage have a
-preceding blank line. Group counts remain below their titles and any file
-tree, preserving that separation; the next group's title follows the count
-directly, without an additional blank line.
+The renderer makes one deterministic pass with no body line budget. Why keeps
+its authored line breaks; all four authored fields, group titles, coverage,
+the applicable requirement table and every proof cell render in full.
+Each group shows at most 10 described canonical file rows in author order.
+Additional described rows join its count as “N more described files”, distinct
+from mechanical, generated and not-described files. Schema caps bound the
+remaining content. Counted lines and coverage have a preceding blank line;
+a blank line also separates each count from the next group's title.
 Apostrophes and quotation marks render literally; markup-injection characters
 remain neutralized.
 

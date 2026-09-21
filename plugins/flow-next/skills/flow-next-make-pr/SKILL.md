@@ -6,11 +6,10 @@ allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
 # /flow-next:make-pr
 
-The host authors one grounded aid object; flowctl validates, stores and renders it as the PR briefing. No
-extra model call or hand-assembled body sections. Read [workflow.md](workflow.md), then its reached references
-in sequence. The opt-in [html-lens.md](html-lens.md) loads only behind its config gate. Invocation authorizes
-push and PR creation without a confirmation prompt; `--dry-run` previews without repository writes, push, PR
-edits or memory writes.
+The host authors one grounded aid object; flowctl validates, stores and renders the briefing. Read
+[workflow.md](workflow.md), then its reached references. No extra model call or hand-assembled sections.
+Invocation authorizes push and PR creation; `--dry-run` previews without repository writes, push, PR edits
+or memory writes. The opt-in [html-lens.md](html-lens.md) loads only behind its config gate.
 
 Define `FLOWCTL` from `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl`, then
 `<plugin-root>/scripts/flowctl` (two levels above this SKILL.md), then `.flow/bin/flowctl`, choosing the first
