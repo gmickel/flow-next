@@ -98,7 +98,7 @@ fi
         else:
             flowctl = SCRIPTS / "flowctl"
         fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", WORKFLOW.read_text(encoding="utf-8"), re.S) if "# --- §0.5:" in f)
-        env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), RALPH=str(int(ralph)), NO_MERMAID="0", WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
+        env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), RALPH=str(int(ralph)), WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
         # Observe the exact head seen by the artifact/export phase and PR creation.
         tail = '''
 printf '%s' "$PHASE0_CONTEXT" > "$OBSERVATIONS/context.json"

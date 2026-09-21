@@ -18,8 +18,16 @@ OUT="$ROOT/$POINT"; mkdir -p "$OUT"
 git -C "$FIX" reset -q --hard "$HEAD_SHA"
 git -C "$FIX" clean -qfdx -- .flow/artifacts .flow/tmp 2>/dev/null || true
 [ "$(git -C "$FIX" rev-parse HEAD)" = "$HEAD_SHA" ]
-# A run may pick its own scratch directory; park any leftover so the next run starts cold.
-for d in "$HOME"/.cache/make-pr-*; do if [ -e "$d" ]; then mv "$d" "$OUT/scratch-before-run$RUN-$(basename "$d")"; fi; done
+# A run picks its own scratch directory, under the user cache or beside the fixture.
+# Park every leftover so the next run starts cold: anything matching make-pr-* in the
+# user cache, and anything in the harness root that is not the fixture, the harness,
+# a point directory or the parking area itself.
+PARK="$ROOT/parked/$POINT-before-run$RUN"
+for d in "$HOME"/.cache/make-pr-* "$ROOT"/*; do
+  [ -e "$d" ] || continue
+  case "$(basename "$d")" in pr449|measure.sh|parked|p[0-9]-*) [ "$(dirname "$d")" = "$ROOT" ] && continue ;; esac
+  mkdir -p "$PARK"; mv "$d" "$PARK/"
+done
 
 STREAM="$OUT/run$RUN.stream.jsonl"
 START=$(date +%s.%N)

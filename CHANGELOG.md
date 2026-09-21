@@ -14,6 +14,32 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- The obsolete make-pr `--no-mermaid` flag is removed.
+
+- make-pr bodies are now one short briefing that flowctl renders from the aid
+  artifact, at most 40 lines for any pull-request size: Why, What changes for a
+  user or operator, Scope, Blast radius, Verification, Tradeoffs and Open
+  items, each omitted when empty. Scope shows numbered diff-fenced file trees
+  with a purpose and requirement on each described file, one counted line for
+  the rest, and one coverage line. The compact and full forms, their size
+  threshold, the machine-identity proof rows, the per-row evidence column, the
+  review-plan section and the generated-by footer are gone; artifact id, base
+  and head ride in one HTML comment. The stored artifact, the HTML lens and
+  `html-input` are unchanged. This resolves the body-length report in #447,
+  which measured bodies at 2,700 to 3,700 words. Thanks to @flecamos for the
+  report.
+- The aid artifact accepts four optional authored strings (`userImpact`,
+  `blastRadius`, `tradeoffs`, `openItems`) and an optional `outcome` (`pass`,
+  `fail`, `unverified`) on each proof cell. The renderer ticks only `pass`;
+  cells without an outcome render as plain items. The additions are additive:
+  the schema version stays 1 and stored artifacts remain valid. See the
+  [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md).
+- make-pr composes the aid artifact after the spec-close commit, so the
+  artifact's head equals the pull request's head. An explicit `--base <branch>`
+  now resolves against `origin/<branch>`, so a stale local base no longer
+  widens the export. The make-pr instruction text an ordinary run loads drops
+  from about 2,900 lines to under 600.
+
 - PR aids written from sparse input remain reusable at make-pr's resolve step
   when base and head match. Explicit same-head successors still publish
   deliberate corrections to authored content.

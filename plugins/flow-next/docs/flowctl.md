@@ -558,12 +558,12 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and d
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 ```
 
-**Deterministic traceability slice.** Four additive fields back the make-pr "Review plan" render with data - all reproducible from repo state at export time, no LLM judgment (the render layer judges, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
+**Deterministic traceability slice.** Four additive fields supply make-pr with traceability data - all reproducible from repo state at export time, no LLM judgment (the host authors the artifact, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
 
-- `diff_summary.files[].changed_symbols` - the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git can't detect a function - the render falls back to file-level anchoring, never fabricates.
-- `diff_summary.files[].derived` - `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror and `.flow/` state - there is no default dual-copy pair, since nothing is copied into a repo any more; the `dual-copy` kind stays supported for projects that configure their own pairs); a configured value fully replaces the default.
-- `removed_export_refs` - top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
-- `tasks[].evidence.files` - each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
+- `diff_summary.files[].changed_symbols` - the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git cannot detect a function; the author can use file-level evidence.
+- `diff_summary.files[].derived` - `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files to inform the artifact author's attention classifications. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror and `.flow/` state - there is no default dual-copy pair, since nothing is copied into a repo any more; the `dual-copy` kind stays supported for projects that configure their own pairs); a configured value fully replaces the default.
+- `removed_export_refs` - top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. An empty list adds no briefing content. False positives are acceptable (they steer a human look); completeness is never claimed.
+- `tasks[].evidence.files` - each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the author can map tasks to files and commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
 
 **Declared vs evidenced coverage (fn-180, #301).** `tasks_summary` answers two
 distinct questions with two sets: `uncovered_r_ids` (existing, unchanged) is
@@ -1313,8 +1313,25 @@ generation at
 `.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`; it never
 overwrites an existing generation. `current` returns a labeled
 `current|absent|stale|unsupported|invalid` selection and exposes no artifact on
-non-current states. `render` emits deterministic compact/full GitHub Markdown
-for a validated file or the supported current generation.
+non-current states. `render` emits one deterministic Markdown briefing for a
+validated file or the supported current generation, regardless of diff size.
+Empty sections disappear; grouped file trees and proof-cell checklists carry
+the review content. To meet 40 lines (including blanks), collapse stops as soon
+as the body fits: no-outcome proof cells, pass cells, later groups' file rows,
+the requirement table, the whole scope, then authored lines beyond the first
+(tradeoffs, blast radius, user/operator change, open items), and finally
+unverified cells followed by fail cells. Proof cells collapse from the end.
+In ordinary collapse, a step is applied only when it shortens the rendered
+body, including blank lines and counted summaries; otherwise content stays.
+The 40-line bound takes precedence: a final pass shares one checkpoint across
+no-outcome, pass, unverified and fail proof cells, hiding only as many as needed
+into one line with exact counts per outcome. Group
+counts stay below titles and file trees, with a preceding blank line; the
+next group title follows directly. Why and coverage remain. Thesis
+reflow precedes all collapse; a thesis whose lines plus its four scaffolding
+lines exceed 40 stays complete, with other content counted. See the
+[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,
+proof outcomes and collapse behavior.
 
 `--diff-files` binds membership, Git state, and churn to a JSON map produced
 from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,

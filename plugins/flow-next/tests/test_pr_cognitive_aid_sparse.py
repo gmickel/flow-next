@@ -76,7 +76,10 @@ class SparseInputTests(unittest.TestCase):
                                  flowctl.render_pr_cognitive_aid_markdown(expected).encode("utf-8"))
                 if value is sparse:
                     self.assertIn(described, output.getvalue())
-                    self.assertIn(omitted, output.getvalue())
+                    # fn-252 renders unclassified expansion rows as an honest
+                    # count; lossless HTML below still retains the actual path.
+                    self.assertNotIn(omitted, output.getvalue())
+                    self.assertIn("1 not described file", output.getvalue())
                 output = StringIO()
                 with redirect_stdout(output):
                     flowctl.cmd_pr_cognitive_aid_html_input(args)

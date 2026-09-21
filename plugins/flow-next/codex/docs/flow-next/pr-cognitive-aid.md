@@ -44,6 +44,28 @@ The PR body still travels with the PR; the local aid files do not.
 
 ## Sparse authoring
 
+Four optional authored fields are additive within `changeWalkthrough`.
+The stored `schemaVersion` remains `1` and the artifact path above is unchanged.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `userImpact` | string | What changes for a user or operator. |
+| `blastRadius` | string | Who or what the change touches and why it is safe or risky. |
+| `tradeoffs` | string | Rejected alternatives a reviewer would otherwise ask about. |
+| `openItems` | string | Work that remains unfinished. |
+
+Each field allows an empty string and up to 4,000 characters. Omit fields with
+no authored content. Existing artifacts without them remain valid. Wrong types
+are rejected with the field's path; unknown fields remain rejected.
+
+Each `changeWalkthrough.proof[]` cell also accepts an additive optional
+`outcome` string with exactly three values: `pass`, `fail`, or `unverified`.
+A verification step nobody ran is a proof cell with outcome `unverified`;
+its `value` explains the gap. Cells without an outcome remain valid, preserving
+artifacts stored before this addition. Invalid outcomes are rejected with the
+cell's path. All four input entry points below preserve the authored fields
+and proof-cell outcomes during sparse expansion and storage.
+
 Validate, write, render --file, and html-input --file accept rows with only
 judgment fields. Missing `changeType`, `additions`, and `deletions` are filled
 from the bound diff. An omitted `diffUrl` becomes
@@ -55,7 +77,7 @@ a deleted path, which has no blob at the head, and if the derived URL exceeds
 the v1 length bound. The path shape is the one the pull-request forge that
 make-pr opens against serves; a reader on another forge should treat the link
 as advisory. Readers receive either that literal
-string shape or no `diffUrl` key, which renders as a dash. Supplied links retain
+string shape or no `diffUrl` key. Supplied links retain
 the existing URL-safety validation; they need not equal the derived link.
 Explicit counts and change types must match the bound diff. Row references
 inherit the corresponding group fields unless explicitly supplied.
@@ -111,6 +133,73 @@ Full validation rules, bounds, and fallback behavior are defined by the
 [`pr-cognitive-aid` flowctl commands](flowctl.md#pr-cognitive-aid). The HTML
 presentation boundary remains documented in
 [`html-artifacts.md`](html-artifacts.md).
+
+## Markdown briefing
+
+Every pull-request size uses the same deterministic briefing. The artifact
+supplies all content; rendering reads no live Flow state. Invalid artifacts
+produce no briefing, so make-pr uses its existing fallback.
+
+Sections appear in this order, and empty sections have neither a heading nor
+a placeholder:
+
+| Section | Artifact content |
+| --- | --- |
+| Why | `changeWalkthrough.thesis`, with the intent and approach. |
+| What changes for a user or operator | `changeWalkthrough.userImpact`. |
+| Scope | Grouped files and requirement coverage from the artifact. |
+| Blast radius | `changeWalkthrough.blastRadius`. |
+| Verification | `changeWalkthrough.proof[]`. |
+| Tradeoffs | `changeWalkthrough.tradeoffs`. |
+| Open items | `changeWalkthrough.openItems`. |
+
+Scope uses one numbered, diff-fenced file tree per group. Each described file carries its
+one-line purpose and requirement IDs. Remaining files collapse to a counted
+line that distinguishes mechanical files from files not described; an empty
+summary never implies safe-to-skim status. A group with no described files
+shows its title and that count. One coverage line maps requirement IDs to the
+numbers of the groups that evidence them and names uncovered requirements; a
+requirement evidenced only by groups without files names those groups. A per-criterion
+table appears only when a requirement is unevidenced or undeclared. Requirement
+sources in `sources[]` supply the declared set, including requirements cited
+by no group.
+
+Verification renders only authored proof cells. Outcome `pass` receives a
+checked box; `fail` and `unverified` receive unchecked boxes with their distinct
+status and the cell's note. A cell without an outcome is a plain list item with no
+checkbox. Old artifacts therefore keep their evidence without gaining a pass
+claim. Proof cells with no outcome are still valid, and absent proof cells
+omit the section entirely.
+
+The renderer fits ordinary briefings within 40 lines, counting blank lines.
+Before collapsing anything, it reflows a multiline thesis if needed, unless
+that thesis plus its Why heading, two blank lines and identity comment already
+exceeds 40 lines. That exceptional thesis remains in full; other content is
+counted. Why and the coverage line never collapse.
+
+Collapse stops as soon as the body fits: proof cells without outcomes first,
+then pass cells, each from the end; described file rows from later groups
+before earlier groups; the requirement table; the whole scope; then lines
+beyond the first in tradeoffs, blast radius, user/operator change and open
+items; finally unverified cells, then fail cells, each from the end.
+In ordinary collapse, a step is applied only when it shortens the rendered
+body, including blank lines and counted summaries. Candidates accumulate
+until their counted form saves lines; otherwise the authored content stays.
+The 40-line bound takes precedence: if still over budget, a final pass uses
+one shared checkpoint across no-outcome, pass, unverified and fail proof cells,
+hiding only as many as needed into one line with exact counts per outcome.
+Proof counts distinguish each outcome. Counted lines and coverage have a
+preceding blank line. Group counts remain below their titles and any file
+tree, preserving that separation; the next group's title follows the count
+directly, without an additional blank line.
+Apostrophes and quotation marks render literally; markup-injection characters
+remain neutralized.
+
+Artifact ID, base SHA and head SHA appear together in one invisible HTML
+comment. File statistics, repeated provenance, review plans and generated-by
+footers stay out of the visible briefing. The complete stored artifact remains
+available to the HTML lens and other consumers; neither its lossless
+`html-input` output nor the lens changes with the markdown briefing.
 
 ## Canonical fixture and downstream vendoring
 

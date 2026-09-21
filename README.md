@@ -107,7 +107,7 @@ Use installation commands in your terminal or the host's plugin interface as sho
 
 ## Land a pull request
 
-`/flow-next:land <PR>` resolves feedback and CI for one named PR and squash merges when currently authorized. The completed spec and final task statuses are committed by make-pr before the PR opens; the merge carries them to the base. Land reads every matching spec at the PR head and requires all to be closed.
+`/flow-next:land <PR>` resolves feedback and CI for one named PR and squash merges when currently authorized. The completed spec and final task statuses are committed by make-pr before it composes the aid artifact and opens the PR; the merge carries them to the base. Land reads every matching spec at the PR head and requires all to be closed.
 
 For several PRs, enumerate open PRs and inspect each head: select it only when at least one spec has `branch_name` equal to its head branch and every such spec is closed (`status: done`), then invoke land for each selected PR with current merge authorization. Re-read each PR before its invocation; land never discovers a repository-wide batch.
 

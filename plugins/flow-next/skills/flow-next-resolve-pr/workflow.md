@@ -263,11 +263,11 @@ fi
 
 ### Spec decision context (shared — load ONCE, pass to every resolver)
 
-Reviewers ask *"why this approach?"* / *"why is X out of scope?"* — and the answers are RECORDED in the PR's authoring spec (its `## Decision Context`, boundaries) and its `knowledge/decisions/*` memory. Without this a resolver reconstructs rationale from code archaeology, and — worse — can `fixed` a suggestion that contradicts a **deliberate** spec decision, because the `not-addressing`/`fixed-differently` judgment has no access to the intent record. Derive the spec from the branch (make-pr §0.2 pattern) and load the decision context once:
+Reviewers ask *"why this approach?"* / *"why is X out of scope?"* — and the answers are RECORDED in the PR's authoring spec (its `## Decision Context`, boundaries) and its `knowledge/decisions/*` memory. Without this a resolver reconstructs rationale from code archaeology, and — worse — can `fixed` a suggestion that contradicts a **deliberate** spec decision, because the `not-addressing`/`fixed-differently` judgment has no access to the intent record. Derive the spec from the branch (make-pr Phase 0 pattern) and load the decision context once:
 
 ```bash
 # find (not a glob) so a missing legacy .flow/epics/ never errors under zsh nomatch,
-# and both dirs are scanned (make-pr §0.2 dual-dir). $REPO_ROOT-anchored throughout.
+# and both dirs are scanned (make-pr Phase 0 dual-dir). $REPO_ROOT-anchored throughout.
 CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 SPEC_ID=""; SPEC_PATH=""; DECISIONS_JSON="[]"
 if [[ -n "$CURRENT_BRANCH" ]]; then
@@ -277,7 +277,7 @@ if [[ -n "$CURRENT_BRANCH" ]]; then
   done < <(find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null)
 fi
 if [[ -n "$SPEC_ID" ]]; then
-  SPEC_PATH="$REPO_ROOT/.flow/specs/${SPEC_ID}.md"              # .md sidecar always under .flow/specs/ (make-pr §0.2)
+  SPEC_PATH="$REPO_ROOT/.flow/specs/${SPEC_ID}.md"              # .md sidecar always under .flow/specs/ (make-pr Phase 0)
   DECISIONS_JSON="$($FLOWCTL memory list --track knowledge --category decisions --json 2>/dev/null | jq -c '[.entries[]? | {id: .entry_id, title, path}]' 2>/dev/null || echo '[]')"
 fi
 ```
@@ -455,7 +455,7 @@ The 2-cycle bound is identical in both modes. Under `AUTONOMOUS=1` the escalatio
 
 **Optional. Runs only when the tracker bridge is active AND `resolvePr` is opted in, after the resolution pass settles (Phase 9 found nothing left to loop on, or only `needs-human` threads remain). With no tracker configured this is a no-op.** Posts an optional resolution comment to the linked tracker issue summarizing what was addressed on the PR — append-only (R8), conflict-free.
 
-The linked spec id comes from the PR's spec association (the same `SPEC_ID` make-pr used; resolve `flowctl show <spec-id>` from the branch / PR body breadcrumb as elsewhere in this skill).
+The linked spec id comes from the PR's spec association (the same `SPEC_ID` make-pr used; resolve `flowctl show <spec-id>` from the branch as elsewhere in this skill).
 
 ```bash
 LEAF="$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — work SKILL.md)
