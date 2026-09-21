@@ -1,6 +1,6 @@
 # make-pr measurement record
 
-Measurement record for fn-249 R8 and fn-252 R11. Four points on one fixed pull
+Measurement record for fn-249 R8 and fn-252 R11. Five points on one fixed pull
 request, same model, same method:
 
 | Point | make-pr under test | Status |
@@ -9,6 +9,7 @@ request, same model, same method:
 | p1-after-input | after fn-249 (sparse aid input), branch head `3fc36c96` | recorded 2026-09-20 |
 | p2-after-briefing | after fn-252 (briefing body), branch head `2968cbbe` | recorded 2026-09-21 |
 | p3-after-readable | after #458 (full-render body, several specs), integration branch `e9092520` | recorded 2026-09-21 |
+| p4-after-polish | after #460 (linked rows, rendered group summaries, artifact skeleton in the skill), integration branch `928123a8` | recorded 2026-09-21 |
 
 ## Method
 
@@ -199,6 +200,45 @@ That matches what the first real several-spec dry run reported: the authoring
 guidance leaves the object shape to be discovered through validation errors.
 The cost now sits in authoring round trips, not in instruction text or body
 length.
+
+## p4-after-polish (2026-09-21)
+
+Same fixture, model, harness and cold start. Plugin under test: the integration
+branch at `928123a8`, after #460 (file rows as a linked list, group summaries
+rendered, and a validated artifact skeleton plus the authoring limits in the
+skill).
+
+| Run | Output tokens | Tool calls | Wall clock (s) |
+|---|---|---|---|
+| 1 | 7,946 | 13 | 100.1 |
+| 2 | 9,075 | 14 | 218.6 |
+| 3 | 8,174 | 11 | 96.9 |
+| **Median** | **8,174** | **13** | **100.1** |
+
+| Median | p0 | p1 | p2 | p3 | p4 | p4 vs p0 |
+|---|---|---|---|---|---|---|
+| Output tokens | 21,627 | 25,653 | 10,918 | 11,787 | 8,174 | -62.2% |
+| Tool calls | 22 | 20 | 15 | 19 | 13 | -9 |
+| Wall clock (s) | 251.1 | 273.3 | 129.3 | 137.5 | 100.1 | -60.1% |
+
+**Result: the lowest point so far on all three measures.** Tool calls fell from
+19 to 13 against p3, which is what the skeleton was for: authors no longer
+discover the artifact's shape through validation errors.
+
+Read with care:
+
+- Run 2's wall clock (218.6 s) is an outlier outside the model: 105 s of it is
+  API time, in line with the other runs, and its tokens and calls are ordinary.
+  The median is unaffected; a mean would not be.
+- Part of the token drop is not the skill: no p4 run repeated the rendered body
+  in its final message (2,026 to 2,781 characters against 6,376 to 7,147 at p3).
+  Whether a run echoes the body has moved totals by thousands of tokens at every
+  point in this record, so the comparison of tool calls is the firmer signal.
+- Every run loaded the plugin from the integration worktree, read the two short
+  skill files, and got back a rendered body with the size line and ten or eleven
+  linked rows. Runs still made two or three `validate` calls each (a dry run
+  validates; a real run calls `write` once); one error seen was a head SHA taken
+  from somewhere other than the export.
 
 ## Limits
 
