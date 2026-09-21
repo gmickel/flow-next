@@ -32,11 +32,13 @@ class LandUpgradeDocsTest(unittest.TestCase):
         recovery = (DOCS / "troubleshooting.md").read_text(encoding="utf-8")
         for token in ("rebase --onto", "--force-with-lease", "gh pr edit"):
             self.assertIn(token, recovery)
-        unreleased = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("## Unreleased", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("major", unreleased)
-        self.assertIn("#landing-upgrade", unreleased)
+        # The notes live in whichever changelog section retired the keys: Unreleased
+        # while staged, the release section once cut.
+        sections = ("\n" + (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")).split("\n## ")
+        notes = next(section for section in sections if "#landing-upgrade" in section)
+        self.assertIn("major", notes)
         for key in RETIRED:
-            self.assertIn("land." + key, unreleased)
+            self.assertIn("land." + key, notes)
 
 
 if __name__ == "__main__":
