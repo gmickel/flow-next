@@ -34654,7 +34654,7 @@ def spec_short_id(spec_id: str) -> str:
 def specs_closed_in_range(
     flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
 ) -> list[str]:
-    """Return newly closed specs with work completed in range, plus the host."""
+    """Return newly closed specs whose task files the range touches, plus the host."""
     repo_root = get_repo_root()
     closed = {host_spec_id} if host_spec_id else set()
     try:

@@ -241,6 +241,16 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [sid])
 
+    def test_task_body_change_alone_counts(self):
+        sid = self.spec(21, "open")
+        body = self.flow / "tasks" / f"{sid}.1.md"
+        body.write_text("# Task\n", encoding="utf-8")
+        base = self.commit()
+        self.spec(21, "done")
+        body.write_text("# Task\n\nDone summary.\n", encoding="utf-8")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [sid])
+
     def test_legacy_and_renamed_already_done_identity(self):
         old = self.spec(17, "done")
         fresh = self.spec(18, "open")
