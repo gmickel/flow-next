@@ -231,6 +231,15 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
 
+    def test_task_minted_in_range_counts_even_when_its_tracked_status_is_stale(self):
+        # A hand-recorded close can leave the tracked task record at its minted
+        # status; the task file appearing in the range is the evidence of work.
+        base = self.commit()
+        sid = self.spec(19, "done")
+        self.task(sid, "todo")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [sid])
+
     def test_legacy_and_renamed_already_done_identity(self):
         old = self.spec(17, "done")
         fresh = self.spec(18, "open")

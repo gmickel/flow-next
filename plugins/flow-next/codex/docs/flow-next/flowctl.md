@@ -571,7 +571,7 @@ flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 
 The closed set includes specs in the Flow specs or legacy epics directory that
 are `done` at HEAD, absent or not `done` at the merge base by JSON `id`, and have
-at least one task changed to `done` in that range, plus the host spec.
+at least one of its task files changed in that range, plus the host spec.
 Record-only closes are excluded. A sibling is also excluded when its recorded
 branch exists locally or under `origin` and its spec is already done at that
 branch's merge base with HEAD: the close belongs to HEAD's own branch history.

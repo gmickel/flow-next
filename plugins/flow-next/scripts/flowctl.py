@@ -34669,17 +34669,22 @@ def specs_closed_in_range(
     )
     if rc:
         raise ValueError(f"Cannot read closed specs: {err.strip()}")
-    paths = [path for path in out.split("\0") if path.endswith(".json")]
+    changed_paths = [path for path in out.split("\0") if path]
+    paths = [path for path in changed_paths if path.endswith(".json")]
     spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
                   and Path(path).stem != host_spec_id]
     if not spec_paths:
         return list(closed)
 
     def record(revision: str, path: str) -> dict[str, Any]:
+        # Absence is read from the tree, never from git's localized stderr.
+        rc, listed, err = _export_run_git(["ls-tree", "--name-only", revision, "--", path], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        if not listed.strip():
+            return {}
         rc, text, err = _export_run_git(["show", f"{revision}:{path}"], cwd=repo_root)
         if rc:
-            if "does not exist in" in err or "exists on disk, but not in" in err:
-                return {}
             raise ValueError(f"Cannot read closed specs: {err.strip()}")
         value = json.loads(text)
         if not isinstance(value, dict):
@@ -34688,12 +34693,14 @@ def specs_closed_in_range(
 
     # Include deleted paths: a rename must compare identities, not filenames.
     base_specs = [record(base_commit, path) for path in spec_paths]
-    already_done = {item.get("id") for item in base_specs if item.get("status") == "done"}
+    # Identity is the short id: a slug rename of a spec done at base is not a new close.
+    already_done = {spec_short_id(item["id"]) for item in base_specs
+                    if item.get("status") == "done" and isinstance(item.get("id"), str) and is_spec_id(item["id"])}
     candidates = set()
     for path in spec_paths:
         head = record("HEAD", path)
         sid = head.get("id")
-        if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and sid not in already_done:
+        if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and spec_short_id(sid) not in already_done:
             def read_close(commit: str, path: str = path) -> tuple[bool, str]:
                 return record(commit, path).get("status") == "done", ""
 
@@ -34705,18 +34712,14 @@ def specs_closed_in_range(
                 raise ValueError(f"Cannot read closed specs: {error}")
             if not stacked_ref:
                 candidates.add(sid)
-    task_paths = [path for path in paths if Path(path).parent.as_posix() == tasks_dir] if candidates else []
-    base_tasks = [record(base_commit, path) for path in task_paths] if candidates else []
-    done_tasks = {item.get("id", Path(path).stem) for path, item in zip(task_paths, base_tasks, strict=True)
-                  if item.get("status") == "done"}
-    for path in task_paths if candidates else []:
-        head = record("HEAD", path)
-        tid = head.get("id", Path(path).stem)
-        if not isinstance(tid, str):
-            continue
-        sid = tid.rsplit(".", 1)[0]
-        if sid in candidates and head.get("status") == "done" and tid not in done_tasks:
-            closed.add(sid)
+    # Work happened here when the range touches one of the spec's task files (record
+    # or body). A record-only close touches the spec file alone and stays out. The
+    # tracked task status is not consulted: it is persisted late and can read stale.
+    for path in changed_paths:
+        if Path(path).parent.as_posix() == tasks_dir:
+            sid = Path(path).stem.rsplit(".", 1)[0]
+            if sid in candidates:
+                closed.add(sid)
     return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
 
 

@@ -38,7 +38,7 @@ for candidate in origin/main main origin/master master; do
   fi
 done
 if [[ -z "$SPEC_ID" ]]; then
-  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json)
+  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
   if [[ -z "$SPEC_ID" ]]; then
     [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]] && exit 2
@@ -48,7 +48,7 @@ fi
 CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
 if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
   [[ "$CHAIN_BASE" == origin/* ]] && { git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2; }
-  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json)
+  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
     # Closed-set membership excludes closes inherited from a stacked parent branch.
     if printf '%s' "$CLOSED_IDS" | jq -e --arg dep "$DEP" '.spec_ids | index($dep) != null' >/dev/null; then continue; fi
