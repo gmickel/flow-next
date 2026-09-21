@@ -34,6 +34,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [spec set-no-plan / spec clear-no-plan](#spec-set-no-plan-spec-clear-no-plan)
   - [spec add-dep / spec rm-dep](#spec-add-dep-spec-rm-dep)
   - [spec set-backend](#spec-set-backend)
+  - [spec closed-in-range](#spec-closed-in-range)
   - [spec export-cognitive-aid](#spec-export-cognitive-aid)
   - [spec skeleton](#spec-skeleton)
   - [task create](#task-create)
@@ -550,6 +551,13 @@ Options:
 
 Format: `backend:model` where backend is a CLI name and model is backend-specific.
 
+### spec closed-in-range
+
+`flowctl spec closed-in-range --base <ref> [--json]` lists the closed set defined
+below, without adding a host. It resolves the merge base of the ref and HEAD and
+reads local committed objects only; it never writes or fetches. Text prints one ID
+per line in set order; JSON returns `{"spec_ids": [...]}` in the same order.
+
 ### spec export-cognitive-aid
 
 Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and diff stats into one structured payload (consumed by `/flow-next:make-pr`).
@@ -558,11 +566,18 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and d
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 ```
 
-The closed set consists of spec JSON files under the Flow specs directory that
-are `done` at HEAD and absent or not `done` at the merge base, plus the host
-spec passed to the command. `specs_closed_in_range` reads local committed
-objects with `git ls-tree` and `git show`; it never fetches or reads working-tree
-status to decide membership. IDs are ordered by numeric spec number.
+The closed set includes specs in the Flow specs or legacy epics directory that
+are `done` at HEAD, absent or not `done` at the merge base by JSON `id`, and have
+at least one task changed to `done` in that range, plus the host spec.
+Record-only closes are excluded. A sibling is also excluded when its recorded
+branch exists locally or under `origin` and its spec is already done at that
+branch's merge base with HEAD: the close belongs to HEAD's own branch history.
+Squash landings, deleted branches and missing `branch_name` remain eligible.
+True merge commits are conservatively excluded, consistent with `spec chain`.
+These ancestry reads apply only to sibling candidates. One local `git diff --name-only` selects changed
+spec and task files; candidate ancestry supplies the additional close evidence. No fetch or working-tree status
+is used. IDs sort by numeric spec number, then full ID. External Flow directories
+fall back to a single-spec export.
 When several specs belong, the additive `specs` array contains each spec's
 `id`, `short_id` (for example `fn-250`), title and `spec_sections` (including
 goal/context and acceptance criteria with IDs and text), `tasks` with evidence,

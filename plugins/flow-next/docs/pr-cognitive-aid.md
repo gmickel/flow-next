@@ -51,9 +51,16 @@ or with one member, existing validation and rendering remain unchanged and
 qualified IDs are invalid. Sparse expansion preserves `specIds`.
 
 Row tags and per-criterion tables retain qualified IDs. Coverage has one line
-per spec in `specIds` order, for example `fn-250: R1 → 1; R2 → 1, 2`.
+per spec in `specIds` order, for example `Coverage fn-250: R1 → 1; R2 → 1, 2`.
 Specs without declared requirements have no coverage line; declared but
 uncovered requirements remain visible.
+
+Membership requires a spec newly done at HEAD and at least one task completed in the range; the host is always included, while record-only sibling closes are excluded. Siblings whose recorded branch has a done spec at its merge base with HEAD are also excluded, including true merge commits; squash landings, deleted branches, and absent branch names remain eligible.
+The undeclared-requirements abort applies only to the host; sibling requirements remain visible as uncovered.
+Under several specs, an undeclared row tag appears only when its group cites a spec that declares requirements.
+Land matches a PR to a spec by branch name, so a several-spec PR is not landed by it and is merged by hand.
+The HTML lens fallback inputs read the host spec only.
+Two listed specs sharing a number within the same ID prefix cannot be qualified unambiguously.
 
 ## Sparse authoring
 

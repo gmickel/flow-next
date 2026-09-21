@@ -29446,9 +29446,8 @@ def validate_pr_cognitive_aid(
             return bool(_PR_COGNITIVE_AID_RID_RE.fullmatch(value))
         short, separator, rid = value.partition(":")
         return bool(separator and _PR_COGNITIVE_AID_RID_RE.fullmatch(rid)
-                    and re.fullmatch(r"fn-[1-9][0-9]*", short)
-                    and sum(member == short or member.startswith(short + "-")
-                            for member in spec_ids if member is not None) == 1)
+                    and sum(spec_short_id(member) == short
+                            for member in spec_ids if member is not None and is_spec_id(member)) == 1)
 
     spec_scope = "artifact.specIds" if multi_spec else "artifact.specId"
     rid_message = "must be a qualified R-ID of exactly one specIds member" if multi_spec else "must be a canonical R-ID"
@@ -30123,12 +30122,12 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         if len(artifact.get("specIds", [])) > 1:
             per_spec = []
             for member in artifact["specIds"]:
-                short = re.match(r"^[^-]+-\d+", member)[0]
+                short = spec_short_id(member)
                 entries = [f"{rid.split(':', 1)[1]} → " +
                            (evidenced_by(evidence) if evidence else "uncovered")
                            for rid, evidence in coverage.items() if rid.startswith(short + ":")]
                 if entries:
-                    per_spec.append(f"{short}: " + "; ".join(entries))
+                    per_spec.append(f"Coverage {short}: " + "; ".join(entries))
             coverage_line = "\n\n".join(per_spec)
         if any(not evidence for evidence in coverage.values()):
             table = ["| Requirement | Groups |", "|---|---|"] + [
@@ -30150,6 +30149,19 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def tree_text(value: str) -> str:
         return " ".join(value.splitlines())
 
+    multi_spec = len(artifact.get("specIds", [])) > 1
+    declaring_specs = {rid.split(":", 1)[0] for rid in declared}
+
+    def group_declares(group: dict[str, Any]) -> bool:
+        if not multi_spec:
+            return bool(declared)
+        cited = {rid.split(":", 1)[0] for rid in requirements(group)}
+        for ref in group["sourceRefs"]:
+            source = sources[ref]
+            if source["kind"] in ("spec", "task"):
+                cited.add(spec_short_id(source["ref"].split(".", 1)[0]))
+        return bool(cited & declaring_specs)
+
     trees = []
     for group in groups:
         if not group["files"]:
@@ -30163,7 +30175,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             rids = requirements(record) or requirements(group)
             # Fenced text is literal; flatten newlines so authored content cannot close the fence.
             sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
-            tag = f" [{', '.join(rids) if rids else 'requirement undeclared'}]" if declared else ""
+            tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
             row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])}{tag}")
             described.append(row)
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
@@ -34631,38 +34643,99 @@ def _export_deferred_findings(
     return deferred_findings
 
 
+def spec_short_id(spec_id: str) -> str:
+    """Return the shared native or tracker-keyed requirement qualifier."""
+    parsed = parse_any_id(spec_id)
+    if parsed is None or parsed[3] is not None:
+        raise ValueError(f"Invalid spec ID: {spec_id}")
+    return f"{parsed[1]}-{parsed[2]}"
+
+
 def specs_closed_in_range(
     flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
 ) -> list[str]:
-    """Return numeric-ordered HEAD specs newly done since base, plus the host.
-
-    Read committed objects only; never fetch or infer membership from branches.
-    """
+    """Return newly closed specs with work completed in range, plus the host."""
     repo_root = get_repo_root()
-    specs_path = (flow_dir / SPECS_DIR).resolve().relative_to(repo_root.resolve()).as_posix()
-
-    def git(*args: str) -> str:
-        rc, out, err = _export_run_git(list(args), cwd=repo_root)
-        if rc:
-            raise ValueError(f"Cannot read closed specs: {err.strip()}")
-        return out
-
-    paths = {}
-    for revision in (base_commit, "HEAD"):
-        paths[revision] = set(git("ls-tree", "-r", "--name-only", "-z", revision,
-                                  "--", specs_path).split("\0"))
     closed = {host_spec_id} if host_spec_id else set()
-    for path in paths["HEAD"]:
-        spec_id = Path(path).stem
-        if not path.endswith(".json") or not is_spec_id(spec_id):
+    try:
+        relative = flow_dir.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return list(closed)  # External Flow state has no repo-local range.
+    spec_dirs = {(relative / directory).as_posix() for directory in (SPECS_DIR, EPICS_DIR)}
+    tasks_dir = (relative / TASKS_DIR).as_posix()
+    rc, out, err = _export_run_git(
+        ["diff", "--name-only", "--no-renames", "-z", base_commit, "HEAD", "--",
+         *sorted(spec_dirs), tasks_dir], cwd=repo_root,
+    )
+    if rc:
+        raise ValueError(f"Cannot read closed specs: {err.strip()}")
+    paths = [path for path in out.split("\0") if path.endswith(".json")]
+    spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
+                  and Path(path).stem != host_spec_id]
+    if not spec_paths:
+        return list(closed)
+
+    def record(revision: str, path: str) -> dict[str, Any]:
+        rc, text, err = _export_run_git(["show", f"{revision}:{path}"], cwd=repo_root)
+        if rc:
+            if "does not exist in" in err or "exists on disk, but not in" in err:
+                return {}
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        value = json.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError(f"Expected object in {revision}:{path}")
+        return value
+
+    # Include deleted paths: a rename must compare identities, not filenames.
+    base_specs = [record(base_commit, path) for path in spec_paths]
+    already_done = {item.get("id") for item in base_specs if item.get("status") == "done"}
+    candidates = set()
+    for path in spec_paths:
+        head = record("HEAD", path)
+        sid = head.get("id")
+        if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and sid not in already_done:
+            def read_close(commit: str, path: str = path) -> tuple[bool, str]:
+                return record(commit, path).get("status") == "done", ""
+
+            try:
+                stacked_ref, error = _spec_close_in_head_history(repo_root, head, read_close)
+            except subprocess.CalledProcessError as exc:
+                raise ValueError(f"Cannot read closed specs: {exc}") from exc
+            if error:
+                raise ValueError(f"Cannot read closed specs: {error}")
+            if not stacked_ref:
+                candidates.add(sid)
+    task_paths = [path for path in paths if Path(path).parent.as_posix() == tasks_dir] if candidates else []
+    base_tasks = [record(base_commit, path) for path in task_paths] if candidates else []
+    done_tasks = {item.get("id", Path(path).stem) for path, item in zip(task_paths, base_tasks, strict=True)
+                  if item.get("status") == "done"}
+    for path in task_paths if candidates else []:
+        head = record("HEAD", path)
+        tid = head.get("id", Path(path).stem)
+        if not isinstance(tid, str):
             continue
-        head = json.loads(git("show", f"HEAD:{path}"))
-        if head.get("status") != "done":
-            continue
-        base = json.loads(git("show", f"{base_commit}:{path}")) if path in paths[base_commit] else {}
-        if base.get("status") != "done":
-            closed.add(spec_id)
-    return sorted(closed, key=lambda spec: (int(re.match(r"^[^-]+-(\d+)", spec)[1]), spec))
+        sid = tid.rsplit(".", 1)[0]
+        if sid in candidates and head.get("status") == "done" and tid not in done_tasks:
+            closed.add(sid)
+    return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
+
+
+def cmd_spec_closed_in_range(args: argparse.Namespace) -> None:
+    """List committed range members without changing Flow state."""
+    use_json = getattr(args, "json", False)
+    try:
+        repo_root = get_repo_root()
+        rc, base, err = _export_run_git(["merge-base", args.base, "HEAD"], cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot resolve closed-spec base: {err.strip()}")
+        ids = specs_closed_in_range(get_flow_dir(), base.strip())
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if use_json:
+        json_output({"spec_ids": ids})
+    else:
+        for spec_id in ids:
+            print(spec_id)
 
 
 def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json: bool) -> tuple:
@@ -35014,7 +35087,7 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
                 data = normalize_epic(load_json_or_exit(find_spec_json_path(flow_dir, member), "spec", use_json=use_json))
                 section, tasks, summary, _, _ = _export_spec_summary(flow_dir, data, use_json=use_json)
             payload["specs"].append({
-                **section, "short_id": re.match(r"^[^-]+-\d+", member)[0],
+                **section, "short_id": spec_short_id(member),
                 "tasks": tasks, "tasks_summary": summary,
             })
 
@@ -35867,6 +35940,33 @@ _SPEC_BASE_CACHE: dict[Path, tuple[str, str, bool]] = {}
 _SPEC_BASE_NOTICE_CWDS: set[Path] = set()
 
 
+def _spec_close_in_head_history(repo_root: Path, spec_data: dict, read_spec_close) -> tuple[str, str]:
+    """Return the branch ref proving a close in HEAD ancestry, or a read error."""
+    branch = spec_data.get("branch_name")
+    if branch:
+        for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+            exists = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", ref],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if exists.returncode == 1:  # Missing ref, not an unreadable object.
+                continue
+            exists.check_returncode()
+            ancestry = subprocess.run(
+                ["git", "merge-base", ref, "HEAD"],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+            )
+            if ancestry.returncode == 1:  # Unrelated histories prove nothing.
+                continue
+            ancestry.check_returncode()
+            closed, error = read_spec_close(ancestry.stdout.strip())
+            if error:
+                return "", error
+            if closed:
+                return ref, ""
+    return "", ""
+
+
 def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
     """Return (landed, error, diagnostic) from base evidence, then ancestry.
 
@@ -35945,32 +36045,15 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
             return False, error, ""
         if closed:
             return True, "", ""
-        branch = spec_data.get("branch_name")
-        if branch:
-            for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
-                exists = subprocess.run(
-                    ["git", "show-ref", "--verify", "--quiet", ref],
-                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-                )
-                if exists.returncode == 1:  # Missing ref, not an unreadable object.
-                    continue
-                exists.check_returncode()
-                ancestry = subprocess.run(
-                    ["git", "merge-base", ref, "HEAD"],
-                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-                )
-                if ancestry.returncode == 1:  # Unrelated histories prove nothing.
-                    continue
-                ancestry.check_returncode()
-                closed, error = read_spec_close(ancestry.stdout.strip())
-                if error:
-                    return False, error, ""
-                if closed:
-                    return False, "", (
-                        f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
-                        f"dependency branch {ref} is in this branch's history; "
-                        "fetch the base or land it"
-                    )
+        ref, error = _spec_close_in_head_history(repo_root, spec_data, read_spec_close)
+        if error:
+            return False, error, ""
+        if ref:
+            return False, "", (
+                f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+                f"dependency branch {ref} is in this branch's history; "
+                "fetch the base or land it"
+            )
         # Squash landing, deleted branch, or no recorded branch.
         return True, "", ""
     except (subprocess.CalledProcessError, OSError, ValueError) as exc:
@@ -56251,6 +56334,10 @@ def main() -> None:
     spec_sub = p_spec.add_subparsers(dest="spec_cmd", required=True)
     _add_spec_subparsers(spec_sub, noun="spec", dest="spec_cmd")
     _add_spec_skeleton(spec_sub)
+    p_closed_range = spec_sub.add_parser("closed-in-range", help="List specs completed in a committed range")
+    p_closed_range.add_argument("--base", required=True, help="Base ref (uses its merge base with HEAD)")
+    p_closed_range.add_argument("--json", action="store_true", help="JSON output")
+    p_closed_range.set_defaults(func=cmd_spec_closed_in_range)
 
     # scope — fn-44.1 helper plumbing. Read-only token-safe parsers
     # consumed by `/flow-next:refine` (T2) and `/flow-next:capture`

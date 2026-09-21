@@ -17,8 +17,9 @@ repository:
   `diff_metadata`, `commit`, bound to this spec, its tasks, canonical R-IDs,
   receipts, commits and `$MERGE_BASE..$HEAD_SHA`. Include every declared R-ID, even uncovered.
 - When export has `specs`, set `specIds` to their IDs in export order; keep `specId` as host. Declare every
-  spec's requirements with qualified refs and `rIds` (`fn-250:R4`). Use one group per spec in review order,
-  short ID in its title, each spec's task/evidence summary; commits belonging to no spec get their own group.
+  spec's requirements with qualified refs and `rIds` (`fn-250:R4`). At least one group per spec in review order
+  (two allowed above ten must-read files), short ID in each title, using its task/evidence summary; no-spec commits get a group.
+  Past the seven-step cap, merge the smallest specs into one group whose title names each short ID.
 - `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
   `userImpact` says what changes for a user or operator; `blastRadius` names who
   or what is touched, what to read first and what is unproven; `tradeoffs` records

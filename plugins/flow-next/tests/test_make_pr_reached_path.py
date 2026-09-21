@@ -75,6 +75,21 @@ class MakePrReachedPathTests(unittest.TestCase):
         self.assertIn("Undeclared R-ID coverage", self.workflow)
         self.assertNotIn("Empty R-ID coverage", self.workflow)
 
+    def test_landed_range_and_current_base_skip_chain_parent(self) -> None:
+        fence = self.workflow.split("# fence:chain-detect", 1)[1].split("# --- §0.5", 1)[0]
+        closed_probe = fence.index('spec closed-in-range --base "$CHAIN_BASE" --json')
+        skip = fence.index("'.spec_ids | index($dep) != null'")
+        parent_read = fence.index('DEP_JSON=$("$FLOWCTL" show')
+        self.assertLess(closed_probe, skip)
+        self.assertLess(skip, parent_read)
+        landed = next(line for line in fence.splitlines()
+                      if 'DEP_PR_STATE' in line and 'branch --show-current' in line)
+        for token in ('"MERGED"', '.baseRefName', 'then continue; fi'):
+            self.assertIn(token, landed)
+        self.assertLess(fence.index(landed), fence.index('refs/pull/$DEP_PR_NUMBER/head'))
+        self.assertIn('spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json', fence)
+        self.assertIn("'.spec_ids[-1] // empty'", fence)
+
     def test_codex_mirror_route_when_regenerated(self) -> None:
         """Conductor regenerates the mirror after joining the parallel wave."""
         mirror_html = MIRROR / "html-lens.md"

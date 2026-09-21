@@ -264,7 +264,8 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "cmd_triage_skip"): 4,
                 # fn-250: landed-at-base evidence for chain dependencies
                 # plus local ref existence and ancestry (plain git plumbing, no LLM).
-                ("subprocess.run", "spec_landed_at_base"): 5,
+                ("subprocess.run", "spec_landed_at_base"): 3,
+                ("subprocess.run", "_spec_close_in_head_history"): 2,
                 ("subprocess.run", "read_spec_close"): 2,
                 ("subprocess.run", "_gate_repo_and_head"): 2,
                 ("subprocess.run", "_gate_status_paths"): 1,

@@ -62,8 +62,8 @@ class MultiSpecArtifactTests(unittest.TestCase):
         self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
         self.assertIn("[fn-136:R6]", text)
         self.assertIn("[fn-250:R1]", text)
-        self.assertIn("fn-136: R6 → 1", text)
-        self.assertIn("fn-250: R1 → 1; R7 → uncovered", text)
+        self.assertIn("Coverage fn-136: R6 → 1", text)
+        self.assertIn("Coverage fn-250: R1 → 1; R7 → uncovered", text)
         self.assertLess(text.index("fn-136: R6"), text.index("fn-250: R1"))
         self.assertIn("| fn-250:R7 | unevidenced |", text)
         self.assertNotIn("fn-251:", text)
@@ -80,6 +80,37 @@ class MultiSpecArtifactTests(unittest.TestCase):
                 flowctl.cmd_pr_cognitive_aid_html_input(argparse.Namespace(file=str(path)))
             embedded = output.getvalue().split(">", 1)[1].split("</script>", 1)[0]
             self.assertEqual(json.loads(embedded), value)
+
+    def test_tracker_sibling_validates_and_renders(self):
+        value = json.loads(json.dumps(multi_artifact()).replace("fn-250", "wor-17"))
+        self.assertEqual(flowctl.spec_short_id("wor-17-sibling"), "wor-17")
+        flowctl.validate_pr_cognitive_aid(value)
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("Coverage wor-17: R1 → 1; R7 → uncovered", text)
+        self.assertIn("[wor-17:R1]", text)
+
+    def test_undeclared_tags_follow_group_spec(self):
+        for source_kind, source_ref, tagged in (
+            ("spec", "fn-251-no-requirements", False),
+            ("spec", SPEC_ID, True),
+            ("task", SPEC_ID + ".1", True),
+            ("rid", "fn-136:R6", True),
+            ("diff_metadata", "BASE..HEAD", False),
+        ):
+            with self.subTest(kind=source_kind, ref=source_ref):
+                value = multi_artifact()
+                group = value["changeWalkthrough"]["groups"][2]
+                ref = "diff" if source_kind == "diff_metadata" else "group-spec"
+                if ref != "diff":
+                    value["sources"].append({"id": ref, "kind": source_kind, "ref": source_ref})
+                group.update(sourceRefs=[ref], rIds=[], taskIds=[])
+                for row in group["files"]:
+                    row.update(sourceRefs=["diff"], rIds=[], taskIds=[], summary="")
+                row = group["files"][0]
+                row.update(summary="Review this change", sourceRefs=["diff", "spec"])
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                # A group RID is inherited, so it gets a qualified tag instead.
+                self.assertEqual("[requirement undeclared]" in text, tagged and source_kind != "rid")
 
     def test_invalid_spec_sets(self):
         for ids in ([SIBLING], [SPEC_ID, SPEC_ID], [SPEC_ID, "bad"],
@@ -152,6 +183,11 @@ class ClosedRangeTests(unittest.TestCase):
             f"## Acceptance Criteria\n\n- **R1:** Requirement {number}.\n", encoding="utf-8")
         return sid
 
+    def task(self, sid, status):
+        tid = sid + ".1"
+        (self.flow / "tasks" / f"{tid}.json").write_text(
+            json.dumps({"id": tid, "status": status}), encoding="utf-8")
+
     def commit(self):
         self.git("add", ".flow")
         self.git("commit", "-qm", "state")
@@ -161,6 +197,7 @@ class ClosedRangeTests(unittest.TestCase):
         sid = self.spec(250, "open")
         base = self.commit()
         self.spec(250, "done")
+        self.task(sid, "done")
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [sid])
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base, "fn-2-host"), ["fn-2-host", sid])
@@ -174,22 +211,107 @@ class ClosedRangeTests(unittest.TestCase):
         base = self.commit()
         expected = [self.spec(8, "done"), self.spec(30, "done"), self.spec(250, "done")]
         self.spec(2, "open")
+        for sid in expected:
+            self.task(sid, "done")
         self.commit()
         self.spec(2, "done")  # Dirt must not affect membership.
         self.spec(30, "open")
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), expected)
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base, already), [already, *expected])
 
-    def export(self, module=flowctl, *, multi=False):
+    def test_record_only_close_excluded_and_task_transition_included(self):
+        sid = self.spec(17, "open")
+        self.task(sid, "done")
+        other = self.spec(18, "open")
+        self.task(other, "open")
+        base = self.commit()
+        self.spec(17, "done")
+        self.spec(18, "done")
+        self.task(other, "done")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
+
+    def test_legacy_and_renamed_already_done_identity(self):
+        old = self.spec(17, "done")
+        fresh = self.spec(18, "open")
+        base = self.commit()
+        (self.flow / "epics").mkdir()
+        (self.flow / "specs" / f"{old}.json").rename(self.flow / "epics" / "renamed.json")
+        self.spec(18, "done")
+        (self.flow / "specs" / f"{fresh}.json").rename(self.flow / "epics" / f"{fresh}.json")
+        self.task(old, "done")
+        self.task(fresh, "done")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [fresh])
+
+    def test_non_object_spec_is_value_error(self):
+        sid = self.spec(17, "open")
+        base = self.commit()
+        (self.flow / "specs" / f"{sid}.json").write_text("[]", encoding="utf-8")
+        self.commit()
+        with self.assertRaisesRegex(ValueError, "Expected object"):
+            flowctl.specs_closed_in_range(self.flow, base)
+
+    def test_external_flow_falls_back_without_git(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(flowctl, "_export_run_git") as git:
+            self.assertEqual(flowctl.specs_closed_in_range(Path(tmp), "HEAD", SIBLING), [SIBLING])
+            git.assert_not_called()
+
+    def test_single_export_closed_step_uses_one_git_call(self):
+        real = flowctl.specs_closed_in_range
+        calls = []
+        def counted(*args):
+            with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
+                result = real(*args)
+                calls.extend(git.call_args_list)
+                return result
+        with mock.patch.object(flowctl, "specs_closed_in_range", side_effect=counted):
+            self.export()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].args[0][:2], ["diff", "--name-only"])
+
+    def test_closed_range_command_text_json_and_errors(self):
+        self.spec(30, "open")
+        base = self.commit()
+        for number in (30, 8):
+            self.task(self.spec(number, "done"), "done")
+        self.commit()
+        for use_json in (False, True):
+            output = StringIO()
+            with mock.patch.object(flowctl, "get_flow_dir", return_value=self.flow), redirect_stdout(output):
+                with mock.patch.object(sys, "argv", ["flowctl", "spec", "closed-in-range", "--base", base, *(["--json"] if use_json else [])]):
+                    flowctl.main()
+            ids = json.loads(output.getvalue())["spec_ids"] if use_json else output.getvalue().splitlines()
+            self.assertEqual(ids, ["fn-8-spec", "fn-30-spec"])
+        with redirect_stdout(StringIO()), self.assertRaises(SystemExit) as exc:
+            flowctl.cmd_spec_closed_in_range(argparse.Namespace(base="missing-ref", json=True))
+        self.assertEqual(exc.exception.code, 1)
+
+    def export(self, module=flowctl, *, multi=False, parent_mode=None):
         sid = self.spec(250, "open")
         task = sid + ".1"
         (self.flow / "tasks" / f"{task}.json").write_text("{}", encoding="utf-8")
         (self.flow / "tasks" / f"{task}.md").write_text(
             "---\nsatisfies: [R1]\n---\n\n## Done summary\n\nImplemented.\n", encoding="utf-8")
         base = self.commit()
+        if parent_mode:
+            self.git("checkout", "-qb", "parent")
+            parent = self.spec(251, "done")
+            parent_path = self.flow / "specs" / f"{parent}.json"
+            data = json.loads(parent_path.read_text(encoding="utf-8"))
+            data["branch_name"] = "parent"
+            parent_path.write_text(json.dumps(data), encoding="utf-8")
+            self.task(parent, "done")
+            self.commit()
+            self.git("checkout", "-qb", "child", "HEAD" if parent_mode == "stacked" else base)
+            if parent_mode == "squash":
+                self.git("merge", "--squash", "parent")
+                self.git("commit", "-qm", "Squash parent")
+            elif parent_mode == "merge":
+                self.git("merge", "--no-ff", "-m", "Merge parent", "parent")
         self.spec(250, "done")
         if multi:
-            self.spec(251, "done")
+            self.task(self.spec(251, "done"), "done")
         self.commit()
         with ExitStack() as stack:
             for name, result in {
@@ -211,6 +333,23 @@ class ClosedRangeTests(unittest.TestCase):
 
     def test_single_export_matches_pre_change_bytes(self):
         self.assertEqual(self.export().encode("utf-8"), FIXTURE.read_text(encoding="utf-8").encode("utf-8"))
+
+    def test_stacked_closed_parent_keeps_single_export_and_body(self):
+        payload = self.export(parent_mode="stacked")
+        self.assertEqual(payload.encode("utf-8"), FIXTURE.read_bytes())
+        value = artifact()
+        expected = flowctl.render_pr_cognitive_aid_markdown(value)
+        members = json.loads(payload).get("specs", [])
+        value["specIds"] = [member["id"] for member in members] or [value["specId"]]
+        self.assertEqual(flowctl.render_pr_cognitive_aid_markdown(value), expected)
+
+    def test_squash_landed_parent_is_range_member(self):
+        payload = json.loads(self.export(parent_mode="squash"))
+        self.assertEqual([spec["id"] for spec in payload["specs"]],
+                         ["fn-250-spec", "fn-251-spec"])
+
+    def test_merge_commit_parent_is_conservatively_excluded(self):
+        self.assertEqual(self.export(parent_mode="merge").encode("utf-8"), FIXTURE.read_bytes())
 
     def test_multi_export_reuses_host_summary_and_carries_requirements(self):
         payload = json.loads(self.export(multi=True))
