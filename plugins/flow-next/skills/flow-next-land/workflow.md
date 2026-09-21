@@ -16,23 +16,26 @@ An already merged PR stops the landing path, reason `already merged`:
 repeat only the configured tracker touchpoint below, then report `MERGED`.
 Do not repair, merge again, or delete a branch on that replay.
 
-Read every `.flow/specs/*.json` blob at the full `headRefOid` from the PR's
-head repository, using GitHub's tree/contents API, never local spec state.
-Select every spec whose `branch_name` equals `headRefName`; several matches
-are legitimate. If none match, select specs with `status: done` at the head, absent
-or not `done` in the PR's `baseRefName` tree, and with at least one task blob.
-Read that base tree from the base repository through the same forge API.
+Read every `.flow/specs/*.json` blob at full `headRefOid` from the PR's
+head repository using the recursive git trees API (`recursive=1`), never local state.
+Select every spec whose `branch_name` equals `headRefName`; several matches are valid.
+If none match, read the `baseRefName` tree the same way and select specs with
+`status: done` at head, absent or not done at base, and at least one
+`.flow/tasks/<spec-id>.*` entry whose tree SHA is absent from, or different in,
+the base tree; task blob existence alone does not qualify.
 A closed spec has `status: done` and at least one
 `.flow/tasks/<spec-id>.*.json` blob in the same tree. If any selected spec is
 open, stop `BLOCKED`, reason `work not finished` naming every open selection;
 change nothing. If the selected set is empty, stop `NO_WORK`, reason `no matching spec`.
-Missing or malformed blobs, incomplete tree reads, or API errors stop
+Missing or malformed blobs, incomplete tree reads (including `truncated: true`), or API errors stop
 `NEEDS_HUMAN`; they are not evidence of no match. Repeat this head-bound
 selection after any head move. A merged replay reads its original head to
 recover matching tracker links, without re-opening the landing gates; a lookup
 failure there is a touchpoint failure and retains the confirmed `MERGED`.
 
 ## Resolve conflicts, threads, then CI
+
+Land repairs the PR it is given: that authorizes repairs (resolving threads, CI fixes, catch-up); only merging needs session merge authorization.
 
 Read mergeability first. A conflict stops `BLOCKED` with the exact branch
 needing a rebase. Unknown mergeability is `RESOLVING`, never permission to
@@ -70,7 +73,7 @@ Without this PR's current session merge authorization, stop
 `AWAITING_REVIEW`, reason `merge-ready; authorization required` when ready.
 When calling flow authorizes the merge without a human's in-session merge
 authorization, require `land.patienceMinutes` since the last push. Use push
-evidence, not commit author time; an unknown push time holds. Before the
+evidence; for a null push date use the head commit's earliest check-suite creation time, else its committer date. Before the
 window expires, report `AWAITING_REVIEW` with remaining minutes and return;
 the caller owns cadence. A human's current merge authorization waives the wait.
 
@@ -99,7 +102,7 @@ A plain child still based on its parent needs a manual rebase onto the intended
 base before its own landing; land never retargets it or resolves its conflicts.
 Other stack errors stop `NEEDS_HUMAN`, not a silent fallback.
 
-If the authorized PR is draft, mark it ready with `gh pr ready` and re-read
+If the authorized PR is draft, mark it ready with `gh pr ready <PR> --repo <owner/repo>` and re-read
 checks and review state before proceeding.
 Refresh the full head SHA and all gates immediately before merge. A shortened
 SHA is invalid. Ordinary PRs use `gh pr merge <PR> --repo <owner/repo>

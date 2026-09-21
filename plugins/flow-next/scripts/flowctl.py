@@ -29297,7 +29297,7 @@ def _expand_pr_cognitive_aid_input(
                     break  # Structural validation owns the missing step error.
                 group = next((group for group in steps if len(group["files"]) < 200), steps[0])
                 group["files"].append({
-                    "path": repo_path, "summary": "",
+                    "path": repo_path, "summary": "", "restOfDiff": True,
                     "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
                     "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
                 })
@@ -29655,6 +29655,8 @@ def validate_pr_cognitive_aid(
                 f"{path}.summary",
                 maximum=1000,
             )
+            if summary is not None and not summary.strip():
+                fail(f"{path}.summary", "must not be whitespace-only")
             validate_refs(group, path, require_grounding=bool(summary))
             files = check(_pr_aid_array, group.get("files", []), f"{path}.files", maximum=200)
             if files is None:
@@ -29676,7 +29678,7 @@ def validate_pr_cognitive_aid(
                         "path", "changeType", "attentionClass", "summary",
                         "sourceRefs", "rIds", "taskIds",
                     },
-                    optional={"additions", "deletions", "diffUrl"},
+                    optional={"additions", "deletions", "diffUrl", "restOfDiff"},
                 )
                 change_type = check(
                     _pr_aid_string,
@@ -29701,6 +29703,10 @@ def validate_pr_cognitive_aid(
                     maximum=500,
                     allow_empty=True,
                 )
+                if summary and not summary.strip():
+                    fail(f"{file_path}.summary", "must not be whitespace-only")
+                if "restOfDiff" in record and type(record["restOfDiff"]) is not bool:
+                    fail(f"{file_path}.restOfDiff", "must be a boolean")
                 refs = validate_refs(record, file_path, require_grounding=bool(summary))
                 if refs is not None and not any(
                     source_by_id.get(source_id, {}).get("kind") == "diff_metadata"
@@ -30065,7 +30071,8 @@ def write_pr_cognitive_aid(
 
 
 def _pr_aid_plain_text(value: Any) -> str:
-    escaped = html.escape(str(value), quote=False).replace("`", "&#96;")
+    escaped = html.escape(str(value).strip(), quote=False).translate(
+        str.maketrans({"`": "&#96;", "@": "&#64;", "#": "&#35;", "|": "&#124;"}))
     for character in ("\\", "*", "_", "[", "]", "~"):
         escaped = escaped.replace(character, f"\\{character}")
     return " ".join(escaped.splitlines())
@@ -30103,14 +30110,11 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
                       if any(rid in requirements(record)
                              for record in [group, *group["files"]])]
                 for rid in declared}
-    # Scope numbers the groups it draws; a requirement evidenced only by groups
-    # without files names them, because they have no number to point at.
-    numbers = {id(group): index for index, group in enumerate(
-        (group for group in groups if group["files"]), start=1)}
+    numbers = {id(group): index for index, group in enumerate(groups, start=1)}
 
     def evidenced_by(evidence: list[dict[str, Any]]) -> str:
-        drawn = [str(numbers[id(g)]) for g in evidence if id(g) in numbers]
-        return ", ".join(drawn or [_pr_aid_plain_text(g["title"]) for g in evidence])
+        return ("group " if len(evidence) == 1 else "groups ") + ", ".join(
+            str(numbers[id(group)]) for group in evidence)
 
     coverage_line = ""
     table = []
@@ -30146,8 +30150,15 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
                          for kind, count in counts.items() if count)
 
-    def tree_text(value: str) -> str:
-        return " ".join(value.splitlines())
+    def file_link(record: dict[str, Any]) -> str:
+        path = " ".join(record["path"].splitlines())
+        # A delimiter longer than any run in the path keeps code spans literal.
+        delimiter = "`" * (max((len(run) for run in re.findall(r"`+", path)), default=0) + 1)
+        label = f"{delimiter} {path} {delimiter}"
+        if record.get("diffUrl"):
+            url = urllib.parse.quote(record["diffUrl"], safe="/:#?=&%+@~.-_")
+            return f"[{label}]({url})"
+        return label
 
     multi_spec = len(artifact.get("specIds", [])) > 1
     declaring_specs = {rid.split(":", 1)[0] for rid in declared}
@@ -30163,23 +30174,24 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         return bool(cited & declaring_specs)
 
     trees = []
+    leftovers = []
     for group in groups:
-        if not group["files"]:
-            continue
         described, remaining = [], []
         for record in group["files"]:
+            if record.get("restOfDiff"):
+                leftovers.append(record)
+                continue
             if (record["attentionClass"] != "canonical" or not record["summary"].strip()
                     or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
                 remaining.append(record)
                 continue
             rids = record.get("rIds") or requirements(record) or requirements(group)
-            # Fenced text is literal; flatten newlines so authored content cannot close the fence.
-            sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
+            marker = record["changeType"] + " " if record["changeType"] in ("added", "deleted", "renamed") else ""
             tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
-            row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])}{tag}")
+            row = f"- {marker}{file_link(record)} : {_pr_aid_plain_text(record['summary'])}{tag}"
             described.append(row)
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
-                      "summary": _pr_aid_prose(tree_text(group["summary"])),
+                      "summary": _pr_aid_prose(group["summary"]),
                       "rows": described,
                       "remaining": remaining})
 
@@ -30200,17 +30212,30 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def section(title: str, content: list[str]) -> list[str]:
         return [f"## {title}", "", *content, ""] if content else []
 
-    scope = []
+    files = [record for group in groups for record in group["files"]]
+    additions = sum(record.get("additions") or 0 for record in files)
+    deletions = sum(record.get("deletions") or 0 for record in files)
+    generated = sum(record["attentionClass"] == "generated" for record in files)
+    mechanical = sum(record["attentionClass"] == "mechanical" for record in files)
+    scope = [f"{len(files)} files changed; +{additions}/-{deletions} lines; "
+             f"{generated} generated, {mechanical} mechanical."]
     for tree in trees:
         if scope:
             scope.append("")
         scope.extend([f"**{tree['title']}**", "", tree["summary"]])
         rows = tree["rows"]
         if rows:
-            rows[-1] = rows[-1].replace("├──", "└──", 1)
-            scope.extend(["", "```diff", *rows, "```"])
+            scope.extend(["", *rows])
         if tree["remaining"]:
             scope.extend(["", counted(tree["remaining"])])
+    if leftovers:
+        canonical = [record for record in leftovers if record["attentionClass"] == "canonical"]
+        counts = counted([record for record in leftovers if record["attentionClass"] != "canonical"])
+        if canonical:
+            paths = ("not described: " + ", ".join(file_link(record) for record in canonical)
+                     if len(canonical) <= 5 else f"{len(canonical)} not described files")
+            counts = "; ".join(filter(None, (counts, paths)))
+        scope.extend(["", "Rest of diff: " + counts])
     if coverage_line:
         if scope:
             scope.append("")
@@ -34673,12 +34698,10 @@ def specs_closed_in_range(
     changed_paths = [path for path in out.split("\0") if path]
     touched_tasks = {Path(path).stem.rsplit(".", 1)[0] for path in changed_paths
                      if Path(path).parent.as_posix() == tasks_dir}
-    touched_specs = {spec_short_id(sid) for sid in touched_tasks if is_spec_id(sid)}
     paths = [path for path in changed_paths if path.endswith(".json")]
     spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
                   and Path(path).stem != host_spec_id
-                  and is_spec_id(Path(path).stem)
-                  and spec_short_id(Path(path).stem) in touched_specs]
+                  and touched_tasks]
     if not spec_paths:
         return list(closed)
 

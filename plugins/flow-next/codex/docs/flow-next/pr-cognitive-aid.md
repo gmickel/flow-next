@@ -54,14 +54,14 @@ or with one member, existing validation and rendering remain unchanged and
 qualified IDs are invalid. Sparse expansion preserves `specIds`.
 
 Row tags and per-criterion tables retain qualified IDs. Coverage has one line
-per spec in `specIds` order, for example `Coverage fn-250: R1 → 1; R2 → 1, 2`.
+per spec in `specIds` order, for example `Coverage fn-250: R1 → group 1; R2 → groups 1, 2`.
 Specs without declared requirements have no coverage line; declared but
 uncovered requirements remain visible.
 
 Membership requires a spec newly done at HEAD and at least one of its task files changed in the range; the host is always included, while record-only sibling closes are excluded. Siblings whose recorded branch has a done spec at its merge base with HEAD are also excluded, including true merge commits; squash landings, deleted branches, and absent branch names remain eligible.
 The undeclared-requirements abort applies only to the host; sibling requirements remain visible as uncovered.
 Under several specs, an undeclared row tag appears only when its group cites a spec that declares requirements.
-Land selects specs by branch name; with no match, it selects specs done at the PR head but absent or not done at the PR base, with at least one task blob, using forge trees.
+Land selects specs by branch name. With no match, it reads recursive git trees at the head and the base: newly done specs qualify only with a task entry new or changed against base. Truncated reads need human attention. Land repairs the pull request it is given; merging requires session merge authorization. A null push date falls back to the head's earliest check-suite creation time, then committer date.
 The HTML lens fallback inputs read the host spec only.
 Two listed specs sharing a number within the same ID prefix cannot be qualified unambiguously.
 
@@ -109,8 +109,9 @@ Unlisted changed paths get rows with `summary: ""`, diff-only `sourceRefs`, and
 empty `rIds`/`taskIds`. An empty summary means "not described", is legal on any
 row, and carries no semantic grounding requirement. A non-empty summary keeps
 the existing grounding rule. Every row still cites the bound `diff_metadata`
-source and validates any supplied references. The stored form has no marker
-that distinguishes an authored empty summary from a flowctl-added one.
+source and validates any supplied references. Appended rows carry `restOfDiff: true`
+so Markdown attributes them to the whole diff; existing complete artifacts without
+the tag retain their grouping.
 These rows make no semantic claim. They are appended in
 path order to existing step groups, filling the last step first and preceding
 steps if its 200-file limit is reached. Group identity, authored row order,
@@ -176,18 +177,24 @@ a placeholder:
 | Tradeoffs | `changeWalkthrough.tradeoffs`. |
 | Open items | `changeWalkthrough.openItems`. |
 
-Scope uses one numbered, diff-fenced file tree per group with files. Its summary
-renders as a neutralized paragraph between the bold title and fence, describing what to check here. Each described file carries its
-one-line purpose and requirement IDs. A row's own nonempty `rIds` are its displayed tags; otherwise tags inherit. Coverage still includes all group and row citations. Remaining files render in a counted
-line that distinguishes mechanical files from files not described; an empty
-summary never implies safe-to-skim status. A group with no described files
-shows its title, summary and that count. One coverage line maps requirement IDs to the
-numbers of the groups that evidence them and names uncovered requirements; a
-requirement evidenced only by groups without files names those groups. A per-criterion
-table appears only when a declared requirement is unevidenced. With no declared
-requirements, coverage, the table and requirement tags are omitted. Requirement
-sources in `sources[]` supply the declared set, including requirements cited
-by no group.
+Scope opens with files changed, lines added/removed, and generated/mechanical counts
+summed from artifact rows. Every group has a numbered bold title and trimmed,
+neutralized summary, including fileless problem, principle, kept and verify groups.
+Described files are normal Markdown list items: added/deleted/renamed marker when
+applicable, a code-span path linked through `diffUrl` when available, ` : `, purpose,
+and requirement tags. Modified files have no marker; there are no fences or tree glyphs.
+A row's nonempty `rIds` determine its tags; otherwise tags inherit.
+Coverage retains all citations: `Coverage: R1 → group 1; R2 → groups 1, 3`.
+Fileless groups use the same numbers. Uncovered requirements get a per-criterion
+table; no declared requirements means no coverage, table or requirement tags.
+
+Each group's count covers its omitted rows, including described rows beyond ten.
+Sparse expansion's appended rows appear once after all groups under `Rest of diff`,
+with mechanical/generated counts and canonical not-described paths (linked like rows)
+when there are at most five, otherwise a count. An empty row summary implies no
+safe-to-skim claim. Spec and task markdown under `.flow/` is canonical unless explicitly
+classed mechanical. Untagged complete artifacts keep their existing group attribution.
+Whitespace-only summaries are rejected with the field name; empty file summaries remain legal.
 
 Verification renders only authored proof cells. Outcome `pass` receives a
 checked box; `fail` and `unverified` receive unchecked boxes with their distinct
@@ -197,7 +204,7 @@ claim. Proof cells with no outcome are still valid, and absent proof cells
 omit the section entirely.
 
 The renderer makes one deterministic pass with no body line budget. Why keeps
-its authored line breaks; all four authored fields, titles and summaries of groups with files, coverage,
+its authored line breaks; all four authored fields, titles and summaries of every group, coverage,
 the applicable requirement table and every proof cell render in full.
 Each group shows at most 10 described canonical file rows in author order.
 Additional described rows join its count as “N more described files”, distinct
@@ -205,7 +212,7 @@ from mechanical, generated and not-described files. Schema caps bound the
 remaining content. Counted lines and coverage have a preceding blank line;
 a blank line also separates each count from the next group's title.
 Apostrophes and quotation marks render literally; markup-injection characters
-remain neutralized.
+remain neutralized, including mentions (`@name`) and issue references (`#123`, `fixes #1`).
 
 Artifact ID, base SHA and head SHA appear together in one invisible HTML
 comment. File statistics, repeated provenance, review plans and generated-by

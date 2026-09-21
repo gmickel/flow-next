@@ -46,8 +46,29 @@ class NamedPullRequestContractTest(unittest.TestCase):
 
     def test_integration_selection_uses_forge_base_and_task_blobs(self):
         text = self.read_contract()
-        for token in ("baseRefName", "status: done", "absent", "task blob", "base repository", "forge API"):
+        for token in ("baseRefName", "status: done", ".flow/tasks/<spec-id>.*", "tree SHA",
+                      "different in", "base tree", "task blob existence"):
             self.assertIn(token, text)
+
+    def test_fallback_open_records_and_complete_recursive_trees(self):
+        text = self.read_contract()
+        for token in ("recursive git trees API", "recursive=1", "truncated: true", "NEEDS_HUMAN"):
+            self.assertIn(token, text)
+
+    def test_repairs_patience_and_draft_authority(self):
+        skill = (LAND / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (LAND / "workflow.md").read_text(encoding="utf-8")
+        for text in (skill, workflow):
+            for token in ("authorizes repairs", "resolving threads", "CI fixes", "catch-up",
+                          "session merge authorization"):
+                self.assertIn(token, text)
+        gate = self.section("Authorize and gate the merge")
+        for token in ("null push date", "earliest check-suite creation time", "committer date",
+                      "merge-ready", "authorization required"):
+            self.assertIn(token, gate)
+        merge = self.section("Merge one layer")
+        for token in ("authorized PR", "gh pr ready <PR> --repo <owner/repo>"):
+            self.assertIn(token, merge)
 
     def test_r5_repair_contract(self):
         text = self.section("Resolve conflicts, threads, then CI")

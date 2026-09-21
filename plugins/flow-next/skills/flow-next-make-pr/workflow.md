@@ -272,7 +272,7 @@ unchanged; retain its optional Render lens line when it succeeds.
 ## Phase 2: Deliver the briefing
 
 Use rendered `BODY_FILE` unchanged; append the enabled lens line before `Ref` / Stack lines.
-The renderer's diff-fenced group trees supply the structural sketch; the lens's old summary-block references mean this position.
+The renderer's numbered groups and linked file lists supply the structural sketch; the lens's old summary-block references mean this position.
 
 For dry-run, print `BODY_FILE` and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
 complete it.

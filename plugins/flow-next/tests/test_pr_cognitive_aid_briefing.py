@@ -65,7 +65,7 @@ class BriefingTests(unittest.TestCase):
                 self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
                 self.assertEqual(value, before)
                 self.assertIn("## Scope\n", text)
-                self.assertEqual(text.count("```diff"), 1)
+                self.assertNotIn("```diff", text)
                 self.assertNotIn("<details", text)
                 self.assertNotIn("Legend", text)
 
@@ -96,7 +96,7 @@ class BriefingTests(unittest.TestCase):
         group.update(files=[], sourceRefs=["task"], rIds=[])
         value["changeWalkthrough"].update(groups=[group], proof=[])
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertEqual(re.findall(r"^## (.+)$", text, re.M), ["Why"])
+        self.assertEqual(re.findall(r"^## (.+)$", text, re.M), ["Why", "Scope"])
         self.assertNotIn("Coverage:", text)
 
     def test_scope_trees_purpose_requirement_and_honest_remaining_counts(self):
@@ -104,15 +104,15 @@ class BriefingTests(unittest.TestCase):
         files = value["changeWalkthrough"]["groups"][2]["files"]
         files[1]["summary"] = ""
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn(" └── src/change_0.py — Implements bounded behavior 0. [R6]", text)
+        self.assertIn(" : Implements bounded behavior 0. [R6]", text)
         self.assertIn("1 mechanical file; 1 generated file; 1 not described file", text)
         self.assertNotIn("src/change_1.py", text)
-        self.assertIn("**1. Validate and render**", text)
-        self.assertIn("Coverage: R6 → 1\n", text)
+        self.assertIn("**3. Validate and render**", text)
+        self.assertIn("Coverage: R6 → groups 1, 3\n", text)
         self.assertNotIn("| Requirement |", text)
         files[0]["summary"] = ""
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("**1. Validate and render**\n\n", text)
+        self.assertIn("**3. Validate and render**\n\n", text)
         self.assertIn("2 not described files", text)
         self.assertNotIn("├──", text)
 
@@ -179,7 +179,7 @@ class BriefingTests(unittest.TestCase):
                     self.assertIn(record["path"], text)
                     self.assertIn(record["summary"], text)
         self.assertEqual(titles, sorted(titles))
-        self.assertEqual(len(re.findall(r"^[ +-] [├└]──", text, re.M)), 20)
+        self.assertEqual(len(re.findall(r"^- (?:added |deleted |renamed )?\[`", text, re.M)), 20)
         for cell in walk["proof"]:
             outcome = cell.get("outcome")
             prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
@@ -204,7 +204,7 @@ class BriefingTests(unittest.TestCase):
         value = json.loads(GOLDEN.read_text(encoding="utf-8"))
         text = flowctl.render_pr_cognitive_aid_markdown(value)
         self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
-        shown = len(re.findall(r"^[ +-] [├└]──", text, re.M))
+        shown = len(re.findall(r"^- (?:added |deleted |renamed )?\[`", text, re.M))
         counted = sum(int(n) for n in re.findall(
             r"(\d+) (?:mechanical|generated|not described|more described) files?\b", text))
         self.assertEqual(shown + counted, 500)
@@ -221,15 +221,15 @@ class BriefingTests(unittest.TestCase):
         text = flowctl.render_pr_cognitive_aid_markdown(seven_section_artifact())
         self.assertEqual(text.count("1 generated file\n\n**"), 4)
         self.assertIn("1 generated file\n\nCoverage:", text)
-        self.assertEqual(text.count("```\n\n1 mechanical file"), 5)
+        self.assertEqual(text.count("[R6]\n\n1 mechanical file"), 5)
 
-    def test_group_summary_is_a_neutralized_paragraph_before_fence(self):
+    def test_group_summary_is_a_neutralized_paragraph_before_rows(self):
         value = artifact()
         group = value["changeWalkthrough"]["groups"][2]
         group["summary"] = "## Check <input>\n[links](bad) and `code`."
         text = flowctl.render_pr_cognitive_aid_markdown(value)
         expected = flowctl._pr_aid_prose(" ".join(group["summary"].splitlines()))
-        self.assertIn(f"**1. {group['title']}**\n\n{expected}\n\n```diff", text)
+        self.assertIn(f"**3. {group['title']}**\n\n{expected}\n\n- [", text)
         self.assertNotIn("<input>", text)
         self.assertNotIn("\n## Check", text)
 
@@ -258,7 +258,7 @@ class BriefingTests(unittest.TestCase):
                          {"rIds": [], "sourceRefs": ["file_rid", "rid", "diff", "task"]}):
             record.update(citation)
             text = flowctl.render_pr_cognitive_aid_markdown(value)
-            self.assertIn("R7 → 1", text)
+            self.assertIn("R7 → group 3", text)
             self.assertNotIn("| Requirement |", text)
 
     def test_setext_underlines_are_neutralized_in_each_authored_field(self):
@@ -278,8 +278,8 @@ class BriefingTests(unittest.TestCase):
         group["files"][0]["changeType"] = "added"
         group["files"][1]["changeType"] = "deleted"
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("+ ├── src/change_0.py", text)
-        self.assertIn("- └── src/change_1.py", text)
+        self.assertIn("- added [` src/change_0.py `]", text)
+        self.assertIn("- deleted [` src/change_1.py `]", text)
 
     def test_undescribed_group_has_same_shape_in_each_position(self):
         value = artifact()
@@ -303,7 +303,87 @@ class BriefingTests(unittest.TestCase):
         value["changeWalkthrough"]["groups"] = [group]
         value["sources"].append({"id": "uncovered", "kind": "rid", "ref": "R9"})
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn(r"| R6 | One \| Two |", text)
+        self.assertIn("| R6 | group 1 |", text)
+
+    def test_all_group_kinds_render_with_shared_coverage_numbers(self):
+        value = artifact()
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        for number, group in enumerate(value["changeWalkthrough"]["groups"], 1):
+            self.assertIn(f"**{number}. {group['title']}**\n\n{group['summary']}", text)
+        self.assertIn("Coverage: R6 → groups 1, 3", text)
+        self.assertEqual(text.count("1 mechanical file; 1 generated file"), 1)
+
+    def test_trim_and_reject_whitespace_only_summaries(self):
+        for location in ("group", "row"):
+            value = artifact()
+            group = value["changeWalkthrough"]["groups"][2]
+            record = group if location == "group" else group["files"][0]
+            record["summary"] = "    Check this.   "
+            text = flowctl.render_pr_cognitive_aid_markdown(value)
+            self.assertNotIn("    Check this.", text)
+            self.assertIn("Check this.", text)
+            record["summary"] = " \n\t"
+            field = r"groups\[2\]" + (r".files\[0\]" if location == "row" else "")
+            with self.assertRaisesRegex(flowctl.PrCognitiveAidValidationError, field + r".summary:"):
+                flowctl.render_pr_cognitive_aid_markdown(value)
+
+    def test_paths_links_and_prose_are_literal(self):
+        value = full_artifact()
+        walk = value["changeWalkthrough"]
+        prose = "@name #123 fixes #1 ] ) `code` | <b> café"
+        for field in ("thesis", "userImpact", "blastRadius", "tradeoffs", "openItems"):
+            walk[field] = prose
+        group = walk["groups"][2]
+        group.update(title=prose, summary=prose)
+        walk["proof"] = [{"label": prose, "value": prose, "sourceRefs": ["task"]}]
+        for linked in (True, False):
+            for change in ("added", "deleted", "renamed", "modified"):
+                row = group["files"][0]
+                row.update(path="src/a])`|<b> café.py", summary=prose, changeType=change)
+                if linked:
+                    row["diffUrl"] = "/diff/a%5D%29%60%7C%3Cb%3E%20caf%C3%A9.py"
+                else:
+                    row.pop("diffUrl", None)
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                label = "`` src/a])`|<b> café.py ``"
+                path = f"[{label}]({row['diffUrl']})" if linked else label
+                marker = "" if change == "modified" else change + " "
+                self.assertIn(f"- {marker}{path} : ", text)
+                self.assertNotIn("@name", text)
+                self.assertNotIn("#123", text)
+                self.assertNotIn("fixes #1", text)
+                self.assertIn("&#64;name &#35;123 fixes &#35;1", text)
+                self.assertIn("&#96;code&#96; &#124; &lt;b&gt; café", text)
+                self.assertNotIn("```diff", text)
+
+    def test_size_and_sparse_leftovers_are_whole_diff(self):
+        for count in (1, 5, 6):
+            value = artifact(canonical_files=1)
+            group = value["changeWalkthrough"]["groups"][2]
+            original = copy.deepcopy(group["files"][0])
+            group["files"] = [original]
+            for index in range(count):
+                row = copy.deepcopy(original)
+                row.update(path=f"rest/{index}.py", summary="", restOfDiff=True)
+                group["files"].append(row)
+            for attention in ("mechanical", "generated"):
+                row = copy.deepcopy(original)
+                row.update(path=f"rest/{attention}", attentionClass=attention,
+                           summary="", restOfDiff=True)
+                group["files"].append(row)
+            text = flowctl.render_pr_cognitive_aid_markdown(value)
+            self.assertIn(f"{count + 3} files changed; +{(count + 3) * original['additions']}/"
+                          f"-{(count + 3) * original['deletions']} lines; 1 generated, 1 mechanical.", text)
+            line = next(line for line in text.splitlines() if line.startswith("Rest of diff:"))
+            self.assertGreater(text.index(line), text.index("**5."))
+            self.assertIn("1 mechanical file; 1 generated file", line)
+            if count <= 5:
+                for index in range(count):
+                    self.assertIn(f"[` rest/{index}.py `]", line)
+            else:
+                self.assertIn("6 not described files", line)
+                self.assertNotIn("rest/0.py", text)
+            self.assertNotIn("1 mechanical file", text[:text.index(line)])
 
     def test_literal_quotes_and_neutralized_prose_injection(self):
         value = full_artifact()

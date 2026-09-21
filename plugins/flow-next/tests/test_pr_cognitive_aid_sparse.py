@@ -59,7 +59,15 @@ class SparseInputTests(unittest.TestCase):
                          flowctl.PR_COGNITIVE_AID_SOURCE_KINDS)
         rows = [row for group in validated["changeWalkthrough"]["groups"] for row in group["files"]]
         self.assertEqual({row["path"] for row in rows}, set(diff))
-        self.assertIn("src/change_0.py", flowctl.render_pr_cognitive_aid_markdown(validated))
+        body = flowctl.render_pr_cognitive_aid_markdown(validated)
+        self.assertIn("src/change_0.py", body)
+        self.assertTrue(any(not group["files"] and group["kind"] != "step"
+                            for group in validated["changeWalkthrough"]["groups"]))
+        step = validated["changeWalkthrough"]["groups"][1]
+        self.assertNotIn("R7", step["rIds"])
+        self.assertEqual(step["files"][0]["rIds"], ["R7"])
+        self.assertIn("row-rid", step["files"][0]["sourceRefs"])
+        self.assertIn("task", step["files"][0]["sourceRefs"])
 
     def test_file_commands_share_expansion_and_complete_render_is_unchanged(self):
         complete = self.complete()
@@ -89,10 +97,8 @@ class SparseInputTests(unittest.TestCase):
                                  flowctl.render_pr_cognitive_aid_markdown(expected).encode("utf-8"))
                 if value is sparse:
                     self.assertIn(described, output.getvalue())
-                    # fn-252 renders unclassified expansion rows as an honest
-                    # count; lossless HTML below still retains the actual path.
-                    self.assertNotIn(omitted, output.getvalue())
-                    self.assertIn("1 not described file", output.getvalue())
+                    self.assertIn(omitted, output.getvalue())
+                    self.assertIn("Rest of diff: not described:", output.getvalue())
                 output = StringIO()
                 with redirect_stdout(output):
                     flowctl.cmd_pr_cognitive_aid_html_input(args)
@@ -237,7 +243,7 @@ class SparseInputTests(unittest.TestCase):
         files = complete["changeWalkthrough"]["groups"][2]["files"]
         for path in sorted(patterns):
             files.append({
-                "path": path, "summary": "", "attentionClass": patterns[path],
+                "path": path, "summary": "", "attentionClass": patterns[path], "restOfDiff": True,
                 "changeType": "added", "additions": 1, "deletions": 0,
                 "diffUrl": f"/acme/repo/blob/{HEAD_SHA}/{path}",
                 "sourceRefs": ["diff"], "rIds": [], "taskIds": [],

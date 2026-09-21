@@ -1,6 +1,6 @@
 # Create and finalize
 
-Real create/update only. With several specs, title the combined change; otherwise use the spec title verbatim
+Real create/update only. With several specs, set `PR_TITLE` to a combined-change title of at most 72 characters; otherwise use the spec title verbatim
 up to 72 characters, or the first goal/context sentence up to 70 plus ellipsis, or spec ID if empty.
 Use `BODY_FILE` from the one `pr-cognitive-aid render` redirection; append trailing lens/linkage lines, never retype the body.
 Require nonempty content. Above 65,000 characters, stop with the retained file; never commit after close or
