@@ -558,6 +558,18 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and d
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 ```
 
+The closed set consists of spec JSON files under the Flow specs directory that
+are `done` at HEAD and absent or not `done` at the merge base, plus the host
+spec passed to the command. `specs_closed_in_range` reads local committed
+objects with `git ls-tree` and `git show`; it never fetches or reads working-tree
+status to decide membership. IDs are ordered by numeric spec number.
+When several specs belong, the additive `specs` array contains each spec's
+`id`, `short_id` (for example `fn-250`), title and `spec_sections` (including
+goal/context and acceptance criteria with IDs and text), `tasks` with evidence,
+and `tasks_summary`, using the host's summary builder. One spec leaves the
+export bytes unchanged. Make-pr without a branch match selects the highest
+numbered closed spec as host, or requests a spec ID when the closed set is empty.
+
 **Deterministic traceability slice.** Four additive fields supply make-pr with traceability data - all reproducible from repo state at export time, no LLM judgment (the host authors the artifact, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
 
 - `diff_summary.files[].changed_symbols` - the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git cannot detect a function; the author can use file-level evidence.

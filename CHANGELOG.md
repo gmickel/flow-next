@@ -14,6 +14,8 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec; single-spec briefings stay unchanged.
+
 - The obsolete make-pr `--no-mermaid` flag is removed.
 
 - make-pr bodies now keep the full authored briefing in one rendering pass

@@ -29417,7 +29417,7 @@ def validate_pr_cognitive_aid(
     keys(artifact, "pr_cognitive_aid", required={
         "schemaVersion", "artifactId", "specId", "baseSha", "headSha",
         "generatedAt", "sources", "changeWalkthrough",
-    }, optional={"supersedesArtifactId"})
+    }, optional={"supersedesArtifactId", "specIds"})
     if len(_pr_aid_serialized_text(artifact).encode("utf-8")) > PR_COGNITIVE_AID_MAX_BYTES:
         fail("pr_cognitive_aid", f"encoded payload exceeds {PR_COGNITIVE_AID_MAX_BYTES} bytes")
     schema_version = artifact.get("schemaVersion")
@@ -29431,6 +29431,27 @@ def validate_pr_cognitive_aid(
     if spec_id is not None and not is_spec_id(spec_id):
         fail("specId", "must be a canonical Flow spec ID")
         spec_id = None
+    spec_ids = [spec_id]
+    if "specIds" in artifact:
+        spec_ids = strings(artifact["specIds"], "specIds") or []
+        if spec_id not in spec_ids:
+            fail("specIds", "must include artifact.specId")
+        for index, member in enumerate(spec_ids):
+            if member is not None and not is_spec_id(member):
+                fail(f"specIds[{index}]", "must be a canonical Flow spec ID")
+    multi_spec = len(spec_ids) > 1
+
+    def valid_rid(value: str) -> bool:
+        if not multi_spec:
+            return bool(_PR_COGNITIVE_AID_RID_RE.fullmatch(value))
+        short, separator, rid = value.partition(":")
+        return bool(separator and _PR_COGNITIVE_AID_RID_RE.fullmatch(rid)
+                    and re.fullmatch(r"fn-[1-9][0-9]*", short)
+                    and sum(member == short or member.startswith(short + "-")
+                            for member in spec_ids if member is not None) == 1)
+
+    spec_scope = "artifact.specIds" if multi_spec else "artifact.specId"
+    rid_message = "must be a qualified R-ID of exactly one specIds member" if multi_spec else "must be a canonical R-ID"
     base_sha = check(_pr_aid_sha, artifact.get("baseSha"), "baseSha")
     head_sha = check(_pr_aid_sha, artifact.get("headSha"), "headSha")
     generated_at = check(
@@ -29480,16 +29501,16 @@ def validate_pr_cognitive_aid(
             fail(f"{path}.kind", "unsupported source kind")
         ref = check(_pr_aid_string, source.get("ref"), f"{path}.ref", maximum=1024)
         if ref is not None:
-            if kind == "spec" and spec_id is not None and ref != spec_id:
-                fail(f"{path}.ref", "must identify artifact.specId")
+            if kind == "spec" and spec_id is not None and ref not in spec_ids:
+                fail(f"{path}.ref", f"must identify {spec_scope}")
             if (
                 kind == "task"
                 and spec_id is not None
-                and (not is_task_id(ref) or spec_id_from_task(ref) != spec_id)
+                and (not is_task_id(ref) or spec_id_from_task(ref) not in spec_ids)
             ):
-                fail(f"{path}.ref", "must identify a task of artifact.specId")
-            if kind == "rid" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(ref):
-                fail(f"{path}.ref", "must be a canonical R-ID")
+                fail(f"{path}.ref", f"must identify a task of {spec_scope}")
+            if kind == "rid" and not valid_rid(ref):
+                fail(f"{path}.ref", rid_message)
             if (
                 kind == "diff_metadata"
                 and base_sha is not None
@@ -29531,15 +29552,15 @@ def validate_pr_cognitive_aid(
             for index, identifier in enumerate(ids or []):
                 if identifier is None:
                     continue
-                if ref_field == "rIds" and not _PR_COGNITIVE_AID_RID_RE.fullmatch(identifier):
-                    fail(f"{path}.{ref_field}[{index}]", "must be a canonical R-ID")
+                if ref_field == "rIds" and not valid_rid(identifier):
+                    fail(f"{path}.{ref_field}[{index}]", rid_message)
                     continue
                 if (
                     ref_field == "taskIds"
                     and spec_id is not None
-                    and (not is_task_id(identifier) or spec_id_from_task(identifier) != spec_id)
+                    and (not is_task_id(identifier) or spec_id_from_task(identifier) not in spec_ids)
                 ):
-                    fail(f"{path}.{ref_field}[{index}]", "must identify a task of artifact.specId")
+                    fail(f"{path}.{ref_field}[{index}]", f"must identify a task of {spec_scope}")
                     continue
                 if refs_valid and sources is not None and not any(
                     source_by_id.get(source_id, {}).get("kind") == ("rid" if ref_field == "rIds" else "task")
@@ -30099,6 +30120,16 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             f"{rid} → " + (evidenced_by(evidence) if evidence else "uncovered")
             for rid, evidence in coverage.items()
         )
+        if len(artifact.get("specIds", [])) > 1:
+            per_spec = []
+            for member in artifact["specIds"]:
+                short = re.match(r"^[^-]+-\d+", member)[0]
+                entries = [f"{rid.split(':', 1)[1]} → " +
+                           (evidenced_by(evidence) if evidence else "uncovered")
+                           for rid, evidence in coverage.items() if rid.startswith(short + ":")]
+                if entries:
+                    per_spec.append(f"{short}: " + "; ".join(entries))
+            coverage_line = "\n\n".join(per_spec)
         if any(not evidence for evidence in coverage.values()):
             table = ["| Requirement | Groups |", "|---|---|"] + [
                 f"| {rid} | " + (evidenced_by(evidence).replace("|", "\\|")
@@ -34600,97 +34631,43 @@ def _export_deferred_findings(
     return deferred_findings
 
 
-def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
-    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
-    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+def specs_closed_in_range(
+    flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
+) -> list[str]:
+    """Return numeric-ordered HEAD specs newly done since base, plus the host.
 
-    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
-    parsing). Body-rendering happens in the skill — this command emits
-    the structured payload only. Per the architecture rule, no LLM
-    judgment lives here.
-
-    Exit codes:
-      1: missing spec / generic failure
-      2: invalid args (missing --base, etc.)
-      3: corrupt spec JSON
+    Read committed objects only; never fetch or infer membership from branches.
     """
-    use_json = bool(getattr(args, "json", False))
-
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Casefold first so uppercase tracker display handles (WOR-17) survive
-    # the validity check — resolve_spec_id_arg below canonicalizes fully.
-    spec_id = casefold_handle(getattr(args, "id", None))
-    if not spec_id or not is_spec_id(spec_id):
-        error_exit(
-            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
-            f"(e.g., fn-1, fn-1-add-auth)",
-            use_json=use_json,
-            code=2,
-        )
-    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
-    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
-
-    base_ref = getattr(args, "base", None)
-    if not base_ref:
-        error_exit(
-            "--base is required (e.g., --base origin/main)",
-            use_json=use_json,
-            code=2,
-        )
-
-    flow_dir = get_flow_dir()
-    spec_json_path = find_spec_json_path(flow_dir, spec_id)
-    if not spec_json_path.exists():
-        error_exit(
-            f"Spec {spec_id} not found at {spec_json_path}",
-            use_json=use_json,
-            code=1,
-        )
-
-    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
-    # its own error path — but we want a corrupt-spec exit code of 3
-    # (distinct from "missing"), so do the read ourselves first.
-    try:
-        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=3,
-        )
-    except OSError as exc:
-        error_exit(
-            f"Failed to read spec JSON at {spec_json_path}: {exc}",
-            use_json=use_json,
-            code=1,
-        )
-    if not isinstance(raw_spec, dict):
-        error_exit(
-            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
-            f"{type(raw_spec).__name__}",
-            use_json=use_json,
-            code=3,
-        )
-    spec_data = normalize_epic(raw_spec)
-
-    # Resolve merge base.
-    merge_base_sha = _export_resolve_merge_base(base_ref)
-    if merge_base_sha is None:
-        error_exit(
-            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
-            f"--base ref (e.g., origin/main).",
-            use_json=use_json,
-            code=1,
-        )
-
     repo_root = get_repo_root()
+    specs_path = (flow_dir / SPECS_DIR).resolve().relative_to(repo_root.resolve()).as_posix()
 
+    def git(*args: str) -> str:
+        rc, out, err = _export_run_git(list(args), cwd=repo_root)
+        if rc:
+            raise ValueError(f"Cannot read closed specs: {err.strip()}")
+        return out
+
+    paths = {}
+    for revision in (base_commit, "HEAD"):
+        paths[revision] = set(git("ls-tree", "-r", "--name-only", "-z", revision,
+                                  "--", specs_path).split("\0"))
+    closed = {host_spec_id} if host_spec_id else set()
+    for path in paths["HEAD"]:
+        spec_id = Path(path).stem
+        if not path.endswith(".json") or not is_spec_id(spec_id):
+            continue
+        head = json.loads(git("show", f"HEAD:{path}"))
+        if head.get("status") != "done":
+            continue
+        base = json.loads(git("show", f"{base_commit}:{path}")) if path in paths[base_commit] else {}
+        if base.get("status") != "done":
+            closed.add(spec_id)
+    return sorted(closed, key=lambda spec: (int(re.match(r"^[^-]+-(\d+)", spec)[1]), spec))
+
+
+def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json: bool) -> tuple:
+    """Build the same spec, task and evidence summary for each range member."""
+    spec_id = spec_data["id"]
     # --- Spec markdown parsing ---
     spec_md_path = flow_dir / SPECS_DIR / f"{spec_id}.md"
     spec_text = ""
@@ -34861,6 +34838,107 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "undeclared_r_ids": undeclared,
     }
 
+    return spec_section, task_entries, tasks_summary, task_created_ats, spec_text
+
+
+def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
+    """Aggregate spec + tasks + memory + glossary + strategy + diff + reviews
+    into one structured JSON payload for /flow-next:make-pr (R4-R6).
+
+    Heavy-lifting is mechanical (file walks, git plumbing, frontmatter
+    parsing). Body-rendering happens in the skill — this command emits
+    the structured payload only. Per the architecture rule, no LLM
+    judgment lives here.
+
+    Exit codes:
+      1: missing spec / generic failure
+      2: invalid args (missing --base, etc.)
+      3: corrupt spec JSON
+    """
+    use_json = bool(getattr(args, "json", False))
+
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Casefold first so uppercase tracker display handles (WOR-17) survive
+    # the validity check — resolve_spec_id_arg below canonicalizes fully.
+    spec_id = casefold_handle(getattr(args, "id", None))
+    if not spec_id or not is_spec_id(spec_id):
+        error_exit(
+            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug "
+            f"(e.g., fn-1, fn-1-add-auth)",
+            use_json=use_json,
+            code=2,
+        )
+    # Resolve short ids / tracker handles to the canonical on-disk id (fn-60).
+    spec_id = resolve_spec_id_arg(get_flow_dir(), spec_id, use_json=use_json)
+
+    base_ref = getattr(args, "base", None)
+    if not base_ref:
+        error_exit(
+            "--base is required (e.g., --base origin/main)",
+            use_json=use_json,
+            code=2,
+        )
+
+    flow_dir = get_flow_dir()
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        error_exit(
+            f"Spec {spec_id} not found at {spec_json_path}",
+            use_json=use_json,
+            code=1,
+        )
+
+    # Load spec JSON. load_json_or_exit handles JSON-decode errors with
+    # its own error path — but we want a corrupt-spec exit code of 3
+    # (distinct from "missing"), so do the read ourselves first.
+    try:
+        raw_spec = json.loads(spec_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=3,
+        )
+    except OSError as exc:
+        error_exit(
+            f"Failed to read spec JSON at {spec_json_path}: {exc}",
+            use_json=use_json,
+            code=1,
+        )
+    if not isinstance(raw_spec, dict):
+        error_exit(
+            f"Corrupt spec JSON at {spec_json_path}: expected object, got "
+            f"{type(raw_spec).__name__}",
+            use_json=use_json,
+            code=3,
+        )
+    spec_data = normalize_epic(raw_spec)
+
+    # Resolve merge base.
+    merge_base_sha = _export_resolve_merge_base(base_ref)
+    if merge_base_sha is None:
+        error_exit(
+            f"Could not resolve merge-base for '{base_ref}'. Pass a valid "
+            f"--base ref (e.g., origin/main).",
+            use_json=use_json,
+            code=1,
+        )
+
+    repo_root = get_repo_root()
+
+    spec_section, task_entries, tasks_summary, task_created_ats, spec_text = (
+        _export_spec_summary(flow_dir, spec_data, use_json=use_json)
+    )
+    acceptance_criteria = spec_section["spec_sections"]["acceptance_criteria"]
+    acceptance_criteria_residue = spec_section["spec_sections"]["acceptance_criteria_residue"]
+    uncovered = tasks_summary["uncovered_r_ids"]
+
     # --- Memory during spec lifecycle ---
     # fn-49.2: pass earliest-task and branch-name fallback inputs so the
     # time-window filter approximates the spec lifetime even when
@@ -34922,6 +35000,23 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         "removed_export_refs": removed_export_refs,
         "deferred_findings": deferred_findings,
     }
+
+    try:
+        closed_specs = specs_closed_in_range(flow_dir, merge_base_sha, spec_id)
+    except (ValueError, OSError) as exc:
+        error_exit(str(exc), use_json=use_json, code=1)
+    if len(closed_specs) > 1:
+        payload["specs"] = []
+        for member in closed_specs:
+            if member == spec_id:
+                section, tasks, summary = spec_section, task_entries, tasks_summary
+            else:
+                data = normalize_epic(load_json_or_exit(find_spec_json_path(flow_dir, member), "spec", use_json=use_json))
+                section, tasks, summary, _, _ = _export_spec_summary(flow_dir, data, use_json=use_json)
+            payload["specs"].append({
+                **section, "short_id": re.match(r"^[^-]+-\d+", member)[0],
+                "tasks": tasks, "tasks_summary": summary,
+            })
 
     if use_json:
         json_output(payload)

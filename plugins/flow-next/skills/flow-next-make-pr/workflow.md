@@ -5,7 +5,6 @@ close, staging or close commit stops before export, artifact composition and PR 
 skipping close.
 Use `set -e`, the resolved `FLOWCTL`, and `REPO_ROOT=$(git rev-parse --show-toplevel)`.
 
-
 ## Phase 0: Pre-flight
 
 Run the following three fences; an information prompt may interrupt and rerun its fence. Dry-run skips gh
@@ -27,8 +26,10 @@ if [[ "$DRY_RUN" != "1" ]]; then
 fi
 ```
 Resolve `SPEC_ID` from the argument, otherwise match the current branch against
-`.flow/specs/*.json` `branch_name` (first match). With no match, `NEED_INPUT: SPEC_ID`
-asks interactively; Ralph/autonomous exit 2. The next fence uses that resolved ID.
+`.flow/specs/*.json` `branch_name` (first match). With no match, resolve the local base from `--base`
+or the cascade below; import `flowctl` from the directory containing `$FLOWCTL` and call
+`specs_closed_in_range(get_flow_dir(), <merge-base>)`. Use its last (highest-numbered) ID as host;
+if empty, `NEED_INPUT: SPEC_ID` asks interactively; Ralph/autonomous exit 2. Resolve before the next fence.
 ```bash
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
 if [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
@@ -249,9 +250,9 @@ existing OPEN PR is REQUIRED; closed/merged PRs do not prevent a create. Preserv
 
 Capture `EXPORT_PAYLOAD` from `$FLOWCTL spec export-cognitive-aid "$SPEC_ID"
 --base "$BASE_REF" --json` once, after close. Refresh `HEAD_SHA` and `MERGE_BASE`
-from this head and base. Stop for empty goal/context AND empty task summaries, or when nonempty acceptance
-criteria are ALL in `tasks_summary.undeclared_r_ids` (`Undeclared R-ID coverage`). Unevidenced but declared
-criteria remain renderable.
+from this head and base. For each entry in `specs` (otherwise the host), stop for empty goal/context AND
+empty task summaries, or nonempty acceptance criteria ALL in `tasks_summary.undeclared_r_ids`
+(`Undeclared R-ID coverage`). No requirements is valid; unevidenced but declared criteria remain renderable.
 
 ## Phase 1.5: Structured PR cognitive-aid
 

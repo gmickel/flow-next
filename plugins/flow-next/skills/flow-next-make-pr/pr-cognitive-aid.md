@@ -16,6 +16,9 @@ repository:
 - `sources[]` records have `id`, `kind`, `ref`; kinds `spec`, `task`, `rid`, `review_receipt`, `qa_receipt`,
   `diff_metadata`, `commit`, bound to this spec, its tasks, canonical R-IDs,
   receipts, commits and `$MERGE_BASE..$HEAD_SHA`. Include every declared R-ID, even uncovered.
+- When export has `specs`, set `specIds` to their IDs in export order; keep `specId` as host. Declare every
+  spec's requirements with qualified refs and `rIds` (`fn-250:R4`). Use one group per spec in review order,
+  short ID in its title, each spec's task/evidence summary; commits belonging to no spec get their own group.
 - `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
   `userImpact` says what changes for a user or operator; `blastRadius` names who
   or what is touched, what to read first and what is unproven; `tradeoffs` records
