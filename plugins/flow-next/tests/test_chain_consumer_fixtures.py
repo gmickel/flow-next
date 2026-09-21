@@ -275,8 +275,13 @@ class ChainDetectTestCase(unittest.TestCase):
 
     def test_closed_unmerged_parent_without_remote_history_still_stops(self) -> None:
         parent, child, _ = parent_child(self.w)
+        git(self.w.work, "checkout", "-q", "A")
         closed = self.w.flowctl("spec", "close", parent)
         self.assertEqual(closed["status"], "done")
+        git(self.w.work, "add", "-f", ".flow/specs", ".flow/tasks")
+        git(self.w.work, "commit", "-q", "-m", "record parent close")
+        git(self.w.work, "checkout", "-q", "B")
+        git(self.w.work, "merge", "-q", "--no-edit", "A")
         git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/A")
         rc, got = self.detect(child)
         self.assertEqual(rc, 2, got)

@@ -56,8 +56,12 @@ versioning remains a separate maintainer step.
   Flowctl never untracks files itself. Ignored aids remain per-clone; see the
   [consumer contract](plugins/flow-next/docs/pr-cognitive-aid.md#storage-and-identity).
 
-- Chain dependencies count as landed only when the base records the spec as
-  closed. A close on an unmerged parent branch keeps its children chained.
+- Chain dependencies first count as landed when the default base records the
+  spec as closed. Otherwise, a locally closed dependency stays chained when
+  its spec records a close at HEAD's merge-base with either its remote-tracking
+  or local branch, even after that branch advances. Otherwise it counts as landed. A branch deleted from both refs,
+  or no recorded branch, also counts as landed. True merges onto a non-default
+  base conservatively stay chained. Base-checkout and no-base fallbacks remain.
 - `spec close` reports every rewritten file in `modified_paths`, so callers can
   commit the complete close. A task create or start that reopens a closed spec
   reports the spec file the same way. make-pr never closes a spec that has no tasks, and

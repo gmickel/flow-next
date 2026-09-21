@@ -35819,7 +35819,7 @@ _SPEC_BASE_NOTICE_CWDS: set[Path] = set()
 
 
 def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
-    """Return (landed, error, diagnostic) from local base evidence.
+    """Return (landed, error, diagnostic) from base evidence, then ancestry.
 
     Resolve origin's default branch, then the chain-base cascade. Successful
     resolutions are memoized per cwd, like _REPO_ROOT_CACHE. No fetch occurs.
@@ -35870,29 +35870,60 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
         base_ref, base, on_base = cached
         if on_base:
             return True, "", ""
-        diagnostic = (
-            f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
-            "fetch the base or land it"
-        )
         flow_path = flow_dir.relative_to(repo_root).as_posix()
         paths = [f"{flow_path}/{directory}/{spec_id}.json" for directory in (SPECS_JSON_DIR, EPICS_DIR)]
-        tree = subprocess.run(
-            ["git", "ls-tree", "--name-only", base, "--", *paths],
-            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
-        )
-        present = set(tree.stdout.splitlines())
-        path = next((path for path in paths if path in present), None)
-        if path is None:
-            return False, "", diagnostic
-        blob = subprocess.run(
-            ["git", "show", f"{base}:{path}"],
-            cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
-        )
-        data = json.loads(blob.stdout)
-        if not isinstance(data, dict):
-            return False, f"base spec {spec_id} is not an object", ""
-        landed = data.get("status") == "done"
-        return landed, "", "" if landed else diagnostic
+
+        def read_spec_close(commit: str) -> tuple[bool, str]:
+            tree = subprocess.run(
+                ["git", "ls-tree", "--name-only", commit, "--", *paths],
+                cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+            )
+            present = set(tree.stdout.splitlines())
+            path = next((path for path in paths if path in present), None)
+            if path is not None:
+                blob = subprocess.run(
+                    ["git", "show", f"{commit}:{path}"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8", check=True,
+                )
+                data = json.loads(blob.stdout)
+                if not isinstance(data, dict):
+                    return False, f"base spec {spec_id} is not an object"
+                return data.get("status") == "done", ""
+            return False, ""
+
+        closed, error = read_spec_close(base)
+        if error:
+            return False, error, ""
+        if closed:
+            return True, "", ""
+        branch = spec_data.get("branch_name")
+        if branch:
+            for ref in (f"refs/remotes/origin/{branch}", f"refs/heads/{branch}"):
+                exists = subprocess.run(
+                    ["git", "show-ref", "--verify", "--quiet", ref],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                )
+                if exists.returncode == 1:  # Missing ref, not an unreadable object.
+                    continue
+                exists.check_returncode()
+                ancestry = subprocess.run(
+                    ["git", "merge-base", ref, "HEAD"],
+                    cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+                )
+                if ancestry.returncode == 1:  # Unrelated histories prove nothing.
+                    continue
+                ancestry.check_returncode()
+                closed, error = read_spec_close(ancestry.stdout.strip())
+                if error:
+                    return False, error, ""
+                if closed:
+                    return False, "", (
+                        f"dependency {spec_id} closed locally but not recorded at {base_ref}; "
+                        f"dependency branch {ref} is in this branch's history; "
+                        "fetch the base or land it"
+                    )
+        # Squash landing, deleted branch, or no recorded branch.
+        return True, "", ""
     except (subprocess.CalledProcessError, OSError, ValueError) as exc:
         return False, f"base read failed: {exc}", ""
 
