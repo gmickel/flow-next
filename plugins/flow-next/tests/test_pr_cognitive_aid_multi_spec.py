@@ -323,7 +323,10 @@ class ClosedRangeTests(unittest.TestCase):
             parent_path.write_text(json.dumps(data), encoding="utf-8")
             self.task(parent, "done")
             self.commit()
-            self.git("checkout", "-qb", "child", "HEAD" if parent_mode == "stacked" else base)
+            self.git("checkout", "-qb", "child", base if parent_mode in ("squash", "merge") else "HEAD")
+            if parent_mode == "stacked-moved":
+                (self.flow / "epics").mkdir(exist_ok=True)
+                self.git("mv", f".flow/specs/{parent}.json", f".flow/epics/{parent}.json")
             if parent_mode == "squash":
                 self.git("merge", "--squash", "parent")
                 self.git("commit", "-qm", "Squash parent")
@@ -362,6 +365,9 @@ class ClosedRangeTests(unittest.TestCase):
         members = json.loads(payload).get("specs", [])
         value["specIds"] = [member["id"] for member in members] or [value["specId"]]
         self.assertEqual(flowctl.render_pr_cognitive_aid_markdown(value), expected)
+
+    def test_stacked_parent_whose_record_moved_directories_stays_out(self):
+        self.assertEqual(self.export(parent_mode="stacked-moved").encode("utf-8"), FIXTURE.read_bytes())
 
     def test_squash_landed_parent_is_range_member(self):
         payload = json.loads(self.export(parent_mode="squash"))

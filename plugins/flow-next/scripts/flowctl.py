@@ -34701,8 +34701,21 @@ def specs_closed_in_range(
         head = record("HEAD", path)
         sid = head.get("id")
         if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and spec_short_id(sid) not in already_done:
-            def read_close(commit: str, path: str = path) -> tuple[bool, str]:
-                return record(commit, path).get("status") == "done", ""
+            def read_close(commit: str, short: str = spec_short_id(sid)) -> tuple[bool, str]:
+                # By identity, not by today's path: the record may have moved
+                # between the spec directories or changed slug since that commit.
+                rc, listed, err = _export_run_git(
+                    ["ls-tree", "--name-only", commit, "--", *(d + "/" for d in sorted(spec_dirs))],
+                    cwd=repo_root,
+                )
+                if rc:
+                    raise ValueError(f"Cannot read closed specs: {err.strip()}")
+                for name in listed.splitlines():
+                    stem = Path(name).stem
+                    if (name.endswith(".json") and is_spec_id(stem) and spec_short_id(stem) == short
+                            and record(commit, name).get("status") == "done"):
+                        return True, ""
+                return False, ""
 
             try:
                 stacked_ref, error = _spec_close_in_head_history(repo_root, head, read_close)
