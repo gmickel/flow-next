@@ -29555,23 +29555,17 @@ def validate_pr_cognitive_aid(
     walkthrough = check(_pr_aid_object, artifact.get("changeWalkthrough"), "changeWalkthrough")
     if walkthrough is not None:
         keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"},
-             optional={"userImpact", "blastRadius", "unverifiedSteps"})
+             optional={"userImpact", "blastRadius", "tradeoffs", "openItems"})
         check(
             _pr_aid_string,
             walkthrough.get("thesis"),
             "changeWalkthrough.thesis",
             maximum=4000,
         )
-        for field in ("userImpact", "blastRadius"):
+        for field in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
             if field in walkthrough:
                 check(_pr_aid_string, walkthrough[field], f"changeWalkthrough.{field}",
                       maximum=4000, allow_empty=True)
-        if "unverifiedSteps" in walkthrough:
-            steps = check(_pr_aid_array, walkthrough["unverifiedSteps"],
-                          "changeWalkthrough.unverifiedSteps", maximum=32)
-            for index, step in enumerate(steps or []):
-                check(_pr_aid_string, step, f"changeWalkthrough.unverifiedSteps[{index}]",
-                      maximum=1000)
         proof = check(
             _pr_aid_array,
             walkthrough.get("proof"),
@@ -29583,7 +29577,11 @@ def validate_pr_cognitive_aid(
             cell = check(_pr_aid_object, raw_cell, path)
             if cell is None:
                 continue
-            keys(cell, path, required={"label", "value", "sourceRefs"})
+            keys(cell, path, required={"label", "value", "sourceRefs"}, optional={"outcome"})
+            if "outcome" in cell:
+                outcome = check(_pr_aid_string, cell["outcome"], f"{path}.outcome", maximum=160)
+                if outcome is not None and outcome not in ("pass", "fail", "unverified"):
+                    fail(f"{path}.outcome", "unsupported proof outcome")
             check(_pr_aid_string, cell.get("label"), f"{path}.label", maximum=160)
             check(_pr_aid_string, cell.get("value"), f"{path}.value", maximum=160)
             validate_refs(cell, path, require_grounding=True)

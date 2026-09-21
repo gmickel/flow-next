@@ -20,21 +20,29 @@ from test_pr_cognitive_aid import BASE_SHA, HEAD_SHA, SPEC_ID, artifact, artifac
 FIELDS = {
     "userImpact": "Operators can inspect the change before opening a review.",
     "blastRadius": "Touches local review artifacts only.",
-    "unverifiedSteps": ["Live forge smoke: no credentials available."],
+    "tradeoffs": "Keep authored context in one artifact for all consumers.",
+    "openItems": "Live forge verification remains unfinished.",
 }
 
 
 class AuthoredFieldTests(unittest.TestCase):
     def test_optional_fields_round_trip_through_all_four_entry_points(self):
         variants = [{}, *({key: value} for key, value in FIELDS.items()), FIELDS,
-                    {"userImpact": "", "blastRadius": "", "unverifiedSteps": []}]
-        for fields in variants:
+                    {field: "" for field in FIELDS}]
+        for fields, outcomes in ((fields, outcomes) for fields in variants
+                                 for outcomes in (False, True)):
             for sparse in (False, True):
-                with self.subTest(fields=fields, sparse=sparse), \
+                with self.subTest(fields=fields, outcomes=outcomes, sparse=sparse), \
                      tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
                     value = artifact()
                     value["changeWalkthrough"].update(copy.deepcopy(fields))
+                    original_cell = value["changeWalkthrough"]["proof"][0]
+                    if outcomes:
+                        value["changeWalkthrough"]["proof"].extend(
+                            dict(original_cell, outcome=outcome)
+                            for outcome in ("pass", "fail", "unverified")
+                        )
                     expected = copy.deepcopy(value)
                     diff = artifact_diff_files(value)
                     if sparse:
@@ -80,37 +88,50 @@ class AuthoredFieldTests(unittest.TestCase):
 
     def test_wrong_types_name_each_authored_field(self):
         for field in FIELDS:
-            wrong_values = [None, False, 42, {}]
-            wrong_values += [[], ["text"]] if field != "unverifiedSteps" else ["text"]
+            wrong_values = [None, False, 42, {}, [], ["text"]]
             for wrong in wrong_values:
                 with self.subTest(field=field, wrong=wrong):
                     value = artifact()
                     value["changeWalkthrough"][field] = wrong
                     with self.assertRaises(flowctl.PrCognitiveAidValidationError) as raised:
                         flowctl.validate_pr_cognitive_aid(value)
-                    expected_type = "an array" if field == "unverifiedSteps" else "a string"
                     self.assertEqual(str(raised.exception),
-                                     f"changeWalkthrough.{field}: must be {expected_type}")
-        for wrong in (None, False, 42, {}, []):
-            with self.subTest(item=wrong):
-                value = artifact()
-                value["changeWalkthrough"]["unverifiedSteps"] = [wrong]
-                with self.assertRaises(flowctl.PrCognitiveAidValidationError) as raised:
-                    flowctl.validate_pr_cognitive_aid(value)
-                self.assertEqual(str(raised.exception),
-                                 "changeWalkthrough.unverifiedSteps[0]: must be a string")
+                                     f"changeWalkthrough.{field}: must be a string")
+
+    def test_invalid_outcome_names_the_proof_cell(self):
+        for wrong in (None, False, 42, {}, [], "", "PASS", "failed", "unknown"):
+            for index in (0, 1):
+                with self.subTest(outcome=wrong, index=index):
+                    value = artifact()
+                    proof = value["changeWalkthrough"]["proof"]
+                    proof[:] = [copy.deepcopy(proof[0]) for _ in range(2)]
+                    proof[index]["outcome"] = wrong
+                    with self.assertRaises(flowctl.PrCognitiveAidValidationError) as raised:
+                        flowctl.validate_pr_cognitive_aid(value)
+                    message = (
+                        "unsupported proof outcome"
+                        if isinstance(wrong, str) and wrong
+                        else "must not be empty" if wrong == ""
+                        else "must be a string"
+                    )
+                    self.assertEqual(str(raised.exception),
+                                     f"changeWalkthrough.proof[{index}].outcome: {message}")
 
     def test_unknown_fields_remain_rejected(self):
-        for location in ("root", "changeWalkthrough"):
-            with self.subTest(location=location):
+        for location, field, content in (
+            ("root", "unknownAuthoredField", "text"),
+            ("changeWalkthrough", "unknownAuthoredField", "text"),
+            ("changeWalkthrough", "unverifiedSteps", ["Not run"]),
+        ):
+            with self.subTest(location=location, field=field):
                 value = artifact()
                 target = value if location == "root" else value[location]
-                target["unknownAuthoredField"] = "text"
+                target[field] = content
                 with self.assertRaises(flowctl.PrCognitiveAidValidationError) as raised:
                     flowctl.validate_pr_cognitive_aid(value)
                 prefix = "pr_cognitive_aid" if location == "root" else location
                 self.assertEqual(str(raised.exception),
-                                 f"{prefix}: unknown fields: unknownAuthoredField")
+                                 f"{prefix}: unknown fields: {field}")
 
 
 if __name__ == "__main__":

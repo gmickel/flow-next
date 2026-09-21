@@ -41,21 +41,27 @@ The PR body still travels with the PR; the local aid files do not.
 
 ## Sparse authoring
 
-Three optional authored fields are additive within `changeWalkthrough`.
+Four optional authored fields are additive within `changeWalkthrough`.
 The stored `schemaVersion` remains `1` and the artifact path above is unchanged.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `userImpact` | string | What changes for a user or operator. |
 | `blastRadius` | string | Who or what the change touches and why it is safe or risky. |
-| `unverifiedSteps` | array of strings | Verification steps nobody ran, each with a note explaining the gap. |
+| `tradeoffs` | string | Rejected alternatives a reviewer would otherwise ask about. |
+| `openItems` | string | Work that remains unfinished. |
 
-`userImpact` and `blastRadius` allow empty strings and up to 4,000 characters
-each. `unverifiedSteps` allows an empty array or up to 32 non-empty strings of
-up to 1,000 characters each. Omit fields with no authored content. Existing
-artifacts without them remain valid. Wrong types are rejected with the field's
-path; unknown fields remain rejected. All four input entry points below
-preserve these fields during sparse expansion and storage.
+Each field allows an empty string and up to 4,000 characters. Omit fields with
+no authored content. Existing artifacts without them remain valid. Wrong types
+are rejected with the field's path; unknown fields remain rejected.
+
+Each `changeWalkthrough.proof[]` cell also accepts an additive optional
+`outcome` string with exactly three values: `pass`, `fail`, or `unverified`.
+A verification step nobody ran is a proof cell with outcome `unverified`;
+its `value` explains the gap. Cells without an outcome remain valid, preserving
+artifacts stored before this addition. Invalid outcomes are rejected with the
+cell's path. All four input entry points below preserve the authored fields
+and proof-cell outcomes during sparse expansion and storage.
 
 Validate, write, render --file, and html-input --file accept rows with only
 judgment fields. Missing `changeType`, `additions`, and `deletions` are filled
