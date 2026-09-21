@@ -4,136 +4,32 @@ description: Open a PR with a cognitive-aid body rendered from flow-next spec st
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---
+# /flow-next:make-pr
 
-# /flow-next:make-pr — PR-as-cognitive-aid
+The host authors one grounded aid object; flowctl validates, stores and renders it as the PR briefing. No
+extra model call or hand-assembled body sections. Read [workflow.md](workflow.md), then its reached references
+in sequence. The opt-in [html-lens.md](html-lens.md) loads only behind its config gate. Invocation authorizes
+push and PR creation without a confirmation prompt; `--dry-run` previews without repository writes, push, PR
+edits or memory writes.
 
-A reviewable PR body is itself an artefact: it lets a human decide *where to focus* before skimming the diff. flow-next already collects every input that body needs — the spec with R-IDs, per-task done summaries and evidence commits, decisions / bug / architecture-patterns memory entries, glossary changes, strategy alignment, deferred review findings, the git diff itself. This skill stitches those into a structured body, optionally adds mermaid diagrams for module-boundary changes, and pushes via `gh pr create`.
+Define `FLOWCTL` from `${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`, then
+`<plugin-root>/scripts/flowctl` (two levels above this SKILL.md), then `.flow/bin/flowctl`, choosing the first
+executable. Never assume a global install. Parse `$ARGUMENTS`: the positional token is `SPEC_ID`; reject
+unknown flags and missing base values. Carry these values between prompt turns:
 
-The host agent (Claude Code / Codex / Droid) reads the structured payload from `flowctl spec export-cognitive-aid` and synthesizes the body directly. **Every claim in the body must trace to a structured field in the export payload — never fabricate file paths, SHAs, R-ID attributions, or "why" reasoning.** Unknown attribution is honest ("uncovered" / "unclear") rather than invented. The host is competent at "what looks important here?" given the rich input; no second-model review pass is needed (the structured payload does the heavy lifting).
+| Argument | Variable / effect |
+| --- | --- |
+| `--draft`, `--ready` | `DRAFT_FORCE=draft|ready`; default `auto`; last wins, note conflicts |
+| `--base <ref>` or `--base=<ref>` | `BASE_REF`; default empty |
+| `--no-mermaid` | `NO_MERMAID=1`; default 0; suppress structural sketches too |
+| `--memory` | `WRITE_MEMORY=1`; default 0 |
+| `--dry-run` | `DRY_RUN=1`; default 0 |
+| `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR |
+| `mode:autonomous` or `FLOW_AUTONOMOUS=1` | `AUTONOMOUS=1`; default 0; never sets `RALPH` |
 
-flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders the body, then pushes and creates the PR **directly — no confirm prompt** (invoking make-pr is the intent; the body is deterministic; the default is a reversible draft). `--dry-run` prints the body without creating; `--ready`/`--draft` set draft state.
-
-**Read [workflow.md](workflow.md) for Phases 0–3 (pre-flight → gather → render body → mermaid) + the §4.0 `--dry-run` short-circuit — each phase ends with its inline `### Done when` checklist. You MUST also read [pr-cognitive-aid.md](pr-cognitive-aid.md) before composing any body — it IS Phase 1.5 (compose → `flowctl pr-cognitive-aid` validate/write → deterministic render), runs on EVERY invocation including `--dry-run`, and its rendered walkthrough supersedes the legacy Verification section, and the legacy R-ID coverage section when coverage is fully evidenced (with any unevidenced or undeclared criterion that table renders beside the walkthrough - pr-cognitive-aid.md §4 owns the rule); a body composed without executing it is a contract violation, not a style choice. Phase 1.5b additionally loads [html-lens.md](html-lens.md) only when HTML artifacts are enabled and the run is not `--dry-run`. The post-render create + finalize machinery (§4.1 title → §4.6 `gh pr create`/`--update` → Phase 5 receipt/footer) lives in [create-and-finalize.md](create-and-finalize.md), read ONLY on a real create (after §4.0 does not short-circuit) — a `--dry-run` preview never loads it. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, the hard caps + allocation rule, the prose-summary rule, the pre-emission validation checklist, the Phase-3 hallucination guardrails, and the diff-fenced structural sketch alternate emission (§8); the `--no-mermaid` / no-trigger / skip-rule paths never load it. Phase 2's §2.11b Live QA section is likewise gated: [references/live-qa-section.md](references/live-qa-section.md) is read only when the spec's `qa_verdict` receipt is present (the uncommon case).**
-
-## Preamble
-
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `workflow.md`) use `$FLOWCTL`:
-
-```bash
-FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-```
-
-**Inline skill (no `context: fork`)** — `plain-text numbered prompt` must stay reachable for the **Phase 0** info prompts (resolve a missing base ref / undetected spec id — never a confirm gate). Subagents can't call plain-text numbered prompts (Claude Code issues #12890, #34592). There is **no Phase 4 confirm prompt** — make-pr creates the PR directly.
-
-## Mode Detection
-
-Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no-mermaid`, `--memory`, `--dry-run`, `--base <ref>` (consumes the next token), and the literal token `mode:autonomous`. Strip recognized tokens; the remainder (if any) is the optional spec id.
-
-```bash
-RAW_ARGS="$ARGUMENTS"
-DRAFT_FORCE="auto"      # auto | draft | ready
-NO_MERMAID=0
-WRITE_MEMORY=0
-DRY_RUN=0
-BASE_REF=""
-SPEC_ID=""
-AUTONOMOUS=0
-
-# Tokenize and walk the argument list. The loop handles both `--base=<ref>`
-# and space-separated `--base <ref>` via a PREV token holder. Deliberately NO
-# bash positional parameters here — the host's argument interpolation rewrites
-# positional tokens inside skill code blocks (pilot dogfood finding, 1.13.0).
-PREV=""
-for ARG in $RAW_ARGS; do
-  case "$PREV" in
-    --base) BASE_REF="$ARG"; PREV=""; continue ;;
-  esac
-  case "$ARG" in
-    --draft)      DRAFT_FORCE="draft" ;;
-    --ready)      DRAFT_FORCE="ready" ;;
-    --no-mermaid) NO_MERMAID=1 ;;
-    --memory)     WRITE_MEMORY=1 ;;
-    --dry-run)    DRY_RUN=1 ;;
-    --base)       PREV="$ARG" ;;
-    --base=*)     BASE_REF="${ARG#--base=}" ;;
-    mode:autonomous) AUTONOMOUS=1 ;;
-    -*) echo "Unknown flag: $ARG" >&2; exit 2 ;;
-    *)  SPEC_ID="$ARG" ;;
-  esac
-done
-[[ -n "$PREV" ]] && { echo "Flag $PREV given without a value" >&2; exit 2; }
-
-# Secondary signal: process-level autonomous driver (env survives only
-# within one process tree; the token is the primary, prose-safe carrier).
-if [[ "${FLOW_AUTONOMOUS:-}" == "1" ]]; then
-  AUTONOMOUS=1
-fi
-```
-
-| Flag | Effect |
-|------|--------|
-| `--draft` | Force draft PR regardless of open-items count or Ralph context. |
-| `--ready` | Force non-draft PR. Conflicts with `--draft` (last flag wins; surface the conflict). |
-| `--no-mermaid` | Skip Phase 3 entirely. Mermaid prose summaries are also skipped. |
-| `--memory` | After PR creation, write a `knowledge/architecture-patterns/` memory entry summarizing what shipped. Idempotent — rerun adds no second entry for the same spec id. |
-| `--dry-run` | Skip Phase 4 entirely. Render body to stdout. Useful for inspection or `… --dry-run \| pbcopy`. |
-| `--base <ref>` | Override base-branch detection cascade. Useful when the team's default branch is `develop`, etc. |
-| `mode:autonomous` | Autonomous mode: Phase 0 info prompts hard-error instead of asking; draft forced. Sets `AUTONOMOUS=1` only — NEVER `RALPH`. Also derived from `FLOW_AUTONOMOUS=1`. |
-
-Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected separately in workflow.md §0.0 — the skill is **not** Ralph-blocked. Under Ralph the skill hard-errors instead of asking the Phase 0 info prompts, forces `--draft`, and emits the PR URL to stdout. (The PR is created directly in both modes — the only difference is forced-draft + no Phase 0 prompts under Ralph.) Autonomous mode is a SEPARATE flag: `AUTONOMOUS=1` derives only from the `mode:autonomous` token or `FLOW_AUTONOMOUS=1` and never sets `RALPH`. Under `RALPH || AUTONOMOUS` the Phase 0 info prompts hard-error and `--draft` is forced (`--ready` ignored with a note); the `PR_URL=` stdout contract and all receipt/harness semantics remain Ralph-only.
-
-## Interaction Principles
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-- Ask **one question at a time** via `plain-text numbered prompt`. Never silently skip the question.
-- Lead with the **recommended option** and a one-sentence rationale.
-- **No confirm gate.** make-pr opens the PR without asking. Phase 0 asks *only* to resolve info it cannot derive (no `--base` and no detection match; no spec detected) — never "do you want to create it?". Not-all-tasks-done warns and proceeds (the open items make it a draft). Skip questions when context resolves cleanly.
-- **Ralph and autonomous modes skip all questions.** Detect both once at Phase 0 and route deterministically; a genuinely unanswerable gap hard-errors with a clear message (NEEDS_HUMAN-style) instead of hanging on a prompt.
-
-## Hallucination guardrails
-
-The body is synthesized from the export payload. Every claim must trace to a structured field. The skill explicitly forbids:
-
-- **Inventing file paths.** Only paths returned by `git diff --name-status` (via the `diff.files` array) appear in Critical Changes / Review plan. No "I think there's also a config file" content.
-- **Inventing risk or verification claims.** Every "must review because…" clause in the Review plan traces to a `diff_summary` risk signal (churn / public export / security path / cross-module edge / user-facing surface); every "the pipeline verified…" line in the How-to-review block traces to `tasks[].evidence` / R-ID coverage / `reviews.*`. No narrated risk and no claimed verification without a payload anchor — absent verification is stated honestly ("no cross-model review recorded on this PR").
-- **Fabricating commit SHAs.** SHAs come from `tasks[].evidence[].commits` and `git log --oneline base..HEAD` only.
-- **Guessing R-ID coverage.** Coverage is computed from task `satisfies` frontmatter. Declared and evidenced are distinct: an R-ID no task claims (`undeclared_r_ids`) gets a ⚠️ flag; one claimed by a task that is not done yet renders as `⏳ claimed, not yet evidenced`. Never a confident attribution either way.
-- **Inventing "why" reasoning.** Decision context comes from `memory.decisions[]` entries' bodies. If no decision entry exists for a change, the body says so explicitly rather than narrating a plausible-sounding rationale.
-- **Quoting raw diff content.** The body talks ABOUT the diff (paths, churn, modules). Never includes code snippets — privacy + secret-leakage risk; GitHub renders the actual diff below the body.
-- **Synthesizing review findings.** Findings come from `reviews.deferred[]` and `reviews.suppressed_count`. The body never editorializes severity or fabricates findings.
-- **Generating fictitious memory IDs.** When the body references memory entries (decisions / bugs / patterns), the IDs come from the export payload — never interpolated.
-- **Synthesizing strategy alignment.** Strategy section content comes verbatim from `strategy.tracks[]` and the spec's `## Strategy Alignment` block. The body never invents alignment claims.
-- **Inventing glossary terms.** Glossary section content comes from `glossary.changes[]`. New terms / renamed terms are surfaced only if the export reports them.
-- **Hallucinating mermaid relationships.** Diagram nodes + edges come from real cross-module imports detected via `git diff` analysis (Phase 3 details in the mermaid-rules.md ref file). The skill never adds "I think module X also imports Y" edges.
-
-When data is missing, the body says so honestly (e.g. `*No decision-track memory entries for this spec. Surface decisions in PR review comments if needed.*`) rather than confabulating content. **Honest "unclear" beats plausible "wrong".**
-
-## Forbidden
-
-- **Ralph-blocking the skill.** This skill is the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced). A `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill has broken this.
-- **Re-adding a confirm gate.** make-pr creates the PR without prompting. A run that asks "do you want to create it?" before push has broken this — the escape hatch is `--dry-run`, not a question.
-- **Pushing or creating PRs in `--dry-run` mode.** Phase 4 short-circuits before any `git push` or `gh pr create`. The body lands on stdout only.
-- **Squashing the existing-PR check.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for CLOSED and MERGED PRs as readily as OPEN. Filter `.state == "OPEN"` via `jq` (validated empirically). Closed/merged PRs on a reused branch must NOT trigger refusal.
-- **Manual `git push` workflows when `gh` is missing.** When `gh` isn't installed or authenticated, surface the install / `gh auth login` instructions and exit. Don't try to fall back to half-baked PR creation.
-- **Writing memory entries without `--memory`.** Default off. The user opts in for structurally-significant specs — every-PR memory inflation is the failure mode this gate prevents.
-- **Quoting raw diff content in the body.** See hallucination guardrails — the body describes the diff, never copies code.
-- **Calling `gh pr merge`.** Out of scope. The skill creates and exits; merge is a human decision.
-- **`git add -A` (or any broad stage) for a legacy PR-artifact commit.** A supported current v1 lens stays local-only so it cannot stale its own head-bound input. The fallback committed path stages exactly `.flow/artifacts/<spec-id>/pr.html` with the fixed message `chore(flow): pr artifact <spec-id>` — unrelated working-tree changes are not make-pr's concern.
-- **Opening a Lavish session or running `lavish-axi poll` from make-pr.** The PR artifact is a read-only review instrument — no annotate loop, interactive or autonomous. Review conversation belongs to the code host.
-- **Emitting an artifact blob link that can 404.** Gitignored `.flow/artifacts/` → local-open guidance only; committed mode links only after the narrow artifact commit landed on the branch being pushed.
-
-## Workflow
-
-Execute the phases in [workflow.md](workflow.md) in order:
-
-0. **Pre-flight** — `gh` installed + authenticated; resolve spec id (arg or branch-match); base-branch detection cascade with the chain rung (a branch built on a dependency's branch, detected from history, targets that parent's branch; a merged parent rewrites the branch onto the chain base on a create run only); branch validity (HEAD ahead of base); all tasks `done` (warn + proceed as draft without closing if not — no prompt; Ralph exits 2); existing-PR refusal filtered on `.state == "OPEN"`; stop before closing if its spec or task JSON paths have pre-existing tracked changes; on a real create with at least one task and all tasks done, bind the spec to the head branch and commit its close before exporting or composing the aid. Dry-run and body-only updates never close. Detects Ralph environment for downstream phases.
-1. **Gather inputs** — single call to `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json`; parse the structured payload (spec / tasks / memory / glossary / strategy / diff / reviews).
-1.5. **Structured PR cognitive aid (ALWAYS — read [pr-cognitive-aid.md](pr-cognitive-aid.md) and execute it)** — the existing host composes one grounded v1 walkthrough from the export-time head. flowctl validates/persists/selects/renders it before optional HTML and final body creation. Not optional and not HTML-gated — only 1.5b is opt-in. No extra model call. Supported current artifacts render compact/full deterministically; stale/invalid artifacts select the existing fallback without mixing fields. The post-creation `makePr` tracker facade remains unchanged.
-1.5b. **HTML render lens (opt-in)** — only when `artifacts.html.enabled` is true AND not `--dry-run`: generate `.flow/artifacts/<spec-id>/pr.html` (read-only review instrument per the shared disclosure reference [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) §5 — diff-derived, R-ID-verified with flagged mismatch rows). A supported current v1 object is embedded as the exact HTML-safe semantic carrier and stays local-only so `HEAD` remains equal to its `headSha`; only the visibly labeled legacy fallback may use the narrow committed-artifact path. Record the render-lens line for the body summary block. Never opens a Lavish session or polls (interactive AND autonomous). Failure is non-fatal — one stderr note, PR proceeds. With the mode off/unset there is zero artifact-related behavior or output beyond the single config read.
-2. **Render body** — TL;DR, R-ID coverage table, Critical changes, How to review this PR (trust-calibration coaching block), Review plan (risk-ranked Must review / Spot-check / Safe to skim with a ≤~30% focus budget), Decisions made, Memory left behind, Glossary/strategy notes, Open items, footer breadcrumb. Sections without content are omitted (never empty placeholder headings).
-3. **Mermaid generation** — gated by 5 trigger conditions (cross-module imports, public interface changes, new/removed top-level dirs, high fan-out spec). Hard caps: 3 diagrams, 12 nodes, 25 edges, 12K characters. Each codefence preceded by a 3-5 sentence plain-language prose summary (load-bearing for forges that don't render mermaid). Validates each codefence against the [`mermaid-rules.md`](mermaid-rules.md) §6 checklist (reserved words, escape patterns, no emoji / MathJax, no inheritance cycles) before emitting. Skipped under `--no-mermaid` or when no triggers fire / a skip rule applies (pure-additive single-module diff <50 LOC, flat-layout repo).
-4. **Push + create PR** — `git push -u origin HEAD`, then `gh pr create --title --body`. Draft when `OPEN_ITEMS_COUNT > 0` OR Ralph OR `--draft`; ready when `--ready`, and a chained layer with nothing open is ready even under autonomy. On GitHub a chained layer whose parent PR is open is linked into the parent's stack afterwards (failure degrades to a plain chain layer with one stderr line). `--dry-run` short-circuits before push.
-5. **Output + footer** — emit PR URL on success; print breadcrumb (`Generated by /flow-next:make-pr from <spec-id> against <base>`) plus the invisible machine marker `<!-- flow-next:make-pr spec=<spec-id> base=<base-ref> -->` as provenance, not a landing gate (issue #274); optionally write `knowledge/architecture-patterns/` memory entry under `--memory`.
+Keep this skill inline so `plain-text numbered prompt` remains available. Resolve only missing information, one question
+at a time with a recommended option; use a numbered prompt if the tool is unavailable. `NEED_INPUT:` means ask
+outside Bash and rerun with the answer. Ralph/autonomous gaps hard-error instead. Ralph alone owns `PR_URL=`
+stdout and harness semantics. Draft rules live in create-and-finalize; a complete chained layer can be ready
+under autonomy. Never merge here. Evidence, paths and requirement attribution must be grounded in the export
+and receipts, with unknowns explicit rather than invented.

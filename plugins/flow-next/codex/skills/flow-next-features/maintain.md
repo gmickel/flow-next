@@ -232,7 +232,7 @@ At least one proven map or owned-harness correction.
 gh pr create --title "chore(features): maintain pass" --body-file "$PR_BODY"
 ```
 
-Write `$PR_BODY` to a file under `$RUN_DIR` (or a tempfile). Hand-written body matching the make-pr **structure**, these four sections in order:
+Write `$PR_BODY` to a file under `$RUN_DIR` (or a tempfile). Use a hand-written chore body with these four sections in order:
 
 - **Summary**
 - **What changed**

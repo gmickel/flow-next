@@ -458,9 +458,7 @@ for nf in \
     -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
     -e 's|Reviewer feedback → /flow-next:resolve-pr|Reviewer feedback → $flow-next-resolve-pr|g' \
     -e 's|Body inspection → /flow-next:make-pr|Body inspection → $flow-next-make-pr|g' \
-    -e 's|Reviewer should run: /flow-next:resolve-pr|Reviewer should run: $flow-next-resolve-pr|g' \
     -e 's|re-run /flow-next:make-pr (skill detects the existing branch and re-tries)|re-run $flow-next-make-pr (skill detects the existing branch and re-tries)|g' \
-    -e 's|An OPEN PR exists. /flow-next:resolve-pr addresses review feedback|An OPEN PR exists. $flow-next-resolve-pr addresses review feedback|g' \
     -e 's|Use `/flow-next:plan fn-N`|Use `$flow-next-plan fn-N`|g' \
     -e 's|→ `/flow-next:work fn-N` (or more interview|→ `$flow-next-work fn-N` (or more interview|g' \
     -e 's|→ `/flow-next:work fn-N.M`|→ `$flow-next-work fn-N.M`|g' \
@@ -2415,9 +2413,7 @@ flow-next-plan/references/next-steps-menu.md	`/flow-next:plan-review fn-N-slug`	
 flow-next-work/phases.md	Next: /flow-next:make-pr <spec-id>	Next: $flow-next-make-pr <spec-id>
 flow-next-make-pr/create-and-finalize.md	Reviewer feedback → /flow-next:resolve-pr	Reviewer feedback → $flow-next-resolve-pr
 flow-next-make-pr/create-and-finalize.md	Body inspection → /flow-next:make-pr	Body inspection → $flow-next-make-pr
-flow-next-make-pr/create-and-finalize.md	Reviewer should run: /flow-next:resolve-pr	Reviewer should run: $flow-next-resolve-pr
 flow-next-make-pr/create-and-finalize.md	re-run /flow-next:make-pr (skill detects	re-run $flow-next-make-pr (skill detects
-flow-next-make-pr/create-and-finalize.md	An OPEN PR exists. /flow-next:resolve-pr	An OPEN PR exists. $flow-next-resolve-pr
 flow-next-refine/SKILL.md	Use `/flow-next:plan fn-N`	Use `$flow-next-plan fn-N`
 flow-next-refine/SKILL.md	→ `/flow-next:work fn-N` (or more interview	→ `$flow-next-work fn-N` (or more interview
 flow-next-refine/SKILL.md	→ `/flow-next:work fn-N.M`	→ `$flow-next-work fn-N.M`

@@ -21,7 +21,7 @@ The files below stay in the repository because something at runtime reads them: 
 | [`tracker-sync.md`](tracker-sync.md) | Capture, make-pr, and work read the retro-fire rule; `flowctl_tracker` code and the config schema cite the fn-64 ordering rule |
 | [`memory-schema.md`](memory-schema.md) | The qa skill maps bug categories through it |
 | [`html-artifacts.md`](html-artifacts.md) | The html-lens references in capture, make-pr, and plan; the fixture-contract test reads it |
-| [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The consumer contract for the PR walkthrough; the fixture-contract test pins it against the make-pr skill copy |
+| [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | The consumer contract for the stored PR walkthrough and its rendered briefing |
 | [`review-findings.md`](review-findings.md) | The structured findings contract; its test pins the schema fields, bounds, and identity grammar |
 | [`judge.md`](judge.md) | The setup workflow links it for key handling; the config schema descriptions point at it |
 | [`running-lean.md`](running-lean.md) | Seven config schema descriptions point at it for the cost of each optional layer |

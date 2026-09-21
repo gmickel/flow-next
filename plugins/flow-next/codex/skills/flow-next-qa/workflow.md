@@ -56,7 +56,7 @@ When the sentinel prints, STOP and Read [references/autonomy.md](references/auto
 
 ### 1.1 — Resolve the spec id
 
-`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt. Match the branch against each spec's stored `branch_name` — **never against the branch literal**, since a flow branch name need not equal the spec id; a resolver comparing the branch string to spec ids has broken this. Reuse the make-pr pattern (`flow-next-make-pr/workflow.md` §0.2). Scan `.flow/specs/*.json` (canonical) and `.flow/epics/*.json` (legacy alias dir):
+`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt. Match the branch against each spec's stored `branch_name` — **never against the branch literal**, since a flow branch name need not equal the spec id; a resolver comparing the branch string to spec ids has broken this. Reuse the make-pr pattern (`flow-next-make-pr/workflow.md` Phase 0). Scan `.flow/specs/*.json` (canonical) and `.flow/epics/*.json` (legacy alias dir):
 
 ```bash
 if [[ -z "$SPEC_ID" ]]; then
@@ -87,7 +87,7 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 `spec export-cognitive-aid` requires a `--base` ref. QA needs the **spec** section (AC / R-IDs / boundaries / decision context) to derive scenarios **and** the top-level `tasks[]` (with each task's `satisfies` + `evidence`) for the §2.0 evidence-aware subtraction, so load the one full payload and reuse it:
 
 ```bash
-# Base-branch detection cascade (reuses make-pr §0.3): pick the first ref that
+# Base-branch detection cascade (reuses make-pr Phase 0): pick the first ref that
 # actually resolves. `git rev-parse --verify --quiet` is the gate — a bare `sed`
 # pipeline exits 0 even when origin/HEAD is unset, which would leave the base
 # empty and break the merge-base below.
@@ -120,7 +120,7 @@ if [[ -z "$DEFAULT_BRANCH" ]]; then
   fi
 fi
 # Still nothing — ask the user for the base (interactive), or hard-error under
-# Ralph. Mirrors make-pr §0.3: never silently exit on an unusual default branch.
+# Ralph. Mirrors make-pr Phase 0: never silently exit on an unusual default branch.
 QA_OUTCOME=""   # set non-empty here ONLY to short-circuit to the BLOCKED receipt (autonomous no-base path)
 if [[ -z "$DEFAULT_BRANCH" ]]; then
   if [[ "${NO_PROMPT:-0}" == "1" ]]; then
@@ -234,14 +234,14 @@ Record, per R-ID, a `coverage_source ∈ {live, subtracted:<task-id>:<test-cmd>}
 Walk `spec.spec_sections` and build the scenario set. When Phase 1.3 loaded a matching feature for this target, scenario `steps` cite those map-sourced routes and commands; do not re-derive them. Targets the map does not cover derive routes exactly as without a map.
 
 1. **AC → scenarios.** Each `acceptance_criteria[]` entry with a *user-observable* surface becomes ≥1 scenario: a persona, a goal, and the steps a real user takes to exercise that criterion on the live app. Backend / CLI / non-UI criteria yield **no** scenario (they are covered by static review) — note them as "not live-QA-able" rather than inventing a fake UI path. **For every write-path / state-changing scenario, also derive an error-path variant** (invalid input, an empty/error/permission state) — ACs are written as positive assertions, so a happy-path-only set silently misses exactly the states real users hit.
-2. **R-IDs → coverage spine.** Every `acceptance_criteria[].id` is a row in the coverage table (reuse the make-pr R-ID coverage-table pattern — see §2.2). Each scenario maps back to the R-ID(s) it exercises. R-IDs with no scenario are flagged `⚠️ no live scenario` (an honest gap, never a confident PASS).
+2. **R-IDs → coverage spine.** Every `acceptance_criteria[].id` is a row in the coverage table (see §2.2). Each scenario maps back to the R-ID(s) it exercises. R-IDs with no scenario are flagged `⚠️ no live scenario` (an honest gap, never a confident PASS).
 3. **Boundaries → exclusions.** Each `boundaries[]` entry is an **explicit non-goal**: a behavior QA must NOT test (e.g. "NOT a code review — drives the live app, not the source"). This suppresses false bugs — a "missing" feature that a boundary declares out of scope is not a finding.
 4. **Decision context → expected behavior.** Each `decision_context[]` `{question, answer}` pair seeds the **Expected** column for the scenario(s) it governs — the resolved-default behavior the live app should exhibit. A scenario's pass/fail is `observed vs this expected`, captured as evidence.
 5. **Prior bugs → regression scenarios.** QA *files* into the bug-memory track (Phase 5) but the derive step never *read* it — a half-closed loop: a bug filed by a previous pass on a touched surface is never re-exercised unless a new AC happens to cover it. Query `flowctl memory search --track bug` scoped to this spec's touched surfaces / modules and turn each still-plausible prior bug into a **regression scenario** (marked `regression`, **no R-ID** — it is coverage-independent, so it never counts toward or against the R-ID spine). Skip entries a `boundaries[]` item excludes or that the diff clearly removed.
 
 ### 2.2 — Coverage spine (R-ID table)
 
-Render an R-ID coverage table — exact column order, reusing the make-pr pattern (`flow-next-make-pr/workflow.md` §2.3):
+Render an R-ID coverage table — with this exact column order:
 
 ```markdown
 | R-ID | Acceptance criterion | Scenario(s) | Coverage |
@@ -688,7 +688,7 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 ### 6.3b — Commit QA's own handoff (autonomous mode only)
 
-When `QA_AUTONOMOUS=1` (the `flow --auto` QA stage dispatched this pass - autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. QA knows exactly which files it produced (the receipt above, plus the memory entries tracked in `QA_FILED_MEMORY` at §5.4 / §5.5), so it commits those and the driver never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. User-invoked QA leaves commits to the user. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
+When `QA_AUTONOMOUS=1` (the `flow --auto` QA stage dispatched this pass - autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the briefing’s Verification and Open items report. QA knows exactly which files it produced (the receipt above, plus the memory entries tracked in `QA_FILED_MEMORY` at §5.4 / §5.5), so it commits those and the driver never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. User-invoked QA leaves commits to the user. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then
@@ -722,11 +722,11 @@ Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids +
 
 ## Phase A: autonomy
 
-**Goal:** detect Ralph **once** and route deterministically (R11) — autonomous when the target URL + test accounts are configured (emits the verdict receipt, no prompts); asks the user (info-only) when they are undocumented. The skill is **not a hard Ralph-block** — there is **no** top-of-skill `FLOW_RALPH` exit-2 guard (the make-pr §0.0 precedent; see [SKILL.md](SKILL.md) Forbidden). Phase A also owns the opt-in tracker verdict post (`tracker.perEvent.qa`) and the graceful-degradation contract when no live deploy / driver is present. The full routing table, gating predicate, and degradation matrix live in **[references/autonomy.md](references/autonomy.md)** — read it before any Ralph or tracker step.
+**Goal:** detect Ralph **once** and route deterministically (R11) — autonomous when the target URL + test accounts are configured (emits the verdict receipt, no prompts); asks the user (info-only) when they are undocumented. The skill is **not a hard Ralph-block** — there is **no** top-of-skill `FLOW_RALPH` exit-2 guard (the make-pr Phase 0 precedent; see [SKILL.md](SKILL.md) Forbidden). Phase A also owns the opt-in tracker verdict post (`tracker.perEvent.qa`) and the graceful-degradation contract when no live deploy / driver is present. The full routing table, gating predicate, and degradation matrix live in **[references/autonomy.md](references/autonomy.md)** — read it before any Ralph or tracker step.
 
 ### A.1 — Detect Ralph once, route deterministically (R11)
 
-`RALPH` was already computed **once** in the Autonomous-mode gate above (the make-pr §0.0 pattern — detect at the top of the run, then route downstream; never re-probe per phase). Reuse that value here; do not recompute it.
+`RALPH` was already computed **once** in the Autonomous-mode gate above (the make-pr Phase 0 pattern — detect at the top of the run, then route downstream; never re-probe per phase). Reuse that value here; do not recompute it.
 
 - **No top-of-skill exit guard.** `RALPH=1` does **not** abort the skill. QA runs in Ralph; it just routes differently (the make-pr precedent — autonomous loops emitting a QA verdict is the intended use). Do **not** add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard.
 - **`plain-text numbered prompt` is info-only, never a confirm gate.** It resolves *undocumented* facts (target URL, test accounts — Phases 1.1, 3.1, 3.2), never "shall I run QA? / ship?". Interactive asks; Ralph cannot ask, so an undocumented URL/accounts under Ralph is a **hard limitation → BLOCKED** (Phase 6, `blocked_reason`), not a prompt and not an exit.
