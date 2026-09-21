@@ -99,10 +99,30 @@ The outcome paragraph is mandatory for a minor release or any release whose
 value spans more than one changelog bullet. A narrowly scoped patch may express
 the outcome in its first bullet.
 
+**Lead with what the release gives the reader, then say what changes on upgrade.**
+The opening paragraphs state the gains in the present tense, each with its
+measured number or its mechanism ("make-pr produces it 60% faster: 251 seconds
+to 100"). A breaking or behavior-changing release follows them with one paragraph
+that opens **What changes when you upgrade.** and gives the action and the link.
+Everything else comes after.
+
+**Release notes are not the development record.** How the work got there (an
+approach that was tried and dropped, a step that measured worse first, a review
+finding, a rule that was reversed) belongs in the pull request, the measurement
+record, or the maintainer's notes. A bound on a claim stays, as a clause beside
+the number it bounds (`three cold runs per point`), never as a paragraph of
+caveats. Paths that have not yet run live belong in the pull request's
+verification list. This keeps prose.md rule 10 intact: the bound is stated, the
+story of reaching it is not.
+
 **Hard rejection test:** stop and rewrite when any of these is true:
 
 - the first substantive sentence names a command, function, schema, artifact,
   fixture, hash, benchmark, or internal subsystem;
+- the opening explains a problem, a history, or a caveat before it says what the
+  reader gains;
+- a paragraph narrates what was tried, reversed, or measured wrong along the way;
+- a caveat has its own paragraph instead of sitting beside the claim it bounds;
 - a reader cannot explain what became easier, safer, faster, or newly possible
   after reading the opening paragraph;
 - the entry lists what was built without walking through how the user's work
@@ -176,7 +196,7 @@ The public, human-readable changelog at `~/work/flow-next.dev/src/content/docs/r
 ```mdx
 ### X.Y.Z - <short title (3-6 words)>
 
-**<the reader's problem, then what changes for them - the "why", in plain language>.**
+**<what the release gives the reader, with its number, in plain language; for a breaking release, one closing clause saying so and that the upgrade steps are below>.**
 
 <details>
 <summary>Detail</summary>
@@ -190,14 +210,14 @@ fine WHERE THE READER ACTS ON THEM. Blank lines around this block so MDX renders
 **Register (MANDATORY - the docs-site changelog is customer-facing, NOT the repo CHANGELOG in disguise):**
 
 - **The generic prose contract applies** ([`prose.md`](../plugins/flow-next/docs/prose.md), cited above): outcome first with mechanism last, name the number, plain hyphens, honesty. Changelog-specific register on top of it: this page is customer-facing, and for review features the human reviewer is the protagonist - explain how they orient themselves, follow the change, focus risk, inspect evidence, and retain merge judgment. The first detail paragraphs describe the old burden, the new flow, and the control or confidence gained; internal machinery belongs in an "Under the hood" tail.
-- **The title and bold one-liner answer "what was hard before, what can I do now, and why should I care?"** They never lead with a command, schema, artifact name, fixture, parser, or benchmark. Wrong: "Snapshot-based config get: three read forms backed by one command-scoped snapshot". Right: "The skills you run most now read configuration once instead of seven times - less waiting, fewer places for a half-written task to exist."
+- **The title and bold one-liner answer "what can I do now, how much better is it, and why should I care?"** They state the gain; they do not open on the old problem. They never lead with a command, schema, artifact name, fixture, parser, or benchmark. Wrong: "Snapshot-based config get: three read forms backed by one command-scoped snapshot". Right: "The skills you run most now read configuration once instead of seven times - less waiting, fewer places for a half-written task to exist."
 - **Every paragraph earns its place by answering why / what it means for you.**
   Function names, LOC counts, fence/prose-contract mechanics, fn-task numbering,
   test counts, and compatibility contracts belong in the repo CHANGELOG or the
   technical tail - reference them earlier only when the reader must act on them.
-- **Upgrade actions come FIRST and are imperative.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it opens the details block under a "do these first" framing - never buried mid-list. **If `SNIPPET_SCHEMA_VERSION` bumped in this release, say so there** - it is the only thing that makes a user re-run `/flow-next:setup` (plugin updates never do).
+- **Upgrade actions are imperative and come right after the gains.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it is the first paragraph after the ones that say what the release gives them, under a "What changes when you upgrade" lead - never buried mid-list, never ahead of the gains. **If `SNIPPET_SCHEMA_VERSION` bumped in this release, say so there** - it is the only thing that makes a user re-run `/flow-next:setup` (plugin updates never do).
 - **Numbers are outcomes, not inventory.** "30 seconds to half a second" and "half the wall-clock" persuade; "-1,251 LOC" and "ran=1935" are inventory. Keep measured evidence (that is the register: proof-backed, never adjective-backed), drop bookkeeping.
-- **Honesty stays** (prose.md rule 10, load-bearing in this register). Bounds, deliberate misses, and what did NOT change are part of the story ("about 35% of runs still force a full suite as the safety floor"). The register is candid practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
+- **Honesty stays, beside the claim** (prose.md rule 10, load-bearing in this register). A bound sits next to the number it bounds ("about 35% of runs still force a full suite as the safety floor"), and what did NOT change gets its own short "What you keep" paragraph. The development story does not belong here: what was tried and dropped, what measured worse first, and what has not yet run live go in the pull request, the measurement record and the maintainer's notes. The register is confident practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
 
 **Docs-site hard rejection test:** hide the final technical paragraph and ask:
 "Can a user explain why this release matters, how their workflow changes, and
