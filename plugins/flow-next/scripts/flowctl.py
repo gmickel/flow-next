@@ -30084,7 +30084,8 @@ def _pr_aid_plain_text(value: Any) -> str:
         escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
         for character in ("\\", "*", "_", "[", "]", "~"):
             escaped = escaped.replace(character, f"\\{character}")
-        escaped = re.sub(r"(?<![\w.])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
+        # The forge's mention boundary is an ASCII word character; emails keep theirs.
+        escaped = re.sub(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
         escaped = re.sub(r"(?<!&)#(?=\d)", "#&#8203;", escaped)  # not our own entities
         return re.sub(r"(?i)\b(GH-)(?=\d)", r"\1&#8203;", escaped)
 
@@ -30092,7 +30093,7 @@ def _pr_aid_plain_text(value: Any) -> str:
     parts, position = [], 0
     for match in _PR_AID_URL_RE.finditer(text):
         parts.append(words(text[position:match.start()]))
-        parts.append(html.escape(match.group(0), quote=False).translate(_PR_AID_ENTITIES))
+        parts.append(html.escape(match.group(0).replace("|", "%7C").replace("`", "%60"), quote=False))
         position = match.end()
     parts.append(words(text[position:]))
     return "".join(parts)

@@ -209,7 +209,7 @@ from mechanical, generated and not-described files. Schema caps bound the
 remaining content. Counted lines and coverage have a preceding blank line;
 a blank line also separates each count from the next group's title.
 Apostrophes and quotation marks render literally; markup-injection characters
-remain neutralized, including mentions (`@name`) and issue references (`#123`, `fixes #1`).
+remain neutralized, including mentions (`@name`) and short issue references (`#123`, `fixes #1`, `GH-1`). URLs in prose stay clickable, so a full issue or pull-request URL is the deliberate way to reference one; a bare commit SHA still links.
 
 Artifact ID, base SHA and head SHA appear together in one invisible HTML
 comment. File statistics, repeated provenance, review plans and generated-by

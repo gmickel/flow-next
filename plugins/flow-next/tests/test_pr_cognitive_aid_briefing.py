@@ -330,7 +330,7 @@ class BriefingTests(unittest.TestCase):
     def test_paths_links_and_prose_are_literal(self):
         value = full_artifact()
         walk = value["changeWalkthrough"]
-        prose = "@name #123 fixes #1 ] ) `code` | <b> café"
+        prose = "@name #123 fixes #1 ] ) `code` | <b> café end.@name é@name me@example.com"
         for field in ("thesis", "userImpact", "blastRadius", "tradeoffs", "openItems"):
             walk[field] = prose
         group = walk["groups"][2]
@@ -355,6 +355,7 @@ class BriefingTests(unittest.TestCase):
                 # The forge resolves references after decoding entities, so the
                 # token is broken with a zero-width space, not entity-encoded.
                 self.assertIn("@&#8203;name #&#8203;123 fixes #&#8203;1", text)
+                self.assertIn("end.@&#8203;name é@&#8203;name me@example.com", text)
                 self.assertIn("&#96;code&#96; &#124; &lt;b&gt; café", text)
                 self.assertNotIn("```diff", text)
 
