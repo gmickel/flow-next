@@ -67,7 +67,7 @@ class ClaudeFleetSmokeHarnessTests(unittest.TestCase):
 
     def test_external_writes_are_guarded(self):
         source = self.harness_source()
-        self.assertIn("--dry-run --base main --no-mermaid", source)
+        self.assertIn("--dry-run --base main", source)
         self.assertIn('"no_live_pr_create"', source)
         self.assertIn("strict_empty_mcp", source)
         self.assertIn("no_tracker_receipt_write", source)

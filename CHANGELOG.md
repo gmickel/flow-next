@@ -14,6 +14,8 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
+- The obsolete make-pr `--no-mermaid` flag is removed.
+
 - make-pr bodies are now one short briefing that flowctl renders from the aid
   artifact, at most 40 lines for any pull-request size: Why, What changes for a
   user or operator, Scope, Blast radius, Verification, Tradeoffs and Open

@@ -168,12 +168,22 @@ checkbox. Old artifacts therefore keep their evidence without gaining a pass
 claim. Proof cells with no outcome are still valid, and absent proof cells
 omit the section entirely.
 
-The renderer keeps the briefing within 40 lines by collapsing entries
-predictably, lowest attention first, and counting the collapsed content. Why
-and the coverage line always remain. If the thesis alone exceeds the budget,
-it renders in full and everything else collapses to counted lines. Apostrophes
-and quotation marks render literally; markup-injection characters remain
-neutralized.
+The renderer fits ordinary briefings within 40 lines, counting blank lines.
+Before collapsing anything, it reflows a multiline thesis if needed, unless
+that thesis plus its Why heading, two blank lines and identity comment already
+exceeds 40 lines. That exceptional thesis remains in full; other content is
+counted. Why and the coverage line never collapse.
+
+Collapse stops as soon as the body fits: proof cells without outcomes first,
+then pass cells, each from the end; described file rows from later groups
+before earlier groups; then lines beyond the first in tradeoffs, blast radius,
+user/operator change and finally open items. Each field keeps its first line
+and a counted remainder; one-line fields survive ordinary collapse. Fail and
+unverified cells collapse only after these steps. Proof counts distinguish
+each outcome. Exhausted scope and optional coverage-table detail use counted
+summaries when needed. Counted lines and coverage have a preceding blank line.
+Apostrophes and quotation marks render literally; markup-injection characters
+remain neutralized.
 
 Artifact ID, base SHA and head SHA appear together in one invisible HTML
 comment. File statistics, repeated provenance, review plans and generated-by

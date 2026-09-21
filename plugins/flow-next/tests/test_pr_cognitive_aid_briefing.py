@@ -83,7 +83,7 @@ class BriefingTests(unittest.TestCase):
         files = value["changeWalkthrough"]["groups"][2]["files"]
         files[1]["summary"] = ""
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn(" ├── src/change_0.py — Implements bounded behavior 0. [R6]", text)
+        self.assertIn(" └── src/change_0.py — Implements bounded behavior 0. [R6]", text)
         self.assertIn("1 mechanical file; 1 generated file; 1 not described file", text)
         self.assertNotIn("src/change_1.py", text)
         self.assertIn("**1. Validate and render**", text)
@@ -91,7 +91,7 @@ class BriefingTests(unittest.TestCase):
         self.assertNotIn("| Requirement |", text)
         files[0]["summary"] = ""
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("**1. Validate and render**\n```diff\n", text)
+        self.assertIn("**1. Validate and render**\n\n", text)
         self.assertIn("2 not described files", text)
         self.assertNotIn("├──", text)
 
@@ -158,7 +158,7 @@ class BriefingTests(unittest.TestCase):
 
     def test_budget_reflows_short_thesis_without_removing_content(self):
         value = full_artifact()
-        reasons = [f"Reason {i}." for i in range(39)]
+        reasons = [f"Reason {i}." for i in range(35)]
         value["changeWalkthrough"]["thesis"] = "\n".join(reasons)
         text = flowctl.render_pr_cognitive_aid_markdown(value)
         self.assertLessEqual(len(text.splitlines()), 40)
@@ -177,6 +177,160 @@ class BriefingTests(unittest.TestCase):
         self.assertEqual(text.count("1 authored line collapsed"), 4)
         self.assertIn("Proof cells collapsed: 1 pass", text)
         self.assertNotIn("├──", text)
+
+    def test_file_only_requirement_is_covered_without_table(self):
+        value = artifact()
+        value["sources"].append({"id": "file_rid", "kind": "rid", "ref": "R7"})
+        record = value["changeWalkthrough"]["groups"][2]["files"][0]
+        for citation in ({"rIds": ["R7", "R6"], "sourceRefs": ["file_rid", "rid", "diff", "task"]},
+                         {"rIds": [], "sourceRefs": ["file_rid", "rid", "diff", "task"]}):
+            record.update(citation)
+            text = flowctl.render_pr_cognitive_aid_markdown(value)
+            self.assertIn("R7 → 1", text)
+            self.assertNotIn("| Requirement |", text)
+
+    def test_setext_underlines_are_neutralized_in_each_authored_field(self):
+        for key in ("thesis", "userImpact", "blastRadius", "tradeoffs", "openItems"):
+            for underline in ("=", "-", "==  ", "--  "):
+                with self.subTest(key=key, underline=underline):
+                    value = artifact()
+                    value["changeWalkthrough"][key] = "Forged heading\n" + underline
+                    text = flowctl.render_pr_cognitive_aid_markdown(value)
+                    self.assertNotIn("\n" + underline + "\n", text)
+                    self.assertIn(f"&#{ord(underline[0])};", text)
+
+    def test_tree_change_signs_and_last_row(self):
+        value = artifact()
+        group = value["changeWalkthrough"]["groups"][2]
+        group["files"] = group["files"][:2]
+        group["files"][0]["changeType"] = "added"
+        group["files"][1]["changeType"] = "deleted"
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("+ ├── src/change_0.py", text)
+        self.assertIn("- └── src/change_1.py", text)
+
+    def test_undescribed_group_has_same_shape_in_each_position(self):
+        value = artifact()
+        group = value["changeWalkthrough"]["groups"][2]
+        group["files"] = group["files"][-2:]
+        other = copy.deepcopy(group)
+        other["ordinal"] = group["ordinal"] + 1
+        other["title"] = "Other"
+        for record in other["files"]:
+            record["path"] = "other/" + record["path"]
+        value["changeWalkthrough"]["groups"] = [group, other]
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        for number, title in ((1, group["title"]), (2, "Other")):
+            self.assertIn(f"**{number}. {title}**\n\n1 mechanical file; 1 generated file", text)
+        self.assertNotIn("```", text)
+
+    def test_table_escapes_pipe_in_group_title(self):
+        value = artifact()
+        group = value["changeWalkthrough"]["groups"][2]
+        group.update(files=[], title="One | Two")
+        value["changeWalkthrough"]["groups"] = [group]
+        value["sources"].append({"id": "uncovered", "kind": "rid", "ref": "R9"})
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn(r"| R6 | One \| Two |", text)
+
+    def test_reflow_precedes_collapse_and_preserves_warnings(self):
+        value = artifact()
+        walk = value["changeWalkthrough"]
+        walk["thesis"] = "\n".join(f"Reason {i}." for i in range(26))
+        walk["openItems"] = "Investigate the failure."
+        walk["proof"] = [{"label": "Gate", "value": "Broken", "outcome": "fail",
+                          "sourceRefs": ["task"]}]
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("- [ ] fail: Gate: Broken", text)
+        self.assertIn(walk["openItems"], text)
+        self.assertLessEqual(len(text.splitlines()), 40)
+
+    def test_proof_collapse_order_and_minimum_needed(self):
+        value = full_artifact()
+        del value["changeWalkthrough"]["groups"][2]["files"][1]
+        walk = value["changeWalkthrough"]
+        walk["proof"] = [
+            {"label": f"Gate {i}", "value": "Note", "sourceRefs": ["task"],
+             **({"outcome": outcome} if outcome else {})}
+            for i, outcome in enumerate(["fail", "unverified"] + ["pass"] * 5 + [None] * 5)
+        ]
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("5 no outcome", text)
+        self.assertIn("- [x] Gate 2", text)
+        self.assertIn("- [ ] fail: Gate 0", text)
+        self.assertIn("- [ ] unverified: Gate 1", text)
+        self.assertIn("src/change_0.py", text)
+        for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+            self.assertIn(walk[key], text)
+        self.assertLessEqual(len(text.splitlines()), 40)
+        for index, line in enumerate(text.splitlines()):
+            if line.startswith(("Proof cells collapsed:", "Coverage:")) or " files" in line:
+                self.assertEqual(text.splitlines()[index - 1], "")
+
+    def test_thesis_budget_threshold_includes_why_scaffolding(self):
+        for length in range(25, 43):
+            with self.subTest(length=length):
+                value = full_artifact()
+                thesis = "\n".join(f"Reason {i}." for i in range(length))
+                value["changeWalkthrough"]["thesis"] = thesis
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
+                if length + 4 <= 40:
+                    self.assertLessEqual(len(text.splitlines()), 40)
+                    self.assertIn(" ".join(thesis.splitlines()), text)
+                else:
+                    self.assertIn(thesis, text)
+                    self.assertIn("1 group collapsed:", text)
+
+    def test_partial_legacy_collapse_does_not_touch_pass_or_files(self):
+        value = full_artifact()
+        del value["changeWalkthrough"]["groups"][2]["files"][1]
+        value["changeWalkthrough"]["proof"].extend(
+            {"label": f"Legacy {i}", "value": "Note", "sourceRefs": ["task"]}
+            for i in range(6)
+        )
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("- [x] Focused tests", text)
+        self.assertIn("- Legacy 0: Note", text)
+        self.assertNotIn("- Legacy 5: Note", text)
+        shown = len(re.findall(r"^- Legacy", text, re.M))
+        self.assertIn(f"Proof cells collapsed: {6 - shown} no outcome", text)
+        self.assertIn("src/change_0.py", text)
+        self.assertEqual(len(text.splitlines()), 40)
+
+    def test_file_rows_collapse_from_last_group_after_pass_cells(self):
+        value = full_artifact()
+        group = value["changeWalkthrough"]["groups"][2]
+        other = copy.deepcopy(group)
+        other["ordinal"] = group["ordinal"] + 1
+        other["title"] = "Later group"
+        for record in other["files"]:
+            record["path"] = "later/" + record["path"]
+        value["changeWalkthrough"]["groups"] = [group, other]
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertIn("Proof cells collapsed: 1 pass", text)
+        self.assertNotIn("later/src/change_1.py", text)
+        self.assertIn("src/change_0.py", text)
+        self.assertLessEqual(len(text.splitlines()), 40)
+
+    def test_multiline_field_collapse_preserves_first_lines_and_counts(self):
+        value = full_artifact()
+        walk = value["changeWalkthrough"]
+        for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+            walk[key] = "\n".join(f"{key} {i}" for i in range(10))
+        value["sources"].append({"id": "missing", "kind": "rid", "ref": "R9"})
+        walk["proof"][0]["outcome"] = "fail"
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertLessEqual(len(text.splitlines()), 40)
+        for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+            self.assertIn(f"{key} 0", text)
+            section = text.split(f"{key} 0", 1)[1].split("##", 1)[0]
+            visible = 1 + len(re.findall(rf"^{key} \d+", section, re.M))
+            self.assertIn(f"{10 - visible} authored lines collapsed", section)
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if "collapsed" in line or line.startswith("Coverage:"):
+                self.assertEqual(lines[index - 1], "")
 
     def test_literal_quotes_and_neutralized_prose_injection(self):
         value = full_artifact()

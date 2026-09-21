@@ -69,7 +69,7 @@ class MakePrReachedPathTests(unittest.TestCase):
             self.assertIn(needle, self.workflow)
 
     # fn-252 moves coverage rendering into flowctl; renderer fixture tests
-    # cover gaps and orphaned evidence. The make-pr admission guard remains.
+    # cover gaps; test_evidence_reachability.py covers orphaned evidence in export.
     def test_coverage_abort_is_keyed_on_undeclared_not_uncovered(self) -> None:
         self.assertIn("tasks_summary.undeclared_r_ids", self.workflow)
         self.assertIn("Undeclared R-ID coverage", self.workflow)

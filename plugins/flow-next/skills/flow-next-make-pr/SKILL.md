@@ -1,6 +1,6 @@
 ---
 name: flow-next-make-pr
-description: Render a briefing from the aid artifact and open or update a PR via gh. Auto-detects the spec from the branch. Supports --draft, --ready, --no-mermaid, --base, --memory, --dry-run, --update, and mode:autonomous. Not Ralph-blocked.
+description: Render a briefing from the aid artifact and open or update a PR via gh. Auto-detects the spec from the branch. Supports --draft, --ready, --base, --memory, --dry-run, --update, and mode:autonomous. Not Ralph-blocked.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
@@ -21,7 +21,6 @@ unknown flags and missing base values. Carry these values between tool calls:
 | --- | --- |
 | `--draft`, `--ready` | `DRAFT_FORCE=draft|ready`; default `auto`; last wins, note conflicts |
 | `--base <ref>` or `--base=<ref>` | `BASE_REF`; default empty |
-| `--no-mermaid` | `NO_MERMAID=1`; default 0; suppress structural sketches too |
 | `--memory` | `WRITE_MEMORY=1`; default 0 |
 | `--dry-run` | `DRY_RUN=1`; default 0 |
 | `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR |

@@ -1316,9 +1316,13 @@ overwrites an existing generation. `current` returns a labeled
 non-current states. `render` emits one deterministic Markdown briefing for a
 validated file or the supported current generation, regardless of diff size.
 Empty sections disappear; grouped file trees and proof-cell checklists carry
-the review content. The renderer collapses lower-attention entries to counted
-lines to meet a 40-line budget, preserving Why and requirement coverage. A
-thesis that alone exceeds the budget remains complete. See the
+the review content. To meet 40 lines (including blanks), collapse stops as soon
+as the body fits: no-outcome proof cells, pass cells, later groups' file rows,
+then authored lines beyond the first (tradeoffs, blast radius, user/operator
+change, open items), and finally unverified/fail proof. Counts retain outcomes;
+one-line fields survive ordinary collapse. Why and coverage remain. Thesis
+reflow precedes all collapse; a thesis whose lines plus its four scaffolding
+lines exceed 40 stays complete, with other content counted. See the
 [briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,
 proof outcomes and collapse behavior.
 

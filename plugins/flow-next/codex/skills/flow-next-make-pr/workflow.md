@@ -272,8 +272,7 @@ unchanged; retain its optional Render lens line when it succeeds.
 
 Use `PR_AID_MARKDOWN` as the body, without hand-rendering or editing sections. Add only the enabled
 lens line and creation linkage handled below. For changed structure, prefer the renderer's diff-fenced group trees as the structural sketch.
-Use Mermaid only if a relationship needs a diagram: ground nodes and edges in the diff, validate syntax,
-and explain its point. No size/churn trigger; `--no-mermaid` suppresses optional diagrams and sketches.
+Append the lens line after the rendered briefing, before `Ref` / Stack lines; the lens's old summary-block references mean this position.
 
 For dry-run, print the body and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
 complete it.

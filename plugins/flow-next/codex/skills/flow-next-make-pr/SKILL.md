@@ -21,7 +21,6 @@ unknown flags and missing base values. Carry these values between prompt turns:
 | --- | --- |
 | `--draft`, `--ready` | `DRAFT_FORCE=draft|ready`; default `auto`; last wins, note conflicts |
 | `--base <ref>` or `--base=<ref>` | `BASE_REF`; default empty |
-| `--no-mermaid` | `NO_MERMAID=1`; default 0; suppress structural sketches too |
 | `--memory` | `WRITE_MEMORY=1`; default 0 |
 | `--dry-run` | `DRY_RUN=1`; default 0 |
 | `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR |

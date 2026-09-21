@@ -20,6 +20,7 @@ repository:
   `userImpact` says what changes for a user or operator; `blastRadius` names who
   or what is touched and why safe or risky; `tradeoffs` records rejected alternatives
   reviewers would ask about; `openItems` records unfinished work.
+- Work claimed but not yet evidenced belongs in `openItems`.
 - Findings the spec requires to be recorded in the PR belong in Open items or Tradeoffs.
 - `proof[]`: sourced `label`, `value`, `sourceRefs`, optional `outcome`.
   Draw from task evidence and review receipts: `pass` only for a gate run green,

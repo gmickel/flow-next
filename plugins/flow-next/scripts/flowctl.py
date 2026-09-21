@@ -30053,7 +30053,7 @@ def _pr_aid_plain_text(value: Any) -> str:
 
 def _pr_aid_prose(value: Any) -> str:
     escaped = _pr_aid_plain_text(value)
-    if re.match(r"^\s*(?:#{1,6}\s|[-+]\s|\d+[.)]\s|[-=]{3,}\s*$)", escaped):
+    if re.match(r"^\s*(?:#{1,6}\s|[-+]\s|\d+[.)]\s|(?:-+|=+)\s*$)", escaped):
         first = len(escaped) - len(escaped.lstrip())
         escaped = escaped[:first] + f"&#{ord(escaped[first])};" + escaped[first + 1:]
     return escaped
@@ -30076,7 +30076,9 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     declared = list(dict.fromkeys(
         source["ref"] for source in artifact["sources"] if source["kind"] == "rid"
     ))
-    coverage = {rid: [group for group in groups if rid in requirements(group)]
+    coverage = {rid: [group for group in groups
+                      if any(rid in requirements(record)
+                             for record in [group, *group["files"]])]
                 for rid in declared}
     # Scope numbers the groups it draws; a requirement evidenced only by groups
     # without files names them, because they have no number to point at.
@@ -30134,7 +30136,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             described.append((record, row))
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
                       "rows": described,
-                      "remaining": remaining, "compact": False})
+                      "remaining": remaining})
 
     proof = []
     for cell in walkthrough["proof"]:
@@ -30150,7 +30152,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     prose = {key: [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
              for key, _ in fields}
     why = [_pr_aid_prose(line) for line in walkthrough["thesis"].strip().splitlines()]
-    thesis_over_budget = len(why) > 40
+    thesis_over_budget = len(why) + 4 > 40  # Why heading, blanks and identity.
     compact_scope = False
     hidden_table = False
 
@@ -30162,29 +30164,33 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         if compact_scope and trees:
             scope = [f"{len(trees)} group{'' if len(trees) == 1 else 's'} collapsed: " + counted([
                 record for group in groups for record in group["files"]])]
+            if hidden_table and table:
+                scope[0] += f"; {len(table) - 2} requirement rows collapsed"
         else:
             for tree in trees:
                 remaining = tree["remaining"]
-                if tree["compact"]:
-                    scope.append(f"{tree['title']}: {counted(remaining)}")
-                else:
-                    rows = [row for _, row in tree["rows"]]
-                    if rows and not remaining:
-                        rows[-1] = rows[-1].replace("├──", "└──", 1)
-                    scope.extend([f"**{tree['title']}**", "```diff", *rows])
-                    if remaining:
-                        scope.append(f"  └── {counted(remaining)}")
-                    scope.append("```")
+                rows = [row for _, row in tree["rows"]]
+                scope.append(f"**{tree['title']}**")
+                if rows:
+                    rows[-1] = rows[-1].replace("├──", "└──", 1)
+                    scope.extend(["```diff", *rows, "```"])
+                if remaining:
+                    scope.extend(["", counted(remaining)])
         if coverage_line:
+            if scope:
+                scope.append("")
             scope.append(coverage_line)
-        if table:
-            scope.extend([f"{len(table) - 2} requirement rows collapsed"] if hidden_table else table)
+        if table and not (compact_scope and trees and hidden_table):
+            scope.extend(["", f"{len(table) - 2} requirement rows collapsed"]
+                         if hidden_table else ["", *table])
         verification = [row for _, row in proof]
         if hidden_proof:
             counts: dict[str, int] = {}
             for cell in hidden_proof:
                 status = cell.get("outcome", "no outcome")
                 counts[status] = counts.get(status, 0) + 1
+            if verification:
+                verification.append("")
             verification.append("Proof cells collapsed: " + ", ".join(
                 f"{count} {status}" for status, count in counts.items()))
         lines = [*section("Why", why),
@@ -30201,33 +30207,40 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def over_budget() -> bool:
         return thesis_over_budget or len(assemble()) > 40
 
-    # Secondary files already count as a single line. Collapse canonical rows
-    # from the end so the author's earliest review steps remain visible longest.
+    # Reflow before hiding evidence; an intrinsically oversized thesis stays full.
+    if not thesis_over_budget and len(assemble()) > 40:
+        why = [_pr_aid_prose(walkthrough["thesis"])]
+
+    def collapse_proof(outcomes: tuple[Any, ...]) -> None:
+        for outcome in outcomes:
+            for index in range(len(proof) - 1, -1, -1):
+                if proof[index][0].get("outcome") == outcome and over_budget():
+                    hidden_proof.append(proof.pop(index)[0])
+
+    collapse_proof((None, "pass"))
+    # Preserve the earliest authored review steps, dropping only the rows needed.
     for tree in reversed(trees):
         while tree["rows"] and over_budget():
             record, _ = tree["rows"].pop()
             tree["remaining"].append(record)
-    for tree in reversed(trees):
-        if over_budget() and not tree["rows"]:
-            tree["compact"] = True
+    # Scope scaffolding and the optional detail table carry less attention than
+    # authored warnings; their counted forms bound artifacts with many groups.
     if over_budget() and table:
         hidden_table = True
-    for key, _ in reversed(fields):
-        if prose[key] and over_budget():
-            prose[key] = [f"{len(prose[key])} authored line"
-                          f"{'' if len(prose[key]) == 1 else 's'} collapsed"]
-    # Keep failures and unverified work visible after successful or legacy proof.
-    for outcome in (None, "pass", "unverified", "fail"):
-        for entry in list(reversed(proof)):
-            if entry[0].get("outcome") == outcome and over_budget():
-                proof.remove(entry)
-                hidden_proof.append(entry[0])
-    if over_budget():
+    if over_budget() and trees:
         compact_scope = True
-    # Reflow a short thesis without losing any words if section scaffolding
-    # consumes its remaining space. An intrinsically over-budget thesis stays whole.
-    if not thesis_over_budget and len(assemble()) > 40:
-        why = [_pr_aid_prose(walkthrough["thesis"])]
+    for key in ("tradeoffs", "blastRadius", "userImpact", "openItems"):
+        original = prose[key][:]
+        if thesis_over_budget and original:
+            prose[key] = [f"{len(original)} authored line"
+                          f"{'' if len(original) == 1 else 's'} collapsed"]
+            continue
+        hidden = 0
+        while len(original) - hidden > 1 and over_budget():
+            hidden += 1
+            prose[key] = [*original[:-hidden], "",
+                          f"{hidden} authored line{'' if hidden == 1 else 's'} collapsed"]
+    collapse_proof(("unverified", "fail"))
     return "\n".join(assemble()).rstrip() + "\n"
 
 

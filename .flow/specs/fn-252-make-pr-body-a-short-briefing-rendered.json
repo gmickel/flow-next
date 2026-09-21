@@ -11,12 +11,48 @@
     "fn-250-land-redesign-one-named-pr-spec-closed"
   ],
   "id": "fn-252-make-pr-body-a-short-briefing-rendered",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-252-make-pr-body-a-short-briefing-rendered.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "9d6b85abca0629ad14dd8a02568c712fddde0311981c2c5f5bb12217590b9c12",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4411bcb5a1bea655c0ea9a11de284b3eacf81051",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 4358,
+      "output_sha256": "e572147e900184d8f0bafa47fdb9fa8416b7cd092d5cbca9adfe418db0dda447",
+      "reservation_id": "b54de9285ed5417b94da52fbb565ef66",
+      "round_consumed": true,
+      "scope": "impl:fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "superseded_by": null,
+      "task": "fn-252-make-pr-body-a-short-briefing-rendered.1",
+      "timestamp": "2026-09-21T04:28:44.633565Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-252-make-pr-body-a-short-briefing-rendered.1": 0
+  },
   "spec_path": ".flow/specs/fn-252-make-pr-body-a-short-briefing-rendered.md",
   "status": "open",
   "title": "make-pr body: a short briefing rendered from the aid artifact",
@@ -31,5 +67,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-20T13:46:06.380172Z"
+  "updated_at": "2026-09-21T04:28:47.789837Z"
 }
