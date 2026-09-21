@@ -30159,15 +30159,24 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def section(title: str, content: list[str]) -> list[str]:
         return [f"## {title}", "", *content, ""] if content else []
 
+    # Rows only ever move from a tree's tail into its remainder, so a tree's
+    # counted line is determined by its position and remainder length.
+    counted_memo: dict[tuple[int, int], str] = {}
+
+    def counted_once(key: tuple[int, int], records: list[dict[str, Any]]) -> str:
+        if key not in counted_memo:
+            counted_memo[key] = counted(records)
+        return counted_memo[key]
+
     def assemble() -> list[str]:
         scope = []
         if compact_scope and trees:
-            scope = [f"{len(trees)} group{'' if len(trees) == 1 else 's'} collapsed: " + counted([
-                record for group in groups for record in group["files"]])]
+            scope = [f"{len(trees)} group{'' if len(trees) == 1 else 's'} collapsed: " + counted_once(
+                (-1, 0), [record for group in groups for record in group["files"]])]
             if hidden_table and table:
                 scope[0] += f"; {len(table) - 2} requirement rows collapsed"
         else:
-            for tree in trees:
+            for position, tree in enumerate(trees):
                 remaining = tree["remaining"]
                 rows = [row for _, row in tree["rows"]]
                 scope.append(f"**{tree['title']}**")
@@ -30175,7 +30184,7 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
                     rows[-1] = rows[-1].replace("├──", "└──", 1)
                     scope.extend(["```diff", *rows, "```"])
                 if remaining:
-                    scope.extend(["", counted(remaining)])
+                    scope.extend(["", counted_once((position, len(remaining)), remaining)])
         if coverage_line:
             if scope:
                 scope.append("")
@@ -30216,14 +30225,16 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
 
     def collapse_proof(outcomes: tuple[Any, ...]) -> None:
         saved_proof, saved_hidden = proof[:], hidden_proof[:]
-        before = len(assemble())
+        before = current = len(assemble())  # one assemble per candidate
         for outcome in outcomes:
             for index in range(len(proof) - 1, -1, -1):
-                if proof[index][0].get("outcome") == outcome and over_budget():
+                if proof[index][0].get("outcome") == outcome and (
+                        thesis_over_budget or current > 40):
                     hidden_proof.append(proof.pop(index)[0])
-                    if shorter_than(before):
+                    current = len(assemble())
+                    if thesis_over_budget or current < before:
                         saved_proof, saved_hidden = proof[:], hidden_proof[:]
-                        before = len(assemble())
+                        before = current
         proof[:] = saved_proof
         hidden_proof[:] = saved_hidden
 
@@ -30231,13 +30242,14 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     # Preserve the earliest authored review steps, dropping only the rows needed.
     for tree in reversed(trees):
         saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
-        before = len(assemble())
-        while tree["rows"] and over_budget():
+        before = current = len(assemble())
+        while tree["rows"] and (thesis_over_budget or current > 40):
             record, _ = tree["rows"].pop()
             tree["remaining"].append(record)
-            if shorter_than(before):
+            current = len(assemble())
+            if thesis_over_budget or current < before:
                 saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
-                before = len(assemble())
+                before = current
         tree["rows"], tree["remaining"] = saved_rows, saved_remaining
     # Scope scaffolding and the optional detail table carry less attention than
     # authored warnings; their counted forms bound artifacts with many groups.
