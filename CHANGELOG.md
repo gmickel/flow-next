@@ -14,21 +14,26 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
-- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec; single-spec briefings stay unchanged.
+- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec. Land selects the specs a pull request closes when no branch name matches, reading recursive head and base trees and requiring a task entry changed against base; a truncated read needs human attention. Land repairs the pull request it is given; merging still needs session authorization. A null push date falls back to the head's earliest check-suite creation time, then its committer date.
 
 - The obsolete make-pr `--no-mermaid` flag is removed.
 
 - make-pr bodies now keep the full authored briefing in one rendering pass
   from the aid artifact: Why, What changes for a
   user or operator, Scope, Blast radius, Verification, Tradeoffs and Open
-  items, each omitted when empty. Scope shows numbered diff-fenced file trees
-  with up to 10 described files per group in review order; extra described,
-  mechanical, generated and undescribed files are counted separately. Authored
-  fields and proof cells stay complete. Coverage appears only for declared requirements. The compact and full forms, their size
+  items, each omitted when empty. Scope starts with file/churn and generated/mechanical totals, then numbered groups
+  including fileless guidance, with linked list rows and up to 10 described files
+  per group in review order. A row's own requirement IDs determine its tags while
+  coverage keeps every citation; extra described,
+  mechanical, generated and undescribed files are counted separately. Sparse leftovers
+  belong to the whole diff, naming up to five canonical paths; coverage names group numbers.
+  Whitespace-only summaries fail validation; prose mentions and issue references are neutralized. Authored
+  fields and proof cells stay complete. The skill supplies a validated artifact
+  skeleton and writes directly before one render. Coverage appears only for declared requirements. The compact and full forms, their size
   threshold, the machine-identity proof rows, the per-row evidence column, the
   review-plan section and the generated-by footer are gone; artifact id, base
-  and head ride in one HTML comment. The stored artifact, the HTML lens and
-  `html-input` are unchanged. This resolves the body-length report in #447,
+  and head ride in one HTML comment. Stored sparse expansions add a rest-of-diff marker; the HTML lens and
+  `html-input` presentation are unchanged. This resolves the body-length report in #447,
   which measured bodies at 2,700 to 3,700 words. Thanks to @flecamos for the
   report.
 - The aid artifact accepts four optional authored strings (`userImpact`,

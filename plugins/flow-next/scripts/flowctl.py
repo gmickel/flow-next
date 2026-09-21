@@ -29297,7 +29297,7 @@ def _expand_pr_cognitive_aid_input(
                     break  # Structural validation owns the missing step error.
                 group = next((group for group in steps if len(group["files"]) < 200), steps[0])
                 group["files"].append({
-                    "path": repo_path, "summary": "",
+                    "path": repo_path, "summary": "", "restOfDiff": True,
                     "attentionClass": _pr_aid_pattern_attention(repo_path) or "canonical",
                     "sourceRefs": diff_refs[:1], "rIds": [], "taskIds": [],
                 })
@@ -29655,6 +29655,8 @@ def validate_pr_cognitive_aid(
                 f"{path}.summary",
                 maximum=1000,
             )
+            if summary is not None and not summary.strip():
+                fail(f"{path}.summary", "must not be whitespace-only")
             validate_refs(group, path, require_grounding=bool(summary))
             files = check(_pr_aid_array, group.get("files", []), f"{path}.files", maximum=200)
             if files is None:
@@ -29676,7 +29678,7 @@ def validate_pr_cognitive_aid(
                         "path", "changeType", "attentionClass", "summary",
                         "sourceRefs", "rIds", "taskIds",
                     },
-                    optional={"additions", "deletions", "diffUrl"},
+                    optional={"additions", "deletions", "diffUrl", "restOfDiff"},
                 )
                 change_type = check(
                     _pr_aid_string,
@@ -29701,6 +29703,10 @@ def validate_pr_cognitive_aid(
                     maximum=500,
                     allow_empty=True,
                 )
+                if summary and not summary.strip():
+                    fail(f"{file_path}.summary", "must not be whitespace-only")
+                if "restOfDiff" in record and type(record["restOfDiff"]) is not bool:
+                    fail(f"{file_path}.restOfDiff", "must be a boolean")
                 refs = validate_refs(record, file_path, require_grounding=bool(summary))
                 if refs is not None and not any(
                     source_by_id.get(source_id, {}).get("kind") == "diff_metadata"
@@ -30064,11 +30070,33 @@ def write_pr_cognitive_aid(
     return target
 
 
+_PR_AID_URL_RE = re.compile(r"https?://\S+")
+_PR_AID_ENTITIES = str.maketrans({"`": "&#96;", "|": "&#124;"})
+
+
 def _pr_aid_plain_text(value: Any) -> str:
-    escaped = html.escape(str(value), quote=False).replace("`", "&#96;")
-    for character in ("\\", "*", "_", "[", "]", "~"):
-        escaped = escaped.replace(character, f"\\{character}")
-    return " ".join(escaped.splitlines())
+    """Neutralize authored prose for a forge body; URLs stay clickable.
+
+    The forge resolves mentions and issue references after decoding entities,
+    so those tokens are broken with a zero-width space, never entity-encoded.
+    """
+    def words(text: str) -> str:
+        escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
+        for character in ("\\", "*", "_", "[", "]", "~"):
+            escaped = escaped.replace(character, f"\\{character}")
+        # The forge's mention boundary is an ASCII word character; emails keep theirs.
+        escaped = re.sub(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
+        escaped = re.sub(r"(?<!&)#(?=\d)", "#&#8203;", escaped)  # not our own entities
+        return re.sub(r"(?i)\b(GH-)(?=\d)", r"\1&#8203;", escaped)
+
+    text = " ".join(str(value).strip().splitlines())
+    parts, position = [], 0
+    for match in _PR_AID_URL_RE.finditer(text):
+        parts.append(words(text[position:match.start()]))
+        parts.append(html.escape(match.group(0).replace("|", "%7C").replace("`", "%60"), quote=False))
+        position = match.end()
+    parts.append(words(text[position:]))
+    return "".join(parts)
 
 
 def _pr_aid_prose(value: Any) -> str:
@@ -30103,14 +30131,11 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
                       if any(rid in requirements(record)
                              for record in [group, *group["files"]])]
                 for rid in declared}
-    # Scope numbers the groups it draws; a requirement evidenced only by groups
-    # without files names them, because they have no number to point at.
-    numbers = {id(group): index for index, group in enumerate(
-        (group for group in groups if group["files"]), start=1)}
+    numbers = {id(group): index for index, group in enumerate(groups, start=1)}
 
     def evidenced_by(evidence: list[dict[str, Any]]) -> str:
-        drawn = [str(numbers[id(g)]) for g in evidence if id(g) in numbers]
-        return ", ".join(drawn or [_pr_aid_plain_text(g["title"]) for g in evidence])
+        return ("group " if len(evidence) == 1 else "groups ") + ", ".join(
+            str(numbers[id(group)]) for group in evidence)
 
     coverage_line = ""
     table = []
@@ -30146,8 +30171,15 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
                          for kind, count in counts.items() if count)
 
-    def tree_text(value: str) -> str:
-        return " ".join(value.splitlines())
+    def file_link(record: dict[str, Any]) -> str:
+        path = " ".join(record["path"].splitlines())
+        # A delimiter longer than any run in the path keeps code spans literal.
+        delimiter = "`" * (max((len(run) for run in re.findall(r"`+", path)), default=0) + 1)
+        label = f"{delimiter} {path} {delimiter}"
+        if record.get("diffUrl"):
+            url = urllib.parse.quote(record["diffUrl"], safe="/:#?=&%+@~.-_")
+            return f"[{label}]({url})"
+        return label
 
     multi_spec = len(artifact.get("specIds", [])) > 1
     declaring_specs = {rid.split(":", 1)[0] for rid in declared}
@@ -30163,22 +30195,24 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
         return bool(cited & declaring_specs)
 
     trees = []
+    leftovers = []
     for group in groups:
-        if not group["files"]:
-            continue
         described, remaining = [], []
         for record in group["files"]:
+            if record.get("restOfDiff"):
+                leftovers.append(record)
+                continue
             if (record["attentionClass"] != "canonical" or not record["summary"].strip()
                     or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
                 remaining.append(record)
                 continue
-            rids = requirements(record) or requirements(group)
-            # Fenced text is literal; flatten newlines so authored content cannot close the fence.
-            sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
+            rids = record.get("rIds") or requirements(record) or requirements(group)
+            marker = record["changeType"] + " " if record["changeType"] in ("added", "deleted", "renamed") else ""
             tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
-            row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])}{tag}")
+            row = f"- {marker}{file_link(record)} : {_pr_aid_plain_text(record['summary'])}{tag}"
             described.append(row)
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
+                      "summary": _pr_aid_prose(group["summary"]),
                       "rows": described,
                       "remaining": remaining})
 
@@ -30199,17 +30233,30 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     def section(title: str, content: list[str]) -> list[str]:
         return [f"## {title}", "", *content, ""] if content else []
 
-    scope = []
+    files = [record for group in groups for record in group["files"]]
+    additions = sum(record.get("additions") or 0 for record in files)
+    deletions = sum(record.get("deletions") or 0 for record in files)
+    generated = sum(record["attentionClass"] == "generated" for record in files)
+    mechanical = sum(record["attentionClass"] == "mechanical" for record in files)
+    scope = [f"{len(files)} files changed; +{additions}/-{deletions} lines; "
+             f"{generated} generated, {mechanical} mechanical."]
     for tree in trees:
         if scope:
             scope.append("")
-        scope.append(f"**{tree['title']}**")
+        scope.extend([f"**{tree['title']}**", "", tree["summary"]])
         rows = tree["rows"]
         if rows:
-            rows[-1] = rows[-1].replace("├──", "└──", 1)
-            scope.extend(["```diff", *rows, "```"])
+            scope.extend(["", *rows])
         if tree["remaining"]:
             scope.extend(["", counted(tree["remaining"])])
+    if leftovers:
+        canonical = [record for record in leftovers if record["attentionClass"] == "canonical"]
+        counts = counted([record for record in leftovers if record["attentionClass"] != "canonical"])
+        if canonical:
+            paths = ("not described: " + ", ".join(file_link(record) for record in canonical)
+                     if len(canonical) <= 5 else f"{len(canonical)} not described files")
+            counts = "; ".join(filter(None, (counts, paths)))
+        scope.extend(["", "Rest of diff: " + counts])
     if coverage_line:
         if scope:
             scope.append("")
@@ -34670,9 +34717,12 @@ def specs_closed_in_range(
     if rc:
         raise ValueError(f"Cannot read closed specs: {err.strip()}")
     changed_paths = [path for path in out.split("\0") if path]
+    touched_tasks = {Path(path).stem.rsplit(".", 1)[0] for path in changed_paths
+                     if Path(path).parent.as_posix() == tasks_dir}
     paths = [path for path in changed_paths if path.endswith(".json")]
     spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
-                  and Path(path).stem != host_spec_id]
+                  and Path(path).stem != host_spec_id
+                  and touched_tasks]
     if not spec_paths:
         return list(closed)
 
@@ -34728,11 +34778,7 @@ def specs_closed_in_range(
     # Work happened here when the range touches one of the spec's task files (record
     # or body). A record-only close touches the spec file alone and stays out. The
     # tracked task status is not consulted: it is persisted late and can read stale.
-    for path in changed_paths:
-        if Path(path).parent.as_posix() == tasks_dir:
-            sid = Path(path).stem.rsplit(".", 1)[0]
-            if sid in candidates:
-                closed.add(sid)
+    closed.update(candidates & touched_tasks)
     return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
 
 

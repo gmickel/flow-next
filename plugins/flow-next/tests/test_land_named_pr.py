@@ -44,6 +44,30 @@ class NamedPullRequestContractTest(unittest.TestCase):
         for token in ("branch_name", "headRefName", "status: done", "work not finished"):
             self.assertIn(token, text)
 
+    def test_integration_selection_uses_forge_base_and_task_blobs(self):
+        text = self.read_contract()
+        for token in ("baseRefName", "status: done", ".flow/tasks/<spec-id>.*", "tree SHA",
+                      "different in", "base tree", "base repository"):
+            self.assertIn(token, text)
+
+    def test_spec_reads_use_complete_recursive_trees(self):
+        text = self.read_contract()
+        for token in ("recursive git trees API", "recursive=1", "truncated: true", "NEEDS_HUMAN"):
+            self.assertIn(token, text)
+
+    def test_repair_authority_and_patience_evidence(self):
+        skill = (LAND / "SKILL.md").read_text(encoding="utf-8")
+        for token in ("authorizes repairs", "resolving threads", "CI fixes", "catch-up",
+                      "session merge authorization"):
+            self.assertIn(token, skill)
+        gate = self.section("Authorize and gate the merge")
+        for token in ("null push date", "earliest check-suite creation time", "committer date",
+                      "merge-ready", "authorization required"):
+            self.assertIn(token, gate)
+        merge = self.section("Merge one layer")
+        for token in ("authorized PR", "gh pr ready <PR> --repo <owner/repo>"):
+            self.assertIn(token, merge)
+
     def test_r5_repair_contract(self):
         text = self.section("Resolve conflicts, threads, then CI")
         for token in ("mode:autonomous", "update-branch", "--failed"):

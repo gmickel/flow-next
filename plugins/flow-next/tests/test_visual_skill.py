@@ -185,7 +185,7 @@ class MakePrSketchClause(unittest.TestCase):
 
     def test_workflow_keeps_structural_sketch_contract(self) -> None:
         workflow = _read(MAKE_PR_WORKFLOW)
-        self.assertIn("diff-fenced", workflow)
+        self.assertIn("linked file lists", workflow)
         self.assertNotIn("mermaid-rules.md", workflow)
         self.assertFalse((MAKE_PR_DIR / "mermaid-rules.md").exists())
 

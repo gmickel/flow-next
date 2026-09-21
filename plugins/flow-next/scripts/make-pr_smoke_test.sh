@@ -771,7 +771,9 @@ assert re.findall(r"^## (.+)$", body, re.M) == [
 for field in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
     assert walkthrough[field] in body
 assert body == flowctl.render_pr_cognitive_aid_markdown(artifact)
-assert "Coverage:" in body
+assert "Coverage:" in body and "→ group" in body
+assert "files changed;" in body and " : " in body
+assert "```diff" not in body
 assert "<details" not in body
 PY_BRIEFING
   then

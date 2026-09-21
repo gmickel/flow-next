@@ -271,11 +271,10 @@ do not read `html-lens.md` or the shared disclosure reference; emit no artifact,
 unchanged; retain its optional Render lens line when it succeeds.
 ## Phase 2: Deliver the briefing
 
-Use `PR_AID_MARKDOWN` as the body, without hand-rendering or editing sections. Add only the enabled
-lens line and creation linkage handled below. For changed structure, prefer the renderer's diff-fenced group trees as the structural sketch.
-Append the lens line after the rendered briefing, before `Ref` / Stack lines; the lens's old summary-block references mean this position.
+Use rendered `BODY_FILE` unchanged; append the enabled lens line before `Ref` / Stack lines.
+The renderer's numbered groups and linked file lists supply the structural sketch; the lens's old summary-block references mean this position.
 
-For dry-run, print the body and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
+For dry-run, print `BODY_FILE` and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
 complete it.
 
 [Manual smoke](references/manual-smoke.md) is a maintainer checklist, never loaded at runtime.

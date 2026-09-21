@@ -62,8 +62,8 @@ class MultiSpecArtifactTests(unittest.TestCase):
         self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
         self.assertIn("[fn-136:R6]", text)
         self.assertIn("[fn-250:R1]", text)
-        self.assertIn("Coverage fn-136: R6 → 1", text)
-        self.assertIn("Coverage fn-250: R1 → 1; R7 → uncovered", text)
+        self.assertIn("Coverage fn-136: R6 → groups 1, 3", text)
+        self.assertIn("Coverage fn-250: R1 → group 3; R7 → uncovered", text)
         self.assertLess(text.index("fn-136: R6"), text.index("fn-250: R1"))
         self.assertIn("| fn-250:R7 | unevidenced |", text)
         self.assertNotIn("fn-251:", text)
@@ -86,7 +86,7 @@ class MultiSpecArtifactTests(unittest.TestCase):
         self.assertEqual(flowctl.spec_short_id("wor-17-sibling"), "wor-17")
         flowctl.validate_pr_cognitive_aid(value)
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("Coverage wor-17: R1 → 1; R7 → uncovered", text)
+        self.assertIn("Coverage wor-17: R1 → group 3; R7 → uncovered", text)
         self.assertIn("[wor-17:R1]", text)
 
     def test_undeclared_tags_follow_group_spec(self):
@@ -231,6 +231,16 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
 
+    def test_record_only_close_reads_no_objects(self):
+        sid = self.spec(17, "open")
+        self.task(sid, "done")
+        base = self.commit()
+        self.spec(17, "done")
+        self.commit()
+        with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
+            self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff"])
+
     def test_task_minted_in_range_counts_even_when_its_tracked_status_is_stale(self):
         # A hand-recorded close can leave the tracked task record at its minted
         # status; the task file appearing in the range is the evidence of work.
@@ -263,11 +273,28 @@ class ClosedRangeTests(unittest.TestCase):
         self.task(fresh, "done")
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [fresh])
+        # Reverse direction: a non-id filename at base still carries done identity.
+        base = self.git("rev-parse", "HEAD")
+        (self.flow / "epics" / "renamed.json").rename(self.flow / "specs" / f"{old}.json")
+        self.task(old, "open")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+
+    def test_record_only_malformed_spec_skips_object_reads(self):
+        sid = self.spec(17, "open")
+        base = self.commit()
+        (self.flow / "specs" / f"{sid}.json").write_text("[]", encoding="utf-8")
+        self.commit()
+        # Record-only malformed records now return [] instead of raising; keep the cheap skip.
+        with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
+            self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff"])
 
     def test_non_object_spec_is_value_error(self):
         sid = self.spec(17, "open")
         base = self.commit()
         (self.flow / "specs" / f"{sid}.json").write_text("[]", encoding="utf-8")
+        self.task(sid, "done")
         self.commit()
         with self.assertRaisesRegex(ValueError, "Expected object"):
             flowctl.specs_closed_in_range(self.flow, base)

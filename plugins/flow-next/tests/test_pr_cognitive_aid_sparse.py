@@ -48,6 +48,27 @@ class SparseInputTests(unittest.TestCase):
             head_sha=HEAD_SHA, expected_diff_files=diff,
         )
 
+    def test_skill_skeleton_expands_and_validates_against_fixture_diff(self):
+        skill = Path(__file__).resolve().parents[1] / "skills/flow-next-make-pr/pr-cognitive-aid.md"
+        example = skill.read_text(encoding="utf-8").split("```json\n", 1)[1].split("```", 1)[0]
+        value = json.loads(example)
+        diff = artifact_diff_files(self.complete())
+        expanded = flowctl._expand_pr_cognitive_aid_input(value, diff)
+        validated = flowctl.validate_pr_cognitive_aid(expanded, expected_diff_files=diff)
+        self.assertEqual({source["kind"] for source in validated["sources"]},
+                         flowctl.PR_COGNITIVE_AID_SOURCE_KINDS)
+        rows = [row for group in validated["changeWalkthrough"]["groups"] for row in group["files"]]
+        self.assertEqual({row["path"] for row in rows}, set(diff))
+        body = flowctl.render_pr_cognitive_aid_markdown(validated)
+        self.assertIn("src/change_0.py", body)
+        self.assertTrue(any(not group["files"] and group["kind"] != "step"
+                            for group in validated["changeWalkthrough"]["groups"]))
+        step = validated["changeWalkthrough"]["groups"][1]
+        self.assertNotIn("R7", step["rIds"])
+        self.assertEqual(step["files"][0]["rIds"], ["R7"])
+        self.assertIn("row-rid", step["files"][0]["sourceRefs"])
+        self.assertIn("task", step["files"][0]["sourceRefs"])
+
     def test_file_commands_share_expansion_and_complete_render_is_unchanged(self):
         complete = self.complete()
         sparse = copy.deepcopy(complete)
@@ -76,10 +97,8 @@ class SparseInputTests(unittest.TestCase):
                                  flowctl.render_pr_cognitive_aid_markdown(expected).encode("utf-8"))
                 if value is sparse:
                     self.assertIn(described, output.getvalue())
-                    # fn-252 renders unclassified expansion rows as an honest
-                    # count; lossless HTML below still retains the actual path.
-                    self.assertNotIn(omitted, output.getvalue())
-                    self.assertIn("1 not described file", output.getvalue())
+                    self.assertIn(omitted, output.getvalue())
+                    self.assertIn("Rest of diff: not described:", output.getvalue())
                 output = StringIO()
                 with redirect_stdout(output):
                     flowctl.cmd_pr_cognitive_aid_html_input(args)
@@ -224,7 +243,7 @@ class SparseInputTests(unittest.TestCase):
         files = complete["changeWalkthrough"]["groups"][2]["files"]
         for path in sorted(patterns):
             files.append({
-                "path": path, "summary": "", "attentionClass": patterns[path],
+                "path": path, "summary": "", "attentionClass": patterns[path], "restOfDiff": True,
                 "changeType": "added", "additions": 1, "deletions": 0,
                 "diffUrl": f"/acme/repo/blob/{HEAD_SHA}/{path}",
                 "sourceRefs": ["diff"], "rIds": [], "taskIds": [],
