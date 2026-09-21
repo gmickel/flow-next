@@ -30077,17 +30077,16 @@ _PR_AID_ENTITIES = str.maketrans({"`": "&#96;", "|": "&#124;"})
 def _pr_aid_plain_text(value: Any) -> str:
     """Neutralize authored prose for a forge body; URLs stay clickable.
 
-    The forge resolves mentions and issue references after decoding entities,
-    so those tokens are broken with a zero-width space, never entity-encoded.
+    The forge resolves mentions after decoding entities, so a mention is broken
+    with a zero-width space, never entity-encoded.
     """
     def words(text: str) -> str:
         escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
         for character in ("\\", "*", "_", "[", "]", "~"):
             escaped = escaped.replace(character, f"\\{character}")
         # The forge's mention boundary is an ASCII word character; emails keep theirs.
-        escaped = re.sub(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
-        escaped = re.sub(r"(?<!&)#(?=\d)", "#&#8203;", escaped)  # not our own entities
-        return re.sub(r"(?i)\b(GH-)(?=\d)", r"\1&#8203;", escaped)
+        # Issue and pull-request numbers stay live links: a reviewer wants them.
+        return re.sub(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
 
     text = " ".join(str(value).strip().splitlines())
     parts, position = [], 0

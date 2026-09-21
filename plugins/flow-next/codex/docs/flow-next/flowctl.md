@@ -1364,7 +1364,7 @@ paths, otherwise a count. Untagged complete artifacts retain group attribution.
 A row's nonempty `rIds` override inherited display tags; coverage retains every citation,
 including fileless groups: `R1 → group 1; R2 → groups 1, 3` (several specs: `Coverage fn-250:`).
 Whitespace-only summaries fail validation by field name; empty row summaries remain legal.
-Authored markup, mentions and issue references are neutralized.
+Authored markup and mentions are neutralized; issue and pull-request numbers stay live links.
 With no declared requirements, coverage, the table and requirement
 tags are omitted; declared but uncovered requirements remain named. See the
 [briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order

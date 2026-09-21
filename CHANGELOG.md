@@ -27,7 +27,7 @@ versioning remains a separate maintainer step.
   coverage keeps every citation; extra described,
   mechanical, generated and undescribed files are counted separately. Sparse leftovers
   belong to the whole diff, naming up to five canonical paths; coverage names group numbers.
-  Whitespace-only summaries fail validation; prose mentions and issue references are neutralized. Authored
+  Whitespace-only summaries fail validation; prose mentions are neutralized, while issue and pull-request numbers stay live links. Authored
   fields and proof cells stay complete. The skill supplies a validated artifact
   skeleton and writes directly before one render. Coverage appears only for declared requirements. The compact and full forms, their size
   threshold, the machine-identity proof rows, the per-row evidence column, the
