@@ -74,7 +74,7 @@ a deleted path, which has no blob at the head, and if the derived URL exceeds
 the v1 length bound. The path shape is the one the pull-request forge that
 make-pr opens against serves; a reader on another forge should treat the link
 as advisory. Readers receive either that literal
-string shape or no `diffUrl` key, which renders as a dash. Supplied links retain
+string shape or no `diffUrl` key. Supplied links retain
 the existing URL-safety validation; they need not equal the derived link.
 Explicit counts and change types must match the bound diff. Row references
 inherit the corresponding group fields unless explicitly supplied.
@@ -130,6 +130,56 @@ Full validation rules, bounds, and fallback behavior are defined by the
 [`pr-cognitive-aid` flowctl commands](flowctl.md#pr-cognitive-aid). The HTML
 presentation boundary remains documented in
 [`html-artifacts.md`](html-artifacts.md).
+
+## Markdown briefing
+
+Every pull-request size uses the same deterministic briefing. The artifact
+supplies all content; rendering reads no live Flow state. Invalid artifacts
+produce no briefing, so make-pr uses its existing fallback.
+
+Sections appear in this order, and empty sections have neither a heading nor
+a placeholder:
+
+| Section | Artifact content |
+| --- | --- |
+| Why | `changeWalkthrough.thesis`, with the intent and approach. |
+| What changes for a user or operator | `changeWalkthrough.userImpact`. |
+| Scope | Grouped files and requirement coverage from the artifact. |
+| Blast radius | `changeWalkthrough.blastRadius`. |
+| Verification | `changeWalkthrough.proof[]`. |
+| Tradeoffs | `changeWalkthrough.tradeoffs`. |
+| Open items | `changeWalkthrough.openItems`. |
+
+Scope uses one numbered, diff-fenced file tree per group. Each described file carries its
+one-line purpose and requirement IDs. Remaining files collapse to a counted
+line that distinguishes mechanical files from files not described; an empty
+summary never implies safe-to-skim status. A group with no described files
+shows its title and that count. One coverage line maps requirement IDs to the
+numbers of the groups that evidence them and names uncovered requirements; a
+requirement evidenced only by groups without files names those groups. A per-criterion
+table appears only when a requirement is unevidenced or undeclared. Requirement
+sources in `sources[]` supply the declared set, including requirements cited
+by no group.
+
+Verification renders only authored proof cells. Outcome `pass` receives a
+checked box; `fail` and `unverified` receive unchecked boxes with their distinct
+status and the cell's note. A cell without an outcome is a plain list item with no
+checkbox. Old artifacts therefore keep their evidence without gaining a pass
+claim. Proof cells with no outcome are still valid, and absent proof cells
+omit the section entirely.
+
+The renderer keeps the briefing within 40 lines by collapsing entries
+predictably, lowest attention first, and counting the collapsed content. Why
+and the coverage line always remain. If the thesis alone exceeds the budget,
+it renders in full and everything else collapses to counted lines. Apostrophes
+and quotation marks render literally; markup-injection characters remain
+neutralized.
+
+Artifact ID, base SHA and head SHA appear together in one invisible HTML
+comment. File statistics, repeated provenance, review plans and generated-by
+footers stay out of the visible briefing. The complete stored artifact remains
+available to the HTML lens and other consumers; neither its lossless
+`html-input` output nor the lens changes with the markdown briefing.
 
 ## Canonical fixture and downstream vendoring
 

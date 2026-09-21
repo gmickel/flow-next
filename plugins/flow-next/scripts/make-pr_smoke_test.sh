@@ -24,12 +24,8 @@
 #   T8.  All-empty optional inputs (no STRATEGY.md / no memory / no glossary
 #        / no deferred) → all empty arrays, no crash, exits 0.
 #   T9.  Branch-no-commits-ahead → `diff_summary.files: []` (no error).
-#   T10. Skill `--dry-run` produces stdout output containing `## TL;DR`,
-#        `## R-ID coverage`, `## Critical changes` markers (loose match).
-#        SKIPS as deferred-to-manual today: skill is interactive markdown
-#        with `AskUserQuestion` blocking tools — not unit-shell-testable.
-#        We assert the canonical skill prose carries the required section
-#        markers (so the rendered body necessarily contains them).
+#   T10. The real renderer produces a deterministic, bounded seven-section
+#        briefing from an artifact. Dry-run and PR creation seams stay wired.
 #   T11. Mermaid trigger logic — fixture with cross-module imports
 #        produces `cross_module_changes` non-empty (the trigger that gates
 #        the skill's mermaid emission). The codefence emission itself is
@@ -745,37 +741,42 @@ assert_eq_jq "T9" "$T9_OUT" "len(d['diff_summary']['files'])" "0" "diff_summary.
 assert_eq_jq "T9" "$T9_OUT" "d['diff_summary']['lines_added']" "0" "diff_summary.lines_added == 0"
 
 # =============================================================================
-# T10: Skill body-rendering smoke — assert canonical SKILL prose carries
-# the section markers the rendered body must include.
+# T10: Exercise the briefing renderer; fn-252 retires the old skill-body
+# section pins. Keep PR creation and dry-run integration checks.
 # =============================================================================
-echo -e "${YELLOW}--- T10: skill body — section markers in canonical workflow.md ---${NC}"
+echo -e "${YELLOW}--- T10: artifact briefing and PR creation seams ---${NC}"
 WORKFLOW_FILE="$PLUGIN_ROOT/skills/flow-next-make-pr/workflow.md"
-PHASES_FILE="$PLUGIN_ROOT/skills/flow-next-make-pr/phases.md"
 SKILL_FILE="$PLUGIN_ROOT/skills/flow-next-make-pr/SKILL.md"
 
 if [[ ! -f "$WORKFLOW_FILE" ]] || [[ ! -f "$SKILL_FILE" ]]; then
   skip "T10" "skill files not yet on disk (Tasks 3-6 not landed)"
 else
-  # Required body markers per spec R7
   WF_TEXT="$(cat "$WORKFLOW_FILE")"
-  PH_TEXT="$(cat "$PHASES_FILE" 2>/dev/null || true)"
-  COMBINED="$WF_TEXT
-$PH_TEXT"
-
-  for marker in "## TL;DR" "## R-ID coverage" "## Critical changes" "## How to review this PR" "## Review plan" "## Decisions" "## Memory left behind" "## Open items"; do
-    if grep -qF -- "$marker" <<< "$COMBINED"; then
-      ok "T10" "section marker '$marker' present in skill prose"
-    else
-      fail "T10" "section marker '$marker' missing from skill prose"
-    fi
-  done
-
-  # fn-93: the risk-ranked Review plan + How-to-review coaching block replace the
-  # old per-category '## Where to look' section — assert it is gone from the render order.
-  if grep -qF -- "## Where to look" <<< "$COMBINED"; then
-    fail "T10" "'## Where to look' still present — fn-93 replaced it with '## Review plan' + '## How to review this PR'"
+  if python3 - "$PLUGIN_ROOT" <<'PY_BRIEFING'
+import json
+import re
+import sys
+from pathlib import Path
+plugin = Path(sys.argv[1])
+sys.path.insert(0, str(plugin / "scripts"))
+import flowctl
+artifact = json.loads((plugin / "tests/fixtures/pr-cognitive-aid/v1/golden.json").read_text(encoding="utf-8"))
+walkthrough = artifact["changeWalkthrough"]
+walkthrough.update(userImpact="Review the change.", blastRadius="Markdown only.",
+                   tradeoffs="Full detail stays in the artifact.", openItems="Forge check pending.")
+body = flowctl.render_pr_cognitive_aid_markdown(artifact)
+assert re.findall(r"^## (.+)$", body, re.M) == [
+    "Why", "What changes for a user or operator", "Scope", "Blast radius",
+    "Verification", "Tradeoffs", "Open items"]
+assert len(body.splitlines()) <= 40
+assert body == flowctl.render_pr_cognitive_aid_markdown(artifact)
+assert "Coverage:" in body
+assert "<details" not in body
+PY_BRIEFING
+  then
+    ok "T10" "artifact renders one bounded seven-section briefing"
   else
-    ok "T10" "'## Where to look' absent from render contract (folded into the Review plan)"
+    fail "T10" "briefing renderer contract failed"
   fi
 
   # `--dry-run` short-circuit: SKILL.md must document it

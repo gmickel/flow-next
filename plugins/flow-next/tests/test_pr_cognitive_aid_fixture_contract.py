@@ -13,8 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import flowctl  # noqa: E402
 
@@ -41,22 +40,6 @@ IMAGE_NAMES = (
     "change-walkthrough-expanded-diff.jpeg",
     "change-walkthrough-grouped-files.jpeg",
 )
-GROUP_BADGES = {
-    "problem": "WHY",
-    "principle": "PRINCIPLE",
-    "step": "STEP",
-    "kept": "KEPT",
-    "verify": "VERIFY",
-}
-CHANGE_BADGES = {
-    "added": "NEW",
-    "modified": "MODIFIED",
-    "deleted": "DELETED",
-    "renamed": "RENAMED",
-    "copied": "COPIED",
-}
-
-
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -211,56 +194,19 @@ class CrossRenderParityTests(unittest.TestCase):
         cls.artifact = _read_json(GOLDEN)
         cls.rendered = flowctl.render_pr_cognitive_aid_markdown(cls.artifact)
 
-    def test_markdown_preserves_identity_and_currentness(self) -> None:
+    # fn-252 makes markdown a bounded briefing; lossless parity belongs to
+    # html-input below, not to visible per-file tables or provenance badges.
+    def test_markdown_keeps_identity_in_one_comment(self) -> None:
         artifact = self.artifact
-        self.assertIn(
-            f"| Artifact | `{artifact['artifactId']}` | artifact identity |",
-            self.rendered,
-        )
-        self.assertIn(
-            f"| Base commit | `{artifact['baseSha']}` | artifact currentness |",
-            self.rendered,
-        )
-        self.assertIn(
-            f"| Head commit | `{artifact['headSha']}` | artifact identity |",
-            self.rendered,
-        )
+        self.assertEqual(re.findall(r"<!--.*?-->", self.rendered), [
+            f"<!-- artifact={artifact['artifactId']} base={artifact['baseSha']} head={artifact['headSha']} -->"
+        ])
 
-    def test_markdown_preserves_group_order_kinds_and_sources(self) -> None:
-        positions = []
-        for group in self.artifact["changeWalkthrough"]["groups"]:
-            summary = (
-                f"<summary><code>{GROUP_BADGES[group['kind']]}</code> "
-                f"{group['ordinal']}. {group['title']} — {group['summary']}"
-                "</summary>"
-            )
-            positions.append(self.rendered.index(summary))
-            for source_ref in group["sourceRefs"]:
-                self.assertIn(f"source:{source_ref}", self.rendered)
-        self.assertEqual(positions, sorted(positions))
-
-    def test_markdown_preserves_every_file_semantic(self) -> None:
-        for group in self.artifact["changeWalkthrough"]["groups"]:
-            for file_record in group["files"]:
-                with self.subTest(path=file_record["path"]):
-                    expected = flowctl._pr_aid_file_row(file_record)
-                    self.assertEqual(self.rendered.count(expected), 1)
-                    self.assertIn(
-                        f"`{CHANGE_BADGES[file_record['changeType']]}`",
-                        expected,
-                    )
-                    self.assertIn(
-                        f"`{file_record['attentionClass'].upper()}`",
-                        expected,
-                    )
-                    for rid in file_record["rIds"]:
-                        self.assertIn(f"R-ID:{rid}", expected)
-                    for task_id in file_record["taskIds"]:
-                        self.assertIn(f"task:{task_id}", expected)
-
-    def test_kept_and_verify_remain_first_class(self) -> None:
-        self.assertIn("<code>KEPT</code> 10. Kept", self.rendered)
-        self.assertIn("<code>VERIFY</code> 11. Verify", self.rendered)
+    def test_maximum_fixture_is_a_bounded_briefing(self) -> None:
+        self.assertLessEqual(len(self.rendered.splitlines()), 40)
+        self.assertIn("## Why", self.rendered)
+        self.assertIn("Coverage:", self.rendered)
+        self.assertNotIn("<details", self.rendered)
 
     def test_optional_html_contract_consumes_same_validated_object(self) -> None:
         canonical = flowctl.validate_pr_cognitive_aid(_read_json(GOLDEN))

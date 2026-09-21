@@ -1311,8 +1311,14 @@ generation at
 `.flow/artifacts/<spec-id>/pr-cognitive-aid/<artifactId>.json`; it never
 overwrites an existing generation. `current` returns a labeled
 `current|absent|stale|unsupported|invalid` selection and exposes no artifact on
-non-current states. `render` emits deterministic compact/full GitHub Markdown
-for a validated file or the supported current generation.
+non-current states. `render` emits one deterministic Markdown briefing for a
+validated file or the supported current generation, regardless of diff size.
+Empty sections disappear; grouped file trees and proof-cell checklists carry
+the review content. The renderer collapses lower-attention entries to counted
+lines to meet a 40-line budget, preserving Why and requirement coverage. A
+thesis that alone exceeds the budget remains complete. See the
+[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,
+proof outcomes and collapse behavior.
 
 `--diff-files` binds membership, Git state, and churn to a JSON map produced
 from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,

@@ -30045,197 +30045,190 @@ def write_pr_cognitive_aid(
 
 
 def _pr_aid_plain_text(value: Any) -> str:
-    escaped = html.escape(str(value), quote=True).replace("`", "&#96;")
-    for character in ("\\", "*", "[", "]", ">"):
+    escaped = html.escape(str(value), quote=False).replace("`", "&#96;")
+    for character in ("\\", "*", "_", "[", "]", "~"):
         escaped = escaped.replace(character, f"\\{character}")
-    return escaped.replace("\n", " ")
+    return " ".join(escaped.splitlines())
 
 
 def _pr_aid_prose(value: Any) -> str:
     escaped = _pr_aid_plain_text(value)
-    if re.match(
-        r"^\s*(?:#{1,6}\s|[-+*]\s|\d+[.)]\s|`{3,}|~{3,}|-{3,}\s*$|"
-        r"\*{3,}\s*$|_{3,}\s*$)",
-        escaped,
-    ):
+    if re.match(r"^\s*(?:#{1,6}\s|[-+]\s|\d+[.)]\s|[-=]{3,}\s*$)", escaped):
         first = len(escaped) - len(escaped.lstrip())
-        escaped = (
-            escaped[:first]
-            + "&#"
-            + str(ord(escaped[first]))
-            + ";"
-            + escaped[first + 1 :]
-        )
+        escaped = escaped[:first] + f"&#{ord(escaped[first])};" + escaped[first + 1:]
     return escaped
 
 
-def _pr_aid_markdown_cell(value: Any) -> str:
-    return _pr_aid_plain_text(value).replace("|", "\\|")
-
-
-def _pr_aid_links(record: dict[str, Any]) -> str:
-    parts = [
-        *(f"source:{item}" for item in record.get("sourceRefs", [])),
-        *(f"R-ID:{item}" for item in record.get("rIds", [])),
-        *(f"task:{item}" for item in record.get("taskIds", [])),
-    ]
-    return _pr_aid_markdown_cell(", ".join(parts) or "—")
-
-
-def _pr_aid_file_row(file_record: dict[str, Any]) -> str:
-    additions = file_record.get("additions")
-    deletions = file_record.get("deletions")
-    stats = (
-        "—"
-        if additions is None and deletions is None
-        else f"+{additions or 0}/-{deletions or 0}"
-    )
-    diff_url = file_record.get("diffUrl")
-    diff = (
-        f"[diff]({html.escape(diff_url, quote=True)})" if diff_url else "—"
-    )
-    change_badges = {
-        "added": "NEW",
-        "modified": "MODIFIED",
-        "deleted": "DELETED",
-        "renamed": "RENAMED",
-        "copied": "COPIED",
-    }
-    return (
-        f"| `{change_badges[file_record['changeType']]}` | "
-        f"`{file_record['attentionClass'].upper()}` | "
-        f"`{_pr_aid_markdown_cell(file_record['path'])}` | "
-        f"{_pr_aid_markdown_cell(file_record['summary'])} | {stats} | {diff} | "
-        f"{_pr_aid_links(file_record)} |"
-    )
-
-
 def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
-    """Render the validated v1 object with deterministic compact/full rules."""
+    """Render one bounded briefing using only the validated artifact."""
     artifact = validate_pr_cognitive_aid(artifact)
     walkthrough = artifact["changeWalkthrough"]
     groups = walkthrough["groups"]
-    files = [file_record for group in groups for file_record in group.get("files", [])]
-    canonical_files = [
-        file_record
-        for file_record in files
-        if file_record["attentionClass"] == "canonical"
-    ]
-    human_review_lines = sum(
-        (file_record.get("additions") or 0) + (file_record.get("deletions") or 0)
-        for file_record in canonical_files
-    )
-    full = human_review_lines >= 200 or len(canonical_files) >= 6
-    lines = [
-        "## The change, top to bottom",
-        "",
-        _pr_aid_prose(walkthrough["thesis"]),
-        "",
-        "| Proof | Value | Sources |",
-        "|---|---|---|",
-        f"| Artifact | `{artifact['artifactId']}` | artifact identity |",
-        f"| Base commit | `{artifact['baseSha']}` | artifact currentness |",
-        f"| Head commit | `{artifact['headSha']}` | artifact identity |",
-        f"| Human-review lines | {human_review_lines} | deterministic file stats |",
-        f"| Canonical files | {len(canonical_files)} | deterministic membership |",
-        f"| Total files | {len(files)} | deterministic membership |",
-    ]
-    if walkthrough["proof"]:
-        for cell in walkthrough["proof"]:
-            lines.append(
-                f"| {_pr_aid_markdown_cell(cell['label'])} | "
-                f"{_pr_aid_markdown_cell(cell['value'])} | "
-                f"{_pr_aid_links(cell)} |"
-            )
-    lines.append("")
-    if not full:
-        lines.extend(
-            [
-                "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
-                "|---|---|---|---|---:|---|---|",
-                *(_pr_aid_file_row(file_record) for file_record in canonical_files),
-                "",
-            ]
-        )
-        return "\n".join(lines).rstrip() + "\n"
+    sources = {source["id"]: source for source in artifact["sources"]}
 
-    lines.extend(
-        [
-            "**Legend:** `WHY` `PRINCIPLE` `STEP` `KEPT` `VERIFY` · "
-            "`NEW` `MODIFIED` `DELETED` `RENAMED` `COPIED` · "
-            "`CANONICAL` `GENERATED` `MECHANICAL`",
-            "",
-        ]
-    )
-    first_open_step = next(
-        (
-            group["ordinal"]
-            for group in groups
-            if group["kind"] == "step"
-            and any(
-                file_record["attentionClass"] == "canonical"
-                for file_record in group.get("files", [])
-            )
-        ),
-        None,
-    )
-    kind_badges = {
-        "problem": "WHY",
-        "principle": "PRINCIPLE",
-        "step": "STEP",
-        "kept": "KEPT",
-        "verify": "VERIFY",
-    }
-    for group in groups:
-        open_attr = " open" if group["ordinal"] == first_open_step else ""
-        lines.extend(
-            [
-                f"<details{open_attr}>",
-                f"<summary><code>{kind_badges[group['kind']]}</code> "
-                f"{group['ordinal']}. {_pr_aid_plain_text(group['title'])} — "
-                f"{_pr_aid_plain_text(group['summary'])}</summary>",
-                "",
-                f"Evidence: {_pr_aid_links(group)}",
-                "",
-            ]
+    def requirements(record: dict[str, Any]) -> list[str]:
+        return list(dict.fromkeys([
+            *record.get("rIds", []),
+            *(sources[ref]["ref"] for ref in record["sourceRefs"]
+              if sources[ref]["kind"] == "rid"),
+        ]))
+
+    declared = list(dict.fromkeys(
+        source["ref"] for source in artifact["sources"] if source["kind"] == "rid"
+    ))
+    coverage = {rid: [group for group in groups if rid in requirements(group)]
+                for rid in declared}
+    # Scope numbers the groups it draws; a requirement evidenced only by groups
+    # without files names them, because they have no number to point at.
+    numbers = {id(group): index for index, group in enumerate(
+        (group for group in groups if group["files"]), start=1)}
+
+    def evidenced_by(evidence: list[dict[str, Any]]) -> str:
+        drawn = [str(numbers[id(g)]) for g in evidence if id(g) in numbers]
+        return ", ".join(drawn or [_pr_aid_plain_text(g["title"]) for g in evidence])
+
+    coverage_line = ""
+    table = []
+    if declared:
+        coverage_line = "Coverage: " + "; ".join(
+            f"{rid} → " + (evidenced_by(evidence) if evidence else "uncovered")
+            for rid, evidence in coverage.items()
         )
-        group_files = group.get("files", [])
-        run_start = 0
-        while run_start < len(group_files):
-            secondary = (
-                group_files[run_start]["attentionClass"] != "canonical"
-            )
-            run_end = run_start + 1
-            while (
-                run_end < len(group_files)
-                and (
-                    group_files[run_end]["attentionClass"] != "canonical"
-                )
-                == secondary
-            ):
-                run_end += 1
-            run = group_files[run_start:run_end]
-            if secondary:
-                lines.extend(
-                    [
-                        "<details>",
-                        f"<summary>Generated/mechanical files ({len(run)})</summary>",
-                        "",
-                    ]
-                )
-            lines.extend(
-                [
-                    "| Change | Attention | File | Purpose | +/- | Diff | Evidence |",
-                    "|---|---|---|---|---:|---|---|",
-                    *(_pr_aid_file_row(file_record) for file_record in run),
-                    "",
-                ]
-            )
-            if secondary:
-                lines.extend(["</details>", ""])
-            run_start = run_end
-        lines.extend(["</details>", ""])
-    return "\n".join(lines).rstrip() + "\n"
+        if any(not evidence for evidence in coverage.values()):
+            table = ["| Requirement | Groups |", "|---|---|"] + [
+                f"| {rid} | " + (evidenced_by(evidence).replace("|", "\\|")
+                                 if evidence else "unevidenced") + " |"
+                for rid, evidence in coverage.items()
+            ]
+    elif any(group["files"] for group in groups):
+        coverage_line = "Coverage: requirements undeclared"
+        table = ["| Requirement | Groups |", "|---|---|", "| Undeclared | No requirement IDs |"]
+
+    def counted(files: list[dict[str, Any]]) -> str:
+        counts = {"mechanical": 0, "generated": 0, "not described": 0, "described": 0}
+        for record in files:
+            attention = record["attentionClass"]
+            category = (attention if attention != "canonical" else
+                        "described" if record["summary"].strip() else "not described")
+            counts[category] += 1
+        return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
+                         for kind, count in counts.items() if count)
+
+    def tree_text(value: str) -> str:
+        return " ".join(value.splitlines())
+
+    trees = []
+    for group in groups:
+        if not group["files"]:
+            continue
+        described, remaining = [], []
+        for record in group["files"]:
+            if record["attentionClass"] != "canonical" or not record["summary"].strip():
+                remaining.append(record)
+                continue
+            rids = requirements(record) or requirements(group)
+            # Fenced text is literal; flatten newlines so authored content cannot close the fence.
+            sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
+            row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])} "
+                   f"[{', '.join(rids) if rids else 'requirement undeclared'}]")
+            described.append((record, row))
+        trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
+                      "rows": described,
+                      "remaining": remaining, "compact": False})
+
+    proof = []
+    for cell in walkthrough["proof"]:
+        outcome = cell.get("outcome")
+        prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
+        status = f"{outcome}: " if outcome in ("fail", "unverified") else ""
+        proof.append((cell, f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
+                      f"{_pr_aid_plain_text(cell['value'])}"))
+    hidden_proof: list[dict[str, Any]] = []
+    fields = [("userImpact", "What changes for a user or operator"),
+              ("blastRadius", "Blast radius"), ("tradeoffs", "Tradeoffs"),
+              ("openItems", "Open items")]
+    prose = {key: [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
+             for key, _ in fields}
+    why = [_pr_aid_prose(line) for line in walkthrough["thesis"].strip().splitlines()]
+    thesis_over_budget = len(why) > 40
+    compact_scope = False
+    hidden_table = False
+
+    def section(title: str, content: list[str]) -> list[str]:
+        return [f"## {title}", "", *content, ""] if content else []
+
+    def assemble() -> list[str]:
+        scope = []
+        if compact_scope and trees:
+            scope = [f"{len(trees)} group{'' if len(trees) == 1 else 's'} collapsed: " + counted([
+                record for group in groups for record in group["files"]])]
+        else:
+            for tree in trees:
+                remaining = tree["remaining"]
+                if tree["compact"]:
+                    scope.append(f"{tree['title']}: {counted(remaining)}")
+                else:
+                    rows = [row for _, row in tree["rows"]]
+                    if rows and not remaining:
+                        rows[-1] = rows[-1].replace("├──", "└──", 1)
+                    scope.extend([f"**{tree['title']}**", "```diff", *rows])
+                    if remaining:
+                        scope.append(f"  └── {counted(remaining)}")
+                    scope.append("```")
+        if coverage_line:
+            scope.append(coverage_line)
+        if table:
+            scope.extend([f"{len(table) - 2} requirement rows collapsed"] if hidden_table else table)
+        verification = [row for _, row in proof]
+        if hidden_proof:
+            counts: dict[str, int] = {}
+            for cell in hidden_proof:
+                status = cell.get("outcome", "no outcome")
+                counts[status] = counts.get(status, 0) + 1
+            verification.append("Proof cells collapsed: " + ", ".join(
+                f"{count} {status}" for status, count in counts.items()))
+        lines = [*section("Why", why),
+                 *section(fields[0][1], prose["userImpact"]),
+                 *section("Scope", scope),
+                 *section("Blast radius", prose["blastRadius"]),
+                 *section("Verification", verification),
+                 *section("Tradeoffs", prose["tradeoffs"]),
+                 *section("Open items", prose["openItems"])]
+        identity = artifact["artifactId"].replace("--", "&#45;&#45;")
+        lines.append(f"<!-- artifact={identity} base={artifact['baseSha']} head={artifact['headSha']} -->")
+        return lines
+
+    def over_budget() -> bool:
+        return thesis_over_budget or len(assemble()) > 40
+
+    # Secondary files already count as a single line. Collapse canonical rows
+    # from the end so the author's earliest review steps remain visible longest.
+    for tree in reversed(trees):
+        while tree["rows"] and over_budget():
+            record, _ = tree["rows"].pop()
+            tree["remaining"].append(record)
+    for tree in reversed(trees):
+        if over_budget() and not tree["rows"]:
+            tree["compact"] = True
+    if over_budget() and table:
+        hidden_table = True
+    for key, _ in reversed(fields):
+        if prose[key] and over_budget():
+            prose[key] = [f"{len(prose[key])} authored line"
+                          f"{'' if len(prose[key]) == 1 else 's'} collapsed"]
+    # Keep failures and unverified work visible after successful or legacy proof.
+    for outcome in (None, "pass", "unverified", "fail"):
+        for entry in list(reversed(proof)):
+            if entry[0].get("outcome") == outcome and over_budget():
+                proof.remove(entry)
+                hidden_proof.append(entry[0])
+    if over_budget():
+        compact_scope = True
+    # Reflow a short thesis without losing any words if section scaffolding
+    # consumes its remaining space. An intrinsically over-budget thesis stays whole.
+    if not thesis_over_budget and len(assemble()) > 40:
+        why = [_pr_aid_prose(walkthrough["thesis"])]
+    return "\n".join(assemble()).rstrip() + "\n"
 
 
 def _pr_aid_read_input(path_arg: str, *, use_json: bool = True) -> Any:
