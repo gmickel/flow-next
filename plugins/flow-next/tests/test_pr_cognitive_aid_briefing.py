@@ -352,7 +352,9 @@ class BriefingTests(unittest.TestCase):
                 self.assertNotIn("@name", text)
                 self.assertNotIn("#123", text)
                 self.assertNotIn("fixes #1", text)
-                self.assertIn("&#64;name &#35;123 fixes &#35;1", text)
+                # The forge resolves references after decoding entities, so the
+                # token is broken with a zero-width space, not entity-encoded.
+                self.assertIn("@&#8203;name #&#8203;123 fixes #&#8203;1", text)
                 self.assertIn("&#96;code&#96; &#124; &lt;b&gt; café", text)
                 self.assertNotIn("```diff", text)
 

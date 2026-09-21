@@ -19,10 +19,10 @@ Do not repair, merge again, or delete a branch on that replay.
 Read every `.flow/specs/*.json` blob at full `headRefOid` from the PR's
 head repository using the recursive git trees API (`recursive=1`), never local state.
 Select every spec whose `branch_name` equals `headRefName`; several matches are valid.
-If none match, read the `baseRefName` tree the same way and select specs with
+If none match, read the `baseRefName` tree from the base repository and select specs with
 `status: done` at head, absent or not done at base, and at least one
 `.flow/tasks/<spec-id>.*` entry whose tree SHA is absent from, or different in,
-the base tree; task blob existence alone does not qualify.
+the base tree.
 A closed spec has `status: done` and at least one
 `.flow/tasks/<spec-id>.*.json` blob in the same tree. If any selected spec is
 open, stop `BLOCKED`, reason `work not finished` naming every open selection;
@@ -34,8 +34,6 @@ recover matching tracker links, without re-opening the landing gates; a lookup
 failure there is a touchpoint failure and retains the confirmed `MERGED`.
 
 ## Resolve conflicts, threads, then CI
-
-Land repairs the PR it is given: that authorizes repairs (resolving threads, CI fixes, catch-up); only merging needs session merge authorization.
 
 Read mergeability first. A conflict stops `BLOCKED` with the exact branch
 needing a rebase. Unknown mergeability is `RESOLVING`, never permission to

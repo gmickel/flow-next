@@ -30070,12 +30070,32 @@ def write_pr_cognitive_aid(
     return target
 
 
+_PR_AID_URL_RE = re.compile(r"https?://\S+")
+_PR_AID_ENTITIES = str.maketrans({"`": "&#96;", "|": "&#124;"})
+
+
 def _pr_aid_plain_text(value: Any) -> str:
-    escaped = html.escape(str(value).strip(), quote=False).translate(
-        str.maketrans({"`": "&#96;", "@": "&#64;", "#": "&#35;", "|": "&#124;"}))
-    for character in ("\\", "*", "_", "[", "]", "~"):
-        escaped = escaped.replace(character, f"\\{character}")
-    return " ".join(escaped.splitlines())
+    """Neutralize authored prose for a forge body; URLs stay clickable.
+
+    The forge resolves mentions and issue references after decoding entities,
+    so those tokens are broken with a zero-width space, never entity-encoded.
+    """
+    def words(text: str) -> str:
+        escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
+        for character in ("\\", "*", "_", "[", "]", "~"):
+            escaped = escaped.replace(character, f"\\{character}")
+        escaped = re.sub(r"(?<![\w.])@(?=[A-Za-z0-9])", "@&#8203;", escaped)
+        escaped = re.sub(r"(?<!&)#(?=\d)", "#&#8203;", escaped)  # not our own entities
+        return re.sub(r"(?i)\b(GH-)(?=\d)", r"\1&#8203;", escaped)
+
+    text = " ".join(str(value).strip().splitlines())
+    parts, position = [], 0
+    for match in _PR_AID_URL_RE.finditer(text):
+        parts.append(words(text[position:match.start()]))
+        parts.append(html.escape(match.group(0), quote=False).translate(_PR_AID_ENTITIES))
+        position = match.end()
+    parts.append(words(text[position:]))
+    return "".join(parts)
 
 
 def _pr_aid_prose(value: Any) -> str:
