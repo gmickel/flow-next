@@ -201,7 +201,7 @@ fi
 `tracker.perEvent.makePr` gates only the optional breadcrumb, which Make PR synthesizes from the URL and
 opened-PR context. Create-if-unlinked first; unreachable transport is a no-op. Use provider-native links or
 URL-deduplicated fallback; never overwrite issue prose or mark Done. Failures warn without changing PR
-success. No tracker-runner dispatch.
+success.
 
 Audit `sync check "$SPEC_ID" --events makePr --since <PR-createdAt> --json` independently of dispatch. If
 MISSING, record a UTC start, Retro-fire the same wrapper once with explicit `--pr-url`, then recheck since
