@@ -225,7 +225,7 @@ def fixture_make_pr(plugin: Path, repo: Path) -> dict[str, Any]:
     )
     commit_all(repo, "chore: complete task")
     return {
-        "command": f"/flow-next:make-pr {spec_id} --dry-run --base main --no-mermaid",
+        "command": f"/flow-next:make-pr {spec_id} --dry-run --base main",
         "env": {"FLOW_AUTONOMOUS": "1"},
         "spec_id": spec_id,
     }

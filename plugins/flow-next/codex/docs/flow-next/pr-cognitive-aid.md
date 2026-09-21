@@ -179,12 +179,17 @@ counted. Why and the coverage line never collapse.
 
 Collapse stops as soon as the body fits: proof cells without outcomes first,
 then pass cells, each from the end; described file rows from later groups
-before earlier groups; then lines beyond the first in tradeoffs, blast radius,
-user/operator change and finally open items. Each field keeps its first line
-and a counted remainder; one-line fields survive ordinary collapse. Fail and
-unverified cells collapse only after these steps. Proof counts distinguish
-each outcome. Exhausted scope and optional coverage-table detail use counted
-summaries when needed. Counted lines and coverage have a preceding blank line.
+before earlier groups; the requirement table; the whole scope; then lines
+beyond the first in tradeoffs, blast radius, user/operator change and open
+items; finally unverified cells, then fail cells, each from the end.
+In ordinary collapse, a step is applied only when it shortens the rendered
+body, including blank lines and counted summaries. Candidates accumulate
+until their counted form saves lines; otherwise the authored content stays.
+Each field keeps its first line; fields of up to three lines survive intact.
+Proof counts distinguish each outcome. Counted lines and coverage have a
+preceding blank line. Group counts remain below their titles and any file
+tree, preserving that separation; the next group's title follows the count
+directly, without an additional blank line.
 Apostrophes and quotation marks render literally; markup-injection characters
 remain neutralized.
 

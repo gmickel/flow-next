@@ -1318,9 +1318,14 @@ validated file or the supported current generation, regardless of diff size.
 Empty sections disappear; grouped file trees and proof-cell checklists carry
 the review content. To meet 40 lines (including blanks), collapse stops as soon
 as the body fits: no-outcome proof cells, pass cells, later groups' file rows,
-then authored lines beyond the first (tradeoffs, blast radius, user/operator
-change, open items), and finally unverified/fail proof. Counts retain outcomes;
-one-line fields survive ordinary collapse. Why and coverage remain. Thesis
+the requirement table, the whole scope, then authored lines beyond the first
+(tradeoffs, blast radius, user/operator change, open items), and finally
+unverified cells followed by fail cells. Proof cells collapse from the end.
+In ordinary collapse, a step is applied only when it shortens the rendered
+body, including blank lines and counted summaries; otherwise content stays.
+Counts retain outcomes; fields of up to three lines survive intact. Group
+counts stay below titles and file trees, with a preceding blank line; the
+next group title follows directly. Why and coverage remain. Thesis
 reflow precedes all collapse; a thesis whose lines plus its four scaffolding
 lines exceed 40 stays complete, with other content counted. See the
 [briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,

@@ -30211,35 +30211,61 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     if not thesis_over_budget and len(assemble()) > 40:
         why = [_pr_aid_prose(walkthrough["thesis"])]
 
+    def shorter_than(before: int) -> bool:
+        return thesis_over_budget or len(assemble()) < before
+
     def collapse_proof(outcomes: tuple[Any, ...]) -> None:
+        saved_proof, saved_hidden = proof[:], hidden_proof[:]
+        before = len(assemble())
         for outcome in outcomes:
             for index in range(len(proof) - 1, -1, -1):
                 if proof[index][0].get("outcome") == outcome and over_budget():
                     hidden_proof.append(proof.pop(index)[0])
+                    if shorter_than(before):
+                        saved_proof, saved_hidden = proof[:], hidden_proof[:]
+                        before = len(assemble())
+        proof[:] = saved_proof
+        hidden_proof[:] = saved_hidden
 
     collapse_proof((None, "pass"))
     # Preserve the earliest authored review steps, dropping only the rows needed.
     for tree in reversed(trees):
+        saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
+        before = len(assemble())
         while tree["rows"] and over_budget():
             record, _ = tree["rows"].pop()
             tree["remaining"].append(record)
+            if shorter_than(before):
+                saved_rows, saved_remaining = tree["rows"][:], tree["remaining"][:]
+                before = len(assemble())
+        tree["rows"], tree["remaining"] = saved_rows, saved_remaining
     # Scope scaffolding and the optional detail table carry less attention than
     # authored warnings; their counted forms bound artifacts with many groups.
     if over_budget() and table:
+        before = len(assemble())
         hidden_table = True
+        hidden_table = shorter_than(before)
     if over_budget() and trees:
+        before = len(assemble())
         compact_scope = True
+        compact_scope = shorter_than(before)
     for key in ("tradeoffs", "blastRadius", "userImpact", "openItems"):
         original = prose[key][:]
         if thesis_over_budget and original:
             prose[key] = [f"{len(original)} authored line"
                           f"{'' if len(original) == 1 else 's'} collapsed"]
             continue
-        hidden = 0
-        while len(original) - hidden > 1 and over_budget():
-            hidden += 1
+        saved = original
+        before = len(assemble())
+        for hidden in range(1, len(original)):
+            if not over_budget():
+                break
             prose[key] = [*original[:-hidden], "",
                           f"{hidden} authored line{'' if hidden == 1 else 's'} collapsed"]
+            if shorter_than(before):
+                saved = prose[key]
+                before = len(assemble())
+        prose[key] = saved
     collapse_proof(("unverified", "fail"))
     return "\n".join(assemble()).rstrip() + "\n"
 

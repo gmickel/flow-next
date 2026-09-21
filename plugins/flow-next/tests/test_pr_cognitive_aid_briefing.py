@@ -298,7 +298,7 @@ class BriefingTests(unittest.TestCase):
         self.assertIn("src/change_0.py", text)
         self.assertEqual(len(text.splitlines()), 40)
 
-    def test_file_rows_collapse_from_last_group_after_pass_cells(self):
+    def test_file_rows_collapse_from_last_group_preserving_single_pass_cell(self):
         value = full_artifact()
         group = value["changeWalkthrough"]["groups"][2]
         other = copy.deepcopy(group)
@@ -308,7 +308,8 @@ class BriefingTests(unittest.TestCase):
             record["path"] = "later/" + record["path"]
         value["changeWalkthrough"]["groups"] = [group, other]
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("Proof cells collapsed: 1 pass", text)
+        self.assertIn("- [x] Focused tests", text)
+        self.assertNotIn("Proof cells collapsed:", text)
         self.assertNotIn("later/src/change_1.py", text)
         self.assertIn("src/change_0.py", text)
         self.assertLessEqual(len(text.splitlines()), 40)
@@ -331,6 +332,40 @@ class BriefingTests(unittest.TestCase):
         for index, line in enumerate(lines):
             if "collapsed" in line or line.startswith("Coverage:"):
                 self.assertEqual(lines[index - 1], "")
+
+    def test_short_open_items_survive_fail_pressure_with_minimum_hidden(self):
+        for length in (2, 3):
+            with self.subTest(length=length):
+                value = full_artifact()
+                walk = value["changeWalkthrough"]
+                walk["openItems"] = "\n".join(f"Warning {i}" for i in range(length))
+                walk["proof"] = [
+                    {"label": f"Gate {i}", "value": "Broken", "outcome": "fail",
+                     "sourceRefs": ["task"]} for i in range(14)
+                ]
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                self.assertIn(walk["openItems"], text)
+                self.assertNotIn("authored lines collapsed", text)
+                self.assertEqual(len(text.splitlines()), 40)
+                shown = re.findall(r"^- \[ \] fail: Gate (\d+):", text, re.M)
+                self.assertEqual(shown, [str(i) for i in range(9 - length)])
+                self.assertIn(f"Proof cells collapsed: {5 + length} fail", text)
+                self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
+
+    def test_single_proof_cell_survives_over_budget_body(self):
+        value = full_artifact()
+        for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+            value["changeWalkthrough"][key] = "\n".join(f"{key} {i}" for i in range(3))
+        for outcome in (None, "pass", "unverified", "fail"):
+            with self.subTest(outcome=outcome):
+                cell = value["changeWalkthrough"]["proof"][0]
+                cell.pop("outcome", None)
+                if outcome:
+                    cell["outcome"] = outcome
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                self.assertIn("1 group collapsed:", text)
+                self.assertIn("Focused tests: Passed locally", text)
+                self.assertNotIn("Proof cells collapsed:", text)
 
     def test_literal_quotes_and_neutralized_prose_injection(self):
         value = full_artifact()
