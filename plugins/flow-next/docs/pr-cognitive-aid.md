@@ -182,7 +182,11 @@ items; finally unverified cells, then fail cells, each from the end.
 In ordinary collapse, a step is applied only when it shortens the rendered
 body, including blank lines and counted summaries. Candidates accumulate
 until their counted form saves lines; otherwise the authored content stays.
-Each field keeps its first line; fields of up to three lines survive intact.
+The 40-line bound takes precedence: if still over budget, a final pass uses
+one shared checkpoint across no-outcome, pass, unverified and fail proof cells,
+hiding only as many as needed into one line with exact counts per outcome.
+If necessary, it continues with authored-field tails, then file rows / scope
+until the body fits; each field keeps its first line.
 Proof counts distinguish each outcome. Counted lines and coverage have a
 preceding blank line. Group counts remain below their titles and any file
 tree, preserving that separation; the next group's title follows the count

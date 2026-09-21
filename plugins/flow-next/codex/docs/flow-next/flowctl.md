@@ -1326,7 +1326,10 @@ the requirement table, the whole scope, then authored lines beyond the first
 unverified cells followed by fail cells. Proof cells collapse from the end.
 In ordinary collapse, a step is applied only when it shortens the rendered
 body, including blank lines and counted summaries; otherwise content stays.
-Counts retain outcomes; fields of up to three lines survive intact. Group
+The 40-line bound takes precedence: a final pass shares one checkpoint across
+no-outcome, pass, unverified and fail proof cells, hiding only as many as needed
+into one line with exact counts per outcome. If still over budget, it continues
+with authored-field tails, then file rows / scope until the body fits. Group
 counts stay below titles and file trees, with a preceding blank line; the
 next group title follows directly. Why and coverage remain. Thesis
 reflow precedes all collapse; a thesis whose lines plus its four scaffolding

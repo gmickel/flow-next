@@ -2,6 +2,7 @@
 
 import copy
 import json
+import random
 import re
 import sys
 import unittest
@@ -364,8 +365,81 @@ class BriefingTests(unittest.TestCase):
                     cell["outcome"] = outcome
                 text = flowctl.render_pr_cognitive_aid_markdown(value)
                 self.assertIn("1 group collapsed:", text)
+                self.assertLessEqual(len(text.splitlines()), 40)
                 self.assertIn("Focused tests: Passed locally", text)
                 self.assertNotIn("Proof cells collapsed:", text)
+
+    def test_final_shared_proof_checkpoint(self):
+        for thesis_lines, outcomes in ((1, [None, "pass", "unverified", "fail"]),
+                                       (26, ["pass", "unverified", "fail"])):
+            with self.subTest(thesis_lines=thesis_lines):
+                value = full_artifact()
+                walk = value["changeWalkthrough"]
+                walk["thesis"] = "\n".join(f"Reason {i}" for i in range(thesis_lines))
+                for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+                    walk[key] = "\n".join(f"{key} {i}" for i in range(3))
+                walk["groups"] = [walk["groups"][2]]
+                walk["proof"] = [
+                    {"label": f"Gate {i}", "value": "Note", "sourceRefs": ["task"],
+                     **({"outcome": outcome} if outcome else {})}
+                    for i, outcome in enumerate(outcomes)
+                ]
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                self.assertLessEqual(len(text.splitlines()), 40)
+                self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
+
+    def test_deterministic_budget_sweep(self):
+        rng = random.Random(25203)
+        template = full_artifact()
+        for case in range(500):
+            value = copy.deepcopy(template)
+            walk = value["changeWalkthrough"]
+            walk["thesis"] = "\n".join(f"Reason {i}" for i in range(1 + case % 36))
+            for key in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+                walk[key] = "\n".join(f"{key} {i}" for i in range(rng.randrange(5)))
+            group = walk["groups"][2]
+            walk["groups"] = []
+            for index in range(rng.randrange(5)):
+                current = copy.deepcopy(group)
+                current["ordinal"] = index + 1
+                current["files"] = current["files"][:rng.randrange(5)]
+                for record in current["files"]:
+                    record["path"] = f"group{index}/" + record["path"]
+                walk["groups"].append(current)
+            # Schema requires a step; an empty step draws zero scope groups.
+            if not walk["groups"]:
+                walk["groups"] = [dict(group, files=[])]
+            if rng.randrange(2):
+                value["sources"].append({"id": "missing", "kind": "rid", "ref": "R9"})
+            else:
+                value["sources"] = [s for s in value["sources"] if s["kind"] != "rid"]
+                for current in walk["groups"]:
+                    for record in [current, *current["files"]]:
+                        record["rIds"] = []
+                        record["sourceRefs"] = ["task", "diff"]
+            walk["proof"] = [
+                {"label": f"Gate {i}", "value": "Note", "sourceRefs": ["task"],
+                 **({"outcome": outcome} if outcome else {})}
+                for i, outcome in enumerate(
+                    rng.choice((None, "pass", "unverified", "fail"))
+                    for _ in range(rng.randrange(7)))
+            ]
+            with self.subTest(case=case):
+                text = flowctl.render_pr_cognitive_aid_markdown(value)
+                self.assertLessEqual(len(text.splitlines()), 40)
+                self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
+                low_shown = any(f"Gate {i}: Note" in text
+                                for i, cell in enumerate(walk["proof"])
+                                if cell.get("outcome") in (None, "pass"))
+                for i, cell in enumerate(walk["proof"]):
+                    if low_shown and cell.get("outcome") in ("unverified", "fail"):
+                        self.assertIn(f"Gate {i}: Note", text)
+                for outcome in (None, "pass", "unverified", "fail"):
+                    hidden = sum(f"Gate {i}: Note" not in text
+                                 for i, cell in enumerate(walk["proof"])
+                                 if cell.get("outcome") == outcome)
+                    if hidden:
+                        self.assertRegex(text, rf"\b{hidden} {outcome or 'no outcome'}\b")
 
     def test_literal_quotes_and_neutralized_prose_injection(self):
         value = full_artifact()
