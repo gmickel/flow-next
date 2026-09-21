@@ -1,10 +1,10 @@
 # Create and finalize
 
-Real create/update only. Title: spec title verbatim up to 72 characters; otherwise first goal/context sentence
-up to 70 plus ellipsis, or spec ID if empty. Persist the rendered body using Write to a private `BODY_FILE`
-tempfile, never shell-interpolate its content. Require nonempty content. If over 65,000 characters, stop with
-the retained local file; never spill a commit after close or truncate renderer output by hand. Clean temporary
-files on exit.
+Real create/update only. With several specs, title the combined change; otherwise use the spec title verbatim
+up to 72 characters, or the first goal/context sentence up to 70 plus ellipsis, or spec ID if empty.
+Use `BODY_FILE` from the one `pr-cognitive-aid render` redirection; append trailing lens/linkage lines, never retype the body.
+Require nonempty content. Above 65,000 characters, stop with the retained file; never commit after close or
+truncate output. Clean temporary files on exit.
 
 ## Draft state
 Set `OPEN_ITEMS_COUNT` from spec open questions, `deferred_findings`, completion review `needs_work` (read

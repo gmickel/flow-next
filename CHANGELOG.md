@@ -14,7 +14,7 @@ versioning remains a separate maintainer step.
 
 ### Changed
 
-- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec; single-spec briefings stay unchanged.
+- Reviewers can follow several completed specs in one integration PR, with a group and requirement coverage for each spec. Land can select newly closed specs from the PR head and base trees when no branch name matches; its merge gates stay unchanged.
 
 - The obsolete make-pr `--no-mermaid` flag is removed.
 
@@ -22,9 +22,12 @@ versioning remains a separate maintainer step.
   from the aid artifact: Why, What changes for a
   user or operator, Scope, Blast radius, Verification, Tradeoffs and Open
   items, each omitted when empty. Scope shows numbered diff-fenced file trees
-  with up to 10 described files per group in review order; extra described,
+  with each group's review guidance below its title and up to 10 described files
+  per group in review order. A row's own requirement IDs determine its tags while
+  coverage keeps every citation; extra described,
   mechanical, generated and undescribed files are counted separately. Authored
-  fields and proof cells stay complete. Coverage appears only for declared requirements. The compact and full forms, their size
+  fields and proof cells stay complete. The skill supplies a validated artifact
+  skeleton and writes directly before one render. Coverage appears only for declared requirements. The compact and full forms, their size
   threshold, the machine-identity proof rows, the per-row evidence column, the
   review-plan section and the generated-by footer are gone; artifact id, base
   and head ride in one HTML comment. The stored artifact, the HTML lens and

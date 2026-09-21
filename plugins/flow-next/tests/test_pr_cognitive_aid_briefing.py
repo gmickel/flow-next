@@ -223,6 +223,33 @@ class BriefingTests(unittest.TestCase):
         self.assertIn("1 generated file\n\nCoverage:", text)
         self.assertEqual(text.count("```\n\n1 mechanical file"), 5)
 
+    def test_group_summary_is_a_neutralized_paragraph_before_fence(self):
+        value = artifact()
+        group = value["changeWalkthrough"]["groups"][2]
+        group["summary"] = "## Check <input>\n[links](bad) and `code`."
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        expected = flowctl._pr_aid_prose(" ".join(group["summary"].splitlines()))
+        self.assertIn(f"**1. {group['title']}**\n\n{expected}\n\n```diff", text)
+        self.assertNotIn("<input>", text)
+        self.assertNotIn("\n## Check", text)
+
+    def test_row_ids_override_inherited_sources_without_changing_coverage(self):
+        value = artifact()
+        value["sources"].append({"id": "second", "kind": "rid", "ref": "R2"})
+        group = value["changeWalkthrough"]["groups"][2]
+        group["sourceRefs"].append("second")
+        group["rIds"].append("R2")
+        row = group["files"][0]
+        row.update(rIds=["R2"], sourceRefs=["diff", "task", "rid", "second"])
+        text = flowctl.render_pr_cognitive_aid_markdown(value)
+        line = next(line for line in text.splitlines() if row["path"] in line)
+        self.assertTrue(line.endswith("[R2]"))
+        coverage = next(line for line in text.splitlines() if line.startswith("Coverage:"))
+        row["rIds"] = []
+        inherited = flowctl.render_pr_cognitive_aid_markdown(value)
+        self.assertTrue(next(line for line in inherited.splitlines() if row["path"] in line).endswith("[R6, R2]"))
+        self.assertIn(coverage, inherited)
+
     def test_file_only_requirement_is_covered_without_table(self):
         value = artifact()
         value["sources"].append({"id": "file_rid", "kind": "rid", "ref": "R7"})
@@ -266,7 +293,7 @@ class BriefingTests(unittest.TestCase):
         value["changeWalkthrough"]["groups"] = [group, other]
         text = flowctl.render_pr_cognitive_aid_markdown(value)
         for number, title in ((1, group["title"]), (2, "Other")):
-            self.assertIn(f"**{number}. {title}**\n\n1 mechanical file; 1 generated file", text)
+            self.assertIn(f"**{number}. {title}**\n\n{group['summary']}\n\n1 mechanical file; 1 generated file", text)
         self.assertNotIn("```", text)
 
     def test_table_escapes_pipe_in_group_title(self):

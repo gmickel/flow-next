@@ -30172,13 +30172,14 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
                     or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
                 remaining.append(record)
                 continue
-            rids = requirements(record) or requirements(group)
+            rids = record.get("rIds") or requirements(record) or requirements(group)
             # Fenced text is literal; flatten newlines so authored content cannot close the fence.
             sign = {"added": "+", "deleted": "-"}.get(record["changeType"], " ")
             tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
             row = (f"{sign} ├── {tree_text(record['path'])} — {tree_text(record['summary'])}{tag}")
             described.append(row)
         trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
+                      "summary": _pr_aid_prose(tree_text(group["summary"])),
                       "rows": described,
                       "remaining": remaining})
 
@@ -30203,11 +30204,11 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     for tree in trees:
         if scope:
             scope.append("")
-        scope.append(f"**{tree['title']}**")
+        scope.extend([f"**{tree['title']}**", "", tree["summary"]])
         rows = tree["rows"]
         if rows:
             rows[-1] = rows[-1].replace("├──", "└──", 1)
-            scope.extend(["```diff", *rows, "```"])
+            scope.extend(["", "```diff", *rows, "```"])
         if tree["remaining"]:
             scope.extend(["", counted(tree["remaining"])])
     if coverage_line:
@@ -34670,9 +34671,14 @@ def specs_closed_in_range(
     if rc:
         raise ValueError(f"Cannot read closed specs: {err.strip()}")
     changed_paths = [path for path in out.split("\0") if path]
+    touched_tasks = {Path(path).stem.rsplit(".", 1)[0] for path in changed_paths
+                     if Path(path).parent.as_posix() == tasks_dir}
+    touched_specs = {spec_short_id(sid) for sid in touched_tasks if is_spec_id(sid)}
     paths = [path for path in changed_paths if path.endswith(".json")]
     spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
-                  and Path(path).stem != host_spec_id]
+                  and Path(path).stem != host_spec_id
+                  and is_spec_id(Path(path).stem)
+                  and spec_short_id(Path(path).stem) in touched_specs]
     if not spec_paths:
         return list(closed)
 
@@ -34728,11 +34734,7 @@ def specs_closed_in_range(
     # Work happened here when the range touches one of the spec's task files (record
     # or body). A record-only close touches the spec file alone and stays out. The
     # tracked task status is not consulted: it is persisted late and can read stale.
-    for path in changed_paths:
-        if Path(path).parent.as_posix() == tasks_dir:
-            sid = Path(path).stem.rsplit(".", 1)[0]
-            if sid in candidates:
-                closed.add(sid)
+    closed.update(candidates & touched_tasks)
     return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
 
 

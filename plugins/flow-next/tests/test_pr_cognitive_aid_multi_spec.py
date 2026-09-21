@@ -231,6 +231,16 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
 
+    def test_record_only_close_reads_no_objects(self):
+        sid = self.spec(17, "open")
+        self.task(sid, "done")
+        base = self.commit()
+        self.spec(17, "done")
+        self.commit()
+        with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
+            self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff"])
+
     def test_task_minted_in_range_counts_even_when_its_tracked_status_is_stale(self):
         # A hand-recorded close can leave the tracked task record at its minted
         # status; the task file appearing in the range is the evidence of work.
@@ -268,6 +278,7 @@ class ClosedRangeTests(unittest.TestCase):
         sid = self.spec(17, "open")
         base = self.commit()
         (self.flow / "specs" / f"{sid}.json").write_text("[]", encoding="utf-8")
+        self.task(sid, "done")
         self.commit()
         with self.assertRaisesRegex(ValueError, "Expected object"):
             flowctl.specs_closed_in_range(self.flow, base)

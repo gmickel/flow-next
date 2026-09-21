@@ -44,6 +44,11 @@ class NamedPullRequestContractTest(unittest.TestCase):
         for token in ("branch_name", "headRefName", "status: done", "work not finished"):
             self.assertIn(token, text)
 
+    def test_integration_selection_uses_forge_base_and_task_blobs(self):
+        text = self.read_contract()
+        for token in ("baseRefName", "status: done", "absent", "task blob", "base repository", "forge API"):
+            self.assertIn(token, text)
+
     def test_r5_repair_contract(self):
         text = self.section("Resolve conflicts, threads, then CI")
         for token in ("mode:autonomous", "update-branch", "--failed"):

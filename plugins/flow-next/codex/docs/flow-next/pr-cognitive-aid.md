@@ -61,7 +61,7 @@ uncovered requirements remain visible.
 Membership requires a spec newly done at HEAD and at least one of its task files changed in the range; the host is always included, while record-only sibling closes are excluded. Siblings whose recorded branch has a done spec at its merge base with HEAD are also excluded, including true merge commits; squash landings, deleted branches, and absent branch names remain eligible.
 The undeclared-requirements abort applies only to the host; sibling requirements remain visible as uncovered.
 Under several specs, an undeclared row tag appears only when its group cites a spec that declares requirements.
-Land matches a PR to a spec by branch name, so a several-spec PR is not landed by it and is merged by hand.
+Land selects specs by branch name; with no match, it selects specs done at the PR head but absent or not done at the PR base, with at least one task blob, using forge trees.
 The HTML lens fallback inputs read the host spec only.
 Two listed specs sharing a number within the same ID prefix cannot be qualified unambiguously.
 
@@ -176,11 +176,12 @@ a placeholder:
 | Tradeoffs | `changeWalkthrough.tradeoffs`. |
 | Open items | `changeWalkthrough.openItems`. |
 
-Scope uses one numbered, diff-fenced file tree per group. Each described file carries its
-one-line purpose and requirement IDs. Remaining files render in a counted
+Scope uses one numbered, diff-fenced file tree per group with files. Its summary
+renders as a neutralized paragraph between the bold title and fence, describing what to check here. Each described file carries its
+one-line purpose and requirement IDs. A row's own nonempty `rIds` are its displayed tags; otherwise tags inherit. Coverage still includes all group and row citations. Remaining files render in a counted
 line that distinguishes mechanical files from files not described; an empty
 summary never implies safe-to-skim status. A group with no described files
-shows its title and that count. One coverage line maps requirement IDs to the
+shows its title, summary and that count. One coverage line maps requirement IDs to the
 numbers of the groups that evidence them and names uncovered requirements; a
 requirement evidenced only by groups without files names those groups. A per-criterion
 table appears only when a declared requirement is unevidenced. With no declared
@@ -196,7 +197,7 @@ claim. Proof cells with no outcome are still valid, and absent proof cells
 omit the section entirely.
 
 The renderer makes one deterministic pass with no body line budget. Why keeps
-its authored line breaks; all four authored fields, group titles, coverage,
+its authored line breaks; all four authored fields, titles and summaries of groups with files, coverage,
 the applicable requirement table and every proof cell render in full.
 Each group shows at most 10 described canonical file rows in author order.
 Additional described rows join its count as “N more described files”, distinct

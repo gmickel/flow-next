@@ -19,10 +19,13 @@ Do not repair, merge again, or delete a branch on that replay.
 Read every `.flow/specs/*.json` blob at the full `headRefOid` from the PR's
 head repository, using GitHub's tree/contents API, never local spec state.
 Select every spec whose `branch_name` equals `headRefName`; several matches
-are legitimate. A closed spec has `status: done` and at least one
-`.flow/tasks/<spec-id>.*.json` blob in the same tree. If any matching spec is
-open, stop `BLOCKED`, reason `work not finished` naming every open match;
-change nothing. If none match, stop `NO_WORK`, reason `no matching spec`.
+are legitimate. If none match, select specs with `status: done` at the head, absent
+or not `done` in the PR's `baseRefName` tree, and with at least one task blob.
+Read that base tree from the base repository through the same forge API.
+A closed spec has `status: done` and at least one
+`.flow/tasks/<spec-id>.*.json` blob in the same tree. If any selected spec is
+open, stop `BLOCKED`, reason `work not finished` naming every open selection;
+change nothing. If the selected set is empty, stop `NO_WORK`, reason `no matching spec`.
 Missing or malformed blobs, incomplete tree reads, or API errors stop
 `NEEDS_HUMAN`; they are not evidence of no match. Repeat this head-bound
 selection after any head move. A merged replay reads its original head to

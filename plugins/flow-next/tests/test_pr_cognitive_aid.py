@@ -817,7 +817,7 @@ class MakePrIntegrationTests(unittest.TestCase):
             workflow.index("## Phase 2:"),
         )
         self.assertIn(
-            "This phase ends before PR creation", artifact_reference
+            "[create-and-finalize.md](create-and-finalize.md)", artifact_reference
         )
         self.assertNotIn("skill: flow-next-tracker-sync", artifact_reference)
         self.assertIn('PR_URL=""', finalize)

@@ -560,6 +560,8 @@ Format: `backend:model` where backend is a CLI name and model is backend-specifi
 below, without adding a host. It resolves the merge base of the ref and HEAD and
 reads local committed objects only; it never writes or fetches. Text prints one ID
 per line in set order; JSON returns `{"spec_ids": [...]}` in the same order.
+Candidates without a touched task file are filtered before per-spec object or
+branch-history reads, so a record-only close needs only the changed-path query.
 
 ### spec export-cognitive-aid
 
@@ -1347,12 +1349,14 @@ non-current states. `render` emits one deterministic Markdown briefing for a
 validated file or the supported current generation, regardless of diff size.
 Empty sections disappear; grouped file trees and proof-cell checklists carry
 the review content. One pass preserves the thesis's authored line breaks,
-all four authored fields, group titles in review order, coverage, the applicable
+all four authored fields, titles and summaries of groups with files in review order, coverage, the applicable
 requirement table and every proof cell. There is no body line budget. Each group
 shows at most 10 described canonical rows in author order; extra rows count as
 “N more described files”, separately from mechanical, generated and not-described
 files. Blank lines precede counts and coverage and separate counts from the next
-group title. With no declared requirements, coverage, the table and requirement
+group title. Each group summary is a neutralized paragraph below its bold title.
+A row's nonempty `rIds` override inherited display tags; coverage retains every citation.
+With no declared requirements, coverage, the table and requirement
 tags are omitted; declared but uncovered requirements remain named. See the
 [briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order
 and proof outcomes.

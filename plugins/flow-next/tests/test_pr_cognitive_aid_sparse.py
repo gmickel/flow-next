@@ -48,6 +48,19 @@ class SparseInputTests(unittest.TestCase):
             head_sha=HEAD_SHA, expected_diff_files=diff,
         )
 
+    def test_skill_skeleton_expands_and_validates_against_fixture_diff(self):
+        skill = Path(__file__).resolve().parents[1] / "skills/flow-next-make-pr/pr-cognitive-aid.md"
+        example = skill.read_text(encoding="utf-8").split("```json\n", 1)[1].split("```", 1)[0]
+        value = json.loads(example)
+        diff = artifact_diff_files(self.complete())
+        expanded = flowctl._expand_pr_cognitive_aid_input(value, diff)
+        validated = flowctl.validate_pr_cognitive_aid(expanded, expected_diff_files=diff)
+        self.assertEqual({source["kind"] for source in validated["sources"]},
+                         flowctl.PR_COGNITIVE_AID_SOURCE_KINDS)
+        rows = [row for group in validated["changeWalkthrough"]["groups"] for row in group["files"]]
+        self.assertEqual({row["path"] for row in rows}, set(diff))
+        self.assertIn("src/change_0.py", flowctl.render_pr_cognitive_aid_markdown(validated))
+
     def test_file_commands_share_expansion_and_complete_render_is_unchanged(self):
         complete = self.complete()
         sparse = copy.deepcopy(complete)
