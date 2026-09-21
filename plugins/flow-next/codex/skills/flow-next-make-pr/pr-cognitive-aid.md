@@ -18,10 +18,9 @@ repository:
   receipts, commits and `$MERGE_BASE..$HEAD_SHA`. Include every declared R-ID, even uncovered.
 - `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
   `userImpact` says what changes for a user or operator; `blastRadius` names who
-  or what is touched and why safe or risky; `tradeoffs` records rejected alternatives
-  reviewers would ask about; `openItems` records unfinished work.
-- Work claimed but not yet evidenced belongs in `openItems`.
-- Findings the spec requires to be recorded in the PR belong in Open items or Tradeoffs.
+  or what is touched, what to read first and what is unproven; `tradeoffs` records
+  rejected alternatives reviewers would ask about; `openItems` records unfinished work.
+- Unevidenced work belongs in `openItems`; required PR findings belong there or in Tradeoffs.
 - `proof[]`: sourced `label`, `value`, `sourceRefs`, optional `outcome`.
   Draw from task evidence and review receipts: `pass` only for a gate run green,
   `fail` for failure, `unverified` for inconclusive or never-run steps, explaining
@@ -34,8 +33,8 @@ repository:
   stale/malformed receipts cannot justify a pass.
 - Ordered `groups[]`: optional `problem`, optional `principle`, 1–7 `step`,
   optional `kept`, optional `verify`; author `ordinal`, `title`, `summary`, `sourceRefs`, `rIds`, `taskIds`.
-  `files` is required on every group even when it is `[]`.
-- Author rows only for paths worth describing from `diff_summary.files[]`, with
+  Group order is review order; `files` is required even when `[]`.
+- Describe files a reviewer must read from `diff_summary.files[]`; let the rest be counted. Use
   `path`, `summary`, and `attentionClass` unless a state/lockfile/mirror pattern
   supplies it. Explicit classes win; canonical means must read, mechanical and
   generated mean safe to skim. References inherit from groups unless supplied;
@@ -44,16 +43,15 @@ repository:
   values must validate. Flowctl-added empty-summary rows render in the counted
   “not described” line, not individual file rows. Never copy raw diff content.
 
-Validate/write accept sparse input, as do `render --file` and `html-input --file`. The persisted object
-remains complete. Correct validation errors together; never truncate values to evade validation or overwrite
-an existing generation.
+Validate/write, `render --file` and `html-input --file` accept sparse input; persisted objects remain complete.
+Correct validation errors together; never truncate values to evade validation or overwrite a generation.
 ```bash
 # Dry-run: validation only, no repository writes.
 "$FLOWCTL" pr-cognitive-aid validate --file "$AID_INPUT" --json
 # Real create/update: validate and atomically persist.
 "$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json
 ```
-Run only the matching command. Reused artifacts need neither.
+Run only the matching command; reused artifacts need neither.
 
 ## Render
 
@@ -62,8 +60,9 @@ PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" --base-sha "$MER
 # For a newly composed dry-run input, use instead:
 PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT") || PR_AID_MARKDOWN=""
 ```
-The renderer owns the seven-section briefing, omission, coverage and collapse. Do not merge export
-fields into its output or choose a size-based form. Invalid, stale or unsupported artifacts render nothing:
+The renderer keeps authored content, showing at most 10 described rows per group; extra rows are counted.
+A summary renders only with its row: nothing essential belongs only in row 11. There is no body budget
+or need for a render-preview loop. Never merge export fields into the output. Invalid, stale or unsupported artifacts render nothing:
 print one stderr note, set `PR_AID_CURRENT=false`, and use a labeled fallback with the export's goal, task
 summaries, recorded verification and open items; never rejected fields. On success set `PR_AID_CURRENT=true`;
 keep the immutable artifact local so it cannot move its own head. This phase ends before PR creation.

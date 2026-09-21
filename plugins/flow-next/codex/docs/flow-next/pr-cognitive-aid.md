@@ -154,13 +154,14 @@ a placeholder:
 | Open items | `changeWalkthrough.openItems`. |
 
 Scope uses one numbered, diff-fenced file tree per group. Each described file carries its
-one-line purpose and requirement IDs. Remaining files collapse to a counted
+one-line purpose and requirement IDs. Remaining files render in a counted
 line that distinguishes mechanical files from files not described; an empty
 summary never implies safe-to-skim status. A group with no described files
 shows its title and that count. One coverage line maps requirement IDs to the
 numbers of the groups that evidence them and names uncovered requirements; a
 requirement evidenced only by groups without files names those groups. A per-criterion
-table appears only when a requirement is unevidenced or undeclared. Requirement
+table appears only when a declared requirement is unevidenced. With no declared
+requirements, coverage, the table and requirement tags are omitted. Requirement
 sources in `sources[]` supply the declared set, including requirements cited
 by no group.
 
@@ -171,27 +172,14 @@ checkbox. Old artifacts therefore keep their evidence without gaining a pass
 claim. Proof cells with no outcome are still valid, and absent proof cells
 omit the section entirely.
 
-The renderer fits ordinary briefings within 40 lines, counting blank lines.
-Before collapsing anything, it reflows a multiline thesis if needed, unless
-that thesis plus its Why heading, two blank lines and identity comment already
-exceeds 40 lines. That exceptional thesis remains in full; other content is
-counted. Why and the coverage line never collapse.
-
-Collapse stops as soon as the body fits: proof cells without outcomes first,
-then pass cells, each from the end; described file rows from later groups
-before earlier groups; the requirement table; the whole scope; then lines
-beyond the first in tradeoffs, blast radius, user/operator change and open
-items; finally unverified cells, then fail cells, each from the end.
-In ordinary collapse, a step is applied only when it shortens the rendered
-body, including blank lines and counted summaries. Candidates accumulate
-until their counted form saves lines; otherwise the authored content stays.
-The 40-line bound takes precedence: if still over budget, a final pass uses
-one shared checkpoint across no-outcome, pass, unverified and fail proof cells,
-hiding only as many as needed into one line with exact counts per outcome.
-Proof counts distinguish each outcome. Counted lines and coverage have a
-preceding blank line. Group counts remain below their titles and any file
-tree, preserving that separation; the next group's title follows the count
-directly, without an additional blank line.
+The renderer makes one deterministic pass with no body line budget. Why keeps
+its authored line breaks; all four authored fields, group titles, coverage,
+the applicable requirement table and every proof cell render in full.
+Each group shows at most 10 described canonical file rows in author order.
+Additional described rows join its count as “N more described files”, distinct
+from mechanical, generated and not-described files. Schema caps bound the
+remaining content. Counted lines and coverage have a preceding blank line;
+a blank line also separates each count from the next group's title.
 Apostrophes and quotation marks render literally; markup-injection characters
 remain neutralized.
 

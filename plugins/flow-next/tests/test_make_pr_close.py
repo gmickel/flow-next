@@ -20,7 +20,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ROOT / "plugins/flow-next/scripts"
 WORKFLOW = ROOT / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
-sys.path.insert(0, str(ROOT / "plugins/flow-next/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 
 @unittest.skipIf(
@@ -31,9 +31,7 @@ sys.path.insert(0, str(ROOT / "plugins/flow-next/scripts"))
 )
 class MakePrCloseTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / ".flow/tmp"
-        scratch.mkdir(parents=True, exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(dir=scratch)
+        self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.repo = self.root / "repo"
@@ -133,6 +131,24 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
                 self.assertTrue(set(changed) <= {self.spec_rel, self.task_rel}, changed)
                 self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_already_closed_spec_keeps_branch_and_head(self):
+        spec_path = self.repo / self.spec_rel
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        spec.update(status="done", branch_name="original-branch")
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        self.git("add", self.spec_rel)
+        self.git("commit", "-qm", "Already closed")
+        before = self.git("rev-parse", "HEAD")
+        stored = spec_path.read_bytes()
+        # A close attempt fails, even if it would otherwise be idempotent.
+        result = self.execute(failure=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(spec_path.read_bytes(), stored)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        context = json.loads((self.root / "context.json").read_text(encoding="utf-8"))
+        self.assertFalse(context["spec_closed"])
 
     def test_r2_incomplete_task_opens_without_close(self):
         self.flow.save_task_runtime(self.task_id, {"status": "todo"})

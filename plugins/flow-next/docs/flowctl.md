@@ -1316,22 +1316,16 @@ overwrites an existing generation. `current` returns a labeled
 non-current states. `render` emits one deterministic Markdown briefing for a
 validated file or the supported current generation, regardless of diff size.
 Empty sections disappear; grouped file trees and proof-cell checklists carry
-the review content. To meet 40 lines (including blanks), collapse stops as soon
-as the body fits: no-outcome proof cells, pass cells, later groups' file rows,
-the requirement table, the whole scope, then authored lines beyond the first
-(tradeoffs, blast radius, user/operator change, open items), and finally
-unverified cells followed by fail cells. Proof cells collapse from the end.
-In ordinary collapse, a step is applied only when it shortens the rendered
-body, including blank lines and counted summaries; otherwise content stays.
-The 40-line bound takes precedence: a final pass shares one checkpoint across
-no-outcome, pass, unverified and fail proof cells, hiding only as many as needed
-into one line with exact counts per outcome. Group
-counts stay below titles and file trees, with a preceding blank line; the
-next group title follows directly. Why and coverage remain. Thesis
-reflow precedes all collapse; a thesis whose lines plus its four scaffolding
-lines exceed 40 stays complete, with other content counted. See the
-[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order,
-proof outcomes and collapse behavior.
+the review content. One pass preserves the thesis's authored line breaks,
+all four authored fields, group titles in review order, coverage, the applicable
+requirement table and every proof cell. There is no body line budget. Each group
+shows at most 10 described canonical rows in author order; extra rows count as
+“N more described files”, separately from mechanical, generated and not-described
+files. Blank lines precede counts and coverage and separate counts from the next
+group title. With no declared requirements, coverage, the table and requirement
+tags are omitted; declared but uncovered requirements remain named. See the
+[briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order
+and proof outcomes.
 
 `--diff-files` binds membership, Git state, and churn to a JSON map produced
 from the live diff. Validation rejects unsafe paths/URLs, ungrounded claims,

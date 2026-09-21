@@ -194,7 +194,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
 fi
 # fence:spec-close
 SPEC_CLOSED=0
-if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 ]]; then
+if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
   SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"
@@ -240,7 +240,7 @@ PHASE0_CONTEXT=$(jq -n --arg head "$HEAD_SHA" --arg branch "$(git -C "$REPO_ROOT
   '{head:$head, branch:$branch, commits_ahead:$commits_ahead, spec_closed:($spec_closed==1), chain_parent:$chain_parent, parent_pr:$parent_pr, parent_pr_state:$parent_pr_state}')
 ```
 
-Completed specs close on the head branch, staging only `modified_paths`, before Phase 1. Incomplete or
+Already-closed specs stay untouched. Otherwise completed specs close on the head branch before Phase 1. Incomplete or
 task-less specs have no close commit and still compose interactively. For `OPEN_COUNT > 0`,
 Ralph/autonomous hard-errors (exit 2). Dry-run and body-only updates never close. Under `--update` an
 existing OPEN PR is REQUIRED; closed/merged PRs do not prevent a create. Preserve `PHASE0_CONTEXT.head`.
