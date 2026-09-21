@@ -782,8 +782,9 @@ PY_BRIEFING
   # `--dry-run` short-circuit: SKILL.md must document it
   assert_grep "T10" "--dry-run" "$(cat "$SKILL_FILE")" "SKILL.md documents --dry-run flag"
 
-  # `gh pr create` reachable in workflow (Phase 4)
-  assert_grep "T10" "gh pr create" "$WF_TEXT" "workflow.md invokes 'gh pr create'"
+  # fn-252: workflow.md hands creation off to create-and-finalize.md; the
+  # `gh pr create` seam itself is asserted in that file below.
+  assert_grep "T10" "create-and-finalize.md" "$WF_TEXT" "workflow.md reaches create-and-finalize.md"
 
   # #277: PR-create seam — canonical create-and-finalize.md carries the
   # FLOW_PR_CREATE_CMD interposition point (default `gh pr create`) AND the
