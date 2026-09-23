@@ -71,10 +71,15 @@ _WIKI_CODE_OPEN_RE = re.compile(r"^\{code(?::([\w+#.-]+))?\}$")
 _WIKI_HEADING_RE = re.compile(r"^h([1-6])\.(?:[ \t]+(.*))?$")
 _WIKI_QUOTE_RE = re.compile(r"^bq\.(?:[ \t]+(.*))?$")
 _WIKI_LIST_RE = re.compile(r"^([*#]+)[ \t]+(.*)$")
+_WIKI_BLOCK_WORD_RE = re.compile(r"h[1-6]|bq")
+#: A link or monospace span inside a table cell keeps its own `|`.
+_WIKI_CELL_SPAN_RE = re.compile(r"\{\{(?:\\.|[^\\])+?\}\}|\[(?:\\.|[^\]\\\n])+\]")
 
 _WIKI_INLINE_RE = re.compile(
     r"(?P<comment><!--.*?-->)"
     r"|(?P<code>\{\{(?P<ctext>(?:\\.|[^\\])+?)\}\})"
+    r"|(?P<bbold>\{\*\}(?P<bbtext>(?:\\.|[^\\\n])+?)\{\*\})"
+    r"|(?P<bem>\{_\}(?P<betext>(?:\\.|[^\\\n])+?)\{_\})"
     r"|(?P<esc>\\[^\sA-Za-z0-9])"
     r"|(?P<link>\[(?P<ltext>(?:\\.|[^\]|\\\n])+)\|(?P<lurl>[^\]\s|]+)\])"
     r"|(?P<blink>\[(?P<burl>https?://[^\]\s|]+)\])"
@@ -100,7 +105,9 @@ def _escape_char(text: str, idx: int, *, line_start: bool) -> str:
         return "\\?"  # ??citation??
     if ch == "#" and idx == 0 and line_start:
         return "\\#"  # numbered list
-    if ch == "(" and _EMOTICON_RE.match(text, idx):
+    if ch == "." and line_start and _WIKI_BLOCK_WORD_RE.fullmatch(text[:idx]):
+        return "\\."  # literal `h1.` / `bq.` prose, not a block
+    if ch == "("and _EMOTICON_RE.match(text, idx):
         return "\\("  # (y) (x) (i) ... emoticons
     return ch
 
@@ -137,16 +144,17 @@ def _encode_inline(text: str, *, line_start: bool = False) -> str:
         elif kind == "link":
             out.append("[" + _encode_inline(m.group("ltext")) + "|"
                        + m.group("lurl") + "]")
-        elif kind == "bold":
-            inner = m.group("btext")
-            if inner is None:
-                inner = m.group("btext2")
-            out.append("*" + _encode_inline(inner) + "*")
-        elif kind == "em":
-            inner = m.group("etext")
-            if inner is None:
-                inner = m.group("etext2")
-            out.append("_" + _encode_inline(inner) + "_")
+        elif kind in ("bold", "em"):
+            if kind == "bold":
+                inner, mark = m.group("btext") or m.group("btext2"), "*"
+            else:
+                inner, mark = m.group("etext") or m.group("etext2"), "_"
+            # Wiki emphasis needs a non-word boundary on both sides; an
+            # intraword span takes the braced `{*}...{*}` form instead.
+            if (text[m.start() - 1:m.start()].isalnum()
+                    or text[m.end():m.end() + 1].isalnum()):
+                mark = "{" + mark + "}"
+            out.append(mark + _encode_inline(inner) + mark)
         pos = m.end()
 
 
@@ -173,6 +181,16 @@ def _split_cells(line: str) -> list[str]:
         i += 1
     cells.append("".join(cur).strip())
     return cells
+
+
+def _shield_closer(line: str, closer: str, step: int) -> str:
+    """Add (+1) or remove (-1) one backslash before each `closer` inside a
+    code block, so literal `{code}` / `{noformat}` content cannot end the
+    block early and still decodes to the original text."""
+    pattern = re.compile(r"(\\*)" + re.escape(closer))
+    if step > 0:
+        return pattern.sub(lambda m: m.group(1) + "\\" + closer, line)
+    return pattern.sub(lambda m: m.group(1)[:-1] + closer, line)
 
 
 def _indent_width(ws: str) -> int:
@@ -213,7 +231,7 @@ def markdown_to_wiki(text: str) -> str:
                         and len(body) >= len(marker)):
                     i += 1
                     break
-                out.append(lines[i])
+                out.append(_shield_closer(lines[i], closer, +1))
                 i += 1
             out.append(closer)
             stack = []
@@ -288,8 +306,6 @@ def _md_literal(ch: str, *, prev: str, nxt: str, at_start: bool,
         return "\\" + ch
     if at_start and ch == ">":
         return "\\>"
-    if ch == "." and prev.isdigit():
-        return "\\."  # `1\.` must not start an ordered list
     return ch
 
 
@@ -329,7 +345,10 @@ def _decode_inline(text: str, *, line_start: bool = False,
             out.append(_backtick_span(_unescape(m.group("ctext"))))
         elif kind == "esc":
             ch = m.group(0)[1]
-            if ch in _ESCAPABLE:
+            if ch == "." and line_start and re.fullmatch(
+                    r"[ \t]*\d+", "".join(out)):
+                out.append("\\.")  # `1\.` must not start an ordered list
+            elif ch in _ESCAPABLE:
                 prev = out[-1][-1:] if out and out[-1] else ""
                 nxt = text[m.end():m.end() + 1]
                 out.append(_md_literal(ch, prev=prev, nxt=nxt,
@@ -343,6 +362,12 @@ def _decode_inline(text: str, *, line_start: bool = False,
                        + "](" + m.group("lurl") + ")")
         elif kind == "blink":
             out.append("<" + m.group("burl") + ">")
+        elif kind == "bbold":
+            out.append("**" + _decode_inline(m.group("bbtext"),
+                                             in_table=in_table) + "**")
+        elif kind == "bem":
+            out.append("*" + _decode_inline(m.group("betext"),
+                                            in_table=in_table) + "*")
         elif kind == "bold":
             out.append("**" + _decode_inline(m.group("btext"),
                                              in_table=in_table) + "**")
@@ -365,6 +390,11 @@ def _split_wiki_cells(line: str, sep: str) -> list[str]:
         if body[i] == "\\" and i + 1 < len(body):
             cur.append(body[i:i + 2])
             i += 2
+            continue
+        span = _WIKI_CELL_SPAN_RE.match(body, i)
+        if span:
+            cur.append(span.group(0))
+            i = span.end()
             continue
         if body.startswith(sep, i):
             cells.append("".join(cur).strip())
@@ -408,6 +438,7 @@ def wiki_to_markdown(text: str) -> str:
                 body.append(lines[j])
                 j += 1
             if j < len(lines):
+                body = [_shield_closer(ln, closer, -1) for ln in body]
                 runs = [len(r) for ln in body
                         for r in re.findall(r"^[ \t]*(`{3,})", ln)]
                 fence = "`" * max([3] + [r + 1 for r in runs])

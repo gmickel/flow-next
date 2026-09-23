@@ -63,11 +63,16 @@ conversion. The byte-exact round trip of the stored string does not show
 that the body renders correctly. Version 3 would need ADF, and Data
 Center has no ADF.
 
-An issue linked before this conversion still holds raw Markdown. When its
-stored body still equals the recorded tracker base, push and reconcile
-convert it in place. Pull refuses it with a `jira_body_unconverted` conflict
-until a push or reconcile has run. A body edited since the base takes the
-normal edit or conflict path.
+An issue linked before this conversion still holds raw Markdown, and its
+decoded read can differ from the recorded base (a `#` heading reads as a
+list). Before the body-merge pre-reduction, compare the stored body
+(`raw.fields.description` in the read result, through `trackerBodyForMerge`)
+with `mergeBaseTracker`. If they are equal, the tracker side is unchanged:
+use `mergeBaseTracker` as the tracker-side body and as the reconcile source
+body. Push and reconcile then convert the body in place. Reconcile refuses a
+source body taken from the decoded read, and pull refuses the issue, both
+with a `jira_body_unconverted` conflict, until a push or reconcile has run. A
+body edited since the base takes the normal edit or conflict path.
 
 ## Status and relations
 

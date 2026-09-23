@@ -527,13 +527,22 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         }
 
     # --- push ---
-    # An unchanged pre-fn-253 Jira body counts as the recorded base: the
-    # caller may have merged against either that base or its decoded form.
-    if (expected_tracker_body is not None
+    # An unchanged pre-fn-253 Jira body IS the recorded base. A merge made
+    # against its wiki decode saw a remote edit that never happened (a `#`
+    # heading reads as a list), so only the base is an acceptable source.
+    if (legacy and expected_tracker_body is not None
+            and trackerBodyForMerge(expected_tracker_body) != base_tracker):
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            "jira body predates wiki conversion and is unchanged since the "
+            "last push; merge against the recorded mergeBaseTracker, not "
+            "the decoded read, and re-run reconcile",
+            subtype="jira_body_unconverted",
+            details={"specId": spec_id, "recoverable": True},
+        )
+    if (expected_tracker_body is not None and not legacy
             and trackerBodyForMerge(current_body)
-            != trackerBodyForMerge(expected_tracker_body)
-            and not (legacy and trackerBodyForMerge(expected_tracker_body)
-                     == base_tracker)):
+            != trackerBodyForMerge(expected_tracker_body)):
         return TrackerError(
             ErrorClass.CONFLICT,
             "tracker body changed after the reconcile read; refusing to "

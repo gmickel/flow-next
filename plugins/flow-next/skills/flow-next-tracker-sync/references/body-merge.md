@@ -96,7 +96,9 @@ the only place a deterministic step precedes the merge — and it exists to ensu
 the agent **only ever judges genuine both-sides-diverged content**, which is what
 keeps the merge from over-surfacing false conflicts (the spec's named failure mode).
 
-Per side, compare against the base **in that side's form**:
+Per side, compare against the base **in that side's form**. On Jira, run the
+stored-body check in [jira.md](jira.md) § Body fidelity first: an issue linked
+before wiki conversion is unchanged when its stored body equals the base.
 
 | Case | Condition | Action |
 |---|---|---|

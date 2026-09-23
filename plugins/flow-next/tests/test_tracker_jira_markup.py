@@ -185,6 +185,19 @@ CONSTRUCTS = [
      "<!-- flow-next:chart-rollup -->\n- **D1** _open_\n<!-- /flow-next:chart-rollup -->",
      "<!-- flow-next:chart-rollup -->\n* *D1* _open_\n<!-- /flow-next:chart-rollup -->",
      "<!-- flow-next:chart-rollup -->\n- **D1** *open*\n<!-- /flow-next:chart-rollup -->"),
+    ("link in a table cell", "| A | B |\n|---|---|\n| x | [d](https://e.x) |",
+     "||A||B||\n|x|[d|https://e.x]|",
+     "| A | B |\n| --- | --- |\n| x | [d](https://e.x) |"),
+    ("fence holding its terminator",
+     "```text\n{noformat}\n# kept\n```\n```python\nx = '{code}'\n```",
+     "{noformat}\n\\{noformat}\n# kept\n{noformat}\n"
+     "{code:python}\nx = '\\{code}'\n{code}",
+     "```\n{noformat}\n# kept\n```\n```python\nx = '{code}'\n```"),
+    ("literal block prefixes", "h1. literal\nbq. literal\n1\\. literal",
+     "h1\\. literal\nbq\\. literal\n1\\. literal",
+     "h1. literal\nbq. literal\n1\\. literal"),
+    ("intraword emphasis", "**bold**tail pre*it*post",
+     "{*}bold{*}tail pre{_}it{_}post", "**bold**tail pre*it*post"),
 ]
 
 
@@ -397,20 +410,29 @@ class LegacyBody(unittest.TestCase):
                 self.assertNotIsInstance(again, TrackerError, again)
 
     def test_reconcile_converts_an_unchanged_legacy_body(self) -> None:
-        for source in ("recorded base", "decoded read"):
-            with self.subTest(source=source), \
-                    tempfile.TemporaryDirectory() as tmp:
-                flow, fake, base = self._legacy(tmp)
-                seen = (base if source == "recorded base"
-                        else JM.wiki_to_markdown(LEGACY_MD))
-                out = SB.sync_body(flow, "fn-1-demo",
-                                   flow_file_body=LEGACY_MD,
-                                   tracker_body=LEGACY_MD,
-                                   expected_tracker_body=seen,
-                                   direction="push", execute=fake)
-                self.assertEqual(out["kind"], "pushed")
-                self.assertEqual(fake.description,
-                                 JM.markdown_to_wiki(LEGACY_MD))
+        with tempfile.TemporaryDirectory() as tmp:
+            flow, fake, base = self._legacy(tmp)
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=LEGACY_MD,
+                               tracker_body=LEGACY_MD,
+                               expected_tracker_body=base,
+                               direction="push", execute=fake)
+            self.assertEqual(out["kind"], "pushed")
+            self.assertEqual(fake.description, JM.markdown_to_wiki(LEGACY_MD))
+
+    def test_reconcile_refuses_a_merge_against_the_decoded_read(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow, fake, base = self._legacy(tmp)
+            decoded = W.dispatch("read", jr_cfg(), locator=LOC,
+                                 execute=fake)["body"]
+            self.assertNotEqual(SB.trackerBodyForMerge(decoded), base)
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=decoded,
+                               tracker_body=decoded,
+                               expected_tracker_body=decoded,
+                               direction="push", execute=fake)
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.subtype, "jira_body_unconverted")
+            self.assertEqual(fake.description, LEGACY_MD)
+            self.assertEqual(saved_tracker(flow)["mergeBaseTracker"], base)
 
     def test_edited_legacy_body_takes_the_normal_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
