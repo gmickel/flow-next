@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-253-jira-bodies-render-as-written-markdown",
   "spec_path": ".flow/tasks/fn-253-jira-bodies-render-as-written-markdown.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Jira bodies render as written: Markdown to wiki markup on the v2 wire",
   "updated_at": "2026-09-23T14:19:33.629940Z"
 }
