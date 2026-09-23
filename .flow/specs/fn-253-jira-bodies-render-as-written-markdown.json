@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-253-jira-bodies-render-as-written-markdown",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-09-23T14:13:10.443147Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-253-jira-bodies-render-as-written-markdown",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-253-jira-bodies-render-as-written-markdown.md",
+  "status": "open",
+  "title": "Jira bodies render as written: Markdown to wiki markup on the v2 wire",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-23T14:24:48.124706Z"
+}

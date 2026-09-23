@@ -6,6 +6,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+- **Jira issues now render the way the spec reads.** A Jira REST v2 text field holds wiki markup and never interprets Markdown, so every spec pushed through tracker-sync showed `#` headings as numbered lists and `**bold**` as a stray asterisk, while the sync reported success. flowctl now converts issue and comment bodies to wiki markup before every write and decodes them back to Markdown once on read, so merge bases, the echo fence, and comment dedup keep comparing Markdown. Correct display needs the Wiki Style Renderer on the description and comment fields; the Default Text Renderer shows the markup literally. An issue pushed before this change is converted by its next push or reconcile while its body is unchanged since the last sync; a pull refuses it with a `jira_body_unconverted` conflict until then. Thanks to @flecamos for the report and the diagnosis in #465.
+
 ## [flow-next 6.0.0] - 2026-09-21
 
 A pull request from flow-next now reads like a briefing for the person reviewing

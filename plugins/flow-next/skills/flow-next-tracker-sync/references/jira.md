@@ -8,8 +8,8 @@ Skill prose never constructs Jira requests.
 
 | Shape | Authentication | API version | Body form |
 |---|---|---|---|
-| Cloud | email plus API token | 2 by default | plain string/renderer form normalized to Markdown |
-| Data Center/Server | bearer PAT | 2 by default | plain string/renderer form normalized to Markdown |
+| Cloud | email plus API token | 2 by default | wiki markup, converted from and to Markdown |
+| Data Center/Server | bearer PAT | 2 by default | wiki markup, converted from and to Markdown |
 
 The resolved destination stores base URL, project key, API version,
 authentication scheme, issue type, status ids, and capabilities. Custom-domain
@@ -19,7 +19,8 @@ re-races credentials to change deployment shape.
 - durable issue identity: Jira numeric/string id;
 - display identity: `KEY-N`;
 - project keys accept upper-case letters, digits, and underscore;
-- issue and comment bodies normalize to Markdown;
+- issue and comment bodies are converted to wiki markup on write and
+  decoded back to Markdown on read;
 - comment responses do not expose parent issue id, so response-side parent
   identity is unavailable.
 
@@ -42,9 +43,31 @@ search. Pagination is hidden by the adapter.
 
 ## Body fidelity
 
-Resolution and migration converge on version 2 for both deployment shapes
-because plain string bodies round-trip byte-exact in the measured shape.
-ADF is therefore not selected as the resolved body format.
+A version 2 text field holds Jira wiki markup and never interprets Markdown.
+Flowctl converts every issue and comment body from Markdown to wiki markup
+before the write, and decodes the stored wiki markup back to Markdown once,
+where a read extracts it. Merge bases, the echo fence, and comment dedup all
+compare the decoded Markdown. Decoding yields stable canonical Markdown, not
+the original spelling. Constructs outside the supported subset (headings,
+bold, italic, inline code, links, fenced code, simple pipe tables,
+blockquotes, nested lists) stay literal text, and wiki fragments added in
+Jira decode unchanged. Sync markers pass through verbatim and stay visible in
+Jira, because wiki markup has no comment syntax.
+
+Correct display requires the Wiki Style Renderer on the description and
+comment fields. The Default Text Renderer shows the markup literally.
+Flowctl does not detect the renderer.
+
+Version 2 stays the resolved version for both deployment shapes, with this
+conversion. The byte-exact round trip of the stored string does not show
+that the body renders correctly. Version 3 would need ADF, and Data
+Center has no ADF.
+
+An issue linked before this conversion still holds raw Markdown. When its
+stored body still equals the recorded tracker base, push and reconcile
+convert it in place. Pull refuses it with a `jira_body_unconverted` conflict
+until a push or reconcile has run. A body edited since the base takes the
+normal edit or conflict path.
 
 ## Status and relations
 

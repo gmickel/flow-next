@@ -118,6 +118,7 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str,
 def create_jira(config: dict, execute: Execute, *, title: str, body: str
                 ) -> Result:
     from ..wire import _jira, _jira_base, _jira_issue_key  # noqa: PLC0415
+    from ..wire.jira import from_wire, to_wire  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
         return dest
@@ -130,11 +131,13 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.UNRESOLVED,
                             "jira destination missing projectId/issueTypeId",
                             subtype="destination")
-    # fn-140 R16 intentionally pins Jira Cloud and DC body operations to v2:
-    # resolved_cache migrates perTracker apiVersion 3 -> 2 and destination
-    # resolution emits 2. This avoids an ADF boundary in the deterministic
-    # verb surface and gives byte-identical plain-string round trips.
-    #
+    # fn-140 R16 pins Jira Cloud and DC body operations to v2 (resolved_cache
+    # migrates perTracker apiVersion 3 -> 2). A v2 text field is wiki markup,
+    # so the Markdown body is converted before the wire (fn-253).
+    wire_body = to_wire(body)
+    if isinstance(wire_body, TrackerError):
+        return wire_body
+
     # Jira rejects fields omitted from the selected issue type's CREATE
     # screen. Include Description by default, but omit it when createmeta
     # positively reports a non-empty field map without `description`.
@@ -165,7 +168,7 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
         "summary": title,
     }
     if description_settable:
-        fields["description"] = body
+        fields["description"] = wire_body
     raw = _jira(execute, "lifecycle-create", "POST",
                 f"{base}/rest/api/2/issue",
                 body={"fields": fields})
@@ -185,10 +188,11 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
     out = {"id": str(raw["id"]), "identifier": key,
            "url": f"{base}/browse/{key}",
            # The paired-base seed must describe what CREATE actually wrote,
-           # not what the caller asked to write. When Description is absent
-           # from the create screen, the local body remains a pending change
-           # for the following sync-body push.
-           "bodyWritten": body if description_settable else ""}
+           # not what the caller asked to write, in the decoded form every
+           # read returns. When Description is absent from the create
+           # screen, the local body remains a pending change for the
+           # following sync-body push.
+           "bodyWritten": from_wire(wire_body) if description_settable else ""}
     if not description_settable:
         out["seedFlowBody"] = ""
         out["degraded"] = {

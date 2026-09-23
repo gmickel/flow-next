@@ -74,7 +74,7 @@
     },
     {
       "path": "flowctl_tracker/lifecycle/providers.py",
-      "sha256": "e995c990776fff5c52b5b74d2807726f325365adb04aab80868d874dac166007"
+      "sha256": "57e71e5f9c914b0f1f88b9c4d944e9a3cea7ed3fbfe855f86dc21c57e4e1af95"
     },
     {
       "path": "flowctl_tracker/lifecycle/verbs.py",
@@ -94,7 +94,11 @@
     },
     {
       "path": "flowctl_tracker/providers/jira.py",
-      "sha256": "09c635435b44c3ea2473c14f6fe47c061c77105b7f1b64f3e7bd355425a0bcd5"
+      "sha256": "ae0adeca2c0817ca616d4cb1ceffcba2bc597c484d9c05c4c5502e2641747b95"
+    },
+    {
+      "path": "flowctl_tracker/providers/jira_markup.py",
+      "sha256": "6678923973e5ab2890284a08fd07160deb92bf92def8e54bad9b5880116adaaf"
     },
     {
       "path": "flowctl_tracker/providers/linear.py",
@@ -154,7 +158,7 @@
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
-      "sha256": "28900aa1db725bebd4bb502c1ef2eb0d57b3227b85cdf1459bbfe27e3237b1b2"
+      "sha256": "433c56f24be77a6cdb941f96e628acb9ff9568604b21ea36c7e2eaf8267e4294"
     },
     {
       "path": "flowctl_tracker/types.py",
@@ -174,7 +178,7 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "99855116e6d5b2ff85a2913a8b11ce51287376f8c1246d2ec71767cb712efcbd"
+      "sha256": "ed4a302ae810a998214526f272a96050d87249e2d98718c3dd6adb8e2d78fbcf"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",

@@ -121,8 +121,8 @@ def _carry_deps_forward(outgoing: str, current: str) -> str:
     return f"{base}\n\n{region}\n"
 
 
-def _raw_body(provider: str, parent: dict) -> str:
-    """Extract issue body from a raw parent_read object (provider-shaped)."""
+def _wire_body(provider: str, parent: dict) -> str:
+    """Extract the stored issue body from a raw parent_read object."""
     if provider == "github":
         body = parent.get("body")
     elif provider == "jira":
@@ -134,6 +134,26 @@ def _raw_body(provider: str, parent: dict) -> str:
     if body is None:
         return ""
     return body if isinstance(body, str) else str(body)
+
+
+def _read_body(provider: str, wire_body: str) -> str:
+    """The one read-side decode: Jira stores wiki markup (fn-253)."""
+    if provider == "jira":
+        from ..wire.jira import from_wire  # noqa: PLC0415
+        return from_wire(wire_body)
+    return wire_body
+
+
+def _legacy_unconverted(provider: str, tracker: dict,
+                        wire_body: Optional[str]) -> bool:
+    """A Jira body pushed before fn-253 still holds raw Markdown and its
+    recorded tracker base is that raw Markdown. Stored/base equality under
+    the existing normalization proves nobody edited it since; decoding it as
+    wiki markup would invent a remote edit that never happened."""
+    base = tracker.get("mergeBaseTracker")
+    return (provider == "jira" and wire_body is not None
+            and _has_paired_base(tracker)
+            and trackerBodyForMerge(wire_body) == base)
 
 
 def _raw_title(provider: str, parent: dict) -> str:
@@ -398,6 +418,9 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     from ..wire import parent_read  # noqa: PLC0415
     ex = bound_executor(config, execute)
     current_title = ""
+    # The stored (pre-decode) body, kept only to recognize a Jira body
+    # written before fn-253; every comparison below uses the decoded body.
+    wire_body: Optional[str] = None
 
     # Pull + caller-supplied reader: run the wire read HERE, inside the
     # claimed transaction and against the transaction's own locator. The
@@ -416,13 +439,19 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             current_body = raw
         else:
             current_body = str(raw)
+        raw_issue = read_out.get("raw") if isinstance(read_out, dict) else None
+        if provider == "jira" and isinstance(raw_issue, dict):
+            wire_body = _wire_body(provider, raw_issue)
     else:
         parent = parent_read(provider, config, locator, ex,
                              op="sync-body-parent-read")
         if isinstance(parent, TrackerError):
             return parent
-        current_body = _raw_body(provider, parent)
+        wire_body = _wire_body(provider, parent)
+        current_body = _read_body(provider, wire_body)
         current_title = _raw_title(provider, parent)
+    legacy = _legacy_unconverted(provider, tracker, wire_body)
+    base_tracker = tracker.get("mergeBaseTracker")
 
     malformed = _deps_region_error(current_body, label="tracker body")
     if malformed is not None:
@@ -439,6 +468,17 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             return malformed
 
     if direction == "pull":
+        if legacy and trackerBodyForMerge(current_body) != base_tracker:
+            # Adopting the decoded form as the new base would erase the only
+            # evidence that the body is unchanged since the last push.
+            return TrackerError(
+                ErrorClass.CONFLICT,
+                "jira body predates wiki conversion and is unchanged since "
+                "the last push; run push or reconcile first so it is "
+                "converted before a pull adopts it",
+                subtype="jira_body_unconverted",
+                details={"specId": spec_id, "recoverable": True},
+            )
         if (expected_tracker_body is not None
                 and trackerBodyForMerge(current_body)
                 != trackerBodyForMerge(expected_tracker_body)):
@@ -487,9 +527,13 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         }
 
     # --- push ---
+    # An unchanged pre-fn-253 Jira body counts as the recorded base: the
+    # caller may have merged against either that base or its decoded form.
     if (expected_tracker_body is not None
             and trackerBodyForMerge(current_body)
-            != trackerBodyForMerge(expected_tracker_body)):
+            != trackerBodyForMerge(expected_tracker_body)
+            and not (legacy and trackerBodyForMerge(expected_tracker_body)
+                     == base_tracker)):
         return TrackerError(
             ErrorClass.CONFLICT,
             "tracker body changed after the reconcile read; refusing to "
@@ -529,6 +573,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     #     like divergence. An explicitly supplied --tracker-body-file is a
     #     newly APPROVED reconcile result and must never be suppressed by it.
     has_base = _has_paired_base(tracker)
+    tracker_unchanged = (
+        legacy or trackerBodyForMerge(current_body) == base_tracker)
     matches_current = (
         trackerBodyForMerge(outgoing) == trackerBodyForMerge(current_body))
     title_matches = desired_title is None or current_title == desired_title
@@ -536,8 +582,18 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         tracker_body is None
         and has_base
         and flow_file_body == tracker.get("mergeBaseFlow")
-        and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
-    if title_matches and (matches_current or echo_fence):
+        and tracker_unchanged)
+    # A legacy body is rewritten whenever conversion changes what the wire
+    # holds - no-op suppression would otherwise keep raw Markdown forever.
+    converts = False
+    if legacy:
+        from ..wire.jira import to_wire  # noqa: PLC0415
+        outgoing_wire = to_wire(outgoing)
+        if isinstance(outgoing_wire, TrackerError):
+            return outgoing_wire
+        converts = (trackerBodyForMerge(outgoing_wire)
+                    != trackerBodyForMerge(wire_body))
+    if title_matches and (matches_current or echo_fence) and not converts:
         # No tracker write beyond the parent read. But the FLOW half may have
         # moved: a base whose mergeBaseFlow no longer equals the local body
         # must be re-committed (no mutation) or every later flow-side diff
@@ -545,7 +601,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         flow_unchanged = (
             has_base
             and flow_file_body == tracker.get("mergeBaseFlow")
-            and trackerBodyForMerge(current_body) == tracker.get("mergeBaseTracker"))
+            and tracker_unchanged)
         if flow_unchanged:
             if write_receipt:
                 rerr = write_sync_receipt(
