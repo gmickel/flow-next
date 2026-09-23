@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-23T22:33:45.185178Z",
+  "depends_on": [],
+  "id": "fn-254-tracker-first-mint-links-the-spec-in.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-254-tracker-first-mint-links-the-spec-in",
+  "spec_path": ".flow/tasks/fn-254-tracker-first-mint-links-the-spec-in.1.md",
+  "status": "todo",
+  "title": "Implement Tracker-first mint links the spec in the same call",
+  "updated_at": "2026-09-23T22:33:45.185178Z"
+}

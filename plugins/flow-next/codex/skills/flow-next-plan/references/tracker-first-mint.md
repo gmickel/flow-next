@@ -15,17 +15,15 @@ flow-first post-check in steps.md, silently.
 Run inside the same Step 5 creation block, using the SAME `$PLAN_FILE` literal:
 
 ```bash
-# Named existing issue in the request → mint from that key, THEN attach + seed:
-#   $FLOWCTL spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "<Short title>" --plan-file "$PLAN_FILE" --json
-#   Minting stores the identifier but NOT the durable tracker.id, so this
-#   branch MUST also run the fetch/attach/seed ceremony (tracker-sync
-#   steps.md Phase 2b). Skipping it leaves the spec effectively unlinked and
-#   a later touchpoint creates a SECOND remote issue instead of linking.
-# Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
+# Named existing issue in the request → read it first for {id, identifier, url}
+#   ($FLOWCTL tracker wire read), then mint linked and seed:
+#   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "<Short title>" --plan-file "$PLAN_FILE" --json
+#   then seed the merge base from the issue body (tracker-sync steps.md §2 Identity and linking).
+# Fresh idea → create-first first (tracker-sync steps.md §2), then mint linked and seed:
 #   skill: flow-next-tracker-sync (operation: create-first, title: "<Short title>", body: "<seed body>")
 #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first
-#   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "<Short title>" --plan-file "$PLAN_FILE" --json
-#   then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
+#   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "<Short title>" --plan-file "$PLAN_FILE" --json
+#   then seed the merge base, back-reference, and receipt per the §2 receipt / retry contract
 # Network cost (honest, conditional): when tracker.perEvent.plan is already active,
 # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
 # bridge-active repo can have every lifecycle event disabled), tracker-first adds an

@@ -20,17 +20,14 @@ SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$WORK_CFG" 2>/dev/null)
 BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
-  # Named issue -> mint from its key, THEN attach + seed exactly like the fresh
-  # idea route: minting stores tracker.identifier but NOT the durable tracker.id,
-  # so without the Phase 2b fetch/attach/seed ceremony an enabled
-  # work.firstClaim (or any later touchpoint) treats the spec as unlinked and
-  # creates a SECOND remote issue instead of linking the named one.
-  # Fresh idea -> tracker-sync `create-first`
-  # (tracker-sync steps.md Phase 2d) for {id,identifier,url}, then mint + attach + seed.
+  # Named issue -> read it first ($FLOWCTL tracker wire read) for {id,identifier,url}.
+  # Fresh idea -> tracker-sync `create-first` (tracker-sync steps.md §2) for
+  # {id,identifier,url}. Either way, mint linked, then seed the merge base per
+  # tracker-sync steps.md §2 Identity and linking.
   # A noop / no-transport create-first falls through SILENTLY to flow-first -
   # via the unconditional post-check below, NOT an `else` arm (on a noop
   # SPEC_OUTPUT is unset inside THIS branch, which no `else` can reach).
-  #   SPEC_OUTPUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "<title>" --json)
+  #   SPEC_OUTPUT=$($FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "<title>" --json)
   :
 fi
 

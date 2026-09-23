@@ -89,6 +89,8 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
             branch=kw.get("branch"),
             tracker_first=kw.get("tracker_first", False),
             tracker_identifier=kw.get("tracker_identifier"),
+            tracker_id=kw.get("tracker_id"),
+            tracker_url=kw.get("tracker_url"),
         )
 
     def _spec_json(self, spec_id: str) -> dict:
@@ -111,6 +113,10 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
         data = self._spec_json("wor-17-fix-login")
         self.assertEqual(data["tracker"]["identifier"], "WOR-17")
         self.assertEqual(data["branch_name"], "wor-17-fix-login")
+        # fn-254 R5: without --tracker-id the mint stays identifier-only.
+        self.assertIsNone(data["tracker"]["id"])
+        self.assertIsNone(data["tracker"]["url"])
+        self.assertNotIn("linkState", data["tracker"])
 
     def test_tracker_first_task_id_uses_unchanged_generator(self) -> None:
         self._create("Fix login", tracker_first=True, tracker_identifier="WOR-17")
@@ -192,6 +198,123 @@ class TrackerIdGeneratorTestCase(unittest.TestCase):
             branch="custom-branch",
         )
         self.assertEqual(res["branch_name"], "custom-branch")
+
+    # --- linked tracker-first mint (fn-254) -----------------------------------
+
+    def _spec_files(self) -> list:
+        return sorted(p.name for p in (self.flow_dir / "specs").iterdir())
+
+    def _create_error(self, title: str, **kw) -> str:
+        """Run a create expected to refuse; return its JSON error message."""
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit):
+            with redirect_stdout(buf):
+                self.flowctl.cmd_spec_create(argparse.Namespace(
+                    json=True, title=title, branch=None,
+                    tracker_first=kw.get("tracker_first", False),
+                    tracker_identifier=kw.get("tracker_identifier"),
+                    tracker_id=kw.get("tracker_id"),
+                    tracker_url=kw.get("tracker_url"),
+                ))
+        return json.loads(buf.getvalue())["error"]
+
+    def test_linked_mint_publishes_linked_and_skips_remote_create(self) -> None:
+        self._create(
+            "Fix login", tracker_first=True, tracker_identifier="WOR-17",
+            tracker_id="uuid-17", tracker_url="https://linear.app/x/WOR-17",
+        )
+        tracker = self._spec_json("wor-17-fix-login")["tracker"]
+        self.assertEqual(tracker["id"], "uuid-17")
+        self.assertEqual(tracker["identifier"], "WOR-17")
+        self.assertEqual(tracker["url"], "https://linear.app/x/WOR-17")
+        self.assertEqual(tracker["linkState"], "linked")
+
+        # R1 regression (#464): the real linkage decision adopts the minted
+        # link; the transport is never called, so no second issue is created.
+        from flowctl_tracker.facade import steps as FS
+
+        def execute(request):
+            raise AssertionError(f"unexpected remote call {request.op!r}")
+
+        completed: list = []
+        out = FS.create_if_unlinked(
+            self.flow_dir, "wor-17-fix-login", title="Fix login", body="b",
+            flow_body="b", config={"tracker": {"type": "linear"}},
+            event="test", execute=execute, completed=completed, statuses=[],
+        )
+        self.assertEqual(out["kind"], "already_linked")
+        self.assertEqual(out["linkState"], "linked")
+        self.assertEqual(completed, [])
+
+    def test_linked_mint_argument_errors_write_nothing(self) -> None:
+        cases = {
+            "id without tracker-first": dict(tracker_id="uuid-1"),
+            "url without tracker-first": dict(tracker_url="https://x/1"),
+            "url without id": dict(
+                tracker_first=True, tracker_identifier="WOR-1",
+                tracker_url="https://x/1"),
+            "empty id": dict(
+                tracker_first=True, tracker_identifier="WOR-1", tracker_id=""),
+            "whitespace id": dict(
+                tracker_first=True, tracker_identifier="WOR-1", tracker_id="  "),
+            "whitespace url": dict(
+                tracker_first=True, tracker_identifier="WOR-1",
+                tracker_id="uuid-1", tracker_url=" \t"),
+        }
+        for name, kw in cases.items():
+            with self.subTest(name):
+                self.assertIn("--tracker-", self._create_error("Bad args", **kw))
+                self.assertEqual(self._spec_files(), [])
+
+    def test_linked_mint_refuses_durable_id_owned_by_another_spec(self) -> None:
+        self._create(
+            "First", tracker_first=True, tracker_identifier="WOR-1",
+            tracker_id="uuid-1",
+        )
+        before = self._spec_files()
+        error = self._create_error(
+            "Second", tracker_first=True, tracker_identifier="WOR-2",
+            tracker_id="uuid-1",
+        )
+        self.assertIn("wor-1-first", error)
+        self.assertNotIn("--force", error)
+        self.assertEqual(self._spec_files(), before)
+
+    def test_linked_mint_checks_and_publishes_under_writer_lock(self) -> None:
+        # R2: the collision check and the publication both run inside one
+        # hold of the shared config writer lock.
+        from contextlib import contextmanager
+        from unittest import mock
+
+        events: list = []
+
+        @contextmanager
+        def recording_lock(_flow_dir):
+            events.append("lock")
+            yield
+            events.append("unlock")
+
+        real_owner = self.flowctl._tracker_id_owner
+        real_create = self.flowctl.atomic_create
+
+        def owner(*a, **k):
+            events.append("check")
+            return real_owner(*a, **k)
+
+        def create(*a, **k):
+            events.append("write")
+            return real_create(*a, **k)
+
+        with mock.patch.object(self.flowctl, "_shared_config_lock",
+                               recording_lock), \
+                mock.patch.object(self.flowctl, "_tracker_id_owner", owner), \
+                mock.patch.object(self.flowctl, "atomic_create", create):
+            self._create(
+                "Fix login", tracker_first=True, tracker_identifier="WOR-17",
+                tracker_id="uuid-17",
+            )
+        self.assertEqual(events, ["lock", "check", "write", "write", "unlock"])
+
 
     # --- enumeration vs allocation -----------------------------------------
 

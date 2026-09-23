@@ -67,10 +67,11 @@ Three supported starts share one durable locator:
 
 - **Flow-first:** create an issue for an existing spec, then persist the durable
   id, display identifier, and URL.
-- **Tracker-first:** read the existing issue, mint the hybrid Flow id, link it,
-  and seed the paired merge base from the current bodies.
+- **Tracker-first:** read the existing issue, mint the hybrid Flow id linked
+  (`spec create --tracker-first --tracker-id --tracker-url`), and seed the
+  paired merge base from the current bodies.
 - **Create-first:** create a remote issue using a retry key before a local spec
-  exists, mint from the returned identity, then link. If local persistence
+  exists, then mint linked from the returned identity. If local persistence
   fails after the remote create, retry links the recovery record and never
   creates a duplicate.
 
@@ -96,7 +97,7 @@ attached spec via the tracker id and adopt it. **Under any autonomy marker**
 (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`,
 `mode:autonomous`) a CAS conflict resolves to `sync defer` like every other
 collision - adopting a winner and retiring a spec is a human-confirmed
-resolution, not an autonomous one. Only after mint, attach, merge-base seed,
+resolution, not an autonomous one. Only after the linked mint, merge-base seed,
 back-reference, and the normal spec-keyed receipt all succeed may the caller
 consume the record with `sync create-first-clear`. These four helpers
 exclusively own the retry record; do not recompute its hash or read, write, or

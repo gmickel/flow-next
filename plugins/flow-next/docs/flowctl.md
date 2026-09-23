@@ -297,7 +297,8 @@ Create new spec. The new spec's markdown is the canonical scaffold `templates/sp
 flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--plan-file plan.md | --plan -] [--json]
 
 # Tracker-first: key the spec by its tracker identifier (wor-17-slug) instead of fn-NN
-flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 [--json]
+flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 \
+  [--tracker-id <durable-id> [--tracker-url <url>]] [--json]
 ```
 
 Output:
@@ -306,6 +307,8 @@ Output:
 ```
 
 `--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key - no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
+
+`--tracker-id <durable-id>` (optionally with `--tracker-url <url>`) publishes the tracker-first spec already linked: `tracker.id`, `tracker.identifier`, `tracker.url`, and `linkState: linked` land in the same write, so no later touchpoint mistakes it for unlinked and creates a second issue. Both require `--tracker-first`; `--tracker-url` requires `--tracker-id`; empty values are refused. A durable id already linked to another spec refuses the create before anything is written. Without `--tracker-id` the spec stores only the display identifier until `sync set-tracker-id` links it.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
 
@@ -1467,7 +1470,7 @@ flowctl sync create-first-key   --type github --title "Fix login" [--body-file b
 flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
 flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport … \
                                 [--spec-id <id>] [--if-absent | --expect-spec-id <id>]
-flowctl sync create-first-clear --key <k>             # after mint + attach succeed
+flowctl sync create-first-clear --key <k>             # after the linked mint succeeds
 ```
 
 The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.

@@ -35,7 +35,7 @@ import urllib.parse
 import uuid
 from collections import deque
 from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager, redirect_stdout, suppress
+from contextlib import ExitStack, contextmanager, nullcontext, redirect_stdout, suppress
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -27720,6 +27720,26 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     tracker_identifier = getattr(args, "tracker_identifier", None)
     tracker_first = getattr(args, "tracker_first", False)
 
+    # fn-254: a tracker-first mint may carry the durable id (and URL) so the
+    # spec publishes linked in one write. Validated before any allocation.
+    durable_tracker_id = getattr(args, "tracker_id", None)
+    tracker_url = getattr(args, "tracker_url", None)
+    if not tracker_first:
+        for flag, value in (("--tracker-id", durable_tracker_id),
+                            ("--tracker-url", tracker_url)):
+            if value is not None:
+                error_exit(f"{flag} requires --tracker-first", use_json=args.json)
+    if tracker_url is not None and durable_tracker_id is None:
+        error_exit("--tracker-url requires --tracker-id", use_json=args.json)
+    for flag, value in (("--tracker-id", durable_tracker_id),
+                        ("--tracker-url", tracker_url)):
+        if value is not None and not value.strip():
+            error_exit(f"{flag} must not be empty", use_json=args.json)
+    if durable_tracker_id is not None:
+        durable_tracker_id = durable_tracker_id.strip()
+    if tracker_url is not None:
+        tracker_url = tracker_url.strip()
+
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
     suffix = slug if slug else generate_epic_suffix()
@@ -27778,6 +27798,12 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         # lowercase key; the full UUID / url land later on link (fn-52.2).
         if tracker_first_flag and tracker_id_val:
             spec_data["tracker"]["identifier"] = tracker_id_val
+            # fn-254: with the durable id the spec is linked at birth.
+            if durable_tracker_id is not None:
+                spec_data["tracker"]["id"] = durable_tracker_id
+                spec_data["tracker"]["linkState"] = "linked"
+                if tracker_url is not None:
+                    spec_data["tracker"]["url"] = tracker_url
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
         spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
@@ -27829,12 +27855,35 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         # Tracker-first ids are not from the native counter; still serialize
         # publication against the shared lock so a concurrent native allocate
         # cannot race a colliding path write (defensive; schemes differ).
+        # fn-254: a durable id also takes the config writer lock (the one
+        # `sync set-tracker-id` links under) across the collision check and
+        # the publication, so no concurrent link lands between them.
+        writer_lock = (
+            _shared_config_lock(flow_dir)
+            if durable_tracker_id is not None
+            else nullcontext()
+        )
         try:
-            with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
-                spec_data = _publish_spec(spec_id, True, tracker_identifier)
+            with writer_lock:
+                if durable_tracker_id is not None:
+                    owner_id = _tracker_id_owner(flow_dir, durable_tracker_id)
+                    if owner_id is not None:
+                        error_exit(
+                            f"Tracker id {durable_tracker_id} already linked "
+                            f"to spec {owner_id}; refusing to mint a second "
+                            "spec for it.",
+                            use_json=args.json,
+                        )
+                with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
+                    spec_data = _publish_spec(spec_id, True, tracker_identifier)
         except CrossProcessLockError as e:
             error_exit(
                 f"Native id allocation lock unavailable: {e}",
+                use_json=args.json,
+            )
+        except TimeoutError as exc:
+            error_exit(
+                f"could not acquire the config writer lock for spec create: {exc}",
                 use_json=args.json,
             )
     else:
@@ -41628,17 +41677,16 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
 
             # Collision guard (R5): refuse to link two specs to one tracker
             # UUID unless forced (re-link of the same spec is always fine).
-            for owner_id, owner_state in _iter_tracker_states(flow_dir):
-                if owner_id == args.id:
-                    continue
-                if owner_state.get("id") and owner_state["id"] == args.tracker_id:
-                    if not getattr(args, "force", False):
-                        error_exit(
-                            f"Tracker id {args.tracker_id} already linked to spec "
-                            f"{owner_id}. Pass --force to override (rare; usually a "
-                            f"duplicate-issue mistake).",
-                            use_json=args.json,
-                        )
+            owner_id = _tracker_id_owner(
+                flow_dir, args.tracker_id, exclude_spec_id=args.id
+            )
+            if owner_id is not None and not getattr(args, "force", False):
+                error_exit(
+                    f"Tracker id {args.tracker_id} already linked to spec "
+                    f"{owner_id}. Pass --force to override (rare; usually a "
+                    f"duplicate-issue mistake).",
+                    use_json=args.json,
+                )
 
             state = spec_data["tracker"]
             state["id"] = args.tracker_id
@@ -41806,6 +41854,24 @@ def _iter_tracker_states(flow_dir: Path):
         yield spec_data.get("id", spec_file.stem), spec_data.get(
             "tracker"
         ) or default_spec_tracker_state()
+
+
+def _tracker_id_owner(
+    flow_dir: Path, tracker_id: str, *, exclude_spec_id: Optional[str] = None
+) -> Optional[str]:
+    """Return the spec already linked to durable ``tracker_id``, if any.
+
+    The collision rule shared by ``sync set-tracker-id`` and the linked
+    tracker-first mint: two specs never hold one tracker id. Callers run it
+    under the shared config writer lock so the check and their write commit
+    together.
+    """
+    for owner_id, owner_state in _iter_tracker_states(flow_dir):
+        if owner_id == exclude_spec_id:
+            continue
+        if owner_state.get("id") and owner_state["id"] == tracker_id:
+            return owner_id
+    return None
 
 
 def cmd_sync_list_unsynced(args: argparse.Namespace) -> None:
@@ -56130,6 +56196,16 @@ def main() -> None:
         p_create.add_argument(
             "--tracker-identifier",
             help="Tracker display identifier (e.g., WOR-17); required with --tracker-first",
+        )
+        # fn-254: the durable id (and URL) publish the spec linked in one write.
+        p_create.add_argument(
+            "--tracker-id",
+            help="Durable tracker id (e.g., the issue UUID); with --tracker-first "
+            "the spec is created linked",
+        )
+        p_create.add_argument(
+            "--tracker-url",
+            help="Tracker issue URL; requires --tracker-id",
         )
         # fn-163.1: one-shot create+set-plan. Mutually exclusive; plan content
         # is fully read before id allocation (pre-write validation ordering).

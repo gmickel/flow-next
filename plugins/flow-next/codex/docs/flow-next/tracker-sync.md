@@ -70,11 +70,11 @@ After the config writes, the ceremony asks **one optional, skippable readiness q
 All attach sync state **on link**:
 
 1. **Author-in-flow-then-push (flow-first).** A `fn-NN` spec already exists. Push creates the tracker issue, then `flowctl sync set-tracker-id` attaches the issue UUID + `--identifier WOR-17` + `--url`. The `fn-NN` id is kept; the tracker key becomes a resolvable alias.
-2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** (`flowctl spec create --tracker-first --tracker-identifier <key>`), seed the merge base from the current issue body, first pass is pull-only. **All four trackers support tracker-first:**
+2. **Link-existing-issue (tracker-first): "grab issue X and spec it."** Fetch the issue, create the spec **keyed by the tracker key** and linked in the same write (`flowctl spec create --tracker-first --tracker-identifier <key> --tracker-id <id> --tracker-url <url>`), seed the merge base from the current issue body, first pass is pull-only. **All four trackers support tracker-first:**
    - Linear `WOR-17` / Jira `PROJ-123` are native `KEY-N` and mint directly (`wor-17-slug` / `proj-123-slug`).
    - GitHub `#123` and GitLab `<project>#456` are **not** literal `KEY-N` (no alpha key / path + `#`), so flowctl mints **synthetic keys** while `tracker.type` matches: `#123` → `gh-123-slug`, `<project>#456` → `gl-456-slug` (project-scoped `iid`, never the opaque global id). Bare `gh-123` / `gl-456` resolve as aliases.
    - Flow-first remains available on every tracker (create `fn-NN`, then `set-tracker-id` with the issue ref as a display alias).
-3. **Create-first (fresh idea - issue before any local spec).** When `tracker.specIds=tracker` and no issue exists yet, tracker-sync creates the issue from title + body (no local spec id), returns `{id, identifier, url}`, then the caller mints → attaches → seeds the merge base. Pre-spec recovery lives under `.flow/create-first/` (gitignored); a retry after partial failure **links**, never re-creates. See the skill's Phase 2d.
+3. **Create-first (fresh idea - issue before any local spec).** When `tracker.specIds=tracker` and no issue exists yet, tracker-sync creates the issue from title + body (no local spec id), returns `{id, identifier, url}`, then the caller mints linked (`--tracker-id` / `--tracker-url`) → seeds the merge base. Pre-spec recovery lives under `.flow/create-first/` (gitignored); a retry after partial failure **links**, never re-creates. See the skill's steps.md §2 Identity and linking.
 
    **Racing promoters (fn-182, #310):** the post-mint `sync create-first-put --spec-id` should pass `--if-absent` - the record write is then a compare-and-set, and the loser of a concurrent promotion exits `10` with `class=conflict`, `subtype=spec_already_minted`, and `details.recordedSpecId` naming the winner. On that conflict, adopt the recorded spec and discard the locally minted one instead of re-putting; `--expect-spec-id <id>` is the CAS form for updating a claim you already own.
 
@@ -90,7 +90,7 @@ The two id schemes **coexist**; resolution is provided by flowctl's widened reso
 | canonical task ids | `wor-17-slug.M` / `gh-123-slug.M` | `fn-NN-slug.M` |
 | branch | same as canonical id | `fn-NN-slug` |
 | bare aliases | `wor-17` / `gh-123` / `gl-456` (and `.M` task forms) resolve to the full slug id | `WOR-17` (stored in `tracker.identifier`) resolves to `fn-NN-slug`. A GitHub/GitLab ref like `#123` is **display-only** - stored and shown, never a resolvable handle; only the synthetic `gh-123` / `gl-456` form resolves |
-| create / link | `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` | `flowctl sync set-tracker-id fn-NN-slug <uuid> --identifier <key> --url <url>` |
+| create / link | `flowctl spec create --tracker-first --tracker-identifier <key-or-ref> --tracker-id <id> --tracker-url <url>` | `flowctl sync set-tracker-id fn-NN-slug <uuid> --identifier <key> --url <url>` |
 
 ### Synthetic keys (GitHub / GitLab)
 
