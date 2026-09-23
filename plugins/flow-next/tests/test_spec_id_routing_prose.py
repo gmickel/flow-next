@@ -324,47 +324,44 @@ class SpecIdSetupQuestion(unittest.TestCase):
         )
 
 
-class NamedIssueMintMustAttach(unittest.TestCase):
-    """Every named-issue mint branch must also attach + seed (PR #241 P1).
+class TrackerFirstMintIsLinked(unittest.TestCase):
+    """Every tracker-first mint site passes the durable id at mint (fn-254, #464).
 
-    `spec create --tracker-first` stores the display identifier but NOT the
-    durable `tracker.id`. Three mint sites minted from a user-named key and
-    stopped there, so the spec was effectively unlinked: the next lifecycle
-    touchpoint took the create-if-unlinked path and opened a SECOND remote
-    issue instead of linking the one the user actually named. Duplicate remote
-    issues are not locally reversible, which is why this is pinned in prose.
+    A mint that stored only the display identifier left the spec unlinked; the
+    next lifecycle touchpoint then opened a SECOND remote issue. Duplicate
+    remote issues are not locally reversible, so each site that composes
+    `spec create --tracker-first` must carry `--tracker-id` in the same call,
+    and none may point at the retired steps.md phase numbering.
     """
 
     SITES = {
         "capture": CAPTURE_TRACKER_REF,
         "plan": PLAN_MINT_REF,
         "refine": SKILLS / "flow-next-refine" / "references" / "write-back.md",
-        # work was omitted from this list originally, which is exactly how the
-        # attach requirement went missing there for a whole review wave.
         "work": SKILLS / "flow-next-work" / "references" / "spec-id-mint.md",
         "qa": SKILLS / "flow-next-qa" / "references" / "bug-filing.md",
     }
 
-    def test_each_named_issue_branch_requires_attach(self) -> None:
+    def test_each_tracker_first_mint_passes_durable_id(self) -> None:
         for name, path in self.SITES.items():
             with self.subTest(site=name):
                 text = path.read_text(encoding="utf-8")
-                i = min([x for x in (text.find("Named existing issue"), text.find("Named issue"), text.find("named issue key")) if x != -1], default=-1)
-                self.assertNotEqual(i, -1, f"{name}: named-issue branch not found")
-                # The attach obligation must appear in the branch itself, before
-                # the fresh-idea branch that already carries its own attach step.
-                branch = text[i : i + 1200]
-                self.assertIn(
-                    "attach", branch,
-                    f"{name}: named-issue branch mints without attaching - a later "
-                    "touchpoint would create a second remote issue",
+                mints = [
+                    line for line in text.splitlines()
+                    if "spec create --tracker-first" in line
+                ]
+                self.assertTrue(mints, f"{name}: no tracker-first mint found")
+                for line in mints:
+                    self.assertRegex(
+                        line, r"(?<!\S)--tracker-id(?=[\s=])",
+                        f"{name}: tracker-first mint without --tracker-id "
+                        "publishes an unlinked spec",
+                    )
+                self.assertIn("seed", text, f"{name}: merge-base seed dropped")
+                self.assertNotRegex(
+                    text, r"Phase 2[a-d]\b",
+                    f"{name}: stale tracker-sync steps.md phase pointer",
                 )
-                self.assertIn(
-                    "tracker.id", branch,
-                    f"{name}: branch does not say WHY attach is required "
-                    "(the durable tracker.id is what is missing)",
-                )
-
 
 
 if __name__ == "__main__":

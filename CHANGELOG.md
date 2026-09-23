@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **A tracker-first spec is linked the moment it is minted.** `flowctl spec create --tracker-first` now takes `--tracker-id` and `--tracker-url` beside `--tracker-identifier`, and writes the durable id, display key, URL and `linkState: linked` in the same write. Before, the mint stored only the display key, so a later lifecycle touchpoint could treat the spec as unlinked and open a second issue. A durable id already linked to another spec refuses the mint. The plan, capture, work, refine and QA mint sites now read or create the issue first and pass its identity at mint. Thanks to @sn-furali for the report in #464.
+
 ## [flow-next 6.0.1] - 2026-09-23
 
 ### Fixed
