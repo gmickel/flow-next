@@ -183,16 +183,6 @@ def _split_cells(line: str) -> list[str]:
     return cells
 
 
-def _shield_closer(line: str, closer: str, step: int) -> str:
-    """Add (+1) or remove (-1) one backslash before each `closer` inside a
-    code block, so literal `{code}` / `{noformat}` content cannot end the
-    block early and still decodes to the original text."""
-    pattern = re.compile(r"(\\*)" + re.escape(closer))
-    if step > 0:
-        return pattern.sub(lambda m: m.group(1) + "\\" + closer, line)
-    return pattern.sub(lambda m: m.group(1)[:-1] + closer, line)
-
-
 def _indent_width(ws: str) -> int:
     return len(ws.expandtabs(4))
 
@@ -234,16 +224,23 @@ def markdown_to_wiki(text: str) -> str:
             # Pick the block whose terminator the content does not hold:
             # Jira renders an escaping backslash inside a block literally.
             joined = "\n".join(content)
-            if "{code}" in joined and "{noformat}" not in joined:
-                opener, closer = "{noformat}", "{noformat}"
-            elif lang in _CODE_LANGS or "{noformat}" in joined:
+            has_code, has_noformat = "{code}" in joined, "{noformat}" in joined
+            if has_code and has_noformat:
+                # No verbatim block can hold both: keep the text as escaped
+                # monospace lines, which decode to inline code.
+                out.extend("{{" + _escape_span(ln, 0, len(ln), line_start=False)
+                           + "}}" if ln else "" for ln in content)
+                stack = []
+                continue
+            if has_code:
+                opener = closer = "{noformat}"
+            elif lang in _CODE_LANGS or has_noformat:
                 opener = f"{{code:{lang}}}" if lang in _CODE_LANGS else "{code}"
                 closer = "{code}"
             else:
-                opener, closer = "{noformat}", "{noformat}"
+                opener = closer = "{noformat}"
             out.append(opener)
-            # Both terminators present: only a visible escape is left.
-            out.extend(_shield_closer(ln, closer, +1) for ln in content)
+            out.extend(content)
             out.append(closer)
             stack = []
             continue
@@ -449,7 +446,6 @@ def wiki_to_markdown(text: str) -> str:
                 body.append(lines[j])
                 j += 1
             if j < len(lines):
-                body = [_shield_closer(ln, closer, -1) for ln in body]
                 runs = [len(r) for ln in body
                         for r in re.findall(r"^[ \t]*(`{3,})", ln)]
                 fence = "`" * max([3] + [r + 1 for r in runs])

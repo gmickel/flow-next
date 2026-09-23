@@ -98,7 +98,7 @@
     },
     {
       "path": "flowctl_tracker/providers/jira_markup.py",
-      "sha256": "85b4812a1399487da51caa3403ec38dd0465ee819b29127fd33c7ed7c9b69313"
+      "sha256": "bd5ec2b95216b5b4c7f6040a0306974af1f340f2ecaae46724d2b18f091ff1d3"
     },
     {
       "path": "flowctl_tracker/providers/linear.py",
