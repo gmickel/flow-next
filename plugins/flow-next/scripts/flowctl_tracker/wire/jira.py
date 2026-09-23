@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 from urllib.parse import quote, urlencode
 
+from ..providers.jira_markup import markdown_to_wiki, wiki_to_markdown
 from ..types import ErrorClass, TrackerError
 from . import (
     Execute,
@@ -22,6 +23,25 @@ from . import (
 )
 
 
+def to_wire(body: str) -> Result:
+    """Markdown -> the wiki markup a v2 text field stores (fn-253).
+
+    A converter failure is a structured error: the unconverted Markdown is
+    never sent in its place."""
+    try:
+        return markdown_to_wiki(body)
+    except Exception as exc:  # noqa: BLE001 - surface, never send raw
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"jira wiki conversion failed: {exc}",
+                            subtype="wiki_conversion")
+
+
+def from_wire(body):
+    """Decode a stored v2 body to Markdown; the single read-side decode."""
+    if body is None:
+        return None
+    return wiki_to_markdown(body if isinstance(body, str) else str(body))
+
 
 def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
     fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
@@ -29,7 +49,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
         "id": str(raw.get("id")),
         "identifier": raw.get("key"),
         "title": fields.get("summary"),
-        "body": fields.get("description"),
+        "body": from_wire(fields.get("description")),
         "url": None,
         "labels": list(fields.get("labels") or []),
         "status": (
@@ -47,7 +67,7 @@ def _issue_out(raw: dict, *, parent_identity: str = "not_available") -> dict:
 
 
 def _comment_out(raw: dict, *, parent_identity: str) -> dict:
-    return {"id": raw.get("id"), "body": raw.get("body"),
+    return {"id": raw.get("id"), "body": from_wire(raw.get("body")),
             "url": None, "created_at": raw.get("created"),
             "raw": raw, "parent_identity": parent_identity}
 
@@ -191,7 +211,10 @@ def update(config: dict, locator: dict, execute: Execute, *,
     if title is not None:
         fields["summary"] = title
     if body is not None:
-        fields["description"] = body
+        wire_body = to_wire(body)
+        if isinstance(wire_body, TrackerError):
+            return wire_body
+        fields["description"] = wire_body
     if not fields:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "update requires --title and/or --body-file",
@@ -223,9 +246,12 @@ def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> 
     base = _jira_base(config, dest)
     if isinstance(base, TrackerError):
         return base
+    wire_body = to_wire(body)
+    if isinstance(wire_body, TrackerError):
+        return wire_body
     data = _jira(execute, "wire-comment-add", "POST",
                  f"{base}/rest/api/2/issue/{quote(str(locator['durable']), safe='')}/comment",
-                 body={"body": body})
+                 body={"body": wire_body})
     if isinstance(data, TrackerError):
         return data
     if not isinstance(data, dict):
@@ -283,10 +309,13 @@ def comment_update(config: dict, locator: dict, execute: Execute, *,
         return base
     # Intrinsically parent-scoped: issue key/id is in the path, so no comment
     # pre-fetch is required (unlike GitHub/Linear which address by comment id alone).
+    wire_body = to_wire(body)
+    if isinstance(wire_body, TrackerError):
+        return wire_body
     data = _jira(execute, "wire-comment-update", "PUT",
                  f"{base}/rest/api/2/issue/{quote(str(locator['durable']), safe='')}"
                  f"/comment/{quote(str(comment_id), safe='')}",
-                 body={"body": body})
+                 body={"body": wire_body})
     if isinstance(data, TrackerError):
         return data
     if not isinstance(data, dict):

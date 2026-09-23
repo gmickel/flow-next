@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
+from flowctl_tracker.providers.jira_markup import markdown_to_wiki  # noqa: E402
 from flowctl_tracker.lifecycle.verbs import (  # noqa: E402
     _claim_body_mutation, _release_claim,
 )
@@ -181,8 +182,10 @@ def _ln_issue(body: str) -> dict:
 
 
 def _jr_issue(body: str) -> dict:
+    # Jira stores the wiki markup flowctl writes (fn-253).
     return {"id": JR_ID, "key": "SCRUM-1",
-            "fields": {"summary": "T", "description": body, "labels": []}}
+            "fields": {"summary": "T", "description": markdown_to_wiki(body),
+                       "labels": []}}
 
 
 PROVIDERS = [

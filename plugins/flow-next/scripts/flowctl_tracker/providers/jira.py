@@ -6,8 +6,9 @@ ONLY** - transition ids are NEVER cached (`jira.md:738`: valid only FROM the
 current status, verified live: To Do / In Progress / Done each surfaced
 different transition ids). Transition re-fetch is spec B's concern.
 
-`apiVersion` resolves to **2** by decision: v2 round-trips a plain-string body
-byte-exact on Cloud AND DC (measured), while v3 forces ADF.
+`apiVersion` resolves to **2** by decision on Cloud AND DC (v3 forces ADF,
+which DC lacks). A v2 body is wiki markup: the Jira wire converts Markdown on
+write and decodes on read (`jira_markup`, fn-253).
 """
 
 from __future__ import annotations

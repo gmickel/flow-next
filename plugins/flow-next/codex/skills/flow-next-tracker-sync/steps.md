@@ -51,8 +51,9 @@ Discovery is the one-time agentic ceremony:
 
 No confirmation means no write. Credentials stay outside `.flow/config.json`.
 For Jira, persist the deployment shape selected during discovery. API version
-2 is the default for both Cloud and Data Center/Server because the measured v2
-body shape round-trips plain strings byte-exact. Discovery persists version 2;
+2 is the default for both Cloud and Data Center/Server; flowctl converts bodies
+to v2 wiki markup, which needs the Wiki Style Renderer on the body fields
+([references/jira.md](references/jira.md)). Discovery persists version 2;
 alternate API versions are unsupported.
 
 **Done when:** `tracker resolve` returned a destination that was shown for
