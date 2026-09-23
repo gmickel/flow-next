@@ -352,8 +352,8 @@ class TrackerFirstMintIsLinked(unittest.TestCase):
                 ]
                 self.assertTrue(mints, f"{name}: no tracker-first mint found")
                 for line in mints:
-                    self.assertIn(
-                        "--tracker-id", line,
+                    self.assertRegex(
+                        line, r"(?<!\S)--tracker-id(?=[\s=])",
                         f"{name}: tracker-first mint without --tracker-id "
                         "publishes an unlinked spec",
                     )
