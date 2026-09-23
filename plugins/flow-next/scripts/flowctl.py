@@ -27719,6 +27719,13 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     #     `task_id = spec_id.N`; branch defaults to the same canonical id.
     tracker_identifier = getattr(args, "tracker_identifier", None)
     tracker_first = getattr(args, "tracker_first", False)
+    tracker_id = getattr(args, "tracker_id", None)
+    tracker_url = getattr(args, "tracker_url", None)
+    if not tracker_first and (tracker_id is not None or tracker_url is not None):
+        error_exit(
+            "--tracker-id and --tracker-url require --tracker-first",
+            use_json=args.json,
+        )
 
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
@@ -27731,7 +27738,13 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     spec_md_dir = flow_dir / SPECS_DIR
     spec_md_dir.mkdir(parents=True, exist_ok=True)
 
-    def _publish_spec(spec_id: str, tracker_first_flag: bool, tracker_id_val) -> dict:
+    def _publish_spec(
+        spec_id: str,
+        tracker_first_flag: bool,
+        tracker_identifier_val,
+        tracker_id_val,
+        tracker_url_val,
+    ) -> dict:
         # Double-check no collision across BOTH dirs (shouldn't happen with
         # scan-based allocation + no-clobber create).
         canonical_json_path = flow_dir / SPECS_JSON_DIR / f"{spec_id}.json"
@@ -27774,10 +27787,17 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
             "updated_at": now_iso(),
         }
         # fn-52.10: tracker-first specs store the DISPLAY identifier (WOR-17) so the
-        # alias index resolves the bare handle. The canonical id already carries the
-        # lowercase key; the full UUID / url land later on link (fn-52.2).
-        if tracker_first_flag and tracker_id_val:
-            spec_data["tracker"]["identifier"] = tracker_id_val
+        # alias index resolves the bare handle. When the caller already has the
+        # remote issue identity, persist it in the same atomic publication so the
+        # spec is linked immediately instead of requiring a follow-up attach.
+        if tracker_first_flag:
+            if tracker_identifier_val is not None:
+                spec_data["tracker"]["identifier"] = tracker_identifier_val
+            if tracker_id_val is not None:
+                spec_data["tracker"]["id"] = tracker_id_val
+                spec_data["tracker"]["linkState"] = "linked"
+            if tracker_url_val is not None:
+                spec_data["tracker"]["url"] = tracker_url_val
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
         spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
@@ -27831,7 +27851,9 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         # cannot race a colliding path write (defensive; schemes differ).
         try:
             with cross_process_lock(native_fn_alloc_lock_path(flow_dir)):
-                spec_data = _publish_spec(spec_id, True, tracker_identifier)
+                spec_data = _publish_spec(
+                    spec_id, True, tracker_identifier, tracker_id, tracker_url
+                )
         except CrossProcessLockError as e:
             error_exit(
                 f"Native id allocation lock unavailable: {e}",
@@ -27849,7 +27871,7 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
                 max_spec = scan_max_native_fn_spec_id(flow_dir)
                 spec_num = max_spec + 1
                 spec_id = f"fn-{spec_num}-{suffix}"
-                spec_data = _publish_spec(spec_id, False, tracker_identifier)
+                spec_data = _publish_spec(spec_id, False, tracker_identifier, None, None)
         except CrossProcessLockError as e:
             error_exit(
                 f"Native id allocation lock unavailable: {e}",
@@ -27898,6 +27920,10 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         }
         if tracker_first and tracker_identifier:
             out["tracker_identifier"] = tracker_identifier
+        if tracker_first and tracker_id is not None:
+            out["tracker_id"] = tracker_id
+        if tracker_first and tracker_url is not None:
+            out["tracker_url"] = tracker_url
         json_output(out)
     else:
         print(f"Spec {spec_id} created: {args.title}")
@@ -56130,6 +56156,14 @@ def main() -> None:
         p_create.add_argument(
             "--tracker-identifier",
             help="Tracker display identifier (e.g., WOR-17); required with --tracker-first",
+        )
+        p_create.add_argument(
+            "--tracker-id",
+            help="Durable tracker issue id to persist during tracker-first creation",
+        )
+        p_create.add_argument(
+            "--tracker-url",
+            help="Tracker issue URL to persist during tracker-first creation",
         )
         # fn-163.1: one-shot create+set-plan. Mutually exclusive; plan content
         # is fully read before id allocation (pre-write validation ordering).

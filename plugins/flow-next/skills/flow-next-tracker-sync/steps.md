@@ -67,12 +67,15 @@ Three supported starts share one durable locator:
 
 - **Flow-first:** create an issue for an existing spec, then persist the durable
   id, display identifier, and URL.
-- **Tracker-first:** read the existing issue, mint the hybrid Flow id, link it,
-  and seed the paired merge base from the current bodies.
+- **Tracker-first:** read the existing issue, mint the hybrid Flow id while
+  passing its identifier, durable id, and URL to `spec create`, link it in the
+  same write, and seed the paired merge base from the current bodies.
 - **Create-first:** create a remote issue using a retry key before a local spec
-  exists, mint from the returned identity, then link. If local persistence
-  fails after the remote create, retry links the recovery record and never
-  creates a duplicate.
+  exists, mint from the returned identity with `--tracker-id` and
+  `--tracker-url`, then seed. `sync set-tracker-id` remains a compatibility
+  fallback for partial responses or older flowctl. If local persistence fails
+  after the remote create, retry links the recovery record and never creates a
+  duplicate.
 
 #### Receipt / retry contract
 
@@ -96,9 +99,10 @@ attached spec via the tracker id and adopt it. **Under any autonomy marker**
 (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`,
 `mode:autonomous`) a CAS conflict resolves to `sync defer` like every other
 collision - adopting a winner and retiring a spec is a human-confirmed
-resolution, not an autonomous one. Only after mint, attach, merge-base seed,
-back-reference, and the normal spec-keyed receipt all succeed may the caller
-consume the record with `sync create-first-clear`. These four helpers
+resolution, not an autonomous one. Only after mint (with complete identity or
+the attach fallback), merge-base seed, back-reference, and the normal
+spec-keyed receipt all succeed may the caller consume the record with `sync
+create-first-clear`. These four helpers
 exclusively own the retry record; do not recompute its hash or read, write, or
 delete its file directly.
 

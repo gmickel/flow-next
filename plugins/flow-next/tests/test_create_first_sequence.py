@@ -183,6 +183,50 @@ class CreateFirstSequence(unittest.TestCase):
             "exactly one remote creation across create + retry + mint + attach + later touchpoint",
         )
 
+    def test_tracker_first_mint_can_persist_the_complete_remote_identity(self) -> None:
+        """A tracker-first mint must not leave the issue only half-linked."""
+        issue = self._create_first()
+        mint = _fc(
+            self.repo,
+            "spec",
+            "create",
+            "--title",
+            self.TITLE,
+            "--tracker-first",
+            "--tracker-identifier",
+            issue["identifier"],
+            "--tracker-id",
+            issue["id"],
+            "--tracker-url",
+            issue["url"],
+            "--json",
+        )
+        self.assertEqual(mint.returncode, 0, mint.stderr)
+        spec_id = json.loads(mint.stdout)["id"]
+        sidecar = json.loads(
+            (self.repo / ".flow" / "specs" / f"{spec_id}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            sidecar["tracker"],
+            {
+                "id": issue["id"],
+                "identifier": issue["identifier"],
+                "url": issue["url"],
+                "lastSyncedAt": None,
+                "baseHashFlow": None,
+                "baseHashTracker": None,
+                "mergeBaseFlow": None,
+                "mergeBaseTracker": None,
+                "depRelations": [],
+                "linkState": "linked",
+            },
+        )
+        state = _fc(self.repo, "sync", "get-state", spec_id, "--json")
+        self.assertEqual(state.returncode, 0, state.stderr)
+        self.assertEqual(json.loads(state.stdout)["tracker"]["linkState"], "linked")
+
     def test_the_later_touchpoint_would_create_on_an_unlinked_spec(self) -> None:
         """Proves the touchpoint's create branch is live, so the linked-spec
         assertion above is a real routing result and not a tautology."""

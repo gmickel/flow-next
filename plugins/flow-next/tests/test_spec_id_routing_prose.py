@@ -324,16 +324,8 @@ class SpecIdSetupQuestion(unittest.TestCase):
         )
 
 
-class NamedIssueMintMustAttach(unittest.TestCase):
-    """Every named-issue mint branch must also attach + seed (PR #241 P1).
-
-    `spec create --tracker-first` stores the display identifier but NOT the
-    durable `tracker.id`. Three mint sites minted from a user-named key and
-    stopped there, so the spec was effectively unlinked: the next lifecycle
-    touchpoint took the create-if-unlinked path and opened a SECOND remote
-    issue instead of linking the one the user actually named. Duplicate remote
-    issues are not locally reversible, which is why this is pinned in prose.
-    """
+class NamedIssueMintPersistsIdentity(unittest.TestCase):
+    """Every named-issue mint branch passes the complete identity (PR #464)."""
 
     SITES = {
         "capture": CAPTURE_TRACKER_REF,
@@ -345,24 +337,26 @@ class NamedIssueMintMustAttach(unittest.TestCase):
         "qa": SKILLS / "flow-next-qa" / "references" / "bug-filing.md",
     }
 
-    def test_each_named_issue_branch_requires_attach(self) -> None:
+    def test_each_named_issue_branch_persists_identity(self) -> None:
         for name, path in self.SITES.items():
             with self.subTest(site=name):
                 text = path.read_text(encoding="utf-8")
                 i = min([x for x in (text.find("Named existing issue"), text.find("Named issue"), text.find("named issue key")) if x != -1], default=-1)
                 self.assertNotEqual(i, -1, f"{name}: named-issue branch not found")
-                # The attach obligation must appear in the branch itself, before
-                # the fresh-idea branch that already carries its own attach step.
+                # The complete identity flags must appear in the branch itself,
+                # before the fresh-idea branch that carries its own command.
                 branch = text[i : i + 1200]
                 self.assertIn(
-                    "attach", branch,
-                    f"{name}: named-issue branch mints without attaching - a later "
-                    "touchpoint would create a second remote issue",
+                    "--tracker-id", branch,
+                    f"{name}: named-issue branch does not pass the durable tracker id",
+                )
+                self.assertIn(
+                    "--tracker-url", branch,
+                    f"{name}: named-issue branch does not pass the tracker URL",
                 )
                 self.assertIn(
                     "tracker.id", branch,
-                    f"{name}: branch does not say WHY attach is required "
-                    "(the durable tracker.id is what is missing)",
+                    f"{name}: branch does not explain the durable tracker identity",
                 )
 
 

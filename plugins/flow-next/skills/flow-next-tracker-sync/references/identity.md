@@ -21,10 +21,10 @@ A spec pulled from a tracker issue ("grab issue X and spec it") IS keyed by the 
 | `github` | `#123` | `gh-123-slug` (synthetic; reserved while type is github) |
 | `gitlab` | `<project>#456` | `gl-456-slug` (synthetic; project-scoped `iid`) |
 
-Create it with:
+Create it with (include the durable id and URL when the tracker read already returned them):
 
 ```bash
-$FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
+$FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --tracker-id "<issue id>" --tracker-url "<issue url>" --title "<issue title>" --json
 # GitHub: --tracker-identifier "#123"  → gh-123-slug
 # GitLab: --tracker-identifier "group/project#456"  → gl-456-slug
 ```
@@ -52,13 +52,13 @@ Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming
 
 ## Create-first - issue exists before the local id (R19)
 
-When `tracker.specIds=tracker` and no issue exists yet, the caller cannot mint a tracker-keyed id without a key. **Create-first** (steps.md Phase 2d) creates the issue first and returns `{id, identifier, url}` with **no local spec id as input**. Attach is still via `set-tracker-id` after mint - create-first does not write sync state itself.
+When `tracker.specIds=tracker` and no issue exists yet, the caller cannot mint a tracker-keyed id without a key. **Create-first** (steps.md Phase 2d) creates the issue first and returns `{id, identifier, url}` with **no local spec id as input**. The caller passes all three values to `spec create`, which writes the complete tracker identity atomically; `set-tracker-id` remains the fallback for older flowctl or partial adapter responses.
 
 Sequence (owned by the calling skill; tracker-sync owns only the create-first op):
 
 1. `create-first(title, body)` → `{id, identifier, url}` (adapter-native identifier: `WOR-17` / `PROJ-123` / `#123` / `<project>#<iid>`).
-2. Mint: `spec create --tracker-first --tracker-identifier <identifier>` → `KEY-N-slug` or synthetic `gh-N-slug` / `gl-N-slug` (flowctl mint; this file does not reimplement synthesis).
-3. Attach: `sync set-tracker-id <spec-id> <id> --identifier <identifier> --url <url>`.
+2. Mint: `spec create --tracker-first --tracker-identifier <identifier> --tracker-id <id> --tracker-url <url>` → `KEY-N-slug` or synthetic `gh-N-slug` / `gl-N-slug` (flowctl mint; this file does not reimplement synthesis).
+3. If the identity was partial or an older flowctl is in use, attach with `sync set-tracker-id <spec-id> <id> --identifier <identifier> --url <url>`.
 4. Seed merge base (both halves) so the first reconcile is not a whole-body conflict - same first-link base-seeding as Phase 2b.
 
 **Pre-spec recovery:** at create-first time no local spec id exists, so `sync receipt` cannot run yet. Durable recovery lives at `.flow/create-first/<retryKey>.json` keyed by:
@@ -67,12 +67,12 @@ Sequence (owned by the calling skill; tracker-sync owns only the create-first op
 retryKey = sha256(tracker.type + "\0" + title + "\0" + body)[:16]
 ```
 
-A retry after partial failure (remote create ok, local mint fail) finds that file and **links** the existing issue - never creates a second one. Normal `sync receipt <spec-id>` runs only after mint + attach; then the recovery file is consumed. Full contract: [steps.md](../steps.md) Phase 2d.
+A retry after partial failure (remote create ok, local mint fail) finds that file and **links** the existing issue - never creates a second one. Normal `sync receipt <spec-id>` runs only after mint + identity link (atomic or fallback attach); then the recovery file is consumed. Full contract: [steps.md](../steps.md) Phase 2d.
 
 ## Hard rules — never violate
 
 - **No rename-on-push.** Existing spec/task ids, branches, and dep edges are never mutated when a spec is synced; the tracker key is added as a resolvable handle/alias, not a replacement.
 - **`spec set-title` on a tracker-linked spec updates the title only** — the canonical id, branch, and files are never re-slugged. A renamed id after a title change has broken this and desynced the linkage. Unlinked specs keep today's rename behavior.
 - **Surface `identifier` in sync listings** so users see both handles (the canonical flow id and the board-facing `WOR-17`).
-- **Create-first never renames and never mints.** It returns the adapter identifier as-is; the caller mints and attaches. A retry never creates a second issue (recovery file + retry lookup key).
+- **Create-first never renames and never mints.** It returns the adapter identifier as-is; the caller mints with the complete identity and seeds the merge base (or uses the attach fallback). A retry never creates a second issue (recovery file + retry lookup key).
 - This is **additive** — it does not require the separate `fn-NN`-deprecation id-scheme change to land first; that change, when it comes, only governs *removing* `fn-NN`, not *also accepting* the tracker key.

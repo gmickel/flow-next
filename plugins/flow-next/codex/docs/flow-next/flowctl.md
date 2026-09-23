@@ -301,6 +301,10 @@ flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--plan-fi
 
 # Tracker-first: key the spec by its tracker identifier (wor-17-slug) instead of fn-NN
 flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 [--json]
+
+# Persist an already-fetched issue identity during the same create
+flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 \
+  --tracker-id <durable-id> --tracker-url <issue-url> [--json]
 ```
 
 Output:
@@ -308,7 +312,7 @@ Output:
 {"success": true, "id": "fn-1-spec-title", "title": "Spec title", "spec_path": ".flow/specs/fn-1-spec-title.md"}
 ```
 
-`--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key - no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
+`--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key - no fresh `fn-NN` is allocated; ids never rename. Optional `--tracker-id` and `--tracker-url` persist the durable issue identity in the same atomic write; supplying `--tracker-id` also marks the sidecar `linkState` as `linked`. Use `sync set-tracker-id` for older flowctl or a partial adapter response. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
 
@@ -1470,7 +1474,7 @@ flowctl sync create-first-key   --type github --title "Fix login" [--body-file b
 flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
 flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport … \
                                 [--spec-id <id>] [--if-absent | --expect-spec-id <id>]
-flowctl sync create-first-clear --key <k>             # after mint + attach succeed
+flowctl sync create-first-clear --key <k>             # after mint + identity link succeed
 ```
 
 The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.
@@ -2013,7 +2017,7 @@ base from readback, and projects status.
 - **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) - free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
 - **`check`** is the **read-only** end-of-skill audit. fn-141 R8 supersedes fn-57 R3 by moving deterministic tracker mutations into `flowctl tracker`; this command itself still reads only local receipts. For each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO**; this is the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
 - **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) - **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
-- The hybrid id model (tracker-first `wor-17-slug` / `gh-123-slug` / `gl-456-slug` canonical / flow-first `fn-NN` + resolvable alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` (see [`spec create`](#spec-create)). Skills auto-route when `tracker.specIds=tracker`. Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
+- The hybrid id model (tracker-first `wor-17-slug` / `gh-123-slug` / `gl-456-slug` canonical / flow-first `fn-NN` + resolvable alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` with optional `--tracker-id` and `--tracker-url` for an already-fetched issue (see [`spec create`](#spec-create)). Skills auto-route when `tracker.specIds=tracker`. Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 
 ### repo-map
 

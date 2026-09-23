@@ -78,12 +78,13 @@ SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$INTERVIEW_CFG" 2>/dev/null
 BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
-  # Named existing issue → $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "..." --json
-  #   then attach + seed too (tracker-sync steps.md Phase 2b): minting stores the
-  #   identifier but NOT the durable tracker.id, and an unlinked spec makes a later
-  #   touchpoint create a SECOND remote issue instead of linking the named one.
+  # Named existing issue → pass the complete identity to spec create:
+  #   $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --tracker-id "<id>" --tracker-url "<url>" --title "..." --json
+  #   This persists tracker.identifier, tracker.id, and tracker.url in one write;
+  #   use sync set-tracker-id only as a compatibility fallback for a partial
+  #   adapter response, then seed the merge base.
   # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body)
-  #   then mint + attach + seed (tracker-sync steps.md Phase 2d "Enabled caller sequence")
+  #   then mint with --tracker-id/--tracker-url and seed (tracker-sync steps.md Phase 2d)
   # Assign SPEC_OUTPUT on every path that succeeds here.
   :
 fi

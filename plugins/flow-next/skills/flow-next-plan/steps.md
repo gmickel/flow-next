@@ -381,7 +381,8 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    if [ "$ACTIVE" = "1" ]; then
      echo "TRACKER-FIRST GATE ACTIVE — STOP. Read references/tracker-first-mint.md before continuing."
    fi
-   # The tracker-first arm (named-issue mint, create-first ceremony, attach + seed)
+   # The tracker-first arm (named-issue mint with complete identity, create-first
+   # ceremony, merge-base seed; attach only for partial/legacy responses)
    # runs HERE, and ONLY per that reference — it assigns SPEC_OUTPUT / IDENTIFIER.
 
    # SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE
