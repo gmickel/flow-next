@@ -115,7 +115,7 @@
     "impl:fn-254-tracker-first-mint-links-the-spec-in.1": 0
   },
   "spec_path": ".flow/specs/fn-254-tracker-first-mint-links-the-spec-in.md",
-  "status": "open",
+  "status": "done",
   "title": "Tracker-first mint links the spec in the same call",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-23T22:49:24.074818Z"
+  "updated_at": "2026-09-23T22:52:11.266541Z"
 }
