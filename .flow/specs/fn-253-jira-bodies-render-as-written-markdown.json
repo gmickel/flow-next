@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-253-jira-bodies-render-as-written-markdown",
   "impl_review_rounds": {
-    "fn-253-jira-bodies-render-as-written-markdown.1": 1
+    "fn-253-jira-bodies-render-as-written-markdown.1": 2
   },
   "next_task": 1,
   "no_plan": true,
@@ -92,6 +92,90 @@
       "task": "fn-253-jira-bodies-render-as-written-markdown.1",
       "timestamp": "2026-09-23T14:53:12.994618Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "80a39f97c12f55935e1e9243280dec31d18b9a404185e714f99048329a2bce09",
+      "backend": "codex",
+      "base_sha": "b91f43c03f7b59e4823a472aae1791d40b24e119",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-02079c5f091bcc9e7c20c6d631c2975a",
+            "classification": "introduced",
+            "findingId": "finding-02079c5f091bcc9e7c20c6d631c2975a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-696dca31024135822afb8bea590cfe50",
+            "classification": "introduced",
+            "findingId": "finding-696dca31024135822afb8bea590cfe50",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-ab537f3c34f1b4cf853fabc4b9076a7e",
+            "classification": "introduced",
+            "findingId": "finding-ab537f3c34f1b4cf853fabc4b9076a7e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-c75496abe6948dc40f9757f9828c3e65",
+            "classification": "introduced",
+            "findingId": "finding-c75496abe6948dc40f9757f9828c3e65",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-75a851cecb5d34daaba1d0cf3ec07f23",
+            "classification": "introduced",
+            "findingId": "finding-75a851cecb5d34daaba1d0cf3ec07f23",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-d57f6871a16bd3a9152d5c771bb850cc",
+            "classification": "introduced",
+            "findingId": "finding-d57f6871a16bd3a9152d5c771bb850cc",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "31b8d4f1072fb040301d8f11ba2e69b16936169b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2354,
+      "output_sha256": "f4b50e3792a0a60fc010098c2f960315f06e362849fb1c11a91958f047927432",
+      "reservation_id": "a092010096044f508ee3b1d23e915f98",
+      "round_consumed": true,
+      "scope": "impl:fn-253-jira-bodies-render-as-written-markdown.1",
+      "superseded_by": null,
+      "task": "fn-253-jira-bodies-render-as-written-markdown.1",
+      "timestamp": "2026-09-23T14:55:05.595100Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {},
@@ -114,5 +198,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-23T14:53:12.997058Z"
+  "updated_at": "2026-09-23T14:55:05.597537Z"
 }

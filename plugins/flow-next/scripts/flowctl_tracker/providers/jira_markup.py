@@ -221,9 +221,7 @@ def markdown_to_wiki(text: str) -> str:
         fence = _MD_FENCE_RE.match(line)
         if fence:
             marker, lang = fence.group(1), fence.group(2).lower()
-            out.append(f"{{code:{lang}}}" if lang in _CODE_LANGS
-                       else "{noformat}")
-            closer = "{code}" if lang in _CODE_LANGS else "{noformat}"
+            content: list[str] = []
             i += 1
             while i < len(lines):
                 body = lines[i].strip()
@@ -231,8 +229,21 @@ def markdown_to_wiki(text: str) -> str:
                         and len(body) >= len(marker)):
                     i += 1
                     break
-                out.append(_shield_closer(lines[i], closer, +1))
+                content.append(lines[i])
                 i += 1
+            # Pick the block whose terminator the content does not hold:
+            # Jira renders an escaping backslash inside a block literally.
+            joined = "\n".join(content)
+            if "{code}" in joined and "{noformat}" not in joined:
+                opener, closer = "{noformat}", "{noformat}"
+            elif lang in _CODE_LANGS or "{noformat}" in joined:
+                opener = f"{{code:{lang}}}" if lang in _CODE_LANGS else "{code}"
+                closer = "{code}"
+            else:
+                opener, closer = "{noformat}", "{noformat}"
+            out.append(opener)
+            # Both terminators present: only a visible escape is left.
+            out.extend(_shield_closer(ln, closer, +1) for ln in content)
             out.append(closer)
             stack = []
             continue
