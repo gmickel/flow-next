@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-255-unattended-run-correctness-fixes-audit",
   "spec_path": ".flow/tasks/fn-255-unattended-run-correctness-fixes-audit.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Unattended-run correctness fixes (audit wave 1)",
   "updated_at": "2026-09-25T21:23:12.659759Z"
 }

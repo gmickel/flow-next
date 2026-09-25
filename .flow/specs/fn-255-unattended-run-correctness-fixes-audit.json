@@ -179,7 +179,7 @@
     "impl:fn-255-unattended-run-correctness-fixes-audit.1": 0
   },
   "spec_path": ".flow/specs/fn-255-unattended-run-correctness-fixes-audit.md",
-  "status": "open",
+  "status": "done",
   "title": "Unattended-run correctness fixes (audit wave 1)",
   "tracker": {
     "baseHashFlow": null,
@@ -192,5 +192,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T22:02:12.141565Z"
+  "updated_at": "2026-09-25T22:41:09.354830Z"
 }
