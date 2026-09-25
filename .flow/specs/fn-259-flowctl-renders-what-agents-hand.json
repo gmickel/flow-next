@@ -1,0 +1,27 @@
+{
+  "branch_name": "fn-259-flowctl-renders-what-agents-hand",
+  "created_at": "2026-09-25T20:30:52.019431Z",
+  "depends_on_epics": [
+    "fn-255-unattended-run-correctness-fixes-audit",
+    "fn-258-smaller-default-outputs-and-bundles"
+  ],
+  "id": "fn-259-flowctl-renders-what-agents-hand",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-259-flowctl-renders-what-agents-hand.md",
+  "status": "open",
+  "title": "flowctl renders what agents hand-assemble (audit wave 5)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-25T20:34:50.696324Z"
+}

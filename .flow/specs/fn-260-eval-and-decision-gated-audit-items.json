@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-260-eval-and-decision-gated-audit-items",
+  "created_at": "2026-09-25T20:30:52.398130Z",
+  "depends_on_epics": [],
+  "id": "fn-260-eval-and-decision-gated-audit-items",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-260-eval-and-decision-gated-audit-items.md",
+  "status": "open",
+  "title": "Eval- and decision-gated audit items (audit wave 6)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-25T20:33:17.143676Z"
+}
