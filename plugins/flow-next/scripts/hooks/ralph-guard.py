@@ -133,20 +133,41 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     if not receipt_path:
         return False
 
-    patterns = [
-        rf">\s*['\"]?{re.escape(receipt_path)}['\"]?",
-        r">\s*['\"]?.*receipts/.*\.json",
-        r">\s*['\"]?\$[{]?REVIEW_RECEIPT_PATH[}]?['\"]?",
-        r">\s*['\"]?\$[{]?RECEIPT_PATH[}]?['\"]?",
-        r">\s*['\"]?\$[{]?RECEIPT_DIR[}]?/",
-        r"cat\s*>\s*.*receipt",
-        r"\btee\s+['\"]?\$[{]?REVIEW_RECEIPT_PATH[}]?['\"]?",
-        r"\btee\s+['\"]?\$[{]?RECEIPT_PATH[}]?['\"]?",
-    ]
     receipt_dir = os.path.dirname(receipt_path)
-    if receipt_dir:
-        patterns.append(rf">\s*['\"]?{re.escape(receipt_dir)}")
-    return any(re.search(pattern, command, re.I) for pattern in patterns)
+
+    def receipt_target(target: str) -> bool:
+        target = _unquote(target)
+        return (
+            target == receipt_path
+            or bool(re.search(r"(?:^|/)receipts/.*\.json$", target, re.I))
+            or bool(re.fullmatch(r"\$\{?(?:REVIEW_RECEIPT_PATH|RECEIPT_PATH)\}?", target))
+            or bool(re.match(r"\$\{?RECEIPT_DIR\}?/", target))
+            or bool(receipt_dir and target.startswith(receipt_dir + "/"))
+        )
+
+    scan = _ShellScan(command)
+    _flowctl_argvs(command, scan)
+    for script in [command, *scan.nested_commands]:
+        # Preserve quotes so a literal ">" in prose is not a shell redirect.
+        lexer = shlex.shlex(script, posix=False, punctuation_chars="|&;<>")
+        lexer.whitespace_split = True
+        try:
+            tokens = list(lexer)
+        except ValueError:
+            continue
+        for index, token in enumerate(tokens[:-1]):
+            if token in {">", ">>", ">|", "&>", "&>>"}:
+                target = _unquote(tokens[index + 1])
+                if receipt_target(target):
+                    return True
+                # Retain the existing cat-to-receipt rail, scoped to its target.
+                if "receipt" in target.lower() and index and tokens[index - 1] == "cat":
+                    return True
+    return any(
+        os.path.basename(argv[0]) == "tee"
+        and any(receipt_target(target) for target in argv[1:] if not target.startswith("-"))
+        for argv in scan.command_argvs
+    )
 
 
 def _collapse_path_noise(text: str) -> str:
@@ -506,7 +527,7 @@ def handle_file_tool_receipt_check(data: dict) -> None:
             )
 
 
-_SHELL_COMMAND_SEPARATORS = frozenset({"|", "||", "&", "&&", ";", "(", ")"})
+_SHELL_COMMAND_SEPARATORS = frozenset({"|", "||", "&", "&&", ";", "(", ")", "\n"})
 _FLOWCTL_PATH_RE = re.compile(r"(?:.*/)?flowctl(?:\.py)?$")
 _REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor", "claude"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
@@ -709,10 +730,19 @@ def _tokenize_shell_command(command: str) -> Optional[list[str]]:
     """
     command = _collapse_line_continuations(command)
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()<>")
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()<>\n")
+        lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
         lexer.commenters = ""
-        return list(lexer)
+        tokens = []
+        for token in lexer:
+            # shlex groups adjacent punctuation, including a separator followed
+            # by a newline. Keep each newline as its own command boundary.
+            if "\n" in token and re.fullmatch(r"[|&;()<>\n]+", token):
+                tokens.extend(part for part in re.split(r"(\n)", token) if part)
+            else:
+                tokens.append(token)
+        return tokens
     except ValueError:
         return None
 
@@ -841,6 +871,8 @@ class _ShellScan:
         self.composed_vars = _composed_variables(command)
         # Executable-position tokens (after wrapper stripping), at every depth.
         self.exec_tokens: list[str] = []
+        self.command_argvs: list[list[str]] = []
+        self.nested_commands: list[str] = []
 
 
 def _is_flowctl_executable(token: str, launcher_vars: frozenset = frozenset()) -> bool:
@@ -1038,6 +1070,7 @@ def _segment_argvs(
     ):
         segment.pop(0)
     scan.exec_tokens.append(segment[0])
+    scan.command_argvs.append(segment)
     if _is_flowctl_executable(segment[0], scan.launcher_vars):
         return [segment[1:]]
     return []
@@ -1045,6 +1078,7 @@ def _segment_argvs(
 
 def _nested_argvs(text: str, depth: int, scan: "_ShellScan") -> list[list[str]]:
     """Classify shell text carried as a string argument of a wrapper."""
+    scan.nested_commands.append(text)
     tokens = _tokenize_shell_command(text)
     if tokens is None:
         # Unparseable nested text is still screened by the raw-text floor in
@@ -1417,51 +1451,45 @@ def handle_pre_tool_use(data: dict) -> None:
                     "Remove --new-chat flag."
                 )
 
-    # Block direct codex calls (must use flowctl codex wrappers)
-    if re.search(r"\bcodex\b", command):
-        # Allow flowctl codex wrappers
-        is_wrapper = re.search(r"flowctl\s+codex|FLOWCTL.*codex", command)
-        if not is_wrapper:
-            # Block direct codex usage
-            if re.search(r"\bcodex\s+exec\b", command):
+    # Check executable positions, never arguments such as grep patterns or prose.
+    scan = _ShellScan(command)
+    flowctl_argvs = _flowctl_argvs(command, scan) or []
+    backend_argvs = [
+        (os.path.basename(argv[0]), argv[1:], False)
+        for argv in scan.command_argvs
+        if os.path.basename(argv[0]) in {"codex", "copilot"}
+    ] + [
+        (argv[0], argv[1:], True)
+        for argv in flowctl_argvs if argv and argv[0] in {"codex", "copilot"}
+    ]
+    for backend, argv, is_wrapper in backend_argvs:
+        if backend == "codex":
+            if not is_wrapper and argv and argv[0] in {"exec", "review"}:
                 output_block(
-                    "BLOCKED: Do not call 'codex exec' directly. "
+                    f"BLOCKED: Do not call 'codex {argv[0]}' directly. "
                     "Use 'flowctl codex impl-review' or 'flowctl codex plan-review' "
                     "to ensure proper receipt handling and session continuity."
                 )
-            if re.search(r"\bcodex\s+review\b", command):
+            if any(arg == "--last" or arg.startswith("--last=") for arg in argv):
                 output_block(
-                    "BLOCKED: Do not call 'codex review' directly. "
-                    "Use 'flowctl codex impl-review' or 'flowctl codex plan-review'."
+                    "BLOCKED: Do not use '--last' with codex. "
+                    "Session continuity is managed via session_id in receipts."
                 )
-        # Block --last even through wrappers (breaks session continuity)
-        if re.search(r"--last\b", command):
-            output_block(
-                "BLOCKED: Do not use '--last' with codex. "
-                "Session continuity is managed via session_id in receipts."
-            )
-
-    # Block direct copilot calls (must use flowctl copilot wrappers)
-    if re.search(r"\bcopilot\b", command):
-        # Allow flowctl copilot wrappers
-        is_wrapper = re.search(r"flowctl\s+copilot|FLOWCTL.*copilot", command)
-        if not is_wrapper:
-            # Block any direct copilot invocation
-            output_block(
-                "BLOCKED: Do not call 'copilot' directly. "
-                "Use 'flowctl copilot impl-review', 'flowctl copilot plan-review', "
-                "or 'flowctl copilot completion-review' to ensure proper receipt "
-                "handling and session continuity (via client-generated UUID)."
-            )
-        # Block --continue even through wrappers (resumes most recent session,
-        # conflicts with parallel reviews and multi-project usage)
-        if re.search(r"--continue\b", command):
-            output_block(
-                "BLOCKED: Do not use '--continue' with copilot. "
-                "It resumes the most recent session and conflicts with parallel "
-                "reviews. Session continuity is managed via session_id (UUID) "
-                "stored in receipts and replayed with --resume=<uuid>."
-            )
+        else:
+            if not is_wrapper:
+                output_block(
+                    "BLOCKED: Do not call 'copilot' directly. "
+                    "Use 'flowctl copilot impl-review', 'flowctl copilot plan-review', "
+                    "or 'flowctl copilot completion-review' to ensure proper receipt "
+                    "handling and session continuity (via client-generated UUID)."
+                )
+            if any(arg == "--continue" or arg.startswith("--continue=") for arg in argv):
+                output_block(
+                    "BLOCKED: Do not use '--continue' with copilot. "
+                    "It resumes the most recent session and conflicts with parallel "
+                    "reviews. Session continuity is managed via session_id (UUID) "
+                    "stored in receipts and replayed with --resume=<uuid>."
+                )
 
     # Validate setup-review usage
     if "setup-review" in command:
@@ -1485,16 +1513,17 @@ def handle_pre_tool_use(data: dict) -> None:
             )
 
     # Enforce flowctl done requires --evidence-json and --summary-file
-    if " done " in command and ("flowctl" in command or "FLOWCTL" in command):
-        # Skip if it's just "flowctl done --help" or similar
-        if not re.search(r"--help|-h", command):
-            if not re.search(r"--evidence-json|--evidence", command):
+    for argv in flowctl_argvs:
+        if not argv or argv[0] != "done":
+            continue
+        if not {"--help", "-h"}.intersection(argv):
+            if not any(arg.split("=", 1)[0] in {"--evidence-json", "--evidence"} for arg in argv):
                 output_block(
                     "BLOCKED: flowctl done requires --evidence-json flag. "
                     "You must capture commit SHAs and test commands. "
                     "Use: flowctl done <task> --summary-file <s.md> --evidence-json <e.json>"
                 )
-            if not re.search(r"--summary-file|--summary", command):
+            if not any(arg.split("=", 1)[0] in {"--summary-file", "--summary"} for arg in argv):
                 output_block(
                     "BLOCKED: flowctl done requires --summary-file flag. "
                     "You must write a done summary. "
@@ -1831,14 +1860,16 @@ def handle_stop(data: dict) -> None:
 
     # Clean up state file
     state_file = get_state_file(session_id)
-    if state_file.exists():
+    if data.get("hook_event_name") != "SubagentStop" and state_file.exists():
         state_file.unlink()
 
     sys.exit(0)
 
 
 def handle_subagent_stop(data: dict) -> None:
-    """Handle SubagentStop event - same as Stop for subagents."""
+    """Only workers own the receipt gate; the parent owns session cleanup."""
+    if data.get("agent_type", "").split(":")[-1] != "worker":
+        sys.exit(0)
     handle_stop(data)
 
 

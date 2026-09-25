@@ -33,6 +33,7 @@ from typing import Optional
 from .. import envelope
 from ..executor import execute as default_execute
 from ..lifecycle.helpers import (ACTIVE, Execute, Result, dict_, load_spec,
+                                spec_sidecar_lock,
                                  merged_tracker, read_config, tracker_type,
                                  write_sync_receipt, write_tracker_block,
                                  atomic_write_json, leaf_is_safe)
@@ -90,7 +91,7 @@ def _ledger_write(flow_dir: Path, spec_id: str, mutate) -> Result:
     block, or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded
@@ -278,7 +279,7 @@ def _ledger_reclaim(flow_dir: Path, spec_id: str, *, key: str,
     Returns the persisted tracker block, or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded
@@ -324,7 +325,7 @@ def _ledger_finalize_guarded(flow_dir: Path, spec_id: str, dep_spec: str, *,
     TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded
@@ -419,7 +420,7 @@ def _ledger_claim(flow_dir: Path, spec_id: str, *, key: str, dep_spec: str,
     tracker block on a successful claim, or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded

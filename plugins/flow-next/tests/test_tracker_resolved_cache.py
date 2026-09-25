@@ -9,6 +9,7 @@ no POSIX-only APIs anywhere in this file.
 from __future__ import annotations
 
 import json
+import io
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import threading
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
@@ -26,6 +28,46 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from flowctl_tracker import config_lock as CL  # noqa: E402
 from flowctl_tracker import resolved_cache as RC  # noqa: E402
 from flowctl_tracker.types import ErrorClass, TrackerError  # noqa: E402
+
+
+class ConfigReaderDiagnostics(unittest.TestCase):
+    def test_tracker_readers_share_one_parse_warning(self) -> None:
+        from flowctl_tracker.config_io import load_raw_config, read_config_file
+        from flowctl_tracker.lifecycle.helpers import read_config
+        from flowctl_tracker.resolve_verb import _read_raw
+        from flowctl_tracker.wire import _read_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            path = flow / "config.json"
+            self.assertIsNone(load_raw_config(path))
+            invalid = '{"tracker": true,}'
+            path.write_text(invalid, encoding="utf-8")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                for reader in (read_config, _read_raw, _read_config):
+                    self.assertEqual(reader(flow), {})
+            message = stderr.getvalue()
+            self.assertEqual(message.count("Warning:"), 1)
+            self.assertIn(str(path), message)
+            self.assertIn("line 1 column", message)
+            with self.assertRaisesRegex(ValueError, "line 1 column"):
+                read_config_file(path)
+            with self.assertRaises(ValueError):
+                RC._read_config(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), invalid)
+
+    def test_strict_config_reader_rejects_nonobject_and_unreadable(self) -> None:
+        from flowctl_tracker.config_io import read_config_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            path.write_text("[]", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                read_config_file(path)
+            with mock.patch.object(Path, "read_text", side_effect=PermissionError("denied")):
+                with self.assertRaisesRegex(ValueError, "denied"):
+                    read_config_file(path)
 
 
 def iso(dt: datetime) -> str:

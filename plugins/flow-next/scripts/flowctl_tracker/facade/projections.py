@@ -8,6 +8,7 @@ from urllib.parse import quote, urlencode
 
 from ..config_lock import ConfigLockTimeout, config_lock
 from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
+                                spec_sidecar_lock,
                                  load_spec, merged_tracker, now_iso)
 from ..types import ErrorClass, TrackerError
 from ..wire import (_PAGE_SIZE, _destination, _gh_repo, _gl_project, _jira,
@@ -199,7 +200,7 @@ def _persist_ready(flow_dir: Path, spec_id: str, *, desired: bool,
                    expected_id: str | None, expected_identifier: str | None
                    ) -> Result:
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             loaded = load_spec(flow_dir, spec_id)
             if isinstance(loaded, TrackerError):
                 return loaded

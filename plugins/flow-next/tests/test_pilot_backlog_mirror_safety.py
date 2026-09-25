@@ -431,12 +431,12 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         # Prose-quality restatement pins removed 2026-08-07 - judged via
         # .flow/criteria.md G1, not grep. The ENFORCING bash allowlist is the
         # guard that stays pinned.
-        self.assertIn("assert_allowed_dispatch", self.m_workflow)
+        self.assertIn('case "$DISPATCH_TARGET" in', self.m_workflow)
         # The allowlist names the sanctioned stage skills only.
         self.assertRegex(
             self.m_workflow,
             r"/flow-next:plan\|/flow-next:plan-review\|/flow-next:work"
-            r"\|/flow-next:qa\|/flow-next:make-pr\)\s*return 0",
+            r"\|/flow-next:qa\|/flow-next:make-pr\)\s*:",
             "the dispatch allowlist must whitelist only the pipeline stages",
         )
 

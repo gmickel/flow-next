@@ -297,6 +297,57 @@ class TestReviewFanout(unittest.TestCase):
 
     # 1 -----------------------------------------------------------------
 
+    def test_interrupted_dispatch_finalizes_completed_draw(self) -> None:
+        sidecars = []
+
+        def interrupted(draws, prompts, repo_root, args, sidecar):
+            sidecars.append(sidecar)
+            meta = json.loads((sidecar / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["reservation_id"], sidecar.name)
+            draw = next(row for row in draws if row["axis"] == "correctness")
+            flowctl._review_fanout_run_draw(
+                draw, prompts[draw["axis"]], repo_root, args, sidecar,
+            )
+            raise KeyboardInterrupt("host interrupted after first draw")
+
+        with mock.patch.object(flowctl, "_review_fanout_dispatch", side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self._dispatch(self._ship_exec([]))
+        self.assertEqual(self._pending(), 1)
+        sidecar = sidecars[0]
+        # The aggregate was never refreshed; finalize must read the draw file.
+        pending = json.loads((sidecar / "meta.json").read_text(encoding="utf-8"))
+        self.assertTrue(all(row["verdict"] is None for row in pending["draws"]))
+        receipt = self.root / "recovered.json"
+        code, result, err = self._finalize(
+            sidecar.name, self._write_merged(_empty_merged_review()),
+            "--receipt", str(receipt),
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(result["verdict"], "SHIP")
+        self.assertEqual(self._pending(), 0)
+        published = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(sum(row.get("verdict") == "SHIP" for row in published["draws"]), 1)
+        self.assertEqual(sum(bool(row.get("round_consumed")) for row in self._attempts()), 1)
+
+    def test_interrupted_dispatch_without_draws_refunds_once(self) -> None:
+        sidecars = []
+
+        def interrupted(draws, prompts, repo_root, args, sidecar):
+            sidecars.append(sidecar)
+            raise KeyboardInterrupt("host interrupted before first draw")
+
+        with mock.patch.object(flowctl, "_review_fanout_dispatch", side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self._dispatch(self._ship_exec([]))
+        merged = self._write_merged(_empty_merged_review())
+        for _ in range(2):
+            code, _, err = self._finalize(sidecars[0].name, merged)
+            self.assertEqual(code, 2, err)
+        self.assertEqual(self._pending(), 0)
+        refunds = [row for row in self._attempts() if row.get("outcome") == "transport_failure"]
+        self.assertEqual(len(refunds), 1)
+
     def test_one_reservation_both_phases(self) -> None:
         calls: list = []
         receipt = self.root / "receipt.json"

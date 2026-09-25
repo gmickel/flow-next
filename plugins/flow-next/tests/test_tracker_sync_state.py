@@ -370,6 +370,43 @@ class TrackerSyncStateTestCase(unittest.TestCase):
 
     # --- PR #246: relink serializes under the shared config writer lock -----
 
+    def test_tracker_writer_waits_for_review_lock_and_reloads(self) -> None:
+        import threading
+
+        from flowctl_tracker.lifecycle.helpers import locked_tracker_write
+        from flowctl_tracker.types import TrackerError
+
+        spec_id = self._create_spec("Shared sidecar lock")
+        flow_dir = self.tmpdir / ".flow"
+        path = self.flowctl.find_spec_json_path(flow_dir, spec_id)
+        started = threading.Event()
+        done = threading.Event()
+        results = []
+
+        def write() -> None:
+            started.set()
+            try:
+                results.append(locked_tracker_write(
+                    flow_dir, spec_id, lambda tracker: {**tracker, "id": "uuid-new"}))
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=write, daemon=True)
+        with self.flowctl._review_sidecar_lock(flow_dir, spec_id):
+            worker.start()
+            self.assertTrue(started.wait(5))
+            self.assertFalse(done.wait(0.2), "tracker ignored the review lock")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["reviewRounds"] = {"impl": {"round": 9}}
+            path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(done.wait(15))
+        worker.join(5)
+        self.assertEqual(len(results), 1)
+        self.assertNotIsInstance(results[0], TrackerError)
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["tracker"]["id"], "uuid-new")
+        self.assertEqual(saved["reviewRounds"], data["reviewRounds"])
+
     def test_set_tracker_id_excluded_by_held_config_lock(self) -> None:
         """The relink writer must hold the same config_lock every tracker
         verb's identity recheck reloads under: while another writer holds

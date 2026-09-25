@@ -200,24 +200,27 @@ Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
 
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
-  ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
-  TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
-  RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
-  # Subcommand + one literal flag stay on the command line (the Ralph guard
-  # blocks a variable in either of the two tokens after the launcher).
-  TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
-  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
-  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
-  # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
-  # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
-  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+  # Only a first-round route may skip review; probe failure falls through.
+  if ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)" \
+      && [[ "$(jq -r '.action // empty' <<<"$ROUTE")" == "fanout" ]]; then
+    TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+    RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
+    # Subcommand + one literal flag stay on the command line (the Ralph guard
+    # blocks a variable in either of the two tokens after the launcher).
+    TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
+    [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+    [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+    # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
+    # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
+    [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
-  if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
-    # Exit 0 = SKIP. Receipt already written by flowctl.
-    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
-    echo "Triage-skip: $SKIP_REASON"
-    echo "VERDICT=SHIP"
-    exit 0
+    if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+      # Exit 0 = SKIP. Receipt already written by flowctl.
+      SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
+      echo "Triage-skip: $SKIP_REASON"
+      echo "VERDICT=SHIP"
+      exit 0
+    fi
   fi
   # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
   # through so impl-review proceeds safely rather than failing on triage.

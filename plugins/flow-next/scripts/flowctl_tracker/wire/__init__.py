@@ -764,11 +764,9 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
 
 
 def _read_config(flow_dir) -> dict:
-    try:
-        data = json.loads((Path(flow_dir) / "config.json").read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    from ..config_io import load_raw_config  # noqa: PLC0415
+
+    return load_raw_config(Path(flow_dir) / "config.json") or {}
 
 
 def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None,

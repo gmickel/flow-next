@@ -90,8 +90,8 @@ class CodexFlowDispatchTests(unittest.TestCase):
     def test_installed_shell_dispatch_identity_preserves_authority_gate(self):
         def allowlist(path):
             text = path.read_text()
-            start = text.index("  assert_allowed_dispatch()")
-            return text[start:text.index("\n  }", start) + len("\n  }")]
+            start = text.index('case "$DISPATCH_TARGET" in')
+            return text[start:text.index("esac", start) + len("esac")]
 
         source = allowlist(self.source / "auto.md")
         installed = allowlist(self.installed / "auto.md")
@@ -107,7 +107,7 @@ class CodexFlowDispatchTests(unittest.TestCase):
         ):
             with self.subTest(target=target, authorized=authorized, spec=spec, pr=pr):
                 result = subprocess.run(
-                    ["bash", "-c", installed + '\nassert_allowed_dispatch "$1"', "test", target],
+                    ["bash", "-c", 'DISPATCH_TARGET="$1"\n' + installed, "test", target],
                     env=dict(self.env, LAND_AUTHORIZED=authorized,
                              LAND_SCOPE_SPEC=spec, LAND_SCOPE_PR=pr),
                     capture_output=True, text=True, timeout=30,

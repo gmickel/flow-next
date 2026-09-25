@@ -266,7 +266,7 @@ class ConfigSnapshotTestCase(unittest.TestCase):
                 if content is not None:
                     path.write_bytes(content)
                 snapshot = self.flowctl.load_config_snapshot()
-                self.assertIsNone(snapshot.raw)
+                self.assertEqual(snapshot.raw, None if content is None else {})
                 self.assertEqual(snapshot.merged, self.flowctl.get_default_config())
                 self.assertEqual(self.flowctl.load_flow_config(), snapshot.merged)
                 self.assertIs(

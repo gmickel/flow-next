@@ -274,9 +274,11 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         body_out = sync_body(
             flow_dir, spec_id, flow_file_body=flow_body, direction="push",
             tracker_body=tracker_body, event=event, execute=execute,
-            sync_title=True, write_receipt=False,
+            sync_title=True, refuse_tracker_divergence=True, write_receipt=False,
         )
         if isinstance(body_out, TrackerError):
+            if body_out.subtype == "tracker_diverged":
+                return body_out
             prior = list((body_out.details or {}).get("completed_steps") or [])
             if prior:
                 completed.append("sync-body-partial")

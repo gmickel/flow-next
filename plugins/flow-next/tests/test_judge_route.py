@@ -181,7 +181,7 @@ class JudgeRouteTests(unittest.TestCase):
         indices = {"discovery": 0, "theme": 3, "build": 4, "capture_brief": 5, "defect": 6,
                    "cleanup": 7, "slowness": 8, "hillclimb": 9, "question": 10, "fork": 11,
                    "tiny": 12, "refine": 13, "plan_review": 14, "work_no_plan_default": 15,
-                   "plan": 15, "work_planned": 16, "all_done_make_pr": 17, "existing_pr_tail": 18, "closed_spec_no_pr": 19}
+                   "plan": 15, "work_planned": 17, "all_done_make_pr": 18, "existing_pr_tail": 19, "closed_spec_no_pr": 20}
         for kind, index in indices.items():
             self.assertEqual(f.JUDGE_ROUTE_PRESENTATION[kind][1], rows[index][3])
 

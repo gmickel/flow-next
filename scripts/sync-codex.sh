@@ -574,7 +574,7 @@ Before spawning, apply [references/judge-tier.md](references/judge-tier.md) once
 Use the **worker** agent role to implement each selected task. For a multi-task
 wave, create one isolated mutable workspace and task-unique summary/evidence
 paths per worker, then dispatch the selected workers concurrently. For a
-one-task wave, use the existing single-worker path.
+one-task wave, use the existing single-worker path. On every route, choose and pass absolute, task-unique `HANDOVER_SUMMARY` and `HANDOVER_EVIDENCE` paths before dispatch; create their parent directory.
 
 **Commit the spec and task files BEFORE creating the workspaces.** A wave
 workspace is branched from a commit, so anything still uncommitted in the
@@ -610,7 +610,7 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host-deferred
+REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host|host-deferred
 RALPH_MODE: true|false
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>
@@ -652,7 +652,7 @@ host-deferred shape is independent of `REVIEW_MODE`; the conductor preserves
 the resolved backend and applies it after integration. The prompt fields are an
 internal handoff, not a public CLI or stored schema.
 
-**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** On the wave route's single-worker path only, when the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; terminal NEEDS_WORK escalates after impl-review's internal bounded fix loop; never re-invoke it. Read references/host-deferred-review.md for the task-base and memory auto-capture gates.
 
 **Worker returns** (both paths): task id, terminal status, commit range, `actual_model` when evidenced, and the
 summary/evidence paths (plus the review receipt path when the single-worker path

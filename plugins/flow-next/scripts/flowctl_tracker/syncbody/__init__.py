@@ -37,7 +37,7 @@ from ..lifecycle.helpers import (ACTIVE, Execute, Result, atomic_write_json,
                                  merged_tracker, now_iso, read_config,
                                  spec_project_fields,
                                  tracker_type, write_sync_receipt,
-                                 write_tracker_block)
+                                 write_tracker_block, spec_sidecar_lock)
 from ..lifecycle.linkstate import require_durable
 from ..lifecycle.verbs import (_claim_body_mutation, _claim_is_stale,
                                _ensure_create_first_ignored, _release_claim)
@@ -209,7 +209,7 @@ def _commit_paired_base(flow_dir: Path, spec_id: str, *,
     hash_flow = _content_hash(base_flow)
     hash_tracker = _content_hash(merge_tracker)
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             loaded = load_spec(flow_dir, spec_id)
             if isinstance(loaded, TrackerError):
                 return loaded
@@ -317,6 +317,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               expected_tracker_body: Optional[str] = None,
               tracker_read: Optional[Callable[[dict], Result]] = None,
               sync_title: bool = False,
+              refuse_tracker_divergence: bool = False,
               direction: str = "push",
               event: Optional[str] = None,
               execute: Execute = default_execute,
@@ -379,6 +380,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             flow_file_body=flow_file_body, tracker_body=tracker_body,
             expected_tracker_body=expected_tracker_body,
             tracker_read=tracker_read, sync_title=sync_title,
+            refuse_tracker_divergence=refuse_tracker_divergence,
             direction=direction,
             event=event, execute=execute, write_receipt=write_receipt)
     finally:
@@ -392,6 +394,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    expected_tracker_body: Optional[str],
                    tracker_read: Optional[Callable[[dict], Result]],
                    sync_title: bool,
+                   refuse_tracker_divergence: bool,
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
@@ -452,6 +455,13 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         current_title = _raw_title(provider, parent)
     legacy = _legacy_unconverted(provider, tracker, wire_body)
     base_tracker = tracker.get("mergeBaseTracker")
+    if (refuse_tracker_divergence and not legacy and isinstance(base_tracker, str)
+            and trackerBodyForMerge(current_body) != base_tracker):
+        return TrackerError(
+            ErrorClass.CONFLICT,
+            "tracker body differs from the recorded merge base; run reconcile",
+            subtype="tracker_diverged",
+        )
 
     malformed = _deps_region_error(current_body, label="tracker body")
     if malformed is not None:

@@ -6,6 +6,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Unattended runs preserve their scope and stop on blocked work.** Tracker-key specs resolve through the same lookup as other commands, review overrides stay explicit, and branch setup uses the resolved default base and stops on git failures.
+- **Review receipts agree with the recorded review.** Contradictory verdicts and counts are refused, open reviews survive trivial-diff triage, concurrent spec updates retain review rounds, and interrupted fan-out can recover completed draws.
+- **Worker handovers stay separate across concurrent tasks.** The conductor supplies task-unique paths and integrated review bases, captures lessons after a NEEDS_WORK-to-SHIP recovery, and passes readable inputs to plan-sync.
+- **Invalid configuration and tracker co-edits remain intact.** Configuration writes refuse unreadable or malformed files; body-writing tracker pushes return `tracker_diverged` until reconcile handles remote edits. Ralph checks shell commands and redirect targets without blocking harmless mentions, and keeps worker completion evidence mandatory.
+
 ## [flow-next 6.0.2] - 2026-09-24
 
 ### Fixed

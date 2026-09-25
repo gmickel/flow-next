@@ -300,7 +300,9 @@ Before accepting the return or integrating, apply [phases.md Phase 3d](../phases
    integration steps: confirm the handover; integrate that task's workspace
    commits onto the target branch; normalize its evidence SHAs to the
    integrated commit IDs (retaining the task's normalized integrated base and
-   head).
+   head). Keep that base in the conductor's per-task record; if absent, recover
+   `base_commit` from that task's normalized evidence. Never read the shared
+   `.flow/tmp/base_commit`; a missing base is `BLOCKED`, never an empty review base.
 2. When the task's resolved `REVIEW_MODE` is not `none`, LAUNCH its review
    conductor-side
    (`/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
@@ -324,7 +326,12 @@ default shape.
   the review context, not on the target) and append their integrated SHAs to
   the task's evidence commits - a SHIP whose fix commits are not on the
   target is not a completable state, and running `done` over it has broken
-  this. THEN run the focused integrated verify; `flowctl done` with the
+  this. THEN run the focused integrated verify. Before `done`, the conductor
+  reads [worker.md Phase 4.5](../../../agents/worker.md#phase-45-auto-capture-on-successful-fix-after-needs_work-ship)
+  and executes its memory auto-capture using the review rounds and fix commits:
+  check `memory.enabled`, capture only after NEEDS_WORK → SHIP under its
+  existing non-trivial-fix/dedup rules, and warn on failure without blocking
+  completion. Then `flowctl done` with the
   updated task-unique summary/evidence; verify `done`; run the 3d.1 tracker
   touchpoint; **run 3e for this completed task** (the skip line); THEN free
   the slot and recompute admission at 3a. done(N) fires only

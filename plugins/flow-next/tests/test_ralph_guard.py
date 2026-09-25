@@ -217,6 +217,111 @@ class CodexSectionGuardTestCase(unittest.TestCase):
         )
 
 
+class UnattendedGuardMatchingTestCase(unittest.TestCase):
+    def _command(self, command: str):
+        return _drive_hook(
+            {
+                "hook_event_name": "PreToolUse", "tool_name": "Bash",
+                "session_id": "fn255-matching", "tool_input": {"command": command},
+            },
+            env_extra={"REVIEW_RECEIPT_PATH": "/tmp/receipts/impl-fn-1.2.json"},
+        )
+
+    def test_arguments_and_nonreceipt_redirects_pass(self) -> None:
+        for command in (
+            "ls /tmp/receipts/*.json",
+            "ls > /tmp/list.txt /tmp/receipts/*.json",
+            "grep copilot src/",
+            "git commit -m 'fix: codex exec handling'",
+            "printf '%s' 'codex exec; copilot --continue'",
+            "echo 'write > /tmp/receipts/impl-fn-1.2.json'",
+            "echo '>' /tmp/receipts/impl-fn-1.2.json",
+            "flowctl done fn-1.2 --help",
+            "flowctl done fn-1.2 '-h'",
+        ):
+            with self.subTest(command=command):
+                proc = self._command(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_real_violations_stay_blocked(self) -> None:
+        for command in (
+            "echo '{}' > /tmp/receipts/impl-fn-1.2.json",
+            "echo '{}' >> /tmp/receipts/impl-fn-1.2.json",
+            "bash -c 'echo > /tmp/receipts/impl-fn-1.2.json'",
+            "eval 'echo > /tmp/receipts/impl-fn-1.2.json'",
+            "echo '{}' > \"$REVIEW_RECEIPT_PATH\"",
+            "printf '{}' | tee /tmp/receipts/impl-fn-1.2.json",
+            "grep copilot src/; copilot --prompt hi",
+            "echo safe\ncopilot --prompt hi",
+            "echo safe;\ncodex exec hi",
+            "flowctl codex impl-review fn-1.2; codex exec hi",
+            "env FOO=1 /usr/bin/codex review --base main",
+            "bash -c 'copilot --prompt hi'",
+            "flowctl copilot impl-review fn-1.2 --continue",
+            "flowctl done fn-1.2 --summary-file /tmp/s-helper.md",
+            "flowctl done fn-1.2 --summary-file /tmp/--help.md",
+            "echo --help; flowctl done fn-1.2 --summary-file /tmp/s.md",
+        ):
+            with self.subTest(command=command):
+                proc = self._command(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+
+    def test_subagent_stop_preserves_parent_state_and_gates_only_workers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            state_path = pathlib.Path(td) / "ralph-guard-fn255-stop.json"
+            original = '{"chats_sent": 3}'
+            state_path.write_text(original, encoding="utf-8")
+            receipt_path = pathlib.Path(td) / "impl-fn-1.2.json"
+            env = {
+                "TMPDIR": td, "TMP": td, "TEMP": td,
+                "REVIEW_RECEIPT_PATH": str(receipt_path),
+            }
+            for agent_type in ("Explore", "flow-next:repo-scout", "", "worker", "flow-next:worker"):
+                with self.subTest(agent_type=agent_type):
+                    proc = _drive_hook(
+                        {"hook_event_name": "SubagentStop", "session_id": "fn255-stop",
+                         "agent_type": agent_type}, env_extra=env,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    if agent_type.split(":")[-1] == "worker":
+                        self.assertEqual(json.loads(proc.stdout)["decision"], "block")
+                    else:
+                        self.assertEqual(proc.stdout, "")
+                    self.assertEqual(state_path.read_text(encoding="utf-8"), original)
+            receipt_path.write_text(
+                '{"type":"impl_review","id":"fn-1.2","verdict":"SHIP"}', encoding="utf-8",
+            )
+            proc = _drive_hook(
+                {"hook_event_name": "SubagentStop", "session_id": "fn255-stop",
+                 "agent_type": "flow-next:worker"}, env_extra=env,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertTrue(state_path.exists())
+            proc = _drive_hook(
+                {"hook_event_name": "Stop", "session_id": "fn255-stop"}, env_extra=env,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertFalse(state_path.exists())
+
+    @unittest.skipIf(os.name == "nt", "Runs the bash wrapper with an empty PATH")
+    def test_inactive_wrapper_needs_no_interpreter_or_utilities(self) -> None:
+        import shutil
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+        with tempfile.TemporaryDirectory() as td:
+            for active in (None, "0"):
+                env = {**os.environ, "PATH": td}
+                env.pop("FLOW_RALPH", None)
+                if active is not None:
+                    env["FLOW_RALPH"] = active
+                proc = subprocess.run(
+                    [bash, str(GUARD_PY.with_suffix(""))], input="{}",
+                    capture_output=True, text=True, env=env,
+                )
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.stderr, "")
+
+
 class FileToolReceiptGateTestCase(unittest.TestCase):
     def test_write_receipt_blocked_pre_review(self) -> None:
         receipt = "/tmp/flow-next-test-receipts/impl-fn-1.2.json"

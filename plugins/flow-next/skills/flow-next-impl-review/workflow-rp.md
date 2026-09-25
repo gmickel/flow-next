@@ -321,91 +321,96 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # Optional: capture suppression-gate tally.
-  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
-  SUPPRESSED_JSON="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//' \
-    | awk '
-      BEGIN { first=1; printf "{" }
-      {
-        n=split($0, parts, /,[[:space:]]*/)
-        for (i=1; i<=n; i++) {
-          if (match(parts[i], /([0-9]+)[[:space:]]+at[[:space:]]+anchor[[:space:]]+(0|25|50|75|100)/, m)) {
+  EXTRA_FIELDS=""
+  # Task-scoped record derives these fields; standalone has no recorder.
+  if [[ -z "$TASK_ID" ]]; then
+    # Optional: capture suppression-gate tally.
+    # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
+    SUPPRESSED_JSON="$(grep -iE '^[>*_` ]*suppressed findings[ *_`]*:' "$RESPONSE_FILE" \
+      | head -n 1 \
+      | awk '
+        BEGIN { first=1; printf "{" }
+        {
+          while (match($0, /[0-9]+[[:space:]]+at[[:space:]]+anchor[[:space:]]+(100|75|50|25|0)/)) {
+            pair=substr($0, RSTART, RLENGTH)
+            split(pair, words, /[[:space:]]+/)
             if (!first) printf ","
-            printf "\"%s\":%s", m[2], m[1]
+            printf "\"%s\":%s", words[4], words[1]
             first=0
+            $0=substr($0, RSTART+RLENGTH)
           }
         }
-      }
-      END { printf "}" }')"
+        END { printf "}" }')"
 
-  # Optional: capture introduced vs pre_existing classification tally.
-  # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
-  # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
-  CLASSIFICATION_LINE="$(grep -iE '^[>*_` ]*classification counts[ *_`]*:' "$RESPONSE_FILE" \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
-  INTRODUCED_COUNT=""
-  PRE_EXISTING_COUNT=""
-  if [[ -n "$CLASSIFICATION_LINE" ]]; then
-    INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+introduced' \
+    # Optional: capture introduced vs pre_existing classification tally.
+    # Reviewer emits a line like "Classification counts: 2 introduced, 4 pre_existing."
+    # Uses portable grep -Eio so this works on BSD awk / mawk / gawk alike.
+    CLASSIFICATION_LINE="$(grep -iE '^[>*_` ]*classification counts[ *_`]*:' "$RESPONSE_FILE" \
       | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
-      | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
-      | head -n 1 \
-      | grep -Eo '^[0-9]+')"
-    # Default the missing bucket to 0 when the other is present
-    if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
-      INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
-      PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
-    fi
-  fi
-
-  # Optional: capture unaddressed R-IDs.
-  # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
-  # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
-  UNADDRESSED_JSON=""
-  UNADDRESSED_LINE="$(grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' "$RESPONSE_FILE" \
-    | head -n 1 \
-    | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
-  if [[ -n "$UNADDRESSED_LINE" ]]; then
-    # Strip surrounding brackets/quotes; treat "none"/"n/a"/"" as empty list.
-    normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
-    lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
-      UNADDRESSED_JSON="[]"
-    else
-      # Extract R-ID tokens (R followed by digits), de-dup preserving order.
-      rids="$(printf '%s' "$UNADDRESSED_LINE" \
-        | grep -oE '\bR[0-9]+\b' \
-        | awk '!seen[$0]++')"
-      if [[ -z "$rids" ]]; then
-        UNADDRESSED_JSON="[]"
-      else
-        UNADDRESSED_JSON="$(printf '%s' "$rids" \
-          | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+      | sed -E 's/^[^:]+:[[:space:]]*//; s/\.$//')"
+    INTRODUCED_COUNT=""
+    PRE_EXISTING_COUNT=""
+    if [[ -n "$CLASSIFICATION_LINE" ]]; then
+      INTRODUCED_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+        | grep -Eio '[0-9]+[[:space:]]+introduced' \
+        | head -n 1 \
+        | grep -Eo '^[0-9]+')"
+      PRE_EXISTING_COUNT="$(printf '%s' "$CLASSIFICATION_LINE" \
+        | grep -Eio '[0-9]+[[:space:]]+pre[-_ ]?existing' \
+        | head -n 1 \
+        | grep -Eo '^[0-9]+')"
+      # Default the missing bucket to 0 when the other is present
+      if [[ -n "$INTRODUCED_COUNT" || -n "$PRE_EXISTING_COUNT" ]]; then
+        INTRODUCED_COUNT="${INTRODUCED_COUNT:-0}"
+        PRE_EXISTING_COUNT="${PRE_EXISTING_COUNT:-0}"
       fi
     fi
-  fi
 
-  # Build receipt; inject the optional signals only when present
-  EXTRA_FIELDS=""
-  if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
-    EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
-  fi
-  if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
-    EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
-  fi
-  if [[ -n "$UNADDRESSED_JSON" ]]; then
-    EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+    # Optional: capture unaddressed R-IDs.
+    # Reviewer emits `Unaddressed R-IDs: [R3, R5]` (or `[]` / `none` for empty).
+    # Absent line => legacy spec (no R-IDs) — leave field off the receipt entirely.
+    UNADDRESSED_JSON=""
+    UNADDRESSED_LINE="$(grep -iE '^[>*_` ]*unaddressed([[:space:]]+r[-_ ]?ids?)?[ *_`]*:' "$RESPONSE_FILE" \
+      | head -n 1 \
+      | sed -E 's/^[^:]+:[[:space:]]*//; s/[[:space:]]*$//; s/\.$//')"
+    if [[ -n "$UNADDRESSED_LINE" ]]; then
+      # Strip surrounding brackets/quotes; treat "none"/"n/a"/"" as empty list.
+      normalized="$(printf '%s' "$UNADDRESSED_LINE" | sed -E 's/^[[:space:]]*\[|\][[:space:]]*$//g; s/[[:space:]]+//g')"
+      lower="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+      if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
+        UNADDRESSED_JSON="[]"
+      else
+        # Extract R-ID tokens (R followed by digits and optional lowercase suffix), de-dup preserving order.
+        rids="$(printf '%s' "$UNADDRESSED_LINE" \
+          | grep -oE 'R[0-9]+[a-z]*' \
+          | awk '!seen[$0]++')"
+        if [[ -z "$rids" ]]; then
+          UNADDRESSED_JSON="[]"
+        else
+          UNADDRESSED_JSON="$(printf '%s' "$rids" \
+            | awk 'BEGIN{printf "["} {printf (NR>1?",":"") "\"" $0 "\""} END{printf "]"}')"
+        fi
+      fi
+    fi
+
+    # Build receipt; inject the optional signals only when present
+    EXTRA_FIELDS=""
+    if [[ -n "$SUPPRESSED_JSON" && "$SUPPRESSED_JSON" != "{}" ]]; then
+      EXTRA_FIELDS+=",\"suppressed_count\":$SUPPRESSED_JSON"
+    fi
+    if [[ -n "$INTRODUCED_COUNT" && -n "$PRE_EXISTING_COUNT" ]]; then
+      EXTRA_FIELDS+=",\"introduced_count\":$INTRODUCED_COUNT,\"pre_existing_count\":$PRE_EXISTING_COUNT"
+    fi
+    if [[ -n "$UNADDRESSED_JSON" ]]; then
+      EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
+    fi
+
+    EXTRA_FIELDS=",\"verdict\":\"$VERDICT\"$EXTRA_FIELDS"
   fi
 
   RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-impl-review-receipt-<task-id-or-branch-slug>-<suffix>.json"
   cat > "$RECEIPT_INPUT" <<EOF
-{"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts"}
+{"type":"impl_review","id":"<TASK_ID>","mode":"rp"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts"}
 EOF
   RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
 fi

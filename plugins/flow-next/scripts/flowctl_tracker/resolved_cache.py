@@ -251,20 +251,9 @@ def migrate_config(config: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 def _read_config(config_path: Path) -> dict:
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except (OSError, ValueError) as exc:
-        raise ValueError(f"unreadable config at {config_path}: {exc}") from exc
-    if not isinstance(data, dict):
-        # A present-but-non-object config is CORRUPT, not absent. Treating it
-        # as {} made the transaction atomically overwrite the file with a fresh
-        # document - silently destroying whatever the user had.
-        raise ValueError(
-            f"config at {config_path} is valid JSON but not an object; "
-            "refusing to overwrite it")
-    return data
+    from .config_io import read_config_file  # noqa: PLC0415
+
+    return read_config_file(config_path) or {}
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:

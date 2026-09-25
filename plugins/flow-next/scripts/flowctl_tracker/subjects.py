@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Iterator, Optional, Union
 
 from .lifecycle.helpers import (Result, atomic_write_json, dict_, leaf_is_safe,
+                                spec_sidecar_lock,
                                 merged_tracker, now_iso)
 from .types import ErrorClass, TrackerError
 
@@ -328,6 +329,8 @@ def locked_subject_write(
             if (kind or "").strip().lower() in ("chart", "decision"):
                 stack.enter_context(charts_resource_lock(flow_dir))
             stack.enter_context(config_lock(flow_dir))
+            if (kind or "").strip().lower() == "spec":
+                stack.enter_context(spec_sidecar_lock(flow_dir, subject_id))
             loaded = load_subject(flow_dir, kind, subject_id)
             if isinstance(loaded, TrackerError):
                 return loaded
