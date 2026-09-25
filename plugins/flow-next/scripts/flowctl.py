@@ -32329,13 +32329,12 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
             code=2,
         )
     if receipt_payload is not None and verdict:
-        counts = parse_classification_counts(output)
+        counts = parse_classification_counts(output) or {}
         derived = {
             "verdict": verdict,
-            "review": output,
             "suppressed_count": parse_suppressed_count(output),
-            "introduced_count": counts["introduced"] if counts is not None else None,
-            "pre_existing_count": counts["pre_existing"] if counts is not None else None,
+            "introduced_count": counts.get("introduced"),
+            "pre_existing_count": counts.get("pre_existing"),
             "unaddressed": parse_unaddressed_rids(output),
         }
         for field, value in derived.items():
@@ -32345,7 +32344,10 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
                     use_json=args.json,
                     code=2,
                 )
-        receipt_payload.update(derived)
+        # The review text is copied from the recorded output, never compared:
+        # an embedded copy that differs only in whitespace is not a contradiction.
+        derived["review"] = output
+        receipt_payload.update({k: v for k, v in derived.items() if v is not None})
     result = record_review_attempt(
         spec_id,
         args.kind,

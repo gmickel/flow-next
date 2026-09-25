@@ -82,7 +82,7 @@ class UnattendedCoreTests(unittest.TestCase):
     def test_record_rejects_contradictory_fields_before_any_state_change(self):
         output = '<verdict>NEEDS_WORK</verdict>\nClassification counts: 1 introduced, 0 pre_existing.\n'
         before = self.sidecar.read_bytes()
-        for payload in ({"verdict": "SHIP"}, {"introduced_count": 0}, {"review": "fabricated"}):
+        for payload in ({"verdict": "SHIP"}, {"introduced_count": 0}, {"unaddressed": ["R1"]}):
             with self.subTest(payload=payload):
                 code, record = self._record(output, payload)
                 self.assertEqual(code, 2)
@@ -96,7 +96,8 @@ class UnattendedCoreTests(unittest.TestCase):
         ]
         for output in outputs:
             with self.subTest(output=output):
-                code, record = self._record(output, {"model": "reviewer"})
+                # A host payload embeds the review text; the recorded output wins.
+                code, record = self._record(output, {"model": "reviewer", "review": output.rstrip()})
                 self.assertEqual(code, 0)
                 payload = record.call_args.kwargs["receipt_payload"]
                 self.assertEqual(payload["verdict"], "NEEDS_WORK")

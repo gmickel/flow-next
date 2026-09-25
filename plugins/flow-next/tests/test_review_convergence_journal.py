@@ -867,9 +867,7 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         self.assertEqual(
             json.loads(target.read_text()),
             {**self._payload(), "review_reservation_id": reservation_id,
-             "verdict": "NEEDS_WORK", "review": "<verdict>NEEDS_WORK</verdict>",
-             "introduced_count": None, "pre_existing_count": None,
-             "suppressed_count": None, "unaddressed": None},
+             "verdict": "NEEDS_WORK", "review": "<verdict>NEEDS_WORK</verdict>"},
         )
         data = self._data()
         self.assertEqual(data.get("review_reservations", {}), {})
