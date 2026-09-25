@@ -753,7 +753,7 @@ _WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
     "time": frozenset({"-o", "--output", "-f", "--format"}),
     "npx": frozenset({"-p", "--package"}),
 }
-_REDIRECT_OPERATORS = frozenset({">", ">>", "<", ">&", "<&", "&>", "&>>", ">|", "<>", "<<<"})
+_REDIRECT_OPERATORS = frozenset({">", ">>", "<", ">&", "<&", "&>", "&>>", ">|", "<>", "<<", "<<-", "<<<"})
 # Only `timeout` takes a bare DURATION positional before its command; popping
 # digit-ish tokens for every wrapper would eat a legitimate first argument.
 _DURATION_POSITIONAL_WRAPPERS = frozenset({"timeout"})
@@ -1105,13 +1105,14 @@ def _strip_argv_wrappers(segment: list[str]) -> list[str]:
             segment.pop(0)
             if wrapper == "npx":
                 # `npx -c 'cmd'` / `--call cmd` runs a shell string: screen it as `sh -c`.
-                for index, token in enumerate(segment):
-                    if not token.startswith("-"):
-                        break
+                index = 0
+                while index < len(segment) and segment[index].startswith("-"):
+                    token = segment[index]
                     if token in ("-c", "--call") and index + 1 < len(segment):
                         return ["sh", "-c", segment[index + 1]]
                     if token.startswith("--call="):
                         return ["sh", "-c", token.split("=", 1)[1]]
+                    index += 2 if token in _WRAPPER_VALUE_OPTIONS["npx"] else 1
             _strip_wrapper_options(segment, wrapper)
             continue
         break

@@ -276,6 +276,9 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "/usr/bin/time -o /tmp/timing codex exec hi",
             "> /dev/null codex exec hi",
             "2>/dev/null codex exec hi",
+            "npx -p @openai/codex -c 'codex exec hi'",
+            "npx --package @openai/codex --call 'codex exec hi'",
+            "<<EOF codex exec hi\nEOF",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)
