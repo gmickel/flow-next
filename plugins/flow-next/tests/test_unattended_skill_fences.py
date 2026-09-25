@@ -87,19 +87,19 @@ class UnattendedSkillFences(unittest.TestCase):
                     if not skipped:
                         self.assertEqual(receipt.read_text(encoding="utf-8"), before)
 
-    def test_each_dispatch_fence_has_independent_allowlist(self):
-        text = (SKILLS / "flow-next-flow/auto.md").read_text(encoding="utf-8")
-        blocks = [block for block in re.findall(r"```bash\n(.*?)```", text, re.S)
-                  if "DISPATCH_TARGET=" in block]
-        self.assertGreaterEqual(len(blocks), 6)
-        for block in blocks:
-            with self.subTest(target=block.split("DISPATCH_TARGET=", 1)[1].splitlines()[0]):
-                start = block.index('case "$DISPATCH_TARGET" in')
-                guard = block[start:block.index("esac", start) + len("esac")]
-                # Each check executes in a new shell with no previous definitions.
-                for target, allowed in (("/flow-next:work", True), ("/flow-next:release", False)):
-                    result = self.shell(guard, DISPATCH_TARGET=target)
-                    self.assertEqual(result.returncode == 0, allowed, result.stderr)
+    def test_stage_dispatch_fence_refuses_unlisted_stages_on_its_own(self):
+        code = fence("flow-next-flow/auto.md", 'DISPATCH_TARGET="/flow-next:$STAGE"')
+        # The fence runs in a fresh shell with no earlier definitions, as a tool call does.
+        for stage, land, allowed in (("work", "0", True), ("make-pr", "0", True),
+                                     ("release", "0", False), ("land", "0", False),
+                                     ("land", "1", True)):
+            with self.subTest(stage=stage, land=land):
+                result = self.shell(code, PILOT_AUTONOMY="backlog", STAGE=stage,
+                                    LAND_AUTHORIZED=land, LAND_SCOPE_SPEC="fn-1",
+                                    LAND_SCOPE_PR="7")
+                self.assertEqual(result.returncode == 0, allowed, result.stdout + result.stderr)
+                if not allowed:
+                    self.assertIn("PILOT_VERDICT=NEEDS_HUMAN", result.stdout)
 
     def test_standalone_rp_tally_runs_with_posix_awk_and_suffix_ids(self):
         text = (SKILLS / "flow-next-impl-review/workflow-rp.md").read_text(encoding="utf-8")
@@ -115,7 +115,7 @@ class UnattendedSkillFences(unittest.TestCase):
             response = directory / "response.md"
             response.write_text("Suppressed findings: 3 at anchor 50, 7 at anchor 25.\n"
                                 "Classification counts: 2 introduced, 4 pre_existing.\n"
-                                "Unaddressed R-IDs: [R4a, R9, R4a]\n", encoding="utf-8")
+                                "Unaddressed R-IDs: [PR12, R4a, R9, R4ab, R4a]\n", encoding="utf-8")
             for task in ("", "fn-1.1"):
                 with self.subTest(task=task):
                     result = self.shell(code + '\nprintf \'{"mode":"rp"%s}\' "$EXTRA_FIELDS"',

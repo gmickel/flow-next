@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-255-unattended-run-correctness-fixes-audit",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-25T22:02:12.141558Z",
   "created_at": "2026-09-25T20:30:50.471627Z",
   "default_impl": null,
   "default_review": null,
@@ -192,5 +192,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T22:01:02.222290Z"
+  "updated_at": "2026-09-25T22:02:12.141565Z"
 }

@@ -238,10 +238,38 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "echo '>' /tmp/receipts/impl-fn-1.2.json",
             "flowctl done fn-1.2 --help",
             "flowctl done fn-1.2 '-h'",
+            "rg 'codex exec' docs/",
+            "git status >/dev/null 2>&1 && ls /tmp/receipts/*.json",
+            "echo 'single quotes never run `codex exec`'",
+            "time python3 -m unittest",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_spellings_the_text_screen_blocked_stay_blocked(self) -> None:
+        # Each of these was blocked by the pre-fn-255 raw-text screen; command-word
+        # matching must not let them through (wrappers, substitutions, and text the
+        # tokenizer cannot read, which falls back to the text screen).
+        for command in (
+            "time codex exec hi",
+            "time -p codex exec hi",
+            "npx codex exec hi",
+            "npx -p @openai/codex codex exec hi",
+            "echo `codex exec hi`",
+            'echo "$(codex exec hi)"',
+            "time flowctl done fn-1.2 --summary-file /tmp/s.md",
+            "`flowctl done fn-1.2`",
+            'x="$(flowctl done fn-1.2)"',
+            "echo `cat > /tmp/receipts/impl-fn-1.2.json`",
+            'echo "$(cat > /tmp/receipts/impl-fn-1.2.json)"',
+            "echo $'a\\'b'; codex exec hi",
+            "echo $'a\\'b'; flowctl done fn-1.2",
+            "echo $'a\\'b'; cat > /tmp/receipts/impl-fn-1.2.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._command(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
 
     def test_real_violations_stay_blocked(self) -> None:
         for command in (

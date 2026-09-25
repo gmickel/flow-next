@@ -291,91 +291,39 @@ Done when: exactly one candidate has passed the full predicate, or none has and 
 DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, flow-side facts only
 ```
 
-1. **1a - pull-before-scan** (backlog-mode.md 1a). **Skipped under `--explain`** (dispatch-free; the explain readiness read is whatever `ready --all` already reflects locally). Otherwise guard the dispatch (invariant #1), then dispatch:
+1. **1a - pull-before-scan** (backlog-mode.md 1a). **Skipped under `--explain`** (dispatch-free; the explain readiness read is whatever `ready --all` already reflects locally). Otherwise dispatch this fixed, allowlisted read:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync reconcile"
-     case "$DISPATCH_TARGET" in
-       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
-       /flow-next:land)
-         if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
-           echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-           exit 1
-         fi ;;
-       "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
-       *)
-         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-         exit 1 ;;
-     esac
      # -> dispatch: $flow-next-tracker-sync reconcile mode:autonomous   (FLOW_AUTONOMOUS=1; no-op when the bridge is inactive)
    fi
    ```
 
 2. **1b - scan the flow side (facts)** (backlog-mode.md 1b): `READY_ALL_JSON="$($FLOWCTL ready --all --json)"`.
 
-3. **1c - union the tracker side (`list-open`)** (backlog-mode.md 1c). **Skipped under `--explain`**; the candidate set is then the flow specs (1b) only. Otherwise guard the dispatch (invariant #1), then dispatch:
+3. **1c - union the tracker side (`list-open`)** (backlog-mode.md 1c). **Skipped under `--explain`**; the candidate set is then the flow specs (1b) only. Otherwise dispatch this fixed, allowlisted read:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync list-open"
-     case "$DISPATCH_TARGET" in
-       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
-       /flow-next:land)
-         if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
-           echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-           exit 1
-         fi ;;
-       "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
-       *)
-         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-         exit 1 ;;
-     esac
      # -> dispatch: $flow-next-tracker-sync list-open mode:autonomous   (no-ops when tracker.readyState unset -> flow-ready specs only)
    fi
    ```
 
-4. **1d - skip parked subjects** (backlog-mode.md 1d). For every tracker-only candidate, guard and execute the missing comment read before deciding whether its latest question round is parked:
+4. **1d - skip parked subjects** (backlog-mode.md 1d). For every tracker-only candidate, execute the missing comment read before deciding whether its latest question round is parked:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync list-comments"
-     case "$DISPATCH_TARGET" in
-       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
-       /flow-next:land)
-         if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
-           echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-           exit 1
-         fi ;;
-       "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
-       *)
-         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-         exit 1 ;;
-     esac
      # -> dispatch per tracker-only issue: $flow-next-tracker-sync list-comments <tracker-id> mode:autonomous
      # Any error or truncated listing fails closed: do not select from an
      # incomplete question/answer history.
    fi
    ```
 
-5. **1e - dep-order the survivors** (backlog-mode.md 1e). The tracker relation edges come from the guarded per-issue `list-relations` READ (invariant #1: on the allowlist, never a merge):
+5. **1e - dep-order the survivors** (backlog-mode.md 1e). The tracker relation edges come from the per-issue `list-relations` READ (invariant #1: on the allowlist, never a merge):
 
    ```bash
    if [ "$DRY" = "0" ]; then
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
-     DISPATCH_TARGET="/flow-next:tracker-sync list-relations"
-     case "$DISPATCH_TARGET" in
-       /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
-       /flow-next:land)
-         if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
-           echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-           exit 1
-         fi ;;
-       "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
-       *)
-         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-         exit 1 ;;
-     esac
      # -> dispatch per tracker issue: $flow-next-tracker-sync list-relations <tracker-id> mode:autonomous
      #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
      #   GitLab indexes /issues/:iid from the <project>#<iid> it carries - a global id is
@@ -384,7 +332,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
    fi
    ```
 
-   (Under `--explain` there are no tracker candidates, 1c was skipped, so 1e uses the flow `blockedBy` edges only and issues no tracker read; the guarded dispatch above is skipped.) **Invariant #4: a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal, never fall through to re-pick it next run:
+   (Under `--explain` there are no tracker candidates, 1c was skipped, so 1e uses the flow `blockedBy` edges only and issues no tracker read; the dispatch above is skipped.) **Invariant #4: a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal, never fall through to re-pick it next run:
 
    ```bash
    if [ "${DEP_DEADLOCK:-0}" = "1" ]; then
@@ -794,7 +742,7 @@ Done when: every dispatched stage's before/after evidence block and `stage:` out
 
 **Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `ask`** (ready-but-thin / needs-spec / needs-human / force-gated). Execute [references/backlog-mode.md](references/backlog-mode.md) Phase 3, the async question valve. **Never asks interactively** (`plain-text numbered prompt` is forbidden on the run path; the human answers later via the spec or the tracker).
 
-**Enforce invariant #2 inline before any spec-side write.** A spec-backed subject writes `## Open Questions`; a tracker-only subject (empty/absent `SPEC_PATH`) must hard-exit rather than author a spec stub. Call the assert with the resolved paths, then guard the dispatch (invariant #1):
+**Enforce invariant #2 inline before any spec-side write.** A spec-backed subject writes `## Open Questions`; a tracker-only subject (empty/absent `SPEC_PATH`) must hard-exit rather than author a spec stub. Call the assert with the resolved paths:
 
 ```bash
 # Spec-backed: SPEC_PATH points at an EXISTING spec file -> the assert passes and the op writes the
@@ -803,19 +751,6 @@ Done when: every dispatched stage's before/after evidence block and `stage:` out
 # ONLY when a spec-side write is intended (HAS_SPEC=1); a tracker-only subject skips it and parks in
 # the tracker.
 [ "${HAS_SPEC:-0}" = "1" ] && assert_spec_write_allowed "$SUBJECT_ID" "$SPEC_PATH"
-DISPATCH_TARGET="/flow-next:tracker-sync question"
-case "$DISPATCH_TARGET" in
-  /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
-  /flow-next:land)
-    if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
-      echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-      exit 1
-    fi ;;
-  "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
-  *)
-    echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-    exit 1 ;;
-esac
 ```
 
 The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:

@@ -186,6 +186,8 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
 
     scan = _ShellScan(command)
     _flowctl_argvs(command, scan)
+    if scan.unparsed and _raw_receipt_write(command, receipt_path):
+        return True
     for script in [command, *scan.nested_commands]:
         for writer, target in _redirect_targets(script):
             if receipt_target(target):
@@ -198,6 +200,53 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
         and any(receipt_target(target) for target in argv[1:] if not target.startswith("-"))
         for argv in scan.command_argvs
     )
+
+
+def _raw_receipt_write(command: str, receipt_path: str) -> bool:
+    """Pre-tokenizer receipt screen, used only when the command defeats the tokenizer."""
+    patterns = [
+        rf">\s*['\"]?{re.escape(receipt_path)}['\"]?",
+        r">\s*['\"]?.*receipts/.*\.json",
+        r">\s*['\"]?\$[{]?(?:REVIEW_RECEIPT_PATH|RECEIPT_PATH)[}]?['\"]?",
+        r">\s*['\"]?\$[{]?RECEIPT_DIR[}]?/",
+        r"cat\s*>\s*.*receipt",
+        r"\btee\s+['\"]?\$[{]?(?:REVIEW_RECEIPT_PATH|RECEIPT_PATH)[}]?['\"]?",
+    ]
+    receipt_dir = os.path.dirname(receipt_path)
+    if receipt_dir:
+        patterns.append(rf">\s*['\"]?{re.escape(receipt_dir)}")
+    return any(re.search(pattern, command, re.I) for pattern in patterns)
+
+
+def _raw_launch_violation(command: str) -> Optional[str]:
+    """Pre-tokenizer codex/copilot/done screen for commands the tokenizer cannot
+    read: the text-level rules this guard enforced before command-word matching,
+    so an unparseable command is never trusted."""
+    if re.search(r"\bcodex\s+(?:exec|review)\b", command) and not re.search(
+        r"flowctl\s+codex|FLOWCTL.*codex", command
+    ):
+        return (
+            "BLOCKED: Do not call codex directly. "
+            "Use 'flowctl codex impl-review' or 'flowctl codex plan-review'."
+        )
+    if re.search(r"\bcopilot\b", command) and not re.search(
+        r"flowctl\s+copilot|FLOWCTL.*copilot", command
+    ):
+        return "BLOCKED: Do not call 'copilot' directly. Use the 'flowctl copilot' review commands."
+    if (
+        re.search(r"\bdone\b", command)
+        and ("flowctl" in command or "FLOWCTL" in command)
+        and not re.search(r"(?:^|\s)(?:--help|-h)(?:\s|$)", command)
+        and not (
+            re.search(r"--evidence(?:-json)?\b", command)
+            and re.search(r"--summary(?:-file)?\b", command)
+        )
+    ):
+        return (
+            "BLOCKED: flowctl done requires --evidence-json and --summary-file. "
+            "Use: flowctl done <task> --summary-file <s.md> --evidence-json <e.json>"
+        )
+    return None
 
 
 def _collapse_path_noise(text: str) -> str:
@@ -676,6 +725,8 @@ _ARGV_WRAPPERS = frozenset({
     # them, `command "$FLOWCTL" "review-rounds" "reset" …` was classified as a
     # `command` invocation and never reached the flowctl argv screen.
     "command", "exec", "builtin", "sudo",
+    # `time codex exec` / `npx codex exec` run their argv the same way.
+    "time", "npx",
 })
 # PR #290 bot r8: an option that takes a SEPARATE value token. Popping the
 # option alone left its value sitting in the launcher position
@@ -699,6 +750,8 @@ _WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
     "command": frozenset(),
     "builtin": frozenset(),
     "exec": frozenset({"-a"}),
+    "time": frozenset(),
+    "npx": frozenset({"-p", "--package"}),
 }
 # Only `timeout` takes a bare DURATION positional before its command; popping
 # digit-ish tokens for every wrapper would eat a legitimate first argument.
@@ -761,6 +814,10 @@ def _tokenize_shell_command(command: str) -> Optional[list[str]]:
     while bash ran the very command both screens exist to block.
     """
     command = _collapse_line_continuations(command)
+    if "$'" in command:
+        # ANSI-C quoting (`$'a\'b'`) is not shlex's grammar; misreading it can
+        # hide the rest of the line, so treat it as unparseable (fail closed).
+        return None
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()<>\n")
         lexer.whitespace = " \t\r"
@@ -905,6 +962,9 @@ class _ShellScan:
         self.exec_tokens: list[str] = []
         self.command_argvs: list[list[str]] = []
         self.nested_commands: list[str] = []
+        # Set when any command text defeated the tokenizer; callers then fall
+        # back to the raw-text screens (fail closed).
+        self.unparsed = False
 
 
 def _is_flowctl_executable(token: str, launcher_vars: frozenset = frozenset()) -> bool:
@@ -926,10 +986,53 @@ def _flowctl_argvs(
     matter which prefix (`timeout`, `env`, `nice`, `xargs`) or interpreter
     (`sh -c "…"`, `eval "…"`) carries it.
     """
+    scan = scan if scan is not None else _ShellScan(command)
     tokens = _tokenize_shell_command(command)
     if tokens is None:
+        scan.unparsed = True
         return None
-    return _argvs_from_tokens(tokens, 0, scan if scan is not None else _ShellScan(command))
+    argvs = _argvs_from_tokens(tokens, 0, scan)
+    for body in _substitution_bodies(command):
+        argvs.extend(_nested_argvs(body, 1, scan))
+    return argvs
+
+
+def _substitution_bodies(text: str) -> list[str]:
+    """Command-substitution bodies (`` `…` `` and `$(…)`) outside single quotes.
+
+    The tokenizer keeps a substitution inside double quotes as one word, but
+    bash still runs it, so its body is screened as a command of its own.
+    """
+    bodies: list[str] = []
+    in_single = False
+    tick = None
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and not in_single:
+            index += 2
+            continue
+        if char == "'" and tick is None:
+            in_single = not in_single
+        elif in_single:
+            pass
+        elif char == "`":
+            if tick is None:
+                tick = index + 1
+            else:
+                bodies.append(text[tick:index])
+                tick = None
+        elif tick is None and text.startswith("$(", index):
+            depth, end = 0, index + 1
+            while end < len(text):
+                depth += {"(": 1, ")": -1}.get(text[end], 0)
+                if depth == 0:
+                    break
+                end += 1
+            bodies.append(text[index + 2 : end])
+            index = end
+        index += 1
+    return bodies
 
 
 def _strip_array_literals(tokens: list[str]) -> list[str]:
@@ -1113,10 +1216,14 @@ def _nested_argvs(text: str, depth: int, scan: "_ShellScan") -> list[list[str]]:
     scan.nested_commands.append(text)
     tokens = _tokenize_shell_command(text)
     if tokens is None:
-        # Unparseable nested text is still screened by the raw-text floor in
-        # `_blocks_review_counter_recovery`, which sees the whole command.
+        # Unparseable nested text: the raw-text floors see the whole command.
+        scan.unparsed = True
         return []
-    return _argvs_from_tokens(tokens, depth, scan)
+    argvs = _argvs_from_tokens(tokens, depth, scan)
+    if depth < _MAX_WRAPPER_DEPTH:
+        for body in _substitution_bodies(text):
+            argvs.extend(_nested_argvs(body, depth + 1, scan))
+    return argvs
 
 
 def _command_has_recovery_markers(command: str) -> bool:
@@ -1486,6 +1593,10 @@ def handle_pre_tool_use(data: dict) -> None:
     # Check executable positions, never arguments such as grep patterns or prose.
     scan = _ShellScan(command)
     flowctl_argvs = _flowctl_argvs(command, scan) or []
+    if scan.unparsed:
+        violation = _raw_launch_violation(command)
+        if violation:
+            output_block(violation)
     backend_argvs = [
         (os.path.basename(argv[0]), argv[1:], False)
         for argv in scan.command_argvs

@@ -53,6 +53,40 @@ class UnattendedCoreTests(unittest.TestCase):
         errors = f.validate_flow_root(self.flow)
         self.assertTrue(any(str(path) in error and "line 1 column" in error for error in errors))
 
+    def test_tracker_spec_lock_is_the_review_sidecar_lock(self):
+        from flowctl_tracker.lifecycle import helpers
+
+        for spec_id in (self.spec_id, "wor-17-x", "fn-2"):
+            with self.subTest(spec_id=spec_id):
+                self.assertEqual(helpers.spec_sidecar_lock_path(self.flow, spec_id),
+                                 f._review_sidecar_lock_path(self.flow, spec_id))
+        self.assertEqual(helpers.SPEC_SIDECAR_LOCK_WAIT_SECS, f.CROSS_PROCESS_LOCK_WAIT_SECS)
+
+    def test_standalone_config_reader_matches_tracker_config_io(self):
+        # A copied flowctl without the tracker package reads config through its own
+        # fallback; it must classify every file exactly as config_io does.
+        from flowctl_tracker import config_io
+
+        path = self.flow / "config.json"
+        cases = {"missing": None, "valid": '{"a": 1}', "not-object": "[]",
+                 "bad-json": '{"a": 1,}', "empty": ""}
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                path.unlink(missing_ok=True)
+                if body is not None:
+                    path.write_text(body, encoding="utf-8")
+                results = []
+                for reader in (config_io.read_config_file, None):
+                    try:
+                        if reader is None:
+                            with mock.patch.dict(sys.modules, {"flowctl_tracker.config_io": None}):
+                                results.append(("ok", f._read_flow_config_file(path)))
+                        else:
+                            results.append(("ok", reader(path)))
+                    except ValueError as exc:
+                        results.append(("error", str(exc)))
+                self.assertEqual(results[0], results[1])
+
     def test_invalid_read_warns_once_and_missing_retains_defaults(self):
         path = self.flow / "config.json"
         self.assertIsNone(f._load_raw_flow_config())
@@ -166,6 +200,22 @@ for index in range(8):
                 f.cmd_triage_skip(args)
         self.assertEqual(raised.exception.code, 1)
         self.assertEqual(receipt.read_text(encoding="utf-8"), original)
+
+    def test_triage_busy_receipt_lock_takes_full_review(self):
+        receipt = self.root / "review.json"
+        args = argparse.Namespace(base="main", receipt=str(receipt), task="fn-1-demo.1", json=True,
+                                  no_llm=True, backend=None, model=None, effort=None)
+        result = subprocess.CompletedProcess([], 0, stdout="README.md\n", stderr="")
+        busy = mock.MagicMock(side_effect=f.CrossProcessLockError("timed out"))
+        out = io.StringIO()
+        with mock.patch.object(f.subprocess, "run", return_value=result), \
+                mock.patch.object(f, "cross_process_lock", busy), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                f.cmd_triage_skip(args)
+        self.assertEqual(raised.exception.code, 1)
+        self.assertEqual(json.loads(out.getvalue())["verdict"], "REVIEW")
+        self.assertFalse(receipt.exists())
 
 
 if __name__ == "__main__":

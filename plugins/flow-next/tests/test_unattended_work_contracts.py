@@ -103,6 +103,21 @@ class WorkBranchRegression(unittest.TestCase):
                 self.assertEqual(self.git("show", "HEAD:tracked"), "base")
                 self.assertEqual(path.read_text(encoding="utf-8"), "planned")
 
+    def test_unset_default_base_resolves_from_origin_head(self) -> None:
+        remote = Path(self.tmp.name + "-origin.git")
+        self.addCleanup(shutil.rmtree, remote, True)
+        subprocess.run(["git", "clone", "-q", "--bare", str(self.repo), str(remote)],
+                       env=self.env, check=True, capture_output=True)
+        self.git("remote", "add", "origin", str(remote))
+        self.git("fetch", "-q", "origin")
+        self.git("remote", "set-head", "origin", "trunk")
+        del self.env["DEFAULT_BASE"]
+        run = self.branch()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.git("branch", "--show-current"), "task")
+        self.assertEqual((self.repo / ".flow/tmp/spec_base").read_text(encoding="utf-8").strip(),
+                         self.git("rev-parse", "origin/trunk"))
+
     def test_existing_branch_is_reused(self) -> None:
         self.git("branch", "task")
         run = self.branch()

@@ -49700,6 +49700,10 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
                 else:
                     atomic_write_json(receipt_path, receipt_data)
                     receipt_written = args.receipt
+        except CrossProcessLockError as e:
+            # A busy receipt lock means another review owns it: take the full review.
+            verdict = "REVIEW"
+            reason = f"receipt lock busy ({e}); defaulting to REVIEW"
         except OSError as e:
             error_exit(
                 f"failed to write receipt {args.receipt}: {e}",

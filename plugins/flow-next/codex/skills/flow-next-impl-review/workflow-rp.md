@@ -407,9 +407,9 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
       if [[ "$lower" == "none" || "$lower" == "n/a" || -z "$lower" ]]; then
         UNADDRESSED_JSON="[]"
       else
-        # Extract R-ID tokens (R followed by digits and optional lowercase suffix), de-dup preserving order.
+        # Whole-word R-IDs (flowctl's \bR\d+[a-z]?\b: PR12 and R4ab are not R-IDs), de-dup preserving order.
         rids="$(printf '%s' "$UNADDRESSED_LINE" \
-          | grep -oE 'R[0-9]+[a-z]*' \
+          | tr -cs 'A-Za-z0-9_' '\n' | grep -E '^R[0-9]+[a-z]?$' \
           | awk '!seen[$0]++')"
         if [[ -z "$rids" ]]; then
           UNADDRESSED_JSON="[]"

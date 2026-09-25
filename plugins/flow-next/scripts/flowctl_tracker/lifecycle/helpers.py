@@ -266,16 +266,25 @@ def collision(flow_dir: Path, durable_id: str, *, except_spec: Optional[str] = N
     return None
 
 
+SPEC_SIDECAR_LOCK_WAIT_SECS = 30.0
+
+
+def spec_sidecar_lock_path(flow_dir: Path, spec_id: str) -> Path:
+    """Must equal flowctl's `_review_sidecar_lock_path` (pinned by a parity test)."""
+    import hashlib  # noqa: PLC0415
+
+    digest = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()
+    return Path(flow_dir) / "locks" / f"review-rounds-{digest}.lock"
+
+
 @contextmanager
 def spec_sidecar_lock(flow_dir: Path, spec_id: str):
     """Same kernel lock and filename as the review ledger; config lock first."""
-    import hashlib  # noqa: PLC0415
     from ..subjects import _bounded_file_lock  # noqa: PLC0415
 
-    digest = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()
     with _bounded_file_lock(
-        Path(flow_dir) / "locks" / f"review-rounds-{digest}.lock",
-        timeout_s=30.0, label="spec sidecar",
+        spec_sidecar_lock_path(flow_dir, spec_id),
+        timeout_s=SPEC_SIDECAR_LOCK_WAIT_SECS, label="spec sidecar",
     ):
         yield
 

@@ -22,6 +22,7 @@ Follow-ups (not built): SubagentStop with no `agent_type` now skips the worker r
 
 stage: impl-review - ran [2026-09-25..2026-09-26]
 stage: implement - ran (model: gpt-6-astra at medium; delegated: 5)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
 - Commits: ccb513bd88ef83bfad35007c40f8749e10cbe623, 26e87d2790f8a3842ceedb31ca3cf5dbce5989ea, f61f048ee7cf42d9b73522f78631d82b80ea0655, d946f4348543f2172eb7c7bdfd52818655aafa50
 - Tests: python3 scripts/run_tests_parallel.py (baseline green at 77fc2248; green at f61f048e: 237 files, 5076 tests, 0 failures), GATE_SKIPPED:unittest:green-receipt f61f048e - baseline reused from prior post-gate pass, uvx ruff@0.16.0 check ., python3 -m unittest plugins/flow-next/tests/test_unattended_core.py plugins/flow-next/tests/test_review_convergence_journal.py plugins/flow-next/tests/test_unattended_work_contracts.py plugins/flow-next/tests/test_ralph_guard.py, ./scripts/sync-codex.sh (twice, idempotent)
