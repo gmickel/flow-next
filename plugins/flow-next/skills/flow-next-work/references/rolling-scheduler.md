@@ -327,7 +327,7 @@ default shape.
   the task's evidence commits - a SHIP whose fix commits are not on the
   target is not a completable state, and running `done` over it has broken
   this. THEN run the focused integrated verify. Before `done`, the conductor
-  reads [worker.md Phase 4.5](../../../agents/worker.md#phase-45-auto-capture-on-successful-fix-after-needs_work-ship)
+  reads [the worker agent's Phase 4.5](../../../agents/worker.md#phase-45-auto-capture-on-successful-fix-after-needs_work-ship)
   and executes its memory auto-capture using the review rounds and fix commits:
   check `memory.enabled`, capture only after NEEDS_WORK → SHIP under its
   existing non-trivial-fix/dedup rules, and warn on failure without blocking

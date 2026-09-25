@@ -261,6 +261,11 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "flowctl done fn-1.2 --summary-file /tmp/s-helper.md",
             "flowctl done fn-1.2 --summary-file /tmp/--help.md",
             "echo --help; flowctl done fn-1.2 --summary-file /tmp/s.md",
+            "echo hi > \"/tmp/receipts\"/impl-fn-1.2.json",
+            "if codex exec hi; then :; fi",
+            "for i in 1; do copilot --prompt hi; done",
+            "if true; then flowctl done fn-1.2 --summary-file /tmp/s.md; fi",
+            "{ codex exec hi; }",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)

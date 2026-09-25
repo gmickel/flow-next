@@ -128,6 +128,45 @@ def output_block(reason: str) -> None:
 VALID_RECEIPT_VERDICTS = {"SHIP", "NEEDS_WORK", "MAJOR_RETHINK", "NEEDS_HUMAN"}
 
 
+def _redirect_targets(script: str) -> list[tuple[str, str]]:
+    """(word before, full target word) for each unquoted output redirect.
+
+    A `>` inside quotes is prose, not a redirect. The target is read as one
+    shell word, so adjacent quoted and unquoted fragments stay joined.
+    """
+    found: list[tuple[str, str]] = []
+    quote = ""
+    index = 0
+    while index < len(script):
+        char = script[index]
+        if char == "\\" and quote != "'":
+            index += 2
+            continue
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "'\"":
+            quote = char
+        elif char == ">":
+            end = index + 1
+            while end < len(script) and script[end] in ">|":
+                end += 1
+            lexer = shlex.shlex(script[end:], posix=True, punctuation_chars="|&;<>()")
+            lexer.whitespace_split = True
+            try:
+                target = next(iter(lexer), "")
+            except ValueError:
+                target = ""
+            before = script[:index].split()
+            writer = before[-1] if before else ""
+            if target:
+                found.append((writer, target))
+            index = end
+            continue
+        index += 1
+    return found
+
+
 def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     """Return true when a Bash command redirects output to the active receipt."""
     if not receipt_path:
@@ -148,21 +187,12 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     scan = _ShellScan(command)
     _flowctl_argvs(command, scan)
     for script in [command, *scan.nested_commands]:
-        # Preserve quotes so a literal ">" in prose is not a shell redirect.
-        lexer = shlex.shlex(script, posix=False, punctuation_chars="|&;<>")
-        lexer.whitespace_split = True
-        try:
-            tokens = list(lexer)
-        except ValueError:
-            continue
-        for index, token in enumerate(tokens[:-1]):
-            if token in {">", ">>", ">|", "&>", "&>>"}:
-                target = _unquote(tokens[index + 1])
-                if receipt_target(target):
-                    return True
-                # Retain the existing cat-to-receipt rail, scoped to its target.
-                if "receipt" in target.lower() and index and tokens[index - 1] == "cat":
-                    return True
+        for writer, target in _redirect_targets(script):
+            if receipt_target(target):
+                return True
+            # Retain the existing cat-to-receipt rail, scoped to its target.
+            if "receipt" in target.lower() and writer == "cat":
+                return True
     return any(
         os.path.basename(argv[0]) == "tee"
         and any(receipt_target(target) for target in argv[1:] if not target.startswith("-"))
@@ -638,6 +668,8 @@ _GUARDED_DISPATCH_TEXT_RE = re.compile(
     r"impl-review|plan-review|completion-review"
     r"|review-rounds['\"]?\s+['\"]?increment\b"
 )
+# `if flowctl done …; then codex exec …; fi`: the command follows the keyword.
+_SHELL_CONTROL_WORDS = frozenset({"if", "then", "elif", "else", "while", "until", "do", "!", "{"})
 _ARGV_WRAPPERS = frozenset({
     "env", "timeout", "nice", "xargs", "nohup", "stdbuf",
     # PR #290 bot r3: shell builtins that run their argv transparently. Without
@@ -951,9 +983,9 @@ def _argvs_from_tokens(
 
 
 def _strip_argv_wrappers(segment: list[str]) -> list[str]:
-    """Drop leading env assignments and prefix wrappers with their options."""
+    """Drop leading control words, env assignments, and prefix wrappers."""
     while segment:
-        if _ENV_ASSIGN_RE.fullmatch(segment[0]):
+        if segment[0] in _SHELL_CONTROL_WORDS or _ENV_ASSIGN_RE.fullmatch(segment[0]):
             segment.pop(0)
             continue
         wrapper = os.path.basename(segment[0])

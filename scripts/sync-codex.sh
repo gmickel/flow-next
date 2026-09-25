@@ -387,6 +387,15 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
+# --- Relative agent links (all skill .md files): Codex ships agents as .toml ---
+# `](../../../agents/<name>.md#anchor)` resolves to `codex/agents/<name>.toml`
+# in the mirror and `$CODEX_HOME/agents/<name>.toml` once installed; a TOML file
+# carries no Markdown anchors, so the fragment is dropped.
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  sed -i.bak -E 's#\]\(((\.\./){2,3})agents/([a-z-]+)\.md(\#[^)]*)?\)#](\1agents/\3.toml)#g' "$f"
+  rm -f "${f}.bak"
+done
+
 # --- Actionable next-step invocations → Codex command names (fn-202 / #363 P2) ---
 # The capture/plan footer templates emit copy-pasteable next-step commands
 # (`Recommended next:` line + `Next:` menu) and the surrounding judgment prose

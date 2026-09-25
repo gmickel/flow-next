@@ -431,13 +431,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
     if [[ -n "$UNADDRESSED_JSON" ]]; then
       EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
     fi
-
-    EXTRA_FIELDS=",\"verdict\":\"$VERDICT\"$EXTRA_FIELDS"
   fi
 
   RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-impl-review-receipt-<task-id-or-branch-slug>-<suffix>.json"
   cat > "$RECEIPT_INPUT" <<EOF
-{"type":"impl_review","id":"<TASK_ID>","mode":"rp"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts"}
+{"type":"impl_review","id":"<TASK_ID>","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts"}
 EOF
   RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
 fi

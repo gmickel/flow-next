@@ -577,10 +577,10 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
-  # review-rounds record derives the verdict and tallies from RESPONSE_FILE.
+  # review-rounds record checks the verdict and derives the tallies from RESPONSE_FILE.
   RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-completion-review-receipt-<spec-id>-<suffix>.json"
   if ! cat > "$RECEIPT_INPUT" <<EOF
-{"type":"completion_review","id":"$SPEC_ID","mode":"rp","base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts","attempt_timestamp":""}
+{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"$VERDICT","base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts","attempt_timestamp":""}
 EOF
   then
     echo "<promise>RETRY</promise>"

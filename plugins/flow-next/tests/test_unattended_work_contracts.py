@@ -61,18 +61,26 @@ class WorkBranchRegression(unittest.TestCase):
         self.assertEqual(path.read_text(encoding="utf-8"), "planned")
 
     def test_locally_committed_spec_survives_older_default_base(self) -> None:
-        base = self.git("rev-parse", "HEAD")
         path = self.repo / ".flow/tasks/fn-1.1.md"
         path.parent.mkdir(parents=True)
-        path.write_text("planned", encoding="utf-8")
-        self.git("add", ".flow")
-        self.git("commit", "-qm", "plan")
-        self.env["DEFAULT_BASE"] = base
-        run = self.branch()
-        self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(self.git("branch", "--show-current"), "task")
-        self.assertEqual(path.read_text(encoding="utf-8"), "planned")
-        self.assertEqual((self.repo / ".flow/tmp/spec_base").read_text(encoding="utf-8").strip(), base)
+        for base_version in (None, "older plan"):  # absent at the base, or outdated there
+            with self.subTest(base_version=base_version):
+                self.git("checkout", "-q", "trunk")
+                if base_version is not None:
+                    path.write_text(base_version, encoding="utf-8")
+                    self.git("add", ".flow")
+                    self.git("commit", "-qm", "older plan")
+                base = self.git("rev-parse", "HEAD")
+                path.write_text(f"planned {base_version}", encoding="utf-8")
+                self.git("add", ".flow")
+                self.git("commit", "-qm", "plan")
+                self.env.update(DEFAULT_BASE=base, BRANCH_NAME=f"task-{base_version is None}")
+                run = self.branch()
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertEqual(self.git("branch", "--show-current"), self.env["BRANCH_NAME"])
+                self.assertEqual(path.read_text(encoding="utf-8"), f"planned {base_version}")
+                self.assertEqual(self.git("status", "--porcelain", "--", ".flow/tasks"), "")
+                self.assertEqual((self.repo / ".flow/tmp/spec_base").read_text(encoding="utf-8").strip(), base)
 
     def test_preexisting_stage_is_not_included_in_planning_checkpoint(self) -> None:
         base = self.git("rev-parse", "HEAD")
@@ -161,10 +169,12 @@ class DispatchContracts(unittest.TestCase):
         self.assertIn("## Investigation targets", text)
 
     def test_conductor_capture_reachable_on_both_ship_paths(self) -> None:
-        for name in ("rolling-scheduler.md", "host-deferred-review.md"):
-            text = (WORK / "references" / name).read_text(encoding="utf-8")
-            links = re.findall(r"\]\(([^)]+worker\.md#[^)]+)\)", text)
-            self.assertEqual(len(links), 1, name)
-            self.assertTrue((WORK / "references" / links[0].split("#")[0]).resolve().exists())
-            self.assertIn("memory.enabled", text)
-            self.assertNotIn("$(cat .flow/tmp/base_commit)", text)
+        codex_work = WORK.parents[1] / "codex" / "skills" / "flow-next-work"
+        for work, pattern in ((WORK, r"worker\.md#[^)]+"), (codex_work, r"worker\.toml")):
+            for name in ("rolling-scheduler.md", "host-deferred-review.md"):
+                text = (work / "references" / name).read_text(encoding="utf-8")
+                links = re.findall(r"\]\(([^)]+" + pattern + r")\)", text)
+                self.assertEqual(len(links), 1, (work, name))
+                self.assertTrue((work / "references" / links[0].split("#")[0]).resolve().exists())
+                self.assertIn("memory.enabled", text)
+                self.assertNotIn("$(cat .flow/tmp/base_commit)", text)
