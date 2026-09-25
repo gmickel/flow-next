@@ -447,7 +447,9 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         # Prose-quality restatement pins removed 2026-08-07 - judged via
         # .flow/criteria.md G1, not grep. The ENFORCING guard + its hard-exit
         # message are what stay pinned.
-        self.assertIn("assert_spec_write_allowed", self.m_workflow)
+        # The guard runs inline in the Phase 3.5 block (a shell function defined
+        # in an earlier block would not survive the tool-call boundary).
+        self.assertIn('[ ! -f "$SPEC_PATH" ]', self.m_workflow)
         self.assertRegex(
             self.m_workflow,
             r"backlog mode never authors specs",

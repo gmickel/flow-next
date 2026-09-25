@@ -221,14 +221,8 @@ else
   # Invariant #2 - never author a spec. The ask stage may write spec-side ONLY when
   # the spec file ALREADY exists (fill an obvious blank in an existing spec). A
   # tracker-only item has NO spec; its question parks in the tracker comment ALONE.
-  # Called inline in Phase 3.5 before any spec-side write.
-  assert_spec_write_allowed() {  # $1 = SUBJECT_ID, $2 = SPEC_PATH (empty for tracker-only)
-    if [ -z "$2" ] || [ ! -f "$2" ]; then
-      echo "Evidence: backlog mode attempted to author a spec for a specless item ($1)"
-      echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
-      exit 1
-    fi
-  }
+  # Phase 3.5 enforces this inline in its own block (shell functions do not
+  # survive between tool calls).
 fi
 ```
 
@@ -750,7 +744,11 @@ Done when: every dispatched stage's before/after evidence block and `stage:` out
 # invoked WITHOUT touching any spec (the question lives in the tracker comment alone). Run the assert
 # ONLY when a spec-side write is intended (HAS_SPEC=1); a tracker-only subject skips it and parks in
 # the tracker.
-[ "${HAS_SPEC:-0}" = "1" ] && assert_spec_write_allowed "$SUBJECT_ID" "$SPEC_PATH"
+if [ "${HAS_SPEC:-0}" = "1" ] && { [ -z "$SPEC_PATH" ] || [ ! -f "$SPEC_PATH" ]; }; then
+  echo "Evidence: backlog mode attempted to author a spec for a specless item ($SUBJECT_ID)"
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
+  exit 1
+fi
 ```
 
 The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:
