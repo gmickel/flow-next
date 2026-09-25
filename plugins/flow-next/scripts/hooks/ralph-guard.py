@@ -750,9 +750,10 @@ _WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
     "command": frozenset(),
     "builtin": frozenset(),
     "exec": frozenset({"-a"}),
-    "time": frozenset(),
+    "time": frozenset({"-o", "--output", "-f", "--format"}),
     "npx": frozenset({"-p", "--package"}),
 }
+_REDIRECT_OPERATORS = frozenset({">", ">>", "<", ">&", "<&", "&>", "&>>", ">|", "<>", "<<<"})
 # Only `timeout` takes a bare DURATION positional before its command; popping
 # digit-ish tokens for every wrapper would eat a legitimate first argument.
 _DURATION_POSITIONAL_WRAPPERS = frozenset({"timeout"})
@@ -1004,7 +1005,7 @@ def _substitution_bodies(text: str) -> list[str]:
     bash still runs it, so its body is screened as a command of its own.
     """
     bodies: list[str] = []
-    in_single = False
+    in_single = in_double = False
     tick = None
     index = 0
     while index < len(text):
@@ -1012,10 +1013,12 @@ def _substitution_bodies(text: str) -> list[str]:
         if char == "\\" and not in_single:
             index += 2
             continue
-        if char == "'" and tick is None:
+        if char == "'" and tick is None and not in_double:
             in_single = not in_single
         elif in_single:
             pass
+        elif char == '"' and tick is None:
+            in_double = not in_double
         elif char == "`":
             if tick is None:
                 tick = index + 1
@@ -1091,9 +1094,24 @@ def _strip_argv_wrappers(segment: list[str]) -> list[str]:
         if segment[0] in _SHELL_CONTROL_WORDS or _ENV_ASSIGN_RE.fullmatch(segment[0]):
             segment.pop(0)
             continue
+        # A leading redirection (`> /dev/null codex …`, `2> err codex …`) is not
+        # the executable: drop the operator, its fd number, and its target.
+        redirect = 1 if segment[0].isdigit() and len(segment) > 1 else 0
+        if segment[redirect] in _REDIRECT_OPERATORS:
+            del segment[: redirect + 2]
+            continue
         wrapper = os.path.basename(segment[0])
         if wrapper in _ARGV_WRAPPERS:
             segment.pop(0)
+            if wrapper == "npx":
+                # `npx -c 'cmd'` / `--call cmd` runs a shell string: screen it as `sh -c`.
+                for index, token in enumerate(segment):
+                    if not token.startswith("-"):
+                        break
+                    if token in ("-c", "--call") and index + 1 < len(segment):
+                        return ["sh", "-c", segment[index + 1]]
+                    if token.startswith("--call="):
+                        return ["sh", "-c", token.split("=", 1)[1]]
             _strip_wrapper_options(segment, wrapper)
             continue
         break

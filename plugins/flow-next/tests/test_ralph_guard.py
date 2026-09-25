@@ -242,6 +242,8 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "git status >/dev/null 2>&1 && ls /tmp/receipts/*.json",
             "echo 'single quotes never run `codex exec`'",
             "time python3 -m unittest",
+            'echo "it\'s fine"; ls',
+            "npx -y prettier --check .",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)
@@ -266,6 +268,14 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "echo $'a\\'b'; codex exec hi",
             "echo $'a\\'b'; flowctl done fn-1.2",
             "echo $'a\\'b'; cat > /tmp/receipts/impl-fn-1.2.json",
+            'echo "it\'s $(codex exec hi)"',
+            'echo "it\'s $(flowctl done fn-1.2)"',
+            'echo "it\'s $(cat > /tmp/receipts/impl-fn-1.2.json)"',
+            "npx -c 'codex exec hi'",
+            "npx --call='codex exec hi'",
+            "/usr/bin/time -o /tmp/timing codex exec hi",
+            "> /dev/null codex exec hi",
+            "2>/dev/null codex exec hi",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)
