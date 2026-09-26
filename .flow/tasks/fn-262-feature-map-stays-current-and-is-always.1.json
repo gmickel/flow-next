@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-262-feature-map-stays-current-and-is-always",
   "spec_path": ".flow/tasks/fn-262-feature-map-stays-current-and-is-always.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Feature map stays current and is always recommended",
   "updated_at": "2026-09-26T22:22:53.778136Z"
 }

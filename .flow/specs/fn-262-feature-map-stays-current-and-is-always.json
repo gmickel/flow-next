@@ -164,7 +164,7 @@
     "impl:fn-262-feature-map-stays-current-and-is-always.1": 0
   },
   "spec_path": ".flow/specs/fn-262-feature-map-stays-current-and-is-always.md",
-  "status": "open",
+  "status": "done",
   "title": "Feature map stays current and is always recommended",
   "tracker": {
     "baseHashFlow": null,
@@ -177,5 +177,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T22:49:17.539748Z"
+  "updated_at": "2026-09-26T22:56:26.472444Z"
 }
