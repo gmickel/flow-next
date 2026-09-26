@@ -14,6 +14,7 @@ Implemented all 31 fn-259 R-IDs: flowctl now renders, validates, counts and join
 
 stage: implement - ran (model: gpt-6-astra at medium; delegated: 12)
 stage: impl-review - ran [round 1 fan-out NEEDS_WORK (5 introduced) .. round 2 SHIP; post-SHIP delta review of 68e0aec8 SHIP]
+stage: plan-sync - skipped(config: planSync.enabled != true)
 
 Spec drift: no R-ID was already fully met by waves 1-4. Parts already present were reused, not rebuilt: plan and completion default receipts (e5535836, R14), Linear parent state fields (e6a86018, R18), and wave-1 `review-rounds record` derivation (b4c980af).
 
