@@ -50,9 +50,18 @@ The local critical path is now `test_chain_consumer_fixtures.py` (~110-140s): 18
 Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly.
 
 ## Done summary
-TBD
+Remote REST callers (the fn-181 localClient rule) and every HTTP MCP caller no longer receive owner configuration paths: /api/status, /api/collections(/:name), /api/connectors(/install) drop configPath, dbPath and path fields through the existing redaction wrapper, and MCP gno_status omits configPath, dbPath and collection roots (its text summary drops the Config/Database lines). Local owners, stdio MCP, CLI and SDK are unchanged. The Web UI tolerates the omitted fields, the production SPA snapshot was rebuilt (the stale snapshot crashed the remote Collections page), and the disk health text no longer names the model cache folder for any caller. Schemas (status, collection-list), docs/API.md, docs/MCP.md, CHANGELOG [Unreleased] and gno.sh (branch fn-188-remote-config-paths, not pushed) are updated.
 
+R-ID tests: test/spec/schemas/host-paths.test.ts ("REST owner config paths" and "MCP gno_status owner config paths": one local and one remote caller each, schema-validated).
+
+Live QA evidence: .flow/tmp/qa-fn-188-remote-status-and-collection-responses/ (temp root /tmp/gno-qa188 on port 3871: remote REST and HTTP MCP responses contain 0 temp-root hits and 0 path keys; local and stdio keep them; Collections page renders locally with paths and remotely without, no page errors).
+
+Follow-up (not built): document mutation routes still return a host `path` field to remote callers (create doc, rename, move, create folder, editable-copy file:// uri in src/serve/routes/api.ts); fn-181 only stripped `absPath`. Worth a separate spec.
+
+Tier: session (actual_model: claude-opus-5-5)
+
+stage: impl-review - ran (codex gpt-6-astra medium, 3-draw fan-out, SHIP first round)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1de2913b268e934cffe583a3f30c10fc40f1ae7e, 2da699be88b8f05161e4cc59847115b57dadbd9a, 6550384d8d9d06e0dcb074e23f5cc0dc315e42db
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., bash plugins/flow-next/scripts/impl-review_smoke_test.sh (run from scratchpad; 71 passed), ./scripts/sync-codex.sh --check, baseline: green (python3 scripts/run_tests_parallel.py pre-edit: files=234 ran=5044 skipped=7)
 - PRs:
