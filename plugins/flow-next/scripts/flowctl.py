@@ -44150,37 +44150,42 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     path = _pilot_strikes_ledger_path()
     strikes = _pilot_strikes_read(path, use_json=True) if path else {}
     actor = get_actor()
-    rows, probe_failed = [], False
-    candidates = [s for s in specs if (not spec_id or s["id"] == spec_id)
-                  and (spec_id or s.get("ready") is True or s["status"] == "done")]
-    if candidates:
+    def list_prs(*selector: str, limit: int) -> Optional[list]:
         try:
             probe = subprocess.run(
-                ["gh", "pr", "list", "--state", "all", "--limit", "1000", "--json",
+                ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
                  "number,url,state,headRefName,headRefOid,mergedAt"],
                 cwd=repo, capture_output=True, text=True, timeout=10, check=False)
-            rows = json.loads(probe.stdout) if probe.returncode == 0 else None
-            probe_failed = not (isinstance(rows, list) and len(rows) < 1000 and all(
-                isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
-                and isinstance(row.get("number"), int) and isinstance(row.get("url"), str)
-                and isinstance(row.get("headRefName"), str) for row in rows))
+            listed = json.loads(probe.stdout) if probe.returncode == 0 else None
         except (OSError, ValueError, subprocess.TimeoutExpired):
-            probe_failed = True
-        if probe_failed:
-            rows = []
+            return None
+        valid = isinstance(listed, list) and len(listed) < limit and all(
+            isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
+            and isinstance(row.get("number"), int) and isinstance(row.get("url"), str)
+            and isinstance(row.get("headRefName"), str) for row in listed)
+        return listed if valid else None
+
+    def observe(listed: Optional[list], branch: Optional[str]) -> dict:
+        prs = sorted([row for row in listed or [] if row["headRefName"] == branch],
+                     key=lambda row: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[row["state"]],
+                                      row.get("mergedAt") or "", row["number"]), reverse=True)
+        failed = bool(branch) and (listed is None or sum(row["state"] == "OPEN" for row in prs) > 1)
+        merged = next((row for row in prs if row["state"] == "MERGED"), None)
+        return {"open": next((row for row in prs if row["state"] == "OPEN"), None),
+                "merged": merged, "merged_head": merged.get("headRefOid") if merged else None,
+                "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed}
+
+    candidates = [s for s in specs if (not spec_id or s["id"] == spec_id)
+                  and (spec_id or s.get("ready") is True or s["status"] == "done")]
+    # Selection joins open PRs from one listing; only the selected branch gets
+    # the full-history probe, so the listing never truncates on large repos.
+    rows = list_prs("--state", "open", limit=1000) if candidates else None
     result = []
     remote_heads = RemoteHeads()
     for spec in candidates:
         sid, branch = spec["id"], spec.get("branch_name")
         tasks = inventory.by_spec.get(sid, [])
-        prs = sorted([row for row in rows if row["headRefName"] == branch],
-                     key=lambda row: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[row["state"]],
-                                      row.get("mergedAt") or "", row["number"]), reverse=True)
-        failed = bool(branch) and (probe_failed or sum(row["state"] == "OPEN" for row in prs) > 1)
-        merged = next((row for row in prs if row["state"] == "MERGED"), None)
-        observation = {"open": next((row for row in prs if row["state"] == "OPEN"), None),
-                       "merged": merged, "merged_head": merged.get("headRefOid") if merged else None,
-                       "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed}
+        observation = observe(rows, branch)
         branch_head = None
         if branch:
             head = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
@@ -44217,6 +44222,9 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                        "branch_exists": branch_head is not None, "branch_head": branch_head,
                        "qa_fresh": fresh})
     selected = next((row for row in result if spec_id or row["pr"]["open"] or row["eligible"]), None)
+    if selected and selected["branch_name"]:
+        selected["pr"] = observe(list_prs("--head", selected["branch_name"], "--state", "all", limit=100),
+                                 selected["branch_name"])
     for candidate in result:
         with redirect_stdout(io.StringIO()) as output:
             cmd_review_backend(argparse.Namespace(id=candidate["id"], json=True))
@@ -44244,7 +44252,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         candidate["route"]["explain"] = judge_route_explain(candidate["route"], state)
     current = subprocess.run(["git", "branch", "--show-current"], cwd=repo,
                              capture_output=True, text=True, check=True).stdout.strip()
-    current_prs = [row for row in rows if row["headRefName"] == current and row["state"] == "OPEN"]
+    current_prs = [row for row in rows or [] if row["headRefName"] == current]
     return {"guards": {"nested": bool(os.environ.get("FLOW_RALPH") or os.environ.get("REVIEW_RECEIPT_PATH")),
                        "dirty": dirty}, "config": config, "actor": actor, "strikes": strikes,
             "counts": {"total": len(specs), "open": sum(s["status"] == "open" for s in specs),
@@ -44252,7 +44260,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
             "candidates": result, "selected": selected, "review_backend": selected["review_backend"] if selected else None,
             "route": selected["route"] if selected else None,
             "current_branch": current, "current_branch_prs": current_prs,
-            "current_branch_probe_failed": probe_failed or not current, "before_dispatch": selected["tasks"] if selected else []}
+            "current_branch_probe_failed": rows is None or not current, "before_dispatch": selected["tasks"] if selected else []}
 
 
 def cmd_pilot_snapshot(args: argparse.Namespace) -> None:

@@ -118,7 +118,13 @@ case "$TERMINAL_ACTION" in
   retry) echo "<promise>RETRY</promise>"; exit "$TERMINAL_EXIT" ;;
   ship) echo "VERDICT=SHIP"; exit "$TERMINAL_EXIT" ;;
   superseded) echo "COMPLETION_REVIEW_STATUS=$TERMINAL_STATUS"; exit "$TERMINAL_EXIT" ;;
-  escalate) echo "ESCALATE: completion review $TERMINAL_STATUS"; exit "$TERMINAL_EXIT" ;;
+  escalate)
+    if [ "$TERMINAL_STATUS" = needs_human ]; then
+      echo "ESCALATE: reviewer requested human review"
+    else
+      echo "ESCALATE: completion-review did not converge within the verdict-round cap"
+    fi
+    exit "$TERMINAL_EXIT" ;;
   *) echo "Unknown terminal review action: $TERMINAL_ACTION" >&2; exit 1 ;;
 esac
 ```

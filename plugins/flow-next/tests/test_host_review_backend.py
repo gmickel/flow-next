@@ -287,7 +287,9 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 ("retry", "unknown", 0, "<promise>RETRY</promise>"),
                 ("ship", "ship", 0, "VERDICT=SHIP"),
                 ("superseded", "ship", 0, "COMPLETION_REVIEW_STATUS=ship"),
-                ("escalate", "needs_human", 4, "ESCALATE:"),
+                # ralph.sh greps this exact line for its NEEDS_HUMAN fast path.
+                ("escalate", "needs_human", 4, "ESCALATE: reviewer requested human review"),
+                ("escalate", "needs_work", 4, "ESCALATE: completion-review did not converge"),
                 ("bad-action", "unknown", 1, "Unknown terminal review action"),
             ):
                 with self.subTest(action=action):

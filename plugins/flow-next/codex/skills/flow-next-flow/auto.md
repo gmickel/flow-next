@@ -87,6 +87,8 @@ if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.nested')" = true ]; then
   exit 1
 fi
 if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq '.guards.dirty | length')" -gt 0 ]; then
+  echo "Evidence: dirty non-.flow working tree at run start"
+  printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.dirty[]'
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
   exit 0
 fi

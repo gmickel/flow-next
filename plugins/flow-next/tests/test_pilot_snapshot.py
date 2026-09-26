@@ -36,11 +36,13 @@ class PilotSnapshotTests(unittest.TestCase):
         def run(command, *args, **kwargs):
             if command[0] == 'gh':
                 gh_calls.append(command)
-                return SimpleNamespace(returncode=int(failed), stdout=json.dumps(rows or []))
+                listed = [row for row in rows or [] if '--head' in command or row['state'] == 'OPEN']
+                return SimpleNamespace(returncode=int(failed), stdout=json.dumps(listed))
             return real_run(command, *args, **kwargs)
         with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
             result = f.pilot_snapshot(self.sid)
-        self.assertEqual(len(gh_calls), 1)
+        # One open-PR listing for selection, one full-history probe for the selected branch.
+        self.assertEqual([call[3:5] for call in gh_calls], [['--state', 'open'], ['--head', self.branch]])
         return result
 
     def test_snapshot_has_code_route_without_external_judge_and_is_read_only(self):
