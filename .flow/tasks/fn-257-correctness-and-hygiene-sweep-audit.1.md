@@ -19,6 +19,7 @@ Deliberate narrowings: plan-review host receipts record `head` only (plan review
 Error-case tests: R3 missing `--files` entry and R5 unresolvable base (test_claude_review_commands), R18 evidence keys and lock re-checks (test_done_block_ergonomics), R19 Windows retry bound, hints and closed pipe (test_done_block_ergonomics), R15 malformed frontmatter and unsupported values (test_memory_marks, test_memory_schema), R17 timeout finding (test_prime_run_bounded), R12 broken links (test_shipped_links).
 
 stage: impl-review - ran (codex gpt-6-astra high; round 1 fan-out NEEDS_WORK with 4 findings fixed, round 2 SHIP)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
 - Commits: 133036959e7731b2e4b6ce7818159bb954ae4ada, 1c3263578badb4ee8463f675a7ab66f5fac3512c, ac1a114cb99e18368690261b930539eaf0907b33
 - Tests: python3 scripts/run_tests_parallel.py (baseline green 5081; final green 5111, 0 failures), uvx ruff@0.16.0 check ., python3 scripts/check_doc_anchors.py, ./scripts/sync-codex.sh (x2, idempotent), python3 scripts/gen_tracker_manifest.py, test_done_block_ergonomics.py, test_shipped_links.py, test_prime_run_bounded.py, test_capture_config_snapshot.py, test_task_skill_contract.py, test_memory_marks.py, test_memory_schema.py, test_host_review_backend.py, test_claude_review_commands.py
