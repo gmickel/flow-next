@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-211-feature-map-compounding-user-pov-drive",
   "spec_path": ".flow/tasks/fn-211-feature-map-compounding-user-pov-drive.3.md",
-  "status": "todo",
+  "status": "done",
   "title": "Consumers: qa + drive read the map by pointer; stale routes file as drift memos",
   "updated_at": "2026-08-29T12:31:09.663991Z"
 }

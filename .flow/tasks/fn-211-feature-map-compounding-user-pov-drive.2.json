@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-211-feature-map-compounding-user-pov-drive",
   "spec_path": ".flow/tasks/fn-211-feature-map-compounding-user-pov-drive.2.md",
-  "status": "todo",
+  "status": "done",
   "title": "Maintain mode: audit-shaped pass with clean/changed/blocked",
   "updated_at": "2026-08-29T12:31:09.391229Z"
 }
