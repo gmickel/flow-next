@@ -30,9 +30,14 @@ All autonomous signals collapse into one no-prompt gate:
 ```bash
 RALPH=0
 [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] \
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" \
+   || "$ARGUMENTS" == *mode:autonomous* ]] \
   && RALPH=1
 ```
+
+`RALPH=1` means any unattended run, not only Ralph. A lifecycle stage that
+runs the inline wrapper applies its own autonomy: a stage `flow --auto`
+dispatched carries `mode:autonomous`, so it takes the `RALPH=1` path.
 
 > **Autonomy parity is a hard invariant.** Under `RALPH=1` no code path reaches
 > `AskUserQuestion`: discovery, collisions, merge conflicts, and question
@@ -202,11 +207,12 @@ Branch only on the envelope:
 | `external_action_required` | perform the named MCP action if authorized, then resume with `persist-external`; otherwise defer |
 
 A push `conflict` with subtype `tracker_diverged` means someone edited the
-tracker body since the last sync. In an attended run, ask once: reconcile
+tracker body since the last sync. With `RALPH=0`, ask once: reconcile
 (recommended, merges both sides), overwrite the tracker body (rerun the same
-push with `--overwrite-diverged`), or leave it. Under any autonomy marker (the
-gate above sets `RALPH=1` for all of them, `flow --auto` included), never
-overwrite; defer for a human.
+push with `--overwrite-diverged`), or leave it. With `RALPH=1` (including every
+stage `flow --auto` runs), never overwrite: record it with
+`flowctl sync defer <spec-id> --summary "tracker body diverged since last sync"
+--suggested "reconcile, or confirm an --overwrite-diverged push"` and continue.
 
 Recovery routing is agentic because the same class can imply a user choice,
 MCP continuation, local correction, or deferral. The error message is
