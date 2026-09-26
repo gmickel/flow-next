@@ -6,7 +6,7 @@ Memory-entry body prose authored by the Update / Replace / Harden outcomes follo
 
 | Outcome | Meaning | Default action |
 |---------|---------|----------------|
-| **Keep** | Still accurate and useful | No edit; report reviewed-without-change |
+| **Keep** | Still accurate and useful | No content edit; stamp `flowctl memory mark-fresh`; report reviewed-without-change |
 | **Update** | Solution still correct, references drifted | Agent edits in place via Write tool |
 | **Consolidate** | Two entries overlap heavily, both correct | Merge unique content into canonical, `git rm` subsumed |
 | **Replace** | Old entry now misleading, successor exists / can be written | Write replacement entry, `git rm` old |
@@ -52,7 +52,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 
 **Action steps:**
 
-- No file edit.
+- No content edit; stamp `flowctl memory mark-fresh <id>` (see [workflow.md](workflow.md) §4.1).
 - Report under "Reviewed without edits" subsection (see [workflow.md](workflow.md) §5.1).
 
 **Edge cases:**
@@ -135,8 +135,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
    - Integrate unique content where it logically belongs (don't blindly append).
    - Combine `tags` arrays (dedupe).
    - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
-   - Optional: append `related_to: [<subsumed_id>, ...]` for traceability (git history also captures this).
-4. **Update other entries' `related_to`** — if any other entries cross-reference the subsumed entries, re-point to canonical.
+4. **Re-point every `related_to` that names a subsumed entry** — other entries point at canonical instead; canonical drops the id rather than naming itself. No `related_to` may name an entry this run deletes; git history and the commit message record the merge.
 5. **`git rm` subsumed entries.** No archival, no redirect metadata. Git history preserves them; recovery via `git log --diff-filter=D -- .flow/memory/`.
 
 **Edge cases:**
@@ -194,12 +193,10 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
      - Track-specific knowledge: `applies_when`.
      - Optional: `module`, `tags`, `related_to`, `status`.
 2. **Subagent writes the new entry** via Write tool OR `flowctl memory add --track <t> --category <c> --title "..." --module <m> --tags "a,b" --body-file <path>`. flowctl `add` enforces schema validation; direct Write requires the subagent to emit valid frontmatter.
-3. **Optional traceability** — new entry's frontmatter may include `related_to: [<old-id>]`. Git history also captures the relationship.
+3. **Re-point every `related_to` that names the old entry** to the new entry id, and remove the old id from the new entry's own `related_to` (`memory add` links a moderate-overlap match automatically). No `related_to` may name the deleted entry; git history records the relationship.
 4. **Orchestrator `git rm`'s the old entry** after the subagent completes.
 
 **Edge cases:**
-
-- Old entry has dependents (`related_to` from other entries) → update their `related_to` to point at the new entry id.
 - Replacement subagent's evidence comes back insufficient mid-write → abort, mark old entry stale, surface as a recommendation in the report.
 - Successor pattern exists in code but is itself drifting (the new approach is being replaced by an even newer one) → this is rare; classify as Replace targeting the newest approach, with a short note in the body about the migration in progress.
 
@@ -488,7 +485,7 @@ a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
 Are there reference drifts (paths, modules, links, snippets)?
   yes → Update (write tool; preserve unknown frontmatter) — one Update per entry,
         carrying the retrieval-surface repair too if one was named above
-  no  → Keep (no edit; report under "Reviewed without edits"), unless a retrieval
+  no  → Keep (mark-fresh stamp only; report under "Reviewed without edits"), unless a retrieval
         fix was named above — then it is that Update alone
 ```
 

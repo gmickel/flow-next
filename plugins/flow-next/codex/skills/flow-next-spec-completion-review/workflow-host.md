@@ -207,10 +207,10 @@ Never turn it into `NEEDS_WORK`, and never write completion status for that path
 
 ## Step 3: Receipt
 
-Receipt path (same contract as the subprocess backends — spec-scoped default; explicit `REVIEW_RECEIPT_PATH` always wins):
+Receipt path (same contract as the subprocess backends — repo- and spec-keyed default; explicit `REVIEW_RECEIPT_PATH` always wins):
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt${SPEC_ID:+-${SPEC_ID}}.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/completion-review-receipt-${SPEC_ID}.json}"
 ```
 
 Build this payload once:
@@ -225,6 +225,8 @@ Build this payload once:
   "spec": "host",
   "session_id": null,
   "review": "<full reviewer output text - findings + verdict>",
+  "base": "<REVIEW_BASE_SHA>",
+  "head": "<REVIEW_HEAD_SHA>",
   "timestamp": "<ISO-8601>",
   "attempt_timestamp": ""
 }
@@ -262,20 +264,10 @@ fi
 Unsupported/legacy prose leaves the additive field absent. The same transaction
 also attaches the additive `criteria: [{id, status, note?}]` field when the
 reviewer output has a parseable `## Global criteria` section (absent otherwise).
-The command performs no reviewer/model/network call.
-
-Persist it in this order:
-
-1. Under the terminal receipt's cross-process lock, write the complete JSON
-   payload to
-   `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
-   first (create the parent directory), preserve the prior terminal generation
-   beside `$RECEIPT_PATH`, then atomically advance `$RECEIPT_PATH`.
-2. Validate `type`, `id`, and `verdict` at `$RECEIPT_PATH` with `jq`.
-3. Leave the recovery file in place after receipt validation. SKILL.md's
-   shared checkpoint deletes it only after terminal status persists.
-   On any write/validation failure, leave recovery in place, output
-   `<promise>RETRY</promise>`, and stop before terminal status.
+The command performs no reviewer/model/network call. `attach` publishes under
+the receipt lock and keeps the prior generation, and the `record` journal is
+its recovery source: never write a recovery file or advance the receipt by
+hand.
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.
 

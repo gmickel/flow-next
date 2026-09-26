@@ -17,8 +17,8 @@ The Step 5 efficiency note still binds: author with **Write**, revise with
 
 2. If task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M):
    ```bash
-   # Combined set-spec: description + acceptance in one call
-   # Write to temp files only if content has single quotes — unique per-task paths
+   # Combined set-spec: description + acceptance in one call. Both flags take FILE
+   # paths — Write each section to its own unique per-task file first
    # (path-persistence rule: literal agent-composed paths, never shared fixed names)
    $FLOWCTL task set-spec <id> --description "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" --acceptance "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" --json
    ```
@@ -27,7 +27,7 @@ The Step 5 efficiency note still binds: author with **Write**, revise with
 - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
 - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
 
-Then return to Step 5 and apply the plan-content rules (spec scaffold, R-ID rule
+Then return to Step 5 and apply the plan-content rules (template sections, R-ID rule
 including per-R error/boundary enumeration, source-tag consumption), the
 task-spec content rules (artifact split, `**Touches:**`, `satisfies`), spec
 dependencies (both directions), and task dependencies.

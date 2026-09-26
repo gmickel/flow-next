@@ -289,7 +289,10 @@ class ChartRegistryCounts(unittest.TestCase):
         skill_dirs = _skill_dirs()
         commands = _command_stems()
         slash_skills = _slash_command_skills()
-        phrase = [s for s in skill_dirs if s not in slash_skills and s != "flow-next"]
+        aliases = {"flow-next-interview", "flow-next-pilot"}
+        phrase = [
+            s for s in skill_dirs if s not in slash_skills and s != "flow-next" and s not in aliases
+        ]
         # base flow-next is phrase-triggered too
         phrase_count = len(phrase) + (1 if "flow-next" in skill_dirs else 0)
 
@@ -306,17 +309,17 @@ class ChartRegistryCounts(unittest.TestCase):
         # exclude the alias. fn-239 folded pilot into `flow --auto` and keeps
         # `flow-next-pilot` as a second one-release alias stub (plus its
         # command shim), so the filesystem/registry inventory stays at
-        # 33 dirs / 29 shims while the published phrases drop to the stable
-        # 31 skills / 26 slash-command. Both aliases drop out of the
-        # inventory when they are removed the release after.
+        # 33 dirs while the published phrases drop to the stable 31 skills /
+        # 26 slash-command. fn-257 R21 retired both alias command shims, so
+        # the registry inventory reads 27 commands; the stub dirs remain.
         self.assertEqual(len(skill_dirs), 33, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 29, f"commands: {commands}")
+        self.assertEqual(len(commands), 27, f"commands: {commands}")
         self.assertIn("flow-next-refine", skill_dirs)
         self.assertIn("flow-next-interview", skill_dirs)
         self.assertIn("flow-next-pilot", skill_dirs)
         self.assertIn("refine", commands)
-        self.assertIn("interview", commands)
-        self.assertIn("pilot", commands)
+        self.assertNotIn("interview", commands)
+        self.assertNotIn("pilot", commands)
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-flow", skill_dirs)
         self.assertNotIn("flow-next-guide", skill_dirs)
@@ -325,12 +328,12 @@ class ChartRegistryCounts(unittest.TestCase):
         self.assertIn("flow", commands)
         self.assertNotIn("guide", commands)
         self.assertIn("features", commands)
-        # each alias stub has a matching shim, so both count as slash skills
-        # in the inventory (28) while the published phrase stays at 26.
-        self.assertEqual(len(slash_skills), 28, f"slash skills: {slash_skills}")
+        # the alias stubs have no shim, so they count as neither slash nor
+        # phrase skills.
+        self.assertEqual(len(slash_skills), 26, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "29 commands, 33 skills"
+        expected_snippet = f"{len(commands)} commands, {len(skill_dirs)} skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(

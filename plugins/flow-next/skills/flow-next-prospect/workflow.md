@@ -25,7 +25,7 @@ done
 [ -n "$PY" ] || { echo "prospect: no working Python 3.11+ interpreter found" >&2; exit 1; }
 ```
 
-`jq` and Python 3.11+ (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do not survive across tool calls.** Any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) re-declares the Preamble picker block verbatim at its top before invoking `$PY`; a block that invoked `$PY` without that re-declaration has broken this. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
+`jq` and Python 3.11+ (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do not survive across tool calls.** Any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2–5.3) re-declares the whole Preamble block verbatim at its top (it also defines `$FLOWCTL`, `$PROSPECTS_DIR` and `$TODAY`) before invoking `$PY`; a block that invoked `$PY` without that re-declaration has broken this. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
 
 ---
 
@@ -388,24 +388,61 @@ The `GENERATION_TARGET_DESCRIPTION` slot:
 
 ### 2.4 — Validate the YAML
 
-Parse the model output. The skill must accept output the model wraps in ```yaml fences as well as bare YAML. A defensive parser:
+Write the model output, fenced or bare, with the **Write tool** to a literal unique path (e.g. `/tmp/flow-prospect-candidates-<suffix>.md`, your resolved temp dir) and validate it with a stdlib-only reader for the §2.3 shape. The path is an argument because the heredoc owns stdin:
 
 ```bash
-# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
-# here first (vars die across tool calls).
+# Re-declare the whole Preamble block verbatim here first (vars die across tool calls).
 
-$PY - <<'PY'
-import sys, re, yaml  # PyYAML may not be installed — fall back to a stdlib loader if needed.
-text = sys.stdin.read()
+$PY - "/tmp/flow-prospect-candidates-<suffix>.md" <<'PY'
+import json, re, sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
 m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
 body = m.group(1) if m else text
-data = yaml.safe_load(body) if 'yaml' in dir() else None
+
+def scalar(v):
+    v = v.strip()
+    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
+
+# A list of flat mappings; affected_areas is the one list value (block or [a, b]).
+cands, cur, list_key, item_indent = [], None, None, 0
+for raw in body.splitlines():
+    s = raw.strip()
+    if not s or s.startswith("#") or s == "candidates:":
+        continue
+    indent = len(raw) - len(raw.lstrip())
+    if s.startswith("- ") and list_key and indent > item_indent:
+        cur[list_key].append(scalar(s[2:]))
+        continue
+    if s.startswith("- "):
+        cur, list_key, item_indent = {}, None, indent
+        cands.append(cur)
+        s = s[2:]
+    key, sep, value = s.partition(":")
+    if cur is None or not sep:
+        continue
+    key, value = key.strip(), value.strip()
+    if not value:
+        cur[key], list_key = [], key
+    elif value.startswith("[") and value.endswith("]"):
+        cur[key], list_key = [scalar(x) for x in value[1:-1].split(",") if x.strip()], None
+    else:
+        cur[key], list_key = scalar(value), None
+
+valid = []
+for i, c in enumerate(cands):
+    missing = [f for f in ("title", "summary", "affected_areas") if not c.get(f)]
+    if missing:
+        print(f"Phase 2: dropped malformed candidate at index {i}: missing {', '.join(missing)}", file=sys.stderr)
+    else:
+        valid.append(c)
+print(json.dumps(valid))
 PY
 ```
 
-If PyYAML is unavailable on the host, fall back to the stdlib parser pattern from Phase 0 §0.2 — it covers the limited subset (block list, scalar fields, no anchors / no nesting beyond `affected_areas`). Any candidate missing `title`, `summary`, or `affected_areas` is dropped before Phase 3 with a stderr warning (`Phase 2: dropped malformed candidate at index <i>: <reason>`).
+Any candidate missing `title`, `summary`, or `affected_areas` is dropped before Phase 3 with the stderr warning above.
 
-Hand the validated list to Phase 3 as `CANDIDATES_YAML` (canonical form: re-serialize from the parsed object so downstream prompts get a clean shape).
+Hand the printed JSON list (valid YAML) to Phase 3 as `CANDIDATES_YAML`, so downstream prompts get a clean shape.
 
 If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive validation, surface a blocking question:
 
@@ -661,28 +698,22 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 
 ### 5.2 — Slug + artifact id allocation (R13)
 
-Use the bundled helpers — both are stdlib-only and concurrency-safe:
+Use the bundled helpers — both are stdlib-only and concurrency-safe. They live in `flowctl.py` beside the resolved `$FLOWCTL`, so the block works without a plugin-root variable:
 
 ```bash
-# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
-# here first (vars die across tool calls).
+# Re-declare the whole Preamble block verbatim here first (vars die across tool calls).
+FLOWCTL_PY="$(dirname "$FLOWCTL")/flowctl.py"
+[ -f "$FLOWCTL_PY" ] || { echo "prospect: flowctl.py not found at $FLOWCTL_PY (expected <plugin-root>/scripts/flowctl.py)" >&2; exit 1; }
 
-$PY - "$PROSPECTS_DIR" "$FOCUS_HINT" "$TODAY" <<'PY'
-import importlib.util, os, sys
+$PY - "$FLOWCTL_PY" "$PROSPECTS_DIR" "<focus hint, empty when none>" "$TODAY" <<'PY'
+import importlib.util, sys
 from pathlib import Path
 
-# Load flowctl module without invoking the CLI.
-flowctl_py = os.environ.get("FLOWCTL_PY") or (
-    Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
-    / "scripts" / "flowctl.py"
-)
-spec = importlib.util.spec_from_file_location("fc", str(flowctl_py))
+flowctl_py, prospects_dir, focus_hint, today = sys.argv[1:5]
+spec = importlib.util.spec_from_file_location("fc", flowctl_py)  # load without invoking the CLI
 fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
-
-prospects_dir, focus_hint, today = sys.argv[1], sys.argv[2], sys.argv[3]
 base_slug = fc._prospect_slug(focus_hint or None)
-artifact_id = fc._prospect_next_id(Path(prospects_dir), base_slug, today)
-print(artifact_id)
+print(fc._prospect_next_id(Path(prospects_dir), base_slug, today))
 PY
 ```
 
@@ -693,37 +724,45 @@ PY
 
 ### 5.3 — Build frontmatter + body, then atomic write
 
-Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Use `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
+Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Write the §5.1 inputs with the **Write tool** as one JSON file at a literal unique path (e.g. `/tmp/flow-prospect-inputs-<suffix>.json`):
 
-```python
-ranked = {                                  # from Phase 4 §4.3
-    "high_leverage":         [{...}, {...}],
-    "worth_considering":     [{...}, ...],
-    "if_you_have_the_time":  [{...}, ...],
+```json
+{
+  "focus_text": "<FOCUS_TEXT>",
+  "grounding_snapshot": "<GROUNDING_SNAPSHOT>",
+  "ranked": {"high_leverage": [], "worth_considering": [], "if_you_have_the_time": []},
+  "drops": [{"title": "...", "taxonomy": "...", "reason": "..."}],
+  "frontmatter": {
+    "title": "<focus or Open-ended prospect>",
+    "date": "<TODAY>",
+    "focus_hint": "<focus hint or empty>",
+    "volume": 0,
+    "survivor_count": 0,
+    "rejected_count": 0,
+    "rejection_rate": 0.0,
+    "artifact_id": "<§5.2 output>",
+    "promoted_ideas": [],
+    "status": "active"
+  }
 }
-drops = [{"title": ..., "taxonomy": ..., "reason": ...}, ...]
-body = fc.render_prospect_body(focus_text, grounding_snapshot, ranked, drops)
+```
 
-frontmatter = {
-    "title": <focus or "Open-ended prospect">,
-    "date": today_iso,                       # quoted as a string by the writer
-    "focus_hint": focus_hint or "",
-    "volume": volume,                        # int
-    "survivor_count": survivor_count,        # int
-    "rejected_count": rejected_count,        # int
-    "rejection_rate": rejection_rate,        # float, two decimals
-    "artifact_id": artifact_id,
-    "promoted_ideas": [],                    # `flowctl prospect promote` appends here
-    "status": "active",
-}
-# Optional flags — set ONLY when upstream phases provided them.
-if phase3_floor_violation:
-    frontmatter["floor_violation"] = True
-if phase2_generation_under_volume:
-    frontmatter["generation_under_volume"] = True
+`ranked` holds the Phase 4 §4.3 buckets. Add `"floor_violation": true` / `"generation_under_volume": true` to `frontmatter` ONLY when upstream phases set them. `promoted_ideas` stays empty; `flowctl prospect promote` appends to it. Then render and write in one call with `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
 
-target = Path(prospects_dir) / f"{artifact_id}.md"
-fc.write_prospect_artifact(target, frontmatter, body)
+```bash
+# Re-declare the whole Preamble block and the FLOWCTL_PY check from §5.2 first.
+$PY - "$FLOWCTL_PY" "$PROSPECTS_DIR" "/tmp/flow-prospect-inputs-<suffix>.json" <<'PY'
+import importlib.util, json, sys
+from pathlib import Path
+
+flowctl_py, prospects_dir, inputs = sys.argv[1:4]
+spec = importlib.util.spec_from_file_location("fc", flowctl_py)
+fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
+d = json.loads(Path(inputs).read_text(encoding="utf-8"))
+fm = d["frontmatter"]
+body = fc.render_prospect_body(d["focus_text"], d["grounding_snapshot"], d["ranked"], d["drops"])
+fc.write_prospect_artifact(Path(prospects_dir) / f"{fm['artifact_id']}.md", fm, body)
+PY
 ```
 
 Atomic semantics (R4 anchor):

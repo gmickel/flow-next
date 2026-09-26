@@ -1,15 +1,187 @@
 {
   "branch_name": "fn-257-correctness-and-hygiene-sweep-audit",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-26T11:05:40.497833Z",
   "created_at": "2026-09-25T20:30:51.244889Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-255-unattended-run-correctness-fixes-audit"
   ],
   "id": "fn-257-correctness-and-hygiene-sweep-audit",
+  "impl_review_rounds": {
+    "fn-257-correctness-and-hygiene-sweep-audit.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "bc672eedc87e3019d9819734337af3f7b88b4578cdbd17e875630861e80d2483",
+      "backend": "codex",
+      "base_sha": "68cf62deca1c713a6262e033499ada42ab382bae",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b5e4000d1749eadb059e9158639c11b3",
+            "classification": "introduced",
+            "findingId": "finding-b5e4000d1749eadb059e9158639c11b3",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e10d0431ae85a6de502b4b0cafac31b1",
+            "classification": "introduced",
+            "findingId": "finding-e10d0431ae85a6de502b4b0cafac31b1",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c6e5642c9395989e56ad7ea5f4e14d09",
+            "classification": "introduced",
+            "findingId": "finding-c6e5642c9395989e56ad7ea5f4e14d09",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-11d834a26977549b8cc16331a983ed49",
+            "classification": "introduced",
+            "findingId": "finding-11d834a26977549b8cc16331a983ed49",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3beed5b4976b2de0368f9fefdcce2051",
+            "classification": "pre_existing",
+            "findingId": "finding-3beed5b4976b2de0368f9fefdcce2051",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "133036959e7731b2e4b6ce7818159bb954ae4ada",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3503,
+      "output_sha256": "3422cc4c6b39715f16469c97b8ddd6cf8114ca92e6d2f8efdb9fcf5243c384c7",
+      "reservation_id": "1b7beaf2cdef4c7e892b1bf57db49cfa",
+      "round_consumed": true,
+      "scope": "impl:fn-257-correctness-and-hygiene-sweep-audit.1",
+      "superseded_by": null,
+      "task": "fn-257-correctness-and-hygiene-sweep-audit.1",
+      "timestamp": "2026-09-26T10:51:18.068858Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "4ece1d21c185edc566a9dde7681696f0cdefb85a75b2798eca6d908677cc3997",
+      "backend": "codex",
+      "base_sha": "68cf62deca1c713a6262e033499ada42ab382bae",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b5e4000d1749eadb059e9158639c11b3",
+            "classification": "introduced",
+            "findingId": "finding-b5e4000d1749eadb059e9158639c11b3",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-e10d0431ae85a6de502b4b0cafac31b1",
+            "classification": "introduced",
+            "findingId": "finding-e10d0431ae85a6de502b4b0cafac31b1",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c6e5642c9395989e56ad7ea5f4e14d09",
+            "classification": "introduced",
+            "findingId": "finding-c6e5642c9395989e56ad7ea5f4e14d09",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-11d834a26977549b8cc16331a983ed49",
+            "classification": "introduced",
+            "findingId": "finding-11d834a26977549b8cc16331a983ed49",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3beed5b4976b2de0368f9fefdcce2051",
+            "classification": "pre_existing",
+            "findingId": "finding-3beed5b4976b2de0368f9fefdcce2051",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1c3263578badb4ee8463f675a7ab66f5fac3512c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2764,
+      "output_sha256": "e94fd632220f0c49ff3e94492d3ceba1fb4a5ca7d0e707a72d8913363ef02a4a",
+      "reservation_id": "02b66740730d4aed92ea68883b204202",
+      "round_consumed": true,
+      "scope": "impl:fn-257-correctness-and-hygiene-sweep-audit.1",
+      "superseded_by": null,
+      "task": "fn-257-correctness-and-hygiene-sweep-audit.1",
+      "timestamp": "2026-09-26T11:00:44.131373Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-257-correctness-and-hygiene-sweep-audit.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-257-correctness-and-hygiene-sweep-audit.1": 0
+  },
   "spec_path": ".flow/specs/fn-257-correctness-and-hygiene-sweep-audit.md",
-  "status": "open",
+  "status": "done",
   "title": "Correctness and hygiene sweep (audit wave 3)",
   "tracker": {
     "baseHashFlow": null,
@@ -22,5 +194,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T20:33:41.379779Z"
+  "updated_at": "2026-09-26T11:18:23.077145Z"
 }

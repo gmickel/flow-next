@@ -8,7 +8,9 @@ description: Manage git worktrees (create/list/switch/cleanup) and copy .env fil
 Use the manager script for all worktree actions.
 
 ```bash
-bash "${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh" <command> [args]
+WORKTREE_SH="${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh"
+[ -f "$WORKTREE_SH" ] || WORKTREE_SH="<plugin-root>/skills/flow-next-worktree-kit/scripts/worktree.sh"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+bash "$WORKTREE_SH" <command> [args]
 ```
 
 Commands:

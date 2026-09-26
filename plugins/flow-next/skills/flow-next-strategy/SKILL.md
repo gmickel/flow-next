@@ -12,7 +12,7 @@ allowed-tools: AskUserQuestion, Read, Write, Bash
 
 The document is short and structured on purpose. Good answers to a handful of sharp questions produce a better strategy than any amount of prose. This skill asks those questions, pushes back on weak answers, and writes the doc.
 
-**Note: The current year is 2026.** Use this when dating the strategy document.
+**Date the strategy document from `date -u +%Y-%m-%d`** (run it; never assume the year).
 
 ## Preamble
 

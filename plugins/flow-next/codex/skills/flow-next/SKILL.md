@@ -68,10 +68,10 @@ EOF
 # Start working on task
 $FLOWCTL start fn-1-add-oauth.2 --json
 
-# Mark task done
-echo "What was done" > /tmp/summary.md
-echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > /tmp/evidence.json
-$FLOWCTL done fn-1-add-oauth.2 --summary-file /tmp/summary.md --evidence-json /tmp/evidence.json --json
+# Mark task done (unique per-task temp paths)
+echo "What was done" > "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md"
+echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json"
+$FLOWCTL done fn-1-add-oauth.2 --summary-file "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md" --evidence-json "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json" --json
 
 # Validate structure
 $FLOWCTL validate --spec fn-1-add-oauth --json
@@ -165,7 +165,7 @@ Legacy formats `fn-N` and `fn-N-xxx` (random 3-char suffix) are still supported.
 ## Notes
 
 - Run `$FLOWCTL --help` to discover all commands and options
-- **Every write goes through a flowctl subcommand.** A session that edits `.flow/` JSON or task markdown by hand has broken this.
+- **Every write goes through a flowctl subcommand**, except the `.flow/memory/declined/*.md` file above, which has no flowctl verb. A session that edits `.flow/` JSON or task markdown by hand has broken this.
 - **Every read comes from `.flow/` state**, via `--json` (`detect`, `list`, `specs`, `tasks`, `show`, `ready`) or `cat` for markdown. An answer assembled from files skimmed by hand has broken this.
 - **A task marked complete is closed with `flowctl done` carrying both `--summary-file` and `--evidence-json`.** A bare status flip has broken this.
 - **Requests that need real planning or execution are handed off**, to `/flow-next:plan` and `/flow-next:work`. Improvising them here has broken this.

@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # `/flow-next:pilot` is now `/flow-next:flow --auto --tick`
 
-Print exactly one line to stderr, then invoke the `flow-next-flow` skill with the arguments rewritten as below:
+Print exactly one line to stderr, then invoke the `flow-next-flow` skill with `--auto --tick` followed by the arguments rewritten as below:
 
 ```bash
 echo "pilot is now flow --auto --tick; this alias is removed in the next release" >&2

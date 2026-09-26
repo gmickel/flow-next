@@ -490,13 +490,11 @@ class ChartRegistryEntries(unittest.TestCase):
         `.agents/plugins/marketplace.json` does not enumerate command/skill
         counts - it only lists the plugin - so it is checked for presence only.
         """
-        # 28/32 include the stable flow-next-prose skill (fn-207.5) and
-        # flow-next-features (fn-211.4); the work-rolling beta graduated into
-        # work's default scheduler (fn-218). Registry manifests count every
-        # shipped dir.
-        # fn-238 R15: registry inventory carries the one-release interview alias
-        # stub + shim and the why-scout (see test_chart_docs_inventory).
-        expected_snippet = "29 commands, 33 skills"
+        # Registry manifests count every shipped command shim and skill dir
+        # (see test_chart_docs_inventory).
+        commands = len(list((PLUGIN / "commands").glob("*.md")))
+        skills = len([d for d in (PLUGIN / "skills").iterdir() if (d / "SKILL.md").is_file()])
+        expected_snippet = f"{commands} commands, {skills} skills"
         count_surfaces = (
             REPO_ROOT / ".claude-plugin" / "marketplace.json",
             PLUGIN / ".claude-plugin" / "plugin.json",

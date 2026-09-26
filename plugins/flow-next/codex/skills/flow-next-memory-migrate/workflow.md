@@ -37,18 +37,19 @@ Output shape:
 
 ```json
 {
+  "success": true,
   "files": [
     {
       "filename": "pitfalls.md",
-      "path": ".flow/memory/pitfalls.md",
-      "mechanical_track": "bug",
-      "mechanical_category": "build-errors",
+      "entry_count": 1,
       "entries": [
         {
           "title": "OAuth callback drops state on retry",
           "body": "...",
           "tags": ["auth", "oauth"],
-          "date": "2025-08-12"
+          "date": "2025-08-12",
+          "mechanical_track": "bug",
+          "mechanical_category": "build-errors"
         }
       ]
     }
@@ -133,7 +134,7 @@ Autofix: skip the gate and proceed.
 
 ### Done when
 
-- `WORKING_SET` (the in-memory list of `{filename, entries[], mechanical_track, mechanical_category}`) is finalized.
+- `WORKING_SET` (the in-memory list of `{filename, entries[]}`, each entry carrying its `mechanical_track` / `mechanical_category`) is finalized.
 - `ALREADY_MIGRATED` list is captured for the eventual report.
 - Confirmation passed (interactive) or skipped (autofix).
 
@@ -154,7 +155,7 @@ For each entry in `WORKING_SET`:
 for file in working_set:
     for entry in file.entries:
         # one iteration = one entry = one decision
-        classify_entry(entry, file.mechanical_track, file.mechanical_category)
+        classify_entry(entry, entry.mechanical_track, entry.mechanical_category)
 ```
 
 ### 1.2 — Per-entry classification steps
@@ -162,7 +163,7 @@ for file in working_set:
 For each entry:
 
 1. **Read** the entry's title, body, tags, source filename.
-2. **Set the default** to `(file.mechanical_track, file.mechanical_category)` from the list-legacy output.
+2. **Set the default** to the entry's `(mechanical_track, mechanical_category)` from the list-legacy output.
 3. **Scan for override signals** in the title + body. See [phases.md](phases.md) §When to override for the catalog. Common overrides:
    - Title or body mentions race conditions, deadlocks, leaks, hangs → `bug/runtime-errors`
    - References to build/CI/compile failures → `bug/build-errors` (already the default for `pitfalls.md`)
@@ -244,26 +245,24 @@ TMPFILE=$(mktemp -t memory-migrate-body.XXXXXX.md)
 # Write body to tempfile (preserve markdown verbatim — no transformation).
 printf '%s\n' "$ENTRY_BODY" > "$TMPFILE"
 
-"$FLOWCTL" memory add \
+if ADD_OUTPUT=$("$FLOWCTL" memory add \
   --track "$TRACK" \
   --category "$CATEGORY" \
   --title "$TITLE" \
   --body-file "$TMPFILE" \
   --tags "$(printf '%s,' "${TAGS[@]}" | sed 's/,$//')" \
-  --json
+  --json); then
+  ENTRY_ID=$(jq -r '.entry_id' <<< "$ADD_OUTPUT")
+else
+  ADD_ERROR=$(jq -r '.error' <<< "$ADD_OUTPUT")   # failure JSON: {"success": false, "error": "..."}
+fi
 ```
 
 - **Tags**: forward tags from the legacy entry verbatim. Don't invent new ones.
 - **Module**: legacy entries don't carry a `module` field — leave empty unless the body unambiguously names a single file path or module.
 - **Date**: don't pass `--date`; let `flowctl memory add` use today's date for the new entry. The legacy entry's date is preserved in the migration report only (preserving history is what `git log` is for).
 
-Capture the resulting entry id from the JSON output for the verification + report:
-
-```bash
-ENTRY_ID=$(jq -r '.id // empty' <<< "$ADD_OUTPUT")
-```
-
-If `flowctl memory add` exits non-zero, capture stderr and surface in the report under "Failed writes" — do not retry automatically (could be a real schema validation issue worth surfacing).
+The exit status decides success. A non-zero exit is a failed write: surface `ADD_ERROR` in the report under "Failed writes" — do not retry automatically (could be a real schema validation issue worth surfacing).
 
 ### 2.2 — Slug uniqueness
 
@@ -282,7 +281,7 @@ rm -f "$TMPFILE"
 ### Done when
 
 - Every classification record from Phase 1 has been written via `flowctl memory add`.
-- Failed writes are captured (entry id will be empty for those).
+- Failed writes (non-zero exit) are captured with flowctl's error.
 - Tempfiles cleaned up.
 
 ---
@@ -293,7 +292,7 @@ rm -f "$TMPFILE"
 
 ### 3.1 — Verify each new entry round-trips
 
-For each non-empty `ENTRY_ID` from Phase 2, re-read via flowctl:
+For each `ENTRY_ID` from a successful Phase 2 write, re-read via flowctl:
 
 ```bash
 "$FLOWCTL" memory read "$ENTRY_ID" --json > /dev/null

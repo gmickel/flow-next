@@ -347,6 +347,28 @@ class TestValidateFrontmatter(unittest.TestCase):
         self.assertTrue(any("unknown fields" in e for e in errors))
         self.assertTrue(any("sekrit_field" in e for e in errors))
 
+    def test_allow_unknown_passes_field_names_only(self) -> None:
+        # fn-257 R15: a stdlib-parsed block scalar yields keys like
+        # "- option a"; those still fail so a stamp never rewrites them.
+        fm = _valid_bug_frontmatter()
+        fm["audit_consolidates"] = ["bug/data/x-2026-01-01"]
+        self.assertEqual(
+            flowctl.validate_memory_frontmatter(fm, allow_unknown=True), []
+        )
+        fm["- option a"] = "rejected because"
+        errors = flowctl.validate_memory_frontmatter(fm, allow_unknown=True)
+        self.assertTrue(any("- option a" in e for e in errors))
+        self.assertFalse(any("audit_consolidates" in e for e in errors))
+
+    def test_allow_unknown_rejects_values_the_writer_cannot_round_trip(self) -> None:
+        # A mapping would be rewritten as a quoted string, so a stamp refuses it.
+        for value in ({"owner": "gordon"}, [{"owner": "gordon"}]):
+            with self.subTest(value=value):
+                fm = _valid_bug_frontmatter()
+                fm["custom"] = value
+                errors = flowctl.validate_memory_frontmatter(fm, allow_unknown=True)
+                self.assertTrue(any("custom" in e for e in errors))
+
     def test_invalid_problem_type(self) -> None:
         fm = _valid_bug_frontmatter()
         fm["problem_type"] = "wat"

@@ -56,7 +56,7 @@ SPEC_FILES=( "$SPECS_DIR"/*.json )
 shopt -u nullglob
 ```
 
-For each spec JSON, read `id` + `title` + `status`. Skip closed specs (`status: closed`).
+For each spec JSON, read `id` + `title` + `status`. Compare only open specs (`status == "open"`); a `done` spec is shipped work, not a duplicate.
 
 For each remaining spec, compute keyword overlap with the conversation keywords. Count **strong matches** — proper nouns / file paths / multi-word phrases that appear in both. Common single English words are not strong matches.
 
@@ -247,7 +247,7 @@ Auxiliary section rules layered on the template:
 ### 2.3 — R-ID allocation rules (R15)
 
 - Use the prose prefix format: `- **R1:** ...`, `- **R2:** ...`, etc.
-- Allocate sequentially from R1 in creation order. Capture-created specs have never been reviewed → no renumber concern (the renumber-forbidden rule from `flow-next-plan/steps.md:227-262` only applies after a review cycle).
+- Allocate sequentially from R1 in creation order. Capture-created specs have never been reviewed → no renumber concern (the renumber-forbidden R-ID rule in `flow-next-plan/steps.md` Step 5 only applies after a review cycle).
 - R-IDs in `## Acceptance Criteria` and `## Requirement coverage` must match whenever the coverage section is written (§2.2).
 - Plain markdown prose, not YAML.
 - When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
@@ -388,7 +388,7 @@ The interactive capture request authorizes saving the spec after pre-flight and 
 
 ### 4.1 — Materialize and check the body
 
-Write the complete body once to a literal unique path, `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<4-char suffix>.md`. Use that exact path in Phase 5's `spec set-plan --file`; never re-author the body in a heredoc. The body opens with `# <title>`, followed by the sections the resolved template names (§2.2).
+Write the complete body once to a literal unique path, `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<4-char suffix>.md`. Use that exact path in Phase 5's `spec create --plan-file` (or the rewrite's `spec set-plan --file`); never re-author the body in a heredoc. The body opens with `# <title>`, followed by the sections the resolved template names (§2.2).
 
 Before any write, every per-line `[user]` tag must be findable in the verbatim user evidence. Retag a close restatement as `[paraphrase]`, an unsupported inference as `[inferred]`, and recompute the tally. Section-level breakdown notes remain informational. Material unknowns use Phase 3's questions; inferred content never becomes user-approved merely because it is saved.
 
@@ -400,11 +400,9 @@ Readiness is a separate follow-up after the spec exists. Capture the target-awar
 
 ```bash
 ACTIVE=0
-RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || ACTIVE=1
-if [ "$ACTIVE" = "0" ]; then
-  VAL="$(printf '%s' "$RAW" | jq -r '.value // empty' 2>/dev/null)" || ACTIVE=1
-  [ -z "$VAL" ] && ACTIVE=1
-fi
+# From the preamble root snapshot (same literal path) — not a config get call.
+VAL="$(jq -r '.value.tracker.readyState // empty' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1
+[ -z "$VAL" ] && ACTIVE=1
 if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — STOP. Read references/mark-ready.md before continuing."
 fi   # default branch: bare no-op — NO link, NO read path
@@ -444,9 +442,9 @@ When Phase 0.3b's gate fired, run §5.0 from `references/strategy-alignment.md` 
 
 ### 5.1 — The spec body is the §4.1 draft file
 
-The source-checked draft file from §4.1 IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
+The source-checked draft file from §4.1 IS the input to `flowctl spec create --plan-file <literal draft path>` (a rewrite: `spec set-plan --file`) — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:refine`) see the tags and can scrutinize.
 
-`spec set-plan` replaces the ENTIRE markdown file with the supplied body — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
+The supplied body replaces the ENTIRE markdown file — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
 
 ### 5.2 — New-spec branch
 
@@ -467,8 +465,10 @@ fi   # default branch: bare no-op — NO link, NO read path
 # SILENT degrade - the ONLY flow-first creation site, deliberately an
 # unconditional post-check outside the tracker-first branch (rationale + the
 # orphan-issue GUARD live in references/tracker-integration.md §5.2).
+# The body comes from the §4.1 draft file in the same call — type the literal path
+# verbatim from agent context (path-persistence rule: never a shell variable across tool calls).
 if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
-  SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
+  SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --plan-file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json)
 fi
 SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')
 
@@ -477,10 +477,6 @@ if [[ -z "$SPEC_ID" || "$SPEC_ID" == "null" ]]; then
   exit 1
 fi
 
-# Write the spec body from the §4.1 draft file — type the literal path verbatim
-# from agent context (path-persistence rule: never a shell variable across tool calls).
-"$FLOWCTL" spec set-plan "$SPEC_ID" --file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json
-
 # Run anchor for Phase 6's sync check — written at the write step, BEFORE the
 # 5.7 dispatch, so it lower-bounds this run's receipts.
 date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
@@ -488,9 +484,9 @@ date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 
 When the tracker gate above printed, read [references/tracker-integration.md](references/tracker-integration.md) and run its §5.2 tracker-first mint (and, later in this phase, its §5.7 touchpoint) around the flow-first post-check. When the gate is silent, `spec create` mints `fn-N` locally and nothing tracker-related happens anywhere in this run.
 
-The draft file round-trips embedded markdown and newlines byte-exact — `read_file_or_stdin` in `flowctl.py` handles `--file <path>` directly. No re-authoring: the synthesized content is consumed from disk without a second rendering.
+The draft file round-trips embedded markdown and newlines byte-exact — flowctl reads `--plan-file <path>` directly. No re-authoring: the synthesized content is consumed from disk without a second rendering.
 
-When Phase 0.5b's chart gate fired, run that reference's §5.2 chart handoff — `chart link-spec` **only after** a successful `spec create` + `spec set-plan`, with its retry rules.
+When Phase 0.5b's chart gate fired, run that reference's §5.2 chart handoff — `chart link-spec` **only after** a successful `spec create --plan-file`, with its retry rules.
 
 ### 5.2b — Split branch
 
@@ -512,17 +508,7 @@ Skip silently if no branch was named — `spec create` already populated `branch
 
 ### 5.5 — Capture write failures
 
-If `spec create` fails (e.g. `.flow/` corrupted, disk full): exit 1 with the error. The user has not yet committed anything.
-
-If `spec set-plan` fails: the spec JSON sidecar exists but the markdown body is the placeholder. Surface the failure and the rollback option:
-
-```text
-Error: spec set-plan failed for <id>. The spec JSON sidecar was created but the
-markdown body write failed. To roll back: rm .flow/specs/<id>.json .flow/specs/<id>.md.
-Or re-run capture with --rewrite <id> to retry the body write.
-```
-
-This mirrors the failure semantics in other flowctl commands — partial-state recovery is on the user, but the error is loud.
+If `spec create --plan-file` fails (e.g. `.flow/` corrupted, disk full, unreadable draft): exit 1 with the error. It reads the draft before allocating an id and removes whatever it created when the body write fails, so no partial spec is left behind and the user has not yet committed anything. Every creation path in this skill (flow-first, tracker-first, split) passes `--plan-file`.
 
 ### 5.6 — No git commit from this skill
 
@@ -576,17 +562,15 @@ Best-effort like §5.8/§5.9: a refusal (the verb refuses when the spec already 
 
 ```bash
 ACTIVE=0
-RAW="$("$FLOWCTL" config get artifacts.html.enabled --json 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
-if [ "$ACTIVE" = "0" ]; then
-  VAL="$(printf '%s' "$RAW" | jq -r 'if .value == true then "true" else "false" end' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
-  [ "$VAL" = "true" ] && ACTIVE=1
-fi
+# From the preamble root snapshot (same literal path) — not a config get call.
+VAL="$(jq -r 'if .value.artifacts.html.enabled == true then "true" else "false" end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE (fail open)
+[ "$VAL" = "true" ] && ACTIVE=1
 if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — STOP. Read references/html-lens.md before continuing."
 fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, read [references/html-lens.md](references/html-lens.md) and follow it — the spec-artifact generation, the disclosure-reference load, the link-line write, and the Lavish companion. When the gate is silent (off or unset): **skip entirely** — write no artifact, print no artifact output. The one-line gate read above is the only cost.
+When the sentinel prints, read [references/html-lens.md](references/html-lens.md) and follow it — the spec-artifact generation, the disclosure-reference load, the link-line write, and the Lavish companion. When the gate is silent (off or unset): **skip entirely** — write no artifact, print no artifact output. The snapshot read above is the only cost.
 
 ### Done when
 
@@ -597,7 +581,7 @@ When the sentinel prints, read [references/html-lens.md](references/html-lens.md
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
 - Mark-ready write applied iff separately consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
 - No-plan write applied iff `--no-plan` was passed, or `from:flow` with a direct judgment (5.9b); skipped silently otherwise, with the refusal notice printed when the set was refused.
-- HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the single config read.
+- HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the snapshot read.
 
 ---
 

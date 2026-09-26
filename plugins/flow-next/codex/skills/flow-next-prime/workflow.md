@@ -49,14 +49,14 @@ Some classification facts are LOW-CONFIDENCE (probes disagree) or UNINFERABLE IN
 
 Run all 9 scouts in parallel using the Task tool. The pillar scanners are **fast scout** dispatches — mechanical inventory scanning where the cheapest tier is the correct one — except `docs-gap-scout` and `agents-md-scout`, which are **thinking scout** dispatches (documentation-quality judgment degrades badly on a fast model). **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
-**Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar - its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), NOT its own internal "X/5 health score" (those denominators don't match the pillars and must never be reused as a pillar score). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below). **Every scout prompt also carries a one-line classification context sentence from Phase 0.5** so the scout probes the right thing and does not fail the repo against conventions that do not apply (e.g. "This is a huge Delphi tier-1 repo - assess the Delphi verify command per stacks.md, do not assess Node/TS conventions"; "This is a greenfield scaffold - expect deferrals, not gaps"; "This is a CLI-shaped library - grade the agent-first-CLI drivability row, not a web boot"). build-scout and testing-scout additionally receive the detected stack's `stacks.md` verify column so they probe the correct commands.
+**Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar - its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), never to a score of its own (pillar scores come from Phase 3 only). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below). **Every scout prompt also carries a one-line classification context sentence from Phase 0.5** so the scout probes the right thing and does not fail the repo against conventions that do not apply (e.g. "This is a huge Delphi tier-1 repo - assess the Delphi verify command per stacks.md, do not assess Node/TS conventions"; "This is a greenfield scaffold - expect deferrals, not gaps"; "This is a CLI-shaped library - grade the agent-first-CLI drivability row, not a web boot"). build-scout and testing-scout additionally receive the detected stack's `stacks.md` verify column so they probe the correct commands.
 
 ### Agent Readiness Scouts (Pillars 1-5)
 
 ```
 Use the tooling_scout agent    # linters, formatters, pre-commit, type checking → SV1-6
 Use the agents_md_scout agent  # CLAUDE.md/AGENTS.md quality → DC2 (+ command-doc)
-Use the env_scout agent        # .env.example, docker, devcontainer → DE/BS lock+runtime
+Use the env_scout agent        # .env.example, docker, devcontainer, runtime pin → DE1-6
 Use the testing_scout agent    # test framework, coverage, commands → TS1-6
 Use the build_scout agent      # build system, scripts, CI → BS1-6
 Use the docs_gap_scout agent   # MODE: inventory (no planned change) — assess DC1/DC3-7 doc currency
@@ -142,15 +142,22 @@ character classes** in every probe pattern (per classification.md's edge-case ru
 
 ```bash
 # Portable bounded run: run_bounded <seconds> <command...>. Re-declared per block.
+# The command leads its own process group (python3 setsid; job control is off in
+# a non-interactive zsh), so a timeout kills everything it started.
 run_bounded() {
-  _limit="$1"; shift
-  "$@" & _pid=$!
-  ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!
+  _limit="$1"; shift; _mark=$(mktemp)
+  python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!
+  ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!
   wait "$_pid" 2>/dev/null; _rc=$?
-  kill "$_watch" 2>/dev/null
-  return "$_rc"
+  if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124
+  else kill "$_watch" 2>/dev/null; fi
+  rm -f "$_mark"; return "$_rc"
 }
 ```
+
+Exit 124 with a `TIMEOUT:` line means the probe hit its bound: record a timeout finding for that
+criterion with the line quoted (⚠️ unverified, never ✅). The boot probe (2.5) is the exception:
+running to its bound is its normal end, and its evidence is the ready line.
 
 **Which command to run is DATA, not logic.** The detected stack's **verify column in
 [stacks.md](stacks.md)** drives the exact non-interactive command per surface (build-scout and
@@ -167,7 +174,7 @@ framework's command. Illustrative equivalents (the stacks.md verify column wins)
 |-----------|---------------------|
 | pytest | `pytest --collect-only` |
 | Jest | `npx jest --listTests` |
-| Vitest | `npx vitest --run --reporter=dot` |
+| Vitest | `npx vitest list` |
 | Mocha | `npx mocha --dry-run` |
 | Go test | `go test ./... -list .` |
 | Cargo test | `cargo test --no-run` |
@@ -184,7 +191,7 @@ the worktree guard:
 
 ```bash
 ROOT="${ROOT:-.}"
-run_bounded() { _limit="$1"; shift; "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; return "$_rc"; }
+run_bounded() { _limit="$1"; shift; _mark=$(mktemp); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; else kill "$_watch" 2>/dev/null; fi; rm -f "$_mark"; return "$_rc"; }
 PRE_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
 # Capture the BUILD's exit status BEFORE truncating output - `$?` after a
 # pipeline is the LAST command's status (tail), which would mark a broken
@@ -242,7 +249,7 @@ BS3 and for AO3 (parseable ready line + deterministic port). Rules:
 
 ```bash
 ROOT="${ROOT:-.}"
-run_bounded() { _limit="$1"; shift; "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; return "$_rc"; }
+run_bounded() { _limit="$1"; shift; _mark=$(mktemp); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; else kill "$_watch" 2>/dev/null; fi; rm -f "$_mark"; return "$_rc"; }
 # Boot only behind a detected ready signal; capture the ready line + bound port as evidence.
 run_bounded 60 sh -c 'cd "$0" && <stacks.md dev/boot command>' "$ROOT" 2>&1 | grep -aiE '(ready|listening|started).*[0-9]{2,5}' | head -3
 ```

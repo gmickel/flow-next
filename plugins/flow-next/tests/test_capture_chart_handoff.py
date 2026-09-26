@@ -109,14 +109,13 @@ class CaptureChartHandoffContract(unittest.TestCase):
         ref = _read_ref("chart-briefing.md")
         self.assertIn("chart link-spec", ref)
         self.assertIn("link-spec", ref)
-        # Order: create -> set-plan -> link-spec
-        self.assertIn("spec create", ref.lower())
-        self.assertIn("spec set-plan", ref.lower())
+        # Order: one atomic create (spec + body) -> link-spec.
         self.assertIn("only after", ref.lower())
-        # Explicit ordering in the reference's shell block.
-        self.assertIn("set-plan", ref)
         self.assertIn("Order is load-bearing", ref)
-        self.assertIn("create → set-plan → link-spec", ref)
+        handoff = ref[ref.index("## 5.2"):]
+        self.assertLess(handoff.index("spec create --plan-file"),
+                        handoff.index('chart link-spec "${LINK_ARGS[@]}"'))
+        self.assertNotIn("set-plan", ref)
         # Reachability: the spine still names the handoff callback and routes
         # the ordering detail to the chart-briefing reference.
         self.assertIn("chart link-spec", skill)

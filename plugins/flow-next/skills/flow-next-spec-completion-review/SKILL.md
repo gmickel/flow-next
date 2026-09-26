@@ -106,7 +106,7 @@ Run this checkpoint after parsing `SPEC_ID` and **before** loading or dispatchin
 any backend. Run the same checkpoint again immediately after host/rp records a
 verdict. It recovers a terminal status write that failed after the verdict round
 was durably consumed, without reserving or dispatching another review.
-This shared step is the sole writer for host and rp terminal status. A stored `not_required` (work's 3g policy skip) is neither `ship` nor `unknown` here: the checkpoint has no terminal attempt to resume for it, and an explicit manual invocation may still run a real review and overwrite it with `ship`/`needs_work` — the upgrade direction is legal, while the skip's own write stays gated on `unknown`.
+Host and rp terminal status has one owner, `review-rounds record --status-target completion` (with a journaled receipt, that status leg lands when the receipt publishes); this checkpoint only repairs a write that did not land. A stored `not_required` (work's 3g policy skip) is neither `ship` nor `unknown` here: the checkpoint has no terminal attempt to resume for it, and an explicit manual invocation may still run a real review and overwrite it with `ship`/`needs_work` — the upgrade direction is legal, while the skip's own write stays gated on `unknown`.
 
 ```bash
 if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
@@ -168,7 +168,7 @@ if [[ -n "$TERMINAL_STATUS" \
     || ( -n "$ATTEMPT_AT" \
       && ( -z "$CURRENT_REVIEWED_AT" \
         || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
-  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"
+  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/tmp/completion-review-receipt-${SPEC_ID}.json}"
   RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
 
   # A recovery payload belongs to exactly one durable attempt. Remove an older
@@ -201,9 +201,10 @@ if [[ -n "$TERMINAL_STATUS" \
       ;;
   esac
 
-  # Every receipt-owning backend preserves the complete payload here before
-  # writing the caller-selected path. Restore it before status so a transient
-  # receipt-path failure never consumes another review or loses Ralph evidence.
+  # The subprocess backends preserve the complete payload here before writing
+  # the caller-selected path (host/rp recover from the record journal). Restore
+  # it before status so a transient receipt-path failure never consumes another
+  # review or loses Ralph evidence.
   if [[ -f "$RECEIPT_RECOVERY" ]]; then
     if ! mkdir -p "$(dirname "$RECEIPT_PATH")" \
       || ! cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"; then

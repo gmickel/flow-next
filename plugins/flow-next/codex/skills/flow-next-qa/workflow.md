@@ -289,9 +289,9 @@ Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one
 
 **Driving stays flow-next-drive's job.** This phase resolves *what to drive and as whom*; the concrete commands (set viewport, clear storage, save/load auth state) live in flow-next-drive's references — point at them, never duplicate the prose:
 
-- Viewport + screenshot: `flow-next-drive/references/commands.md` (`agent-browser set viewport W H`, `agent-browser screenshot …`)
-- Per-session isolation (`--session`): `flow-next-drive/references/session-management.md`
-- Auth / state persistence (`state save` / `state load`, header auth): `flow-next-drive/references/auth.md`
+- Viewport + screenshot: `skills/flow-next-drive/references/commands.md` (`agent-browser set viewport W H`, `agent-browser screenshot …`)
+- Per-session isolation (`--session`): `skills/flow-next-drive/references/session-management.md`
+- Auth / state persistence (`state save` / `state load`, header auth): `skills/flow-next-drive/references/auth.md`
 
 ### 3.1 — Resolve the target URL / app
 
@@ -341,7 +341,7 @@ After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), i
 
 Execute the contract per scenario:
 
-1. **Read flow-next-drive's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this.
+1. **Read flow-next-drive's driving flow** — [`skills/flow-next-drive/SKILL.md`](../flow-next-drive/SKILL.md) (surface detection + universal flow + ladder) and the relevant rung reference under `skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this.
 2. **Resolve a target.** A live deploy URL or a localhost app. If none is reachable, jump to the BLOCKED routing (§4.2) — the R13 graceful-surface path.
 3. **Drive the scenario** via flow-next-drive's universal flow (`observe → snapshot fresh refs → act → verify → capture`), using whatever driver rung the environment resolves (agent-browser is the only assumed-present driver; everything else is probe-and-degrade).
 4. **Capture evidence.** Screenshot + console at the moment of interest to `.flow/tmp/qa-<spec-id>/`, and record the evidence tuple.

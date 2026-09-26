@@ -36,35 +36,33 @@ export function registerBackend(backend: WorkerBackend) {
 ```markdown
 # Backend Abstraction
 
-## Overview
+## Goal & Context
 Abstract worker spawning so any CLI (claude, codex, droid) can run workers.
 
-## Approach
-- Define `WorkerBackend` interface with spawn/isAlive/kill methods
-- Registry pattern for backend lookup (similar to `src/lib/plugins.ts:15-30`)
-- Each backend is a separate file in `src/lib/backends/`
-
-## Key decisions
-- File-based completion detection (not process exit codes) — workers are detached
-- Prompt via CLI arg for claude, stdin for codex (per their docs)
+## Architecture & Data Models
+- A `WorkerBackend` interface with spawn/isAlive/kill methods
+- A registry for backend lookup, following the repo's existing plugin-registry pattern
+- One backend per module
 
 ## Quick commands
 \`\`\`bash
 bun test src/lib/backend.test.ts
 \`\`\`
 
-## Acceptance
-- [ ] WorkerBackend interface defined
-- [ ] claude and codex backends implemented
-- [ ] Registry with registerBackend/getBackend
-- [ ] Existing spawn.ts refactored to use backend abstraction
+## Acceptance Criteria
+- **R1:** Workers spawn through a `WorkerBackend` looked up by name in the registry. Errors: an unknown backend name fails with a message listing the registered names.
+- **R2:** claude and codex backends are registered, and the existing spawn path runs through the registry (no error surface beyond R1).
+
+## Decision Context
+- File-based completion detection (not process exit codes) — workers are detached
+- Prompt via CLI arg for claude, stdin for codex (per their docs)
 ```
 
 **Why this is better:**
 - Describes the approach, not the code
-- References existing pattern (`plugins.ts:15-30`)
+- Names the existing pattern it follows; the task carries its `file:line`
 - Key decisions captured (file-based detection, prompt delivery)
-- Testable acceptance criteria
+- R-ID acceptance criteria, each with its error cases
 
 ---
 
@@ -282,7 +280,7 @@ Include a mermaid diagram when the change involves:
 ### ERD for data model changes
 
 ```markdown
-## Data Model
+## Architecture & Data Models
 
 \`\`\`mermaid
 erDiagram
@@ -300,7 +298,7 @@ erDiagram
 ### Flowchart for architecture/data flow
 
 ```markdown
-## Architecture
+## Architecture & Data Models
 
 \`\`\`mermaid
 flowchart LR

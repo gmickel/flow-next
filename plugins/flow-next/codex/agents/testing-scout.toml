@@ -97,49 +97,28 @@ ls -la .gitlab-ci.yml .circleci/config.yml Jenkinsfile .travis.yml 2>/dev/null
 
 ## Output Format
 
+Key every finding to the Pillar 3 criterion IDs in prime's `pillars.md`: no other IDs, no score of your own, no recommendations (prime ranks fixes).
+
 ```markdown
 ## Testing Scout Findings
 
-### Detected Stack
 - Language(s): [detected]
-- Test framework: [jest/vitest/pytest/go test/etc.] or "None detected"
 
-### Test Infrastructure
-- Test framework: ✅ Configured / ❌ Missing
-- Config file: [path] or "N/A"
-- Test command: `[command]` or "Not found"
-- Test files: [count] found
+| ID | Criterion | Status | Evidence |
+|----|-----------|--------|----------|
+| TS1 | Test framework configured | ✅/❌ | [framework + config path] |
+| TS2 | Test command exists | ✅/❌ | [`command` + where it is defined] |
+| TS3 | Tests exist | ✅/❌ | [test file count + locations] |
+| TS4 | Tests runnable | (prime runs it) | [the discovery command for this stack, e.g. `pytest --collect-only -q`, `vitest list`] |
+| TS5 | Coverage threshold enforced | ✅/⚠️/❌ | [threshold line quoted, or "Not set" - never guess] |
+| TS6 | E2E tests exist | ✅/❌/N/A | [framework or directory] |
 
-### Test Organization
-- Unit tests: ✅ Found in [location] / ❌ Not found
-- Integration tests: ✅ Found in [location] / ❌ Not found
-- E2E tests: ✅ Found in [location] / ❌ Not found
-
-### Coverage
-- Coverage tool: ✅ [tool] / ❌ Not configured
-- Coverage in CI: ✅ Yes / ❌ No
-- Coverage threshold: [X% ONLY if found in config above] or "Not set" (never guess)
-
-### CI Integration
-- CI config: ✅ [platform] / ❌ Not found
-- Tests run in CI: ✅ Yes / ❌ No
-- Test status badge: ✅ Yes (grep README.md for a workflow/coverage badge) / ❌ No / Unknown
-
-### Test Health Score: X/5
-- [ ] Test framework configured
-- [ ] Test command documented/scriptable
-- [ ] Tests exist (>0 test files)
-- [ ] Coverage configured
-- [ ] Tests run in CI
-
-### Recommendations
-- [Priority 1]: [specific action]
-- [Priority 2]: [specific action]
+Notes (unscored context, e.g. whether CI runs the tests): [...]
 ```
 
 ## Rules
 
-- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: the `Verify` column names this stack's authoritative test command (e.g. `ruff check && pytest -q`, `go test ./...`); the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - test discovery / bounded runs are host-side in prime Phase 2). Return your findings keyed to the test criteria (TS1-6); never reuse your own X/5 health score as a pillar score.
+- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: the `Verify` column names this stack's authoritative test command (e.g. `ruff check && pytest -q`, `go test ./...`); the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - test discovery / bounded runs are host-side in prime Phase 2).
 - Speed over completeness - quick scans
 - Count test files to gauge coverage
 - Check for runnable test command (not just framework)

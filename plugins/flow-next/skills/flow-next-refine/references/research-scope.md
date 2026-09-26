@@ -14,7 +14,7 @@
 
 - **No questions.** The research pass asks nothing and runs no interview rounds. It reads the target, decides whether to run, dispatches the read-only scouts, and writes one section back through the shared read-back contract.
 - **Four scouts, plus one gated.** `docs-scout` (official docs, version anchored on the repo's manifest scan), `practice-scout` (current best practices and pitfalls), `docs-gap-scout` (the repo's own docs that must change), and `memory-scout` (the bug and knowledge entries that apply). `github-scout` joins only when `scouts.github` is on, as in plan. Not `repo-scout` (the technical pass's fact scouts and plan's decomposition already cover repo patterns), not `spec-scout`, not `flow-gap-analyst`.
-- **The section is the artifact.** `## Resolved via Research` on the spec (or the task body for a task target): one sub-block per scout that ran, one bullet per finding, a source on every line. Plan writes the same section when its Step 1 runs the same scouts, so the two never produce two copies.
+- **The section is the artifact.** `## Resolved via Research` on the spec (or the task body for a task target): one sub-block per scout that ran, one bullet per finding, a source on every line. Plan writes the same section when its Step 1 ran docs-scout or practice-scout, so the two never produce two copies.
 - **Where research lands.** Research lands in the spec when a human should see it before ratifying and when it must survive the route choice (direct or planned); what only the implementer needs stays with the worker, in the task body or the worker's own investigation.
 - **Never by default.** Flow routes here only on the read-first signal from `route-matrix.md`; the manual user names the scope. `flow --auto` never runs it.
 
@@ -35,7 +35,7 @@ Then Detect Input Type exactly as SKILL.md states it. A file-path target is out 
 Decide from what already exists, and say which case applied in the summary:
 
 - **The section is present.** The target body carries `## Resolved via Research`: skip, write nothing, and name the section as the reason.
-- **Plan already ran the scouts.** A spec target whose tasks (`$FLOWCTL tasks --spec <id> --json`, then `$FLOWCTL cat <task-id>`) carry plan's scout findings: skip, write nothing, and name the task that holds them.
+- **Plan already ran the scouts.** A spec target whose tasks (`$FLOWCTL tasks --spec <id> --json`, then `$FLOWCTL cat <task-id>`) carry plan's docs-scout or practice-scout findings: skip, write nothing, and name the task that holds them.
 - **Delta rerun.** When either case above would skip but the spec now names a library or API that neither the section nor the task findings mention, run the pass for that delta only. New bullets append under their scout's sub-block; existing bullets come back byte-for-byte.
 - **`--force`.** Rerun the whole pass and replace the section.
 
@@ -49,7 +49,7 @@ Dispatch the scouts in parallel as read-only subagents (`Task` with `subagent_ty
 
 ```markdown
 ## Resolved via Research
-<!-- provenance: refine --scope=research (docs-scout, practice-scout, docs-gap-scout, memory-scout) on <YYYY-MM-DD>; plan writes the same section when its Step 1 runs the same scouts -->
+<!-- provenance: refine --scope=research (docs-scout, practice-scout, docs-gap-scout, memory-scout) on <YYYY-MM-DD>; plan writes the same section when its Step 1 ran docs-scout or practice-scout -->
 
 ### docs-scout
 - **<library> <version>** — <what the docs settle: the API signature, the changed behaviour, the constraint>. Source: <url>

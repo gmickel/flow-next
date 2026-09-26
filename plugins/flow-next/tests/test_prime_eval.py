@@ -1557,6 +1557,36 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
         for t in hits:
             self.assertFalse(t.startswith(('"', "'")))
 
+    def test_redirects_and_punctuation_never_become_targets(self) -> None:
+        # fn-257 R17: the target is a shell-tokenized operand - a redirection
+        # (with its file operand) or a punctuation token is never a
+        # never-edit candidate.
+        _write(
+            self.repo, "scripts/clean.sh",
+            "#!/bin/sh\n"
+            "ls old | xargs rm -f 2>/dev/null\n"
+            "find . -name '*.tmp' -exec rm -rf {} +\n"
+            "rm -rf > wipe.log\n"
+            "rm -rf dist >/dev/null 2>&1\n"
+            "find . -exec rm -rf {} + | tee audit.log\n",
+        )
+        payload = self._classify_full()
+        targets = {h["target"] for h in payload["substance"]["destructive_scan"]["hits"]}
+        self.assertIn("dist", targets)
+        for junk in ("2>/dev/null", "{}", ">", "wipe.log", ">/dev/null", "tee"):
+            self.assertNotIn(junk, targets)
+        self.assertEqual(
+            payload["substance"]["tool_managed"]["regenerated_dir_candidates"], ["dist"]
+        )
+
+    def test_identical_hits_deduplicated(self) -> None:
+        _write(self.repo, "scripts/clean.sh", "#!/bin/sh\nrm -rf dist\nrm -rf dist\n")
+        d = self._classify()["substance"]["destructive_scan"]
+        self.assertEqual(
+            [h["target"] for h in d["hits"] if h["file"] == "scripts/clean.sh"], ["dist"]
+        )
+        self.assertEqual(d["hit_count"], len(d["hits"]))
+
 
 class SubstanceRedactionTestCase(_SubstanceBase):
     """The hard redaction contract: KEY NAMES / matched TOKENS only - a secret

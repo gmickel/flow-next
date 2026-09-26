@@ -15,10 +15,8 @@ READY_ADOPTED=0
 REWRITE_WAS_READY=false
 READINESS_PROBES_OK=true
 
-READY_STATE_RAW=$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null) || READINESS_PROBES_OK=false
-if [[ "$READINESS_PROBES_OK" == true ]]; then
-  READY_STATE=$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null) || READINESS_PROBES_OK=false
-fi
+# From the preamble root snapshot (same literal path) — not a config get call.
+READY_STATE=$(jq -r '.value.tracker.readyState // empty' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) || READINESS_PROBES_OK=false
 
 READY_SPECS_RAW=$("$FLOWCTL" specs --json 2>/dev/null) || READINESS_PROBES_OK=false
 if [[ "$READINESS_PROBES_OK" == true ]]; then

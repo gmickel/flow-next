@@ -73,7 +73,7 @@ If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before co
 Read `.flow/meta.json` and check for `setup_version` field.
 
 Also read plugin version from the platform-specific manifest:
-- Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json`
+- Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json` (marketplace install), else `${PLUGIN_ROOT}/plugin.json` (`install-codex.sh` copies the manifest to `$CODEX_HOME/plugin.json`, the Codex plugin root)
 - Claude Code: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
 - Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Droid's interop layer reads the Claude Code manifest directly for Claude-first plugins like flow-next)
 - Cursor: `${PLUGIN_ROOT}/.cursor-plugin/plugin.json`
@@ -116,8 +116,8 @@ done   # || true: the loop's exit is the LAST iteration's test - an empty
 
 **Any present →** list the exact paths, tell the user they are dead weight on every host (nothing reads them; deleting them changes nothing observable), and ask via `plain-text numbered prompt`:
 
-- **header**: `Delete leftover flowctl copies?`
-- **question**: `These files are snapshots from an older install layout. Every flow-next skill now resolves flowctl from the plugin install itself, so nothing reads them — deleting them changes nothing observable in any workflow, and keeping them means a stale flowctl can shadow the current one.`
+- **header**: `Leftovers`
+- **question**: `Delete these leftover flowctl copies? They are snapshots from an older install layout. Every flow-next skill now resolves flowctl from the plugin install itself, so nothing reads them — deleting them changes nothing observable in any workflow, and keeping them means a stale flowctl can shadow the current one.`
 - **options**:
   - `Delete them (Recommended)` — remove the listed paths: `git rm -rq` for tracked ones (this stages the deletions in the user's index — say so; setup never commits), plain `rm -rf` for untracked. FIRST surface any listed tracked file with uncommitted modifications and exclude it from removal (never force-remove modified files; the user resolves those by hand).
   - `Keep them` — nothing is removed; setup continues normally. They stay inert.
@@ -160,8 +160,8 @@ Then branch:
 
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 
-- **header**: `Copy canonical spec template to <repo-root>/SPEC.md?`
-- **body**: `Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then <repo-root>/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project. Skipping is safe — the bundled template always resolves, and you can opt in any time by re-running /flow-next:setup.`
+- **header**: `SPEC.md`
+- **question**: `Copy the canonical spec template to <repo-root>/SPEC.md? Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then <repo-root>/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project. Skipping is safe — the bundled template always resolves, and you can opt in any time by re-running /flow-next:setup.`
 - **options**:
   - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
   - `Skip` — no write. Cascade falls through to the plugin's bundled template. Opt in any time by re-running `/flow-next:setup`.
@@ -211,8 +211,8 @@ Then:
 
 - **Identical** (after normalization): no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
 - **Customized** (any deviation after normalization): **the file is never replaced without an explicit answer** — a customized `SPEC.md` overwritten silently has broken this. Ask the user via `plain-text numbered prompt`:
-  - **header**: `Overwrite customized <repo-root>/$EXISTING?`
-  - **body**: `<repo-root>/$EXISTING exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
+  - **header**: `Spec file`
+  - **question**: `Overwrite the customized <repo-root>/$EXISTING? It exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
   - **options**:
     - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
     - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
@@ -276,7 +276,7 @@ HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CLAUDE=$(which claude >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
-# The HAVE_* values feed the Review question's "(detected)" annotations only.
+# The HAVE_* values feed the Review question's option pick and "(detected)" annotations only.
 # Nothing here gates the routing block: setup never probes for routing, never
 # asks a routing question, and never writes a model id into the block it
 # proposes (config that claims what is installed becomes config
@@ -284,20 +284,15 @@ HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
 # Read current config values if they exist.
 # NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
-# returns the built-in default for unset keys (e.g. `planSync.crossSpec` →
+# returns the built-in default for unset keys (e.g. `artifacts.html.enabled` →
 # `false`), and the `[[ -z "$CURRENT_*" ]]` guards below would skip first-run
 # prompts for any default-false option. `--raw` makes `null` mean "absent
 # from .flow/config.json"; we use an explicit `if .value == null` filter
 # (NOT `.value // empty`, which collapses boolean `false` to "" because
 # jq treats `false` as a falsy LHS for `//`). See PR #135 cycle 2.
+# memory.enabled, planSync.enabled, planSync.crossSpec and scouts.github are not
+# probed: Step 1's init always writes them, so they are never unset here.
 CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_MEMORY=$("${PLUGIN_ROOT}/scripts/flowctl" config get memory.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_PLANSYNC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# planSync.crossSpec is canonical (the pre-1.1.3 legacy alias
-# planSync.crossEpic was removed in 2.0.0 — a leftover key in the on-disk
-# file is inert). The `--raw` probe checks only the canonical key.
-CURRENT_CROSSSPEC=$("${PLUGIN_ROOT}/scripts/flowctl" config get planSync.crossSpec --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-CURRENT_GITHUB_SCOUT=$("${PLUGIN_ROOT}/scripts/flowctl" config get scouts.github --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 # Survives Step 1's `flowctl init`: init deliberately does NOT materialize the
 # `artifacts` block into config.json (flowctl.py _INIT_UNMATERIALIZED_BLOCKS),
 # so this raw probe reads null until the user explicitly decides — here in 6e
@@ -366,11 +361,7 @@ If ANY config values are already set, print a notice before asking questions:
 
 ```
 Current configuration:
-- Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
-- Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
-- Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
 - Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, or claude:<model>:<effort>>)
-- GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
 - Live QA: <off|on|auto> (change with: flowctl config set pipeline.qa <off|on|auto>)
@@ -382,63 +373,9 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the prompt content (question text + numbered option list) dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`** (one exception: `pipeline.qa` materializes as `off` on init, so the Live QA question also treats that default as unanswered on a first setup run and never on a re-run). A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `plain-text numbered prompt` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1` and Global criteria while `.flow/criteria.md` is still absent. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The questions go out in two `plain-text numbered prompt` calls, because the tool takes at most 4 questions per call, 4 options per question, and a header of at most 12 characters: the **config call** (Review, HTML, Live QA, Spec ids — only the unset entries) and then the **files call** (Docs, Criteria, Ralph, Star). Skip a call whose array is empty, so a re-run with all config set asks only the files call: Docs + Star, plus Ralph when `RALPH_ASK=1` and Criteria while `.flow/criteria.md` is still absent. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
 
 Available questions (include only if corresponding config is unset):
-
-**Memory question** (include if CURRENT_MEMORY is empty):
-```json
-{
-  "header": "Memory",
-  "question": "Enable the memory system? When a review sends a task back for rework, the lesson learned is saved under .flow/memory/ and read by future planning and implementation - so the same mistake is not repeated across specs.",
-  "options": [
-    {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/. Near-zero overhead: entries are a side effect of work already happening, read by search."},
-    {"label": "No", "description": "No learnings captured. Enable later with: flowctl config set memory.enabled true"}
-  ],
-  "multiSelect": false
-}
-```
-
-**Plan-Sync question** (include if CURRENT_PLANSYNC is empty):
-```json
-{
-  "header": "Plan-Sync",
-  "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
-  "options": [
-    {"label": "No (Recommended)", "description": "The shipped default: the per-task pass usually finds nothing to change. Run /flow-next:sync manually when a task invalidates a downstream assumption - same capability, on demand."},
-    {"label": "Yes", "description": "Sync remaining task specs automatically whenever implementation deviates from the original plan. Costs one reconciliation pass per completed task; earns it on specs with several dependent tasks."}
-  ],
-  "multiSelect": false
-}
-```
-
-**Plan-Sync cross-spec question** (include if CURRENT_PLANSYNC is "true" AND CURRENT_CROSSSPEC is empty)[^crossspec-legacy]:
-
-[^crossspec-legacy]: The canonical config key is `planSync.crossSpec`. The pre-1.1.3 name `planSync.crossEpic` was removed in 2.0.0 — flowctl no longer reads it; a leftover key in `.flow/config.json` is inert.
-```json
-{
-  "header": "Cross-Spec",
-  "question": "Enable cross-spec plan-sync? (Also checks other open specs for stale references)",
-  "options": [
-    {"label": "No (Recommended)", "description": "Only sync within current spec. Faster, avoids long Ralph loops."},
-    {"label": "Yes", "description": "Also update tasks in other specs that reference changed APIs/patterns."}
-  ],
-  "multiSelect": false
-}
-```
-
-**GitHub Scout question** (include if CURRENT_GITHUB_SCOUT is empty):
-```json
-{
-  "header": "GitHub Scout",
-  "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
-  "options": [
-    {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
-    {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan (adds a web-research pass per plan)"}
-  ],
-  "multiSelect": false
-}
-```
 
 **Spec ids question** (include if `TRACKER_CONFIGURED=1` AND `CURRENT_SPEC_IDS` is empty — both conditions; skip entirely when no tracker is configured, and never re-ask once the key is set to either `flow` or `tracker`):
 ```json
@@ -453,10 +390,10 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**HTML Artifacts question** (include if CURRENT_HTML_ARTIFACTS is empty):
+**HTML question** (include if CURRENT_HTML_ARTIFACTS is empty):
 ```json
 {
-  "header": "HTML Artifacts",
+  "header": "HTML",
   "question": "Enable HTML artifact mode? Capture/plan/make-pr additionally render each spec and PR body as a self-contained HTML page under .flow/artifacts/ - nicer for humans to review in a browser. The markdown stays the source of truth; pages are regenerable any time.",
   "options": [
     {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown (one extra render step per capture, plan, and make-pr)"},
@@ -480,10 +417,10 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**Global criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
+**Criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
 ```json
 {
-  "header": "Global criteria",
+  "header": "Criteria",
   "question": "Scaffold .flow/criteria.md? A plain markdown file of standing, project-wide acceptance criteria (- **G1:** every route change regenerates the contract...). When present, spec completion review judges every criterion against each spec's implementation and records met/violated/n-a in the review receipt. Absent = zero effect anywhere.",
   "options": [
     {"label": "Scaffold", "description": "Write .flow/criteria.md from the bundled template - documents the G-ID grammar with commented examples to replace with your own criteria"},
@@ -494,6 +431,8 @@ Available questions (include only if corresponding config is unset):
 ```
 
 **Review question** (include if CURRENT_BACKEND is empty):
+
+**Four options, not seven.** Each menu below is a catalog; the question carries four of its options, in the menu's order: Host, None, and the first two CLI options whose `HAVE_*` is 1 (when fewer than two are detected, fill from the undetected ones in menu order; on `PLATFORM=codex`, take Codex CLI last, since it is the writer's family). A backend left off the menu is set with `flowctl config set review.backend <name>`, which Step 8's summary names.
 
 **When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor:
 ```json
@@ -651,7 +590,7 @@ fi
 On Cursor/Grok/OpenCode: never offer, never register, never run `/flow-next:ralph-init`.
 When `RALPH_ASK=1`, **MUST read and follow exactly**
 [references/ralph-question.md](references/ralph-question.md) and add its object
-to the grouped prompt. When zero, read no Ralph reference and ask no Ralph
+to the files call. When zero, read no Ralph reference and ask no Ralph
 question. Unknown/malformed gate state fails safe to `RALPH_ASK=0`: no hook
 registration and no branch read.
 
@@ -668,7 +607,7 @@ registration and no branch read.
 }
 ```
 
-Print the prompt content built above and stop for the user's reply.
+Send the config call, then the files call, each through `plain-text numbered prompt`.
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
@@ -676,7 +615,7 @@ Print the prompt content built above and stop for the user's reply.
 
 ### Done when
 
-- One grouped `plain-text numbered prompt` call carried the questions array, and that array holds only the still-unanswered keys plus Docs / Star (and Ralph, Global criteria when their own gates passed).
+- The config call and the files call each carried at most 4 questions, every question at most 4 options, and every header at most 12 characters; together they hold only the still-unanswered keys plus Docs / Star (and Ralph, Criteria when their own gates passed).
 - **No routing question was asked, no CLI was probed for model ids, and no pin was proposed or stamped.** Setup asking which model to route to, or writing a model id anywhere, has broken this.
 - **Under any autonomy marker (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS`, `mode:autonomous`) the Ralph ceremony was skipped silently** — no reference read, no question, no summary noise. A run that blocked on it under an autonomy marker has broken this.
 
@@ -684,33 +623,17 @@ Print the prompt content built above and stop for the user's reply.
 
 Only process answers for questions that were asked (config values that were unset). Skip processing for config that was already set.
 
-**Memory** (if question was asked):
-- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set memory.enabled true --json`
-- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set memory.enabled false --json`
-
-**Plan-Sync** (if question was asked):
-- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled true --json`
-- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.enabled false --json`
-
-**Plan-Sync cross-spec** (if question was asked; canonical key is `planSync.crossSpec` — the legacy `planSync.crossEpic` alias was removed in 2.0.0):
-- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec true --json`
-- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set planSync.crossSpec false --json`
-
-**GitHub Scout** (if question was asked):
-- If "Yes": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github true --json`
-- If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set scouts.github false --json`
-
 **Spec ids** (if question was asked — only when tracker was configured and the key was unset):
 - If "Tracker" / label starts with `Tracker`: `"${PLUGIN_ROOT}/scripts/flowctl" config set tracker.specIds tracker --json`
 - If "Flow": `"${PLUGIN_ROOT}/scripts/flowctl" config set tracker.specIds flow --json`
 - Writing either value ends the ask-once contract: the next setup run sees a non-empty raw key and skips this question.
 
-**HTML Artifacts** (if question was asked):
+**HTML** (if question was asked):
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled false --json`
 - If "Yes":
   1. `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled true --json`
   2. Ask ONE follow-up via `plain-text numbered prompt` — track or ignore the artifact directory:
-     - **header**: `Artifacts in git?`
+     - **header**: `Artifacts`
      - **question**: `Artifacts live at .flow/artifacts/<spec-id>/{spec,pr}.html (fixed paths, regenerable). Commit them or gitignore the directory?`
      - **options**:
        - `Commit artifacts (Recommended)` — keep `.flow/artifacts/` tracked. This is what makes make-pr blob links resolve for remote reviewers. No action needed (the auto-managed `.flow/.gitignore` block does not exclude `artifacts/`).
@@ -749,7 +672,7 @@ Only process answers for questions that were asked (config values that were unse
 - Any other answer: leave the persisted value alone (it stays the materialized `off`) and say so in the summary.
 - When the persisted value is `on` or `auto`, Step 8 prints the one-line `/flow-next:features` recommendation.
 
-**Global criteria** (if question was asked):
+**Criteria** (if question was asked):
 - If "Scaffold": copy the bundled template (resolved from the plugin install - the file is user content from this moment on, so no re-run ever refreshes or compares it):
 
   ```bash
@@ -802,8 +725,8 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
    - `unchanged` - the block already matches the canonical template. No write, no mtime bump.
    - `kept` - a previous "Keep mine" recorded the `"customized"` sentinel; the helper never re-asks and never silently overwrites. Leave it alone.
    - `ask` (reason `customized` or `hash-absent`) - the block differs from canonical and is not provably pristine. The helper wrote nothing; ask via `plain-text numbered prompt`:
-     - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
-     - **body**: `<FILE> contains a flow-next marker block that differs from the canonical template shipped with this plugin version and is not recorded as pristine. Overwriting replaces the marker block only; content outside the markers is untouched either way.`
+     - **header**: `Overwrite`
+     - **question**: `Overwrite the customized flow-next block in <FILE>? <FILE> contains a flow-next marker block that differs from the canonical template shipped with this plugin version and is not recorded as pristine. Overwriting replaces the marker block only; content outside the markers is untouched either way.`
      - **options**:
        - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
        - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
@@ -888,7 +811,7 @@ Platform: <claude-code|codex|droid|cursor|grok|opencode>
 Written:
 - <CLAUDE.md and/or AGENTS.md> flow-next snippet (marker-fenced, sentinel v<N>)
 - <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
-- .flow/criteria.md (only if the Global criteria "Scaffold" option was chosen — otherwise omit this line)
+- .flow/criteria.md (only if the Criteria "Scaffold" option was chosen — otherwise omit this line)
 
 Nothing was copied into .flow/ — flowctl comes from the plugin install:
   flowctl --help        # every command

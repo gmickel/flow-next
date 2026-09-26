@@ -550,7 +550,7 @@ Check if plan-sync should run:
 $FLOWCTL config get planSync.enabled --json
 ```
 
-Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) — but a skip still records its outcome line on each completed task (`stage: plan-sync - skipped(config: planSync.enabled != true)`, see the stage-outcome block below) before advancing to 3f.
+Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) and advance to 3f: `flowctl done` already recorded that skip's stage line on each completed task.
 
 Downstream target extraction, the `planSync.crossSpec` read, and the `plan-sync`
 subagent dispatch live in [references/plan-sync-dispatch.md](references/plan-sync-dispatch.md)
@@ -566,7 +566,7 @@ the next `flowctl done` summary when the wave is still resolving). A single
 batched dispatch still yields one line per completed task:
 
 ```
-stage: plan-sync - ran [<start>..<end>] | skipped(config: planSync.enabled != true) | skipped(empty: no downstream todo tasks) | failed(EXTRACT_FAILED: <detail>) | failed(error: <detail>)
+stage: plan-sync - ran [<start>..<end>] | skipped(empty: no downstream todo tasks) | failed(EXTRACT_FAILED: <detail>) | failed(error: <detail>)
 ```
 
 **A skipped stage is an event with a reason, never an absence.** `DOWNSTREAM=EXTRACT_FAILED`

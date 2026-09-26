@@ -16,7 +16,6 @@ Contents:
 - [3b Claim at admission](#3b-claim-at-admission) - claim-at-admission + tracker touchpoint pointer
 - [3c Spawn workers](#3c-spawn-workers) - always `PARALLEL_WAVE: true`; notes pointer line
 - [3d Per-return integrate, review, complete](#3d-per-return-integrate-review-complete) - event-driven lifecycle; conductor-owned review; failure strikes
-- [3e Plan-sync stage lines](#3e-plan-sync-stage-lines) - mandatory skip line per completed task (plan-sync-on runs took the wave route)
 - [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, completion gate pointer, end-of-run notes cleanup
 
 **Why isolated worktrees (design rationale).** The pre-registered
@@ -332,9 +331,9 @@ default shape.
   check `memory.enabled`, capture only after NEEDS_WORK → SHIP under its
   existing non-trivial-fix/dedup rules, and warn on failure without blocking
   completion. Then `flowctl done` with the
-  updated task-unique summary/evidence; verify `done`; run the 3d.1 tracker
-  touchpoint; **run 3e for this completed task** (the skip line); THEN free
-  the slot and recompute admission at 3a. done(N) fires only
+  updated task-unique summary/evidence (plan-sync is off on this route, and
+  `done` records its skip stage line); verify `done`; run the 3d.1 tracker
+  touchpoint; THEN free the slot and recompute admission at 3a. done(N) fires only
   on SHIP(N).
 - **NEEDS_WORK** → TERMINAL. impl-review returns NEEDS_WORK only after its
   own internal fix loop and churn cap are exhausted; the worker
@@ -392,15 +391,6 @@ arrive after the conductor is gone - no task is ever left silently
 
 **Tracker touchpoint:** when the task reached `done`, run phases.md 3d.1
 exactly as written there.
-
-## 3e Plan-Sync Stage Lines
-
-The Phase 3 route decision already excluded `planSync.enabled=true` runs (they
-take the wave route, whose 3e dispatches plan-sync per resolved wave). On this
-route plan-sync is off by construction: record the skip line on each completed
-task - `stage: plan-sync - skipped(config: planSync.enabled != true)` - per the
-stage-outcome contract of phases.md 3e. A skipped stage is an event with a
-reason, never an absence.
 
 ## 3f Quiesce
 

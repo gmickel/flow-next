@@ -87,6 +87,11 @@ ls -d dist/ build/ out/ .next/ .nuxt/ target/ 2>/dev/null
 grep -E "dist/|build/|out/|\.next/|target/" .gitignore 2>/dev/null
 ```
 
+### Lock Files (committed = tracked)
+```bash
+git ls-files package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb Cargo.lock go.sum poetry.lock Pipfile.lock uv.lock Gemfile.lock composer.lock 2>/dev/null
+```
+
 ### Monorepo Detection
 ```bash
 # Workspace configs
@@ -99,53 +104,29 @@ ls -d packages/ apps/ libs/ modules/ 2>/dev/null
 
 ## Output Format
 
+Key every finding to the Pillar 2 criterion IDs in prime's `pillars.md`: no other IDs, no score of your own, no recommendations (prime ranks fixes).
+
 ```markdown
 ## Build Scout Findings
 
-### Detected Stack
 - Language(s): [detected]
 - Framework: [next/vite/django/etc.] or "None detected"
-- Build tool: [tool] or "None detected"
-- Monorepo: Yes ([tool]) / No
 
-### Build System
-- Build config: ✅ [file] / ❌ Not found
-- Build command: `[command]` or "Not found"
-- Build output: [directory] or "Unknown"
-- Output gitignored: ✅ Yes / ⚠️ No
+| ID | Criterion | Status | Evidence |
+|----|-----------|--------|----------|
+| BS1 | Build tool detected | ✅/❌ | [tool + config file] |
+| BS2 | Build command exists | ✅/❌ | [`command` + where it is defined; prime runs the bounded build] |
+| BS3 | Dev command exists | ✅/❌ | [`command` + where it is defined; prime runs the boot probe] |
+| BS4 | Build output gitignored | ✅/⚠️/❌ | [output dir + .gitignore line] |
+| BS5 | Lock file committed | ✅/❌ | [lock file] |
+| BS6 | Monorepo tooling | ✅/❌/N/A | [workspace config, or N/A when not a monorepo] |
 
-### Development
-- Dev command: `[command]` or "Not found"
-- Dev server: ✅ Configured / ❌ Not found
-- Hot reload: ✅ Yes / ❌ No / Unknown
-
-### CI/CD
-- CI platform: ✅ [platform] / ❌ Not found
-- Build in CI: ✅ Yes / ❌ No
-- Deploy configured: ✅ [platform] / ❌ No
-
-### Scripts Summary
-| Script | Command | Status |
-|--------|---------|--------|
-| build | `[cmd]` | ✅/❌ |
-| dev | `[cmd]` | ✅/❌ |
-| start | `[cmd]` | ✅/❌ |
-
-### Build Health Score: X/5
-- [ ] Build tool configured
-- [ ] Build command documented
-- [ ] Dev command available
-- [ ] CI builds the project
-- [ ] Build artifacts gitignored
-
-### Recommendations
-- [Priority 1]: [specific action]
-- [Priority 2]: [specific action]
+Notes (unscored context, e.g. whether CI builds the project): [...]
 ```
 
 ## Rules
 
-- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: those are the authoritative build/verify commands for this stack; the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - the bounded build/boot probe is host-side in prime Phase 2). Return your findings keyed to the build criteria (BS1-6); never reuse your own X/5 health score as a pillar score.
+- **When the dispatch provides a detected-stack row (from `stacks.md`), probe its `Detect` and `Verify (non-interactive)` entries FIRST**: those are the authoritative build/verify commands for this stack; the generic scans above are the fallback for an unknown stack (no row passed). Report the commands as findings; you stay read-only (no execution here - the bounded build/boot probe is host-side in prime Phase 2).
 - Speed over completeness - config file detection first
 - Extract actual commands from package.json/Makefile
 - Detect monorepo setups (affects how agents should build)

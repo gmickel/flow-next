@@ -222,12 +222,13 @@ NEEDS_INVESTIGATION=1
 if [[ -n "$module" && -n "$last_audited" && "$entry_status" != "stale" && -e "$module" ]]; then
   # $module must be a real tracked path for this to be sound: a logical module NAME, or a
   # DELETED module (path gone → a Delete candidate), both fail `-e` and fall through to investigation.
-  CHANGED="$(git log --oneline --since="$last_audited" -- "$module" 2>/dev/null | head -1)"
+  # Start of the UTC audit day: a bare date means that day at the current clock time and misses same-day commits.
+  CHANGED="$(git log --oneline --since="${last_audited}T00:00:00Z" -- "$module" 2>/dev/null | head -1)"
   [[ -z "$CHANGED" ]] && NEEDS_INVESTIGATION=0   # module path untouched since the last audit → still current
 fi
 ```
 
-- `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**.
+- `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**. A stamp that exits non-zero (flowctl could not parse or validate the frontmatter) is not an auto-Keep: the entry stays in the Phase-1 set with flowctl's error as evidence, and its frontmatter repair is an Update.
 - Otherwise (never audited → no `last_audited`; no `module` or a logical name → can't change-detect; module path gone → possible Delete; module changed; or already `stale`) → keep it in the Phase-1 investigation set.
 
 **Auto-Kept entries still flow into Phase 1.75 cross-doc analysis and the Phase-5 report.** An auto-Kept entry missing from the contradiction scan or from the report has broken this — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
@@ -391,7 +392,7 @@ Default to consolidate when none apply.
 
 For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1.75 produces:
 
-- **Keep** — accurate, no edit needed
+- **Keep** — accurate, no content edit needed
 - **Update** — references drifted; solution still correct. Includes the **retrieval fix**: recurring (§0.75.1), not mechanizable, and carrying a nameable defect in its retrieval surface, so the entry's findability is repaired, never its body. That "never its body" scopes the retrieval rationale only — reference drift in the same entry is still repaired on the ordinary Update's own evidence, and both land as one Update
 - **Consolidate** — overlaps heavily with another entry (canonical doc identified)
 - **Replace** — guidance now misleading; successor needs writing
@@ -448,7 +449,7 @@ When all four conditions hold, classify as Delete and execute without asking (in
 
 ### 4.1 — Keep flow
 
-No content edit — but **stamp `flowctl memory mark-fresh "$entry_id"`** and record `reviewed-without-edit` in the report. The stamp re-sets `last_audited` to today (idempotent — mark-fresh on a non-stale entry just stamps the date), so the next audit's §0.75 change-detection pre-filter can skip this entry for free while its module stays untouched. Without the stamp, every Keep re-investigates from scratch on every future run (the O(all)-not-O(changed) cost §0.75 exists to remove).
+No content edit — but **stamp `flowctl memory mark-fresh "$entry_id"`** and record `reviewed-without-edit` in the report. The stamp re-sets `last_audited` to today (idempotent — mark-fresh on a non-stale entry just stamps the date), so the next audit's §0.75 change-detection pre-filter can skip this entry for free while its module stays untouched. Without the stamp, every Keep re-investigates from scratch on every future run (the O(all)-not-O(changed) cost §0.75 exists to remove). A stamp that exits non-zero is reported on that entry with flowctl's error, never dropped.
 
 ### 4.2 — Update flow
 
@@ -478,7 +479,7 @@ For each cluster from Phase 1.75:
 1. **Confirm canonical entry** (already picked in 1.75).
 2. **Extract unique content** from subsumed entries — anything the canonical doesn't already cover. Edge cases, alternative approaches, extra prevention rules.
 3. **Merge into canonical** in a natural location. Don't append blindly — integrate where it logically belongs. Combine `tags` arrays (dedupe). Preserve canonical's `module`.
-4. **Update `related_to` cross-references** in any other entries that pointed at the subsumed entries — re-point to canonical.
+4. **Re-point every `related_to` that names a subsumed entry** — other entries point at canonical instead; canonical drops the id rather than naming itself. No `related_to` may name an entry this run deletes.
 5. **`git rm` the subsumed entries.** Not archive — delete. Git history preserves them.
 
 If a cluster has 3+ overlapping entries, process pairwise: consolidate the two most overlapping first, then evaluate whether the merged result should consolidate with the next.

@@ -42,10 +42,13 @@ fi
 
 # Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
 # Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
-# right backend before branching (empty → env/config, no regression).
+# right backend before branching. Substitute it literally: a Bash-prompt turn leaves $1 empty,
+# which would silently route to the global backend.
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-SPEC_ID="${1:-}"   # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
+SPEC_ID="<fn-N spec id from \$ARGUMENTS>"
+$FLOWCTL show "$SPEC_ID" --json >/dev/null \
+  || { echo "Error: no spec '$SPEC_ID' - pass the spec id to review" >&2; exit 1; }
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
@@ -114,9 +117,9 @@ When a delivered `NEEDS_WORK` consumes round
 
 - codex/copilot/cursor/claude already self-wrote `needs_work` while handling that
   verdict; do not duplicate it.
-- host/rp continue to SKILL.md's Step 0.5 checkpoint immediately, write
-  `needs_work` exactly once, then emit `ESCALATE:` and exit 4. Do not attempt
-  another reserve/dispatch first.
+- host/rp continue to SKILL.md's Step 0.5 checkpoint immediately; it confirms
+  the recorded `needs_work` (repairing a write that did not land), then emits
+  `ESCALATE:` and exits 4. Do not attempt another reserve/dispatch first.
 
 The exit-4 cap refusal and transport-failure semantics are stated in SKILL.md
 directly under the Step 0.5 checkpoint; the unchanged-artifact terminal is at
@@ -153,15 +156,17 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 `flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude. **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for rp and for repairing a missed write:
 
-For host/rp, execute the SKILL.md Step 0.5 checkpoint again now. The
-just-recorded terminal attempt is newer than the stored status, so that shared
-checkpoint is the sole writer and emits the terminal only after persistence
+For host/rp, `review-rounds record --status-target completion` is the one
+status owner (with a journaled receipt, the status lands when `attach`
+publishes it). Execute the SKILL.md Step 0.5 checkpoint again now: it repairs
+a write that did not land and emits the terminal only after persistence
 succeeds. Codex/copilot/cursor/claude handlers already self-write status; their next
 invocation also runs Step 0.5 first, so a handler-side write failure recovers
 without another reviewer dispatch.
 
-For host and rp, write once on every delivered terminal path — Step 0.5 maps
-SHIP → `ship` (exit 0), capped-NEEDS_WORK → `needs_work` (exit 4), and
+For host and rp, status persists once on every delivered terminal path and
+Step 0.5 emits the matching terminal — SHIP → `ship` (exit 0),
+capped-NEEDS_WORK → `needs_work` (exit 4), and
 NEEDS_HUMAN → `needs_human` (exit 4, `ESCALATE: reviewer requested human
 review`). A delivered NEEDS_HUMAN is terminal at ANY round: never reserve or
 dispatch another review for it. The write happens immediately after the

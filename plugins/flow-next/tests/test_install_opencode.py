@@ -43,6 +43,7 @@ READ_SURFACE_EXCLUSIONS = {
     ".claude-plugin": "host manifest, not a runtime read",
     ".cursor-plugin": "host manifest",
     ".codex-plugin": "host manifest",
+    "plugin.json": "Codex host manifest install-codex.sh writes at $CODEX_HOME",
     "codex": "committed Codex rewrite mirror (must not land at dest)",
     "skills": "installed separately",
     ".flow-next-opencode-manifest": (

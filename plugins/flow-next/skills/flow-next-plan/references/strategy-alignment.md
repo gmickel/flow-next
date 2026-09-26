@@ -5,8 +5,8 @@ Load this reference only when the Step 1 strategy probe printed its sentinel
 or a husk (`sections_filled == 0`), skip both sections below entirely and never
 reach this file.
 
-Both sections belong in the Step 5 plan scaffold, between
-`## Boundaries / non-goals` and `## Decision context`:
+Both sections belong in the Step 5 plan body, between the template's
+`## Boundaries` and `## Decision Context`:
 
 ```
 ## Strategy Alignment
@@ -31,7 +31,7 @@ _No active strategy track served — review for drift._
 ```
 
 **`## Strategy Alignment` rules (active iff STRATEGY_PRESENT=true from Step 1):**
-- Section sits between `## Boundaries / non-goals` and `## Decision context` in the Step 5 template.
+- Section sits between `## Boundaries` and `## Decision Context` in the Step 5 plan body.
 - List active tracks (`### <track-name>` blocks parsed from the strategy snapshot's `tracks` raw markdown string) that this plan advances.
 - When the plan serves NO active track, render the placeholder `_No active strategy track served — review for drift._` literally — do not omit the section.
 - Skip the entire section when STRATEGY_PRESENT=false. Husk-vs-presence: gated on `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`.

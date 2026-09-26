@@ -9,7 +9,7 @@ present, or a host settings file contains a hook command with
 option labels below. Ralph is fully opt-in; the default install ships zero
 hooks and the default answer is No.
 
-Add this object to the grouped Step 6d prompt:
+Add this object to the Step 6d files call:
 
 ```json
 {

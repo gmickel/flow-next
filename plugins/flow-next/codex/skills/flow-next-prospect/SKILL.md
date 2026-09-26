@@ -69,7 +69,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 5. **Write artifact** — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md` via `flowctl.write_prospect_artifact`. Same-day collisions suffix with `-2`, `-3`. Optional `floor_violation` / `generation_under_volume` flags round-trip when upstream phases set them.
 6. **Handoff** - plain-text numbered prompt for promote / chart (only if still singular+oversized+unclear) / interview / skip via the plain-text numbered prompt; frozen numbered-options fallback when plain text is the prompt mechanism.
 
-Phases 0-6 are implemented. Promote command + list/read/archive land in tasks 4-5.
+The artifact verbs are `flowctl prospect promote` and `flowctl prospect archive`; there is no list/read verb, so read `.flow/prospects/*.md` directly.
 
 ## Forbidden
 

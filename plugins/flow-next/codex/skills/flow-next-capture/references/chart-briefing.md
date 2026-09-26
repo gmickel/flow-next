@@ -26,10 +26,10 @@ Capture treats an admitted briefing as **attributable evidence**, not as pre-tag
    - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
    - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
    - Do **not** introduce verified/inferred fact or decision grammar (nothing licenses it here).
-5. **Write order after admission and any split choice:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
+5. **Write order after admission and any split choice:** `spec create --plan-file` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
 6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where source evidence establishes that the target spec needs that guarantee.
 
-Done when: the briefing was admitted or refused on its own `status` (no forced draft treated as final, no stale B-ID admitted without a read-back naming every unresolved D-ID); its chart id, B-ID, cluster key, D-ID links, and approved assets all appear in the evidence surface as untagged links; and every spec this run created carries exactly one matching `chart link-spec` call, made after its own successful `spec create` + `spec set-plan`.
+Done when: the briefing was admitted or refused on its own `status` (no forced draft treated as final, no stale B-ID admitted without a read-back naming every unresolved D-ID); its chart id, B-ID, cluster key, D-ID links, and approved assets all appear in the evidence surface as untagged links; and every spec this run created carries exactly one matching `chart link-spec` call, made after its own successful `spec create --plan-file`.
 
 ---
 
@@ -99,10 +99,10 @@ Also check for an already-linked identity (retry recovery):
 
 ## 5.2 — Chart handoff
 
-Runs inside the Phase 5 new-spec ceremony, immediately after `spec create` + `spec set-plan` succeeded:
+Runs inside the Phase 5 new-spec ceremony, immediately after `spec create --plan-file` succeeded:
 
 ```bash
-# Chart handoff — ONLY after successful create + set-plan.
+# Chart handoff — ONLY after a successful create (spec and body written in one call).
 # Order is load-bearing: never link-spec before the spec body exists.
 # On retry: if produced_specs already has this B-ID+cluster identity, discover
 # that entry and link the existing spec instead of minting another (Phase 1.2b).
@@ -120,7 +120,7 @@ fi
 
 - Capture decline / abort: call nothing; no `produced_specs[]` entry; chart stays resumable.
 - Partial multi-spec: record only successful `link-spec` calls; resume the failed cluster without duplicating the first.
-- Interruption after `spec create` / `spec set-plan` but before `link-spec`: on retry, discover the existing B-ID+cluster identity (chart sidecar `produced_specs[]` or matching specs) and link that same spec — never mint a second.
+- Interruption after `spec create` but before `link-spec`: on retry, discover the existing B-ID+cluster identity (chart sidecar `produced_specs[]` or matching specs) and link that same spec — never mint a second.
 
 ---
 
@@ -132,7 +132,7 @@ Three provenance lanes must not collapse:
 2. **Acceptance-criterion author tags** — `[user]` | `[paraphrase]` | `[inferred]` | `[strategy:<track>]` only on criteria **this capture pass newly authors**. Never retag existing criteria. Never tag D-ID evidence or chart facts. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
 3. **Verified-versus-inferred technical facts** — no such grammar was ever adopted. Capture adds **no** `[verified]` / verified-vs-inferred decision grammar. Do not invent one.
 
-Draft/stale briefings fail closed for ordinary capture; explicit risk override must name unresolved/invalidated D-IDs and read back the risk without promoting a forced draft to final. `link-spec` runs only after `spec create` + `spec set-plan`; retry discovers B-ID+cluster identity first.
+Draft/stale briefings fail closed for ordinary capture; explicit risk override must name unresolved/invalidated D-IDs and read back the risk without promoting a forced draft to final. `link-spec` runs only after `spec create --plan-file`; retry discovers B-ID+cluster identity first.
 
 ---
 
@@ -142,5 +142,5 @@ Draft/stale briefings fail closed for ordinary capture; explicit risk override m
 |-----------|-----|
 | Treating a forced draft briefing as final, or silent draft/stale admission | Fail closed; override requires named D-IDs + risk read-back; never promotes draft to final. |
 | Source-tagging D-ID / chart evidence as `[user]` | Chart provenance is structural links; four-tag grammar is for newly authored criteria only. |
-| `chart link-spec` before `spec create` / `spec set-plan`, or minting a duplicate after interruption | Order: create → set-plan → link-spec; retry discovers B-ID+cluster identity first. |
+| `chart link-spec` before `spec create --plan-file`, or minting a duplicate after interruption | Order: create (with its body) → link-spec; retry discovers B-ID+cluster identity first. |
 | Chart facts get no verified/inferred grammar | No such grammar was adopted; do not invent one. |

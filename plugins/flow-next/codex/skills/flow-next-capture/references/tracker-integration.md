@@ -30,12 +30,12 @@ BRIDGE_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // fa
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
   # Named existing issue in the request → read it first for {id, identifier, url}
   #   ("$FLOWCTL" tracker wire read), then mint linked and seed:
-  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "$SPEC_TITLE" --json)
+  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "$SPEC_TITLE" --plan-file "<§4.1 draft path>" --json)
   #   then seed the merge base from the issue body (tracker-sync steps.md §2 Identity and linking).
   # Fresh idea → create-first first (tracker-sync steps.md §2), then mint linked and seed:
   #   skill: flow-next-tracker-sync (operation: create-first, title: "$SPEC_TITLE", body: "<draft seed>")
   #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
-  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "$SPEC_TITLE" --json)
+  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "$SPEC_TITLE" --plan-file "<§4.1 draft path>" --json)
   #   then seed the merge base, back-reference, and receipt per the §2 receipt / retry contract
   # Network cost (honest, conditional): when tracker.perEvent.capture is already active,
   # tracker-first REORDERS that existing remote write; when the leaf is off (default — a

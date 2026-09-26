@@ -139,7 +139,7 @@ Materialize and source-check the draft.
   autofix --yes: print summary and write
   autofix without --yes: print summary and exit 0 without allocating a spec
 
-Write via flowctl spec create + spec set-plan.
+Write via flowctl spec create --plan-file.
 Interactive: summarize saved spec(s), offer open in editor / continue.
   corrections: re-read the saved file, preserve user edits, print only the diff
   no generic approval or re-approval question

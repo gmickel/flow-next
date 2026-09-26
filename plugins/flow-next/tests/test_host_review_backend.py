@@ -726,7 +726,9 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
-        self.assertIn(recovery, host)
+        # fn-257 R5: the host publishes through `attach`, whose record journal
+        # is the recovery source; it never hand-writes a recovery copy.
+        self.assertNotIn(recovery, host)
         # fn-159.7 review r1: the RP transport no longer hand-rolls a /tmp
         # recovery copy. `review-rounds record` journals the exact intended
         # payload under .flow/review-runs/ BEFORE the receipt advances, which
@@ -864,3 +866,53 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertIn("(`REVIEW_ROUND == REVIEW_CAP`)", host)
         self.assertIn("<verdict>SHIP</verdict>", host)
         self.assertIn("<verdict>NEEDS_WORK</verdict>", host)
+
+
+class TestHostStandaloneImplReview(unittest.TestCase):
+    """fn-257 R2: a standalone host impl-review reserves nothing and attaches directly."""
+
+    def test_standalone_skips_reservation_and_attaches_directly(self) -> None:
+        host = _read("flow-next-impl-review/workflow-host.md")
+        reserve = _bash_fence_after(host, "### Convergence reservation and recovery fence")
+        record = _bash_fence_after(host, "On a fan-out round this runs ONCE")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            git = ["git", "-C", str(temp), "-c", "user.email=t@t.t", "-c", "user.name=t"]
+            subprocess.run([*git, "init", "-q"], check=True)
+            subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+            head = subprocess.run(
+                [*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            log = temp / "flowctl.log"
+            stub = temp / "flowctl-stub"
+            stub.write_text(
+                f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log.as_posix()}"\necho "{{}}"\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+            env = os.environ.copy()
+            env.update({
+                "FLOWCTL": stub.as_posix(), "TASK_ID": "", "BASE_COMMIT": head,
+                "TMPDIR": temp.as_posix(), "VERDICT": "SHIP",
+                "RECEIPT_INPUT": "in.json", "RECEIPT_PATH": "receipt.json",
+                "REVIEW_OUTPUT_FILE": "review.md",
+                "REVIEW_BASE_SHA": head, "REVIEW_HEAD_SHA": head,
+            })
+            for block in (reserve, record):
+                result = subprocess.run(
+                    [_bash_executable(), "-c", block], cwd=temp, env=env,
+                    text=True, capture_output=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = log.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(calls), 1, calls)
+            self.assertTrue(calls[0].startswith("review-findings attach --input in.json"))
+            self.assertIn(f"--base {head} --head {head}", calls[0])
+
+            # A failed attach is the run's failure, never a silent exit 0.
+            stub.write_text("#!/usr/bin/env bash\nexit 7\n", encoding="utf-8")
+            result = subprocess.run(
+                [_bash_executable(), "-c", record], cwd=temp, env=env,
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
