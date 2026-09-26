@@ -181,7 +181,7 @@
     "impl:fn-257-correctness-and-hygiene-sweep-audit.1": 0
   },
   "spec_path": ".flow/specs/fn-257-correctness-and-hygiene-sweep-audit.md",
-  "status": "open",
+  "status": "done",
   "title": "Correctness and hygiene sweep (audit wave 3)",
   "tracker": {
     "baseHashFlow": null,
@@ -194,5 +194,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T11:05:40.497840Z"
+  "updated_at": "2026-09-26T11:18:23.077145Z"
 }
