@@ -20,6 +20,8 @@ import unittest
 from pathlib import Path
 from typing import Any
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -393,7 +395,7 @@ class TaskTitleRejectsMultiline(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self._tmp.name)
         run = lambda *a: subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *a],
+            [*FLOWCTL_CMD, *a],
             cwd=str(self.repo), capture_output=True, text=True, check=False)
         run("init")
         spec_id = json.loads(run("spec", "create", "--title", "S", "--json").stdout)["id"]
@@ -408,7 +410,7 @@ class TaskTitleRejectsMultiline(unittest.TestCase):
     def test_task_create_also_rejects_multiline(self) -> None:
         """Guarding only set-title left the bad state reachable one command earlier."""
         r = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "task", "create",
+            [*FLOWCTL_CMD, "task", "create",
              "--spec", self.task_id.rsplit(".", 1)[0], "--title", "New\nInjected"],
             cwd=str(self.repo), capture_output=True, text=True, check=False,
         )
@@ -417,7 +419,7 @@ class TaskTitleRejectsMultiline(unittest.TestCase):
 
     def test_embedded_newline_is_rejected(self) -> None:
         r = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "task", "set-title", self.task_id,
+            [*FLOWCTL_CMD, "task", "set-title", self.task_id,
              "--title", "New\nInjected"],
             cwd=str(self.repo), capture_output=True, text=True, check=False,
         )

@@ -7,17 +7,18 @@ import json
 import os
 import stat
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 HERE = Path(__file__).resolve()
 TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
-FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 TEMPLATES = PLUGIN_DIR / "skills" / "flow-next-setup" / "templates"
 
 
@@ -46,8 +47,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
     def _flowctl(self, command: str, target: str, template: Path, *extra: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "setup-block",
                 command,
                 "--file",

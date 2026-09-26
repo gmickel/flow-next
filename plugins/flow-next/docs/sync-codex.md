@@ -20,7 +20,7 @@ Plugin-level `hooks/hooks.json` is gone (fn-114). Do not re-add a hooks stage.
 ./scripts/sync-codex.sh
 ```
 
-Commit the regenerated `plugins/flow-next/codex/` tree alongside the canonical change. CI runs the same script and fails if the mirror is stale.
+Commit the regenerated `plugins/flow-next/codex/` tree alongside the canonical change. CI runs `./scripts/sync-codex.sh --check`, which regenerates into a temporary directory, lists every path that differs from the committed mirror, checks the tracker manifest, and fails without writing to the working tree.
 
 ## Pipeline shape
 

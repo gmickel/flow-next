@@ -25,6 +25,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -84,7 +86,7 @@ class _RepoFixture:
         self, *args: str, check: bool = False, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=self.root,
             check=check,
             capture_output=True,

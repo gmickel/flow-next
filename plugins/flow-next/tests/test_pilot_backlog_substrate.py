@@ -43,6 +43,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -421,12 +423,10 @@ class PilotLogTestCase(_FlowctlTmpRepo):
         import concurrent.futures
         import subprocess
 
-        flowctl_py = str(FLOWCTL_PY)
-
         def _append_once(_n: int) -> int:
             return subprocess.run(
                 [
-                    sys.executable, flowctl_py, "pilot-log", "append",
+                    *FLOWCTL_CMD, "pilot-log", "append",
                     "--id", "fn-race", "--action", "advanced", "--stage", "work",
                     "--json",
                 ],

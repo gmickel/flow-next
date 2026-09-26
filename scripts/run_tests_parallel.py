@@ -584,10 +584,15 @@ def run_suite(
                     sys.stdout.write("\n")
     else:
         # Preserve discovery/shuffle order in the printed summary via index map.
+        submit_order = list(enumerate(files))
+        if not shuffle:
+            # Largest file first, so the longest shards never start last and
+            # trail the run; file size needs no timing data to stay current.
+            submit_order.sort(key=lambda item: item[1].stat().st_size, reverse=True)
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
             future_map = {
                 pool.submit(_run_one, tests_dir, f, verbose, file_timeout): idx
-                for idx, f in enumerate(files)
+                for idx, f in submit_order
             }
             ordered: List[Optional[FileResult]] = [None] * len(files)
             for fut in concurrent.futures.as_completed(future_map):

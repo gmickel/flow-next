@@ -17,10 +17,11 @@ import threading
 import unittest
 from pathlib import Path
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
 
 spec = importlib.util.spec_from_file_location("flowctl", ROOT / "scripts" / "flowctl.py")
 flowctl = importlib.util.module_from_spec(spec)
@@ -47,7 +48,7 @@ def _init_repo(repo: Path) -> None:
 
 def _init_flow(repo: Path) -> Path:
     r = subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), "init"],
+        [*FLOWCTL_CMD, "init"],
         cwd=str(repo),
         capture_output=True,
         text=True,
@@ -67,7 +68,7 @@ def _run_flowctl(cwd: Path, *args: str, env: dict | None = None) -> subprocess.C
     if env is None or "FLOWCTL_CHART_FAILPOINT" not in env:
         full_env.pop("FLOWCTL_CHART_FAILPOINT", None)
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,

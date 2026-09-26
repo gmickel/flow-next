@@ -24,7 +24,11 @@ def classify(event, paths):
                                  'plugins/flow-next/codex/scripts/', '.github/workflows/'))
                    or p == '.gitattributes' for p in paths)
         if docs_only:
-            units, run_smokes = DOCS, False
+            # The functional smokes check skill and agent markdown, so those
+            # edits keep them even though they are otherwise docs-only.
+            units = DOCS
+            run_smokes = any(p.startswith(('plugins/flow-next/skills/', 'plugins/flow-next/agents/'))
+                             for p in paths)
     return {'units_matrix': units, 'smokes_matrix': smokes,
             'run_smokes': run_smokes, 'run_windows_stub': stub}
 

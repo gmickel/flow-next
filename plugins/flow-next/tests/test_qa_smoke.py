@@ -22,8 +22,8 @@ dispatch the host agent actually shells), not an in-process import:
 
 This is a hermetic plumbing smoke, NOT a live drive — it never starts an app
 or invokes a driver. Each test runs in its own `tempfile.TemporaryDirectory`
-with a throwaway git repo + `.flow/`, and shells `sys.executable
-scripts/flowctl.py` (no network, no LLM). Windows-portable: `pathlib`
+with a throwaway git repo + `.flow/`, and shells flowctl through
+`flowctl_test_support.FLOWCTL_CMD` (no network, no LLM). Windows-portable: `pathlib`
 everywhere, `sys.executable`, no shell string, no hard-coded separators.
 
 Run:
@@ -35,14 +35,13 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
-
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 SPEC_TITLE = "QA smoke probe"
 # A minimal plan body carrying the two sections the QA skill derives from.
@@ -60,7 +59,7 @@ def _flowctl(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
     Exercises the real argparse → cmd_* dispatch (the path the bundled CLI
     runs), not an in-process function call.
     """
-    cmd = [sys.executable, str(FLOWCTL_PY), *args, "--json"]
+    cmd = [*FLOWCTL_CMD, *args, "--json"]
     proc = subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -96,7 +95,7 @@ class QaTouchpointSmokeTestCase(unittest.TestCase):
         _git(self.repo, "config", "user.email", "qa-smoke@example.test")
         _git(self.repo, "config", "user.name", "qa-smoke")
         subprocess.check_call(
-            [sys.executable, str(FLOWCTL_PY), "init", "--json"],
+            [*FLOWCTL_CMD, "init", "--json"],
             cwd=str(self.repo),
             stdout=subprocess.DEVNULL,
         )
@@ -107,8 +106,7 @@ class QaTouchpointSmokeTestCase(unittest.TestCase):
         self.spec_id = created["id"]
         proc = subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "spec",
                 "set-plan",
                 self.spec_id,

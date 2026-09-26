@@ -39,9 +39,10 @@ fitters and truncators are not a remedy. Genuine transport limits stay explicit.
   host fallbacks belong to the existing platform machinery. Read the
   [cross-platform checklist](adding-skills.md#cross-platform-patterns) when
   changing a skill, agent, command, hook, transform, or installer.
-- For those changes, run `./scripts/sync-codex.sh` twice to verify idempotency
-  and commit generated changes with their source. Preserve transform/guard
-  pairs and validate the installed consumer layout, not just the source tree.
+- For those changes, run `./scripts/sync-codex.sh` once and commit generated
+  changes with their source; CI's `./scripts/sync-codex.sh --check` enforces
+  freshness. Preserve transform/guard pairs and validate the installed
+  consumer layout, not just the source tree.
 - Read [setup.md](setup.md) before changing setup, snippets, artifact resolution,
   or their transforms. Setup-block rejects symlink targets deliberately.
 - Avoid feature flags and compatibility scaffolding without a demonstrated
@@ -70,7 +71,8 @@ a changed tree.
 
 GitHub runs the stable `CI` aggregate on every PR and main push. Docs and
 Flow task/spec bookkeeping retain Ubuntu unit coverage; code changes retain
-all three OS unit legs and functional smokes. Main uses the pushed before/after
+all three OS unit legs and functional smokes. Changes to plugin skill or agent
+markdown also run the functional smokes. Main uses the pushed before/after
 range, PRs use the merge-base range, and missing or empty ranges run full checks.
 The Windows interpreter stub runs for launcher, installer and runtime changes,
 plus the weekly backstop. Superseded PR runs cancel; main runs do not.
@@ -101,7 +103,7 @@ behavioral model. Conduct checklists are conditional review rubrics; read the
 Conditional generated-artifact checks:
 
 - `flowctl.py` or `flowctl_tracker/`: run `python3 scripts/gen_tracker_manifest.py`
-  and `./scripts/sync-codex.sh` twice; include required generated updates.
+  and `./scripts/sync-codex.sh` once; include required generated updates.
 - Config key added, renamed, or retyped: update the table in
   `scripts/gen_flow_config_schema.py` (or its machine-written-key allowlist),
   regenerate the committed schema, and keep its drift test green.

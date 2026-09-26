@@ -395,6 +395,35 @@ class CorpusContractTest(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("zero test files matched", out)
 
+    def test_pool_submits_largest_file_first_and_keeps_listed_order(self):
+        for name, pad in (("test_alpha.py", 0), ("test_beta.py", 400), ("test_gamma.py", 200)):
+            (self.corpus / name).write_text(PASSING_FILE + "#" * pad, encoding="utf-8")
+        real_pool = self.mod.concurrent.futures.ThreadPoolExecutor
+        submitted = []
+
+        class RecordingPool(real_pool):
+            def submit(self, fn, *args, **kwargs):
+                submitted.append(args[1].name)
+                return super().submit(fn, *args, **kwargs)
+
+        def fake_run_one(_tests_dir, test_file, _verbose, _timeout):
+            return self.mod.FileResult(test_file, 0, 1, 0, 0, 0, 0.0, "")
+
+        def listed(args):
+            _rc, out = self._run(args + ["--list-only"])
+            return [ln for ln in out.splitlines() if ln.endswith(".py")]
+
+        with mock.patch.object(
+            self.mod.concurrent.futures, "ThreadPoolExecutor", RecordingPool
+        ), mock.patch.object(self.mod, "_run_one", side_effect=fake_run_one):
+            self.assertEqual(self._run(["--jobs", "2"])[0], 0)
+            self.assertEqual(submitted, ["test_beta.py", "test_gamma.py", "test_alpha.py"])
+            self.assertEqual(listed(["--jobs", "2"]), ["test_alpha.py", "test_beta.py", "test_gamma.py"])
+            # --shuffle keeps its seeded order for submission too.
+            submitted.clear()
+            self.assertEqual(self._run(["--jobs", "2", "--shuffle", "--seed", "3"])[0], 0)
+            self.assertEqual(submitted, listed(["--jobs", "2", "--shuffle", "--seed", "3"]))
+
     def test_failing_file_exits_one(self):
         (self.corpus / "test_delta.py").write_text(FAILING_FILE, encoding="utf-8")
         rc, out = self._run(["--jobs", "2"])
@@ -515,7 +544,9 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         return rc, buf.getvalue(), time.perf_counter() - t0
 
     # -- tests -----------------------------------------------------------
-    def test_timeout_reports_file_elapsed_rc_and_captured_output(self):
+    def test_timeout_reports_the_file_kills_the_descendant_and_collects_under_bound(self):
+        """One hanging-shard run carries every timeout-path assertion, so the
+        shape pays the per-file budget once (fn-256 R7)."""
         self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
         rc, out, wall = self._run()
         self.assertEqual(rc, 1, out)
@@ -538,11 +569,6 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         # never the 1200s the fixture would otherwise sleep.
         self.assertLess(wall, 90, "timeout path was not bounded (wall={})".format(wall))
         self.assertIn("FAILED FILES (1):", out)
-
-    def test_timeout_kills_the_descendant_and_collects_under_bound(self):
-        self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
-        rc, out, _wall = self._run()
-        self.assertEqual(rc, 1, out)
         if os.name == "nt":
             self.assertRegex(out, r"process-tree: pid=\d+ .*shard alive")
             self.assertIn("TerminateJobObject=", out)
