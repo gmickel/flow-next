@@ -24,15 +24,14 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
-FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 FIXTURES_ROOT = HERE.parent / "fixtures" / "clawpatch-map"
 
 
@@ -44,7 +43,7 @@ def _run(
     if env:
         proc_env.update(env)
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         capture_output=True,
         text=True,
         timeout=30,

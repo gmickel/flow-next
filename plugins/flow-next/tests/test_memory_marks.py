@@ -85,41 +85,12 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import flowctl  # noqa: E402  (path-injected import)
+from flowctl_test_support import FLOWCTL_CMD, MemoryRepoTemplate  # noqa: E402
 
-
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 
 GATE_REF = "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes"
 GATE_REF_2 = "CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate"
 ENTRY_ID = "bug/runtime-errors/null-deref-in-auth-2026-05-01"
-
-
-def _init_repo(tmp: Path) -> Path:
-    subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "init", "--json"],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        [
-            sys.executable,
-            str(FLOWCTL_PY),
-            "config",
-            "set",
-            "memory.enabled",
-            "true",
-            "--json",
-        ],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "memory", "init", "--json"],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    return tmp / ".flow" / "memory"
 
 
 def _seed_stale_entry(memory_dir: Path) -> Path:
@@ -188,7 +159,7 @@ def _seed_entry(memory_dir: Path) -> Path:
 
 
 def _run(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
-    cmd = [sys.executable, str(FLOWCTL_PY), *args]
+    cmd = [*FLOWCTL_CMD, *args]
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -251,10 +222,10 @@ def _write_memory_entry(
 # --- mark-fresh (fn-34 task 2) ---
 
 
-class TestMarkFreshHappyPath(unittest.TestCase):
+class TestMarkFreshHappyPath(MemoryRepoTemplate, unittest.TestCase):
     def test_clears_stale_flag_and_stamps_last_audited(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_stale_entry(mem)
             result = _run(
                 Path(tmp),
@@ -276,7 +247,7 @@ class TestMarkFreshHappyPath(unittest.TestCase):
 
     def test_no_op_on_non_stale_entry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_active_entry(mem)
             result = _run(
                 Path(tmp),
@@ -295,7 +266,7 @@ class TestMarkFreshHappyPath(unittest.TestCase):
 
     def test_audited_by_records_breadcrumb(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_stale_entry(mem)
             result = _run(
                 Path(tmp),
@@ -318,7 +289,7 @@ class TestMarkFreshHappyPath(unittest.TestCase):
 
     def test_body_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_stale_entry(mem)
             _run(
                 Path(tmp),
@@ -331,10 +302,10 @@ class TestMarkFreshHappyPath(unittest.TestCase):
             self.assertIn("Convention body content.", text)
 
 
-class TestMarkFreshErrors(unittest.TestCase):
+class TestMarkFreshErrors(MemoryRepoTemplate, unittest.TestCase):
     def test_unknown_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_stale_entry(mem)
             result = _run(
                 Path(tmp),
@@ -349,7 +320,7 @@ class TestMarkFreshErrors(unittest.TestCase):
 
     def test_legacy_id_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_stale_entry(mem)
             (mem / "decisions.md").write_text(
                 "## 2026-01-01 manual\nDecision body.\n", encoding="utf-8"
@@ -366,11 +337,11 @@ class TestMarkFreshErrors(unittest.TestCase):
             self.assertIn("legacy", result["error"].lower())
 
 
-class TestMarkFreshRoundTrip(unittest.TestCase):
+class TestMarkFreshRoundTrip(MemoryRepoTemplate, unittest.TestCase):
     def test_stale_then_fresh_roundtrip(self) -> None:
         """mark-stale then mark-fresh leaves entry in active default."""
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_active_entry(mem)
             _run(
                 Path(tmp),
@@ -398,12 +369,12 @@ class TestMarkFreshRoundTrip(unittest.TestCase):
             self.assertEqual(fm["last_audited"], _today())
 
 
-class TestMarkFreshUnHardens(unittest.TestCase):
+class TestMarkFreshUnHardens(MemoryRepoTemplate, unittest.TestCase):
     """hardened -> active (fn-122 R14): drops `hardened_into` + stale family."""
 
     def test_hardened_then_fresh_drops_gate_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_active_entry(mem)
             _run(
                 Path(tmp),
@@ -438,10 +409,10 @@ class TestMarkFreshUnHardens(unittest.TestCase):
 # --- mark-stale (fn-34 task 2) ---
 
 
-class TestMarkStaleHappyPath(unittest.TestCase):
+class TestMarkStaleHappyPath(MemoryRepoTemplate, unittest.TestCase):
     def test_sets_status_audit_notes_and_last_audited(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -470,7 +441,7 @@ class TestMarkStaleHappyPath(unittest.TestCase):
 
     def test_body_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -488,7 +459,7 @@ class TestMarkStaleHappyPath(unittest.TestCase):
 
     def test_audited_by_suffix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -510,7 +481,7 @@ class TestMarkStaleHappyPath(unittest.TestCase):
 
     def test_human_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -524,10 +495,10 @@ class TestMarkStaleHappyPath(unittest.TestCase):
             self.assertIn(_today(), result["_stdout"])
 
 
-class TestMarkStaleErrors(unittest.TestCase):
+class TestMarkStaleErrors(MemoryRepoTemplate, unittest.TestCase):
     def test_missing_reason_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -544,7 +515,7 @@ class TestMarkStaleErrors(unittest.TestCase):
 
     def test_unknown_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -561,7 +532,7 @@ class TestMarkStaleErrors(unittest.TestCase):
 
     def test_legacy_id_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             (mem / "pitfalls.md").write_text(
                 "## 2026-01-01 manual\nLegacy entry.\n", encoding="utf-8"
@@ -581,10 +552,10 @@ class TestMarkStaleErrors(unittest.TestCase):
             self.assertIn("migrate", result["error"])
 
 
-class TestMarkStaleIdempotent(unittest.TestCase):
+class TestMarkStaleIdempotent(MemoryRepoTemplate, unittest.TestCase):
     def test_remark_updates_audit_notes_and_last_audited(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -619,12 +590,12 @@ class TestMarkStaleIdempotent(unittest.TestCase):
             )
 
 
-class TestMarkStaleDropsHardenedPointer(unittest.TestCase):
+class TestMarkStaleDropsHardenedPointer(MemoryRepoTemplate, unittest.TestCase):
     """hardened -> stale (fn-122 R14): `hardened_into` must not survive."""
 
     def test_hardened_then_stale_clears_gate_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -657,10 +628,10 @@ class TestMarkStaleDropsHardenedPointer(unittest.TestCase):
 # --- mark-hardened (fn-122 task 1) ---
 
 
-class TestMarkHardenedHappyPath(unittest.TestCase):
+class TestMarkHardenedHappyPath(MemoryRepoTemplate, unittest.TestCase):
     def test_sets_status_gate_ref_and_last_audited(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -685,7 +656,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
         """flowctl never parses the `<path>#<rule-id> -- <note>` convention."""
         weird = "not/a/real#convention: 42 -- but stored anyway"
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -703,7 +674,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
         """Only the emptiness check strips — storage is the raw value."""
         padded = f"  {GATE_REF}\t"
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -722,7 +693,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
         """A newline in the value must not shred the frontmatter."""
         multiline = "pyproject.toml#DTZ -- bans\nnaive datetimes\ttab"
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -763,7 +734,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             "Final line.\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             data = flowctl._memory_read_entry(path)
             flowctl.write_memory_entry(path, data["frontmatter"], rich_body)
@@ -800,7 +771,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             "applies_when: always\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             entry_dir = mem / "knowledge" / "conventions"
             entry_dir.mkdir(parents=True, exist_ok=True)
 
@@ -861,7 +832,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             ("fresh", ()),
         )
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             entry_dir = mem / "knowledge" / "conventions"
             entry_dir.mkdir(parents=True, exist_ok=True)
 
@@ -883,7 +854,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
 
     def test_audited_by_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -902,7 +873,7 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
 
     def test_human_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -917,10 +888,10 @@ class TestMarkHardenedHappyPath(unittest.TestCase):
             self.assertIn(_today(), result["_stdout"])
 
 
-class TestMarkHardenedIdempotent(unittest.TestCase):
+class TestMarkHardenedIdempotent(MemoryRepoTemplate, unittest.TestCase):
     def test_remark_replaces_gate_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -949,10 +920,10 @@ class TestMarkHardenedIdempotent(unittest.TestCase):
             self.assertEqual(fm["hardened_into"], GATE_REF_2)
 
 
-class TestMarkHardenedTransitions(unittest.TestCase):
+class TestMarkHardenedTransitions(MemoryRepoTemplate, unittest.TestCase):
     def test_active_to_hardened(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             self.assertNotIn("status", flowctl.parse_memory_frontmatter(path))
             _run(
@@ -972,7 +943,7 @@ class TestMarkHardenedTransitions(unittest.TestCase):
 
     def test_stale_to_hardened_clears_stale_pair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             _run(
                 Path(tmp),
@@ -1010,10 +981,10 @@ class TestMarkHardenedTransitions(unittest.TestCase):
             self.assertNotIn("stale_date", fm)
 
 
-class TestMarkHardenedErrors(unittest.TestCase):
+class TestMarkHardenedErrors(MemoryRepoTemplate, unittest.TestCase):
     def test_missing_gate_ref_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -1030,7 +1001,7 @@ class TestMarkHardenedErrors(unittest.TestCase):
 
     def test_empty_gate_ref_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -1048,7 +1019,7 @@ class TestMarkHardenedErrors(unittest.TestCase):
 
     def test_unknown_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             result = _run(
                 Path(tmp),
@@ -1066,7 +1037,7 @@ class TestMarkHardenedErrors(unittest.TestCase):
 
     def test_legacy_id_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             (mem / "pitfalls.md").write_text(
                 "## 2026-01-01 manual\nLegacy entry.\n", encoding="utf-8"
@@ -1086,11 +1057,11 @@ class TestMarkHardenedErrors(unittest.TestCase):
             self.assertIn("migrate", result["error"])
 
 
-class TestHardenedWriteValidation(unittest.TestCase):
+class TestHardenedWriteValidation(MemoryRepoTemplate, unittest.TestCase):
     def test_unknown_status_rejected_by_name(self) -> None:
         """WRITE-side guarantee only — `_memory_read_entry` never validates."""
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             path = _seed_entry(mem)
             data = flowctl._memory_read_entry(path)
             fm = dict(data["frontmatter"])
@@ -1105,9 +1076,9 @@ class TestHardenedWriteValidation(unittest.TestCase):
         self.assertIn("hardened_into", flowctl.MEMORY_FIELD_ORDER)
 
 
-class TestHardenedStatusFilters(unittest.TestCase):
+class TestHardenedStatusFilters(MemoryRepoTemplate, unittest.TestCase):
     def _seed_and_harden(self, tmp: Path) -> Path:
-        mem = _init_repo(tmp)
+        mem = self.init_repo(tmp)
         path = _seed_entry(mem)
         _run(
             tmp,
@@ -1138,7 +1109,7 @@ class TestHardenedStatusFilters(unittest.TestCase):
 
     def test_list_status_hardened_excludes_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entry(mem)
             _run(
                 Path(tmp),

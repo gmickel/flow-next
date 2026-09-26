@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 from typing import Optional
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -105,7 +106,7 @@ class PortableLockSubprocessTest(unittest.TestCase):
         self.repo = Path(self.tempdir.name)
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
         subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "init", "--json"],
+            [*FLOWCTL_CMD, "init", "--json"],
             cwd=self.repo,
             check=True,
             capture_output=True,
@@ -117,7 +118,7 @@ class PortableLockSubprocessTest(unittest.TestCase):
 
     def _run(self, *args: str, env: Optional[dict] = None) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args, "--json"],
+            [*FLOWCTL_CMD, *args, "--json"],
             cwd=self.repo,
             env=env,
             capture_output=True,

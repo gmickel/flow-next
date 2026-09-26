@@ -41,6 +41,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -1275,7 +1276,7 @@ class EmitterContractTestCase(unittest.TestCase):
     )
     def test_live_cli_resolves_classify_subcommand(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "prime", "classify", "--help"],
+            [*FLOWCTL_CMD, "prime", "classify", "--help"],
             capture_output=True,
             text=True,
         )
@@ -1295,7 +1296,7 @@ class EmitterContractTestCase(unittest.TestCase):
             _write(repo, "main.py", "x = 1\n")
             _commit_all(repo, "seed")
             proc = subprocess.run(
-                [sys.executable, str(FLOWCTL_PY), "prime", "classify", str(repo), "--json"],
+                [*FLOWCTL_CMD, "prime", "classify", str(repo), "--json"],
                 capture_output=True,
                 text=True,
             )

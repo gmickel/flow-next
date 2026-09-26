@@ -12,14 +12,13 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 
 HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 # Live fn-122 pair in this repo (ids never change; R13 regression target).
 LIVE_FN122_A = "fn-122-flowctl-hardening-and-performance-completion-sweep"
 LIVE_FN122_B = "fn-122-harden-verdict-graduate-recurring"
@@ -43,7 +42,7 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
 
     def _run(self, *args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=self.tmpdir,
             check=check,
             capture_output=True,
@@ -371,7 +370,7 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         live_b = REPO_ROOT / ".flow" / "specs" / f"{LIVE_FN122_B}.json"
         if live_a.exists() and live_b.exists():
             live = subprocess.run(
-                [sys.executable, str(FLOWCTL_PY), "validate", "--all", "--json"],
+                [*FLOWCTL_CMD, "validate", "--all", "--json"],
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,

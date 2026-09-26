@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -622,7 +623,7 @@ class ResolveVerb(unittest.TestCase):
 class CliSurface(unittest.TestCase):
     def test_tracker_resolve_registered(self) -> None:
         out = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "flowctl.py"),
+            [*FLOWCTL_CMD,
              "tracker", "resolve", "--help"],
             capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stderr)

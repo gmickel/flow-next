@@ -44,6 +44,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -211,7 +212,7 @@ class BriefRepoTestCase(unittest.TestCase):
 
     def _flowctl(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY)] + list(args),
+            [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,
@@ -670,7 +671,7 @@ class ManyCorruptAndLongRootTest(unittest.TestCase):
 
     def _run(self, cwd: Path, *flags: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "brief", *flags],
+            [*FLOWCTL_CMD, "brief", *flags],
             cwd=str(cwd),
             capture_output=True,
             text=True,

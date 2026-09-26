@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -88,7 +89,7 @@ class GateClassifyTestCase(unittest.TestCase):
 
     def _classify(self, base: str = "") -> tuple[subprocess.CompletedProcess, dict]:
         result = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "gate", "classify", "--base", base or self.base, "--json"],
+            [*FLOWCTL_CMD, "gate", "classify", "--base", base or self.base, "--json"],
             cwd=self.tmpdir,
             capture_output=True,
             text=True,

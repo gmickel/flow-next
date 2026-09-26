@@ -23,11 +23,11 @@ import time
 import unittest
 from pathlib import Path
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
-FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
 
 spec = importlib.util.spec_from_file_location("flowctl", ROOT / "scripts" / "flowctl.py")
 flowctl = importlib.util.module_from_spec(spec)
@@ -348,7 +348,7 @@ class TestSpecIdAllocation(unittest.TestCase):
             main = tmp_path / "main"
             _init_repo(main)
             subprocess.run(
-                [sys.executable, str(FLOWCTL_PY), "init"],
+                [*FLOWCTL_CMD, "init"],
                 cwd=str(main), capture_output=True, text=True, check=False,
             )
             _git(main, "add", "-A")
@@ -361,7 +361,7 @@ class TestSpecIdAllocation(unittest.TestCase):
 
             def create(cwd: Path, title: str) -> str:
                 r = subprocess.run(
-                    [sys.executable, str(FLOWCTL_PY), "spec", "create",
+                    [*FLOWCTL_CMD, "spec", "create",
                      "--title", title, "--json"],
                     cwd=str(cwd), capture_output=True, text=True, check=False,
                 )
@@ -584,7 +584,7 @@ class TestSpecIdAllocation(unittest.TestCase):
             main = Path(tmp) / "repo"
             _init_repo(main)
             subprocess.run(
-                [sys.executable, str(FLOWCTL_PY), "init"],
+                [*FLOWCTL_CMD, "init"],
                 cwd=str(main), capture_output=True, text=True, check=False,
             )
 
@@ -595,7 +595,7 @@ class TestSpecIdAllocation(unittest.TestCase):
 
             def make_spec() -> None:
                 r = subprocess.run(
-                    [sys.executable, str(FLOWCTL_PY), "spec", "create",
+                    [*FLOWCTL_CMD, "spec", "create",
                      "--title", "Concurrent Spec", "--json"],
                     cwd=str(main), capture_output=True, text=True, check=False,
                 )
@@ -606,7 +606,7 @@ class TestSpecIdAllocation(unittest.TestCase):
 
             def make_chart() -> None:
                 r = subprocess.run(
-                    [sys.executable, str(FLOWCTL_PY), "chart", "create",
+                    [*FLOWCTL_CMD, "chart", "create",
                      "--title", "Concurrent Chart",
                      "--outcome", "Outcome", "--json"],
                     cwd=str(main), capture_output=True, text=True, check=False,

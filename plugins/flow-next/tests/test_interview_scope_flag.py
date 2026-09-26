@@ -36,20 +36,19 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
-FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-refine"
 
 
 def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         capture_output=True,
         text=True,
         input=stdin,

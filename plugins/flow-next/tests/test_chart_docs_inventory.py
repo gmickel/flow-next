@@ -16,6 +16,7 @@ import re
 import subprocess
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -24,7 +25,6 @@ DOCS = PLUGIN / "docs"
 SKILLS = PLUGIN / "skills"
 COMMANDS = PLUGIN / "commands"
 CODEX = PLUGIN / "codex"
-FLOWCTL_PY = PLUGIN / "scripts" / "flowctl.py"
 
 # Branch-disclosure refactor: chart prose that used to sit inline in SKILL.md /
 # workflow.md now lives in the mode reference that reaches it. Contracts are
@@ -357,7 +357,7 @@ class ChartRegistryCounts(unittest.TestCase):
 class ChartFlowctlDocsParity(unittest.TestCase):
     def test_help_subcommands_match_docs(self) -> None:
         proc = subprocess.run(
-            ["python3", str(FLOWCTL_PY), "chart", "--help"],
+            [*FLOWCTL_CMD, "chart", "--help"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

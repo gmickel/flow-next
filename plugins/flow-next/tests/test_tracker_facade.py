@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -2558,9 +2559,8 @@ class FacadeOuterClaim(unittest.TestCase):
         return spec["tracker"]["id"]
 
     def _relink_cli(self, root: Path) -> "subprocess.CompletedProcess":
-        flowctl_py = ROOT / "scripts" / "flowctl.py"
         return subprocess.run(
-            [sys.executable, str(flowctl_py), "sync", "set-tracker-id",
+            [*FLOWCTL_CMD, "sync", "set-tracker-id",
              SPEC_ID, self.NEW_UUID, "--json"],
             cwd=root, capture_output=True, text=True, check=False)
 

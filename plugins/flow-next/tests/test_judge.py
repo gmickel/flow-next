@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import Mock, patch
+from flowctl_test_support import FLOWCTL_CMD
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -257,7 +258,7 @@ class JudgeTests(unittest.TestCase):
                 with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as raised:
                     f.cmd_judge(args)
                 self.assertNotEqual(raised.exception.code, 0)
-            proc = subprocess.run([sys.executable, str(SCRIPTS / "flowctl.py"), "judge", "--preset", "bad", "--state-file", str(path)], capture_output=True, text=True)
+            proc = subprocess.run([*FLOWCTL_CMD, "judge", "--preset", "bad", "--state-file", str(path)], capture_output=True, text=True)
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("fork-gate", proc.stderr)
 

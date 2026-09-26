@@ -40,16 +40,15 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 AGENTS_DIR = PLUGIN_DIR / "agents"
-FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 FIXTURE_NO_CLAWPATCH = (
     HERE.parent / "fixtures" / "scout-without-clawpatch"
 )
@@ -85,7 +84,7 @@ def _run(
 ) -> subprocess.CompletedProcess:
     """Invoke `python flowctl.py <args>` against the given cwd."""
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         capture_output=True,
         text=True,
         timeout=30,

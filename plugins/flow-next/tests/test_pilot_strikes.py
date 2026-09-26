@@ -34,6 +34,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -63,7 +64,7 @@ ENTRY_B = {
 
 def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,
@@ -252,7 +253,7 @@ class PilotStrikesTestCase(unittest.TestCase):
         outside.mkdir()
         env = dict(os.environ, GIT_CEILING_DIRECTORIES=str(self.tmpdir))
         listing = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "pilot", "strikes", "list", "--json"],
+            [*FLOWCTL_CMD, "pilot", "strikes", "list", "--json"],
             cwd=str(outside), capture_output=True, text=True, env=env,
         )
         self.assertEqual(listing.returncode, 0, listing.stderr)
@@ -263,7 +264,7 @@ class PilotStrikesTestCase(unittest.TestCase):
         self.assertIn("not a git repository", payload["note"])
 
         clearing = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "pilot", "strikes", "clear",
+            [*FLOWCTL_CMD, "pilot", "strikes", "clear",
              "fn-1-alpha", "--json"],
             cwd=str(outside), capture_output=True, text=True, env=env,
         )

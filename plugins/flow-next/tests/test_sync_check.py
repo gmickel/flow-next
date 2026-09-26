@@ -35,6 +35,7 @@ from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -290,8 +291,7 @@ class SyncCheckTestCase(unittest.TestCase):
     def test_cli_inactive_exits_zero_silent(self) -> None:
         proc = subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "sync",
                 "check",
                 self.spec_id,
@@ -312,8 +312,7 @@ class SyncCheckTestCase(unittest.TestCase):
         self._enable_event("capture")
         proc = subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "sync",
                 "check",
                 self.spec_id,
@@ -335,8 +334,7 @@ class SyncCheckTestCase(unittest.TestCase):
         self._enable_event("capture")
         subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "sync",
                 "receipt",
                 self.spec_id,
@@ -355,8 +353,7 @@ class SyncCheckTestCase(unittest.TestCase):
         )
         proc = subprocess.run(
             [
-                sys.executable,
-                str(FLOWCTL_PY),
+                *FLOWCTL_CMD,
                 "sync",
                 "check",
                 self.spec_id,

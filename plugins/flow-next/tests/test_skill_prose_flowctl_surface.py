@@ -16,13 +16,12 @@ and sync-codex.sh carries its own guards.
 
 import re
 import subprocess
-import sys
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILLS_DIR = REPO_ROOT / "plugins" / "flow-next" / "skills"
-FLOWCTL_PY = REPO_ROOT / "plugins" / "flow-next" / "scripts" / "flowctl.py"
 
 # `$FLOWCTL <token>` / `"$FLOWCTL" <token>` / `${FLOWCTL} <token>`.
 # The token must start with a lowercase letter, so flags (`--help`) never
@@ -36,7 +35,7 @@ _INVOCATION = re.compile(
 def registered_subcommands() -> frozenset[str]:
     """The real top-level subcommand set, from flowctl's own argparse help."""
     result = subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), "--help"],
+        [*FLOWCTL_CMD, "--help"],
         capture_output=True,
         text=True,
         timeout=60,

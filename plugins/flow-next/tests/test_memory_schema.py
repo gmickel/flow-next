@@ -45,6 +45,7 @@ from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from typing import Any
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -53,20 +54,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import flowctl  # noqa: E402  (path-injected import)
 
 
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
-
-
 def _init_repo(tmp: Path) -> Path:
     subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "init", "--json"],
+        [*FLOWCTL_CMD, "init", "--json"],
         cwd=tmp,
         stdout=subprocess.DEVNULL,
     )
     subprocess.check_call(
         [
-            sys.executable,
-            str(FLOWCTL_PY),
+            *FLOWCTL_CMD,
             "config",
             "set",
             "memory.enabled",
@@ -77,7 +73,7 @@ def _init_repo(tmp: Path) -> Path:
         stdout=subprocess.DEVNULL,
     )
     subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "memory", "init", "--json"],
+        [*FLOWCTL_CMD, "memory", "init", "--json"],
         cwd=tmp,
         stdout=subprocess.DEVNULL,
     )
@@ -85,7 +81,7 @@ def _init_repo(tmp: Path) -> Path:
 
 
 def _run_add(cwd: Path, *args: str) -> dict[str, Any]:
-    cmd = [sys.executable, str(FLOWCTL_PY), "memory", "add", *args, "--json"]
+    cmd = [*FLOWCTL_CMD, "memory", "add", *args, "--json"]
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -102,7 +98,7 @@ def _run_add(cwd: Path, *args: str) -> dict[str, Any]:
 
 
 def _run_list(cwd: Path) -> dict[str, Any]:
-    cmd = [sys.executable, str(FLOWCTL_PY), "memory", "list", "--json"]
+    cmd = [*FLOWCTL_CMD, "memory", "list", "--json"]
     proc = subprocess.run(
         cmd,
         cwd=cwd,

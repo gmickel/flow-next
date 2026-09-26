@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -34,7 +35,7 @@ spec.loader.exec_module(flowctl)
 
 def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,

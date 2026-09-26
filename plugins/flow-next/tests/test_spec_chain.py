@@ -22,6 +22,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from flowctl_test_support import FLOWCTL_CMD
 
 HERE = Path(__file__).resolve()
 FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
@@ -56,7 +57,7 @@ class ChainCliTestCase(unittest.TestCase):
     # ---- flowctl ----
     def flowctl(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args, "--json"],
+            [*FLOWCTL_CMD, *args, "--json"],
             cwd=self.repo, capture_output=True, text=True,
             # Inherit PATH: a fixed POSIX PATH finds no git.exe on Windows, and the chain
             # predicate then reports every remote read as failed (CI on #433).

@@ -38,6 +38,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Optional
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -256,7 +257,7 @@ class AnchorRepoTestCase(unittest.TestCase):
     def _flowctl(self, *args: str) -> "subprocess.CompletedProcess[str]":
         """Run the production CLI wire form (exactly what the worker runs)."""
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY)] + list(args),
+            [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,
@@ -510,7 +511,7 @@ class ResolutionTest(unittest.TestCase):
 
     def _flowctl(self, *args: str) -> "subprocess.CompletedProcess[str]":
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY)] + list(args),
+            [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,

@@ -27,14 +27,11 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
-
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+from flowctl_test_support import FLOWCTL_CMD
 
 
 def _init_repo(tmp: Path) -> Path:
@@ -45,7 +42,7 @@ def _init_repo(tmp: Path) -> Path:
         ["memory", "init", "--json"],
     ):
         subprocess.check_call(
-            [sys.executable, str(FLOWCTL_PY), *cmd],
+            [*FLOWCTL_CMD, *cmd],
             cwd=tmp,
             stdout=subprocess.DEVNULL,
         )
@@ -57,7 +54,7 @@ def _run(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
 
     On an expected non-zero exit, returns {"_stdout": ..., "_stderr": ...}.
     """
-    cmd = [sys.executable, str(FLOWCTL_PY), *args]
+    cmd = [*FLOWCTL_CMD, *args]
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -284,8 +281,7 @@ class TestMemoryUpsert(unittest.TestCase):
         for expected_verb in ("Created", "Updated"):
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(FLOWCTL_PY),
+                    *FLOWCTL_CMD,
                     "memory",
                     "upsert",
                     "--track",
@@ -316,8 +312,7 @@ class TestMemoryUpsert(unittest.TestCase):
         def _spawn() -> subprocess.Popen:
             return subprocess.Popen(
                 [
-                    sys.executable,
-                    str(FLOWCTL_PY),
+                    *FLOWCTL_CMD,
                     "memory",
                     "upsert",
                     "--track",

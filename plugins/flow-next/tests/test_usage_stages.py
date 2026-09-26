@@ -9,17 +9,14 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 import unittest
 from pathlib import Path
-
-HERE = Path(__file__).resolve()
-FLOWCTL = HERE.parent.parent / "scripts" / "flowctl.py"
+from flowctl_test_support import FLOWCTL_CMD
 
 
 def run_flowctl(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL), *args],
+        [*FLOWCTL_CMD, *args],
         capture_output=True,
         text=True,
         encoding="utf-8",

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from flowctl_test_support import FLOWCTL_CMD
 
 PLUGIN = Path(__file__).resolve().parents[1]
 WORKFLOWS = [
@@ -43,7 +44,7 @@ class QaWriterShellTest(unittest.TestCase):
                                        QA_FINDINGS='[]', OPEN_P0P1='[]')
                             if value is not None:
                                 env['RID_COVERAGE'] = value
-                            subprocess.run([sys.executable, str(PLUGIN / 'scripts/flowctl.py'), 'init'],
+                            subprocess.run([*FLOWCTL_CMD, 'init'],
                                            cwd=root, env=env, check=True, capture_output=True)
                             result = subprocess.run([shell, '-c', 'set -e\n' + block], cwd=root,
                                                     env=env, capture_output=True, text=True)
