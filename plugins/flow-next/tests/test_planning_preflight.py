@@ -98,9 +98,10 @@ class PlanningPreflight(unittest.TestCase):
         skill = Path(__file__).resolve().parents[1] / "skills/flow-next-refine/SKILL.md"
         fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", skill.read_text(encoding="utf-8"), re.S)
                      if "# One preflight bundle" in f)
-        fake = self.tmpdir / "preflight"
-        fake.write_text('#!/bin/sh\ncat "$PREFLIGHT_PAYLOAD"\n')
-        fake.chmod(0o755)
+        # FLOWCTL=bash turns the fence's `"$FLOWCTL" preflight --json` into
+        # `bash preflight`, a script in cwd: no exec bit or shebang, which Git
+        # Bash on Windows does not honor for a bare script path.
+        (self.tmpdir / "preflight").write_text('cat "$PREFLIGHT_PAYLOAD"\n')
         for status, forced, expected in (("ok", "", "0:0"), ("error", "", "1:1"),
                                          ("error", "off", "0:0")):
             payload = {"probes": {
@@ -110,12 +111,13 @@ class PlanningPreflight(unittest.TestCase):
             }}
             path = self._write("preflight.json", json.dumps(payload))
             # POSIX paths: bash on Windows mangles backslash paths in the fence.
-            env = {**os.environ, "FLOWCTL": fake.as_posix(),
+            env = {**os.environ, "FLOWCTL": Path(bash).as_posix(),
                    "PREFLIGHT_PAYLOAD": Path(path).as_posix(),
                    "TMPDIR": self.tmpdir.as_posix(), "DOC_AWARE_FORCE": forced,
                    "STRATEGY_AWARE_FORCE": forced}
             run = subprocess.run([bash, "-c", fence + '\nprintf "%s:%s" "$DOC_AWARE" "$STRATEGY_AWARE"'],
-                                 env=env, capture_output=True, text=True)
+                                 env=env, capture_output=True, text=True,
+                                 cwd=self.tmpdir)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertTrue(run.stdout.endswith(expected), run.stdout)
 
