@@ -28,6 +28,7 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
          comment_file: Optional[str] = None,
          pr_url: Optional[str] = None,
          status_only: bool = False,
+         overwrite_diverged: bool = False,
          execute: Execute = default_execute):
     """Compose one facade op. Returns data dict or TrackerError — never raises."""
     flow_dir = Path(flow_dir)
@@ -35,7 +36,8 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
         op, flow_file=flow_file, body_file=body_file,
         comments_file=comments_file, source_body_file=source_body_file,
         comment_file=comment_file, pr_url=pr_url,
-        event=event, status_only=status_only)
+        event=event, status_only=status_only,
+        overwrite_diverged=overwrite_diverged)
     if bad:
         return bad
 
@@ -49,7 +51,7 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
                 flow_dir, spec_id, flow_file=flow_file or "",
                 body_file=body_file or "", event=event,
                 comment_file=comment_file, status_only=status_only,
-                execute=execute)
+                overwrite_diverged=overwrite_diverged, execute=execute)
         if op == "pull":
             return op_pull(
                 flow_dir, spec_id, flow_file=flow_file or "",
@@ -104,6 +106,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
         comment_file: Optional[str] = None,
         pr_url: Optional[str] = None,
         status_only: bool = False,
+        overwrite_diverged: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
     config = read_config(flow_dir)
@@ -127,6 +130,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
                source_body_file=source_body_file,
                comment_file=comment_file, pr_url=pr_url,
                status_only=status_only,
+               overwrite_diverged=overwrite_diverged,
                execute=execute)
     if isinstance(out, TrackerError):
         if out.cls is ErrorClass.INACTIVE:

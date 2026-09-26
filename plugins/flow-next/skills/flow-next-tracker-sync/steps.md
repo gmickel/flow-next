@@ -201,6 +201,13 @@ Branch only on the envelope:
 | `transport` | preserve state and report; retry only when explicitly allowed |
 | `external_action_required` | perform the named MCP action if authorized, then resume with `persist-external`; otherwise defer |
 
+A push `conflict` with subtype `tracker_diverged` means someone edited the
+tracker body since the last sync. In an attended run, ask once: reconcile
+(recommended, merges both sides), overwrite the tracker body (rerun the same
+push with `--overwrite-diverged`), or leave it. Under any autonomy marker (the
+gate above sets `RALPH=1` for all of them, `flow --auto` included), never
+overwrite; defer for a human.
+
 Recovery routing is agentic because the same class can imply a user choice,
 MCP continuation, local correction, or deferral. The error message is
 diagnostic prose, never a routing API.

@@ -285,8 +285,10 @@ does not carry the URL.
 
 A body-writing `push` on a linked spec compares the current tracker body with
 its recorded tracker merge base. Divergence returns `conflict` with subtype
-`tracker_diverged` and writes nothing; run reconcile to merge the edits. A first
-push without a recorded base retains its existing behavior.
+`tracker_diverged` and writes nothing; run reconcile to merge the edits. An
+attended run asks first and can overwrite the tracker body with
+`--overwrite-diverged` once a human confirms; unattended runs never overwrite.
+A first push without a recorded base retains its existing behavior.
 
 Work's `firstClaim` caller uses `push --status-only`: an already-linked issue
 receives status only, preserving tracker-side body and relation co-edits. An

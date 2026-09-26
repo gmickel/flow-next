@@ -53,6 +53,7 @@ No new subsystem is introduced. Where flowctl changes a command's behavior, the 
 - **R13:** Worker summary and evidence handover files are always task-unique paths chosen by the conductor, on every route (standard, host-deferred, rolling); the fixed `/tmp/summary.md` and `/tmp/evidence.json` fallbacks are removed from the worker's standard path. Errors: path not provided (direct manual worker run) → the worker picks a task-unique path under `.flow/tmp/` and reports it. [paraphrase]
 - **R14:** Review fan-out records the round's identity before dispatch, and finalize/recovery reads the per-draw result files each draw already publishes, so a round whose host call is killed can still finalize the draws that completed. Regression test: a dispatch interrupted after one draw completes can be finalized for that draw. Errors: zero completed draws → the existing single-refund path. [paraphrase]
 - **R15:** A body-writing tracker `push` on a linked spec returns a `conflict` with subtype `tracker_diverged` (hint: run reconcile) and writes nothing when the tracker's current body differs from the recorded tracker merge base; with no divergence it behaves as today. `push --status-only` never writes the body and is unaffected. The facade matrix test's push cell uses a remote body equal to the base, and a new cell asserts the conflict. Errors: no recorded base (first push) → today's behavior. [paraphrase]
+- **R15a:** When a push returns `tracker_diverged`, an attended run asks the human whether to reconcile, overwrite or leave it; overwrite reruns the same body-writing push with `--overwrite-diverged`, which skips only the divergence check. Unattended runs never overwrite. Errors: `--overwrite-diverged` with any op other than a body-writing push → `invalid_input`. [user] "surely the thing can ask the human for confirmation?"
 
 ## Boundaries
 
@@ -78,10 +79,6 @@ R8 guard convergence: commands containing grouping syntax (parentheses, backtick
 - "Receipts are the portable product boundary": R2 makes receipt values match the recorded review without changing fields.
 - Ralph autonomous mode track (`flow --auto` + land as the default path): R5-R7, R9, R12, R13 remove wrong outcomes on that path.
 
-## Parked unknowns
-
-- Whether tracker `push` is ever meant to overwrite a diverged tracker body (the docs describe reconcile's three-way merge but not push's intent). Resolved by Gordon's call before R15 is implemented; R15 as written assumes it is not.
-
 ## Requirement coverage
 
 | R-ID | Task |
@@ -101,3 +98,4 @@ R8 guard convergence: commands containing grouping syntax (parentheses, backtick
 | R13 | fn-255.M (TBD - populate via /flow-next:plan) |
 | R14 | fn-255.M (TBD - populate via /flow-next:plan) |
 | R15 | fn-255.M (TBD - populate via /flow-next:plan) |
+| R15a | fn-255.M (TBD - populate via /flow-next:plan) |
