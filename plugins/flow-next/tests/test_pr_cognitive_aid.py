@@ -820,7 +820,9 @@ class MakePrIntegrationTests(unittest.TestCase):
             "[create-and-finalize.md](create-and-finalize.md)", artifact_reference
         )
         self.assertNotIn("skill: flow-next-tracker-sync", artifact_reference)
-        self.assertIn('PR_URL=""', finalize)
+        self.assertIn("make-pr-create.sh", finalize)
+        create_script = (REPO_ROOT / "plugins/flow-next/scripts/make-pr-create.sh").read_text()
+        self.assertIn('PR_URL=""', create_script)
         self.assertIn("--pr-url \"$PR_URL\"", finalize)
         self.assertIn("--op reconcile", finalize)
         self.assertIn("sync check", finalize)

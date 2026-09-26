@@ -17,6 +17,7 @@ Run:
 from __future__ import annotations
 
 import os
+import json
 import re
 import shutil
 import subprocess
@@ -192,42 +193,72 @@ class RefusalInversion(unittest.TestCase):
                 self.assertIn(marker, text)
 
     def _hard_guard_fence(self) -> str:
-        guards = _section(_read(AUTO_MD), "## Hard guards", "## Arguments")
-        return _fence_from(guards, 'if [[ -n "${FLOW_RALPH:-}"')
+        return _fence_from(_read(AUTO_MD), '# fence:pilot-guards')
 
-    def test_auto_hard_guard_is_ralph_only(self) -> None:
+    def test_auto_consumes_snapshot_guards(self) -> None:
         fence = self._hard_guard_fence()
-        self.assertIn("FLOW_RALPH", fence)
-        self.assertIn("REVIEW_RECEIPT_PATH", fence)
-        self.assertIn(RALPH_REFUSAL_VERDICT, fence, "pilot's exact Ralph terminal line survives")
-        self.assertNotIn("FLOW_AUTONOMOUS", fence)
-        self.assertNotIn("mode:autonomous", fence)
+        self.assertIn('.guards.nested', fence)
+        self.assertIn('.guards.dirty', fence)
+        self.assertIn(RALPH_REFUSAL_VERDICT, fence)
 
     @_POSIX_BASH
-    @_GIT
-    def test_hard_guard_fence_refuses_ralph_and_admits_autonomous(self) -> None:
-        # Executable: the two guards run against a clean throwaway repo.
-        # Ralph markers -> exit 1 with the verdict as the last stdout line;
-        # FLOW_AUTONOMOUS alone -> nothing printed, exit 0.
-        fence = self._hard_guard_fence()
-        with tempfile.TemporaryDirectory() as td:
-            subprocess.run(["git", "init", "-q", td], check=True, capture_output=True)
-            base = {k: v for k, v in os.environ.items()
-                    if k not in ("FLOW_RALPH", "REVIEW_RECEIPT_PATH", "FLOW_AUTONOMOUS")}
-            script = f'REPO_ROOT="{td}"\n{fence}\nprintf "PASSED"'
-            cases = (
-                ({"FLOW_RALPH": "1"}, 1, RALPH_REFUSAL_VERDICT),
-                ({"REVIEW_RECEIPT_PATH": "/tmp/x.json"}, 1, RALPH_REFUSAL_VERDICT),
-                ({"FLOW_AUTONOMOUS": "1"}, 0, "PASSED"),
-                ({}, 0, "PASSED"),
-            )
-            for extra, rc, last_line in cases:
-                with self.subTest(env=extra):
-                    res = subprocess.run(
-                        ["bash", "-c", script], capture_output=True, text=True, env={**base, **extra}
-                    )
-                    self.assertEqual(res.returncode, rc, res.stderr)
-                    self.assertEqual(res.stdout.rstrip("\n").splitlines()[-1], last_line)
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_snapshot_guard_consumer_stops_before_dispatch(self) -> None:
+        for nested, dirty, rc, expected in (
+            (True, [], 1, RALPH_REFUSAL_VERDICT),
+            (False, [' M code.py'], 0, 'dirty working tree at tick start'),
+            (False, [], 0, 'PASSED'),
+        ):
+            result = subprocess.run(['bash', '-c', self._hard_guard_fence() + '\nprintf PASSED'],
+                                    env={**os.environ, 'PILOT_SNAPSHOT': json.dumps({'guards': {'nested': nested, 'dirty': dirty}})},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, rc)
+            self.assertIn(expected, result.stdout)
+            if nested or dirty:
+                self.assertNotIn('PASSED', result.stdout)
+
+
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_snapshot_fences_fail_closed_in_a_fresh_shell(self) -> None:
+        # Shell variables do not survive between tool calls: a fence run in a
+        # fresh shell reads the snapshot file and stops when it is absent.
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            script = self._hard_guard_fence() + "\nprintf PASSED"
+            missing = subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
+                                     capture_output=True, text=True)
+            self.assertEqual(missing.returncode, 1)
+            self.assertIn("pilot snapshot missing or unreadable", missing.stdout)
+            self.assertNotIn("PASSED", missing.stdout)
+            snap = Path(tmp) / ".flow" / "tmp" / "pilot-snapshot.json"
+            snap.parent.mkdir(parents=True)
+            snap.write_text(json.dumps({"guards": {"nested": False, "dirty": []}}))
+            present = subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
+                                     capture_output=True, text=True)
+            self.assertEqual(present.returncode, 0, present.stderr)
+            self.assertIn("PASSED", present.stdout)
+
+
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_snapshot_write_failure_stops(self) -> None:
+        fence = _fence_from(_read(AUTO_MD), "SNAPSHOT_ARGS=()")
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            (Path(tmp) / ".flow").mkdir()
+            (Path(tmp) / ".flow" / "tmp").write_text("not a directory")
+            stub = Path(tmp) / "flowctl-stub"
+            stub.write_text('#!/usr/bin/env bash\nprintf \'{"guards":{}}\'\n')
+            stub.chmod(0o755)
+            result = subprocess.run(["bash", "-c", fence + "\nprintf PASSED"], cwd=tmp,
+                                    env={**env, "FLOWCTL": str(stub), "PILOT_SPEC": ""},
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("NEEDS_HUMAN", result.stdout)
+        self.assertNotIn("PASSED", result.stdout)
 
 
 class ArgumentParseFence(unittest.TestCase):

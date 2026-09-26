@@ -93,12 +93,6 @@ def _review_text(review_type: str, backend: str) -> str:
 """
 
 
-def _qa_review_renderer_script() -> str:
-    source = QA_WORKFLOW.read_text(encoding="utf-8")
-    marker = '$PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<\'PY\'\n'
-    return source.split(marker, 1)[1].split("\nPY\n", 1)[0]
-
-
 class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -518,74 +512,30 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        renderer = _qa_review_renderer_script()
         current_finding = {
-            "id": "qa-login",
-            "severity": "P1",
-            "confidence": 100,
-            "classification": "introduced",
-            "reason": "Login is broken.",
+            "id": "qa-login", "severity": "P1", "confidence": 100,
+            "classification": "introduced", "reason": "Login is broken.",
             "file": "login",
         }
 
-        def render(outcome: str, findings: list[dict]) -> str:
-            output_path = self.repo / f"qa-{outcome}.md"
-            env = {
-                **os.environ,
-                "QA_TYPE": "qa_verdict",
-                "QA_ID": "fn-136",
-                "QA_MODE": "interactive",
-                "QA_OUTCOME": outcome,
-                "QA_VERDICT": (
-                    "SHIP" if outcome in {"SHIP", "NA"} else "NEEDS_WORK"
-                ),
-                "QA_FINDINGS": json.dumps(findings),
-            }
+        def render(outcome: str, findings: list[dict]) -> dict:
+            output_path = self.repo / f"qa-{outcome}.json"
+            output_path.write_bytes(prior_path.read_bytes())
+            input_path = self.repo / "qa-payload.json"
+            input_path.write_text(json.dumps({
+                "id": "fn-136", "mode": "interactive", "qa_outcome": outcome,
+                "findings": findings,
+            }), encoding="utf-8")
             subprocess.run(
-                [
-                    sys.executable,
-                    "-",
-                    str(output_path),
-                    str(prior_path),
-                ],
-                input=renderer,
-                text=True,
-                encoding="utf-8",
-                env=env,
-                check=True,
+                [sys.executable, str(FLOWCTL_PATH), "qa", "receipt",
+                 "--from-json", str(input_path), "--receipt", str(output_path), "--json"],
+                cwd=self.repo, check=True, capture_output=True, text=True,
             )
-            return output_path.read_text(encoding="utf-8")
+            return json.loads(output_path.read_text(encoding="utf-8"))["findings"]
 
-        repeated = FLOWCTL.parse_review_findings(
-            render("NEEDS_WORK", [current_finding]),
-            source_receipt_id="qa-workflow-2",
-            review_kind="qa",
-            backend="interactive",
-            round_number=2,
-            head_sha=HEAD_SHA,
-            supersedes_receipt_id="qa-workflow-1",
-            prior_findings=first,
-        )
-        blocked = FLOWCTL.parse_review_findings(
-            render("BLOCKED", []),
-            source_receipt_id="qa-workflow-blocked",
-            review_kind="qa",
-            backend="interactive",
-            round_number=2,
-            head_sha=HEAD_SHA,
-            supersedes_receipt_id="qa-workflow-1",
-            prior_findings=first,
-        )
-        resolved = FLOWCTL.parse_review_findings(
-            render("SHIP", []),
-            source_receipt_id="qa-workflow-resolved",
-            review_kind="qa",
-            backend="interactive",
-            round_number=2,
-            head_sha=HEAD_SHA,
-            supersedes_receipt_id="qa-workflow-1",
-            prior_findings=first,
-        )
+        repeated = render("NEEDS_WORK", [current_finding])
+        blocked = render("BLOCKED", [])
+        resolved = render("SHIP", [])
         self.assertEqual(len(repeated["items"]), 1)
         self.assertEqual(repeated["items"][0]["id"], first["items"][0]["id"])
         self.assertEqual(blocked["items"][0]["status"], "not_fixed")
@@ -935,8 +885,8 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertGreaterEqual(
             completion_rp.count('REVIEW_HEAD_SHA="$(git rev-parse HEAD)"'), 2
         )
-        self.assertIn('QA_FINDINGS="${QA_FINDINGS:-[]}"', qa)
-        self.assertIn('RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"', qa)
+        self.assertIn('qa receipt --from-json', qa)
+        self.assertIn('qa receipt --skeleton', qa)
 
 
 class ReviewFindingsCurrentnessTest(unittest.TestCase):

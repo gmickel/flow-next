@@ -121,20 +121,69 @@ def _attach(req: Request, headers: dict[str, str], cred: Optional[Credential]) -
     # the Linear API key off a third-party presigned asset host.
 
 
+# A response is drained while the host lock is held; callers own only its
+# in-memory body, so concurrent requests cannot interleave on one socket.
+_CONNECTIONS: dict = {}
+_CONNECTIONS_LOCK = threading.Lock()
+
+
+class _KeepAliveHandler(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
+    def __init__(self, verify_tls: bool) -> None:
+        super().__init__()
+        self.verify_tls = verify_tls
+
+    def https_open(self, req):
+        return self.do_open(http.client.HTTPSConnection, req)
+
+    def do_open(self, connection_type, req):
+        import io
+        import ssl
+        import urllib.response
+
+        key = (connection_type, req.host, req._tunnel_host, self.verify_tls)
+        with _CONNECTIONS_LOCK:
+            if key not in _CONNECTIONS:
+                options = {}
+                if connection_type is http.client.HTTPSConnection:
+                    options["context"] = (ssl.create_default_context() if self.verify_tls
+                                          else ssl._create_unverified_context())  # noqa: S323
+                conn = connection_type(req.host, timeout=req.timeout, **options)
+                _CONNECTIONS[key] = (conn, threading.Lock())
+            conn, lock = _CONNECTIONS[key]
+        with lock:
+            headers = dict(req.unredirected_hdrs)
+            headers.update(req.headers)
+            headers.pop("Connection", None)
+            if req._tunnel_host:
+                proxy_headers = {}
+                if "Proxy-authorization" in headers:
+                    proxy_headers["Proxy-Authorization"] = headers.pop("Proxy-authorization")
+                if conn.sock is None:
+                    conn.set_tunnel(req._tunnel_host, headers=proxy_headers)
+            conn.timeout = req.timeout
+            if conn.sock is not None:
+                conn.sock.settimeout(req.timeout)
+            try:
+                conn.request(req.get_method(), req.selector, req.data, headers,
+                             encode_chunked=req.has_header("Transfer-encoding"))
+                response = conn.getresponse()
+                body = response.read()
+                result = urllib.response.addinfourl(
+                    io.BytesIO(body), response.headers, req.full_url, response.status)
+                result.msg = response.reason
+                return result
+            except Exception:
+                conn.close()
+                raise
+
+
 def _http(req: Request, cred: Optional[Credential], verify_tls: bool) -> Result:
     headers = dict(req.headers)
     _attach(req, headers, cred)
     started = time.monotonic()
     authenticated = (req.credential_policy is CredentialPolicy.PROVIDER_AUTH
                      and cred is not None)
-    handlers: list = [_GuardedRedirect(authenticated)]
-    if not verify_tls:
-        import ssl
-
-        # `OpenerDirector.open()` takes no `context` kwarg - it must be installed
-        # on an HTTPSHandler. Passing it to open() raises TypeError, which is
-        # exactly how the opt-out was broken.
-        handlers.append(urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))  # noqa: S323
+    handlers: list = [_GuardedRedirect(authenticated), _KeepAliveHandler(verify_tls)]
     try:
         # Request construction is INSIDE the try: a malformed persisted URL or a
         # non-str target raises here, and the contract says this function returns

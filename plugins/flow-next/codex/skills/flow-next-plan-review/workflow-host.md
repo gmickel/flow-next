@@ -106,10 +106,20 @@ the host cannot enforce it, say so in the receipt. The dispatch prompt additiona
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
-Give it the repo-relative PATHS to the current spec and every task spec — not
+Render the dispatch file with the shared backend builder:
+
+```bash
+"$FLOWCTL" review-prompt plan "$SPEC_ID" --receipt "$RECEIPT_PATH" \
+  --out "${TMPDIR:-/tmp}/flow-plan-review-${SPEC_ID}.md" --json || exit $?
+```
+
+Dispatch the generated prompt verbatim; it already supplies paths, rubric and
+prior-finding grammar. Do not reconstruct its contents by hand.
+
+The generated prompt carries repo-relative PATHS to the current spec and every task spec — not
 their contents (the subagent has the same checkout you do, and a plan
 review is judged against the spec on disk, so a pasted copy can only go stale).
-On re-review give it the receipt's
+On re-review the builder supplies the receipt's
 structured `findings.items` (ordinal, severity, classification, status, title,
 and file:line) rather than the legacy review prose. Include focus areas and the
 plan-review rubric from
@@ -169,7 +179,7 @@ journaled payload (never re-derive it after `record`):
 RECORD_JSON="$("$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan \
   --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
   --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
-  --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --json)"
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --attach --json)"
 RECORD_EXIT=$?
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   printf '%s\n' "$RECORD_JSON"
@@ -177,13 +187,6 @@ if [[ "$RECORD_EXIT" -ne 0 ]]; then
 fi
 # Only the fields the next step reads; the full ledger stays in flowctl.
 printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-# A refunded (no-verdict) record journals nothing attachable — record already
-# completed its own bookkeeping; attach only a delivered verdict.
-if [[ -n "$VERDICT" ]]; then
-  "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
-    --receipt "$RECEIPT_PATH" \
-    --json
-fi
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   echo "ESCALATE: reviewer requested human review" >&2

@@ -1232,6 +1232,97 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
+    def test_finalize_derives_scope_from_rid(self) -> None:
+        code, dispatch, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        merged = self.root / "merged.md"
+        merged.write_text(_empty_merged_review())
+        code, out, err = self._run("codex", "impl-review-fanout-finalize",
+                                   "--rid", dispatch["rid"], "--merged-file", str(merged), "--json")
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(json.loads(out)["id"], self.task_id)
+        self.assertFalse(json.loads(out)["standalone"])
+
+    def test_merge_plan_collapses_and_counts_draw_survivors(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            kwargs["resolution_out"]["model"] = "test"
+            return _merged_review(f"Bug from {axis}", verdict="SHIP" if axis == "integration" else "NEEDS_WORK"), f"sess-{axis}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["integration:1"], "collapse": {"correctness:1": "integration:1"}}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        self.assertEqual(code, 0, out + err)
+        result = json.loads(out)
+        self.assertEqual(result["verdict"], "NEEDS_WORK")
+        self.assertEqual(result["needs_work_survivors"], 1)
+        self.assertIn("Bug from integration", result["review"])
+        self.assertNotIn("Bug from correctness", result["review"])
+
+    def test_merge_plan_zero_needs_work_survivors_keeps_ship_remainder(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            text = _merged_review(f"Finding {axis}", verdict="SHIP" if axis == "integration" else "NEEDS_WORK")
+            if axis == "integration":
+                text = text.replace("**Classification**: introduced", "**Classification**: pre_existing")
+            return text, f"sess-{axis}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["integration:1"]}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        result = json.loads(out)
+        self.assertEqual(result["verdict"], "NEEDS_HUMAN", out + err)
+        self.assertEqual(result["needs_work_survivors"], 0)
+        self.assertEqual(result["pre_existing_count"], 1)
+
+    def test_merge_plan_pre_existing_from_needs_work_draw_is_not_a_survivor(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            text = _merged_review(f"Finding {axis}", verdict="NEEDS_WORK" if axis == "correctness" else "SHIP")
+            if axis == "correctness":
+                text = text.replace("**Classification**: introduced", "**Classification**: pre_existing")
+            return text, f"sess-{axis}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["correctness:1"]}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        result = json.loads(out)
+        self.assertEqual(result["needs_work_survivors"], 0, out + err)
+        self.assertEqual(result["verdict"], "NEEDS_HUMAN")
+        self.assertIn("Finding correctness", result["review"])
+
+    def test_merge_plan_rejects_introduced_collapsed_into_pre_existing(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            text = _merged_review(f"Finding {axis}", verdict="SHIP" if axis == "integration" else "NEEDS_WORK")
+            if axis == "integration":
+                text = text.replace("**Classification**: introduced", "**Classification**: pre_existing")
+            return text, f"sess-{axis}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["integration:1"], "collapse": {"correctness:1": "integration:1"}}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("correctness:1", out + err)
+        self.assertEqual(self._pending(), 1)
+
+    def test_merge_plan_reports_all_missing_refs_without_consuming(self) -> None:
+        def fake(prompt, **kwargs):
+            return _empty_merged_review(), "sess-test", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["correctness:99", "integration:42"]}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        self.assertNotEqual(code, 0)
+        self.assertIn("correctness:99", out + err)
+        self.assertIn("integration:42", out + err)
+        self.assertEqual(self._pending(), 1)
+
     def test_task_mode_defaults_receipt_path(self) -> None:
         """PR #392 sol review (R11/R12): task mode always has a receipt — a
         dispatch + finalize without --receipt publishes to the route default."""
@@ -2025,7 +2116,7 @@ class TestReviewFanout(unittest.TestCase):
             "--json",
             fake=self._ship_exec(calls),
             extra_patches=(
-                mock.patch.object(flowctl.secrets, "token_hex", return_value=collision_rid),
+                mock.patch("secrets.token_hex", return_value=collision_rid),
             ),
         )
         self.assertNotEqual(code, 0)
@@ -2053,9 +2144,8 @@ class TestReviewFanout(unittest.TestCase):
             "--json",
             fake=self._ship_exec(calls),
             extra_patches=(
-                mock.patch.object(
-                    flowctl.uuid,
-                    "uuid4",
+                mock.patch(
+                    "uuid.uuid4",
                     return_value=mock.Mock(hex=collision_rid),
                 ),
             ),

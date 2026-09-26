@@ -793,9 +793,9 @@ PY_BRIEFING
   # FLOW_PR_CREATE_CMD interposition point (default `gh pr create`) AND the
   # URL-extraction hardening (PR_URL grep'd out of combined output, never
   # raw-assigned — stderr chatter used to corrupt `${PR_URL##*/}`).
-  CF_FILE="$PLUGIN_ROOT/skills/flow-next-make-pr/create-and-finalize.md"
+  CF_FILE="$PLUGIN_ROOT/scripts/make-pr-create.sh"
   CF_TEXT="$(cat "$CF_FILE" 2>/dev/null || true)"
-  assert_grep "T10" 'PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"' "$CF_TEXT" "create-and-finalize.md declares the FLOW_PR_CREATE_CMD seam with gh default"
+  assert_grep "T10" 'PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"' "$CF_TEXT" "make-pr-create.sh declares the FLOW_PR_CREATE_CMD seam with gh default"
   assert_grep "T10" "grep -Eo 'https://[^[:space:]]+/pull/[0-9]+'" "$CF_TEXT" "PR_URL is extracted from combined output, not raw-assigned"
 fi
 

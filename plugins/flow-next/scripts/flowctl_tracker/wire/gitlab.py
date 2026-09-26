@@ -123,10 +123,16 @@ def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Resul
 
 
 def update(config: dict, locator: dict, execute: Execute, *,
-           title: Optional[str], body: Optional[str]) -> Result:
-    parent = _require_parent(config, locator, execute)
+           title: Optional[str], body: Optional[str],
+           parent: Optional[dict] = None) -> Result:
+    # sync-body already read this parent inside its claimed transaction.
+    if parent is None:
+        parent = _require_parent(config, locator, execute)
     if isinstance(parent, TrackerError):
         return parent
+    identity_error = _check_durable("gitlab", locator, parent)
+    if identity_error:
+        return identity_error
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest

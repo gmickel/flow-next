@@ -125,11 +125,11 @@ is the agent's read in Phase 2, never a flowctl field.
 
 Union in the **tracker-only** promoted issues that have no flow spec - tickets a
 human promoted on the board but never `capture`/`interview`'d into a spec, invisible
-to `flowctl specs`. The inline tracker-sync wrapper supplies this half through
+to `flowctl specs`. Read this half directly through
 flowctl's deterministic tracker transport:
 
 ```text
-flow-next:flow-next-tracker-sync list-open mode:autonomous
+$FLOWCTL tracker wire list-open --json
 ```
 
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
@@ -159,8 +159,8 @@ surfaced and is waiting on a human; re-picking it every run is exactly the naggi
 - **Spec-backed** - scan the spec's `## Open Questions` for a
   `<!-- flow-next:question id=… status=open -->` anchor.
 - **Tracker-only** (no spec) - `list-open` returns issues, not comments. Before
-  deciding parked state, invoke `list-comments <tracker-id>` exactly once for
-  that candidate. It maps to the normalized `comment-list` wire read. Compare
+  deciding parked state, run `$FLOWCTL tracker wire comment-list --locator "$LOCATOR" --json` exactly once for
+  that candidate (`LOCATOR` as built in 1e below). It maps to the normalized `comment-list` wire read. Compare
   matching `flow-next:question` / `flow-next:answer` markers by stable `id` and
   immutable `created_at`: the subject is parked when its latest matching marker
   is a question, and answered when its latest matching marker is an answer.
@@ -190,23 +190,18 @@ edges come from **two** sources and feed **one** existing sorter:
   blocked, `to` = blocker):
 
   ```text
-  flow-next:flow-next-tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
+  $FLOWCTL tracker wire relation-list --locator "$LOCATOR" --json   # per tracker issue
   ```
 
-  **The `<tracker-id>` passed is the candidate's `listOpenIssues` normalized
-  `issue.identifier` (the display handle `<project>#<iid>` / `WOR-17` / `#123`), NOT the
-  opaque global `id`.** On GitLab the global id can't index the
-  `/projects/:id/issues/:iid` path - the adapter needs the `<project>#<iid>` the
-  identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
-  for every provider. On GitHub this read validates the issue and returns no
-  dependency edges: parent/sub-issue hierarchy is not blocked-by and never feeds
-  the sorter. (Spec-backed candidates pass the spec/tracker id,
-  which resolves to the stored `tracker.identifier`.)
+  **`LOCATOR` is JSON, never a bare id:** `{"durable":issue.id,"display":issue.identifier}`
+  from the candidate's `list-open` row (a spec-backed candidate uses its stored
+  `tracker.id` / `tracker.identifier`); the wire verb rejects a bare identifier. On
+  GitLab the adapter indexes `/projects/:id/issues/:iid` from the `<project>#<iid>`
+  the display half carries (gitlab.md § identity). On GitHub this read validates the
+  issue and returns no dependency edges: parent/sub-issue hierarchy is not
+  blocked-by and never feeds the sorter.
 
-  (The inline tracker-sync wrapper builds
-  `{"durable":issue.id,"display":issue.identifier}` and calls
-  `flowctl tracker wire relation-list --locator "$LOCATOR" --json`; see
-  tracker-sync `steps.md` Phase 7. Backlog mode never calls a tracker API
+  (Backlog mode never calls a tracker API
   directly. It is a **READ** - on the run's dispatch allowlist, never a
   merge/write. It no-ops when the bridge is inactive or the issue has no
   relations. A structured `subtype: truncated` error is a failed read, never a
@@ -433,13 +428,9 @@ it to `ask` (Phase 3) instead of advancing - even when it is otherwise workable.
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
-# Derived from the auto.md root snapshot, NOT a config get call. The
-# path is RECOMPUTED here (deterministic repo-hash key; vars don't survive fences).
-# Tolerate BOTH a JSON array (`["risky"]`) AND a scalar set via the CLI.
-# `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
-# which the array-only `.value[]?` would silently drop.
-PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
+GATE_CLASSES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '(.config.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end')"
 ```
 
 (Matching an item to a gate class is the agent's read of the item, like triage -
@@ -450,24 +441,7 @@ selected item belongs to one.)
 
 ## Deterministic, multi-tracker
 
-Backlog mode's tracker surface is **only** four inline tracker-sync wrappers -
-`list-open` (enumerate the promoted lane), `list-comments` (READ one issue's
-question rounds), `list-relations` (READ one issue's dep edges), and `question`
-(park a gap). Each wrapper makes one structured
-`flowctl tracker` call and handles only semantic content or structured recovery.
-All four are on the run's dispatch allowlist; `list-open` / `list-comments` /
-`list-relations` are read-only, `question` posts a comment. The run calls **no**
-tracker-specific API and
-**never** branches on tracker type; flowctl selects the active adapter from the
-resolved tracker configuration and returns the normalized envelope.
-
-The executable mapping is fixed:
-
-- `list-open` → `tracker wire list-open`;
-- `list-comments` → `tracker wire comment-list --locator <durable/display>`;
-- `list-relations` → `tracker wire relation-list --locator <durable/display>`;
-- `question` → `tracker wire question --locator <durable/display>` plus the four
-  stable identity flags and one secure body file.
+Backlog reads use `$FLOWCTL tracker wire list-open --json`, `comment-list --locator "$LOCATOR" --json`, and `relation-list --locator "$LOCATOR" --json` (`LOCATOR` = `{"durable":…,"display":…}` JSON) directly. Their existing envelopes and failure behavior are unchanged; flow never adds a tracker-specific API or branches on tracker type. Keep tracker-sync for `reconcile` and `question`, where semantic folding and question authoring remain host work.
 
 - **Ships on Linear, GitHub, GitLab + Jira** - the four adapters that implement
   `listOpenIssues` / `listIssueRelations` / the comment ops.

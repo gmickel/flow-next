@@ -127,7 +127,7 @@ path, and delete it after the command.
 
 | Operation | `flow-file` | `body-file` | `comments-file` | `source-body-file` | `comment-file` | `pr-url` |
 |---|---|---|---|---|---|---|
-| `push` | final Flow body | rendered tracker body | forbidden | forbidden | optional synthesized comment | forbidden |
+| `push` | optional (defaults to current spec) | optional (flowctl renders) | forbidden | forbidden | optional synthesized comment | forbidden |
 | `pull` | final agent-folded Flow body | exact tracker snapshot used for the fold | normalized comment snapshot | forbidden | forbidden | forbidden |
 | `reconcile` | final conflict-resolved Flow body | final tracker body | normalized comment snapshot | original tracker body used by the merge | forbidden | optional only for event `makePr` |
 | `comment` | forbidden | synthesized comment text | forbidden | forbidden | forbidden | forbidden |
@@ -150,17 +150,39 @@ written around the facade.
 
 ## 4. Body preparation
 
-For push, render the tracker body from the Flow spec without changing Flow.
+For push, invoke `tracker sync <spec> --op push --event <event>` directly.
+Flowctl reads the current spec and renders every section deterministically;
+`--status-only` also needs no content file. Explicit file inputs remain valid.
 
-For pull, compare the exact tracker snapshot with Flow and the stored base.
-Produce the final Flow body using
-[references/body-merge.md](references/body-merge.md). Pull never changes Flow
-task status.
+For pull or reconcile, first invoke:
 
-For reconcile, use the three-way merge reference. Automatic non-conflicting
-folds are acceptable. A true section conflict is retained as the body-merge
-judgment surface: show the section and both edits, then ask in interactive
-mode. Under Ralph or a fork, defer it.
+```bash
+$FLOWCTL tracker sync "$SPEC_ID" --op "$OP" --event "$EVENT" --prepare --json
+```
+
+Use `classification`, `tracker_body`, the paired `base`, and
+`genuine_comments` from that response. `files` holds mode-0600 snapshots:
+`flow_file`, `body_file`, `source_body_file`, `comments_file`, and `base_file`.
+The comment snapshot includes all comments for the facade's unchanged CAS check;
+only `genuine_comments` are candidates for the host's fold. Do not replace that
+snapshot with the filtered list. Snapshots are removed after the next facade
+operation for this spec, or swept once expired (one hour) on the next prepare.
+
+`noop`/echo and `flow-only` comparisons need no body judgment. With no genuine
+comments, use the unchanged Flow file for a noop pull; for reconcile's
+`flow-only` class call push without body inputs. A pull never pushes local
+changes. `tracker-only`, `both-changed`, and `no-base` use the three-way merge in
+[references/body-merge.md](references/body-merge.md) to author the final Flow
+fold and, for reconcile, the final tracker body. Keep the original snapshot
+files intact; put authored output in separate mode-0600 files. Apply the final
+Flow body locally before the facade call and pass the full original comment
+snapshot. Pull never changes Flow task status.
+
+A true section conflict remains host judgment: show the section and both edits,
+then ask in attended mode. Any autonomy marker (`FLOW_RALPH=1`,
+`REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1`, or
+`mode:autonomous`, including the calling stage's marker) or a fork uses
+`flowctl sync defer` instead.
 
 Flow-owned dependency marker blocks are excluded at the comparison boundary.
 The exact server readback becomes the tracker-side base after a successful

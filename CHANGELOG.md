@@ -8,6 +8,9 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Changed
 
+- **Skills hand flowctl their judgments and receive rendered artifacts.** New helpers write prospect artifacts and QA receipts, apply memory audit plans, render host review prompts and tracker bodies, and prepare tracker snapshots. Bulk task creation reports all invalid items together and accepts per-task source files and Touches. Existing explicit inputs remain supported.
+- **Workflow state takes fewer calls.** Pilot, planning and setup snapshots gather their mechanical checks together. Rolling admission reports capacity, dependency and file-overlap holds; contiguous task completion derives commit evidence from a range. Setup remembers declined optional questions. Make-pr and map run their shell plumbing from bundled scripts.
+
 - **Workers and skills read less output.** The worker anchor bundle carries the text memory index, only the glossary entries its task names, and short git status, cutting a typical bundle from about 160 KB to about 60 KB with no comprehension loss on the fn-83 eval. `flowctl show <spec> --json` no longer includes the `review_attempts` and `tracker` ledgers; read them with `flowctl review-rounds attempts` and `flowctl sync get-state`. `flowctl glossary list --match "<text>"` returns only the entries that text names. Review workflows print only the recorded fields they use, and the tracker-sync references drop steps the tracker facade already performs.
 - **Command shims are user-only.** Every `/flow-next:*` command carries `disable-model-invocation: true`, so the agent's skill listing shows each skill once; skills and agents invoke each other by skill id (`flow-next:flow-next-<name>`). Typed slash commands work as before.
 

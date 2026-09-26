@@ -78,14 +78,11 @@ class PlanDietTestCase(unittest.TestCase):
     def steps(self):
         return both_copies("flow-next-plan/steps.md")
 
-    def test_plan_exactly_one_config_get(self):
+    def test_plan_uses_preflight_config(self):
+        for path in both_copies("flow-next-plan/SKILL.md"):
+            self.assertIn("preflight --json", read(path))
         for path in self.steps():
-            text = read(path)
-            self.assertEqual(
-                len(CONFIG_GET.findall(text)), 1,
-                f"{path}: plan must make exactly ONE config get (the Step 0 root snapshot)",
-            )
-            self.assertIn("config get --json", text)
+            self.assertEqual(CONFIG_GET.findall(read(path)), [])
 
     def test_route_b_create_path_has_no_set_branch_or_set_spec(self):
         for path in self.steps():
@@ -176,75 +173,37 @@ class PilotSnapshotTestCase(unittest.TestCase):
     single always-loaded-under---auto file, so the ONE root config snapshot
     call lives there; the gated references derive every later read via jq."""
 
-    def test_exactly_one_config_call_located_in_auto_md(self):
-        counts = {}
-        for rel in ("auto.md", "references/backlog-mode.md",
-                    "references/qa-stage.md"):
-            for path in both_copies(f"flow-next-flow/{rel}"):
-                key = (rel, "mirror" if MIRROR_SKILLS in path.parents else "canonical")
-                counts[key] = len(CONFIG_GET.findall(read(path)))
-        for variant in ("canonical", "mirror"):
-            self.assertEqual(counts[("auto.md", variant)], 1,
-                             f"flow auto.md ({variant}) must own the ONE config call")
-            for rel in ("references/backlog-mode.md", "references/qa-stage.md"):
-                self.assertEqual(counts[(rel, variant)], 0,
-                                 f"flow {rel} ({variant}) must make zero config calls")
-
-    def test_explain_terminals_remove_the_snapshot(self):
-        # Explain (dry-run) leaves no persistent scratch state. The CENTRAL
-        # rule lives in auto.md's verdict contract (EVERY explain terminal
-        # removes the snapshot), and the fenced/inline explain terminals carry
-        # the rm line verbatim (the contract rule plus at least two terminals).
-        rm_expr = ('rm -f "${TMPDIR:-/tmp}/flow-pilot-config-'
-                   "$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json\"")
+    def test_hop_uses_snapshot_instead_of_config_calls(self):
         for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
-            self.assertIn(rm_expr, text,
-                          f"{path}: explain terminals must remove the config snapshot")
+            self.assertIn("pilot snapshot", text)
+            self.assertEqual(CONFIG_GET.findall(text), [])
+
+    def test_no_config_scratch_ceremony(self):
+        for path in both_copies("flow-next-flow/auto.md"):
+            self.assertNotIn("flow-pilot-config-", read(path))
 
     def test_backlog_mode_has_zero_flowctl_config_calls(self):
         for path in both_copies("flow-next-flow/references/backlog-mode.md"):
             self.assertNotRegex(read(path), r'\$FLOWCTL"?\s+config\b',
                                 f"{path}: backlog-mode.md must be config-call-free")
 
-    def test_snapshot_consumers_recompute_the_deterministic_path(self):
-        # The snapshot lives under ${TMPDIR} (never repo-controlled .flow/tmp —
-        # autonomous symlink safety + explain mutates nothing in the repo) at a
-        # deterministic repo-hash-keyed path each fence recomputes identically.
-        snapshot_expr = (
-            'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-'
-            '$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d\' \' -f1).json"'
-        )
+    def test_consumers_use_snapshot_payload(self):
         for rel in ("auto.md", "references/backlog-mode.md"):
             for path in both_copies(f"flow-next-flow/{rel}"):
-                text = read(path)
-                self.assertIn(snapshot_expr, text,
-                              f"{path}: must recompute the deterministic snapshot path")
-                self.assertNotIn(".flow/tmp/pilot-config", text,
-                                 f"{path}: snapshot must not live under repo-controlled .flow/tmp")
+                self.assertIn("PILOT_SNAPSHOT", read(path))
+                self.assertNotIn("PILOT_CFG_SNAPSHOT", read(path))
 
 
 class MakePrFenceTestCase(unittest.TestCase):
-    def test_phase0_has_exactly_three_bash_fences(self):
+    def test_phase0_reaches_bundled_preflight(self):
+        script = read(SKILLS.parent / "scripts/make-pr-preflight.sh")
         for path in both_copies("flow-next-make-pr/workflow.md"):
             phase0 = section(read(path), "## Phase 0", "## Phase 1")
-            self.assertEqual(
-                phase0.count("```bash"), 3,
-                f"{path}: make-pr Phase 0 must run as exactly THREE bash fences",
-            )
-            # §0.5 semantics intact: single show capture doubles as validation,
-            # and the autonomous hard-error on open tasks survives. fn-250 R2
-            # adds the spec-close fence to the same phase.
-            self.assertIn('SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json', phase0)
-            self.assertIn("Autonomous context cannot open PRs for incomplete specs", phase0)
-            self.assertIn("# fence:spec-close", phase0)
-            # The old validation-only show must not come back.
-            self.assertNotIn('show "$SPEC_ID" --json >/dev/null', phase0)
-            # Interactive asks happen OUTSIDE fences: the fence exits with a
-            # NEED_INPUT marker and is re-run with the value preset (a Bash call
-            # cannot pause for AskUserQuestion).
-            self.assertIn("NEED_INPUT:", phase0,
-                          f"{path}: interactive-ask exemption marker missing")
+            self.assertIn('source "$(dirname "$FLOWCTL")/make-pr-preflight.sh"', phase0)
+        self.assertIn('SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json', script)
+        self.assertIn("# fence:spec-close", script)
+        self.assertIn("NEED_INPUT:", script)
 
 
 class ImplReviewArgFenceTestCase(unittest.TestCase):
@@ -371,7 +330,7 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
         for path in both_copies("flow-next-flow/auto.md"):
             text = read(path)
             self.assertIn("read [references/backlog-mode.md]", text)
-            self.assertIn("references/qa-stage.md#qa-stage-freshness-probe", text)
+            self.assertIn("references/qa-stage.md", text)
         for path in both_copies("flow-next-work/phases.md"):
             text = read(path)
             # flow-98 deleted the delegation Phase 1.5 (-> Phase 2) and 3d.2
@@ -394,27 +353,11 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
 
     def test_default_off_probes_and_genuine_terminals_remain(self):
         for path in both_copies("flow-next-flow/auto.md"):
-            text = read(path)
-            self.assertIn(
-                '[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1',
-                text,
-            )
-            self.assertIn(
-                '[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1',
-                text,
-            )
+            self.assertIn("config.pipeline.qa", read(path))
         for path in both_copies("flow-next-work/phases.md"):
             text = read(path)
-            self.assertEqual(
-                text.count(
-                    'RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1'
-                ),
-                3,
-            )
-            self.assertEqual(
-                text.count('[ "$VAL" = "true" ] && ACTIVE=1'),
-                3,
-            )
+            self.assertIn("run-sync-active.json", text)
+            self.assertEqual(text.count('[ "$VAL" = "true" ] && ACTIVE=1'), 3)
             # Bounded standard-failure retry. Prose de-shouted 2026-08-09 in the
             # canonical; the codex mirror still carries the pre-diet spelling
             # until its next regen, so both wordings satisfy the pin.

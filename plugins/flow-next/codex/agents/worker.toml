@@ -108,15 +108,17 @@ Parse the spec carefully. Identify:
 # counts as `baseline: green` via receipt. On exit 1 or 2+, run the full command exactly as
 # today: fail closed, and never treat a check error as a skip. Lint/format commands are unchanged:
 # always run, never receipted, never skipped.
+# Check git log --format= --name-only <verified-sha>..HEAD (not only the net diff).
+# A handoff is valid only if every path changed since its verified SHA is under .flow/.
+# Any other changed path invalidates it: run the baseline normally.
 # When BASELINE_HANDOFF is present, record `baseline: green via handoff (<content>)`
 # and SKIP running the focused Quick commands as baseline (lint/format stay exactly
 # as stated above: always run, never skipped). The red-baseline
 # rules above are unchanged and the handoff never applies to them (a handoff asserts
 # green, so the red branch is unreachable via handoff). Full-suite gate commands keep
-# their existing receipt-check path unchanged. The FIRST task of a run never receives
-# a handoff (nothing verified yet) — its baseline runs exactly as today; that
-# first-task baseline is deliberately kept (it detects local-env inherited reds
-# that CI cannot).
+# their existing receipt-check path unchanged. The wave route keeps its first-task
+# baseline. The rolling first batch may reuse the conductor's green spec-base
+# baseline for the SAME commands, under the same .flow/-only handoff rule.
 ```
 
 **Suite-output capture rule (Baseline and Verify):** green observation is the command exit code, not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs). In this Baseline block, apply that capture when an exit-1/2+ gate check requires the full command.
@@ -489,8 +491,8 @@ assigned handovers, return `in_progress`, and report the exact workspace plus
 uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
-Write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path on every route.
-Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
+On parallel-wave and host-deferred routes, write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path. On the standard contiguous-history route, `done --range` below derives the commit list and base; pass each actual test command and `GATE_SKIPPED` line with repeatable `--test` instead of hand-assembling evidence.
+For those two routes, re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
 in the SAME block, so no shell variable has to survive across tool calls.
 `base_commit` is an additive evidence field — always include it. Include any
@@ -535,8 +537,8 @@ same shell block — variables from the evidence/summary creation calls do not
 survive into a later tool call:
 ```bash
 SUMMARY_FILE="<resolved task-unique HANDOVER_SUMMARY path>"
-EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"
-<FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
+BASE_COMMIT=$(cat .flow/tmp/base_commit)
+<FLOWCTL> done <TASK_ID> --range "$BASE_COMMIT..HEAD" --test "<actual test command>" --summary-file "$SUMMARY_FILE"
 ```
 
 **Stage the receipt:** `done` writes the summary into the
@@ -550,7 +552,9 @@ every other checkout.
 
 Verify completion:
 ```bash
-<FLOWCTL> show <TASK_ID> --json
+<FLOWCTL> show <TASK_ID> --json > .flow/tmp/<TASK_ID>-done.json
+jq .status .flow/tmp/<TASK_ID>-done.json
+jq .evidence .flow/tmp/<TASK_ID>-done.json > "<resolved task-unique HANDOVER_EVIDENCE path>"
 ```
 
 Done when: on the standard path `flowctl show` reports `done`; on the parallel-wave or host-deferred paths the handover files exist at the exact assigned paths and the task is still `in_progress`. Any other terminal state is debugged and retried, never reported as complete.

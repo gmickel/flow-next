@@ -138,7 +138,6 @@ class ResidueProbeParity(unittest.TestCase):
     """
 
     PROBE_FILES = (
-        REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-setup" / "workflow.md",
         REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-plan" / "SKILL.md",
     )
 

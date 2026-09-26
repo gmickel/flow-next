@@ -27,11 +27,27 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
          source_body_file: Optional[str] = None,
          comment_file: Optional[str] = None,
          pr_url: Optional[str] = None,
+         prepare: bool = False,
          status_only: bool = False,
          overwrite_diverged: bool = False,
          execute: Execute = default_execute):
     """Compose one facade op. Returns data dict or TrackerError — never raises."""
     flow_dir = Path(flow_dir)
+    if prepare:
+        if op not in {"pull", "reconcile"}:
+            return TrackerError(ErrorClass.INVALID_INPUT,
+                                "--prepare requires --op pull or reconcile", subtype="args")
+        if any((flow_file, body_file, comments_file, source_body_file,
+                comment_file, pr_url, status_only, overwrite_diverged)):
+            return TrackerError(ErrorClass.INVALID_INPUT,
+                                "--prepare accepts no write inputs", subtype="args")
+        if not event or not event.strip():
+            return TrackerError(ErrorClass.INVALID_INPUT, "--event is required", subtype="event")
+        from .preparation import prepare as prepare_inputs
+        try:
+            return prepare_inputs(flow_dir, spec_id, execute=execute)
+        except Exception as exc:
+            return TrackerError(ErrorClass.TRANSPORT, f"facade raised: {exc}", subtype="unexpected")
     bad = validate_inputs(
         op, flow_file=flow_file, body_file=body_file,
         comments_file=comments_file, source_body_file=source_body_file,
@@ -72,6 +88,9 @@ def sync(flow_dir, spec_id: str, *, op: str, event: str,
     except Exception as exc:  # noqa: BLE001 - boundary must never raise
         return TrackerError(ErrorClass.TRANSPORT,
                             f"facade raised: {exc}", subtype="unexpected")
+    finally:
+        from .preparation import cleanup
+        cleanup(flow_dir, spec_id)
 
 
 def _partial_failure(err: TrackerError) -> tuple[str, int]:
@@ -105,6 +124,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
         source_body_file: Optional[str] = None,
         comment_file: Optional[str] = None,
         pr_url: Optional[str] = None,
+        prepare: bool = False,
         status_only: bool = False,
         overwrite_diverged: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
@@ -129,7 +149,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, op: Optional[str] = None,
                comments_file=comments_file,
                source_body_file=source_body_file,
                comment_file=comment_file, pr_url=pr_url,
-               status_only=status_only,
+               prepare=prepare, status_only=status_only,
                overwrite_diverged=overwrite_diverged,
                execute=execute)
     if isinstance(out, TrackerError):

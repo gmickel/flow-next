@@ -51,6 +51,7 @@ __all__ = [
     "FLOW_DEPS_OPEN",
     "dep_relation_key",
     "relate",
+    "relate_many",
     "run",
 ]
 
@@ -565,9 +566,9 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
 
 def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                 event: Optional[str], execute: Execute,
-                write_receipt: bool) -> Result:
+                write_receipt: bool, prepared: Optional[dict] = None) -> Result:
     """Run probe, mutation, and finalize while both spec claims are live."""
-    config = read_config(flow_dir)
+    config = prepared["config"] if prepared is not None else read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
@@ -650,17 +651,24 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     # validate display -> durable for BOTH ends BEFORE any probe or mutation
     # (wire write-verb parity), so a moved, repointed, or stale identifier
     # aborts instead of inspecting or relating unrelated issues.
-    verr = P.display_durable_guard(
-        provider, config, ex, locators=(loc_a, loc_b))
-    if verr:
-        return verr
+    if prepared is not None:
+        if (loc_a, loc_b) != prepared["locators"]:
+            return _relinked_error(spec_id, blocked_by,
+                                   expected_from=prepared["locators"][0]["durable"],
+                                   expected_to=prepared["locators"][1]["durable"],
+                                   current_from=from_id, current_to=to_id)
+    else:
+        verr = P.display_durable_guard(
+            provider, config, ex, locators=(loc_a, loc_b))
+        if verr:
+            return verr
 
     # 4-way ledger x remote classification BEFORE any mutation (fn-64).
     # A `pending` entry is recorded ownership INTENT from an earlier run whose
     # create/finalize was interrupted - it is OURS to complete, never a
     # collision (two-phase write: intent lands durably BEFORE the provider
     # mutation, so a ledger failure can no longer orphan ownership).
-    remote = probe(config, ex, **kwargs)
+    remote = prepared["remote"] if prepared is not None else probe(config, ex, **kwargs)
     if isinstance(remote, TrackerError):
         return remote
     entry = ledger_entry(tracker_a, key)
@@ -994,3 +1002,6 @@ def run(flow_dir, *, spec_id: Optional[str] = None,
             return envelope.inactive()
         return envelope.failure(out)
     return envelope.success(out)
+
+
+from .many import relate_many  # noqa: E402, F401  (re-export after the names it imports)

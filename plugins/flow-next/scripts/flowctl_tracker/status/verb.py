@@ -244,7 +244,9 @@ def _claim_status(flow_dir: Path, spec_id: str, rec_path: Path,
 def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
            event: Optional[str] = None,
            execute: Execute = default_execute,
-           write_receipt: bool = True) -> Result:
+           write_receipt: bool = True,
+           _parent: Optional[dict] = None,
+           _pr_evidence: Optional[str] = None) -> Result:
     """Spec-aware status verb. Never raises across the boundary.
 
     Serialized per spec via a create-first claim (`status-<spec-id>.json`)
@@ -279,7 +281,8 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
             flow_dir, spec_id, config=config, provider=provider,
             conflict_tiebreak=conflict_tiebreak,
             to=to, reason=reason, event=event, execute=execute,
-            write_receipt=write_receipt)
+            write_receipt=write_receipt, parent_snapshot=_parent,
+            pr_evidence=_pr_evidence)
     finally:
         _release_claim(rec_path)
 
@@ -287,7 +290,9 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
 def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
                 conflict_tiebreak: str,
                 to: str, reason: Optional[str], event: Optional[str],
-                execute: Execute, write_receipt: bool) -> Result:
+                execute: Execute, write_receipt: bool,
+                parent_snapshot: Optional[dict] = None,
+                pr_evidence: Optional[str] = None) -> Result:
     """The claimed transaction body: spec loaded AFTER the claim, so every
     read (spec snapshot, parent, PR evidence) and the provider mutation run
     inside the relink-excluded window."""
@@ -310,7 +315,13 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     ex = bound_executor(config, execute)
 
     # Wire-style pre-mutation parent read + durable check.
-    parent = parent_read(provider, config, locator, ex, op="status-parent-read")
+    parent = (parent_snapshot if parent_snapshot is not None else
+              parent_read(provider, config, locator, ex, op="status-parent-read"))
+    if parent_snapshot is not None:
+        from ..wire import _check_durable
+        identity_error = _check_durable(provider, locator, parent_snapshot)
+        if identity_error:
+            return identity_error
     if isinstance(parent, TrackerError):
         return parent
     if provider == "linear":
@@ -326,7 +337,8 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     # PR evidence belongs to the source Git checkout, not the configured
     # tracker transport. In particular, Jira DC sslVerify=false is valid for
     # Jira HTTP but cannot be applied to the independent gh CLI route.
-    pr_evidence = merge_evidence(config, spec_data, execute)
+    if pr_evidence is None:
+        pr_evidence = merge_evidence(config, spec_data, execute)
     tasks = _load_tasks(flow_dir, spec_id)
     flow_norm = flow_to_normalized(
         spec_data, pr_evidence,

@@ -13,7 +13,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"
 ```
 
-`jq`, a working Python (`python3`, `python`, or `py -3` on Windows — the receipt block probes one into `$PY`, skipping the Windows Store stub), and `git` must be on PATH. `SPEC_ID` comes from the SKILL.md mode-detection block (may be empty — Phase 1 resolves it).
+`jq`, `git` and the bundled flowctl launcher must be available. The launcher resolves Python. `SPEC_ID` comes from the SKILL.md mode-detection block (may be empty — Phase 1 resolves it).
 
 If `.flow/` does not exist, print `No .flow/ directory — /flow-next:qa runs inside a flow-next-managed repo.` and exit 1.
 
@@ -30,7 +30,9 @@ Compute the no-prompt flag **here, at the preamble, before Phase 1** — every i
 RALPH=0
 if [ -n "${REVIEW_RECEIPT_PATH:-}" ] || [ "${FLOW_RALPH:-}" = "1" ]; then RALPH=1; fi
 NO_PROMPT=0
-if [ "${QA_AUTONOMOUS:-}" = "1" ] || [ "$RALPH" = "1" ]; then NO_PROMPT=1; fi
+if [ "${QA_AUTONOMOUS:-}" = "1" ] || [ "$RALPH" = "1" ] \
+  || [ "${FLOW_AUTONOMOUS:-}" = "1" ] || [ "${AUTONOMOUS:-}" = "1" ] \
+  || [[ " ${ARGUMENTS:-} " == *" mode:autonomous "* ]]; then NO_PROMPT=1; fi
 ```
 
 When `NO_PROMPT=1`, every `AskUserQuestion` info-prompt below routes deterministically instead of asking — resolve from spec / config / env, else surface the limitation as a **BLOCKED `qa_verdict`** (§6.3) + clean exit (the spec-id-undetermined case under Ralph is the one genuine hard error — Phase A §1). Each phase below restates its own branch; the full per-fact routing table is reached only on the autonomous path:
@@ -194,6 +196,15 @@ When it is absent: skip. Behavior is byte-identical to today; the only added cos
 - If `.flow/features/` existed, matching feature files were loaded for navigation; a per-target miss fell back to normal derivation; if absent, only the existence check ran.
 
 ---
+
+### Autonomous target preflight
+
+Before scenario derivation, when `NO_PROMPT=1`, resolve the target and account
+requirements using §3.1–3.2. `NO_PROMPT` includes `FLOW_RALPH`,
+`REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1` and `mode:autonomous`.
+A missing target or required accounts ends BLOCKED immediately through §6.3;
+keep coverage empty because no scenarios were derived. Public-only targets
+need no account. Reuse the resolved target and accounts in Phase 3.
 
 ## Phase 2: derive
 
@@ -400,7 +411,7 @@ Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, ne
 
 ### 5.4 — File the finding to bug memory (immediately; host owns update-vs-create)
 
-On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left on** — a filing carrying `--no-overlap-check` has broken this. STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
+On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left on** — a filing carrying `--no-overlap-check` has broken this. STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the read-only overlap probe followed by one create or update, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. When memory is disabled the filing is a clean no-op — **still record the finding in the run notes** so Phase 6 counts it toward the verdict. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
@@ -511,174 +522,23 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 | `rid_coverage` | object `{covered, total, rids: [{id, coverage}]}` | the §2.2 coverage spine, persisted so make-pr surfaces coverage without re-deriving. `coverage ∈ {live, subtracted, no_live_scenario, backend_cli}`. `covered` counts the non-gap rows (`live` + `subtracted` + `backend_cli`); a `no_live_scenario` row on a UI R-ID is the only uncovered kind. |
 | `open_p0p1` | array of **objects** `{id, severity, confidence, classification, reason, file}` | Open P0/P1 findings with lossless v1 enums; severity is P0/P1, confidence is a discrete anchor, and classification is introduced/pre_existing. |
 
-**Build the JSON with a probed Python interpreter (`$PY`, resolved once per the snippet below), not a `cat <<EOF` heredoc** — and this is now *load-bearing*, not just for the reasons: `rid_coverage.rids[].id`/coverage and every `open_p0p1[]` object field (`reason`, `file`) are agent-authored free-form text. Raw shell interpolation into JSON would emit malformed output (or allow field injection) the moment any value contains a quote, backslash, or newline. Pass the structured fields as **JSON strings** through `os.environ` and re-parse with `json.loads`; let `json.dump` escape everything:
+Show `$FLOWCTL qa receipt --skeleton` once. Write a JSON payload with the Write
+tool to `$QA_RECEIPT_INPUT`: `id`, `qa_outcome`, all Phase 5 `findings`
+(`id`, `severity`, `confidence`, `classification`, `reason`, `file`),
+`rid_coverage.rids`, and the outcome's `blocked_reason` or `na_reason` when
+applicable. The verb derives verdict, timestamp, HEAD, branch, coverage counts,
+open P0/P1 and prior-finding carry-over; judgment stays in the payload.
 
 ```bash
-# QA_OUTCOME ∈ {SHIP,NEEDS_WORK,NA,BLOCKED} from §6.1; project to the enum (§6.2).
-case "$QA_OUTCOME" in
-  SHIP)       VERDICT="SHIP" ;;
-  NEEDS_WORK) VERDICT="NEEDS_WORK" ;;
-  BLOCKED)    VERDICT="NEEDS_WORK" ;;
-  NA)         VERDICT="SHIP" ;;
-  *) echo "Internal error: bad qa_outcome '$QA_OUTCOME'" >&2; exit 1 ;;
-esac
-
-# MODE describes the run context (informational; the guard does not gate on it):
-#   ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
-if   [ -n "${REVIEW_RECEIPT_PATH:-}" ]; then MODE="ralph"
-elif [ -n "${QA_RECEIPT_OVERRIDE:-}" ]; then MODE="rp"
-else MODE="interactive"; fi
-
 RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
-mkdir -p "$(dirname "$RECEIPT_PATH")"
-RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-receipt.XXXXXX.json")"
-QA_REVIEW_FILE="$(mktemp "${TMPDIR:-/tmp}/flow-qa-review.XXXXXX.md")"
-PRIOR_RECEIPT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-prior.XXXXXX.json")"
-if [[ -f "$RECEIPT_PATH" ]]; then
-  cp "$RECEIPT_PATH" "$PRIOR_RECEIPT"
-else
-  rm -f "$PRIOR_RECEIPT"
-  PRIOR_RECEIPT=""
-fi
-
-# Freshness key (R1b) + orientation. HEAD is resolved at QA time; a detached/empty
-# HEAD yields "" (the driver's gate treats a missing/empty head_sha as never-fresh).
-HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
-BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
-
-# QA_FINDINGS = JSON ARRAY OF every P0/P1/P2 finding from Phase 5.
-# OPEN_P0P1 = verdict-facing subset:
-#   [{"id","severity","confidence","classification","reason","file"}, …];
-#   default "[]". RID_COVERAGE = the §2.2 spine as JSON:
-#   {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
-# Both are JSON STRINGS here — python re-parses them so free-form fields are escaped.
-# Reason fields are set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
-export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
-       QA_OUTCOME HEAD_SHA BRANCH \
-       QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
-       RID_COVERAGE="${RID_COVERAGE:-}" \
-       BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
-
-# Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
-# alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
-# mirrors the shared scripts/lib/pick-python.sh resolver.
-PY=""
-for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
-  [ -n "$_c" ] || continue
-  $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
-done
-[ -n "$PY" ] || { echo "qa: no working Python 3.11+ interpreter found (see Windows Python troubleshooting)" >&2; exit 1; }
-
-$PY - "$RECEIPT_INPUT" <<'PY'
-import datetime, json, os, sys
-r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
-     "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
-     "qa_outcome": os.environ["QA_OUTCOME"],
-     "head_sha": os.environ.get("HEAD_SHA", ""),     # R1b freshness key (the flow --auto QA stage reads this)
-     "branch": os.environ.get("BRANCH", ""),
-     "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
-     "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
-if os.environ["QA_OUTCOME"] == "BLOCKED" and os.environ.get("BLOCKED_REASON"):
-    r["blocked_reason"] = os.environ["BLOCKED_REASON"]   # json.dump escapes free-form text
-if os.environ["QA_OUTCOME"] == "NA" and os.environ.get("NA_REASON"):
-    r["na_reason"] = os.environ["NA_REASON"]
-r["timestamp"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-with open(sys.argv[1], "w", encoding="utf-8") as fh:
-    json.dump(r, fh); fh.write("\n")
-PY
-
-$PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<'PY'
-import json, os, sys
-items = json.loads(os.environ.get("QA_FINDINGS") or "[]")
-current = {}
-for item in items:
-    required = {"id", "severity", "confidence", "classification", "reason", "file"}
-    if not isinstance(item, dict) or not required <= set(item):
-        raise SystemExit("qa: open finding lacks v1 fields")
-    finding_id = item["id"]
-    if not isinstance(finding_id, str) or not finding_id or finding_id in current:
-        raise SystemExit("qa: finding ids must be unique non-empty strings")
-    current[finding_id] = item
-
-prior_items = []
-prior_path = sys.argv[2] if len(sys.argv) > 2 else ""
-if prior_path:
-    try:
-        with open(prior_path, encoding="utf-8") as fh:
-            prior_receipt = json.load(fh)
-        prior_findings = prior_receipt.get("findings", {})
-        if (
-            prior_receipt.get("type") == os.environ["QA_TYPE"]
-            and prior_receipt.get("id") == os.environ["QA_ID"]
-            and prior_receipt.get("mode") == os.environ["QA_MODE"]
-            and prior_findings.get("schemaVersion") == 1
-            and isinstance(prior_findings.get("items"), list)
-        ):
-            prior_items = prior_findings["items"]
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        prior_items = []
-
-lines = []
-known_ids = set()
-for prior in sorted(prior_items, key=lambda item: item.get("ordinal", 0)):
-    finding_id = prior.get("title")
-    ordinal = prior.get("ordinal")
-    if (
-        not isinstance(finding_id, str)
-        or not isinstance(ordinal, int)
-        or isinstance(ordinal, bool)
-        or ordinal < 1
-        or finding_id in known_ids
-    ):
-        prior_items = []
-        lines = []
-        known_ids = set()
-        break
-    known_ids.add(finding_id)
-    if finding_id in current:
-        status = "not_fixed"
-    elif os.environ["QA_OUTCOME"] in {"BLOCKED", "NA"}:
-        status = prior.get("status", "open")
-        if status == "open":
-            status = "not_fixed"
-    else:
-        status = "fixed"
-    lines.append(f"Prior finding {ordinal} — {status}.")
-
-for finding_id, item in current.items():
-    if finding_id in known_ids:
-        continue
-    lines.extend([
-        f"### {finding_id}",
-        f"- **Severity**: {item['severity']}",
-        f"- **Confidence**: {item['confidence']}",
-        f"- **Classification**: {item['classification']}",
-        f"- **Title**: {finding_id}",
-        f"- **Problem**: {item['reason']} (surface: {item['file']})",
-        "",
-    ])
-if not lines:
-    lines.append("No findings.")
-lines.append(f"<verdict>{os.environ['QA_VERDICT']}</verdict>")
-with open(sys.argv[1], "w", encoding="utf-8") as fh:
-    fh.write("\n".join(lines) + "\n")
-PY
-PRIOR_ARGS=()
-[[ -n "$PRIOR_RECEIPT" ]] \
-  && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT" --require-prior-current)
-if ! "$FLOWCTL" review-findings attach \
-  --input "$RECEIPT_INPUT" \
-  --receipt "$RECEIPT_PATH" \
-  "${PRIOR_ARGS[@]}" \
-  --review-file "$QA_REVIEW_FILE" \
-  --head HEAD \
-  --json >/dev/null; then
-  rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
-  exit 1
-fi
-rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
-echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
+$FLOWCTL qa receipt --from-json "$QA_RECEIPT_INPUT" --receipt "$RECEIPT_PATH" --json
 ```
+
+Set payload `mode` to `ralph` when `REVIEW_RECEIPT_PATH` is set, `rp` for a caller
+`--receipt`, otherwise `interactive`. Validation reports all payload errors and
+leaves the prior receipt unchanged. Fix the payload and retry; never silently
+omit findings. BLOCKED/NA retain unresolved prior findings.
+
 
 The additive fields are **additive only** — `type`, `id`, `mode`, `verdict`, `qa_outcome`, the scoped reasons, and `timestamp` are unchanged, so the receipt still passes `ralph-guard.validate_receipt_data` (it gates on `verdict` only; the extra fields are ignored). `open_p0p1` changing from bare ids to objects is a shape change the guard does not inspect (it never reads `open_p0p1`) and make-pr/.2 consume; no Ralph-guard change.
 

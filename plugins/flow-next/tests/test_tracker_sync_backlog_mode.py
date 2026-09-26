@@ -50,12 +50,20 @@ class BacklogWireContractTests(unittest.TestCase):
             self.assertIn(flag, STEPS)
 
     def test_tracker_only_parked_scan_executes_comment_read(self) -> None:
-        self.assertIn("list-comments", PILOT_WORKFLOW)
+        self.assertIn("tracker wire comment-list", PILOT_WORKFLOW)
         self.assertIn(
             "tracker wire comment-list --locator", PILOT_BACKLOG)
         self.assertIn(
             "tracker wire comment-list --locator", STEPS)
         self.assertIn("fails closed", PILOT_BACKLOG)
+
+    def test_direct_wire_reads_pass_json_locators(self) -> None:
+        # The wire verbs reject a bare identifier; every direct read passes the JSON locator.
+        for text in (PILOT_WORKFLOW, PILOT_BACKLOG):
+            for verb in ("comment-list", "relation-list"):
+                self.assertNotRegex(text, rf"wire {verb} --locator <")
+                self.assertIn(f'wire {verb} --locator "$LOCATOR"', text)
+        self.assertIn('{"durable":issue.id,"display":issue.identifier}', PILOT_BACKLOG)
 
     def test_every_provider_implements_list_open(self) -> None:
         for provider in (github, gitlab, jira, linear):

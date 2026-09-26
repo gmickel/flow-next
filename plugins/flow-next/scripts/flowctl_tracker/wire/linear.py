@@ -224,10 +224,16 @@ def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Resul
 
 
 def update(config: dict, locator: dict, execute: Execute, *,
-           title: Optional[str], body: Optional[str]) -> Result:
-    parent = _require_parent(config, locator, execute)
+           title: Optional[str], body: Optional[str],
+           parent: Optional[dict] = None) -> Result:
+    # sync-body already read this parent inside its claimed transaction.
+    if parent is None:
+        parent = _require_parent(config, locator, execute)
     if isinstance(parent, TrackerError):
         return parent
+    identity_error = _check_durable("linear", locator, parent)
+    if identity_error:
+        return identity_error
     inp: dict = {}
     if title is not None:
         inp["title"] = title
@@ -327,24 +333,17 @@ def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> 
 
 def comment_list(config: dict, locator: dict, execute: Execute) -> Result:
     """Display-addressed (real durable validation) + fully drained connection."""
-    probe = _gql(execute, "wire-comment-list",
-                 "query($id: String!) { issue(id: $id) { id } }",
-                 {"id": locator["display"]}, idempotent=True)
-    if isinstance(probe, TrackerError):
-        return probe
-    issue = probe.get("issue")
-    if issue is None:
-        return TrackerError(ErrorClass.NOT_FOUND, "linear issue not found",
-                            subtype="parent")
-    if not isinstance(issue, dict):
-        return TrackerError(ErrorClass.TRANSPORT, "linear issue is not an object",
-                            subtype="malformed_body")
-    err = _check_durable("linear", locator, issue)
-    if err:
-        return err
-
     def pluck(data: dict) -> Union[dict, TrackerError]:
         iss = data.get("issue")
+        if iss is None:
+            return TrackerError(ErrorClass.NOT_FOUND, "linear issue not found",
+                                subtype="parent")
+        if not isinstance(iss, dict):
+            return TrackerError(ErrorClass.TRANSPORT, "linear issue is not an object",
+                                subtype="malformed_body")
+        err = _check_durable("linear", locator, iss)
+        if err:
+            return err
         conn = (iss.get("comments") if isinstance(iss, dict) else None)
         if not isinstance(conn, dict):
             return TrackerError(ErrorClass.TRANSPORT,
@@ -354,7 +353,7 @@ def comment_list(config: dict, locator: dict, execute: Execute) -> Result:
 
     drained = _gql_connection_drain(
         execute, "wire-comment-list",
-        "query($id: String!, $after: String) { issue(id: $id) { "
+        "query($id: String!, $after: String) { issue(id: $id) { id "
         f"comments(first: {_PAGE_SIZE}, after: $after) "
         "{ nodes { id body url createdAt } "
         "pageInfo { hasNextPage endCursor } } } }",

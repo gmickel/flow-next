@@ -99,6 +99,8 @@ Scheduling: degraded to wave (host lacks non-blocking dispatch)  # dispatch meas
 
 A rolling run whose first `flowctl start` precedes this line has broken this.
 
+Before the first admission batch, run one baseline at the recorded spec base using the spec's Quick commands. Record the verified SHA and exact commands; a green result may be handed to every task in that first batch as `BASELINE_HANDOFF`, provided only `.flow/` paths changed between verification and dispatch. Any non-`.flow/` change invalidates that handoff; red baselines follow the worker's existing failure rule. For each green full gate in this baseline, write `$FLOWCTL gate receipt --gate <gate_id> --command "<exact command>"` so workers reuse the full gate through their existing receipt check. Lint/format still run per worker.
+
 ## 3a Admission at Every Worker-Return Event
 
 The conductor keeps an **in-flight set** of concurrently running tasks (cap 3)
@@ -109,7 +111,7 @@ Recompute admission at loop start and at every worker-return event; never
 precompute admissions for the run - worker return order is nondeterministic.
 
 ```bash
-$FLOWCTL ready --spec <spec-id> --json
+$FLOWCTL ready --spec <spec-id> --admit --in-flight <comma-separated-task-ids> --cap 3 --json
 ```
 
 If the ready frontier is empty AND the in-flight set is empty, check for
@@ -131,30 +133,7 @@ Rolling run ended: spec contended (fn-X.N in_progress by another run) - quiesce 
 This is the same fail-closed posture as 3b's claim contention: runs never
 steal from or bless over each other.
 
-Apply the **admission rule (fail-closed - the wave rule of phases.md
-3a, re-scoped from wave peers to the in-flight set)**. Admission within one
-event is **incremental**: consider candidates one at a time (ready-list
-order), and judge each against the **comparison set** = every task currently
-in flight PLUS every candidate already tentatively admitted at THIS event.
-Checking candidates only against the pre-event in-flight set has broken this -
-two candidates with intersecting Touches would both pass. A candidate is
-admitted only when ALL five conditions hold against EVERY task in the
-comparison set; any one unmet holds the candidate (a held candidate is not
-added to the comparison set):
-
-1. same spec;
-2. in-flight size after admission ≤ 3;
-3. no dependency path between the candidate and any comparison-set task, in
-   either direction, **transitively** (walk the `depends_on` closure from
-   `$FLOWCTL show <task-id> --json` / `$FLOWCTL tasks --spec <spec-id> --json`
-   - `flowctl dep` only writes edges, it has no read verb; a direct-only check
-   is wrong);
-4. the candidate carries a `**Touches:**` declaration, and its declared set is
-   **disjoint** vs every comparison-set task's declared set
-   (`touches(candidate) ∩ touches(member) = ∅`, glob-aware) - so the tasks
-   admitted at one event are pairwise Touches-disjoint by construction;
-5. the candidate does not touch the always-serial set: `.flow/`, lockfiles,
-   migration dirs, codegen/generated outputs, or spec/task files.
+Use the returned `admitted` and `held` sets: flowctl checks dependency closure, declared Touches, conservative glob overlap, the always-serial set, and the cap incrementally against in-flight tasks plus this event's admissions. `touches` and `transitive_depends_on` are included in the snapshot. The host may hold any mechanically admitted task for hidden coupling or capacity; it never overrides a mechanical hold to dispatch concurrently.
 
 The error paths are the rule: a candidate with no `**Touches:**` declaration →
 held; any intersection → held; any doubt about a glob, a hidden coupling
@@ -182,7 +161,7 @@ Sequential fallback: <reason> # only when the admissible set is empty with a non
 ```
 
 Done when: the report lines are printed for this admission event and every
-admitted task satisfies all five conditions against the in-flight set.
+admitted task passed the mechanical checks and the host hold check.
 
 ## 3b Claim at Admission
 
@@ -325,7 +304,7 @@ default shape.
   the review context, not on the target) and append their integrated SHAs to
   the task's evidence commits - a SHIP whose fix commits are not on the
   target is not a completable state, and running `done` over it has broken
-  this. THEN run the focused integrated verify. Before `done`, the conductor
+  this. THEN run the focused integrated verify: the task's focused Quick commands on the integrated target. The wave-join full-gate step applies only at quiesce on this rolling route. Before `done`, the conductor
   reads [the worker agent's Phase 4.5](../../../agents/worker.md#phase-45-auto-capture-on-successful-fix-after-needs_work-ship)
   and executes its memory auto-capture using the review rounds and fix commits:
   check `memory.enabled`, capture only after NEEDS_WORK → SHIP under its
@@ -403,7 +382,7 @@ outcome instead, never here. At quiesce:
 
 1. Run the full-suite verification once on the final integrated target
    (wave-join.md's integrated-target verification contract - the full gate
-   runs only here, never per task); fix and commit any failure.
+   runs only here, never per task); fix and commit any failure, then rerun the affected gate. After each green full gate, write `$FLOWCTL gate receipt --gate <gate_id> --command "<exact command>"` at the verified HEAD, using the same gate id and command as Phase 4. Red gates write no receipt. Phase 4 can then honor this receipt at the same HEAD (or after `.flow/`-only commits).
 2. Run phases.md 3g (completion review gate) exactly as written there - only
    its timing shifts to quiesce, never its semantics.
 

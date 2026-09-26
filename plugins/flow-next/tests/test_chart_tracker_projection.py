@@ -1409,6 +1409,32 @@ class ProjectionSerializationTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class ReadFailureAbortsUpdateTests(unittest.TestCase):
+    def test_unchanged_child_skips_write_but_repairs_hierarchy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_linked_pair(flow)
+            decision = json.loads((flow / "charts" / "fn-10" / "1.json").read_text())
+            child = _gh_issue(node_id="I_child_101", number=101)
+            child["title"] = CP._decision_title(decision)
+            child["body"] = "Remote notes\n" + CP.build_decision_body(decision)
+            parent = _gh_issue(node_id="I_parent_100", number=100)
+            ex = fake_execute({
+                "wire-read": [ok(child), ok(parent)],
+                "wire-parent-read": ok(parent),
+                "wire-update": ok(parent),
+                "relate-child-read": ok(child),
+                "relate-create": ok({"ok": True}),
+            })
+            out = CP.project_chart(flow, "fn-10", event="chart.claim",
+                                   revision="same", evidence="same", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            writes = [c for c in ex.calls if c.op == "wire-update"]
+            self.assertEqual(len(writes), 1, "only parent rollup changes")
+            self.assertIn("relate-create", [c.op for c in ex.calls])
+            self.assertEqual(out["steps"]["children"][0]["kind"], "noop")
+
+
     def test_child_read_error_aborts_without_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)

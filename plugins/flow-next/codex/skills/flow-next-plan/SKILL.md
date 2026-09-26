@@ -120,13 +120,21 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
-Check the configured backend and route:
+Initialize and capture one preflight bundle before routing or scouting (also run this block under autonomy; its question gate remains suppressed). Reuse the literal snapshot path in steps.md:
+
+```bash
+$FLOWCTL init --json
+PLAN_CFG="${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json"
+$FLOWCTL preflight --json > "$PLAN_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
+```
+
+Check the configured backend from that bundle and route:
 
 ```bash
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL review-backend 2>/dev/null)" || ACTIVE=1        # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(jq -er 'if .probes.review_backend.status == "ok" then .probes.review_backend.value.backend else error("review backend probe") end' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1        # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   REVIEW_BACKEND="$(printf '%s' "$RAW" | tr -d '[:space:]' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "$REVIEW_BACKEND" = "ASK" ] && ACTIVE=1
@@ -161,9 +169,9 @@ Read [steps.md](steps.md) and follow each step in order.
 path, the tracker-first mint, tracker projection, selected review, the
 interactive next-steps menu, and the HTML render lens after their existing
 config/choice/route signals. Their references stay cold when the path is not
-taken; Step 0 remains the only config snapshot.
+taken; the preflight bundle above remains the only config snapshot.
 
-**Step 1 (Research) launches every scout in the depth-appropriate set as parallel multi-agent threads (Codex spawns them concurrently).** The set is the steps.md tier table — the full set at STANDARD/DEEP, the full set minus the three web-research scouts at SHORT. A plan whose research skipped a scout inside its own tier, or ran the set sequentially, has broken this. Each scout in the set provides unique signal.
+**Step 1 (Research) launches every scout in the depth-appropriate set as parallel multi-agent threads (Codex spawns them concurrently).** The set is the steps.md tier table — the full set at STANDARD/DEEP, at SHORT skip the three web-research scouts and fold docs-gap-scout’s charter into repo-scout. A plan whose research skipped a scout inside its own tier, or ran the set sequentially, has broken this. Each scout in the set provides unique signal.
 
 ## Output
 

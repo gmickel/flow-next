@@ -85,17 +85,14 @@ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
   || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
   "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+if [[ "$REVIEW_BASE_SHA" != "$REVIEW_HEAD_SHA" ]]; then
+  git diff --quiet "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA"; DIFF_RC=$?
+  [[ "$DIFF_RC" -ne 0 ]] || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+  [[ "$DIFF_RC" -eq 1 ]] || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+fi
 
-DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.diff"
-git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
-  || { echo "git diff failed; not reserving a round" >&2; exit 1; }
-[[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
-  || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
-ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.blob"
-"$FLOWCTL" review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" \
-  --output "$ARTIFACT_FILE" --json
 ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
-  --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+  --review-type completion --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
   printf '%s\n' "$ROUND_JSON"
@@ -154,7 +151,15 @@ state it finds is evidence to report, never something to repair.
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
-Give the subagent:
+Render and dispatch the shared backend prompt verbatim:
+
+```bash
+"$FLOWCTL" review-prompt completion "$SPEC_ID" \
+  --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --receipt "$RECEIPT_PATH" \
+  --out "${TMPDIR:-/tmp}/flow-completion-review-${SPEC_ID}.md" --json || exit $?
+```
+
+The generated prompt supplies these fields; do not hand-assemble them:
 - The completion rubric ([references/completion-review-prompt.md](references/completion-review-prompt.md)) — its verification-budget rail applies by pointer; never restate or widen it in the dispatch prompt
 - Spec requirements / R-IDs / acceptance criteria
 - The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
@@ -242,7 +247,7 @@ and publish that payload by reservation id (never re-derive it):
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --review-type completion --backend host --output-file "$RESPONSE_FILE" \
   --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
-  --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --json)"
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --attach --json)"
 RECORD_EXIT=$?
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   printf '%s\n' "$RECORD_JSON"
@@ -250,14 +255,6 @@ if [[ "$RECORD_EXIT" -ne 0 ]]; then
 fi
 # Only the fields the next step reads; the full ledger stays in flowctl.
 printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-# A refunded (no-verdict) record journals nothing attachable — record already
-# completed its own bookkeeping; attach only a delivered verdict.
-if [[ -n "$VERDICT" ]]; then
-  "$FLOWCTL" review-findings attach \
-    --reservation-id "$RESERVATION_ID" \
-    --receipt "$RECEIPT_PATH" \
-    --json
-fi
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   echo "ESCALATE: reviewer requested human review" >&2
@@ -281,7 +278,7 @@ Continue into the shared Fix Loop — [workflow-common.md](workflow-common.md)
 §"Fix Loop (INTERNAL - do not exit to Ralph)", reached from SKILL.md Step 3 —
 in this same skill run. The shared
 terminal checkpoint re-reads the latest completion verdict and cap counters
-from `review-rounds attempts`; it never relies on shell variables surviving a
+from `review-rounds resume-terminal`; it never relies on shell variables surviving a
 prompt turn. The journaled `record --status-target completion` leg owns this
 host workflow's terminal status — `record` journals it PENDING and it lands
 when the receipt publishes (the `attach` above, or the pre-increment replay

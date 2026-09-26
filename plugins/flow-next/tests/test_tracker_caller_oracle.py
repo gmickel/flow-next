@@ -67,6 +67,7 @@ CURRENT_CALLER_FILES = {
         f"{SKILLS}/flow-next-refine/references/post-write-back.md",
     ),
     "plan": (
+        f"{SKILLS}/flow-next-plan/SKILL.md",
         f"{SKILLS}/flow-next-plan/steps.md",
         f"{SKILLS}/flow-next-plan/references/tracker-projection.md",
     ),
@@ -465,7 +466,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
                 self.assertIn("status.providers.apply_status", text)
                 self.assertIn("wire.parent_read", text)
                 continue
-            self.assertIn("sync active --json", text, caller["id"])
+            self.assertRegex(text, r"sync active --json|preflight --json|run-sync-active\.json", caller["id"])
             self.assertIn("tracker sync", text, caller["id"])
             self.assertIn(f"--event {caller['event']}", text, caller["id"])
             for value in self.oracle["per_event_enum"]:

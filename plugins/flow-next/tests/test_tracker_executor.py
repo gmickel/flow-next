@@ -301,17 +301,60 @@ class CliClassificationThroughExecute(unittest.TestCase):
 
 
 class TlsOptOut(unittest.TestCase):
-    def test_https_handler_carries_the_context_not_open(self) -> None:
-        """`OpenerDirector.open()` takes no `context` kwarg; passing one raised
-        TypeError and broke the documented opt-out entirely."""
-        import inspect
-        import urllib.request
+    def test_https_handler_carries_tls_policy(self) -> None:
+        handler = X._KeepAliveHandler(False)
+        self.assertFalse(handler.verify_tls)
 
-        self.assertNotIn("context",
-                         inspect.signature(urllib.request.OpenerDirector.open).parameters)
-        src = (ROOT / "scripts" / "flowctl_tracker" / "executor.py").read_text()
-        self.assertIn("HTTPSHandler(context=", src)
-        self.assertNotIn("open(r, timeout=req.timeout_s, context=", src)
+    def test_http_reuses_connection_and_preserves_redirects_and_errors(self) -> None:
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        connections = []
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def setup(self):
+                super().setup()
+                connections.append(self.connection)
+
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path == "/redirect":
+                    self.send_response(302)
+                    self.send_header("Location", "/ok")
+                    body = b""
+                else:
+                    self.send_response(404 if self.path == "/missing" else 200)
+                    body = self.path.encode()
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            for path, code, body in (("/ok", 200, b"/ok"),
+                                     ("/redirect", 200, b"/ok"),
+                                     ("/missing", 404, b"/missing")):
+                req = Request(provider="jira", op="read", method="GET",
+                              url_or_argv=f"http://127.0.0.1:{server.server_port}{path}",
+                              credential_policy=CredentialPolicy.NONE)
+                result = X._http(req, None, True)
+                self.assertIsInstance(result, Response, result)
+                self.assertEqual((result.status, result.body), (code, body))
+            self.assertEqual(len(connections), 1)
+        finally:
+            for conn, lock in X._CONNECTIONS.values():
+                with lock:
+                    conn.close()
+            server.shutdown()
+            server.server_close()
+            worker.join()
+
 
     def test_cli_route_rejects_tls_opt_out_rather_than_ignoring_it(self) -> None:
         """Amended acceptance: the executor CANNOT honour sslVerify=false on a

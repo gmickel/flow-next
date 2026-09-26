@@ -16,7 +16,7 @@ Contents:
 
 ## Bridge overview
 
-**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint below runs ONLY when the bridge is **active** AND the specific event is opted in; otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true` (the single value-checked predicate: raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear,github,gitlab,jira}` — NOT merely that a `tracker` block exists, and NOT a stray `type:null`). Each event then reads its own nested `perEvent` leaf (all default `off`):
+**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint below runs ONLY when the bridge is **active** AND the specific event is opted in; otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true` (the single value-checked predicate: raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear,github,gitlab,jira}` — NOT merely that a `tracker` block exists, and NOT a stray `type:null`). Read the run snapshot from phases.md; its `ops` map resolves each event once (disabled events are `off`).
 
 | Lifecycle event | perEvent key | Resolved facade op | Effect when opted in |
 |---|---|---|---|
@@ -28,17 +28,11 @@ Contents:
 
 **Observable + forcing:** every touchpoint invocation above carries its `event: <perEvent-key>` tag, which the tracker-sync skill stamps onto that run's receipts (`sync receipt --event`). Phase 5 then runs an end-of-run `flowctl sync check` over the events that actually triggered, retro-fires any `MISSING` touchpoint exactly once, and surfaces the outcome in a mandatory four-state `Tracker sync:` slot in the final summary (phases.md Phase 5) — a configured-but-didn't-fire touchpoint is a visible gap, never a silent one. Bridge inactive stays zero-overhead: the check exits silently and the slot reads `n/a (bridge inactive)`.
 
-**Shared gating predicate** — every touchpoint uses this exact shape (active AND leaf ≠ off/null):
+**Shared gating predicate** — use the resolved operation from the run snapshot (inactive bridge has an empty map):
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.<key> --json | jq -r '.value')"
-case "$LEAF" in
-  pull|push|reconcile|comment) ENABLED=1 ;;
-  off|null)                    ENABLED=0 ;;
-  *)                           ENABLED=0 ;; # malformed config stays silent
-esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$ENABLED" = "1" ]; then
+OP="$(jq -r '.ops["<key>"] // "off"' <run-sync-active.json>)"
+if [ "$OP" != "off" ]; then
   # invoke the event's fixed lifecycle facade operation below
   :
 fi
@@ -51,14 +45,8 @@ The actual tracker work (transport, body merge, status who-wins, comment dedup, 
 phases.md **3b.1 — first claim → In-Progress.** Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. Trigger only on the spec's **first** claimed task this run (the issue moves to In-Progress once, not per task).
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.work.firstClaim --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — Bridge overview above)
-case "$LEAF" in
-  pull|push|reconcile|comment) OP="push" ;;
-  off|null)                    OP="off" ;;
-  *)                           OP="off" ;; # malformed config stays silent
-esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$OP" != "off" ]; then
+OP="$(jq -r '.ops["work.firstClaim"] // "off"' <run-sync-active.json>)"
+if [ "$OP" != "off" ]; then
   # Invoke the inline wrapper. Work supplies the create-time approved snapshots,
   # then the wrapper makes exactly one facade call:
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op push --status-only --event work.firstClaim <legal file flags>
@@ -66,7 +54,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # local body or relations over tracker-side edits. An unlinked spec still
   # creates, links, seeds the paired base, and then updates status.
   # Unlinked specs create and link inside the facade. No reachable transport is
-  # best-effort; in Ralph mode structured conflicts queue instead of asking.
+  # best-effort; in `FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1`, or `mode:autonomous`, structured conflicts use `flowctl sync defer` instead of asking.
   :
 fi
 ```
@@ -78,14 +66,8 @@ Best-effort: a tracker failure must never block the worker. The skill emits its 
 phases.md **3d.1 — task done → status comment + evidence.** Optional. Runs only when the tracker bridge is active AND `work.done` is opted in, and only when the task reached `done` (phases.md 3d). Posts a structured status comment + evidence (tests / PR links from the task's evidence) to the linked issue; appends-only (R8), deduped by marker — never a conflict.
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.work.done --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — Bridge overview above)
-case "$LEAF" in
-  pull|push|reconcile|comment) OP="comment" ;;
-  off|null)                    OP="off" ;;
-  *)                           OP="off" ;; # malformed config stays silent
-esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$OP" != "off" ]; then
+OP="$(jq -r '.ops["work.done"] // "off"' <run-sync-active.json>)"
+if [ "$OP" != "off" ]; then
   # Work synthesizes the comment content by name: the task done summary plus
   # tests, commits, and PR evidence. Its FIRST line is the stable per-task
   # identity `evidence=<task-id>@<final-evidence-commit-sha>` (or, when the
@@ -94,7 +76,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   # The inline wrapper then makes exactly one facade call and deletes the file:
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event work.done --body-file "$BODY_FILE"
   # Unlinked specs create and link inside the facade. No reachable transport is
-  # best-effort; Ralph queues structured conflicts.
+  # best-effort; unattended runs use `flowctl sync defer` for structured conflicts (same full autonomy namespace as First claim).
   :
 fi
 ```
@@ -106,14 +88,8 @@ Best-effort — append-only comment sync never blocks the work loop; the skill e
 phases.md **3g — SHIP → verdict comment, NEVER terminal Done.** Runs only when the tracker bridge is active AND `completionReview` is opted in, immediately after the completion-review skill returns with its terminal status already written. The status owner stays inside the review skill; this caller-owned touchpoint exists only to project the verdict evidence. **Local completion review is NOT merge evidence** — `Done` is reserved for a `MERGED` PR (status-sync `flowToNormalized`), so this touchpoint is **comment-shaped only**: it posts the verdict + R-ID coverage and at most leaves the issue at `In Review` (if an open PR exists). It NEVER pushes `Done`/`verified`:
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.completionReview --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — Bridge overview above)
-case "$LEAF" in
-  pull|push|reconcile|comment) OP="comment" ;;
-  off|null)                    OP="off" ;;
-  *)                           OP="off" ;; # malformed config stays silent
-esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$OP" != "off" ]; then
+OP="$(jq -r '.ops["completionReview"] // "off"' <run-sync-active.json>)"
+if [ "$OP" != "off" ]; then
   # Work synthesizes the comment content by name: completion-review verdict and
   # R-ID coverage. Its FIRST line is `evidence=<reviewed-head-sha>`, so a retry
   # of the same review deduplicates while a review after new commits does not.

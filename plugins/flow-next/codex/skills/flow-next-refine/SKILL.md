@@ -90,6 +90,9 @@ Decide whether doc-aware mode activates. `DOC_AWARE` controls glossary + decisio
 The default-autodetect rule is: doc-aware mode activates when **any** of three conditions has signal — `glossary.total_terms > 0` (a) OR a decision entry exists (b) OR `strategy.sections_filled >= 1` (c). The two flag pairs override (a)+(b) and (c) independently. Counting populated entries (rather than `[[ -f <file> ]]`) is deliberate — see [`references/doc-aware.md`](references/doc-aware.md) § Why counts, not file presence.
 
 ```bash
+# One preflight bundle for this run. Missing/failed values retain fail-open gates.
+REFINE_PREFLIGHT="${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json"   # reuse this literal path
+"$FLOWCTL" preflight --json > "$REFINE_PREFLIGHT" 2>/dev/null || printf '{}' > "$REFINE_PREFLIGHT"
 # DOC_AWARE: glossary + decisions. Probes and parses fail OPEN (|| DOC_AWARE=1).
 DOC_AWARE=0
 if [[ "$DOC_AWARE_FORCE" == "on" ]]; then
@@ -98,11 +101,11 @@ elif [[ "$DOC_AWARE_FORCE" == "off" ]]; then
   DOC_AWARE=0
 else
   # NO pipelines in the probe — capture raw first, rc-checked; parse separately.
-  GLOSSARY_RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || DOC_AWARE=1
-  DECISIONS_RAW="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null)" || DOC_AWARE=1
+  GLOSSARY_RAW="$(jq -ce 'if .probes.glossary.status == "ok" then .probes.glossary.value else error("glossary probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || DOC_AWARE=1
+  DECISIONS_RAW="$(jq -ce 'if .probes.decisions.status == "ok" then .probes.decisions.value else error("decisions probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || DOC_AWARE=1
   if [ "$DOC_AWARE" = "0" ]; then
     TERMS="$(printf '%s' "$GLOSSARY_RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || DOC_AWARE=1
-    DECS="$(printf '%s' "$DECISIONS_RAW" | jq -r '.entries | length // 0' 2>/dev/null)" || DOC_AWARE=1
+    DECS="$(printf '%s' "$DECISIONS_RAW" | jq -r '.entry_count // 0' 2>/dev/null)" || DOC_AWARE=1
   fi
   if [ "$DOC_AWARE" = "0" ] && { [ "${TERMS:-0}" -gt 0 ] || [ "${DECS:-0}" -gt 0 ]; }; then
     DOC_AWARE=1
@@ -116,7 +119,7 @@ if [[ "$STRATEGY_AWARE_FORCE" == "on" ]]; then
 elif [[ "$STRATEGY_AWARE_FORCE" == "off" ]]; then
   STRATEGY_AWARE=0
 else
-  STRATEGY_RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || STRATEGY_AWARE=1
+  STRATEGY_RAW="$(jq -ce 'if .probes.strategy.status == "ok" then .probes.strategy.value else error("strategy probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || STRATEGY_AWARE=1
   if [ "$STRATEGY_AWARE" = "0" ]; then
     STRAT_FILLED="$(printf '%s' "$STRATEGY_RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || STRATEGY_AWARE=1
   fi
@@ -392,8 +395,8 @@ Both are conditional. Probe once after the write-back; each sentinel names the s
 # Tracker sync (opt-in): projects the enrichment to the linked issue and reconciles
 # two-way. Skip entirely for the file-input case — there is no flow spec yet.
 TRACKER_GATE=0
-LEAF_RAW="$("$FLOWCTL" config get tracker.perEvent.interview --json 2>/dev/null)" || TRACKER_GATE=1
-ACTIVE_RAW="$("$FLOWCTL" sync active --json 2>/dev/null)" || TRACKER_GATE=1
+LEAF_RAW="$(jq -ce 'if .probes.config.status == "ok" then {value: .value.tracker.perEvent.interview} else error("config probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || TRACKER_GATE=1
+ACTIVE_RAW="$(jq -ce 'if .probes.tracker.status == "ok" then .probes.tracker.value else error("tracker probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || TRACKER_GATE=1
 if [ "$TRACKER_GATE" = "0" ]; then
   LEAF="$(printf '%s' "$LEAF_RAW" | jq -r '.value' 2>/dev/null)" || TRACKER_GATE=1
   ACTIVE="$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null)" || TRACKER_GATE=1
@@ -408,7 +411,7 @@ fi
 
 # Mark-ready offer (flow spec inputs only — task ids and file paths carry no spec readiness).
 READY_GATE=0
-READY_STATE_RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || READY_GATE=1
+READY_STATE_RAW="$(jq -ce 'if .probes.config.status == "ok" then {value: .value.tracker.readyState} else error("config probe") end' "${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json" 2>/dev/null)" || READY_GATE=1
 SPECS_RAW="$("$FLOWCTL" specs --json 2>/dev/null)" || READY_GATE=1
 if [ "$READY_GATE" = "0" ]; then
   READY_STATE="$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null)" || READY_GATE=1

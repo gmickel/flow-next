@@ -1,16 +1,224 @@
 {
   "branch_name": "fn-259-flowctl-renders-what-agents-hand",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-26T15:49:41.877140Z",
   "created_at": "2026-09-25T20:30:52.019431Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-255-unattended-run-correctness-fixes-audit",
     "fn-258-smaller-default-outputs-and-bundles"
   ],
   "id": "fn-259-flowctl-renders-what-agents-hand",
+  "impl_review_rounds": {
+    "fn-259-flowctl-renders-what-agents-hand.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0c6d5870a1fd410df5d8baceff89e3554861db490cdfd01b09779ff20c346598",
+      "backend": "codex",
+      "base_sha": "fc93b0a442a677fcbaa270da936f2dbc97a0b4f6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "classification": "introduced",
+            "findingId": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "classification": "introduced",
+            "findingId": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "classification": "introduced",
+            "findingId": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "classification": "introduced",
+            "findingId": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e31c52424e34531d9a03de0d0193df41",
+            "classification": "introduced",
+            "findingId": "finding-e31c52424e34531d9a03de0d0193df41",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c5e10707954b08d615b9591edb4269e2fca39a84",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3985,
+      "output_sha256": "1d0df1827205eea40fefd608e570a02cbefea658f6b05071f8ee2290792a4fea",
+      "reservation_id": "f83a33cc6143456eaf71bb762a774977",
+      "round_consumed": true,
+      "scope": "impl:fn-259-flowctl-renders-what-agents-hand.1",
+      "superseded_by": null,
+      "task": "fn-259-flowctl-renders-what-agents-hand.1",
+      "timestamp": "2026-09-26T15:02:10.457972Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "40a9071fba93be2fb307fbd755c24a6d2b4d131ce495f023106e3affc6d3a038",
+      "backend": "codex",
+      "base_sha": "fc93b0a442a677fcbaa270da936f2dbc97a0b4f6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "classification": "introduced",
+            "findingId": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "classification": "introduced",
+            "findingId": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "classification": "introduced",
+            "findingId": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "classification": "introduced",
+            "findingId": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-e31c52424e34531d9a03de0d0193df41",
+            "classification": "introduced",
+            "findingId": "finding-e31c52424e34531d9a03de0d0193df41",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b05a87bfc1a5a551975ec2caebe05a55b5482d34",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3187,
+      "output_sha256": "63226a0f193ea7242a7dda0be30ed13b4a9f13a226dcbaad6217afd8106a7ec9",
+      "reservation_id": "d0c7f6f0dc4a4f9698a3c702a58608d7",
+      "round_consumed": true,
+      "scope": "impl:fn-259-flowctl-renders-what-agents-hand.1",
+      "superseded_by": null,
+      "task": "fn-259-flowctl-renders-what-agents-hand.1",
+      "timestamp": "2026-09-26T15:07:15.171544Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "edbbf149cbaef90c08b95f8128629cb5a3f8b01cd7de592d27cd9ef4cc728b68",
+      "backend": "codex",
+      "base_sha": "b05a87bfc1a5a551975ec2caebe05a55b5482d34",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "68e0aec8c7243e732493c07a2af2baa723765379",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 125068,
+      "output_sha256": "10b228b6eb971c094b35852429791e7f6c733cc85b427891df73005c54d7f626",
+      "reservation_id": "88ab59c801654150a3f19a3138f6a766",
+      "round_consumed": true,
+      "scope": "impl:fn-259-flowctl-renders-what-agents-hand.1",
+      "superseded_by": null,
+      "task": "fn-259-flowctl-renders-what-agents-hand.1",
+      "timestamp": "2026-09-26T15:32:52.458045Z",
+      "tool_calls": 13,
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-259-flowctl-renders-what-agents-hand.1": 2
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-259-flowctl-renders-what-agents-hand.1": 0
+  },
   "spec_path": ".flow/specs/fn-259-flowctl-renders-what-agents-hand.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl renders what agents hand-assemble (audit wave 5)",
   "tracker": {
     "baseHashFlow": null,
@@ -23,5 +231,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T20:34:50.696324Z"
+  "updated_at": "2026-09-26T16:29:09.553860Z"
 }

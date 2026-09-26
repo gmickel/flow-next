@@ -13,10 +13,13 @@ _FENCE_RE = re.compile(r"^[ \t]*# fence:(?P<name>[a-z-]+)\b.*?$", re.MULTILINE)
 
 def fence(path: Path, name: str) -> str:
     """The bash block that starts at `# fence:<name>` up to its closing ```."""
+    if path.parent.name == "flow-next-make-pr":
+        script = "make-pr-preflight.sh" if path.name == "workflow.md" else "make-pr-create.sh"
+        path = path.parents[2] / "scripts" / script
     text = path.read_text(encoding="utf-8")
     for m in _FENCE_RE.finditer(text):
         if m.group("name") == name:
-            end = text.index("```", m.end())
+            end = text.index("# end:block" if path.suffix == ".sh" else "```", m.end())
             block = text[m.start():end]
             # the frontier fence is indented inside a list item
             indent = re.match(r"[ \t]*", block).group(0)

@@ -2,6 +2,7 @@
 import argparse
 import importlib.util
 import io
+import http.client
 import json
 import os
 from pathlib import Path
@@ -57,7 +58,7 @@ class JudgeTests(unittest.TestCase):
         self.env.start()
         self.config = patch.object(f, "get_config", side_effect=lambda key, default=None: "auto" if key == "pipeline.qa" else True)
         self.config.start()
-        self.http = patch.object(f.http.client, "HTTPSConnection")
+        self.http = patch.object(http.client, "HTTPSConnection")
         self.connection = self.http.start().return_value
         self.sleep = patch.object(f.time, "sleep")
         self.sleeper = self.sleep.start()

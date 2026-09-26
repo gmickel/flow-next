@@ -92,12 +92,11 @@ A confirmed merge ends either mode's run, even if the tracker touchpoint failed;
 report that failure with the merge commit. Do not select another item. An
 unconfirmed `MERGED` result or `NO_WORK` cannot prove completion.
 
-`--tick` stops after one land dispatch. A long-running invocation continues
-only when `LAND_CONTINUE=1`, waiting at the driver's cadence (the caller's
-interval, otherwise 30 minutes) before re-reading the exact PR and current
-consent. Keep patience and repair budgets in land; no tight polling, repair
-churn or pilot strikes while waiting. Stop on cancellation, a host limit,
-`BLOCKED` or `NEEDS_HUMAN` with the observed evidence.
+`--tick` stops after one land dispatch. A long-running invocation continues only when `LAND_CONTINUE=1`. Name the wait mechanism and its bound in the report: use the soonest of land's reported remaining patience, a bounded `gh pr checks <bound-pr> --watch --interval 30` watch when checks are pending, or the caller interval (default 30 minutes). Bound the watch with the host tool timeout to the smaller of remaining patience and caller interval; on timeout re-read the exact PR. Without a remaining-time report, use the caller interval as the bound. Never tight-poll or spend repair attempts on an unchanged external wait.
+
+`--until=merge` supplies driver landing authority; it does **not** waive `land.patienceMinutes`. Only a human's explicit current in-session merge authorization waives patience. Preserve that distinction when passing authority to land.
+
+Track consecutive no-progress land ticks on human-review states (`AWAITING_REVIEW` without a patience countdown or pending checks). Reset on a changed head, review state, or resolved thread. After two unchanged ticks, stop `DEFERRED_TO_LAND` with the waiting evidence; another human decision is needed, so do not wait forever. A decreasing patience countdown and pending CI use their bounded wait instead. Stop on cancellation, host limits, `BLOCKED` or `NEEDS_HUMAN`; never record pilot strikes for waiting.
 
 Under `--auto`, retain the `PILOT_VERDICT` grammar and append every dispatched
 `land` stage in order. Include the observed `LAND_VERDICT`, PR identity and

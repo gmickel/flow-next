@@ -47,7 +47,9 @@ If empty, the skill picks its own coverage targets (15-25 candidates → 5-8 sur
 `/flow-next:prospect` is exploratory and human-in-the-loop. Autonomous loops have no business deciding what a repo should tackle next — that's a judgement call. Hard-error with exit 2 when running under Ralph.
 
 ```bash
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" \
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" \
+   || " ${ARGUMENTS:-} " == *" mode:autonomous "* ]]; then
   echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
   exit 2
 fi
@@ -64,7 +66,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 2. **Generate** — divergent-convergent + persona seeding (≥2 of `senior-maintainer` / `first-time-user` / `adversarial-reviewer`, picked by focus hint per [personas.md](personas.md)). One divergent prompt; no self-judging.
 3. **Critique** — separate prompt pass that does NOT see the focus hint or persona texts; rejection floor ≥40% (≥60% under `raise the bar`); fixed taxonomy (`duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other`); `out-of-scope-vs-strategy` is advisory only (user can override at promote time via existing `--force` flag); floor violation surfaces blocking question with frozen options `regenerate | loosen-floor | ship-anyway`.
 4. **Rank** — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+. Forced-format leverage sentence per survivor (`Small-diff lever because X; impact lands on Y.`); no numeric scores.
-5. **Write artifact** — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md` via `flowctl.write_prospect_artifact`. Same-day collisions suffix with `-2`, `-3`. Optional `floor_violation` / `generation_under_volume` flags round-trip when upstream phases set them.
+5. **Write artifact** — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md` via `flowctl prospect write --from-json`. Same-day collisions suffix with `-2`, `-3`. Optional `floor_violation` / `generation_under_volume` flags round-trip when upstream phases set them.
 6. **Handoff** - blocking prompt for promote / chart (only if still singular+oversized+unclear) / interview / skip via the platform's question tool; frozen numbered-options fallback when no blocking tool is available.
 
 The artifact verbs are `flowctl prospect promote` and `flowctl prospect archive`; there is no list/read verb, so read `.flow/prospects/*.md` directly.

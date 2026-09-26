@@ -285,7 +285,7 @@ class SpecIdSetupQuestion(unittest.TestCase):
 
     def test_raw_probe_and_unset_gate(self) -> None:
         text = _read(SETUP_WF)
-        self.assertIn("tracker.specIds --raw", text)
+        self.assertIn("setup-status", text)
         self.assertIn("TRACKER_CONFIGURED", text)
         self.assertIn("CURRENT_SPEC_IDS", text)
         # Both conditions in the include rule.

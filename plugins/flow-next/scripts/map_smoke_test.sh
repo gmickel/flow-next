@@ -529,7 +529,7 @@ fi
 echo -e "${YELLOW}--- Case 6: Config-state echo (R12) ---${NC}"
 
 # Workflow.md must contain the four field labels in order.
-WF_TEXT="$(cat "$WORKFLOW_FILE")"
+WF_TEXT="$(cat "$PLUGIN_ROOT/scripts/map.sh")"
 assert_grep "clawpatch:" "$WF_TEXT" "Case 6: workflow.md echo block names clawpatch version line"
 assert_grep "CLAWPATCH_PROVIDER:" "$WF_TEXT" "Case 6: workflow.md echo block names CLAWPATCH_PROVIDER line"
 assert_grep "flow-next review backend:" "$WF_TEXT" "Case 6: workflow.md echo block names flow-next review backend line"

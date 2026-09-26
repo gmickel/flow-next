@@ -125,17 +125,28 @@ non-codex primary is refused with exit 2. Secondary draws may name `codex`,
 
 ## Step 3: Coordinator merge (judgment — yours)
 
-Read each surviving draw's `<axis>.review.md` and merge them into ONE review
-document (write it to a file for the finalize):
+Read each surviving draw's `<axis>.review.md` and author a merge-plan JSON:
+
+```json
+{"keep":["correctness:1","integration:2"],"collapse":{"standards:1":"correctness:1"}}
+```
+
+References are `<axis>:<parsed finding ordinal>`. `keep` orders the output;
+`collapse` maps a duplicate to its kept representative. Omitted findings are
+your evidence-gate drops. Targets must be kept; missing ids fail before recording.
+Flowctl renders the document and counts distinct `introduced` survivors from
+NEEDS_WORK draws, including a NEEDS_WORK duplicate collapsed into a SHIP
+representative; kept `pre_existing` items stay in the document but never count. The
+legacy `--merged-file` plus `--needs-work-survivors` route remains available for
+repairing unparseable draw output. Keep these judgment rules:
 
 - **Same-defect dedupe** is judgment: findings describing the same defect from
   different draws collapse to one entry, keeping the strongest evidence.
-- **Evidence bar:** drop findings that fail it and state the dropped counts in
-  the standard per-anchor tally grammar — e.g.
-  `Suppressed findings: 3 at anchor 50, 2 at anchor 0.` — counting each
-  suppressed finding ONCE per anchor even when several draws suppressed the
-  same one (same-defect dedupe applies to the tally too), or carry the draws'
-  JSON tally blocks through verbatim.
+- **Evidence bar:** omit findings that fail it. Optional `suppressed_count`
+  maps confidence anchors to counts, e.g. `{"50":3,"0":2}`. Count each
+  suppressed defect once per anchor even when several draws suppressed it;
+  same-defect dedupe of these counts remains your judgment. Coverage gaps
+  (`unaddressed` R-IDs) are preserved from the draw tallies automatically.
 - **Ranked output with an Act-On tier capped at 5 — non-blocking tiers only** —
   plus a published remainder: considered-and-deferred must be distinguishable
   from never-seen, so remainder items stay in the merged document (they enter
@@ -145,14 +156,8 @@ document (write it to a file for the finalize):
 - **Axis provenance lives in your prose report** (e.g. "the integration draw
   surfaced #3 and #7"), never as a field on finding items — the v1 findings
   schema's closed allowlist is untouched.
-- **Count the NEEDS_WORK-draw survivors while you merge:** you compute this
-  count during the same-defect dedupe — the number of actionable findings from
-  the NEEDS_WORK draws that survived your evidence
-  gate. Pass it to the finalize as `--needs-work-survivors N` — item fields
-  carry no draw attribution, so only your merge knows it. When every
-  NEEDS_WORK-draw finding was dropped, `--needs-work-survivors 0` triggers
-  the wedge escalation even though SHIP-draw remainder items keep the merged
-  container non-empty.
+- **Survivor count is derived:** the merge-plan owns the draw attribution;
+  finalize computes the count and applies the zero-survivor wedge.
 - Keep the draws' output format (Severity / Confidence / Classification /
   File:Line / R-IDs per finding, the `## Pre-existing issues` section, coverage
   table and tally lines where present) and end with exactly one verdict tag.
@@ -168,23 +173,8 @@ document (write it to a file for the finalize):
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-# Bash state does NOT survive across tool calls — re-derive the Step-1/Step-2
-# values in THIS block rather than reading stale variables.
-# RID and MERGED_FILE are typed as LITERALS: the rid from the phase-one JSON
-# output, the merged-file path from your Step-3 merge — never carried shell
-# variables.
-ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
-TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
-RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
-if [[ -z "$BASE_COMMIT" ]]; then
-  DIFF_BASE="main"
-  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
-else
-  DIFF_BASE="$BASE_COMMIT"
-fi
-args=()
-[ -n "$TASK_ID" ] && args+=("$TASK_ID")
-args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<your merged document path>" --needs-work-survivors "<coordinator count of surviving findings from NEEDS_WORK draws>" --receipt "$RECEIPT_PATH" --json)
+# The reservation metadata derives task, base and receipt; use literal paths.
+args=(--rid "<rid from phase-one JSON>" --merge-plan "<merge-plan JSON path>" --json)
 # Scope ownership through the optional phases (PR #392): when --deep,
 # --validate, or --interactive is enabled, hold the lease at the finalize —
 # review-route and the reservation gate refuse any other dispatch on this
@@ -198,9 +188,8 @@ PHASES_RESUME_SESSION="<1 or 0 printed by Step 0>"
 [ "$PHASES_RESUME_SESSION" = "1" ] && args+=(--phases-resume-session)
 FINALIZE_JSON="$($FLOWCTL codex impl-review-fanout-finalize "${args[@]}")"
 FINALIZE_EXIT=$?
-# The merged body is the file you just wrote; print everything else plus the
-# verdict tag (an empty tag when no verdict came back, which is a failure).
-printf '%s' "$FINALIZE_JSON" | jq -c 'del(.review)' 2>/dev/null || printf '%s\n' "$FINALIZE_JSON"
+# Print the rendered document and derived count with the verdict.
+printf '%s' "$FINALIZE_JSON" | jq -c '.' 2>/dev/null || printf '%s\n' "$FINALIZE_JSON"
 printf '<verdict>%s</verdict>\n' "$(printf '%s' "$FINALIZE_JSON" | jq -r '.verdict // empty' 2>/dev/null)"
 exit "$FINALIZE_EXIT"
 ```
@@ -218,8 +207,8 @@ The finalizer is deterministic and atomic — only it records or refunds:
   (`NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > SHIP`); failed draws do not
   vote. No draw's verdict is judged away.
 - **Wedge escalation:** a `NEEDS_WORK` round with zero actionable survivors
-  from the NEEDS_WORK draws (your `--needs-work-survivors` count — required
-  whenever any draw returned `NEEDS_WORK`) escalates to `NEEDS_HUMAN` rather
+  from the NEEDS_WORK draws (derived from the merge-plan; the legacy merged-file
+  route requires `--needs-work-survivors`) escalates to `NEEDS_HUMAN` rather
   than looping against an unchanged artifact — per NEEDS_WORK draw, so
   SHIP-draw remainder items never mask an all-filtered NEEDS_WORK.
 - Records the attempt, the single v1 findings container (ordinals re-assigned

@@ -180,6 +180,11 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("run_cursor_exec", "_cursor_run_exec"): 1,
                 ("run_claude_exec", "_claude_run_exec"): 1,
                 ("subprocess.run", "get_repo_root"): 1,
+                # Snapshot reads, contiguous commit evidence and memory audit git facts.
+                ("subprocess.run", "pilot_snapshot"): 4,
+                ("subprocess.run", "list_prs"): 1,
+                ("subprocess.run", "cmd_done"): 4,
+                ("subprocess.run", "git_lines"): 1,
                 # fn-247: observed PR lifecycle and tracked dependency facts, not LLM bridges.
                 ("subprocess.run", "judge_route_state"): 1,
                 ("subprocess.run", "judge_dependency_tokens"): 1,

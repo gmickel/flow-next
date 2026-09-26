@@ -43,6 +43,14 @@ class QaWriterShellTest(unittest.TestCase):
                                        NA_REASON='CLI "quoted"\n雪', FLOWCTL=str(PLUGIN / 'scripts/flowctl'),
                                        PYTHON_BIN=sys.executable, TMPDIR=str(root),
                                        QA_FINDINGS='[]', OPEN_P0P1='[]')
+                            payload = root / 'qa-input.json'
+                            payload.write_text(json.dumps({
+                                'id': env['SPEC_ID'], 'qa_outcome': env['QA_OUTCOME'],
+                                'mode': 'interactive', 'findings': [],
+                                'na_reason': env['NA_REASON'],
+                                'rid_coverage': json.loads(value) if value else {},
+                            }), encoding='utf-8')
+                            env['QA_RECEIPT_INPUT'] = str(payload)
                             if value is not None:
                                 env['RID_COVERAGE'] = value
                             subprocess.run([*FLOWCTL_CMD, 'init'],

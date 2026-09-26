@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit
 
 # /flow-next:map — wrap `clawpatch map` for a semantic feature index
 
-**Read [workflow.md](workflow.md) for full phase-by-phase execution.**
+**Read [workflow.md](workflow.md) for the bundled-script invocation and summary.**
 
 Wrap the upstream [`clawpatch`](https://github.com/openclaw/clawpatch) CLI's `map` subcommand. Default invocation is provider-free (`--source heuristic`) — zero LLM calls, zero API spend, deterministic mapper. Output lands at `.clawpatch/features/*.json` (Zod-validated upstream, `schemaVersion: 1`). Scout enrichment and the `/flow-next:prime` DE7 nudge read the resulting index; this skill is the install/init/invoke surface.
 
@@ -31,13 +31,13 @@ Arguments: `$ARGUMENTS`
 
 Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 
-- **Default** (no args) → `clawpatch map --source heuristic` (provider-free, deterministic). Heuristic targets conventional app/framework layouts; unconventional repos (CLI tools, plugins, markdown/docs-heavy, non-standard monorepos) may map to 0 features — Phase 5 surfaces a `--source=auto|agent` suggestion when that happens.
+- **Default** (no args) → `clawpatch map --source heuristic` (provider-free, deterministic). Heuristic targets conventional app/framework layouts; unconventional repos (CLI tools, plugins, markdown/docs-heavy, non-standard monorepos) may map to 0 features — The summary surfaces a `--source=auto|agent` suggestion when that happens.
 - `--source auto|agent` → passthrough to clawpatch; user must have `CLAWPATCH_PROVIDER` configured for these paths (clawpatch's own concern, not ours).
 - `--` → terminator; tokens after flow to `clawpatch map` (e.g. `--since-ref origin/main`, `--paths src/`).
 
 **Passthrough boundary.** The slash-command host delivers `$ARGUMENTS` as a single string; the skill word-splits on whitespace. Passthrough is therefore **token-level (whitespace-separated), not full shell-verbatim** — tokens containing literal spaces or shell metacharacters that require shell quoting will not survive. Globs (`*`, `?`) are protected from expansion (`set -f` before the parse) so they reach clawpatch untouched. Users needing complex quoting should run `clawpatch map` directly.
 
-**flow-next's review backend config (rp / codex / copilot / none) stays out of clawpatch.** clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal — a run that sets `CLAWPATCH_PROVIDER` from the flow-next backend has broken this. The Phase 0 echo reports the backend as informational only.
+**flow-next's review backend config (rp / codex / copilot / none) stays out of clawpatch.** clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal — a run that sets `CLAWPATCH_PROVIDER` from the flow-next backend has broken this. The script echo reports the backend as informational only.
 
 ## Version pin
 
@@ -45,7 +45,7 @@ Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"
 ```
 
-Single source of truth for the supported clawpatch range. Workflow Phase 1 parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
+Single source of truth for the supported clawpatch range. The bundled script parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
 
 clawpatch is pre-1.0 (v0.4.0, 2026-05-22; weekly minor releases). The README forecasts breaking changes between minor releases — tolerant parsing matters.
 
@@ -53,32 +53,20 @@ clawpatch is pre-1.0 (v0.4.0, 2026-05-22; weekly minor releases). The README for
 
 `/flow-next:map` requires a user at the terminal for the install-prompt and init-prompt branches. Autonomous loops cannot install global npm packages or accept interactive consent. Decline-to-run when Ralph signals are set.
 
-```bash
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
-  if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-    TRIGGER="REVIEW_RECEIPT_PATH"
-  else
-    TRIGGER="FLOW_RALPH"
-  fi
-  echo "Error: /flow-next:map declines under Ralph ($TRIGGER set); rerun interactively." >&2
-  exit 2
-fi
-```
+The bundled script checks `FLOW_RALPH=1` and nonempty `REVIEW_RECEIPT_PATH`
+before argument parsing or init; either causes exit 2 and names the trigger.
+Run that script once through [workflow.md](workflow.md), without reassembling
+its guard or commands in the host.
 
-**Decline-to-run only — nothing is written to `$REVIEW_RECEIPT_PATH`.** That file belongs to the upstream review caller; a run that leaves any byte there under Ralph has corrupted an unrelated receipt and broken this. The skill exits at line 1 of the workflow under Ralph; install/init paths are unreachable.
+**Decline-to-run only — nothing is written to `$REVIEW_RECEIPT_PATH`.** That file belongs to the upstream review caller; a run that leaves any byte there under Ralph has corrupted an unrelated receipt and broken this. The bundled script exits before work under Ralph; install/init paths are unreachable.
 
 No env-var opt-in. Ralph never installs global tools or accepts interactive consent.
 
 ## Workflow
 
-Execute the phases in [workflow.md](workflow.md) in order:
-
-0. **Pre-flight + config-state echo (R12)** — one four-line block: clawpatch version + `--source`, `CLAWPATCH_PROVIDER` env (or `"none"`), flow-next review backend (informational only), `.clawpatch/` last-mapped timestamp (or `"absent"`).
-1. **Install detection (R1, R11)** — `command -v clawpatch` + `clawpatch --version`. Missing → print `pnpm add -g clawpatch` install instructions verbatim and exit 1. When `pnpm bin -g` exits 0 but `command -v clawpatch` still empty, also print the PNPM_HOME `bin/` hint (run `pnpm setup`, re-source shell rc). **No auto-install.**
-2. **Version-range guard (R10)** — parse `clawpatch --version` with `(\d+\.\d+\.\d+)`; compare against `SUPPORTED_CLAWPATCH`. Outside range → one-line stderr warning naming expected vs found and continue (degrade — never block).
-3. **Init (R2)** — when `.clawpatch/` absent, run `clawpatch init` first. After clawpatch creates `.clawpatch/project.json` + `.clawpatch/config.json`, write a self-contained `.clawpatch/.gitignore` skeleton (skill owns this write — STRATEGY zero-dep means flowctl never references clawpatch).
-4. **Map invocation (R1)** — `clawpatch map --source <SOURCE> [extra passthrough]`. Default `<SOURCE>` is `heuristic` (always passed explicitly — never rely on clawpatch's default in case upstream changes it). clawpatch streams stdout live; the skill does not buffer.
-5. **Result summary** — print path to `.clawpatch/features/`, count of feature files, last-mapped timestamp; suggest `flowctl repo-map list` and the `/flow-next:plan` / `/flow-next:capture` paths that consume it.
+Invoke the bundled script as [workflow.md](workflow.md) directs. It handles
+install detection, the version warning, init, ignore skeleton, streaming map
+and mechanical counts. The host explains the result and optional next steps.
 
 ## Sharing contract — local-only by design
 

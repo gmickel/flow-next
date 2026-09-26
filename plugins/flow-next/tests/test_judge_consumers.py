@@ -1,11 +1,9 @@
 """Run the shipped consumer fences against typed judge fixtures; no network."""
+import argparse
 import importlib.util
 import json
-import os
 from pathlib import Path
 import re
-import shutil
-import subprocess
 import sys
 import unittest
 
@@ -111,20 +109,22 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertTrue(qa["qa_runs"])
         self.assertEqual(fork["fork_action"], "observable")
 
-    @unittest.skipIf(sys.platform == "win32" or not shutil.which("bash") or not shutil.which("jq"), "requires POSIX bash and jq")
-    def test_auto_reuses_probe_and_preserves_failed_observation(self):
-        block = fence("skills/flow-next-flow/auto.md", "PR_PROBE_FAILED=0")
-        for route, expected in [
-            ({"available": True, "decision": {"pr_ref": {"url": "pr1", "state": "OPEN"}}}, "OPEN=pr1 FAIL=0"),
-            ({"available": True, "decision": {"pr_ref": None}}, "OPEN= FAIL=0"),
-            ({"available": False, "pr_probe_failed": True}, "OPEN= FAIL=1"),
-            ({"available": False, "reason": "no_key"}, "OPEN=legacy FAIL=0"),
-        ]:
-            env = dict(os.environ, ROUTE_JSON=json.dumps(route), SPEC_JSON='{"branch_name":"test"}')
-            stub = "gh() { printf '%s\\n' '[{\"url\":\"legacy\",\"state\":\"OPEN\"}]'; }\n"
-            proc = subprocess.run(["bash", "-c", stub + block + '\nprintf "OPEN=%s FAIL=%s\n" "$OPEN_PR" "$PR_PROBE_FAILED"'],
-                                  env=env, capture_output=True, text=True, check=True)
-            self.assertEqual(proc.stdout.strip(), expected)
+    def test_unavailable_judge_keeps_code_lifecycle(self):
+        for value in ('existing_pr_tail', 'work_planned', 'all_done_make_pr'):
+            answer = {'available': False, 'reason': 'no_key',
+                      'decision': {'value': value, 'met': True, 'candidates': []}}
+            output = execute('skills/flow-next-flow/workflow.md', 'fence:judge-route-consumer', result=answer)
+            self.assertEqual(output['route_value'], value)
+            self.assertIn('(code)', output['host_route']['line'])
+        output = execute('skills/flow-next-flow/workflow.md', 'fence:judge-route-consumer',
+                         result={'available': False, 'reason': 'transport', 'pr_probe_failed': True})
+        self.assertTrue(output['host_route']['pr_probe_failed'])
+        # No key and an unmet code decision: name the reason, never an empty list.
+        output = execute('skills/flow-next-flow/workflow.md', 'fence:judge-route-consumer',
+                         result={'available': False, 'reason': 'no_key',
+                                 'decision': {'value': 'host', 'met': False, 'candidates': []}})
+        self.assertEqual(output['route_value'], 'host')
+        self.assertEqual(output['host_route']['line'], 'Route: host (jev-unavailable(no_key))')
 
 
     def tier(self, choice="mechanical", confidence=0.88, **overrides):
@@ -132,7 +132,9 @@ class JudgeConsumerTests(unittest.TestCase):
                     explicit_model=None, fast_model="fast-test-model", can_spawn_model=True, can_bridge=False,
                     role_model=None)
         args.update(overrides)
-        return execute("skills/flow-next-work/references/judge-tier.md", "fence:judge-tier-dispatch", **args)
+        out = f.judge_tier_dispatch(args.pop("result"), argparse.Namespace(**args))
+        out["spawn_model_args"] = {"model": out["spawn_model"]} if out["spawn_model"] else {}
+        return out
 
     def test_tier_selects_spawn_model_not_only_prompt(self):
         out = self.tier()
@@ -154,7 +156,7 @@ class JudgeConsumerTests(unittest.TestCase):
                 out = self.tier(role_model=role_model)
                 actual = effective_model(role_model, **out["spawn_model_args"])
                 self.assertIn(actual, out["tier_line"])
-                self.assertEqual(out["selected_model"], None if role_model else "fast-test-model")
+                self.assertEqual(out["spawn_model"], None if role_model else "fast-test-model")
         pinned = self.tier(role_model="gpt-5.6-terra")
         self.assertIsNone(pinned["implementer"])
         self.assertIn("(role pins model)", pinned["tier_line"])
@@ -167,14 +169,14 @@ class JudgeConsumerTests(unittest.TestCase):
                        {"choice": "moderate"}, {"choice": "intelligent"},
                        {"result": {"available": False, "reason": "disabled"}}):
             out = self.tier(**kwargs)
-            self.assertIsNone(out["selected_model"])
+            self.assertIsNone(out["spawn_model"])
             self.assertEqual(out["implementer"], kwargs.get("explicit_model"))
         self.assertIn("jev-unavailable(disabled)", out["tier_line"])
         out = self.tier(can_spawn_model=False, can_bridge=True)
-        self.assertIsNone(out["selected_model"])
+        self.assertIsNone(out["spawn_model"])
         self.assertEqual(out["implementer"], "fast-test-model")
         out = self.tier(choice="long_running", confidence=0.86)
-        self.assertIsNone(out["selected_model"])
+        self.assertIsNone(out["spawn_model"])
         self.assertIn("bridge recommended", out["tier_line"])
 
 

@@ -128,7 +128,7 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
         self.assertIn('SUMMARY_FILE="<resolved task-unique HANDOVER_SUMMARY path>"', text)
         self.assertIn('EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"', text)
         self.assertIn(
-            '--summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"', text
+            '--range "$BASE_COMMIT..HEAD"', text
         )
 
     def test_canonical(self) -> None:

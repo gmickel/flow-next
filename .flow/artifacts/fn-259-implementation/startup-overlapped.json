@@ -1,0 +1,68 @@
+{
+  "python": "3.12.14",
+  "baseline": "fc93b0a4",
+  "samples": 11,
+  "method": "alternating fresh processes; one warmup pair excluded; common current templates and tracker package; cached module bytecode; direct script --help includes source compilation",
+  "results": {
+    "before": {
+      "module_import_ms": [
+        48.547,
+        50.126,
+        55.465,
+        59.752,
+        55.229,
+        49.624,
+        54.001,
+        61.759,
+        67.529,
+        65.805,
+        205.194
+      ],
+      "help_startup_ms": [
+        384.893,
+        376.53,
+        408.085,
+        409.298,
+        391.419,
+        418.762,
+        400.95,
+        530.796,
+        499.584,
+        547.49,
+        552.818
+      ],
+      "median_module_import_ms": 55.465,
+      "median_help_startup_ms": 409.298
+    },
+    "after": {
+      "module_import_ms": [
+        37.536,
+        41.007,
+        49.491,
+        45.012,
+        44.495,
+        37.903,
+        40.736,
+        53.907,
+        53.985,
+        52.271,
+        52.534
+      ],
+      "help_startup_ms": [
+        327.513,
+        407.739,
+        419.669,
+        401.832,
+        406.788,
+        391.384,
+        422.961,
+        478.073,
+        487.439,
+        441.239,
+        567.325
+      ],
+      "median_module_import_ms": 45.012,
+      "median_help_startup_ms": 419.669
+    }
+  }
+}

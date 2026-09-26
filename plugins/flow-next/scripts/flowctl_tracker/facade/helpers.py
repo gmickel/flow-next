@@ -19,7 +19,7 @@ OPS = frozenset({"push", "pull", "reconcile", "comment"})
 # required / forbidden input names (flow_file / body_file) per op — epic table.
 OP_INPUTS = {
     "push": {
-        "require": frozenset({"flow_file", "body_file"}),
+        "require": frozenset(),
         "forbid": frozenset({"comments_file", "source_body_file", "pr_url"}),
     },
     "pull": {
@@ -432,9 +432,11 @@ def load_tasks(flow_dir: Path, spec_id: str) -> list:
 
 
 def compute_status_to(flow_dir: Path, spec_id: str, config: dict,
-                      spec_data: dict, execute: Execute) -> str:
+                      spec_data: dict, execute: Execute, *,
+                      pr_evidence: Optional[str] = None) -> str:
     from ..status.policy import flow_to_normalized, merge_evidence  # noqa: PLC0415
-    pr = merge_evidence(config, spec_data, execute)
+    pr = (pr_evidence if pr_evidence is not None
+          else merge_evidence(config, spec_data, execute))
     return flow_to_normalized(
         spec_data, pr, completion_review_configured(config, spec_data),
         tasks=load_tasks(flow_dir, spec_id),

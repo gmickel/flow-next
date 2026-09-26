@@ -26,7 +26,7 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 
 ## Step 2: Route
 
-Read [references/route-matrix.md](references/route-matrix.md). Ask once per hop, in attended and auto mode alike:
+Read [references/route-matrix.md](references/route-matrix.md). In auto mode use the route already returned by `pilot snapshot`; in attended mode call once per hop:
 
 ```bash
 ROUTE_JSON="$("$FLOWCTL" judge --preset route --spec <spec-id> --json)"
@@ -39,7 +39,7 @@ ROUTE_JSON="$("$FLOWCTL" judge --preset route --state-file <route-state.json> --
 
 Use only the applicable command. `--spec` assembles fresh lifecycle state in code from the normalized spec/task inventory and `gh pr list --head <branch> --state all` (or the tracker bridge). A failed probe retains today's failure path, never a fabricated absent PR. The code resolves startable targets from documented commands, deploy URLs or the features map, trims `spec_body` at 100000 characters with `spec_body_truncated: true`, and applies first-match lifecycle order: observed PR (open, merged or closed) -> landing rules; closed spec without an observed PR -> host; all tasks done -> QA/make-pr; intentional tasks or sole implicit owner -> recorded work route; ready with zero tasks -> recorded direct or the plan-signal regex rule; not ready -> host. Existing `spec chain` admission and work's direct-owner resume admission still apply.
 
-For intent/brief, apply `decision.value` when `decision.met`; otherwise use today's matrix judgment with only `decision.candidates` (top three probabilities), never raw Nouls as facts. `none_of_the_above` always goes to the host. Unavailable uses today's route and names `reason`. Keep the answer only for this hop: fork and auto-QA consume its answers without another request. Nouls feed the code's defect-repro/research branch and the `Signal:` line; `tiny_one_context_change` and `intent_and_boundaries_stateable` are hints only.
+For intent/brief, apply `decision.value` when `decision.met`; otherwise use today's matrix judgment with only `decision.candidates` (top three probabilities), never raw Nouls as facts. `none_of_the_above` always goes to the host. Unavailable judge answers keep any returned code lifecycle decision; only intake without one uses today's host route and names `reason`. Keep the answer only for this hop: fork and auto-QA consume its answers without another request. Nouls feed the code's defect-repro/research branch and the `Signal:` line; `tiny_one_context_change` and `intent_and_boundaries_stateable` are hints only.
 
 Print `Route: <kind> (jev <confidence>)`, `Route: <lifecycle route> (code)`, `Route: host (jev below floor: <top three>)`, or `Route: host (jev-unavailable(<reason>))` on every hop. Match the resulting route to the matrix. When the match is a ready spec with no tasks and no recorded route, also read [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) and resolve the rule now; the route is recorded after the explain stop below, before any stage runs.
 
@@ -49,7 +49,7 @@ Keep `ROUTE_JSON` inside the tool process or an ephemeral run temporary file, no
 
 ```python
 # fence:judge-route-consumer
-if not result["available"]:
+if not result["available"] and "decision" not in result:
     route_value = "host"
     host_route = {"route": "host", "line": "Route: host (jev-unavailable(%s))" % result["reason"]}
     if result.get("pr_probe_failed"):
@@ -57,12 +57,15 @@ if not result["available"]:
 else:
     decision = result["decision"]
     route_value = decision["value"] if decision["met"] else "host"
-    if route_value == "host":
+    if route_value == "host" and not result["available"]:
+        # No external answers: name why, never an empty below-floor list.
+        host_route = {"route": "host", "line": "Route: host (jev-unavailable(%s))" % result["reason"]}
+    elif route_value == "host":
         candidates = decision.get("candidates", [])
         detail = ", ".join("%s %.2f" % (kind, probability) for kind, probability in candidates)
         host_route = {"route": "host", "candidates": candidates,
                       "line": "Route: host (jev below floor: %s)" % detail}
-    elif "kind" in result["answers"]:
+    elif "kind" in result.get("answers", {}):
         host_route = {"route": route_value, "line": "Route: %s (jev %.2f)" % (
             route_value, result["answers"]["kind"]["confidence"])}
     else:

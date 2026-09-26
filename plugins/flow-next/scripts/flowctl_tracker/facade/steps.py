@@ -118,16 +118,20 @@ def create_if_unlinked(flow_dir: Path, spec_id: str, *, title: str, body: str,
 
 
 def run_status(flow_dir: Path, spec_id: str, *, config: dict, event: str,
-               execute: Execute, completed: list, statuses: list) -> Result:
+               execute: Execute, completed: list, statuses: list,
+               parent: Optional[dict] = None) -> Result:
     """Call status with --to from flow_to_normalized. noop/defer non-fatal."""
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
     _path, spec_data, _tracker = loaded
-    to = compute_status_to(flow_dir, spec_id, config, spec_data, execute)
+    from ..status.policy import merge_evidence
+    pr_evidence = merge_evidence(config, spec_data, execute)
+    to = compute_status_to(flow_dir, spec_id, config, spec_data, execute,
+                           pr_evidence=pr_evidence)
     out = status_verb(
         flow_dir, spec_id, to=to, event=event, execute=execute,
-        write_receipt=False,
+        write_receipt=False, _parent=parent, _pr_evidence=pr_evidence,
     )
     if isinstance(out, TrackerError):
         return out

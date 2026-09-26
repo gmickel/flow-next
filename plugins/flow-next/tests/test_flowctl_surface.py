@@ -41,14 +41,12 @@ REMOVED_NAMES = {
 }
 
 PLAN_INVOCATION_MANIFEST = (
-    ("review-backend",),
+    ("preflight",),
     ("init",),
-    ("config", "get"),
     ("cat",),
     ("show",),
     ("specs",),
     ("spec", "ready"),
-    ("strategy", "status"),
     ("strategy", "read"),
     ("spec", "set-plan"),
     ("task", "set-spec"),
@@ -57,7 +55,6 @@ PLAN_INVOCATION_MANIFEST = (
     ("task", "create"),
     ("dep", "add"),
     ("validate",),
-    ("sync", "active"),
 )
 
 EXPECTED_LEAF_PATHS = frozenset(
@@ -125,6 +122,8 @@ init
 judge
 list
 memory add
+memory apply
+memory audit-scan
 memory init
 memory list
 memory list-legacy
@@ -136,6 +135,8 @@ memory read
 memory search
 memory upsert
 next
+pilot snapshot
+pilot strikes record
 pilot strikes clear
 pilot strikes list
 pilot-log append
@@ -144,11 +145,15 @@ pr-cognitive-aid html-input
 pr-cognitive-aid render
 pr-cognitive-aid validate
 pr-cognitive-aid write
+preflight
 prime classify
 prospect archive
+prospect write
 prospect promote
+qa receipt
 ready
 repo-map list
+review-prompt
 review-artifact
 review-backend
 review-deep-auto
@@ -158,6 +163,7 @@ review-route
 review-rounds increment
 review-rounds record
 review-rounds reset
+review-rounds resume-terminal
 review-walkthrough-defer
 review-walkthrough-record
 rp chat-send
@@ -171,6 +177,7 @@ rp setup-review
 scope bank
 scope resolve
 scope write-policy
+setup-status
 setup-block apply
 setup-block check
 setup-block resolve
@@ -393,13 +400,8 @@ class DeadSurfaceContractTest(unittest.TestCase):
         prospect_workflow = (
             PLUGIN / "skills" / "flow-next-prospect" / "workflow.md"
         ).read_text(encoding="utf-8")
-        for name in (
-            "_prospect_slug",
-            "_prospect_next_id",
-            "render_prospect_body",
-            "write_prospect_artifact",
-        ):
-            self.assertIn(name, prospect_workflow)
+        self.assertNotIn("from flowctl import", prospect_workflow)
+        self.assertIn("prospect write", prospect_workflow)
         self.assertIn("load_all_runtime(", FLOWCTL_PY.read_text(encoding="utf-8"))
 
 
@@ -553,12 +555,10 @@ class RepoPromptCapabilityProbeTest(unittest.TestCase):
         "skills/flow-next-plan-review/workflow.md",
         "skills/flow-next-impl-review/workflow-common.md",
         "skills/flow-next-spec-completion-review/workflow-common.md",
-        "skills/flow-next-setup/workflow.md",
         "skills/flow-next-ralph-init/SKILL.md",
         "codex/skills/flow-next-plan/references/setup-questions.md",
         "codex/skills/flow-next-impl-review/workflow-common.md",
         "codex/skills/flow-next-spec-completion-review/workflow-common.md",
-        "codex/skills/flow-next-setup/workflow.md",
         "codex/skills/flow-next-ralph-init/SKILL.md",
         "scripts/ralph_smoke_rp.sh",
         "scripts/ralph_e2e_rp_test.sh",
