@@ -244,7 +244,6 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "time python3 -m unittest",
             'echo "it\'s fine"; ls',
             "npx -y prettier --check .",
-            'matches="$(rg \'copilot\\(\' src/)"',
         ):
             with self.subTest(command=command):
                 proc = self._command(command)
@@ -281,6 +280,11 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "npx --package @openai/codex --call 'codex exec hi'",
             "<<EOF codex exec hi\nEOF",
             "echo $'ok'; codex resume --last",
+            "x=\"$(echo $(printf '('); codex exec hi)\"",
+            "echo $(printf '('); codex exec hi",
+            "x=$(echo $(date); codex exec hi)",
+            "x=$(echo $(date); flowctl done fn-1.2)",
+            "(cd /tmp; codex exec hi)",
         ):
             with self.subTest(command=command):
                 proc = self._command(command)

@@ -186,7 +186,9 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
 
     scan = _ShellScan(command)
     _flowctl_argvs(command, scan)
-    if scan.unparsed and _raw_receipt_write(command, receipt_path):
+    if (scan.unparsed or _needs_text_floor(command)) and _raw_receipt_write(
+        command, receipt_path
+    ):
         return True
     for script in [command, *scan.nested_commands]:
         for writer, target in _redirect_targets(script):
@@ -216,6 +218,13 @@ def _raw_receipt_write(command: str, receipt_path: str) -> bool:
     if receipt_dir:
         patterns.append(rf">\s*['\"]?{re.escape(receipt_dir)}")
     return any(re.search(pattern, command, re.I) for pattern in patterns)
+
+
+def _needs_text_floor(command: str) -> bool:
+    """Grouping syntax (`(`, `)`, backticks) outside single quotes defeats argv
+    classification in ways that keep surfacing as bypasses, so such commands
+    also get the pre-tokenizer text screens: never less strict than before."""
+    return bool(re.search(r"[`()]", re.sub(r"'[^']*'", "", command)))
 
 
 def _raw_launch_violation(command: str) -> Optional[str]:
@@ -1031,21 +1040,11 @@ def _substitution_bodies(text: str) -> list[str]:
                 bodies.append(text[tick:index])
                 tick = None
         elif tick is None and text.startswith("$(", index):
-            depth, end, quote = 0, index + 1, None
+            depth, end = 0, index + 1
             while end < len(text):
-                ch = text[end]
-                if ch == "\\" and quote != "'":
-                    end += 2
-                    continue
-                if quote:
-                    if ch == quote:
-                        quote = None
-                elif ch in "'\"":
-                    quote = ch
-                else:
-                    depth += {"(": 1, ")": -1}.get(ch, 0)
-                    if depth == 0:
-                        break
+                depth += {"(": 1, ")": -1}.get(text[end], 0)
+                if depth == 0:
+                    break
                 end += 1
             bodies.append(text[index + 2 : end])
             index = end
@@ -1627,7 +1626,7 @@ def handle_pre_tool_use(data: dict) -> None:
     # Check executable positions, never arguments such as grep patterns or prose.
     scan = _ShellScan(command)
     flowctl_argvs = _flowctl_argvs(command, scan) or []
-    if scan.unparsed:
+    if scan.unparsed or _needs_text_floor(command):
         violation = _raw_launch_violation(command)
         if violation:
             output_block(violation)
