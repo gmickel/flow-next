@@ -18,7 +18,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Removed
 
-- **The `/flow-next:pilot` and `/flow-next:interview` command shims.** Use `/flow-next:flow --auto --tick` and `/flow-next:refine`. The skill stubs remain for one more release.
+- **The `/flow-next:pilot` and `/flow-next:interview` command shims.** Use `/flow-next:flow --auto --tick` and `/flow-next:refine`. The skill stubs are hidden and forward to the new names; they go in a later release.
 
 ## [flow-next 6.0.2] - 2026-09-24
 
