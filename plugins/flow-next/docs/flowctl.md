@@ -52,6 +52,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [cat](#cat)
   - [brief](#brief)
   - [anchor](#anchor)
+  - [workflow snapshots](#workflow-snapshots)
   - [ready](#ready)
   - [pilot strikes](#pilot-strikes)
   - [pilot-log](#pilot-log)
@@ -67,6 +68,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [pr-cognitive-aid](#pr-cognitive-aid)
   - [memory](#memory)
   - [prospect](#prospect)
+  - [qa receipt](#qa-receipt)
 - [chart](#chart)
 - [flowctl tracker](#flowctl-tracker)
   - [Resolve persisted runtime facts](#resolve-persisted-runtime-facts)
@@ -392,6 +394,24 @@ flowctl review-rounds attempts fn-1 --kind plan|impl --review-type plan|impl|com
 flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
 ```
 
+`increment --base <sha> --head <sha>` computes the impl diff identity in-process.
+`record --attach` publishes the journaled receipt in the same call; the matching
+reservation is still required. `review-rounds resume-terminal <spec> --review-type
+completion --json` returns `{action, status, exit}` for completion re-entry and
+rejects unknown persisted states.
+
+```bash
+flowctl review-prompt impl <task-id|branch> --axis correctness --base <ref> --out prompt.md
+flowctl review-prompt plan <spec-id> --axis correctness --out prompt.md
+flowctl review-prompt completion <spec-id> --axis correctness --base <ref> --out prompt.md
+```
+
+Host review uses the same builders and rereview context as backend review.
+Backend receipts default to the checkout's receipt location. Fan-out finalize
+can derive task, base and receipt from `--rid`; `--merge-plan <file>` carries the
+coordinator's keep/collapse decisions, and flowctl renders the merged document
+and counts survivors. Missing referenced draw items fail before publication.
+
 ### review-artifact
 
 Build the exact domain-separated artifact blob for an RP review fence. Plan
@@ -673,13 +693,17 @@ Example (`tasks.json`):
 
 Field schema per object:
 - `title` (required, non-empty string)
-- `description?` (string)
-- `acceptance?` (string)
+- `description?` (string) or `description_file?` (path)
+- `acceptance?` (string) or `acceptance_file?` (path)
+- `touches?` (single-line string, rendered as the task’s Touches line)
 - `satisfies?` (array of R-ID strings, e.g. `["R1","R3"]`)
 - `deps?` (array of either task-id strings or **1-based integer indexes** referring to **earlier** entries in the same array; indexes resolve after id allocation)
 - `priority?` (int)
 
-Unknown keys, nulls, wrong types, empty titles, or out-of-range/forward deps reject the batch. Ordered `--json` output:
+File paths resolve relative to the JSON file, or the current directory for stdin.
+Unknown keys, nulls, wrong types, unreadable files, empty titles, or invalid deps
+reject the batch before any write. Errors include every invalid item and the
+allowed key list. Ordered `--json` output:
 ```json
 {"success": true, "tasks": [{"id": "fn-1.1", "title": "Wire auth middleware"}, {"id": "fn-1.2", "title": "Add login UI"}, {"id": "fn-1.3", "title": "Session smoke test"}]}
 ```
@@ -892,13 +916,43 @@ Sections come in fixed order, each labeled with a command and carrying the **ver
 - Pure read (no state mutation, no `updated_at` bumps); markdown banner lines (`===== [k/N] …`) cannot collide with embedded content - spec/task bodies never start lines with `===== [`.
 - `--json` and `--md` are mutually exclusive; invalid/unresolvable task id or missing `.flow/` → standard error exit (JSON envelope under `--json`). Short task ids resolve via the usual resolution rules.
 
+### workflow snapshots
+
+```bash
+flowctl pilot snapshot [--spec <id>] --json
+flowctl preflight [--spec <id>] --json
+flowctl setup-status --json
+```
+
+`pilot snapshot` bundles run guards, config, candidates with chain/claim/strike
+facts, selected spec, review backend, lifecycle and PR observation, branch
+existence, QA freshness and the before-dispatch task list. One PR listing joins
+branches to open, merged and closed observations. Probe failure stays explicit;
+the caller ends the hop rather than reconstructing lifecycle state.
+
+`preflight` carries the config snapshot as `value` plus independent `probes`
+for config, strategy, glossary, decision entries, tracker, review backend and
+memory enabled. Each probe has `status` and `value`, with an error on failure.
+Consumers keep their stage-specific fail-open/default behavior.
+
+`setup-status` gathers setup's read-only probes and recorded optional answers.
+Missing or unreadable setup state is a first run. Setup remembers declined
+optional questions so a steady re-run needs no repeated answers.
+
 ### ready
 
 List tasks ready to start, in progress, and blocked.
 
 ```bash
 flowctl ready --spec fn-1 [--json]
+flowctl ready --spec fn-1 --admit --in-flight fn-1.1 --cap 3 --json
 ```
+
+JSON task rows include parsed `touches` and transitive dependency facts.
+`--admit` adds `admitted` and `held` results with mechanical reasons: dependency
+closure, missing or overlapping Touches, always-serial surfaces, and capacity.
+A missing Touches line yields `touches-missing`. The owner can hold an admitted
+task for hidden coupling; admission never overrides that judgment.
 
 As an ask-before-work command, `ready` (including `--all`) also checks once per invocation whether HEAD is behind its configured upstream: when behind, plain output appends `note: checkout is N commits behind <upstream>; spec-level state may be stale` and `--json` carries `stale_vs_upstream: <N>`. One read-only git spawn, never a fetch, never blocking; no upstream, detached HEAD, or any git failure means the advisory is silently absent. `anchor` carries the same advisory.
 
@@ -953,14 +1007,18 @@ Returns **deterministic eligibility facts only** for every open flow spec: `read
 
 ### pilot strikes
 
-Read and clear the **strikes ledger** of `/flow-next:flow --auto` - the don't-thrash counter the flow skill's auto workflow writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
+Read and clear the **strikes ledger** of `/flow-next:flow --auto` - the don't-thrash counter the flow skill's auto workflow writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). flowctl owns recording, reading and clearing the ledger.
 
 ```bash
+flowctl pilot strikes record <spec-id> --stage <stage> --reason "<reason>" [--json]
 flowctl pilot strikes list [--json]
 flowctl pilot strikes clear <spec-id> [--json]
 flowctl pilot strikes clear --all [--json]
 ```
 
+- `record` increments one cumulative counter per spec under the ledger lock.
+  The latest stage, reason and timestamp are metadata; at count 2 the spec is
+  unreadied. JSON returns `count` and `unreadied`. Unknown specs fail.
 - `list` is empty-safe: a missing ledger, an empty ledger, or a non-git directory all render an empty result and exit `0`.
 - `clear <spec-id>` removes exactly one entry atomically and leaves every other entry untouched. An unknown spec id is a **distinct not-found** (exit `3`) that names the known entries - never silent success. A bare handle (`fn-184`) resolves to its canonical ledger key.
 - Clearing a strike **never touches spec readiness** in either direction. Strikes are driver state, not readiness state (fn-184, #325).
@@ -1031,12 +1089,16 @@ Complete task with summary and evidence. Requires `in_progress` status.
 # File form (preferred for multi-line summaries)
 flowctl done fn-1.2 --summary-file summary.md --evidence-json evidence.json [--force] [--json]
 
+# Contiguous task history; summary from stdin
+flowctl done fn-1.2 --range BASE..HEAD --test "python3 -m unittest" --summary-file - --json
+
 # Inline form (short summaries / scripted callers)
 flowctl done fn-1.2 --summary "short summary" --evidence '{"commits":["abc"],"tests":["t"],"prs":[]}' [--force] [--json]
 ```
 
 - `--summary-file` / `--summary` - done-summary markdown (file or inline text). One of the pair is required.
 - `--evidence-json` / `--evidence` - evidence JSON (file or inline string). With neither flag the CLI records empty commit, test, and PR lists; the work and review contracts, and the Ralph guard, require evidence.
+- `--range BASE..HEAD` derives `commits` and `base_commit`; unreachable commits fail with the offending SHA. Repeat `--test` for multiple commands. Interleaved task histories keep explicit evidence lists.
 - `--force` - skip the `in_progress` status check.
 - Evidence must carry at least one of `commits`, `tests`, `prs`. Keys other than those, `base_commit`, `files` and `files_touched` print a stderr warning and are not rendered.
 - When `planSync.enabled` is not `true`, `done` appends `stage: plan-sync - skipped(config: planSync.enabled != true)` to the summary unless it already carries a plan-sync stage line.
@@ -1070,6 +1132,10 @@ can still contain a stale committed `todo` snapshot. Without runtime progress
 markers that legacy mismatch is a WARNING (`committed snapshot; runtime state
 absent, status may be stale`); runtime-sourced mismatches and tracked definitions
 with real progress remain errors.
+
+Task `satisfies` entries absent from the spec and spec R-IDs without a task
+produce warnings. `validate --spec <id> --coverage --json` also returns the
+Requirement coverage table rendered from actual task IDs and `satisfies`.
 
 Validate also reports **orphaned evidence commits** (fn-180, #302): a warning
 per `evidence.commits[]` entry that exists in the object store but is no
@@ -1124,6 +1190,7 @@ flowctl judge --preset route --spec <spec-id> --json
 flowctl judge --preset route --spec <spec-id> --explain
 flowctl judge --preset route --spec <spec-id> --explain --json
 flowctl judge --preset qa-gate --spec <spec-id> --json
+flowctl judge --preset tier --task <task-id> --json
 ```
 
 Presets: `route`, `qa-gate`, `fork-gate`, `memory-rerank`, `tier`.
@@ -1137,10 +1204,13 @@ An available result contains `success`, `available`, `preset`, the returned
 `candidates` as `[option, probability]` pairs. Memory decisions contain ordered
 entry IDs and scores.
 
-Unavailable results exit 0, omit the decision, and name the reason:
+Unavailable judge answers exit 0 and name the reason. A live route still
+returns its code-computed lifecycle decision and PR observation when those
+facts are available; `available: false` describes the external judge only.
+Other presets retain their unavailable envelope:
 
 ```json
-{"success": true, "available": false, "preset": "route", "reason": "no_key"}
+{"success": true, "available": false, "preset": "fork-gate", "reason": "no_key"}
 ```
 
 Reasons are `no_key`, `disabled`, `http_<status>`, `transport`, `timeout`,
@@ -1153,6 +1223,9 @@ the empty lifecycle and PR facts. Requests use `jev-latest`, a 10-second timeout
 and two retries only for HTTP 429/529, after 1 and 2 seconds. A request estimated
 over 32k tokens at four characters per token is rejected without sending.
 The command never writes state, answers, or credentials to disk.
+
+`--task` assembles tier inputs from the task and returns `tier_line`,
+`spawn_model` and `implementer`. Unknown tasks fail.
 
 `--spec` assembles route or QA facts from the live spec and repository;
 `--explain` prints the route recommendation instead of JSON; with `--json` the
@@ -1446,6 +1519,22 @@ flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [
 flowctl memory read <id> [--json]
 ```
 
+`memory add --check-overlap` returns matches without writing. The host can then
+fold a rediscovery with `--update <id>`.
+
+```bash
+flowctl memory audit-scan --json
+flowctl memory apply --plan audit.json --json
+```
+
+The scan returns frontmatter, schema errors, recurrence counts, module existence
+and change evidence, and hardened-rule presence. An apply plan is a list (or
+`{"entries": [...]}`); each entry names `id` and may carry `set`, `stamp`, `body`,
+`move`, `remove`, and `replacement`. Judgment stays in the host-authored plan.
+Moves and replacements update references. Each entry is applied atomically;
+unknown IDs are reported while other entries proceed. Decision records must be
+superseded, never removed.
+
 `memory read` accepts: full id (`bug/runtime-errors/slug-YYYY-MM-DD`), `slug+date`, `slug` (latest date wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
 
 `--status` defaults to `active`, which excludes **both** stale and hardened entries from default `list` / `search` results - audit-flagged advice stops polluting `memory-scout` output, and a hardened lesson now lives in an enforced gate, so re-injecting it as context is waste. Pass `--status stale`, `--status hardened`, or `--status all` to include them.
@@ -1536,6 +1625,10 @@ Returns `{files: []}` (rc=0) when no legacy files exist. Used by `/flow-next:mem
 Manage prospect artifacts produced by `/flow-next:prospect` under `.flow/prospects/`. Listing and reading are skill-owned (Read the artifact markdown); flowctl owns the mutating verbs.
 
 ```bash
+# Show the authoring shape once, then render the ranked payload
+flowctl prospect write --skeleton
+flowctl prospect write --from-json prospect.json --json
+
 # Promote a survivor to a new spec with pre-filled spec skeleton
 flowctl prospect promote <artifact-id> --idea N [--spec-title "..."] [--force] [--json]
 
@@ -1543,11 +1636,30 @@ flowctl prospect promote <artifact-id> --idea N [--spec-title "..."] [--force] [
 flowctl prospect archive <artifact-id> [--json]
 ```
 
+`write` takes title, focus, grounding, ranked survivors and rejected ideas.
+It derives the artifact ID, date, counts and rejection rate, validates every
+item, then renders and writes atomically. Invalid payloads return all errors
+and write nothing. `--skeleton` prints the exact authoring shape.
+
 `<artifact-id>` accepts full form (`dx-improvements-2026-04-24`) or slug-only (latest date wins).
 
 `promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea - pass `--force` to override.
 
 Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+### qa receipt
+
+```bash
+flowctl qa receipt --skeleton
+flowctl qa receipt --from-json qa.json [--receipt receipt.json] --json
+```
+
+The payload supplies `id`, `qa_outcome`, findings and R-ID coverage; optional
+mode and BLOCKED/NA reasons are host-authored. The command derives commit,
+branch, timestamps, counts and prior-finding lineage, then writes atomically.
+BLOCKED or NA does not close unobserved prior findings. Invalid payloads report
+all errors without replacing the previous receipt. QA resolves unattended
+target and account prerequisites before deriving scenarios.
 
 ## chart
 
@@ -1846,11 +1958,10 @@ verbs:
 
 ```bash
 flowctl tracker sync <spec-id> --op push --event KEY \
-  --flow-file F --body-file F [--comment-file F]
+  [--flow-file F] [--body-file F] [--comment-file F]
 
 # First-claim projection: create/link if needed, then status only.
-flowctl tracker sync <spec-id> --op push --status-only --event KEY \
-  --flow-file F --body-file F
+flowctl tracker sync <spec-id> --op push --status-only --event KEY
 
 flowctl tracker sync <spec-id> --op pull --event KEY \
   --flow-file F --body-file F --comments-file comments.json
@@ -1862,6 +1973,15 @@ flowctl tracker sync <spec-id> --op reconcile --event KEY \
 flowctl tracker sync <spec-id> --op comment --event KEY \
   --body-file F
 ```
+
+`push` renders an omitted body deterministically from the spec; an unchanged
+spec renders identical bytes. `--status-only` requires no body.
+
+`pull` and `reconcile` accept `--prepare` to return the pre-reduction class,
+dependency-stripped tracker body, base pair, and genuine comments in one call.
+Marker comments and their hash matches are excluded. `files` points to private
+mode-0600 snapshots; the next facade call consumes them, and preparation sweeps
+expired snapshots after one hour. The agent retains conflict and fold decisions.
 
 The facade owns create-if-unlinked, lifecycle ordering, marker deduplication,
 status/readiness/dependency projection, transaction boundaries, and one

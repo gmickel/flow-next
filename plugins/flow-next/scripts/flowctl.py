@@ -11,28 +11,22 @@ import copy
 import errno
 import hashlib
 import heapq
-import html
-import http.client
 import io
-import ipaddress
 import json
 import math
 import os
 import re
-import secrets
 import string
 import stat
 import subprocess
 import shlex
 import shutil
-import socket
 import sys
 import tempfile
 import threading
 import time
 import unicodedata
 import urllib.parse
-import uuid
 from collections import deque
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager, nullcontext, redirect_stdout, suppress
@@ -537,12 +531,6 @@ def find_all_glossaries(start: Optional[Path] = None) -> list[Path]:
 
 # --- Glossary parse / render ---
 
-_GLOSSARY_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
-_GLOSSARY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-_GLOSSARY_AVOID_RE = re.compile(r"^_Avoid_:\s*(.+?)\s*$", re.MULTILINE)
-_GLOSSARY_RELATES_RE = re.compile(r"^_Relates to_:\s*(.+?)\s*$", re.MULTILINE)
-
-
 def _glossary_strip_fenced_code(text: str) -> str:
     """Mask each fenced code block byte-for-byte so heading-scan offsets stay
     aligned with the original text.
@@ -556,7 +544,7 @@ def _glossary_strip_fenced_code(text: str) -> str:
     """
     def _blank_replace(m: re.Match) -> str:
         return "".join("\n" if c == "\n" else " " for c in m.group(0))
-    return _GLOSSARY_FENCE_RE.sub(_blank_replace, text)
+    return re.sub(r"```.*?```", _blank_replace, text, flags=re.DOTALL)
 
 
 def parse_glossary_file(text: str) -> list[dict[str, Any]]:
@@ -579,7 +567,7 @@ def parse_glossary_file(text: str) -> list[dict[str, Any]]:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     masked = _glossary_strip_fenced_code(text)
 
-    headings = list(_GLOSSARY_HEADING_RE.finditer(masked))
+    headings = list(re.finditer(r"^##\s+(.+?)\s*$", masked, re.MULTILINE))
     entries: list[dict[str, Any]] = []
     for i, m in enumerate(headings):
         term = m.group(1).strip()
@@ -587,8 +575,8 @@ def parse_glossary_file(text: str) -> list[dict[str, Any]]:
         body_end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
         body = text[body_start:body_end]
 
-        avoid_match = _GLOSSARY_AVOID_RE.search(body)
-        relates_match = _GLOSSARY_RELATES_RE.search(body)
+        avoid_match = re.search(r"^_Avoid_:\s*(.+?)\s*$", body, re.MULTILINE)
+        relates_match = re.search(r"^_Relates to_:\s*(.+?)\s*$", body, re.MULTILINE)
 
         # Strip avoid/relates lines from the definition slice. Offsets were
         # computed against `body`, so remove in descending start order: an
@@ -752,10 +740,6 @@ del _name, _key
 # All valid section names (lowercase) for `read --section` validation.
 _STRATEGY_SECTION_NAMES_LOWER: frozenset[str] = frozenset(_STRATEGY_SECTION_KEYS.keys())
 
-_STRATEGY_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-# HTML comment matcher used by _strategy_section_filled.
-_STRATEGY_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
-
 
 def find_strategy_file(start: Optional[Path] = None) -> tuple[Optional[Path], Path]:
     """Return `(strategy_path, repo_root)` for the single-root strategy file.
@@ -830,7 +814,7 @@ def _strategy_section_filled(body: str) -> bool:
         return False
     # Strip HTML comments first so a section that's only a TODO comment
     # doesn't count as filled.
-    stripped = _STRATEGY_HTML_COMMENT_RE.sub("", body)
+    stripped = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
     # Now check whether anything non-whitespace / non-sentinel remains.
     text = stripped.strip()
     if not text:
@@ -913,7 +897,7 @@ def parse_strategy_file(text: str) -> dict[str, Any]:
 
     # --- Section scan (after frontmatter) ---
     masked = _glossary_strip_fenced_code(body_text)
-    headings = list(_STRATEGY_HEADING_RE.finditer(masked))
+    headings = list(re.finditer(r"^##\s+(.+?)\s*$", masked, re.MULTILINE))
     for i, m in enumerate(headings):
         heading_text = m.group(1).strip()
         key = _STRATEGY_SECTION_KEYS.get(heading_text.lower())
@@ -3151,6 +3135,87 @@ def _cmd_setup_block_apply_locked(
         _setup_block_emit(args, key, "ask", "hash-absent", None)
 
 
+def cmd_setup_status(args: argparse.Namespace) -> None:
+    """Read setup inputs in one call, without initializing or changing files."""
+    root = get_repo_root()
+    plugin = Path(getattr(args, "plugin_root", None) or Path(__file__).resolve().parent.parent)
+
+    def read_object(path: Path) -> dict:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            return value if isinstance(value, dict) else {}
+        except (OSError, UnicodeError, ValueError):
+            return {}
+
+    def exists(path: Path) -> bool:
+        return path.exists() or path.is_symlink()
+
+    meta = read_object(root / ".flow/meta.json")
+    raw = read_object(root / ".flow/config.json")
+    setup = meta.get("setup")
+    answers = setup.get("optional_answers", {}) if isinstance(setup, dict) else {}
+    answers = answers if isinstance(answers, dict) else {}
+    answers = {key: value for key, value in answers.items()
+               if key in {"spec", "leftovers", "docs", "criteria", "ralph", "star"}
+               and isinstance(value, str)}
+    platform = getattr(args, "platform", "claude-code")
+    manifests = {
+        "codex": [".codex-plugin/plugin.json", "plugin.json"],
+        "cursor": [".cursor-plugin/plugin.json"],
+    }.get(platform, []) + [".claude-plugin/plugin.json"]
+    version = next((data.get("version") for name in manifests
+                    if (data := read_object(plugin / name)).get("version")), None)
+    config = {}
+    for key in ("review.backend", "artifacts.html.enabled", "tracker.specIds", "pipeline.qa"):
+        value = raw
+        for part in key.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        config[key] = value
+    docs = {}
+    templates = plugin / "skills/flow-next-setup/templates"
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        template_name = "agents-md-snippet.md" if platform == "codex" and name == "AGENTS.md" else "claude-md-snippet.md"
+        try:
+            current = (root / name).read_text(encoding="utf-8")
+            canonical = (templates / template_name).read_text(encoding="utf-8")
+            if platform == "opencode":
+                canonical = canonical.replace("/flow-next:", "/flow-next-").replace("flow-next:flow-next-", "flow-next-")
+            span = _setup_block_span(current, "FLOW-NEXT")
+            status = "missing" if span is None else "current" if current[span[0]:span[1]] == canonical else "outdated"
+        except FileNotFoundError:
+            status = "missing"
+        except (OSError, UnicodeError, ValueError):
+            status = "unreadable"
+        docs[name] = status
+    tools = {name: shutil.which(command) is not None for name, command in {
+        "codex": "codex", "copilot": "copilot", "cursor": "cursor-agent",
+        "claude": "claude", "grok": "grok", "gh": "gh",
+    }.items()}
+    tools["rp"] = bool(shutil.which("rpce-cli") or shutil.which("rp-cli") or any(
+        os.access(Path.home() / path, os.X_OK) for path in
+        ("RepoPrompt/repoprompt_ce_cli", "Library/Application Support/RepoPrompt CE/repoprompt_ce_cli")))
+    spec_paths = [root / name for name in ("SPEC.md", "spec.md") if exists(root / name)]
+    spec_files = []
+    for path in spec_paths:
+        if not any(path.exists() and (root / other).exists() and path.samefile(root / other) for other in spec_files):
+            spec_files.append(path.name)
+    result = {
+        "first_run": not bool(meta.get("setup_version")),
+        "setup_version": meta.get("setup_version"), "plugin_version": version,
+        "platform": platform, "config": config, "tools": tools, "docs": docs,
+        "optional_answers": answers,
+        "criteria_exists": exists(root / ".flow/criteria.md"),
+        "spec_files": spec_files,
+        "legacy_artifacts": [name for name in LEGACY_COPY_ARTIFACTS if exists(root / name)],
+        "tracker_active": tracker_sync_active(),
+        "judge_available": bool(os.environ.get("TYPESAFE_API_KEY")),
+    }
+    if args.json:
+        json_output(result)
+    else:
+        print(json.dumps(result, indent=2))
+
+
 def cmd_setup_block_check(args: argparse.Namespace) -> None:
     """Read-only fn-171 verdict verb: classifies drift without writing anything.
 
@@ -3287,6 +3352,8 @@ def read_file_or_stdin(file_arg: str, what: str, use_json: bool = True) -> str:
 
 def generate_epic_suffix(length: int = 3) -> str:
     """Generate random alphanumeric suffix for epic IDs (a-z0-9)."""
+    import secrets
+
     alphabet = string.ascii_lowercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
@@ -5321,6 +5388,12 @@ def _review_finding_clean_markdown(value: str) -> str:
 
 def _review_finding_fields(block: str) -> Optional[dict[str, str]]:
     fields: dict[str, str] = {}
+    # Only split a middle dot when followed by a recognized label, preserving
+    # ordinary prose dots inside problem/suggestion text.
+    block = re.sub(
+        r"[ \t]+·[ \t]+(?=(?:\*\*)?(?:severity|confidence|classification)\s*(?:\*\*)?[:=])",
+        "\n", block, flags=re.IGNORECASE,
+    )
     for line in block.splitlines():
         normalized_line = re.sub(
             r"^\s*(?:(?:[-*]|\d+[.)])\s*)?", "", line
@@ -6139,7 +6212,12 @@ def _parse_review_findings_v1(
     supersedes_receipt_id: Optional[str],
     prior_findings: Optional[dict],
     anchor_side: Optional[str],
+    parse_status: dict,
 ) -> Optional[dict]:
+    def fail(reason: str, block: Optional[int] = None) -> None:
+        parse_status.update(status="unparsed", reason=reason, block=block)
+        return None
+
     if (
         not isinstance(output, str)
         or len(output.encode("utf-8")) > _FINDINGS_INPUT_MAX_BYTES
@@ -6173,7 +6251,7 @@ def _parse_review_findings_v1(
             )
         )
     ):
-        return None
+        return fail("invalid-metadata")
 
     prior_items = _review_finding_prior_items(
         output,
@@ -6181,7 +6259,7 @@ def _parse_review_findings_v1(
         source_receipt_id,
     )
     if prior_items is None:
-        return None
+        return fail("invalid-prior-resolution")
     for item in prior_items:
         anchor = item.get("anchor")
         if isinstance(anchor, dict) and (
@@ -6202,17 +6280,17 @@ def _parse_review_findings_v1(
             or isinstance(prior_findings.get("round"), bool)
             or prior_findings["round"] + 1 != round_number
         ):
-            return None
+            return fail("invalid-prior-lineage")
     parsed_rows = _review_finding_host_table(output)
     if parsed_rows == []:
-        return None
+        return fail("invalid-host-table")
     rows = parsed_rows or []
     blocks, saw_severity_label = _review_finding_blocks(output)
     if parsed_rows is not None and saw_severity_label:
         # Multiple representations make completeness/deduplication ambiguous.
-        return None
+        return fail("mixed-representations")
     if parsed_rows is None:
-        for block in blocks:
+        for block_number, block in enumerate(blocks, 1):
             compact = _review_finding_compact(
                 block,
                 base_sha=base_sha,
@@ -6220,23 +6298,23 @@ def _parse_review_findings_v1(
                 anchor_side=anchor_side,
             )
             if compact is False:
-                return None
+                return fail("invalid-compact-finding", block_number)
             if compact is not None:
                 rows.append(compact)
                 continue
             fields = _review_finding_fields(block)
             if fields is None:
-                return None
+                return fail("duplicate-label", block_number)
             enums = _review_finding_enum(fields, block)
             if enums is None:
-                return None
+                return fail("invalid-enum", block_number)
             severity, confidence, classification = enums
             text_fields = _review_finding_text(fields, block)
             if text_fields is None:
-                return None
+                return fail("invalid-text", block_number)
             title, body, suggestion = text_fields
             if not title or not body:
-                return None
+                return fail("missing-title-or-body", block_number)
             row: dict[str, Any] = {
                 "severity": severity,
                 "confidence": confidence,
@@ -6253,7 +6331,7 @@ def _parse_review_findings_v1(
                 anchor_side=anchor_side,
             )
             if anchor is False:
-                return None
+                return fail("invalid-anchor", block_number)
             if anchor is not None:
                 row["anchor"] = anchor
             if suggestion:
@@ -6280,13 +6358,13 @@ def _parse_review_findings_v1(
         any(prior_id not in prior_item_ids for prior_id in prior_references)
         or len(prior_references) != len(set(prior_references))
     ):
-        return None
+        return fail("invalid-prior-reference")
 
     explicit_empty = bool(
         re.search(
             r"""(?ix)
             \b(?:no\s+(?:blocking\s+)?findings?|found\s+no\s+correctness|
-            no\s+blocking\s+gaps|review\s+result:\s*no\s+findings?)\b
+            no\s+blocking\s+gaps|(?:no|zero|0)\s+introduced(?:\s+findings?)?|introduced(?:\s+findings?)?\s*[:=]\s*0|review\s+result:\s*no\s+findings?)\b
             """,
             output,
         )
@@ -6304,9 +6382,9 @@ def _parse_review_findings_v1(
     if not rows and not has_prior_records and not explicit_empty:
         # Prior state is context, not evidence that this generation parsed.
         # Arbitrary re-review prose must not advance the structured lineage.
-        return None
+        return fail("no-findings-container")
     if saw_severity_label and not rows:
-        return None
+        return fail("missing-finding-block")
 
     items: list[dict] = list(prior_items)
     used_ordinals = {
@@ -6347,12 +6425,13 @@ def _parse_review_findings_v1(
         container["supersedesReceiptId"] = supersedes_receipt_id
     container["items"] = items
     if not _review_findings_container_valid(container):
-        return None
+        return fail("invalid-container")
     encoded = json.dumps(
         container, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
     if len(encoded) > _FINDINGS_CONTAINER_MAX_BYTES:
-        return None
+        return fail("container-too-large")
+    parse_status.update(status="parsed", reason=None, block=None)
     return container
 
 
@@ -6369,12 +6448,16 @@ def parse_review_findings(
     prior_findings: Optional[dict] = None,
     anchor_side: Optional[str] = None,
     schema_version: int = _FINDINGS_SCHEMA_VERSION,
+    parse_status: Optional[dict] = None,
 ) -> Optional[dict]:
     """Parse reviewer prose into the additive v1 findings container.
 
     Unsupported versions, unknown enums, over-limit data, and unparseable
     prose return ``None``. The public boundary intentionally never raises.
     """
+    if parse_status is None:
+        parse_status = {}
+    parse_status.update(status="unparsed", reason="unsupported-schema", block=None)
     try:
         if (
             not isinstance(schema_version, int)
@@ -6393,8 +6476,10 @@ def parse_review_findings(
             supersedes_receipt_id=supersedes_receipt_id,
             prior_findings=prior_findings,
             anchor_side=anchor_side,
+            parse_status=parse_status,
         )
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
+        parse_status.update(status="unparsed", reason="invalid-input", block=None)
         return None
 
 
@@ -7051,7 +7136,7 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
     return receipts or None
 
 
-def _attach_publish_from_journal(args: argparse.Namespace) -> None:
+def _attach_publish_from_journal(args: argparse.Namespace, *, emit: bool = True) -> dict:
     """fn-159 round 8: publish the journaled payload by reservation id.
 
     Container construction ownership is SINGULAR — `review-rounds record`
@@ -7150,10 +7235,12 @@ def _attach_publish_from_journal(args: argparse.Namespace) -> None:
         "findings_attached": isinstance(journal.get("findings_container"), dict),
         "published_from_journal": True,
     }
-    if args.json:
-        json_output(result)
-    else:
-        print(f"review receipt published from journal: {receipt_target}")
+    if emit:
+        if args.json:
+            json_output(result)
+        else:
+            print(f"review receipt published from journal: {receipt_target}")
+    return result
 
 
 def cmd_review_findings_attach(args: argparse.Namespace) -> None:
@@ -8502,6 +8589,8 @@ def run_copilot_exec(
         - On timeout (`get_review_exec_timeout()`) returns
           ("", session_id, 2, "<msg>")
     """
+    import uuid
+
     review_exec_timeout = get_review_exec_timeout()
     copilot = require_copilot()
 
@@ -11935,6 +12024,8 @@ def _enforce_and_increment_review_cap_locked(
     locked_receipt_targets: Optional[set] = None,
     exclusive: bool = False,
 ) -> Any:
+    import uuid
+
     cap = get_max_review_iterations()
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
@@ -14038,6 +14129,8 @@ def _begin_chart_transaction(
     mutations: list of (relpath, op, content) where op is create|update.
     Returns the txn directory path. Caller stages contents then publishes.
     """
+    import uuid
+
     charts = charts_dir(flow_dir)
     charts.mkdir(parents=True, exist_ok=True)
     # Validate every relpath before any journal/staging work so a refused
@@ -20629,6 +20722,42 @@ def cmd_config_get(args: argparse.Namespace) -> None:
             print(f"{key}: {value}")
 
 
+def cmd_preflight(args: argparse.Namespace) -> None:
+    """Bundle planning gates, preserving each probe's independent failure status."""
+    probes = {}
+    for name, command, fields in (
+        ("config", cmd_config_get, {}),
+        ("strategy", cmd_strategy_status, {}),
+        ("glossary", cmd_glossary_list, {}),
+        ("decisions", cmd_memory_list, {"track": "knowledge", "category": "decisions"}),
+        ("tracker", cmd_sync_active, {}),
+        ("review_backend", cmd_review_backend, {"id": getattr(args, "spec", None)}),
+    ):
+        output, failure = _anchor_capture(command, argparse.Namespace(json=True, **fields))
+        value = None
+        if failure is None:
+            try:
+                value = json.loads(output)
+            except (ValueError, TypeError) as exc:
+                failure = str(exc)
+        probes[name] = {"status": "error" if failure else "ok", "value": value}
+        if failure:
+            probes[name]["error"] = failure
+    config = (probes["config"]["value"] or {}).get("value", {})
+    decisions = probes["decisions"]
+    if decisions["status"] == "ok":
+        decisions["value"] = {"entry_count": len(decisions["value"].get("entries", []))}
+    probes["memory_enabled"] = {
+        "status": probes["config"]["status"],
+        "value": config.get("memory", {}).get("enabled"),
+    }
+    payload = {"key": None, "value": config, "probes": probes}
+    if args.json:
+        json_output(payload)
+    else:
+        print(json.dumps(payload, indent=2))
+
+
 def cmd_config_set(args: argparse.Namespace) -> None:
     """Set a config value."""
     if not ensure_flow_exists():
@@ -22773,6 +22902,15 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         )
     )
     matches = list(overlap.get("matches") or [])
+    if getattr(args, "check_overlap", False):
+        payload = {"action": "check-overlap", "overlap_level": overlap["level"],
+                   "matches": matches, "warnings": warnings}
+        if args.json:
+            json_output(payload)
+        else:
+            print(json.dumps(payload, indent=2))
+        return
+
 
     # --- Build frontmatter (create path only; --update merges into existing) ---
     frontmatter: dict[str, Any] = {
@@ -23717,7 +23855,7 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
         if not branch:
             # No branch means nothing to probe: absence is observed, not a probe failure.
             state["pr_exists"] = False
-        elif os.environ.get("TYPESAFE_API_KEY") and get_config("judge.enabled", True) is not False:
+        else:
             try:
                 probe = subprocess.run(
                     ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
@@ -24309,8 +24447,17 @@ def judge_decide(preset: str, state: dict, answers: dict, route_decision: dict |
 
 def judge_evaluate(preset: str, state: dict) -> dict:
     """One bounded HTTP request, with retry only for documented overload statuses."""
+    import http.client
+    import socket
+
     judge_validate_state(preset, state)
     unavailable = {"success": True, "available": False, "preset": preset}
+    route_decision = judge_route_lifecycle(state) if preset == "route" else None
+    if route_decision and route_decision["rule"] == "pr_probe_failed":
+        return {**unavailable, "reason": "transport", "pr_probe_failed": True}
+    if route_decision:
+        unavailable["decision"] = {**route_decision, "pr_ref": state.get("pr_ref"),
+                                   "startable_target_fact": state.get("startable_target_fact")}
     enabled = get_config("judge.enabled", True)
     if not isinstance(enabled, bool):
         print("Warning: judge.enabled must be boolean; treating it as true", file=sys.stderr)
@@ -24320,9 +24467,6 @@ def judge_evaluate(preset: str, state: dict) -> dict:
         return {**unavailable, "reason": "disabled"}
     if not key:
         return {**unavailable, "reason": "no_key"}
-    route_decision = judge_route_lifecycle(state) if preset == "route" else None
-    if route_decision and route_decision["rule"] == "pr_probe_failed":
-        return {**unavailable, "reason": "transport", "pr_probe_failed": True}
     questions = judge_questions(preset, state)
     body = json.dumps({"model": JUDGE_MODEL, "state": state, "questions": questions}, ensure_ascii=False)
     if len(body) > 32000 * 4:
@@ -24363,14 +24507,66 @@ def judge_evaluate(preset: str, state: dict) -> dict:
     return {**unavailable, "reason": "transport"}
 
 
+def judge_tier_state(task_id: str) -> dict:
+    flow_dir = get_flow_dir()
+    task_id = resolve_task_arg(flow_dir, task_id, use_json=True)
+    task = load_task_definition(task_id, use_json=True)
+    body = (flow_dir / TASKS_DIR / f"{task_id}.md").read_text(encoding="utf-8")
+    acceptance = re.search(r"(?ms)^## Acceptance\s*\n(.*?)(?=^## |\Z)", body)
+    spec_id = task.get("epic") or task.get("spec") or task_id.rsplit(".", 1)[0]
+    spec_path = find_spec_md_path(flow_dir, spec_id)
+    spec_body = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
+    return {"task_title": task["title"], "task_body": body,
+            "acceptance": acceptance.group(1).strip() if acceptance else "",
+            "touches_count": len(task_touches(body) or []),
+            "has_quick_commands": bool(re.search(r"(?im)^#{2,4}\s+Quick\b", body + "\n" + spec_body)),
+            "repo": str(get_repo_root())}
+
+
+def judge_tier_dispatch(result: dict, args: argparse.Namespace) -> dict:
+    """Render routing from judge answers and explicit host capability facts."""
+    selected_model = None
+    implementer = getattr(args, "explicit_model", None)
+    fast_model = getattr(args, "fast_model", None)
+    role_model = getattr(args, "role_model", None)
+    can_spawn = getattr(args, "can_spawn_model", False)
+    can_bridge = getattr(args, "can_bridge", False)
+    if not result["available"]:
+        line = f"Tier: session (jev-unavailable({result['reason']}))"
+    else:
+        answer = result["answers"]["tier"]
+        value, confidence = result["decision"]["value"], answer["confidence"]
+        if value == "mechanical" and not implementer:
+            if role_model:
+                line = f"Tier: mechanical (jev {confidence:.2f}) -> {role_model} (role pins model)"
+            elif fast_model and (can_spawn or can_bridge):
+                selected_model = fast_model if can_spawn else None
+                implementer = fast_model
+                line = f"Tier: mechanical (jev {confidence:.2f}) -> {fast_model}"
+            else:
+                reason = "no fast-scout model" if not fast_model else "no spawn-model parameter or bridge"
+                line = f"Tier: mechanical (jev {confidence:.2f}) -> session ({reason})"
+        elif value == "long_running":
+            line = f"Tier: long_running (jev {confidence:.2f}) - bridge recommended"
+        else:
+            line = f"Tier: session (jev {answer['choice']} {confidence:.2f})"
+        if getattr(args, "explicit_model", None):
+            line += " (explicit IMPLEMENTER preserved)"
+    return {"tier_line": line, "spawn_model": selected_model, "implementer": implementer}
+
+
 def cmd_judge(args: argparse.Namespace) -> None:
     try:
-        if not args.state_file and not args.spec:
-            raise ValueError("--state-file is required unless --spec is supplied")
+        if not args.state_file and not args.spec and not getattr(args, "task", None):
+            raise ValueError("--state-file is required unless --spec or --task is supplied")
         state = json.loads(Path(args.state_file).read_text(encoding="utf-8")) if args.state_file else {}
         if not isinstance(state, dict):
             raise ValueError("state must be a JSON object")
-        if args.preset == "route":
+        if getattr(args, "task", None):
+            if args.preset != "tier" or args.spec or args.state_file:
+                raise ValueError("--task applies only to tier and cannot combine with --spec or --state-file")
+            state = judge_tier_state(args.task)
+        elif args.preset == "route":
             # Assembly fills the code-owned facts, so intake supplies only its text;
             # judge_evaluate validates the assembled state before any request.
             state = judge_route_state(state, args.spec)
@@ -24384,6 +24580,8 @@ def cmd_judge(args: argparse.Namespace) -> None:
         if args.explain and args.preset != "route":
             raise ValueError("--explain applies only to the route preset")
         result = judge_evaluate(args.preset, state)
+        if args.preset == "tier":
+            result.update(judge_tier_dispatch(result, args))
         # One request serves both the projection and the explain rendering.
         explain = judge_route_explain(result, state) if args.explain else None
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -24676,6 +24874,189 @@ def _memory_raw_body(data: dict[str, Any]) -> Optional[str]:
     """
     envelope = _frontmatter_envelope(data.get("raw", "") or "")
     return envelope.body if envelope.complete else None
+
+
+def _memory_audit_paths(memory_dir: Path) -> list[Path]:
+    return sorted(p for track in MEMORY_TRACKS for p in (memory_dir / track).glob("*/*.md")
+                  if not any(part.startswith(("_", ".")) for part in p.relative_to(memory_dir).parts)
+                  and not p.is_symlink())
+
+
+def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
+    """Collect evidence only; recurrence and gate activeness remain host judgments."""
+    memory_dir = require_memory_enabled(args)
+    root = get_repo_root()
+    entries = []
+    for path in _memory_audit_paths(memory_dir):
+        data = _memory_read_entry(path)
+        fm = data["frontmatter"]
+        def git_lines(*argv):
+            result = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True)
+            return result.stdout.splitlines() if result.returncode == 0 else None
+        history = git_lines("log", "--follow", "--format=COMMIT %H", "--patch", "--unified=0", "--", str(path))
+        substantive = set()
+        commit = None
+        for line in history or []:
+            if line.startswith("COMMIT "):
+                commit = line[7:]
+            elif line.startswith(("--- ", "+++ ")):
+                continue
+            elif line.startswith(("+", "-")) and commit:
+                if not re.match(r"^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):", line[1:]):
+                    substantive.add(commit)
+        module = fm.get("module")
+        module_path = root / str(module) if module else None
+        audited = fm.get("last_audited")
+        changes = git_lines("log", "--format=%H", f"--since={audited}T00:00:00Z", "--", str(module)) if module and audited else None
+        dirty = git_lines("status", "--porcelain", "--", str(module)) if module else None
+        gate = str(fm.get("hardened_into") or "").split(" -- ", 1)[0]
+        gate_path, _, rule = gate.partition("#")
+        present = None
+        if gate_path:
+            try:
+                present = (root / gate_path).is_file() and bool(rule) and rule in (root / gate_path).read_text()
+            except (OSError, UnicodeError):
+                present = False
+        related = fm.get("related_to") or []
+        entries.append({"id": path.relative_to(memory_dir).with_suffix("").as_posix(),
+                        "path": str(path), "frontmatter": fm,
+                        "schema_errors": validate_memory_frontmatter(fm, allow_unknown=True),
+                        "recurrence": {"updates": len(re.findall(r"^## Update\b", data["body"], re.M)),
+                                       "commits": len(substantive) if history is not None else None,
+                                       "related_to": len(related) if isinstance(related, list) else 0},
+                        "module_exists": module_path.exists() if module_path else None,
+                        "module_changed": bool(changes or dirty) if changes is not None and dirty is not None else None,
+                        "hardened_rule_present": present})
+    legacy_files = [name for name in MEMORY_LEGACY_FILES if (memory_dir / name).is_file()]
+    payload = {"entries": entries, "legacy_files": legacy_files,
+               "legacy_entry_count": sum(_memory_legacy_entry_count(memory_dir / name) for name in legacy_files)}
+    if args.json:
+        json_output(payload)
+    else:
+        print(json.dumps(payload, indent=2))
+
+
+def _memory_apply_item(memory_dir: Path, item: dict[str, Any]) -> list[str]:
+    """Validate and prepare one entry and its reference rewrites before mutation.
+
+    Atomic file replacements plus rollback keep a failed entry from leaving a
+    partial plan behind. Entries are independent: one failure does not skip later ones.
+    """
+    if not isinstance(item, dict):
+        raise ValueError("plan entry must be an object")
+    allowed = {"id", "set", "stamp", "body", "move", "remove", "replacement"}
+    unknown = set(item) - allowed
+    if unknown:
+        raise ValueError(f"unknown plan fields: {', '.join(sorted(unknown))}")
+    def resolve(entry_id):
+        if not isinstance(entry_id, str):
+            raise ValueError("entry id must be a string")
+        parts = entry_id.split("/")
+        if len(parts) != 3 or parts[0] not in MEMORY_TRACKS or parts[1] not in MEMORY_CATEGORIES[parts[0]] or not parts[2] or parts[2] in (".", "..") or "\\" in entry_id:
+            raise ValueError(f"invalid categorized id: {entry_id}")
+        path = memory_dir / (entry_id + ".md")
+        if not path.resolve().is_relative_to(memory_dir.resolve()) or path.is_symlink():
+            raise ValueError("memory path escapes categorized tree")
+        return path
+    source = resolve(item.get("id"))
+    if not source.is_file():
+        raise ValueError(f"unknown id: {item['id']}")
+    data = _memory_read_entry(source, raise_errors=True)
+    fm = dict(data["frontmatter"])
+    fields = item.get("set", {})
+    if not isinstance(fields, dict):
+        raise ValueError("set must be an object")
+    fm.update(fields)
+    if item.get("stamp"):
+        fm["last_audited"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target = resolve(item["move"]) if item.get("move") else source
+    if target != source and target.exists():
+        raise ValueError(f"move target exists: {item['move']}")
+    if target != source:
+        fm["track"], fm["category"] = item["move"].split("/")[:2]
+    remove = item.get("remove", False)
+    if not isinstance(remove, bool) or not isinstance(item.get("stamp", False), bool):
+        raise ValueError("remove and stamp must be booleans")
+    if remove and item.get("move"):
+        raise ValueError("remove and move are mutually exclusive")
+    if remove and fm.get("track") == "knowledge" and fm.get("category") == "decisions":
+        raise ValueError("decision entries must be superseded, not removed")
+    replacement = item.get("replacement") or (item.get("move") if target != source else None)
+    if replacement and replacement != item.get("move") and not resolve(replacement).is_file():
+        raise ValueError(f"replacement does not exist: {replacement}")
+    if replacement == item["id"]:
+        raise ValueError("replacement must differ from source")
+    writes = {}
+    if not remove:
+        errors = validate_memory_frontmatter(fm, allow_unknown=True)
+        if errors:
+            raise ValueError("; ".join(errors))
+        body = item.get("body", data["body"])
+        if not isinstance(body, str):
+            raise ValueError("body must be a string")
+        raw_body = _memory_raw_body(data) if "body" not in item else None
+        lines = ["---"] + [f"{key}: {_format_yaml_value(fm[key], key)}" for key in sorted(fm, key=_frontmatter_sort_key)] + ["---"]
+        newline = "\r\n" if raw_body and raw_body.startswith("\r\n") else "\n"
+        writes[target] = newline.join(lines) + (raw_body if raw_body is not None else "\n\n" + body.rstrip("\n") + "\n")
+    if replacement:
+        for path in _memory_audit_paths(memory_dir):
+            if path == source:
+                continue
+            with path.open(newline="") as handle:
+                text = handle.read()
+            updated = re.sub(r"(?<![\w/-])" + re.escape(item["id"]) + r"(?![\w/-])", lambda _: replacement, text)
+            if updated != text:
+                # A canonical survivor must not acquire a related_to pointer to itself.
+                if path.relative_to(memory_dir).with_suffix("").as_posix() == replacement:
+                    survivor = _parse_memory_frontmatter_text(updated)
+                    related = survivor.get("related_to")
+                    if isinstance(related, list) and replacement in related:
+                        survivor["related_to"] = [value for value in related if value != replacement]
+                        envelope = _frontmatter_envelope(updated.replace("\r\n", "\n"))
+                        lines = ["---"] + [f"{key}: {_format_yaml_value(survivor[key], key)}"
+                                            for key in sorted(survivor, key=_frontmatter_sort_key)] + ["---"]
+                        updated = "\n".join(lines) + "\n" + envelope.body
+                writes[path] = updated
+    affected = set(writes) | {source}
+    originals = {p: p.read_bytes() if p.exists() else None for p in affected}
+    try:
+        for path, text in writes.items():
+            atomic_write(path, text)
+        if remove or target != source:
+            source.unlink()
+    except OSError:
+        for path, original in originals.items():
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic_write(path, original.decode("utf-8"))
+        raise
+    return sorted(str(p) for p in affected)
+
+
+def cmd_memory_apply(args: argparse.Namespace) -> None:
+    memory_dir = require_memory_enabled(args)
+    try:
+        plan = json.loads(Path(args.plan).read_text())
+        items = plan.get("entries") if isinstance(plan, dict) else plan
+        if not isinstance(items, list):
+            raise ValueError("plan must be a list or an object with entries")
+    except (OSError, ValueError) as exc:
+        error_exit(str(exc), use_json=args.json)
+    applied, errors = [], []
+    for item in items:
+        try:
+            paths = _memory_apply_item(memory_dir, item)
+            applied.append({"id": item["id"], "modified_paths": paths})
+        except (OSError, ValueError, TypeError) as exc:
+            errors.append({"id": item.get("id") if isinstance(item, dict) else None, "error": str(exc)})
+    payload = {"applied": applied, "errors": errors}
+    if args.json:
+        json_output(payload, success=not errors)
+    else:
+        print(json.dumps(payload, indent=2))
+    if errors:
+        raise SystemExit(1)
 
 
 def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
@@ -25894,6 +26275,209 @@ def _prospect_rewrite_in_place(
                 os.unlink(tmp)
         except OSError:
             pass
+
+
+def _artifact_payload(args: argparse.Namespace) -> dict:
+    try:
+        value = json.loads(read_file_or_stdin(args.from_json, "payload", use_json=args.json))
+    except (OSError, ValueError, TypeError) as exc:
+        error_exit(str(exc), code=2, use_json=args.json)
+    if not isinstance(value, dict):
+        error_exit("payload must be an object", code=2, use_json=args.json)
+    return value
+
+
+def _artifact_errors(errors: list[str], args: argparse.Namespace) -> None:
+    if errors:
+        if args.json:
+            json_output({"success": False, "errors": errors})
+            raise SystemExit(2)
+        error_exit("\n".join(errors), code=2)
+
+
+def cmd_prospect_write(args: argparse.Namespace) -> None:
+    """Render a host-ranked prospect without importing CLI internals in skills."""
+    if args.skeleton:
+        json_output({"title": "Open-ended prospect", "focus_hint": "",
+                     "focus_text": "", "grounding_snapshot": "",
+                     "ranked": {"high_leverage": [], "worth_considering": [],
+                                "if_you_have_the_time": []}, "drops": []})
+        return
+    data = _artifact_payload(args)
+    errors = []
+    for key in ("title", "focus_hint", "focus_text", "grounding_snapshot"):
+        if not isinstance(data.get(key), str):
+            errors.append(f"{key}: expected a string")
+    ranked = data.get("ranked")
+    buckets = ("high_leverage", "worth_considering", "if_you_have_the_time")
+    positions = set()
+    survivor_count = 0
+    if not isinstance(ranked, dict):
+        errors.append("ranked: expected an object")
+    else:
+        for unknown in sorted(set(ranked) - set(buckets)):
+            errors.append(f"ranked.{unknown}: unknown bucket")
+        for bucket in buckets:
+            entries = ranked.get(bucket, [])
+            if not isinstance(entries, list):
+                errors.append(f"ranked.{bucket}: expected a list")
+                continue
+            survivor_count += len(entries)
+            for i, item in enumerate(entries):
+                label = f"ranked.{bucket}[{i}]"
+                if not isinstance(item, dict):
+                    errors.append(f"{label}: expected an object")
+                    continue
+                for key in ("title", "summary", "leverage", "size"):
+                    if not isinstance(item.get(key), str) or not item[key].strip():
+                        errors.append(f"{label}.{key}: expected a non-empty string")
+                position = item.get("position")
+                if type(position) is not int or position < 1 or position in positions:
+                    errors.append(f"{label}.position: expected a unique positive integer")
+                else:
+                    positions.add(position)
+                if item.get("size") not in ("S", "M", "L", "XL"):
+                    errors.append(f"{label}.size: expected S, M, L or XL")
+                if "affected_areas" in item and (
+                    not isinstance(item["affected_areas"], list)
+                    or not all(isinstance(area, str) for area in item["affected_areas"])
+                ):
+                    errors.append(f"{label}.affected_areas: expected a list of strings")
+    drops = data.get("drops")
+    if not isinstance(drops, list):
+        errors.append("drops: expected a list")
+    else:
+        for i, item in enumerate(drops):
+            if not isinstance(item, dict):
+                errors.append(f"drops[{i}]: expected an object")
+                continue
+            for key in ("title", "taxonomy", "reason"):
+                if not isinstance(item.get(key), str) or not item[key].strip():
+                    errors.append(f"drops[{i}].{key}: expected a non-empty string")
+            if item.get("taxonomy") not in (
+                "duplicates-open-epic", "out-of-scope", "out-of-scope-vs-strategy",
+                "insufficient-signal", "too-large", "backward-incompat", "other",
+            ):
+                errors.append(f"drops[{i}].taxonomy: unknown rejection taxonomy")
+    for flag in ("floor_violation", "generation_under_volume"):
+        if flag in data and not isinstance(data[flag], bool):
+            errors.append(f"{flag}: expected a boolean")
+    _artifact_errors(errors, args)
+    volume = survivor_count + len(drops)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    directory = get_prospects_dir()
+    body = render_prospect_body(data["focus_text"], data["grounding_snapshot"], ranked, drops)
+    with cross_process_lock(get_flow_dir() / "locks" / "prospect-write.lock"):
+        artifact_id = _prospect_next_id(directory, _prospect_slug(data["focus_hint"]), today)
+        fm = {"title": data["title"], "date": today, "focus_hint": data["focus_hint"],
+              "volume": volume, "survivor_count": survivor_count,
+              "rejected_count": len(drops), "rejection_rate": round(len(drops) / volume, 2) if volume else 0.0,
+              "artifact_id": artifact_id, "promoted_ideas": [], "status": "active"}
+        for flag in ("floor_violation", "generation_under_volume"):
+            if flag in data:
+                fm[flag] = data[flag]
+        path = directory / f"{artifact_id}.md"
+        write_prospect_artifact(path, fm, body)
+    json_output({"success": True, "artifact_id": artifact_id, "path": str(path), **fm})
+
+
+def cmd_qa_receipt(args: argparse.Namespace) -> None:
+    """Persist QA judgment and retain the existing structured finding lineage."""
+    if args.skeleton:
+        json_output({"id": "fn-1-example", "qa_outcome": "SHIP", "findings": [],
+                     "rid_coverage": {"rids": []}})
+        return
+    data = _artifact_payload(args)
+    errors = []
+    review_id = data.get("id")
+    if not isinstance(review_id, str) or not re.fullmatch(r"fn-[A-Za-z0-9-]+", review_id):
+        errors.append("id: expected a spec id")
+    outcome = data.get("qa_outcome")
+    if outcome not in ("SHIP", "NEEDS_WORK", "NA", "BLOCKED"):
+        errors.append("qa_outcome: expected SHIP, NEEDS_WORK, NA or BLOCKED")
+    for key in ("blocked_reason", "na_reason"):
+        if key in data and not isinstance(data[key], str):
+            errors.append(f"{key}: expected a string")
+    items = data.get("findings", [])
+    current = {}
+    if not isinstance(items, list):
+        errors.append("findings: expected a list")
+    else:
+        for i, item in enumerate(items):
+            if not isinstance(item, dict):
+                errors.append(f"findings[{i}]: expected an object")
+                continue
+            for key in ("id", "reason", "file"):
+                if not isinstance(item.get(key), str) or not item[key].strip():
+                    errors.append(f"findings[{i}].{key}: expected a non-empty string")
+            if isinstance(item.get("id"), str):
+                if item["id"] in current:
+                    errors.append(f"findings[{i}].id: duplicate")
+                current[item["id"]] = item
+            if item.get("severity") not in ("P0", "P1", "P2"):
+                errors.append(f"findings[{i}].severity: expected P0, P1 or P2")
+            if type(item.get("confidence")) is not int or item["confidence"] not in _FINDINGS_CONFIDENCE:
+                errors.append(f"findings[{i}].confidence: expected 0, 25, 50, 75 or 100")
+            if item.get("classification") not in ("introduced", "pre_existing"):
+                errors.append(f"findings[{i}].classification: expected introduced or pre_existing")
+    coverage = data.get("rid_coverage", {})
+    if not isinstance(coverage, dict) or not isinstance(coverage.get("rids", []), list):
+        errors.append("rid_coverage: expected an object with a rids list")
+    else:
+        for i, row in enumerate(coverage.get("rids", [])):
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "no_live_scenario", "backend_cli"):
+                errors.append(f"rid_coverage.rids[{i}]: invalid id or coverage")
+    mode = data.get("mode") or ("ralph" if os.environ.get("REVIEW_RECEIPT_PATH") else "rp" if args.receipt else "interactive")
+    if not isinstance(mode, str):
+        errors.append("mode: expected a string")
+    _artifact_errors(errors, args)
+    head = _resolve_review_sha("HEAD")
+    if head is None:
+        error_exit("qa receipt cannot resolve HEAD", code=2, use_json=args.json)
+    if coverage:
+        coverage = {"covered": sum(r["coverage"] != "no_live_scenario" for r in coverage.get("rids", [])),
+                    "total": len(coverage.get("rids", [])), "rids": coverage.get("rids", [])}
+    verdict = "SHIP" if outcome in ("SHIP", "NA") else "NEEDS_WORK"
+    path = Path(args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or get_flow_dir() / "review-receipts" / f"qa-{review_id}.json")
+    receipt = {"type": "qa_verdict", "id": review_id, "mode": mode, "verdict": verdict,
+               "qa_outcome": outcome, "head_sha": head, "branch": _export_run_git(["branch", "--show-current"])[1].strip(),
+               "rid_coverage": coverage, "open_p0p1": [item for item in items if item["severity"] in ("P0", "P1")],
+               "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    reason_key = "blocked_reason" if outcome == "BLOCKED" else "na_reason" if outcome == "NA" else None
+    if reason_key and data.get(reason_key):
+        receipt[reason_key] = data[reason_key]
+    with cross_process_lock(_review_receipt_lock_path(path)):
+        prior = _load_prior_receipt_findings(path, review_type="qa_verdict", review_id=review_id, backend=mode)
+        lines = []
+        known = set()
+        for item in (prior or {}).get("items", []):
+            finding_id = item["title"]
+            known.add(finding_id)
+            status = "not_fixed" if finding_id in current else "fixed"
+            if finding_id not in current and outcome in ("BLOCKED", "NA"):
+                status = item.get("status", "open")
+                if status == "open":
+                    status = "not_fixed"
+            lines.append(f"Prior finding {item['ordinal']} — {status}.")
+        for finding_id, item in current.items():
+            if finding_id not in known:
+                lines.extend([f"### {finding_id}", f"- **Severity**: {item['severity']}",
+                              f"- **Confidence**: {item['confidence']}",
+                              f"- **Classification**: {item['classification']}",
+                              f"- **Title**: {finding_id}",
+                              f"- **Problem**: {item['reason']} (surface: {item['file']})", ""])
+        if not lines:
+            lines.append("No findings.")
+        lines.append(f"<verdict>{verdict}</verdict>")
+        findings = build_review_receipt_findings("\n".join(lines) + "\n", review_type="qa_verdict", review_id=review_id,
+                                                backend=mode, head_sha=head, prior_receipt_path=path, anchor_side="head")
+        if findings is None:
+            error_exit("QA findings could not be parsed; receipt unchanged", code=2, use_json=args.json)
+        receipt["findings"] = findings
+        if path.exists():
+            _preserve_review_receipt_generation(path)
+        atomic_write_json(path, receipt)
+    json_output({"success": True, "receipt": str(path), "qa_outcome": outcome})
 
 
 def cmd_prospect_archive(args: argparse.Namespace) -> None:
@@ -30180,6 +30764,8 @@ def _pr_aid_plain_text(value: Any) -> str:
     The forge resolves mentions after decoding entities, so a mention is broken
     with a zero-width space, never entity-encoded.
     """
+    import html
+
     def words(text: str) -> str:
         escaped = html.escape(text, quote=False).translate(_PR_AID_ENTITIES)
         for character in ("\\", "*", "_", "[", "]", "~"):
@@ -30621,7 +31207,8 @@ def _resolve_same_spec_deps(
 
 # Allowed keys on each --from-json item (fn-163.2). Unknown keys reject the batch.
 _TASK_BULK_ITEM_KEYS = frozenset(
-    {"title", "description", "acceptance", "satisfies", "deps", "priority"}
+    {"title", "description", "acceptance", "satisfies", "deps", "priority",
+     "touches", "description_file", "acceptance_file"}
 )
 
 
@@ -30636,6 +31223,7 @@ def _parse_bulk_task_items(
     flow_dir: Path,
     spec_id: str,
     use_json: bool,
+    source_dir: Optional[Path] = None,
 ) -> list[dict]:
     """Parse + validate a --from-json body. No writes. Raises via error_exit.
 
@@ -30659,139 +31247,151 @@ def _parse_bulk_task_items(
             use_json=use_json,
         )
 
-    items: list[dict] = []
-    for i, entry in enumerate(data):
+    def reject(message: str) -> None:
+        raise ValueError(message)
+
+    def parse_item(i: int, entry: Any) -> dict:
         label = f"item {i + 1}"
         if not isinstance(entry, dict):
-            error_exit(
+            reject(
                 f"--from-json: {label}: expected object, got {type(entry).__name__}",
-                use_json=use_json,
             )
 
         unknown = sorted(set(entry.keys()) - _TASK_BULK_ITEM_KEYS)
         if unknown:
-            error_exit(
+            reject(
                 f"--from-json: {label}: unknown key(s): {', '.join(unknown)}",
-                use_json=use_json,
             )
 
         # Reject JSON nulls on any present key (null is not a typed value).
         for key, val in entry.items():
             if val is None:
-                error_exit(
+                reject(
                     f"--from-json: {label}: '{key}' must not be null",
-                    use_json=use_json,
-                )
+                    )
 
         if "title" not in entry:
-            error_exit(
+            reject(
                 f"--from-json: {label}: 'title' is required",
-                use_json=use_json,
             )
         title = entry["title"]
         if not isinstance(title, str):
-            error_exit(
+            reject(
                 f"--from-json: {label}: 'title' must be a string",
-                use_json=use_json,
             )
         if not title.strip():
-            error_exit(
+            reject(
                 f"--from-json: {label}: 'title' must be a non-empty string",
-                use_json=use_json,
             )
-        _reject_multiline_title(title, use_json=use_json)
+        if "\n" in title or "\r" in title:
+            reject(f"--from-json: {label}: title must be a single line")
+
+        entry = dict(entry)
+        for section_name in ("description", "acceptance"):
+            file_key = section_name + "_file"
+            if file_key not in entry:
+                continue
+            if section_name in entry:
+                reject(f"--from-json: {label}: '{section_name}' and '{file_key}' are mutually exclusive")
+            if not isinstance(entry[file_key], str) or not entry[file_key]:
+                reject(f"--from-json: {label}: '{file_key}' must be a non-empty path string")
+            try:
+                entry[section_name] = ((source_dir or Path.cwd()) / entry[file_key]).read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                reject(f"--from-json: {label}: '{file_key}': {exc}")
+
+        touches = entry.get("touches")
+        if touches is not None:
+            if not isinstance(touches, str) or not touches.strip() or "\n" in touches or "\r" in touches:
+                reject(f"--from-json: {label}: 'touches' must be a non-empty single-line string")
 
         description = None
         if "description" in entry:
             description = entry["description"]
             if not isinstance(description, str):
-                error_exit(
+                reject(
                     f"--from-json: {label}: 'description' must be a string",
-                    use_json=use_json,
-                )
+                    )
             description = normalize_section_content("## Description", description)
 
         acceptance = None
         if "acceptance" in entry:
             acceptance = entry["acceptance"]
             if not isinstance(acceptance, str):
-                error_exit(
+                reject(
                     f"--from-json: {label}: 'acceptance' must be a string",
-                    use_json=use_json,
-                )
+                    )
             acceptance = normalize_section_content("## Acceptance", acceptance)
 
         satisfies = None
         if "satisfies" in entry:
             sat = entry["satisfies"]
             if not isinstance(sat, list):
-                error_exit(
+                reject(
                     f"--from-json: {label}: 'satisfies' must be an array of R-ID strings",
-                    use_json=use_json,
-                )
+                    )
             for j, tok in enumerate(sat):
                 if not isinstance(tok, str):
-                    error_exit(
+                    reject(
                         f"--from-json: {label}: 'satisfies'[{j}] must be a string",
-                        use_json=use_json,
-                    )
+                            )
             if sat:
                 try:
                     satisfies = parse_satisfies_tokens(",".join(sat))
                 except ValueError as e:
-                    error_exit(
+                    reject(
                         f"--from-json: {label}: {e}",
-                        use_json=use_json,
-                    )
+                            )
 
         priority = None
         if "priority" in entry:
             priority = entry["priority"]
             if not _is_json_int(priority):
-                error_exit(
+                reject(
                     f"--from-json: {label}: 'priority' must be an integer",
-                    use_json=use_json,
-                )
+                    )
 
         dep_refs: list[tuple[str, Any]] = []
         if "deps" in entry:
             deps_raw = entry["deps"]
             if not isinstance(deps_raw, list):
-                error_exit(
+                reject(
                     f"--from-json: {label}: 'deps' must be an array",
-                    use_json=use_json,
-                )
+                    )
             string_deps: list[str] = []
             for j, dep in enumerate(deps_raw):
                 if dep is None:
-                    error_exit(
+                    reject(
                         f"--from-json: {label}: 'deps'[{j}] must not be null",
-                        use_json=use_json,
-                    )
+                            )
                 if _is_json_int(dep):
                     # 1-based index of an EARLIER entry (not self, not forward).
                     if dep < 1 or dep > i:
-                        error_exit(
+                        reject(
                             f"--from-json: {label}: 'deps' index {dep} out of range "
                             f"(must be 1-based index of an earlier entry)",
-                            use_json=use_json,
-                        )
+                                    )
                     dep_refs.append(("index", dep))
                 elif isinstance(dep, str):
                     string_deps.append(dep)
                     dep_refs.append(("id", dep))  # placeholder; resolve below
                 else:
-                    error_exit(
+                    reject(
                         f"--from-json: {label}: 'deps'[{j}] must be a task-id string "
                         f"or 1-based integer index",
-                        use_json=use_json,
-                    )
+                            )
             # Resolve string deps exactly like granular --deps (canonicalize +
             # same-spec membership; no file-existence check).
             if string_deps:
-                resolved = _resolve_same_spec_deps(
-                    flow_dir, spec_id, string_deps, use_json=use_json
+                resolved = []
+                output, failure = _anchor_capture(
+                    lambda _args: resolved.extend(_resolve_same_spec_deps(
+                        flow_dir, spec_id, string_deps, use_json=True
+                    )), argparse.Namespace()
                 )
+                if failure:
+                    detail = json.loads(output).get("error", failure) if output else failure
+                    reject(f"--from-json: {label}: {detail}")
                 # Rewrite id placeholders in order with resolved canonical ids.
                 resolved_iter = iter(resolved)
                 dep_refs = [
@@ -30799,16 +31399,30 @@ def _parse_bulk_task_items(
                     for kind, val in dep_refs
                 ]
 
-        items.append(
-            {
-                "title": title,
-                "description": description,
-                "acceptance": acceptance,
-                "satisfies": satisfies,
-                "priority": priority,
-                "dep_refs": dep_refs,
-            }
-        )
+        return {
+            "title": title,
+            "description": description,
+            "acceptance": acceptance,
+            "satisfies": satisfies,
+            "priority": priority,
+            "dep_refs": dep_refs,
+            "touches": touches,
+        }
+
+    items: list[dict] = []
+    errors: list[str] = []
+    for i, entry in enumerate(data):
+        try:
+            items.append(parse_item(i, entry))
+        except ValueError as exc:
+            errors.append(str(exc))
+    if errors:
+        allowed = sorted(_TASK_BULK_ITEM_KEYS)
+        message = "\n".join(errors) + "\nAllowed keys: " + ", ".join(allowed)
+        if use_json:
+            json_output({"error": message, "errors": errors, "allowed_keys": allowed}, success=False)
+            raise SystemExit(1)
+        error_exit(message, use_json=False)
     return items
 
 
@@ -31034,7 +31648,8 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     if from_json is not None:
         raw = read_file_or_stdin(from_json, "--from-json", use_json=use_json)
         items = _parse_bulk_task_items(
-            raw, flow_dir=flow_dir, spec_id=spec_id, use_json=use_json
+            raw, flow_dir=flow_dir, spec_id=spec_id, use_json=use_json,
+            source_dir=Path(from_json).resolve().parent if from_json != "-" else Path.cwd(),
         )
 
         lock_hash = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()[:16]
@@ -31107,6 +31722,10 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                         description=item["description"],
                         satisfies=item["satisfies"],
                     )
+                    if item.get("touches") is not None:
+                        spec_content = spec_content.replace(
+                            "## Description\n", f"Touches: {item['touches']}\n\n## Description\n", 1
+                        )
                     planned.append(
                         {
                             "id": task_id,
@@ -32229,6 +32848,22 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
     spec_id, task_id = _resolve_review_rounds_args(args)
     artifact_sha256 = getattr(args, "artifact_sha256", None)
     artifact_file = getattr(args, "artifact_file", None)
+    base, head = getattr(args, "base", None), getattr(args, "head", None)
+    if base or head:
+        if not base or not head or (args.kind != "impl" and getattr(args, "review_type", None) != "completion") or artifact_file or artifact_sha256:
+            error_exit("--base and --head require impl/completion review and cannot combine with artifact flags", use_json=args.json, code=2)
+        try:
+            identity_diff = _gather_review_identity_diff(base, head)
+            if args.kind == "impl":
+                blob = build_impl_review_artifact_blob(identity_diff)
+            else:
+                _, _, spec_text, task_text, _ = _load_epic_and_task_specs(spec_id, use_json=args.json, missing_label="Spec markdown not found")
+                criteria_path = get_criteria_path()
+                criteria_text = criteria_path.read_text(encoding="utf-8") if criteria_path.exists() else ""
+                blob = build_completion_review_artifact_blob(spec_text, task_text, identity_diff, criteria_text)
+            artifact_sha256 = _review_artifact_sha256(blob)
+        except (ReviewEvidenceError, OSError, UnicodeError) as exc:
+            error_exit(str(exc), use_json=args.json, code=2)
     if artifact_file and not artifact_sha256:
         try:
             artifact_sha256 = hashlib.sha256(
@@ -32358,6 +32993,8 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+    if getattr(args, "attach", False) and not receipt_target:
+        error_exit("--attach requires --receipt-target and --receipt-payload-file", use_json=args.json, code=2)
     if receipt_payload is not None and verdict:
         counts = parse_classification_counts(output) or {}
         derived = {
@@ -32409,6 +33046,13 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
+    if getattr(args, "attach", False) and verdict:
+        published = _attach_publish_from_journal(argparse.Namespace(
+            reservation_id=getattr(args, "reservation_id", None),
+            receipt=receipt_target, json=args.json,
+        ), emit=False)
+        result["receipt"] = published["receipt"]
+        result["published_from_journal"] = True
     superseded = review_attempt_superseded(result)
     if superseded:
         # PR #290 bot r8: the fences read this record's JSON, so it must say
@@ -32483,6 +33127,152 @@ def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
             f"{result['consecutive_transport_failures']}/"
             f"{result['transport_failure_cap']} consecutive transport failures"
         )
+
+
+def cmd_review_prompt(args: argparse.Namespace) -> None:
+    """Render the shared backend prompt for a host-native review dispatch."""
+    repo_root = get_repo_root()
+    base = args.base or (_default_review_base(args.json) if args.kind == "impl" else "main")
+    try:
+        base_sha, head_sha = _capture_review_snapshot(base)
+        if args.head:
+            head_sha = _resolve_review_sha(args.head)
+            if head_sha is None:
+                raise ValueError(f"cannot resolve review head: {args.head}")
+            base_sha = _resolve_review_sha(base)
+            if base_sha is None:
+                raise ValueError(f"cannot resolve review base: {base}")
+        scope = _gather_review_scope(base_sha, head_sha) if args.kind != "plan" else ""
+        if args.kind == "impl":
+            task_id = None if args.id == "branch" else (resolve_task_arg(get_flow_dir(), args.id) or args.id)
+            if task_id:
+                task_path = get_flow_dir() / TASKS_DIR / f"{task_id}.md"
+                if not task_path.is_file():
+                    raise ValueError(f"Task spec not found: {task_path}")
+                prompt = build_review_prompt(
+                    "impl", context_hints=gather_context_hints(base),
+                    review_scope=scope, diff_range=f"{base_sha}..{head_sha}",
+                    spec_path=task_path.relative_to(repo_root).as_posix(), axis=args.axis,
+                )
+            else:
+                prompt = build_standalone_review_prompt(base, args.focus, scope, f"{base_sha}..{head_sha}", axis=args.axis)
+            receipt = args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or _review_route_receipt_default(repo_root, task_id)
+        else:
+            spec_id = resolve_spec_id_arg(get_flow_dir(), args.id, use_json=args.json)
+            spec_path, tasks_dir, _, _, task_ids = _load_epic_and_task_specs(spec_id, use_json=args.json, missing_label="Spec markdown not found")
+            task_paths = [(tasks_dir / f"{tid}.md").relative_to(repo_root).as_posix() for tid in task_ids]
+            if args.kind == "completion":
+                prompt = build_completion_review_prompt(spec_path.relative_to(repo_root).as_posix(), task_paths, scope, f"{base_sha}..{head_sha}")
+            else:
+                task_paths = [path.relative_to(repo_root).as_posix() for path in sorted(tasks_dir.glob(f"{spec_id}.*.md"))]
+                prompt = build_review_prompt("plan", context_hints=gather_context_hints(base), spec_path=spec_path.relative_to(repo_root).as_posix(), task_spec_paths=task_paths)
+            receipt = args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or _spec_review_receipt_default(args.kind, spec_id)
+        prior_findings = _read_prior_findings(receipt)
+        prior_items = _read_prior_structured_findings(receipt)
+        if prior_findings is not None or prior_items is not None:
+            prompt = build_rereview_preamble(get_changed_files(base), "implementation" if args.kind == "impl" else args.kind, prior_findings=prior_findings, prior_items=prior_items) + prompt
+        prompt = build_review_persona_override() + prompt
+        atomic_write(Path(args.out), prompt)
+    except (OSError, ValueError, ReviewEvidenceError) as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    result = {"path": str(args.out), "kind": args.kind, "id": args.id, "base": base_sha, "head": head_sha}
+    if args.json:
+        json_output(result)
+    else:
+        print(args.out)
+
+
+def _resume_completion_terminal(flow_dir: Path, spec_id: str, receipt_path: Optional[str] = None) -> dict:
+    """Resume the durable completion verdict, without charging another round.
+
+    Keep the receipt recovery, decision and status write under the review lock:
+    a later explicit status decision must not be overwritten by a stale read.
+    """
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    with _review_sidecar_lock(flow_dir, spec_id):
+        data = normalize_epic(load_json(spec_path))
+        status = data.get("completion_review_status", "unknown")
+        if status not in COMPLETION_REVIEW_STATUSES:
+            raise ValueError(f"Unknown completion review status: {status}")
+        result = {"action": "continue", "status": status, "exit": 0}
+        attempts = _review_attempt_summary(data, "plan", None, review_type="completion")["attempts"]
+        if not attempts:
+            return result
+        attempt = attempts[-1]
+        outcome = attempt.get("outcome")
+        verdict = attempt.get("verdict")
+        if outcome not in ("verdict", "transport_failure"):
+            raise ValueError(f"Unknown completion attempt outcome: {outcome}")
+        if outcome == "verdict" and verdict not in ("SHIP", "NEEDS_WORK", "NEEDS_HUMAN", "MAJOR_RETHINK"):
+            raise ValueError(f"Unknown completion verdict: {verdict}")
+        if attempt.get("superseded_by"):
+            return {**result, "action": "superseded"}
+        cap = get_max_review_iterations()
+        terminal = None
+        if outcome == "verdict":
+            if verdict == "SHIP":
+                terminal = "ship"
+            elif verdict == "NEEDS_HUMAN":
+                terminal = "needs_human"
+            elif verdict == "NEEDS_WORK" and cap > 0 and _read_review_rounds(data, "plan", None) >= cap:
+                terminal = "needs_work"
+        timestamp = attempt.get("timestamp") or ""
+        reviewed_at = data.get("completion_reviewed_at") or ""
+        if not terminal or not (status == terminal or (timestamp and (not reviewed_at or timestamp > reviewed_at))):
+            return result
+        recovery = flow_dir / "tmp" / f"completion-review-receipt-recovery-{spec_id}.json"
+        destination = Path(receipt_path) if receipt_path else flow_dir / "tmp" / f"completion-review-receipt-{spec_id}.json"
+        backend = attempt.get("backend") or ""
+
+        def matches(path: Path) -> bool:
+            try:
+                payload = load_json(path)
+                return isinstance(payload, dict) and all(payload.get(key) == value for key, value in {
+                    "type": "completion_review", "id": spec_id, "verdict": verdict,
+                    "mode": backend, "attempt_timestamp": timestamp,
+                }.items())
+            except (OSError, ValueError):
+                return False
+
+        try:
+            if recovery.exists() and not matches(recovery):
+                recovery.unlink()
+            required = backend in ("codex", "copilot", "cursor", "claude", "host") or (
+                backend == "rp" and verdict == "SHIP" and (bool(receipt_path) or recovery.exists())
+            )
+            if recovery.exists():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write(destination, recovery.read_text(encoding="utf-8"))
+                if not matches(destination):
+                    return {**result, "action": "retry"}
+            if required and not matches(destination):
+                return {**result, "action": "retry"}
+            if status != terminal:
+                data["completion_review_status"] = terminal
+                data["completion_reviewed_at"] = now_iso()
+                data["updated_at"] = now_iso()
+                atomic_write_json(spec_path, data)
+            recovery.unlink(missing_ok=True)
+        except (OSError, ValueError) as exc:
+            return {**result, "action": "retry", "error": str(exc)}
+        return {"action": "ship" if terminal == "ship" else "escalate", "status": terminal,
+                "exit": 0 if terminal == "ship" else 4}
+
+
+def cmd_review_rounds_resume_terminal(args: argparse.Namespace) -> None:
+    """Resume completion status/receipt persistence before any new dispatch."""
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    try:
+        result = _resume_completion_terminal(flow_dir, spec_id, os.environ.get("REVIEW_RECEIPT_PATH"))
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json)
+    except OSError as exc:
+        result = {"action": "retry", "status": "unknown", "exit": 0, "error": str(exc)}
+    if args.json:
+        json_output(result)
+    else:
+        print(f"{result['action']}: {result['status']} (exit {result['exit']})")
 
 
 def cmd_review_artifact_build(args: argparse.Namespace) -> None:
@@ -36523,8 +37313,86 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
                 print(f"  {r['id']}{ready_badge}{blocked}")
 
 
+def task_touches(body: str) -> Optional[list[str]]:
+    """Read the declared path list; absence is distinct from an empty list."""
+    match = re.search(r"(?m)^\s*(?:\*\*)?Touches:(?:\*\*)?\s*(.*?)\s*$", body)
+    if not match:
+        return None
+    raw = match.group(1).strip().strip("[]")
+    return [p.strip().strip("`\"'").removeprefix("./") for p in raw.split(",") if p.strip()]
+
+
+def task_dependency_closure(task_id: str, tasks: dict) -> list[str]:
+    seen: set[str] = set()
+    pending = list(tasks.get(task_id, {}).get("depends_on", []))
+    while pending:
+        dep = pending.pop()
+        if dep in seen:
+            continue
+        seen.add(dep)
+        pending.extend(tasks.get(dep, {}).get("depends_on", []))
+    return sorted(seen)
+
+
+def ready_admission(ready: list[dict], tasks: dict, in_flight: list[str], cap: int) -> dict:
+    """Conservative mechanical admission; uncertain globs remain host-held."""
+    import fnmatch
+
+    def overlap(a: str, b: str) -> bool:
+        if fnmatch.fnmatchcase(a, b) or fnmatch.fnmatchcase(b, a):
+            return True
+        # A literal directory owns its descendants. For two patterns, disjoint
+        # literal prefixes prove separation; otherwise hold rather than guess.
+        pa, pb = re.split(r"[*?\[]", a, maxsplit=1)[0], re.split(r"[*?\[]", b, maxsplit=1)[0]
+        return (pa.startswith(pb) or pb.startswith(pa)) if (pa != a or pb != b) else (
+            a.startswith(b.rstrip("/") + "/") or b.startswith(a.rstrip("/") + "/")
+        )
+
+    def serial(path: str) -> bool:
+        parts = path.lower().split("/")
+        return any(p in {".flow", "migrations", "migration", "generated", "codegen"} for p in parts) or (
+            ("lock" in parts[-1] or "spec" in parts[-1]) and any(fnmatch.fnmatchcase(name, parts[-1]) for name in {
+                "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb",
+                "cargo.lock", "poetry.lock", "uv.lock", "composer.lock", "gemfile.lock", "spec.md"
+            })
+        ) or any(overlap(path, protected) for protected in (".flow/", "migrations/", "generated/", "codegen/"))
+
+    comparison = list(dict.fromkeys(in_flight))
+    admitted, held = [], []
+    for task in ready:
+        tid, touches = task["id"], task.get("touches")
+        reason = None
+        if not touches:
+            reason = "touches-missing"
+        elif any(serial(p) for p in touches):
+            reason = "always-serial"
+        elif len(comparison) >= cap:
+            reason = "cap"
+        else:
+            for other_id in comparison:
+                other = tasks[other_id]
+                if other_id in task["transitive_depends_on"] or tid in other["transitive_depends_on"]:
+                    reason = f"dependency:{other_id}"
+                elif not other.get("touches"):
+                    reason = f"touches-missing:{other_id}"
+                elif any(overlap(a, b) for a in touches for b in other["touches"]):
+                    reason = f"touches-overlap:{other_id}"
+                elif any(serial(p) for p in other["touches"]):
+                    reason = f"always-serial:{other_id}"
+                if reason:
+                    break
+        if reason:
+            held.append({"id": tid, "reason": reason})
+        else:
+            admitted.append(tid)
+            comparison.append(tid)
+    return {"admitted": admitted, "held": held}
+
+
 def cmd_ready(args: argparse.Namespace) -> None:
     """List ready tasks for a spec (or, with --all, spec-level backlog facts)."""
+    if getattr(args, "admit", False):
+        args.json = True
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
@@ -36533,6 +37401,8 @@ def cmd_ready(args: argparse.Namespace) -> None:
     # fn-68.1: --all is a DISTINCT spec-level eligibility-facts mode. Dispatch
     # to it BEFORE the task-within-spec resolution so the two never conflate.
     if getattr(args, "all", False):
+        if getattr(args, "admit", False):
+            error_exit("--admit requires --spec, not --all", use_json=args.json)
         cmd_ready_all(args)
         return
 
@@ -36576,6 +37446,8 @@ def cmd_ready(args: argparse.Namespace) -> None:
                 "blocked": [],
                 "blocked_by_specs": blocked_by_specs,
             }
+            if getattr(args, "admit", False):
+                payload.update({"admitted": [], "held": []})
             if stale:
                 payload["stale_vs_upstream"] = stale[0]
             json_output(payload)
@@ -36600,6 +37472,19 @@ def cmd_ready(args: argparse.Namespace) -> None:
         task["id"]: task
         for task in inventory.by_spec.get(spec_id, [])
     }
+
+    if args.json or getattr(args, "admit", False):
+        for task in tasks.values():
+            body_path = tasks_dir / f"{task['id']}.md"
+            task["touches"] = task_touches(body_path.read_text(encoding="utf-8")) if body_path.exists() else None
+            task["transitive_depends_on"] = task_dependency_closure(task["id"], tasks)
+    in_flight = [t.strip() for t in getattr(args, "in_flight", "").split(",") if t.strip()]
+    if getattr(args, "admit", False):
+        unknown = sorted(set(in_flight) - tasks.keys())
+        if unknown:
+            error_exit(f"In-flight tasks outside spec: {', '.join(unknown)}", use_json=args.json)
+        if args.cap < 1:
+            error_exit("--cap must be positive", use_json=args.json)
 
     # Find ready tasks (status=todo, all deps done)
     ready = []
@@ -36653,11 +37538,13 @@ def cmd_ready(args: argparse.Namespace) -> None:
             "spec": spec_id,
             "actor": current_actor,
             "ready": [
-                {"id": t["id"], "title": t["title"], "depends_on": t["depends_on"]}
+                {"id": t["id"], "title": t["title"], "depends_on": t["depends_on"],
+                 "touches": t["touches"], "transitive_depends_on": t["transitive_depends_on"]}
                 for t in ready
             ],
             "in_progress": [
-                {"id": t["id"], "title": t["title"], "assignee": t.get("assignee")}
+                {"id": t["id"], "title": t["title"], "assignee": t.get("assignee"),
+                 "touches": t["touches"], "transitive_depends_on": t["transitive_depends_on"]}
                 for t in in_progress
             ],
             "blocked": [
@@ -36665,10 +37552,14 @@ def cmd_ready(args: argparse.Namespace) -> None:
                     "id": b["task"]["id"],
                     "title": b["task"]["title"],
                     "blocked_by": b["blocked_by"],
+                    "touches": b["task"]["touches"],
+                    "transitive_depends_on": b["task"]["transitive_depends_on"],
                 }
                 for b in blocked
             ],
         }
+        if getattr(args, "admit", False):
+            payload.update(ready_admission(ready, tasks, in_flight, args.cap))
         if stale:
             payload["stale_vs_upstream"] = stale[0]
         json_output(payload)
@@ -37106,9 +37997,7 @@ def cmd_done(args: argparse.Namespace) -> None:
     # Get summary: file > inline > default
     summary: str
     if args.summary_file:
-        summary = read_text_or_exit(
-            Path(args.summary_file), "Summary file", use_json=args.json
-        )
+        summary = read_file_or_stdin(args.summary_file, "Summary file", use_json=args.json)
     elif args.summary:
         summary = args.summary
     else:
@@ -37137,6 +38026,31 @@ def cmd_done(args: argparse.Namespace) -> None:
             "Evidence JSON must be an object with keys: commits/tests/prs",
             use_json=args.json,
         )
+    commit_range = getattr(args, "range", None)
+    if commit_range:
+        if args.evidence or args.evidence_json:
+            error_exit("--range cannot be combined with explicit evidence", use_json=args.json)
+        if commit_range.count("..") != 1 or "..." in commit_range:
+            error_exit("--range requires <base>..<head>", use_json=args.json)
+        base, head = commit_range.split("..")
+        resolved = []
+        for ref in (base, head):
+            proc = subprocess.run(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], capture_output=True, text=True)
+            if not ref or proc.returncode:
+                error_exit(f"Invalid range commit: {ref}", use_json=args.json)
+            sha = proc.stdout.strip()
+            if subprocess.run(["git", "merge-base", "--is-ancestor", sha, "HEAD"], capture_output=True).returncode:
+                error_exit(f"Range commit not reachable from HEAD: {sha}", use_json=args.json)
+            resolved.append(sha)
+        if subprocess.run(["git", "merge-base", "--is-ancestor", *resolved], capture_output=True).returncode:
+            error_exit(f"Range base is not an ancestor of head: {resolved[0]}", use_json=args.json)
+        proc = subprocess.run(["git", "rev-list", "--reverse", f"{resolved[0]}..{resolved[1]}"], capture_output=True, text=True)
+        if proc.returncode:
+            error_exit(proc.stderr.strip(), use_json=args.json)
+        evidence = {"commits": proc.stdout.splitlines(), "base_commit": resolved[0], "tests": [], "prs": []}
+    if getattr(args, "test", None):
+        prior_tests = evidence.get("tests", [])
+        evidence["tests"] = ([prior_tests] if isinstance(prior_tests, str) else list(prior_tests or [])) + args.test
     if not {"commits", "tests", "prs"} & evidence.keys():
         error_exit(
             "Evidence JSON must carry at least one of: commits, tests, prs",
@@ -37691,6 +38605,7 @@ def validate_epic(
         load_json_or_exit(epic_path, f"Spec {epic_id}", use_json=use_json)
     )
 
+    spec_md_text = ""
     # Check spec markdown exists
     epic_spec = flow_dir / SPECS_DIR / f"{epic_id}.md"
     if not epic_spec.exists():
@@ -37737,6 +38652,9 @@ def validate_epic(
     }
     errors.extend(inventory.issues_by_spec.get(epic_id, []))
 
+    requirements = {r["id"] for r in _export_scan_acceptance_criteria(spec_md_text)[0]}
+    covered: set[str] = set()
+
     # Validate each task
     for task_id, task in tasks.items():
         # Validate status (use merged state which defaults to "todo" if missing)
@@ -37755,6 +38673,11 @@ def validate_epic(
             except Exception as e:
                 errors.append(f"Task {task_id}: spec unreadable ({e})")
                 continue
+            satisfied = set(_export_parse_task_satisfies(spec_content))
+            covered.update(satisfied)
+            unknown = sorted(satisfied - requirements)
+            if unknown:
+                warnings.append(f"Task {task_id}: satisfies names R-IDs absent from spec: {', '.join(unknown)}")
             heading_errors = validate_task_spec_headings(spec_content)
             for he in heading_errors:
                 errors.append(f"Task {task_id}: {he}")
@@ -37767,6 +38690,10 @@ def validate_epic(
                 errors.append(
                     f"Task {task_id}: dependency {dep} is outside epic {epic_id}"
                 )
+
+    uncovered = sorted(requirements - covered)
+    if uncovered:
+        warnings.append(f"Spec {epic_id}: uncovered R-IDs: {', '.join(uncovered)}")
 
     # fn-180 / #302: evidence commits voided by a history rewrite. Warning
     # only, never an error and never a rewrite of the recorded value.
@@ -39867,6 +40794,8 @@ def _dispatch_session_pass(
 
     Deep-pass confidence/verdict math is untouched.
     """
+    import uuid
+
     _wire_backend_review_hooks()
     if backend not in BACKEND_REGISTRY or BACKEND_REGISTRY[backend].get("run_exec") is None:
         error_exit(f"Unknown session-pass backend: {backend}", use_json=use_json, code=2)
@@ -42254,7 +43183,20 @@ def cmd_sync_active(args: argparse.Namespace) -> None:
     )
 
     if args.json:
-        json_output({"active": active, "type": tracker_type})
+        ops = {}
+        if active:
+            def visit(value: dict, prefix: str = "") -> None:
+                for key, leaf in value.items():
+                    event = f"{prefix}.{key}" if prefix else key
+                    if isinstance(leaf, dict):
+                        visit(leaf, event)
+                    else:
+                        op = leaf if leaf in ("pull", "push", "reconcile", "comment") else "off"
+                        if op != "off":
+                            op = {"work.firstClaim": "push", "work.done": "comment", "completionReview": "comment", "qa": "comment"}.get(event, op)
+                        ops[event] = op
+            visit(get_config("tracker.perEvent") or {})
+        json_output({"active": active, "type": tracker_type, "ops": ops})
     else:
         print(
             f"tracker sync: {'active' if active else 'inactive'}"
@@ -42658,6 +43600,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         source_body_file=getattr(args, "source_body_file", None),
         comment_file=getattr(args, "comment_file", None),
         pr_url=getattr(args, "pr_url", None),
+        prepare=getattr(args, "prepare", False),
         status_only=getattr(args, "status_only", False),
         overwrite_diverged=getattr(args, "overwrite_diverged", False),
     )
@@ -43175,6 +44118,151 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
         print(f"Pilot-log row appended (tick {tick}, {action}{cost}): {row_path}")
 
 
+def pilot_snapshot(spec_arg: str | None = None) -> dict:
+    """One read-only hop inventory; all PRs join through one branch-keyed listing."""
+    import io
+    from contextlib import redirect_stdout
+
+    repo, flow_dir = get_repo_root(), get_flow_dir()
+    config = load_flow_config()
+    spec_id = resolve_spec_id_arg(flow_dir, spec_arg, use_json=True) if spec_arg else None
+    inventory = TaskInventory.load(flow_dir, use_json=True)
+    specs = [normalize_epic(load_json_or_exit(path, "Spec", use_json=True))
+             for path in iter_spec_json_files(flow_dir)]
+    specs.sort(key=lambda spec: spec["id"])
+    if spec_id and not any(spec["id"] == spec_id for spec in specs):
+        raise ValueError(f"Spec {spec_id} not found")
+    status = subprocess.run(["git", "status", "--porcelain", "-z"], cwd=repo,
+                            capture_output=True, check=True).stdout.split(b"\0")
+    dirty = []
+    index = 0
+    while index < len(status):
+        row = status[index]
+        index += 1
+        if not row:
+            continue
+        paths = [row[3:]]
+        if b"R" in row[:2] or b"C" in row[:2]:
+            paths.append(status[index])
+            index += 1
+        if any(not name.startswith(b".flow/") for name in paths):
+            dirty.append(row.decode("utf-8", "replace"))
+    path = _pilot_strikes_ledger_path()
+    strikes = _pilot_strikes_read(path, use_json=True) if path else {}
+    actor = get_actor()
+    rows, probe_failed = [], False
+    candidates = [s for s in specs if (not spec_id or s["id"] == spec_id)
+                  and (spec_id or s.get("ready") is True or s["status"] == "done")]
+    if candidates:
+        try:
+            probe = subprocess.run(
+                ["gh", "pr", "list", "--state", "all", "--limit", "1000", "--json",
+                 "number,url,state,headRefName,headRefOid,mergedAt"],
+                cwd=repo, capture_output=True, text=True, timeout=10, check=False)
+            rows = json.loads(probe.stdout) if probe.returncode == 0 else None
+            probe_failed = not (isinstance(rows, list) and len(rows) < 1000 and all(
+                isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
+                and isinstance(row.get("number"), int) and isinstance(row.get("url"), str)
+                and isinstance(row.get("headRefName"), str) for row in rows))
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            probe_failed = True
+        if probe_failed:
+            rows = []
+    result = []
+    remote_heads = RemoteHeads()
+    for spec in candidates:
+        sid, branch = spec["id"], spec.get("branch_name")
+        tasks = inventory.by_spec.get(sid, [])
+        prs = sorted([row for row in rows if row["headRefName"] == branch],
+                     key=lambda row: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[row["state"]],
+                                      row.get("mergedAt") or "", row["number"]), reverse=True)
+        failed = bool(branch) and (probe_failed or sum(row["state"] == "OPEN" for row in prs) > 1)
+        merged = next((row for row in prs if row["state"] == "MERGED"), None)
+        observation = {"open": next((row for row in prs if row["state"] == "OPEN"), None),
+                       "merged": merged, "merged_head": merged.get("headRefOid") if merged else None,
+                       "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed}
+        branch_head = None
+        if branch:
+            head = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+                                  cwd=repo, capture_output=True, text=True, check=False)
+            branch_head = head.stdout.strip() if head.returncode == 0 else None
+        receipt_path = flow_dir / "review-receipts" / f"qa-{sid}.json"
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError):
+            receipt = {}
+        fresh = False
+        sha = branch_head
+        if isinstance(receipt, dict) and receipt.get("id") == sid and receipt.get("qa_outcome") in {"SHIP", "NEEDS_WORK", "NA", "BLOCKED"}:
+            while sha:
+                if sha == receipt.get("head_sha"):
+                    fresh = True
+                    break
+                commit = subprocess.run(["git", "log", "-1", "--format=%s%n%P", sha], cwd=repo,
+                                        capture_output=True, text=True, check=False)
+                lines = commit.stdout.splitlines()
+                if commit.returncode or not lines or not re.match(r"^chore\(flow\): (qa verdict|pr artifact) ", lines[0]):
+                    break
+                sha = lines[1].split()[0] if len(lines) > 1 and lines[1].split() else None
+        chain = evaluate_spec_chain(flow_dir, sid, use_json=True, remote_heads=remote_heads)
+        claims = [task for task in tasks if task["status"] == "in_progress" and task.get("assignee")
+                  and (actor == "unknown" or task["assignee"] != actor)]
+        count = strikes.get(sid, {}).get("count", 0)
+        would_clear = count >= 2 and spec.get("ready") is True and not _walk_config_value(config, "tracker.readyState")
+        eligible = (spec["status"] == "open" and spec.get("ready") is True and chain["eligible"]
+                    and not claims and (count < 2 or would_clear))
+        result.append({"id": sid, "spec": spec, "tasks": tasks, "chain": chain,
+                       "other_actor_claims": claims, "strikes": strikes.get(sid), "would_clear_strikes": would_clear,
+                       "eligible": eligible, "pr": observation, "branch_name": branch,
+                       "branch_exists": branch_head is not None, "branch_head": branch_head,
+                       "qa_fresh": fresh})
+    selected = next((row for row in result if spec_id or row["pr"]["open"] or row["eligible"]), None)
+    for candidate in result:
+        with redirect_stdout(io.StringIO()) as output:
+            cmd_review_backend(argparse.Namespace(id=candidate["id"], json=True))
+        candidate["review_backend"] = json.loads(output.getvalue())
+        spec, tasks = candidate["spec"], candidate["tasks"]
+        prs = candidate["pr"]
+        pr_ref = prs["open"] or prs["merged"] or next(iter(prs["closed"]), None)
+        state = judge_route_state({
+            "view": "live", "spec_title": spec["title"],
+            "spec_body": find_spec_md_path(flow_dir, spec["id"]).read_text(encoding="utf-8"),
+            "status": spec["status"], "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
+            "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
+            "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
+            "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}" for t in tasks if t["status"] == "blocked"],
+            "pr_exists": None if prs["probe_failed"] else bool(pr_ref), "pr_ref": pr_ref})
+        decision = judge_route_lifecycle(state)
+        candidate["route"] = {"success": True, "available": False, "preset": "route", "reason": "not_selected"}
+        if prs["probe_failed"]:
+            candidate["route"]["pr_probe_failed"] = True
+        else:
+            candidate["route"]["decision"] = {**decision, "pr_ref": pr_ref,
+                                               "startable_target_fact": state.get("startable_target_fact")}
+        if candidate is selected:
+            candidate["route"] = judge_evaluate("route", state)
+        candidate["route"]["explain"] = judge_route_explain(candidate["route"], state)
+    current = subprocess.run(["git", "branch", "--show-current"], cwd=repo,
+                             capture_output=True, text=True, check=True).stdout.strip()
+    current_prs = [row for row in rows if row["headRefName"] == current and row["state"] == "OPEN"]
+    return {"guards": {"nested": bool(os.environ.get("FLOW_RALPH") or os.environ.get("REVIEW_RECEIPT_PATH")),
+                       "dirty": dirty}, "config": config, "actor": actor, "strikes": strikes,
+            "counts": {"total": len(specs), "open": sum(s["status"] == "open" for s in specs),
+                       "ready": sum(s.get("ready") is True for s in specs)},
+            "candidates": result, "selected": selected, "review_backend": selected["review_backend"] if selected else None,
+            "route": selected["route"] if selected else None,
+            "current_branch": current, "current_branch_prs": current_prs,
+            "current_branch_probe_failed": probe_failed or not current, "before_dispatch": selected["tasks"] if selected else []}
+
+
+def cmd_pilot_snapshot(args: argparse.Namespace) -> None:
+    try:
+        result = pilot_snapshot(args.spec)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        error_exit(f"pilot snapshot failed: {exc}", use_json=args.json)
+    json_output(result)
+
+
 def _pilot_strikes_ledger_path() -> Optional[Path]:
     """Resolve the pilot strikes ledger exactly as the pilot skill does.
 
@@ -43283,7 +44371,54 @@ def cmd_pilot_strikes_list(args: argparse.Namespace) -> None:
     print("\nClear one: flowctl pilot strikes clear <spec-id>")
 
 
+def cmd_pilot_strikes_record(args: argparse.Namespace) -> None:
+    """Record one cumulative strike under the shared ledger lock."""
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.spec_id, use_json=args.json)
+    spec_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_path.exists():
+        error_exit(f"Spec {spec_id} not found", use_json=args.json)
+    path = _pilot_strikes_ledger_path()
+    if path is None:
+        error_exit("Not a git repository - cannot resolve strikes ledger", use_json=args.json)
+    try:
+        with cross_process_lock(path.with_suffix(".lock")):
+            strikes = _pilot_strikes_read(path, use_json=args.json)
+            previous = strikes.get(spec_id, {})
+            count = previous.get("count", 0) if isinstance(previous, dict) else None
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                error_exit(f"Invalid strike count for {spec_id}", use_json=args.json)
+            count += 1
+            strikes[spec_id] = {"count": count, "stage": args.stage,
+                                "reason": args.reason, "ts": now_iso()}
+            # The sidecar lock also serializes readiness with ordinary spec writers.
+            with _review_sidecar_lock(flow_dir, spec_id):
+                spec = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
+                atomic_write_json(path, strikes)
+                if count >= 2 and spec.get("ready") is True:
+                    spec["ready"] = False
+                    spec["updated_at"] = now_iso()
+                    atomic_write_json(spec_path, spec)
+    except (CrossProcessLockError, OSError) as exc:
+        error_exit(str(exc), use_json=args.json)
+    if args.json:
+        json_output({"count": count, "unreadied": count >= 2})
+    else:
+        print(f"{spec_id}: strike {count}/2" + (" (spec unreadied)" if count >= 2 else ""))
+
+
 def cmd_pilot_strikes_clear(args: argparse.Namespace) -> None:
+    path = _pilot_strikes_ledger_path()
+    if path is None:
+        error_exit("Not a git repository - cannot resolve the pilot strikes ledger", use_json=args.json)
+    try:
+        with cross_process_lock(path.with_suffix(".lock")):
+            _cmd_pilot_strikes_clear_locked(args)
+    except CrossProcessLockError as exc:
+        error_exit(str(exc), use_json=args.json)
+
+
+def _cmd_pilot_strikes_clear_locked(args: argparse.Namespace) -> None:
     """Clear one strikes entry, or all of them with `--all` (fn-184.1, R1/R2).
 
     Strikes are PILOT state, not readiness state: this never touches a spec's
@@ -43830,6 +44965,8 @@ def _rereview_prompt_pair(
 
 def require_execution_provider_configuration():
     """Validate configured local reach before reserving a managed-only review."""
+    import ipaddress
+
     url = os.environ.get("FLOW_REVIEW_EXECUTION_URL", "")
     parsed = urllib.parse.urlsplit(url)
     if (parsed.scheme != "http" or not parsed.hostname
@@ -43848,6 +44985,9 @@ def require_execution_provider_configuration():
 
 def _read_review_execution_response(url, token, payload, timeout):
     """One direct local HTTP request, bounded across headers and body reads."""
+    import http.client
+    import socket
+
     parsed = urllib.parse.urlsplit(url)
     connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
     deadline = time.monotonic() + timeout
@@ -43899,6 +45039,8 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
     Kept inside flowctl.py so named-file installs retain the execution boundary.
     Only inference crosses it; flowctl owns review reservations and receipts.
     """
+    import http.client
+
     url = os.environ.get("FLOW_REVIEW_EXECUTION_URL")
     if url is None:
         return None
@@ -44920,6 +46062,8 @@ def _dispatch_backend_review(
     on failure) and phase 2 rebuilds. One review round still reserves exactly one
     round: a failed resume returns no verdict, so nothing is double-consumed.
     """
+    import uuid
+
     args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
     two_phase = (
         injected_prompt is not None
@@ -45051,6 +46195,8 @@ def _receipt_records_fanout(receipt_path: Optional[str]) -> bool:
 
 def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     """Shared impl-review pipeline; per-backend variance via registry hooks."""
+    import uuid
+
     reg = BACKEND_REGISTRY[backend]
     task_id = args.task
     args.base = args.base or _default_review_base(args.json)
@@ -45091,7 +46237,12 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     except ReviewEvidenceError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
 
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    receipt_path = (
+        getattr(args, "receipt", None)
+        or os.environ.get("REVIEW_RECEIPT_PATH")
+        or _review_route_receipt_default(get_repo_root(), task_id)
+    )
+    args.receipt = receipt_path
     # fn-215 R11: a fan-out receipt's draws[] means the resumed primary
     # session did not author the other axes' findings — lean resume is
     # disabled for this one round so the FULL merged container is injected.
@@ -45593,6 +46744,8 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     # Stays None for backends that always inject (cursor, copilot, host) and
     # for a fresh round; only a two_phase_resume backend builds the second,
     # findings-bearing prompt. fn-169 R2.
+    import uuid
+
     injected_prompt: Optional[str] = None
     reg = BACKEND_REGISTRY[backend]
     if not ensure_flow_exists():
@@ -45899,6 +47052,8 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     # Stays None for backends that always inject (cursor, copilot, host) and
     # for a fresh round; only a two_phase_resume backend builds the second,
     # findings-bearing prompt. fn-169 R2.
+    import uuid
+
     injected_prompt: Optional[str] = None
     reg = BACKEND_REGISTRY[backend]
     if not ensure_flow_exists():
@@ -46610,6 +47765,8 @@ def _review_fanout_run_draw(
     draw, prompt, repo_root, args, sidecar_dir: Path,
 ) -> dict:
     """One draw runner: no record/refund/receipt writes (fn-215 R14)."""
+    import uuid
+
     axis = draw["axis"]
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
@@ -46668,8 +47825,15 @@ def _review_fanout_run_draw(
     model, effort = _receipt_model_effort(spec, resolution_out)
     review_path = sidecar_dir / f"{axis}.review.md"
     output_path = sidecar_dir / f"{axis}.out.txt"
+    parse_status: dict = {}
+    parse_review_findings(
+        review_text, source_receipt_id=f"draw-{sidecar_dir.name}-{axis}",
+        review_kind="implementation", backend=backend, round_number=1,
+        head_sha="dispatch", parse_status=parse_status,
+    )
     meta = {
         "axis": axis,
+        "parse_status": parse_status,
         "backend": backend,
         "model": model,
         "effort": effort,
@@ -46814,18 +47978,9 @@ def _review_fanout_refund_all_failed(
 def _review_fanout_next_cmd(
     task_id, base_branch, rid, receipt, needs_survivors=False,
 ) -> str:
-    task_part = f" {task_id}" if task_id else ""
-    receipt_part = f" --receipt {receipt}" if receipt else ""
-    # PR #392 r12: the finalizer REQUIRES the coordinator count when any draw
-    # returned NEEDS_WORK — the advertised next step must carry it.
-    survivors_part = (
-        " --needs-work-survivors <N surviving NEEDS_WORK-draw findings>"
-        if needs_survivors else ""
-    )
     return (
-        f"flowctl codex impl-review-fanout-finalize{task_part} "
-        f"--base {base_branch} --rid {rid} --merged-file <merged.md>"
-        f"{survivors_part}{receipt_part}"
+        f"flowctl codex impl-review-fanout-finalize --rid {rid} "
+        "--merge-plan <merge-plan.json>"
     )
 
 
@@ -46845,6 +48000,7 @@ def _review_fanout_emit_dispatch(
     draws_out = [
         {
             "axis": row["axis"],
+            "parse_status": row.get("parse_status"),
             "verdict": row.get("verdict"),
             "failed": row.get("failed"),
             "failure_class": row.get("failure_class"),
@@ -46870,11 +48026,11 @@ def _review_fanout_emit_dispatch(
             "next": next_line,
         })
         return
-    print(f"{'axis':<14} {'verdict':<16} {'failed':<8} model")
+    print(f"{'axis':<14} {'verdict':<16} {'failed':<8} parse-status model")
     for row in results:
         print(
             f"{row['axis']:<14} {str(row.get('verdict') or '-'):<16} "
-            f"{str(bool(row.get('failed'))):<8} {row.get('model') or '-'}"
+            f"{str(bool(row.get('failed'))):<8} {json.dumps(row.get('parse_status'))} {row.get('model') or '-'}"
         )
     print(f"next: {next_line}")
 
@@ -47181,6 +48337,8 @@ def _review_route_claim(path: Path, scope_id: str) -> Optional[str]:
     """Atomically create the claim placeholder; returns its owner token, or
     None when someone else won (or the write failed — a partial file is
     removed so it cannot linger as unreadable state, sol round 6)."""
+    import secrets
+
     token = secrets.token_hex(16)
     payload = json.dumps({
         "type": "impl_review", "id": scope_id,
@@ -47701,6 +48859,8 @@ def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
 
 
 def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
+    import secrets
+
     _wire_backend_review_hooks()
     args.base = args.base or _default_review_base(args.json)
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
@@ -48471,6 +49631,7 @@ def _review_fanout_emit_finalize(
             "standalone": standalone,
             "review": merged_text,
             "draws": receipt_draws,
+            "needs_work_survivors": getattr(args, "needs_work_survivors", None),
         }
         if suppressed_count:
             json_payload["suppressed_count"] = suppressed_count
@@ -48505,6 +49666,77 @@ def _review_fanout_emit_finalize(
     _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
 
+def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
+    """Render the coordinator's selections; never decide which defects duplicate."""
+    try:
+        plan = json.loads(Path(args.merge_plan).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        error_exit(f"cannot read --merge-plan: {exc}", use_json=args.json, code=2)
+    if not isinstance(plan, dict) or set(plan) - {"keep", "collapse", "suppressed_count"}:
+        error_exit("--merge-plan must contain keep and optional collapse", use_json=args.json, code=2)
+    keep, collapse = plan.get("keep"), plan.get("collapse", {})
+    if (not isinstance(keep, list) or not all(isinstance(x, str) for x in keep)
+            or len(keep) != len(set(keep)) or not isinstance(collapse, dict)
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in collapse.items())):
+        error_exit("--merge-plan expects unique keep ids and collapse source-to-kept-id mapping", use_json=args.json, code=2)
+    suppressed = plan.get("suppressed_count", {})
+    if (not isinstance(suppressed, dict)
+            or any(k not in {"0", "25", "50", "75", "100"}
+                   or type(v) is not int or v < 0 for k, v in suppressed.items())):
+        error_exit("--merge-plan suppressed_count must map confidence anchors to non-negative integers", use_json=args.json, code=2)
+    items, verdicts, unaddressed = {}, {}, set()
+    for draw in meta.get("draws", []):
+        if not draw.get("verdict"):
+            continue
+        try:
+            text = Path(draw["review_path"]).read_text(encoding="utf-8")
+        except (KeyError, OSError) as exc:
+            error_exit(f"cannot read draw {draw.get('axis')}: {exc}", use_json=args.json, code=2)
+        unaddressed.update(parse_unaddressed_rids(text) or [])
+        container = build_review_receipt_findings(
+            text, review_type="impl_review", review_id=meta.get("id") or "branch",
+            backend="codex", head_sha=meta["reviewed_head_sha"],
+            base_sha=meta.get("reviewed_base_sha"),
+        )
+        if container is None:
+            error_exit(f"--merge-plan cannot parse draw {draw['axis']}; use --merged-file to repair its format", use_json=args.json, code=2)
+        for item in container["items"]:
+            ref = f"{draw['axis']}:{item['ordinal']}"
+            items[ref], verdicts[ref] = item, draw["verdict"]
+    missing = sorted((set(keep) | set(collapse) | set(collapse.values())) - set(items))
+    if missing:
+        error_exit("--merge-plan missing draw items: " + ", ".join(missing), use_json=args.json, code=2)
+    if set(collapse) & set(keep) or any(target not in keep for target in collapse.values()):
+        error_exit("--merge-plan collapse sources must be omitted from keep and targets must be kept", use_json=args.json, code=2)
+    survivors = set(ref for ref in keep if verdicts[ref] == "NEEDS_WORK")
+    survivors.update(target for source, target in collapse.items() if verdicts[source] == "NEEDS_WORK")
+    parts, counts = [], {"introduced": 0, "pre_existing": 0}
+    for ordinal, ref in enumerate(keep, 1):
+        item = items[ref]
+        counts[item["classification"]] += 1
+        fields = [f"## Issue {ordinal}",
+                  f"- **Severity**: {item['severity']}",
+                  f"- **Title**: {item['title']}",
+                  f"- **Confidence**: {item['confidence']}",
+                  f"- **Classification**: {item['classification']}",
+                  f"- **Problem**: {item['body']}"]
+        if item.get("suggestion"):
+            fields.append(f"- **Suggestion**: {item['suggestion']}")
+        if item.get("anchor"):
+            anchor = item["anchor"]
+            end = f"-{anchor['endLine']}" if anchor.get("endLine") else ""
+            fields.append(f"- **File:Line**: {anchor['path']}:{anchor['startLine']}{end}")
+        rids = sorted(set(item["rIds"]).union(*(set(items[source]["rIds"]) for source, target in collapse.items() if target == ref)))
+        if rids:
+            fields.append("- **R-IDs**: " + ", ".join(rids))
+        parts.append("\n".join(fields))
+    if not parts:
+        parts.append("No findings.")
+    parts.append("```json\n" + json.dumps({"classification_counts": counts, "unaddressed": sorted(unaddressed), "suppressed_count": suppressed}) + "\n```")
+    parts.append(f"<verdict>{_review_fanout_worst_verdict(meta['draws'])}</verdict>")
+    return "\n\n".join(parts) + "\n", len(survivors)
+
+
 def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     """Phase-two fan-out finalize (fn-215 R14).
 
@@ -48517,16 +49749,17 @@ def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
 
 def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
-    args.base = args.base or _default_review_base(args.json)
-    task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
     rid = args.rid
-    # PR #392 r14 (P2): both rid mints are 32 lowercase hex (uuid4().hex /
-    # token_hex(16)) — a strict format match rejects dot segments and any
-    # other traversal-shaped input (Path("..").name == ".." passed a bare
-    # basename check).
     if not rid or not re.fullmatch(r"[0-9a-f]{32}", rid):
         error_exit("invalid --rid", use_json=args.json, code=2)
-    meta = _review_fanout_load_meta(flow_dir, rid, args)
+    meta = _review_fanout_load_meta(get_flow_dir(), rid, args)
+    if args.task is None and not meta.get("standalone"):
+        args.task = meta.get("id")
+    if args.base is None:
+        args.base = meta.get("base_branch")
+    if not getattr(args, "receipt", None):
+        args.receipt = meta.get("receipt_path")
+    task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
     _review_fanout_check_finalize_meta(meta, task_id, standalone, args)
     meta_draws = meta.get("draws") if isinstance(meta.get("draws"), list) else []
     if meta_draws and not _review_fanout_worst_verdict(meta_draws):
@@ -48536,14 +49769,18 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             meta.get("reviewed_base_sha"),
         )
         return
-    try:
-        merged_text = Path(args.merged_file).read_text(encoding="utf-8")
-    except OSError as exc:
-        error_exit(
-            f"cannot read --merged-file: {exc}", use_json=args.json, code=2,
-        )
-    if not merged_text.strip():
-        error_exit("--merged-file is empty", use_json=args.json, code=2)
+    if getattr(args, "merge_plan", None):
+        merged_text, survivors = _review_fanout_render_merge_plan(meta, args)
+        if args.needs_work_survivors is not None and args.needs_work_survivors != survivors:
+            error_exit("--needs-work-survivors disagrees with --merge-plan", use_json=args.json, code=2)
+        args.needs_work_survivors = survivors
+    else:
+        try:
+            merged_text = Path(args.merged_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            error_exit(f"cannot read --merged-file: {exc}", use_json=args.json, code=2)
+        if not merged_text.strip():
+            error_exit("--merged-file is empty", use_json=args.json, code=2)
     meta_draws = meta.get("draws") if isinstance(meta.get("draws"), list) else []
     verdict = _review_fanout_worst_verdict(meta_draws)
     if not verdict:
@@ -49258,8 +50495,6 @@ def _classify_triage_path(path: str) -> str:
     return "other"
 
 
-_TRIAGE_VERSION_JSON_RE = re.compile(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$')
-_TRIAGE_VERSION_TOML_RE = re.compile(r'^\s*version\s*=\s*"[^"]*"\s*$')
 
 
 def _triage_chore_is_version_only(
@@ -49315,9 +50550,9 @@ def _triage_chore_is_version_only(
             if line.startswith("-"):
                 return False
             continue
-        if is_json and _TRIAGE_VERSION_JSON_RE.match(content):
+        if is_json and re.compile(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$').match(content):
             continue
-        if is_toml and _TRIAGE_VERSION_TOML_RE.match(content):
+        if is_toml and re.compile(r'^\s*version\s*=\s*"[^"]*"\s*$').match(content):
             continue
         return False
     return saw_change
@@ -49537,6 +50772,8 @@ def _triage_run_copilot_judge(
 
     Model resolution: explicit --model, else the copilot triage baseline.
     """
+    import uuid
+
     copilot = shutil.which("copilot")
     if not copilot:
         return None, "copilot CLI not available for triage", None
@@ -50636,6 +51873,26 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
         print(f"Checkpoint was created at: {checkpoint.get('created_at', 'unknown')}")
 
 
+def render_requirement_coverage(flow_dir: Path, spec_id: str) -> str:
+    """Render actual task ownership from satisfies; never predict allocated IDs."""
+    text = (flow_dir / SPECS_DIR / f"{spec_id}.md").read_text(encoding="utf-8")
+    criteria, _ = _export_scan_acceptance_criteria(text)
+    owners: dict[str, list[str]] = {}
+    for path in sorted((flow_dir / TASKS_DIR).glob(f"{spec_id}.*.md")):
+        if not path.with_suffix(".json").exists():
+            continue
+        for rid in _export_parse_task_satisfies(path.read_text(encoding="utf-8")):
+            owners.setdefault(rid, []).append(path.stem)
+    lines = ["## Requirement coverage", "", "| Req | Description | Task(s) | Gap justification |", "| --- | --- | --- | --- |"]
+    for criterion in criteria:
+        rid = criterion["id"]
+        description = criterion["text"].replace("|", "\\|").replace("\n", " ")
+        tasks = ", ".join(owners.get(rid, [])) or "—"
+        gap = "—" if rid in owners else "Uncovered"
+        lines.append(f"| {rid} | {description} | {tasks} | {gap} |")
+    return "\n".join(lines) + "\n"
+
+
 def cmd_validate(args: argparse.Namespace) -> None:
     """Validate spec structure or all specs."""
     if not ensure_flow_exists():
@@ -50799,6 +52056,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
     if args.json:
         json_output(
             {
+                **({"requirement_coverage": render_requirement_coverage(flow_dir, spec_id_arg)} if getattr(args, "coverage", False) and not errors else {}),
                 "spec": spec_id_arg,
                 "root_errors": root_errors,
                 "valid": valid,
@@ -50809,6 +52067,8 @@ def cmd_validate(args: argparse.Namespace) -> None:
             success=valid,
         )
     else:
+        if getattr(args, "coverage", False) and not errors:
+            print(render_requirement_coverage(flow_dir, spec_id_arg), end="")
         print(f"Validation for {spec_id_arg}:")
         print(f"  Tasks: {task_count}")
         print(f"  Valid: {valid}")
@@ -52494,10 +53754,8 @@ _PRIME_WELLKNOWN_ENV = frozenset(
     }
 )
 
-# Env-read patterns across the common runtimes (var NAME captured; the value is
-# never touched → redaction-safe by construction).
-_PRIME_ENV_READ_RE = re.compile(
-    r"""(?x)
+# Patterns stay uncompiled until their collector runs; re caches compilation.
+_PRIME_ENV_PATTERNAD_PATTERN = r"""(?x)
       process\.env\.([A-Za-z_][A-Za-z0-9_]*)
     | process\.env\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
     | os\.environ(?:\.get)?\(?\[?\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
@@ -52506,7 +53764,20 @@ _PRIME_ENV_READ_RE = re.compile(
     | \bENV\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
     | \bgetenv\(\s*"([A-Za-z_][A-Za-z0-9_]*)"
     """
+
+_PRIME_TEST_BASENAME_PATTERN = r"(?i)(^test_[^/]*$|_test\.[a-z0-9]+$|\.(test|spec)\.[a-z0-9]+$|^conftest\.py$)"
+
+_PRIME_INSTALLER_SEG_PATTERN = (
+    r"(?i)^\s*(?:-\s*)?(?:sudo\s+)?(?:"
+    r"(?:pip3?|pipx)\s+install\b"
+    r"|python3?\s+-m\s+pip\s+install\b"
+    r"|uv\s+(?:pip\s+)?(?:install|add)\b"
+    r"|(?:npm|pnpm|yarn|bun)\s+(?:install|ci|i|add)\b"
+    r"|(?:cargo|gem|brew|apk|choco)\s+install\b"
+    r"|apt(?:-get)?\s+(?:-y\s+)?install\b"
+    r")"
 )
+
 
 # Destructive-command patterns (FH5). POSIX character classes only; matched over
 # manifest scripts / Makefiles / shell scripts, NEVER executed.
@@ -52539,21 +53810,6 @@ def _prime_iter_source(deduped: "list[str]") -> "list[str]":
 _PRIME_TEST_DIR_SEGMENTS = frozenset(
     ("test", "tests", "__tests__", "spec", "specs", "e2e", "integration-tests")
 )
-_PRIME_TEST_BASENAME_RE = re.compile(
-    r"(?i)(^test_[^/]*$|_test\.[a-z0-9]+$|\.(test|spec)\.[a-z0-9]+$|^conftest\.py$)"
-)
-
-
-_PRIME_INSTALLER_SEG_RE = re.compile(
-    r"(?i)^\s*(?:-\s*)?(?:sudo\s+)?(?:"
-    r"(?:pip3?|pipx)\s+install\b"
-    r"|python3?\s+-m\s+pip\s+install\b"
-    r"|uv\s+(?:pip\s+)?(?:install|add)\b"
-    r"|(?:npm|pnpm|yarn|bun)\s+(?:install|ci|i|add)\b"
-    r"|(?:cargo|gem|brew|apk|choco)\s+install\b"
-    r"|apt(?:-get)?\s+(?:-y\s+)?install\b"
-    r")"
-)
 
 
 def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
@@ -52568,7 +53824,7 @@ def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
             seg for seg in re.split(r"&&|\|\||;|\|", ln)
             if seg.strip()
             and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
-            and not _PRIME_INSTALLER_SEG_RE.match(seg)
+            and not re.compile(_PRIME_INSTALLER_SEG_PATTERN).match(seg)
         ]
         if kept:
             out.append(" ; ".join(s.strip() for s in kept))
@@ -52582,7 +53838,7 @@ def _prime_is_test_path(path: str) -> bool:
     segs = _prime_posix_segments(path)
     if any(s.lower() in _PRIME_TEST_DIR_SEGMENTS for s in segs[:-1]):
         return True
-    return bool(_PRIME_TEST_BASENAME_RE.search(segs[-1])) if segs else False
+    return bool(re.compile(_PRIME_TEST_BASENAME_PATTERN).search(segs[-1])) if segs else False
 
 
 def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "set[str]":
@@ -52641,7 +53897,7 @@ def _prime_collect_env_crossref(
         txt = _prime_read_tracked(root, rel, c)
         if not txt:
             continue
-        for m in _PRIME_ENV_READ_RE.finditer(txt):
+        for m in re.compile(_PRIME_ENV_PATTERNAD_PATTERN).finditer(txt):
             name = next((g for g in m.groups() if g), None)
             if name:
                 read_vars.add(name)
@@ -54266,11 +55522,9 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         required=True,
         help="Fan-out reservation id (or standalone nonce from phase one)",
     )
-    p2.add_argument(
-        "--merged-file",
-        required=True,
-        help="Path to coordinator-merged review text",
-    )
+    merge_input = p2.add_mutually_exclusive_group(required=True)
+    merge_input.add_argument("--merged-file", help="Path to coordinator-merged review text")
+    merge_input.add_argument("--merge-plan", help="JSON keep/collapse plan using axis:ordinal draw item references")
     p2.add_argument(
         "--receipt", help="Receipt file path for the merged round",
     )
@@ -54476,6 +55730,12 @@ def main() -> None:
     p_judge.add_argument("--preset", required=True, choices=list(JUDGE_PRESETS))
     p_judge.add_argument("--state-file", help="JSON state file")
     p_judge.add_argument("--spec", help="Assemble route or QA state from a live spec")
+    p_judge.add_argument("--task", help="Assemble tier state from a live task")
+    p_judge.add_argument("--explicit-model", help="Preserve the invocation's explicit implementer")
+    p_judge.add_argument("--fast-model", help="Host's configured fast model")
+    p_judge.add_argument("--role-model", help="Model pinned by the dispatched role")
+    p_judge.add_argument("--can-spawn-model", action="store_true", help="Host supports native model selection")
+    p_judge.add_argument("--can-bridge", action="store_true", help="Host verified bridge reach")
     p_judge.add_argument("--explain", action="store_true", help="Print the route recommendation")
     p_judge.add_argument("--json", action="store_true", help="JSON output")
     p_judge.set_defaults(func=cmd_judge)
@@ -54486,6 +55746,12 @@ def main() -> None:
     p_init.set_defaults(func=cmd_init)
 
     # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
+    p_setup_status = subparsers.add_parser("setup-status", help="Read setup probes in one call")
+    p_setup_status.add_argument("--plugin-root")
+    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode"], default="claude-code")
+    p_setup_status.add_argument("--json", action="store_true")
+    p_setup_status.set_defaults(func=cmd_setup_status)
+
     p_setup_block = subparsers.add_parser(
         "setup-block", help="Apply or resolve the tracked Flow-Next docs block"
     )
@@ -54829,13 +56095,13 @@ def main() -> None:
     )
     p_tracker_sync.add_argument(
         "--flow-file", default=None, dest="flow_file",
-        help="Exact final local flow-form body (required for push/pull/reconcile; "
+        help="Exact final local flow-form body (optional for push; required for pull/reconcile; "
              "forbidden for comment); becomes mergeBaseFlow",
     )
     p_tracker_sync.add_argument(
         "--body-file", default=None, dest="body_file",
         help="Tracker-rendered body for push/reconcile, exact tracker snapshot "
-             "used to produce a pull fold, or comment text (required)",
+             "used to produce a pull fold, or comment text (optional for push)",
     )
     p_tracker_sync.add_argument(
         "--comments-file", default=None, dest="comments_file",
@@ -54868,6 +56134,8 @@ def main() -> None:
         help="For a body-writing --op push, overwrite a tracker body that "
              "diverged from the merge base (after a human confirmed it)",
     )
+    p_tracker_sync.add_argument("--prepare", action="store_true",
+                                help="Read pull/reconcile inputs into private expiring snapshots")
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")
     p_tracker_sync.set_defaults(func=cmd_tracker_facade)
@@ -55154,12 +56422,24 @@ def main() -> None:
     )
     pilot_sub = p_pilot.add_subparsers(dest="pilot_cmd", required=True)
 
+    p_pilot_snapshot = pilot_sub.add_parser("snapshot", help="Read the complete pilot hop state")
+    p_pilot_snapshot.add_argument("--spec")
+    p_pilot_snapshot.add_argument("--json", action="store_true")
+    p_pilot_snapshot.set_defaults(func=cmd_pilot_snapshot)
+
     p_pilot_strikes = pilot_sub.add_parser(
         "strikes", help="Pilot two-strike ledger (list / clear)"
     )
     pilot_strikes_sub = p_pilot_strikes.add_subparsers(
         dest="pilot_strikes_cmd", required=True
     )
+
+    p_pilot_strikes_record = pilot_strikes_sub.add_parser("record", help="Record a strike; unready at two")
+    p_pilot_strikes_record.add_argument("spec_id")
+    p_pilot_strikes_record.add_argument("--stage", required=True)
+    p_pilot_strikes_record.add_argument("--reason", required=True)
+    p_pilot_strikes_record.add_argument("--json", action="store_true")
+    p_pilot_strikes_record.set_defaults(func=cmd_pilot_strikes_record)
 
     p_pilot_strikes_list = pilot_strikes_sub.add_parser(
         "list", help="Show recorded pilot strikes (empty-safe)"
@@ -55258,6 +56538,18 @@ def main() -> None:
     p_findings_attach.add_argument("--json", action="store_true", help="JSON output")
     p_findings_attach.set_defaults(func=cmd_review_findings_attach)
 
+    p_review_prompt = subparsers.add_parser("review-prompt", help="Render a shared review dispatch prompt")
+    p_review_prompt.add_argument("kind", choices=["impl", "plan", "completion"])
+    p_review_prompt.add_argument("id", help="Task/spec ID, or branch for standalone impl review")
+    p_review_prompt.add_argument("--axis", choices=REVIEW_FANOUT_AXES)
+    p_review_prompt.add_argument("--base")
+    p_review_prompt.add_argument("--head")
+    p_review_prompt.add_argument("--focus")
+    p_review_prompt.add_argument("--receipt")
+    p_review_prompt.add_argument("--out", required=True)
+    p_review_prompt.add_argument("--json", action="store_true")
+    p_review_prompt.set_defaults(func=cmd_review_prompt)
+
     # review-rounds (fn-90 R5, rp surface) — prose-driven rp workflows hit the
     # same deterministic cap counter the codex/copilot/cursor handlers wire
     # internally at dispatch time.
@@ -55306,6 +56598,8 @@ def main() -> None:
             "reservation model"
         ),
     )
+    p_rr_inc.add_argument("--base", help="Reviewed base SHA for in-process diff identity")
+    p_rr_inc.add_argument("--head", help="Reviewed head SHA for in-process diff identity")
     p_rr_inc.add_argument("--json", action="store_true", help="JSON output")
     p_rr_inc.set_defaults(func=cmd_review_rounds_increment)
 
@@ -55389,6 +56683,7 @@ def main() -> None:
     # claim - and a claim is not an observation. The row stays honestly silent
     # (absent = unknown); observed provenance rides the dispatcher paths that
     # actually resolved a model.
+    p_rr_record.add_argument("--attach", action="store_true", help="Publish the journaled receipt in this call")
     p_rr_record.add_argument("--json", action="store_true", help="JSON output")
     p_rr_record.set_defaults(func=cmd_review_rounds_record)
 
@@ -55413,6 +56708,14 @@ def main() -> None:
     )
     p_rr_attempts.add_argument("--json", action="store_true", help="JSON output")
     p_rr_attempts.set_defaults(func=cmd_review_rounds_attempts)
+
+    p_rr_resume = review_rounds_sub.add_parser(
+        "resume-terminal", help="Resume durable completion status and receipt persistence"
+    )
+    p_rr_resume.add_argument("id", help="Spec ID")
+    p_rr_resume.add_argument("--review-type", required=True, choices=["completion"])
+    p_rr_resume.add_argument("--json", action="store_true", help="JSON output")
+    p_rr_resume.set_defaults(func=cmd_review_rounds_resume_terminal)
 
     # review-route (PR #392): deterministic dispatch routing for the
     # impl-review workflows — replaces the agent-executed bash gates.
@@ -55478,6 +56781,14 @@ def main() -> None:
     p_memory_init = memory_sub.add_parser("init", help="Initialize memory templates")
     p_memory_init.add_argument("--json", action="store_true", help="JSON output")
     p_memory_init.set_defaults(func=cmd_memory_init)
+
+    p_memory_scan = memory_sub.add_parser("audit-scan", help="Read mechanical audit evidence")
+    p_memory_scan.add_argument("--json", action="store_true")
+    p_memory_scan.set_defaults(func=cmd_memory_audit_scan)
+    p_memory_apply = memory_sub.add_parser("apply", help="Apply a host-authored memory audit plan")
+    p_memory_apply.add_argument("--plan", required=True)
+    p_memory_apply.add_argument("--json", action="store_true")
+    p_memory_apply.set_defaults(func=cmd_memory_apply)
 
     def _add_memory_entry_field_args(parser: argparse.ArgumentParser) -> None:
         """Field surface shared by `memory add` and `memory upsert` (fn-212)."""
@@ -55572,6 +56883,8 @@ def main() -> None:
     p_memory_add.add_argument(
         "content", nargs="?", help="DEPRECATED: entry body (use --body-file instead)"
     )
+    p_memory_add.add_argument("--check-overlap", action="store_true",
+                              help="Return overlap matches without writing")
     p_memory_add.set_defaults(func=cmd_memory_add)
 
     p_memory_upsert = memory_sub.add_parser(
@@ -55774,8 +57087,25 @@ def main() -> None:
     p_memory_list_legacy.set_defaults(func=cmd_memory_list_legacy)
 
     # prospect archive / promote (fn-33)
+    p_qa = subparsers.add_parser("qa", help="QA artifact commands")
+    qa_sub = p_qa.add_subparsers(dest="qa_cmd", required=True)
+    p_qa_receipt = qa_sub.add_parser("receipt", help="Render a QA receipt")
+    qa_source = p_qa_receipt.add_mutually_exclusive_group(required=True)
+    qa_source.add_argument("--from-json")
+    qa_source.add_argument("--skeleton", action="store_true")
+    p_qa_receipt.add_argument("--receipt")
+    p_qa_receipt.add_argument("--json", action="store_true")
+    p_qa_receipt.set_defaults(func=cmd_qa_receipt)
+
     p_prospect = subparsers.add_parser("prospect", help="Prospect artifact commands")
     prospect_sub = p_prospect.add_subparsers(dest="prospect_cmd", required=True)
+
+    p_prospect_write = prospect_sub.add_parser("write", help="Render a ranked prospect")
+    prospect_source = p_prospect_write.add_mutually_exclusive_group(required=True)
+    prospect_source.add_argument("--from-json")
+    prospect_source.add_argument("--skeleton", action="store_true")
+    p_prospect_write.add_argument("--json", action="store_true")
+    p_prospect_write.set_defaults(func=cmd_prospect_write)
 
     p_prospect_archive = prospect_sub.add_parser(
         "archive",
@@ -57056,6 +58386,9 @@ def main() -> None:
         help="Spec-level backlog eligibility facts (ignores --spec)",
     )
     p_ready.add_argument("--json", action="store_true", help="JSON output")
+    p_ready.add_argument("--admit", action="store_true", help="Compute mechanical rolling admissions")
+    p_ready.add_argument("--in-flight", default="", help="Comma-separated in-flight task IDs")
+    p_ready.add_argument("--cap", type=int, default=3, help="Maximum concurrent tasks")
     p_ready.set_defaults(func=cmd_ready)
 
     p_next = subparsers.add_parser("next", help="Select next plan/work unit")
@@ -57098,6 +58431,8 @@ def main() -> None:
     p_done.add_argument("--summary", help="Done summary (inline text)")
     p_done.add_argument("--evidence-json", help="Evidence JSON file")
     p_done.add_argument("--evidence", help="Evidence JSON (inline string)")
+    p_done.add_argument("--range", help="Contiguous task commit range: <base>..<head>")
+    p_done.add_argument("--test", action="append", help="Test command; repeatable")
     p_done.add_argument("--force", action="store_true", help="Skip status checks")
     p_done.add_argument("--json", action="store_true", help="JSON output")
     p_done.set_defaults(func=cmd_done)
@@ -57112,6 +58447,11 @@ def main() -> None:
     p_block.set_defaults(func=cmd_block)
 
     # validate
+    p_preflight = subparsers.add_parser("preflight", help="Read planning config and gate probes in one call")
+    p_preflight.add_argument("--spec", help="Spec-aware review backend")
+    p_preflight.add_argument("--json", action="store_true", help="JSON output")
+    p_preflight.set_defaults(func=cmd_preflight)
+
     p_validate = subparsers.add_parser("validate", help="Validate spec or all")
     p_validate.add_argument(
         "--spec", help="Spec ID (e.g., fn-1, fn-1-add-auth)"
@@ -57120,6 +58460,7 @@ def main() -> None:
         "--all", action="store_true", help="Validate all specs and tasks"
     )
     p_validate.add_argument("--json", action="store_true", help="JSON output")
+    p_validate.add_argument("--coverage", action="store_true", help="Render requirement coverage from task satisfies (with --spec)")
     p_validate.set_defaults(func=cmd_validate)
 
     # triage-skip (fn-29.6)

@@ -1493,19 +1493,19 @@ class PaginationIsDrainedNeverSilentlyCapped(unittest.TestCase):
         self.assertIn("page=2", cli_endpoint(ex.calls[-1]))
 
     def test_linear_comment_list_drains_the_connection(self) -> None:
-        probe = gql_issue({"id": LN_UUID})
-        page1 = ok({"data": {"issue": {"comments": {
+        page1 = ok({"data": {"issue": {"id": LN_UUID, "comments": {
             "nodes": [{"id": "c1", "body": "a", "url": None}],
             "pageInfo": {"hasNextPage": True, "endCursor": "cur1"}}}}})
-        page2 = ok({"data": {"issue": {"comments": {
+        page2 = ok({"data": {"issue": {"id": LN_UUID, "comments": {
             "nodes": [{"id": "c2", "body": "b", "url": None}],
             "pageInfo": {"hasNextPage": False, "endCursor": None}}}}})
-        ex = fake_execute({"wire-comment-list": [probe, page1, page2]})
+        ex = fake_execute({"wire-comment-list": [page1, page2]})
         out = W.dispatch("comment-list", ln_cfg(),
                          locator=loc(LN_UUID, "WOR-17"), execute=ex)
         self.assertNotIsInstance(out, TrackerError)
         self.assertEqual([c["id"] for c in out["comments"]], ["c1", "c2"])
         self.assertFalse(out["truncated"])
+        self.assertEqual(len(ex.calls), 2)
 
     def test_jira_list_open_drains_start_at(self) -> None:
         batch1 = {"total": W._PAGE_SIZE + 1,

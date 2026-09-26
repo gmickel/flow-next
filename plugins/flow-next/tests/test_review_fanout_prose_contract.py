@@ -55,20 +55,11 @@ class CodexWorkflowFanoutContract(unittest.TestCase):
             self.assertIn("--rid", text)
             self.assertIn("--receipt", text)
 
-    def test_needs_work_survivors_flag_in_executable_block(self) -> None:
-        # The finalize's executable argument array must carry the flag - not
-        # just prose mentioning it.
+    def test_merge_plan_flag_in_executable_block(self) -> None:
+        # Finalize consumes judgments and derives the survivor count.
         for text in self._texts():
-            exec_lines = [
-                line
-                for line in text.splitlines()
-                if line.lstrip().startswith("args+=(")
-                and "--needs-work-survivors" in line
-            ]
-            self.assertTrue(
-                exec_lines,
-                "--needs-work-survivors missing from an args+=( executable line",
-            )
+            self.assertTrue(any(line.lstrip().startswith("args=(") and "--merge-plan" in line
+                                for line in text.splitlines()))
 
 
 class HostWorkflowFanoutContract(unittest.TestCase):

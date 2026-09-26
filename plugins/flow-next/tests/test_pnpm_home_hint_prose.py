@@ -63,8 +63,8 @@ class PnpmHomeHintProseContract(unittest.TestCase):
             CODEX_WORKFLOW.exists(),
             f"Codex mirror workflow.md missing at {CODEX_WORKFLOW}",
         )
-        self.claude_text = CLAUDE_WORKFLOW.read_text(encoding="utf-8")
-        self.codex_text = CODEX_WORKFLOW.read_text(encoding="utf-8")
+        self.claude_text = (REPO_ROOT / "plugins/flow-next/scripts/map.sh").read_text(encoding="utf-8")
+        self.codex_text = self.claude_text  # shared script, copied unchanged to each host
 
     def test_claude_workflow_carries_all_hint_tokens(self) -> None:
         """Each load-bearing token must appear in the canonical Claude workflow."""

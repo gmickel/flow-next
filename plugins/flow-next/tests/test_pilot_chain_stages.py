@@ -57,7 +57,7 @@ CONDUCT_MD = REPO_ROOT / "agent_docs" / "conduct" / "pilot.md"
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync-codex.sh"
 
 CONFIG_GET = re.compile(r'\$FLOWCTL"?\s+config get')
-CHAIN_KEY_READ = ".value.pipeline.chainStages"
+CHAIN_KEY_READ = ".config.pipeline.chainStages"
 CHAIN_STAGE_TOKEN = "qa+make-pr"
 CHAIN_HEADING = "### Chained stage (`pipeline.chainStages`, `--tick` only)"
 SNAPSHOT_LINE = (
@@ -104,7 +104,7 @@ class ChainGateReadTestCase(unittest.TestCase):
             self.assertIn(CHAIN_KEY_READ, text, path)
             # auto.md owns the ONE config call (the root snapshot); the chain
             # gate fence itself is jq-only.
-            self.assertEqual(len(CONFIG_GET.findall(text)), 1,
+            self.assertEqual(len(CONFIG_GET.findall(text)), 0,
                              f"{path}: auto.md owns exactly ONE config call")
             self.assertEqual(len(CONFIG_GET.findall(chain_gate_fence(text))), 0,
                              f"{path}: must derive the chain gate via jq, never config get")
@@ -196,10 +196,12 @@ class VerdictGrammarTestCase(unittest.TestCase):
                 self._check_chain_gate_fence(read(path))
 
     def _run_fence(self, fence: str, snapshot: str, auto_tick: str) -> subprocess.CompletedProcess:
-        script = fence.replace(SNAPSHOT_LINE, f'PILOT_CFG_SNAPSHOT="{snapshot}"')
-        self.assertIn(snapshot, script, "snapshot path substitution failed")
-        script += '\nprintf "%s" "$CHAIN_ENABLED"'
-        env = {**os.environ, "AUTO_TICK": auto_tick}
+        script = fence + '\nprintf "%s" "$CHAIN_ENABLED"'
+        try:
+            snapshot_json = Path(snapshot).read_text()
+        except OSError:
+            snapshot_json = '{}'
+        env = {**os.environ, "AUTO_TICK": auto_tick, "PILOT_SNAPSHOT": snapshot_json}
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
 
     def _check_chain_gate_fence(self, text: str):
@@ -216,7 +218,7 @@ class VerdictGrammarTestCase(unittest.TestCase):
         for value, tick, want, notice in cases:
             with self.subTest(value=value, auto_tick=tick), tempfile.TemporaryDirectory() as td:
                 snap = Path(td) / "snap.json"
-                snap.write_text(json.dumps({"key": None, "value": {"pipeline": {"chainStages": value}}}))
+                snap.write_text(json.dumps({"config": {"pipeline": {"chainStages": value}}}))
                 res = self._run_fence(fence, str(snap), tick)
                 self.assertEqual(res.returncode, 0, f"{value}/{tick}: fence exited {res.returncode}")
                 self.assertEqual(res.stdout, want, f"{value}/{tick}: CHAIN_ENABLED")

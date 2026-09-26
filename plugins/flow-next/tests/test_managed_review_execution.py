@@ -410,7 +410,7 @@ class ManagedReviewHTTPFramingTests(unittest.TestCase):
                 response.begin()
                 connection = mock.Mock()
                 connection.getresponse.return_value = response
-                with mock.patch.object(flowctl.http.client, "HTTPConnection", return_value=connection), \
+                with mock.patch.object(http.client, "HTTPConnection", return_value=connection), \
                         mock.patch.dict(os.environ, {"FLOW_REVIEW_EXECUTION_URL": "http://127.0.0.1/review",
                                                      "FLOW_REVIEW_EXECUTION_TOKEN": "session-secret"}):
                     output, _, code, _ = flowctl.execute_review(

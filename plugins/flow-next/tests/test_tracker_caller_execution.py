@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -103,27 +102,30 @@ _FLOWCTL_BOOTSTRAP = re.compile(
     r'^(?:FLOWCTL="\$\{DROID_PLUGIN_ROOT|\[ -x "\$FLOWCTL" \] \|\| FLOWCTL=)'
 )
 
-# Declared config-read deltas from the pre-teardown oracle (the oracle itself is
-# immutable). Each override must contain exactly the same DISTINCT reads as the
-# oracle row — only ordering and one documented duplicate may differ, which
-# `test_config_read_overrides_are_declared_deltas` enforces.
-# Declared config-read deltas from the pre-teardown oracle (the oracle itself is
-# immutable). Keys are (caller, phase) or (caller, phase, leaf-value) — the more
-# specific key wins. Each override may reorder the oracle's reads, duplicate one,
-# or drop the read a short-circuiting gate never reaches; it may never introduce
-# a read the oracle does not have (`test_config_read_overrides_are_declared_deltas`).
+for _event in WORK_EVENTS:
+    CURRENT_CALLER_GATES[_event] = {
+        "fence": (SKILLS / "flow-next-work/references/tracker-touchpoints.md",
+                  (f'.ops["{_event}"]', "tracker sync")),
+    }
+
+# Declared read deltas from the immutable pre-teardown oracle. Snapshot-backed
+# callers consume their run preflight rather than repeating config reads. Other
+# overrides account for short-circuiting gates and split-reference reads.
 _INTERVIEW_LEAF = ["config", "get", "tracker.perEvent.interview", "--json"]
 _QA_LEAF = ["config", "get", "tracker.perEvent.qa", "--json"]
 _CHARTS_LEAF = ["config", "get", "tracker.charts", "--json"]
 _SYNC_ACTIVE = ["sync", "active", "--json"]
 
 CONFIG_READ_OVERRIDES = {
-    # Branch-disclosure split interview's gate: the spine probes the leaf (and
-    # the bridge) to decide whether to load the reference, and the loaded
-    # reference re-reads the leaf to resolve the op. Same two distinct reads;
-    # the leaf is read twice whenever the gate actually fires.
-    ("interview", "active"): [_INTERVIEW_LEAF, _SYNC_ACTIVE, _INTERVIEW_LEAF],
-    ("interview", "active", "off"): [_INTERVIEW_LEAF, _SYNC_ACTIVE],
+    **{(event, phase): [] for event in WORK_EVENTS for phase in ("active", "inactive")},
+    # fn-259: these gates consume the already-captured preflight bundle.
+    ("plan", "active"): [],
+    ("plan", "inactive"): [],
+    ("interview", "inactive"): [],
+    # Interview now uses the preflight for its spine gate; the loaded reference
+    # retains the operation lookup.
+    ("interview", "active"): [_INTERVIEW_LEAF],
+    ("interview", "active", "off"): [],
     # QA's spine gate probes only the leaf; the bridge check moved into the
     # reference the sentinel loads, so an `off` leaf never reaches it.
     ("qa", "active", "off"): [_QA_LEAF],
@@ -455,8 +457,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         )
 
     def test_config_read_overrides_are_declared_deltas(self) -> None:
-        """Every override may reorder, or duplicate, the oracle's reads — it may
-        never introduce a new one or drop one."""
+        """Snapshot-backed gates remove reads; no override introduces a new read."""
         for key, override in CONFIG_READ_OVERRIDES.items():
             caller_id, phase = key[0], key[1]
             with self.subTest(key=key):
@@ -479,23 +480,16 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         if caller_id == "qa":
             op_expression = '"$QA_OP"'
         source = self._instrumented_fence(caller_id, op_expression)
-        if caller_id == "plan":
-            source = source.replace(
-                "flow-plan-config-<suffix>.json",
-                "flow-plan-config-harness.json",
-            )
-            snapshot = subprocess.run(
-                [sys.executable, str(self.fake_flowctl), "config", "get", "--json"],
-                env=self._environment(value, active),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=True,
-            ).stdout
-            (self.root / "flow-plan-config-harness.json").write_text(
-                snapshot,
-                encoding="utf-8",
-            )
+        if caller_id in ("plan", "interview"):
+            stem = "flow-plan-config" if caller_id == "plan" else "flow-refine-preflight"
+            source = source.replace(f"{stem}-<suffix>.json", f"{stem}-harness.json")
+            (self.root / f"{stem}-harness.json").write_text(json.dumps({
+                "value": {"tracker": {"perEvent": {"plan": value, "interview": value}}},
+                "probes": {
+                    "config": {"status": "ok"},
+                    "tracker": {"status": "ok", "value": {"active": active}},
+                },
+            }), encoding="utf-8")
         return self._strip_disclosure(
             caller_id, self._run_shell(source, value=value, active=active)
         )
@@ -516,14 +510,19 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         value: str,
         active: bool,
     ) -> subprocess.CompletedProcess[str]:
-        outer = self._run_shell(self._work_outer_fence(caller_id), value=value, active=active)
+        snapshot = self.root / "run-sync-active.json"
+        ops = {event: ("off" if value == "off" else "push" if event == "work.firstClaim" else "comment")
+               for event in WORK_EVENTS} if active else {}
+        snapshot.write_text(json.dumps({"active": active, "ops": ops}), encoding="utf-8")
+        outer_source = self._work_outer_fence(caller_id).replace("<run-sync-active.json>", str(snapshot))
+        outer = self._run_shell(outer_source, value=value, active=active)
         self.assertEqual(outer.returncode, 0, outer.stderr)
         if "GATE ACTIVE" not in outer.stdout:
             return subprocess.CompletedProcess(outer.args, 0, "", "")
 
         with self.import_log.open("a", encoding="utf-8") as handle:
             handle.write("references/tracker-touchpoints.md\n")
-        inner = self._instrumented_fence(caller_id, '"$OP"')
+        inner = self._instrumented_fence(caller_id, '"$OP"').replace("<run-sync-active.json>", str(snapshot))
         return self._run_shell(inner, value=value, active=active)
 
     def _run_make_pr(

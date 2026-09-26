@@ -22,6 +22,9 @@ class MakePrReachedPathTests(unittest.TestCase):
         cls.workflow = (SKILL / "workflow.md").read_text(encoding="utf-8")
         cls.html = (SKILL / "html-lens.md").read_text(encoding="utf-8")
         cls.create = (SKILL / "create-and-finalize.md").read_text(encoding="utf-8")
+        scripts = SKILL.parents[1] / "scripts"
+        cls.workflow += (scripts / "make-pr-preflight.sh").read_text(encoding="utf-8")
+        cls.create += (scripts / "make-pr-create.sh").read_text(encoding="utf-8")
 
     # Evidence-ledger archaeology removed 2026-08-07 - shipped optimizations are
     # history, not invariants. (Candidate-ledger required/forbidden-read and
@@ -56,7 +59,7 @@ class MakePrReachedPathTests(unittest.TestCase):
         for needle in (
             "gh pr create",
             "3-attempt retry loop",
-            "Manual recovery: wait 30s and re-run /flow-next:make-pr",
+            "Manual recovery: wait 30s and repeat this make-pr invocation",
             "Eventual-consistency exhaustion",
         ):
             self.assertIn(needle, self.create)

@@ -321,7 +321,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               direction: str = "push",
               event: Optional[str] = None,
               execute: Execute = default_execute,
-              write_receipt: bool = True) -> Result:
+              write_receipt: bool = True,
+              _observed_parent: Optional[dict] = None) -> Result:
     """Write (optional) + readback + paired merge base. Never raises.
 
     Serialized per spec via a create-first claim taken before any tracker
@@ -382,7 +383,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             tracker_read=tracker_read, sync_title=sync_title,
             refuse_tracker_divergence=refuse_tracker_divergence,
             direction=direction,
-            event=event, execute=execute, write_receipt=write_receipt)
+            event=event, execute=execute, write_receipt=write_receipt,
+            observed_parent=_observed_parent)
     finally:
         _release_claim(body_claim)
         _release_claim(rec_path)
@@ -396,7 +398,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    sync_title: bool,
                    refuse_tracker_divergence: bool,
                    direction: str, event: Optional[str],
-                   execute: Execute, write_receipt: bool) -> Result:
+                   execute: Execute, write_receipt: bool,
+                   observed_parent: Optional[dict] = None) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
     the echo-fence/no-op checks see the base a just-finished sibling wrote,
     never a pre-claim snapshot."""
@@ -453,6 +456,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         wire_body = _wire_body(provider, parent)
         current_body = _read_body(provider, wire_body)
         current_title = _raw_title(provider, parent)
+        if observed_parent is not None:
+            observed_parent.update(parent)
     legacy = _legacy_unconverted(provider, tracker, wire_body)
     base_tracker = tracker.get("mergeBaseTracker")
     if (refuse_tracker_divergence and not legacy and isinstance(base_tracker, str)
@@ -682,7 +687,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
 
     updated = wire_dispatch(
         "update", config, locator=locator, title=desired_title, body=outgoing,
-        execute=ex)
+        execute=ex, _parent=parent)
     if isinstance(updated, TrackerError):
         return updated
 
@@ -697,6 +702,9 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                      "completed_steps": ["wire-update"]},
             auto_retryable=readback.auto_retryable,
         )
+    if observed_parent is not None and isinstance(readback.get("raw"), dict):
+        observed_parent.clear()
+        observed_parent.update(readback["raw"])
     readback_body = readback.get("body") if isinstance(readback, dict) else None
     if readback_body is None:
         readback_body = ""

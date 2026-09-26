@@ -73,18 +73,7 @@ cohesive work merely to manufacture a parallel wave.
 
 ## Step 0: Initialize .flow
 
-```bash
-# Ensure .flow exists (FLOWCTL defined once in SKILL.md preamble)
-$FLOWCTL init --json
-
-# ONE root config snapshot for the whole run: {"key":null,"value":{<merged config>}}.
-# Every later config lookup (readiness, memory/scout gates, tracker leaf, HTML lens)
-# derives from this file via jq — no further `config get` calls on the plan path.
-# Path-persistence rule: compose the literal path with an agent-chosen 4-char suffix
-# and type it verbatim in every later block that reads it.
-PLAN_CFG="${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json"   # literal path
-$FLOWCTL config get --json > "$PLAN_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
-```
+The SKILL.md preflight block already initialized `.flow/` and captured config plus independent gate statuses in `${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json`. Reuse that literal path; do not repeat `init`, `preflight`, or `config get`.
 
 ## Step 1: Fast research (parallel)
 
@@ -148,7 +137,7 @@ jq '{memory_enabled: .value.memory.enabled, scouts_github: .value.scouts.github}
 
 **Check for STRATEGY.md (husk-vs-presence — uses `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`):**
 ```bash
-STRATEGY_STATUS_JSON=$($FLOWCTL strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
+STRATEGY_STATUS_JSON=$(jq -c '.probes.strategy.value // {"exists":false,"sections_filled":0}' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
 STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
 
 if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
@@ -171,14 +160,14 @@ When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy co
 
 **Every other scout in the depth-appropriate set below runs, in parallel.** The set is keyed on `--depth` — a deterministic, user-signaled tier — never on your judgment of "what seems relevant". A fan-out that dropped a scout because it seemed irrelevant has broken this; that judgment-skip is the anti-pattern.
 
-Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
+The **three web-research scouts** are depth-tiered. Codebase grounding and `flow-gap-analyst` run at every depth; SHORT folds docs-gap-scout’s charter into repo-scout rather than dispatching it separately:
 
 | `--depth` | Web-research scouts (`practice-scout`, `docs-scout`, `github-scout`) | Always-run (both depths) |
 |-----------|------|------|
-| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
-| **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
+| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout` (including docs-gap charter), `spec-scout`, `memory-scout` (honoring config gates) + `flow-gap-analyst` (Step 3) |
+| **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same, plus a separate `docs-gap-scout` |
 
-Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is the default (SKILL.md **Plan depth**), so a plan nobody sized loses only the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
+Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, skip the three web-research scouts and give repo-scout the docs-gap-scout charter instead of spawning a separate docs-gap-scout. SHORT is the default (SKILL.md **Plan depth**), so a plan nobody sized loses only the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 **Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When docs-scout or practice-scout ran, Step 5 writes the research scouts' findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
 
@@ -193,9 +182,11 @@ Run ALL of these scouts in parallel:
 | the `github_scout` agent | Cross-repo patterns via gh CLI | IF scouts.github |
 | the `memory_scout` agent | Project memory entries | IF memory.enabled and direct rerank unavailable |
 | the `spec_scout` agent | Dependencies on open specs | YES |
-| the `docs_gap_scout` agent | Docs needing updates | YES |
+| the `docs_gap_scout` agent | Docs needing updates | STANDARD / DEEP; SHORT: repo-scout owns this charter |
 
 **Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
+
+**Dispatch ownership and timing.** When github-scout is enabled and dispatched, it alone owns GitHub code search; repo-scout stays local and docs/practice scouts use primary documentation rather than duplicating GitHub searches. On a non-blocking host, dispatch Step 3's flow-gap-analyst as soon as the repo-grounded scouts (repo, spec, and enabled memory/docs-gap) return; pass their findings and the requested scope while web scouts finish. Reconcile later web findings before drafting and join every scout before Step 5. Step 3 consumes this result without a duplicate dispatch. On blocking hosts keep the existing Step 1 → Step 2 → Step 3 order.
 
 **Before each scout dispatch**, apply [judge-tier.md](../flow-next-work/references/judge-tier.md) to its assignment and use the actual spawn-model parameter when selected. Explicit invocation choices win; otherwise the fallback tiers below remain unchanged.
 
@@ -218,7 +209,7 @@ Must capture:
 - Project conventions (CLAUDE.md, CONTRIBUTING, etc)
 - Architecture patterns and data flow
 - Spec dependencies (from spec-scout)
-- Doc updates needed (from docs-gap-scout) - add to task acceptance criteria
+- Doc updates needed (from docs-gap-scout, or repo-scout at SHORT) - add to task acceptance criteria
 - DESIGN.md design system tokens (if repo-scout found one)
 
 **Check `.flow/memory/declined/` by concept before proposing scope.** One `ls` (the directory is one file per concept, `<concept-slug>.md`); read any file whose concept the request touches. On a hit: cite the file in `## Decision Context`, append this request to that file's `## Prior requests` as a dated line, and keep the scope out of the plan. **Only the user reopens a declined concept** — say it was declined before, say what would change, and wait; a plan that quietly re-proposes declined scope is the failure this ledger exists to stop. No directory (or an empty one) means nothing was ever declined: continue silently.
@@ -284,7 +275,7 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
 ## Step 3: Flow gap check
 
 Run the gap analyst subagent:
-- Use the flow_gap_analyst agent(<request>, research_findings)
+- Use the flow_gap_analyst agent(<request>, research_findings) — only if not already dispatched on the non-blocking path; otherwise join that dispatch and reconcile its result
 
 The gap analyst is a **thinking scout** dispatch — Step 1's rule applies.
 **Routing precedence, highest first: an explicit argument in the invocation,
@@ -353,7 +344,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    ACTIVE=0
    SPEC_IDS="$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
    if [ "$ACTIVE" = "0" ]; then
-     BRIDGE_RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE
+     BRIDGE_RAW="$(jq -ce 'if .probes.tracker.status == "ok" then .probes.tracker.value else error("tracker probe") end' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE
    fi
    if [ "$ACTIVE" = "0" ]; then
      BRIDGE_ACTIVE="$(printf '%s' "$BRIDGE_RAW" | jq -r '.active // false' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
@@ -393,7 +384,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - `## Strategy Alignment` and `## Strategy drift flagged for review`: only when `STRATEGY_PRESENT=true` (Step 1); shapes and placement in [`references/strategy-alignment.md`](references/strategy-alignment.md).
    - `## Resolved via Research`: only when docs-scout or practice-scout ran in Step 1 (docs-gap-scout and memory-scout alone never write it, so a later STANDARD run still gets its web research). Section shape from `flow-next-refine/references/research-scope.md`, `plan` as the provenance, one sub-block per research scout that ran; when Step 1 skipped them because the section was already present, it comes back byte-for-byte.
    - `## Early proof point`, after Acceptance Criteria: `Task fn-N-slug.1 validates the core approach (<what it proves>). If it fails, re-evaluate <strategy> before continuing with fn-N-slug.2+.`
-   - `## Requirement coverage`, last: a `| Req | Description | Task(s) | Gap justification |` table, one row per R-ID, for example `| R1 | <criterion> | fn-N-slug.1, fn-N-slug.2 | — |` and `| R3 | <deferred item> | — | Deferred to fn-M-slug |`.
+   - `## Requirement coverage`, last: render after task creation with `$FLOWCTL validate --spec <id> --coverage --json`; use its `requirement_coverage` Markdown, derived from the tasks’ `satisfies` lists. Do not predict allocated task IDs. Preserve any host-authored gap justification for an uncovered row; the renderer labels it `Uncovered` until you supply that judgment.
 
    **Early proof point rules:**
    - Identify which task proves the fundamental approach works
@@ -455,6 +446,8 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    ```
 
    Per object: `title` required non-empty; `description`/`acceptance` optional strings (full task-spec markdown — same content the granular `--description-file`/`--acceptance-file` flags take); `satisfies` an array of bare R-ID tokens (grammar `R[1-9][0-9]*[a-z]?`); `deps` an array of task-id strings or **1-based integer indexes of EARLIER entries in the same array** (so intra-plan dependencies need no pre-existing ids); `priority` optional int. Any invalid entry rejects the whole batch with zero writes; `--json` returns the created ids in input order. Omit `deps`/`satisfies` where they don't apply. Granular one-task `task create` (with `--description-file`/`--acceptance-file`/`--satisfies`) remains the tool for ADDING a task to an existing plan later; `task set-spec` is for editing tasks that already exist.
+
+   Bulk authoring accepts `touches` as a single-line task Touches value and `description_file` / `acceptance_file` paths relative to the JSON file (stdin uses the working directory). A field and its `_file` variant are mutually exclusive. Invalid batches return every invalid item and the allowed keys before writing anything. After tasks exist, render Requirement coverage from `validate --spec <id> --coverage --json` and replace that table in the spec.
 
    **Task spec content** (remember: NO implementation code):
 
@@ -586,10 +579,10 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 ## Step 6: Validate
 
 ```bash
-$FLOWCTL validate --spec <spec-id> --json
+$FLOWCTL validate --spec <spec-id> --coverage --json
 ```
 
-Fix any errors before proceeding.
+Use `requirement_coverage` to update the spec’s table, retaining any justified uncovered rows. Fix validation errors before proceeding.
 
 **Done when:** `validate` returns clean for the spec, and the execution waves below are derived from the validated DAG.
 
@@ -627,7 +620,7 @@ case "$LEAF" in
   off|null)  OP="off" ;;
   *)         OP="off" ;; # malformed config stays silent
 esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
+if [ "$(jq -r '.probes.tracker.value.active // false' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json")" = "true" ] \
    && [ "$OP" != "off" ]; then
   # Load and follow references/tracker-projection.md with <OP> and <spec-id>.
   # Its inline wrapper makes exactly one lifecycle facade call:
@@ -637,7 +630,7 @@ fi
 ```
 
 Off, unset, inactive, or malformed: skip the reference and continue. This gate
-uses the Step 0 snapshot and the existing active probe; it adds no config read
+uses the preflight snapshot’s config and tracker probe; it adds no config read
 or default-path round trip.
 
 ## Step 7: Review (if chosen at start)

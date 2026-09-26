@@ -70,43 +70,39 @@ If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before co
 
 ## Step 2: Check existing setup
 
-Read `.flow/meta.json` and check for `setup_version` field.
+Read all setup probes once:
 
-Also read plugin version from the platform-specific manifest:
-- Codex: `${PLUGIN_ROOT}/.codex-plugin/plugin.json` (marketplace install), else `${PLUGIN_ROOT}/plugin.json` (`install-codex.sh` copies the manifest to `$CODEX_HOME/plugin.json`, the Codex plugin root)
-- Claude Code: `${PLUGIN_ROOT}/.claude-plugin/plugin.json`
-- Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Droid's interop layer reads the Claude Code manifest directly for Claude-first plugins like flow-next)
-- Cursor: `${PLUGIN_ROOT}/.cursor-plugin/plugin.json`
-- Grok: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Grok reads the canonical Claude plugin format AS-IS — no separate Grok manifest)
-- OpenCode: `${PLUGIN_ROOT}/.flow-next-opencode-manifest` (ownership file at the config root; no separate plugin.json — version falls through to `.claude-plugin/plugin.json` if present, else skip)
+```bash
+"${PLUGIN_ROOT}/scripts/flowctl" setup-status --plugin-root "$PLUGIN_ROOT" --platform "$PLATFORM" --json
+```
 
-Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
+Keep this response through the ceremony. `first_run` supplies `SETUP_FIRST_RUN`,
+`plugin_version` supplies `PLUGIN_VERSION`, and `optional_answers` holds prior
+answers for `spec`, `leftovers`, `docs`, `criteria`, `ralph`, and `star`.
+A missing or unreadable metadata file means first run. A same-version rerun
+continues without a confirmation question; existing choices remain authoritative.
 
-**If `setup_version` exists (already set up):**
-- If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh the docs snippet + config? (y/n)" — a same-version re-run refreshes the versioned doc snippet and re-offers any unanswered config question; nothing is ever copied into the repo, so there are no snapshots to refresh
-  - If yes: continue
-  - If no: done
-- If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
-
-**If no `setup_version`:** continue (first-time setup). Remember this outcome as `SETUP_FIRST_RUN=1` (any existing `setup_version`, same or older, is `SETUP_FIRST_RUN=0`); Step 6d's Live QA question reads it, and Step 5 overwrites the stamp before 6a runs.
-
-Old `setup_mode` / `setup_version` stamps from pre-copy-less installs are inert metadata — read them if you like, never act on them.
+**Optional answers and unattended execution.** Before every optional question,
+consult its saved answer. A saved decline skips that question and its action;
+a saved completed choice skips the question too. Treat a saved Docs `Skip`
+as the current Docs decline for the routing-block guard as well; no instruction
+file is created merely because that question was suppressed. Revisit only when the user
+explicitly asks to change that choice. Persist each attended answer immediately
+under `.flow/meta.json` → `setup.optional_answers.<key>` as its answer label,
+preserving all other metadata (including block hashes). This also applies to
+Step 4a's Skip/Keep and Step 2b's Keep. Never record a missing answer as consent.
+An unattended run (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`,
+`AUTONOMOUS=1`, or `mode:autonomous`) asks nothing: defer unanswered optional
+questions, record no answer, and continue without their optional mutations.
+Existing explicit authorization still governs its scope. Customized-file
+replacement without authorization returns `NEEDS_HUMAN`; no overwrite occurs.
 
 ## Step 2b: Leftover copy artifacts (cleanup offer)
 
 **Setup never copies flowctl, the spec template, or the usage guide into a repo.** Every host resolves `flowctl` from the plugin install (Claude Code / Droid via their plugin-root env vars, Cursor / Grok / OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `$CODEX_HOME`). Repos set up before that carry leftover snapshots; this step offers to delete them.
 
-Enumerate the residue. The machine-readable list is flowctl's `LEGACY_COPY_ARTIFACTS` — the single source of truth; keep this probe in step with it:
-
-```bash
-LEFTOVERS=""
-for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
-         .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
-         .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
-  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n' || true
-done   # || true: the loop's exit is the LAST iteration's test - an empty
-       # LEFTOVERS (the normal copy-less case) must read as success, not failure
-```
+Use `legacy_artifacts` from `setup-status` as the residue list; it comes
+from flowctl's `LEGACY_COPY_ARTIFACTS` source of truth.
 
 **None present → say nothing and continue to Step 4a.** Silence is the normal case.
 
@@ -262,69 +258,14 @@ Read current `.flow/meta.json`, add/update these fields (preserve all others):
 
 ### 6a: Detect current config and tools
 
-Before asking questions, detect available tools and read current config:
+Use the Step 2 response, without repeating shell probes or config calls:
 
-```bash
-# Detect available review backends
-if command -v rpce-cli >/dev/null 2>&1 \
-  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
-  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
-  || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
-HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
-HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
-HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
-HAVE_CLAUDE=$(which claude >/dev/null 2>&1 && echo 1 || echo 0)
-HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
-
-# The HAVE_* values feed the Review question's option pick and "(detected)" annotations only.
-# Nothing here gates the routing block: setup never probes for routing, never
-# asks a routing question, and never writes a model id into the block it
-# proposes (config that claims what is installed becomes config
-# that lies).
-
-# Read current config values if they exist.
-# NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
-# returns the built-in default for unset keys (e.g. `artifacts.html.enabled` →
-# `false`), and the `[[ -z "$CURRENT_*" ]]` guards below would skip first-run
-# prompts for any default-false option. `--raw` makes `null` mean "absent
-# from .flow/config.json"; we use an explicit `if .value == null` filter
-# (NOT `.value // empty`, which collapses boolean `false` to "" because
-# jq treats `false` as a falsy LHS for `//`). See PR #135 cycle 2.
-# memory.enabled, planSync.enabled, planSync.crossSpec and scouts.github are not
-# probed: Step 1's init always writes them, so they are never unset here.
-CURRENT_BACKEND=$("${PLUGIN_ROOT}/scripts/flowctl" config get review.backend --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# Survives Step 1's `flowctl init`: init deliberately does NOT materialize the
-# `artifacts` block into config.json (flowctl.py _INIT_UNMATERIALIZED_BLOCKS),
-# so this raw probe reads null until the user explicitly decides — here in 6e
-# or via `flowctl config set`. Merged reads still return the seeded default.
-CURRENT_HTML_ARTIFACTS=$("${PLUGIN_ROOT}/scripts/flowctl" config get artifacts.html.enabled --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# tracker.specIds is UNMATERIALIZED at init — raw null means "never
-# asked", distinct from an explicit `flow` answer. Gate the Spec ids question on
-# tracker configured AND this key unset so existing repos get asked on their next
-# setup run without re-prompting once either value is written.
-CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# pipeline.qa is MATERIALIZED by Step 1's init as the literal "off", so
-# this raw probe never reads null on a fresh repo and cannot by itself tell
-# "never asked" from "answered off". Decision: the Live QA question is asked when
-# the raw value is empty (hand-removed key) OR when it reads "off" on a FIRST
-# setup run (Step 2 found no setup_version). A same-version or upgrade re-run
-# treats a persisted "off" as the answer and skips the question; `flowctl config
-# set pipeline.qa <off|on|auto>` changes it, and the Step 8 Notes line names all
-# three values.
-CURRENT_QA=$("${PLUGIN_ROOT}/scripts/flowctl" config get pipeline.qa --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-# Global criteria scaffold gate: the question is offered only while
-# .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
-# customized - is user content and is never re-asked about, never touched.
-CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } && echo 1 || echo 0)   # -e||-L: a dangling symlink or non-regular path COUNTS as existing (never re-ask/overwrite; a broken path is a validation error to surface, not a scaffold target)
-
-# Call the canonical predicate; never re-derive it. A bare `-n "$TYPE"` counted
-# an inactive value ("null", a typo) as configured, so setup persisted
-# specIds=tracker while every mint gate saw the bridge as inactive.
-TRACKER_CONFIGURED=$("${PLUGIN_ROOT}/scripts/flowctl" sync active --json 2>/dev/null | jq -r 'if .active == true then 1 else 0 end')
-[[ -n "$TRACKER_CONFIGURED" ]] || TRACKER_CONFIGURED=0
-```
-
-Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
+- `tools` supplies the `HAVE_RP`, `HAVE_CODEX`, `HAVE_COPILOT`, `HAVE_CURSOR`,
+  `HAVE_CLAUDE`, and `HAVE_GROK` availability flags.
+- `config` supplies raw `CURRENT_BACKEND`, `CURRENT_HTML_ARTIFACTS`,
+  `CURRENT_SPEC_IDS`, and `CURRENT_QA`. Only null means unset; false is an answer.
+- `criteria_exists` supplies `CRITERIA_EXISTS`; symlinks count as existing.
+- `tracker_active` supplies `TRACKER_CONFIGURED` from the canonical predicate.
 
 ### 6b: Check docs status
 
@@ -345,15 +286,9 @@ Choose the correct template based on platform:
 
 Both templates are the same slim rail: bare `flowctl`, `flowctl usage` pull directives, and an internal `<!-- flow-next:snippet:vN -->` sentinel that versions the block.
 
-For each of CLAUDE.md and AGENTS.md:
-1. Check if file exists
-2. If exists, check if `<!-- BEGIN FLOW-NEXT -->` marker exists
-3. If marker exists, extract content between markers and compare with template
-
-Determine status for each file:
-- **missing**: file doesn't exist or no flow-next section
-- **current**: section exists and matches template
-- **outdated**: section exists but differs from template
+Use `docs` from the Step 2 response for each file: `missing`, `current`,
+`outdated`, or `unreadable`. An unreadable file needs diagnosis before edits.
+The existing setup-block helpers still own fresh write-time consent checks.
 
 ### 6c: Show current config notice
 
@@ -373,7 +308,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the prompt content (question text + numbered option list) dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`** (one exception: `pipeline.qa` materializes as `off` on init, so the Live QA question also treats that default as unanswered on a first setup run and never on a re-run). A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The questions go out in two `plain-text numbered prompt` calls, because the tool takes at most 4 questions per call, 4 options per question, and a header of at most 12 characters: the **config call** (Review, HTML, Live QA, Spec ids — only the unset entries) and then the **files call** (Docs, Criteria, Ralph, Star). Skip a call whose array is empty, so a re-run with all config set asks only the files call: Docs + Star, plus Ralph when `RALPH_ASK=1` and Criteria while `.flow/criteria.md` is still absent. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The questions go out in two `plain-text numbered prompt` calls, because the tool takes at most 4 questions per call, 4 options per question, and a header of at most 12 characters: the **config call** (Review, HTML, Live QA, Spec ids — only the unset entries) and then the **files call** (Docs, Criteria, Ralph, Star). Skip a call whose array is empty, so a steady re-run with all choices recorded asks nothing. Filter the files call through `optional_answers` before applying its remaining gates. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
 
 Available questions (include only if corresponding config is unset):
 
@@ -424,7 +359,7 @@ Available questions (include only if corresponding config is unset):
   "question": "Scaffold .flow/criteria.md? A plain markdown file of standing, project-wide acceptance criteria (- **G1:** every route change regenerates the contract...). When present, spec completion review judges every criterion against each spec's implementation and records met/violated/n-a in the review receipt. Absent = zero effect anywhere.",
   "options": [
     {"label": "Scaffold", "description": "Write .flow/criteria.md from the bundled template - documents the G-ID grammar with commented examples to replace with your own criteria"},
-    {"label": "Skip", "description": "No file written, nothing changes. Opt in any time by creating .flow/criteria.md yourself (grammar: - **G<N>:** <criterion>) or re-running /flow-next:setup"}
+    {"label": "Skip", "description": "No file written, nothing changes. Opt in any time by creating .flow/criteria.md yourself (grammar: - **G<N>:** <criterion>) or explicitly asking setup to revisit this choice"}
   ],
   "multiSelect": false
 }
@@ -496,7 +431,7 @@ Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `
 never probes a CLI for slugs, and never proposes a pin. Step 7 writes one
 commented example block and says so — that is the whole ceremony.
 
-**Docs question** (always include — adjust default based on platform):
+**Docs question** (include only when unanswered and docs are not current — adjust default based on platform):
 
 For **Codex** (`PLATFORM=codex`):
 ```json
@@ -581,20 +516,21 @@ if [[ "$PLATFORM" == "cursor" || "$PLATFORM" == "grok" || "$PLATFORM" == "openco
   RALPH_ASK=0
   RALPH_OUTCOME="off (unsupported on $PLATFORM)"
 elif [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+      || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
   RALPH_ASK=0
   RALPH_OUTCOME="off (non-interactive)"
 fi
 ```
 
 On Cursor/Grok/OpenCode: never offer, never register, never run `/flow-next:ralph-init`.
+A recorded Ralph answer sets `RALPH_ASK=0` and preserves the existing hooks.
 When `RALPH_ASK=1`, **MUST read and follow exactly**
 [references/ralph-question.md](references/ralph-question.md) and add its object
 to the files call. When zero, read no Ralph reference and ask no Ralph
 question. Unknown/malformed gate state fails safe to `RALPH_ASK=0`: no hook
 registration and no branch read.
 
-**Star question** (always include):
+**Star question** (include only when unanswered):
 ```json
 {
   "header": "Star",
@@ -609,7 +545,7 @@ registration and no branch read.
 
 Send the config call, then the files call, each through `plain-text numbered prompt`.
 
-**Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
+**Note:** If docs are already current, skip the Docs question entirely.
 
 **Note:** If no supported RepoPrompt CLI, codex, copilot, cursor-agent, or claude is detected, add this note to the Review question: "No review backend detected. Install RepoPrompt CE (`rpce-cli`), codex, copilot, cursor-agent, or claude for review support."
 
@@ -679,7 +615,7 @@ Only process answers for questions that were asked (config values that were unse
   cp "${PLUGIN_ROOT}/templates/criteria.md" .flow/criteria.md
   ```
 
-- If "Skip": do nothing - no file, no config key, no meta stamp. Declining leaves no trace.
+- If "Skip": write no criteria file; persist `setup.optional_answers.criteria = "Skip"` in metadata so the next setup does not ask again.
 
 **Review** (if question was asked):
 Map user's answer to config value and persist:
@@ -740,7 +676,7 @@ never interleave the two writes. Two hard outs before the ladder: a **Docs
 answer of `Skip`** is a decline of documentation edits and declines this write
 too — record `skipped (docs declined)` and move on; a **headless or autonomous
 run** (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or
-`mode:autonomous`) never writes the block — instruction-file edits are the
+`AUTONOMOUS=1`, or `mode:autonomous`) never writes the block — instruction-file edits are the
 user's, so record `skipped (headless)` and move on.
 
 Resolve the target with this ladder, first match wins:

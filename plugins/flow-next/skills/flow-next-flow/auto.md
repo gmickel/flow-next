@@ -23,34 +23,7 @@ Cold session or run start: `$FLOWCTL brief` first for session-scope orientation 
 
 ## Hard guards (before anything else)
 
-Run these guards before selection, ledger writes, branch changes, or skill dispatch. `--auto` refuses only under Ralph; it does not refuse under `FLOW_AUTONOMOUS` or `mode:autonomous`, because it sets those for the stages it dispatches.
-
-```bash
-if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-  echo "Ralph and pilot are alternative drivers — never nest them" >&2
-  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
-  exit 1
-fi
-
-if git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
-  echo "Evidence: dirty non-.flow working tree at run start"
-  git -C "$REPO_ROOT" status --porcelain | grep -v '^.. \.flow/' || true
-  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
-  exit 0
-fi
-```
-
-Dirty tree means dirty outside `.flow/`; the run leaves state untouched. No cleanup, no claim reset, no strike. The same dirty-tree guard runs again after every hop (Phase 5).
-
-Resolve the strikes ledger after both hard guards, READ-ONLY here (a missing file reads as `{}`; nothing is created or written until a write site in Phase 1 or Phase 6, so `--explain` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
-
-```bash
-LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)/flow-next"
-LEDGER="$LEDGER_DIR/pilot-strikes.json"
-LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
-```
-
-Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. flowctl reads and clears the ledger (`flowctl pilot strikes list`, `flowctl pilot strikes clear <spec-id>`, `clear --all`), so recovery never means hand-editing a file under `.git/`. auto.md records strikes. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+The first `pilot snapshot` below returns both hard guards before selection, ledger writes, branch changes, or dispatch. `guards.nested` refuses Ralph (`FLOW_RALPH` / `REVIEW_RECEIPT_PATH`); `guards.dirty` lists changes outside `.flow/`. Either ends `NEEDS_HUMAN`, leaves state untouched, and records no strike. The post-hop dirty guard remains in Phase 5.
 
 ## Arguments
 
@@ -95,22 +68,31 @@ done
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK
 ```
 
-Resolve the scope through flowctl, before selection; tracker-key IDs use the same resolver as every other spec. An unresolved argument stops this run rather than widening it to the ready backlog:
+Resolve the scope and capture the hop with one read-only call. Retain `PILOT_SNAPSHOT` as run context across tool calls; do not persist a config scratch file. An unresolved scope or snapshot error ends `NEEDS_HUMAN` with the error, never a host re-derivation or widened backlog.
 
 ```bash
-if [[ -n "$PILOT_SPEC" ]]; then
-  if SCOPE_JSON="$($FLOWCTL show "$PILOT_SPEC" --json)" \
-      && [[ "$(printf '%s' "$SCOPE_JSON" | jq -r '.tasks | type')" == "array" ]]; then
-    PILOT_SPEC="$(printf '%s' "$SCOPE_JSON" | jq -r '.id')"
-    export PILOT_SPEC
-  else
-    SCOPE_REASON="$(printf '%s' "$SCOPE_JSON" | jq -r '.error // "argument is not a spec"' 2>/dev/null || printf '%s' "$SCOPE_JSON")"
-    SCOPE_REASON="$(printf '%s' "$SCOPE_REASON" | tr '\n"' '  ')"
-    printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot resolve spec %s: %s"\n' "$PILOT_SPEC" "$SCOPE_REASON"
-    exit 1
-  fi
+SNAPSHOT_ARGS=()
+[ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
+if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
+  printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot failed: %s"\n' "$PILOT_SNAPSHOT"
+  exit 1
+fi
+[ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
+```
+
+```bash
+# fence:pilot-guards
+if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.nested')" = true ]; then
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
+  exit 1
+fi
+if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq '.guards.dirty | length')" -gt 0 ]; then
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
+  exit 0
 fi
 ```
+
+Apply `guards` now; never select or dispatch if either guard fails. The snapshot contains config, actor, strikes, ready candidates with chain and other-actor claims, branch-joined PR observations, selected spec/task state, review backend, route, QA freshness and before-dispatch tasks. Use those values throughout this hop. On later hops call `pilot snapshot --spec "$SELECTED_SPEC" --json` once and apply the same error and guard rules.
 
 No branch flag exists. Branch resolution is run-owned from the selected spec's `branch_name`.
 
@@ -118,30 +100,7 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single value. This block also captures the run's ROOT CONFIG SNAPSHOT, the ONLY `config get` invocation across this file and its references. The `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses` reads derive from the snapshot file via jq, never a second config call. The gate is a **strict scalar string-enum**. Backlog mode activates **only** on the literal `backlog` (config `pilot.autonomy`), or when the per-run `--backlog` flag forced the override. Any other config value (`ready`, `null`, a coerced bool `true`, a typo) leaves the run in `ready` mode, byte-for-byte unchanged (`references/backlog-mode.md` is never even read):
-
-```bash
-# Root config snapshot: {"key":null,"value":{<merged config>}}. Persisted to a file
-# because bash vars do not survive across tool calls; later fences RECOMPUTE this
-# same deterministic repo-hash-keyed path and jq it. The path lives under
-# ${TMPDIR} - NEVER under repo-controlled .flow/tmp (autonomous symlink safety:
-# a committed symlink must not redirect this write out of tree) - so an explain
-# run mutates nothing inside the repo; explain terminals also `rm -f` this
-# snapshot, leaving no persistent scratch state. On capture FAILURE remove the
-# file: downstream jq reads then error, which keeps the pipeline.qa probe's
-# fail-open contract (probe error => ACTIVE) intact.
-PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-rm -f "$PILOT_CFG_SNAPSHOT" 2>/dev/null   # drop any stale/planted file (incl. a symlinked leaf) before the fresh write
-$FLOWCTL config get --json > "$PILOT_CFG_SNAPSHOT" 2>/dev/null \
-  || rm -f "$PILOT_CFG_SNAPSHOT"
-PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
-if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
-  PILOT_AUTONOMY="backlog"                       # --backlog forces backlog this run
-elif [ "$PILOT_AUTONOMY" != "backlog" ]; then
-  PILOT_AUTONOMY="ready"                         # ONLY the literal `backlog` enables - never bool true / typos / null
-fi
-export PILOT_AUTONOMY
-```
+Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`. The same retained snapshot supplies `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
 
 When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute its backlog-only setup, then continue with Phase 1**. The reference owns the backlog-only verdict extension plus SELECT/TRIAGE/ASK context; this file keeps the enforcing guards and action sites. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
 
@@ -157,14 +116,6 @@ PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> 
 
 Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (when the QA gate selected it), `make-pr`, `land`, or `-`. A run that dispatched more than one stage names every dispatched stage in order joined by `+` (for example `stage=work+qa+make-pr`) and carries the last hop's verdict; a chained tick under `pipeline.chainStages` is the same shape, exactly `qa+make-pr`. A `--tick` run names one stage.
 
-**Explain snapshot cleanup.** Under `--explain` (`PILOT_DRY_RUN=1`), at EVERY terminal `PILOT_VERDICT` emission (the classification stop, the diagnostic `TRIAGED` exit, every `NO_WORK` / `DEFERRED_TO_LAND` / hard-guard exit) remove the root config snapshot BEFORE printing the verdict, so an explain run leaves no persistent scratch state:
-
-```bash
-rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-```
-
-Recompute the path exactly as above (vars die across tool calls). Live runs keep the snapshot for the run's remaining fences; it is overwritten fresh by the next run's capture. Never blocks, fail-open (`rm -f` on a missing file is a no-op).
-
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): without current landing authority, every remaining all-done candidate has an open PR that land owns. An authorized landing tick also uses it for an observed external wait per `references/tail.md`. It is deliberately separated from `NO_WORK` so a driver can route it to `/flow-next:land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 
 Driver condition examples (the default recipe is one `flow --auto` per item; the tick shape is for hosts without stable long sessions):
@@ -177,7 +128,7 @@ Driver condition examples (the default recipe is one `flow --auto` per item; the
 ## Forbidden
 
 - Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. In backlog mode, ambiguity that needs a person is surfaced **async** via the `ask` stage (`ASKED`), never an interactive `AskUserQuestion`. `references/prototype-before-ask.md` licenses no blocking question here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `flow-next:flow-next-tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops**, read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), never a pipeline stage, and only on the backlog path. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge belong to land downstream of the PR; release is separate).
+- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. **Backlog mode additionally invokes tracker-sync for `reconcile` and `question`; read-only `list-open`, `comment-list`, and `relation-list` run directly through `$FLOWCTL tracker wire`**, never as pipeline stages. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge belong to land downstream of the PR; release is separate).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. The one exception is `--tick` under `pipeline.chainStages==on`: `make-pr` after this tick's `qa` verified a fresh terminal verdict (Phase 5, Chained stage), which is the `qa+make-pr` tick the deprecated key still buys for one release.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring plus answer round-trip live in tracker-sync; backlog mode invokes them, never re-implements them.
 - **Never execute merge steps inline.** Without current landing authority, either mode ends at the draft PR. The only driver-composition exception is the scoped land stage under `references/tail.md`; backlog mode alone grants no merge authority. Never dispatch another flow, pilot, Ralph, or host loop.
@@ -196,7 +147,7 @@ Run workflow.md Steps 2 to 4 with the unattended guards, branch resolution, evid
 
 - `AUTO_TICK=1`: print the terminal line and stop.
 - `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge; external waits may continue only at cadence with current consent.
-- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, reload `LEDGER_JSON`, and return to Phase 2 for the same spec.
+- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, refresh `PILOT_SNAPSHOT` for the same spec, and return to Phase 2 for the same spec.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with `make-pr`: without landing authority, print the terminal line and stop. With `FLOW_UNTIL=merge` or current explicit scoped consent, bind the confirmed PR per `references/tail.md`, append `make-pr` to `DISPATCHED_STAGES` and re-classify this same item for land.
 - Any other outcome (`NEEDS_HUMAN`, `ASKED`, `BLOCKED`, `DEFERRED_TO_LAND`, `NO_WORK`) ends the run, except the observed landing wait explicitly handled above.
 
@@ -241,34 +192,11 @@ missing or closed-unmerged targets stop `NEEDS_HUMAN`, never make-pr. Failed or
 ambiguous probes stop safely. This landing path does not reopen a spec, mint
 tasks, or pass it through build readiness/strike admission.
 
-Pass 1 enumerates minimal candidates:
+Consume `counts` and `candidates` from the snapshot in stable id order. A named scope never widens. Each candidate supplies its normalized `spec`, full `tasks`, `chain`, `other_actor_claims`, `strikes`, `would_clear_strikes`, `eligible`, branch and PR observation. `chain.eligible` is the existing dependency predicate; preserve its reason on a hold. Nonempty `other_actor_claims` holds the item. Use `actor` from the snapshot, never resolve it again.
 
-```bash
-SPECS_JSON="$($FLOWCTL specs --json)"
-```
+A named scope still must pass `eligible` unless it takes the existing-PR landing path. Keep the selected row as `SPEC_JSON` / `TASKS_JSON`, `CHAIN_PARENT=chain.parent`, and `LEDGER_JSON=strikes`. A candidate with `would_clear_strikes=true` was human re-blessed: call `$FLOWCTL pilot strikes clear <id> --json` before dispatch, or report would-clear under explain. With `tracker.readyState` armed, a count of two survives board projection until the human calls `flowctl pilot strikes clear <spec-id>`. Selection does not write readiness. Existing PR candidates follow the landing consent rule above; record deferred candidates when authority is absent and continue over this same snapshot's candidates.
 
-Candidate predicate for pass 1:
-
-- `status == "open"`.
-- ready flag is set.
-- stable id order.
-- if a spec id was provided, the candidate list is exactly that spec and it still must pass the predicate.
-
-Echo the pass-1 counts: total specs, open specs, ready specs, and scope-lock target if present.
-
-Pass 2 loads full spec JSON for each candidate:
-
-```bash
-SPEC_JSON="$($FLOWCTL show "$candidate" --json)"
-TASKS_JSON="$($FLOWCTL tasks --spec "$candidate" --json)"
-```
-
-Apply the full predicate:
-
-1. Dependencies: `CHAIN_JSON="$($FLOWCTL spec chain "$candidate" --json)"` is the whole test — the candidate passes iff `.eligible == true`. That one read-only predicate (fn-152 R1/R2) accepts every dependency `done`, or exactly one dependency open with all its tasks done and its branch on origin (the **chain parent**, `.parent`); anything else (`.eligible == false`) parks the candidate with the command's `.reason` verbatim (`dependency <id> in progress`, `two open parents: …`, `parent branch <b> not on origin; …`, `parent <id> already chained by <sibling>`, `remote query failed: …`), records **no strike**, and preserves readiness — an unpushed parent and a failed remote query park here instead of being dispatched into a block. Never re-derive the rule from `show <dep>`; the command is the single owner. Keep `CHAIN_PARENT="$(printf '%s' "$CHAIN_JSON" | jq -r '.parent // empty')"` for the branch row and the verdict prefix (Phase 6). The command's single `git ls-remote` is the only remote read in SELECT.
-2. Collision avoidance: no task may be `in_progress` and assigned to another actor. The minimal `tasks --spec` listing carries no `assignee`; for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee` field. Resolve this session's actor identity exactly as `flowctl.get_actor()` does: `$FLOW_ACTOR` env var, else `git config user.email`, else `git config user.name`, else `$USER`, else `unknown`. If resolution bottoms out at `unknown`, any non-empty assignee counts as another actor.
-3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--explain`, do not write; report the entry as would-clear in the classification report instead. **Exception, active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every run**, so a "ready again" under a configured `tracker.readyState` is mechanical, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every run forever, defeating the strike limit. **So with `tracker.readyState` set, a `count >= 2` strike survives a projection-set ready**: the strikeout stands (skip the candidate as still-struck) until the human who answered the surfaced failure runs `flowctl pilot strikes clear <spec-id>`. That verb is THE recognized human clear under an armed `tracker.readyState`; no board state can serve as one, because a deliberate out-and-back move and a projection echo are byte-identical in every durable artifact, so "an explicit re-ready" is not something this run can detect. A cleared strike whose only "re-bless" was a board-set ready has broken this. The `BLOCKED spec=… reason="strike 2/2"` terminal names the verb, so the transcript carries its own recovery.
-4. **No gh touch here.** Except for existing-PR selection above, PR state belongs to the all-done classification branch; a gh call in SELECT has broken this.
+There are no per-candidate `show`, `tasks`, `spec chain`, actor or `gh` calls: the snapshot joins PRs by branch from one listing and shares the chain remote read. A failed PR observation is `NEEDS_HUMAN`, never absent. The host keeps consent, triage and resume-evidence judgment.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
@@ -300,7 +228,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch: flow-next:flow-next-tracker-sync list-open mode:autonomous   (no-ops when tracker.readyState unset -> flow-ready specs only)
+     $FLOWCTL tracker wire list-open --json   # no-ops when tracker.readyState unset -> flow-ready specs only)
    fi
    ```
 
@@ -308,7 +236,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch per tracker-only issue: flow-next:flow-next-tracker-sync list-comments <tracker-id> mode:autonomous
+     # -> dispatch per tracker-only issue: $FLOWCTL tracker wire comment-list --locator <tracker-id> --json
      # Any error or truncated listing fails closed: do not select from an
      # incomplete question/answer history.
    fi
@@ -319,7 +247,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
    ```bash
    if [ "$DRY" = "0" ]; then
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
-     # -> dispatch per tracker issue: flow-next:flow-next-tracker-sync list-relations <tracker-id> mode:autonomous
+     # -> dispatch per tracker issue: $FLOWCTL tracker wire relation-list --locator <tracker-id> --json
      #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
      #   GitLab indexes /issues/:iid from the <project>#<iid> it carries - a global id is
      #   NOT a valid path index), never the opaque global id.
@@ -380,13 +308,7 @@ When no candidate is selectable, use the terminal split below:
 **Optional force-gate.** Read the sibling key `pilot.gateClasses` (an array, NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage, no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
-# Derived from the root snapshot - NOT a config get call. The path is RECOMPUTED
-# here (deterministic repo-hash key; vars don't survive fences). Tolerate BOTH
-# shapes: a JSON array (`["risky"]`) AND a scalar set through the CLI -
-# `flowctl config set pilot.gateClasses risky` persists the bare string "risky",
-# which `.value[]?` would silently drop. Normalize string->single-class.
-PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
+GATE_CLASSES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '(.config.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end')"
 ```
 
 An empty/unset `gateClasses` (the default) gates nothing; full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
@@ -400,8 +322,6 @@ An empty/unset `gateClasses` (the default) gates nothing; full-auto is unconditi
 ```bash
 if [ "${PILOT_DRY_RUN:-0}" = "1" ]; then
   # $TRIAGE_CLASS = the class resolved above (workable | ready-but-thin | needs-spec | dep-unsatisfied | needs-human).
-  # Explain leaves NO persistent scratch state: remove the root config snapshot (recomputed path).
-  rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
   echo "PILOT_VERDICT=TRIAGED spec=$SUBJECT_ID stage=triage reason=\"dry-run: classified $TRIAGE_CLASS, nothing dispatched or parked\""
   exit 0
 fi
@@ -411,52 +331,36 @@ When NOT explaining, route by class: **workable** sets `SELECTED_SPEC="$SUBJECT_
 
 ## Phase 2 - CLASSIFY from the routing reference (workflow.md Step 2)
 
-Resolve the review backend before classification:
+Derive dispatch flags from the retained snapshot. Only an explicit review option
+is forwarded; the stage otherwise resolves its configured backend.
 
 ```bash
 REVIEW_ARG=""
-if [[ -n "${PILOT_REVIEW:-}" ]]; then
+BACKEND_NAME="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"')"
+if [ -n "${PILOT_REVIEW:-}" ]; then
+  BACKEND_NAME="$PILOT_REVIEW"
   REVIEW_ARG="--review=$PILOT_REVIEW"
-  REVIEW_BACKEND="$PILOT_REVIEW"
-else
-  REVIEW_BACKEND="$($FLOWCTL review-backend "$SELECTED_SPEC")"   # prints the backend, or ASK when unset
 fi
-case "$REVIEW_BACKEND" in
-  none|ASK|"") REVIEW_CONFIGURED=0 ;;
-  *) REVIEW_CONFIGURED=1 ;;
-esac
+REVIEW_CONFIGURED=1
+case "$BACKEND_NAME" in ASK|none|"") REVIEW_CONFIGURED=0 ;; esac
 ```
 
-Resolve the QA gate value once from the root snapshot; [references/gate-selection.md](references/gate-selection.md) owns what each `pipeline.qa` value means, and the all-done juncture consumes the flags. The read is fail-open on a probe/parse error (the freshness reference gets read; the literal check still decides the flags):
+A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`.
 
 ```bash
 QA_STAGE_ENABLED=0
 QA_STAGE_AUTO=0
-QA_GATE=""
-ACTIVE=0
-# Derived from the root snapshot - NOT a config get call. The path is RECOMPUTED
-# here (deterministic repo-hash key; vars don't survive fences). A missing or
-# unreadable snapshot (removed on capture failure) makes the jq read ERROR, which
-# preserves the probe's fail-open contract (error => ACTIVE).
-PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-QA_GATE="$(jq -r '.value.pipeline.qa' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || ACTIVE=1   # snapshot/parse ERROR => ACTIVE (fail open)
-[ "$QA_GATE" = "on" ] && ACTIVE=1
-[ "$QA_GATE" = "auto" ] && ACTIVE=1
-[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1     # flag for the literal `on` (meaning: gate-selection.md)
-[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1      # flag for the literal `auto` (meaning: gate-selection.md)
-if [ "$ACTIVE" = "1" ]; then
-  echo "GATE ACTIVE - read and execute references/qa-stage.md#qa-stage-freshness-probe, then continue with Phase 2 classification."
-fi   # default branch: bare no-op - NO link, NO read path
+QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')"
+[ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1
+[ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1
+QA_FRESH="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id)][0] // .selected) | .qa_fresh // false')"
 ```
 
-When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the classification below. The all-done PR probe's no-PR branch consumes `QA_STAGE_ENABLED` / `QA_STAGE_AUTO` / `QA_FRESH`; on a default run (`off`) the gate is silent and the reference is never read.
-
-Resolve the deprecated stage-chain key. `pipeline.chainStages` is honoured only under `--tick` (the `qa+make-pr` tick it was built for) and is removed with the pilot alias in the next release; in long-horizon mode the hop loop already runs `make-pr` as the next hop, so the key has nothing to chain and is ignored with one notice. Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot, **no** new `config get`. Unlike the QA probe this read is **fail-closed**. A snapshot or parse error disables chaining, because chaining is an accelerator and the safe degradation is the one-stage tick.
+`QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not run its former shell probe.
 
 ```bash
 CHAIN_ENABLED=0
-PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-CHAIN_STAGES="$(jq -r '.value.pipeline.chainStages' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR => off (fail closed)
+CHAIN_STAGES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.chainStages' 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR => off (fail closed)
 if [ "${CHAIN_STAGES:-}" = "on" ]; then
   if [ "${AUTO_TICK:-0}" = "1" ]; then
     CHAIN_ENABLED=1
@@ -466,42 +370,19 @@ if [ "${CHAIN_STAGES:-}" = "on" ]; then
 fi
 ```
 
-`CHAIN_ENABLED` is consumed by the explain report below and by Phase 5's Chained stage. Without a fresh `qa` stage there is nothing to chain from, so the switch is inert.
-
 ### Route (workflow.md Step 2 runs here)
 
-Run workflow Step 2's `judge --preset route --spec <spec-id> --json` once for this hop and capture it as `ROUTE_JSON` without printing raw answers; apply workflow Step 2's `host_route` projection before any host fallback and retain its code lifecycle decision and shared fork/QA answers. Available decisions carry `decision.pr_ref`, the observed branch PR (or null), so the existing-PR/all-done handling below consumes that observation without another branch probe. A top-level `pr_probe_failed: true` takes today's failed-probe terminal immediately, without a retry. Unavailable uses the pre-existing probes and host classification below. Print its `Route:` line even on fallback. Never classify independently under auto or re-probe a failed PR as absent. Step 2 routes the selected spec from `SPEC_JSON`, `TASKS_JSON`, the task details fetched at SELECT, and the design-review intent retained under Arguments: [references/route-matrix.md](references/route-matrix.md) for the spec-state row, [references/gate-selection.md](references/gate-selection.md) for the review, QA, and completion-review gates, and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md) for a ready spec with no tasks and no recorded route (`no_plan == true` in `SPEC_JSON` is the recorded direct route). Echo the row and the gate section the stage came from. Then:
+Use the selected candidate's `route` as `ROUTE_JSON` (the top-level `route` aliases the default selection) and apply workflow Step 2's `host_route` projection. The snapshot already made the one judge call; do not call judge or re-probe lifecycle fields. `available` describes only external answers: a code lifecycle decision remains usable without a key. `pr_probe_failed: true` ends `NEEDS_HUMAN` immediately. The host still applies design-review intent, [references/route-matrix.md](references/route-matrix.md), [references/gate-selection.md](references/gate-selection.md), and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md). Echo the route row and gate section.
 
 - **Route echo.** Step 2 records the route it resolved from plan-vs-no-plan.md. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the recording is printed as would-record and nothing is written.
 - **Refusal when a selected gate needs a backend the run lacks.** A design review the reference selects (an explicit request, or a recorded `needs_work` / `needs_human` plan review) with `REVIEW_CONFIGURED=0` is `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. The run never lowers a gate.
-- **Resume consent.** The spec's sole direct owner (exactly one task, `implicit_owner == true`, `no_plan == true`) is `in_progress`, its assignee matches this resolved actor (re-read `$FLOWCTL show <owner-id> --json` before admitting), and positive evidence proves its prior run ended (a terminal host session/process record, or an explicit user confirmation of that run's termination): `work`, resuming that owner through spec-level work, with the owner ID and the evidence reference passed as dispatch context. A claim's age, an empty ready list, missing output, or an unassigned claim is not proof; with absent or ambiguous proof keep `NEEDS_HUMAN`, never infer termination or steal a claim. `flowctl start` refuses an `in_progress` task held by this same actor unless `--reclaim` is passed; this row's evidence check is what licenses the flag, and work passes it only for the owner admitted through it - never as a driver default.
+- **Resume consent.** The spec's sole direct owner (exactly one task, `implicit_owner == true`, `no_plan == true`) is `in_progress`, its assignee matches this resolved actor (use the snapshot task and actor fields before admitting), and positive evidence proves its prior run ended (a terminal host session/process record, or an explicit user confirmation of that run's termination): `work`, resuming that owner through spec-level work, with the owner ID and the evidence reference passed as dispatch context. A claim's age, an empty ready list, missing output, or an unassigned claim is not proof; with absent or ambiguous proof keep `NEEDS_HUMAN`, never infer termination or steal a claim. `flowctl start` refuses an `in_progress` task held by this same actor unless `--reclaim` is passed; this row's evidence check is what licenses the flag, and work passes it only for the owner admitted through it - never as a driver default.
 - **Blocked owners.** When every remaining non-`done` task is `blocked` or escalated, stop `NEEDS_HUMAN` with the tasks' block/escalation reasons before dispatch; record no strike. Mixed blocked and ready tasks continue on the ready tasks.
 - **Stale claim.** The only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) and no resume proof exists: `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it`. An own claim here may belong to a second live run of this actor on the same clone; without proof it ended, no run adds `--reclaim`.
 
 ### The all-done PR probe
 
-Before dispatch from the existing-PR or all-done row, consume the route observation, because an open PR belongs to land and a merged or closed PR changes the answer. Only an unavailable route falls back to the original PR probe here. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
-
-```bash
-BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
-PR_PROBE_FAILED=0
-if [[ "$(printf '%s' "${ROUTE_JSON:-null}" | jq -r '.pr_probe_failed // false')" == true ]]; then
-  PR_PROBE_FAILED=1; PR_JSON='[]'
-elif [[ "$(printf '%s' "${ROUTE_JSON:-null}" | jq -r '.available')" == true ]]; then
-  PR_JSON=$(printf '%s' "$ROUTE_JSON" | jq '[.decision.pr_ref | select(. != null)]')
-  [[ "$(printf '%s' "$ROUTE_JSON" | jq -r '.decision.rule')" == pr_probe_failed ]] && PR_PROBE_FAILED=1
-else
-  PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid,mergedAt --limit 100 2>/dev/null) || PR_PROBE_FAILED=1
-fi
-# `--limit` is a fetch cap, not an exhaustion guarantee: a probe that returns
-# exactly 100 rows may be truncated, and a truncated history can select the
-# wrong merged head. Treat it as probe failure - same NEEDS_HUMAN as a gh error.
-[ "$(printf '%s\n' "${PR_JSON:-[]}" | jq 'length')" -ge 100 ] && PR_PROBE_FAILED=1
-OPEN_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' | head -1)
-CLOSED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "CLOSED") | .url' | head -1)
-MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERGED") | .url' | head -1)
-MERGED_HEAD=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "MERGED")] | sort_by(.mergedAt) | last | .headRefOid // empty')
-```
+Consume `selected.pr` directly: `open`, `merged`, `merged_head`, `closed`, and `probe_failed`. Set the existing `OPEN_PR`, `MERGED_PR`, `MERGED_HEAD`, `CLOSED_PR` and `PR_PROBE_FAILED` variables from those fields. `selected.branch_name`, `branch_head`, and `branch_exists` supply branch facts. No fallback PR listing is allowed when judge answers are unavailable.
 
 If a PR identity was already bound by this run, bypass branch-history selection: re-read that exact PR per `references/tail.md`. Missing, mismatched or closed-unmerged targets stop; never substitute another PR. On first binding, failed/unparseable or truncated reads and multiple plausible PRs stop `NEEDS_HUMAN` before dispatch.
 
@@ -510,14 +391,14 @@ Apply these existing outcomes to the observed PR for `existing_pr_tail` or `all_
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: with the merge destination or current explicit scoped consent, read `references/tail.md`, bind the unique target, set `STAGE=land`, and retain this selected spec. Without that authority this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
 - No PR exists, the spec is open, and no target was previously bound: `QA_FRESH` is the freshness input; `references/gate-selection.md` decides whether `qa` runs and `references/route-matrix.md` names what follows (a skip records the `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` line in this hop's evidence). A fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
-- MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads, `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). A previously bound PR instead ends the run on its confirmed merge; it can never be replaced by a successor. Without that authority, heads equal: `NEEDS_HUMAN` (the merged branch has no new work, but the spec remains open). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
+- MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare `selected.branch_head` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). A previously bound PR instead ends the run on its confirmed merge; it can never be replaced by a successor. Without that authority, heads equal: `NEEDS_HUMAN` (the merged branch has no new work, but the spec remains open). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
 - MERGED PR exists and the spec is closed: end the run with `PILOT_VERDICT=NO_WORK spec=<id> stage=- reason="already merged: <merge commit>"`, so a driver keyed on `NO_WORK` stops.
 - No PR exists and the spec is closed: `NEEDS_HUMAN`; never create a replacement.
 - CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and the run never silently reopens human-rejected work.
 
 ### Explain stop
 
-`--explain` stops after classification. For explain, add `--explain` to the same `--json` route call (never a second request), keep the structured result for classification, and print its `explain` lines `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:` (with probabilities on available answers; on an unavailable result the host completes today's recommendation first, per workflow.md's explain stop). It also prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It additionally prints `chain=<off|on>` from `CHAIN_ENABLED` and, only when on, a precondition-checked `would-chain=`: a classified `qa` stage prints `would-chain=make-pr (conditional on a fresh terminal qa_outcome)`, a conditional, never a promise, since explain dispatches nothing; any other classified stage prints `would-chain=none (stage <x> heads no pair)`. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so an explain run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
+`--explain` stops after classification. For explain, print the snapshot route's `explain` lines (never a second request), keep the structured result for classification, and print its `explain` lines `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:` (with probabilities on available answers; on an unavailable result the host completes today's recommendation first, per workflow.md's explain stop). It also prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It additionally prints `chain=<off|on>` from `CHAIN_ENABLED` and, only when on, a precondition-checked `would-chain=`: a classified `qa` stage prints `would-chain=make-pr (conditional on a fresh terminal qa_outcome)`, a conditional, never a promise, since explain dispatches nothing; any other classified stage prints `would-chain=none (stage <x> heads no pair)`. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"
@@ -529,14 +410,7 @@ Done when: exactly one stage from `{plan, plan-review, work, qa, make-pr, land}`
 
 The run owns branch resolution and runs it before every hop. Reuse `BRANCH_NAME` from Phase 2 (resolve it here when classification never reached the all-done branch):
 
-```bash
-[[ -n "${BRANCH_NAME:-}" ]] || BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
-if [[ -n "$BRANCH_NAME" ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" >/dev/null; then
-  BRANCH_EXISTS=1
-else
-  BRANCH_EXISTS=0
-fi
-```
+Use `selected.branch_name` and `selected.branch_exists` from the snapshot as `BRANCH_NAME` and `BRANCH_EXISTS`.
 
 Matrix:
 
@@ -549,7 +423,7 @@ Matrix:
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
 | stage is `make-pr` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` |
 | stage is `land` | Keep the bound PR and invoking checkout. Re-check current consent and pass the PR plus authorization as ordinary arguments per `references/tail.md`; no branch checkout is needed. Failure stops `NEEDS_HUMAN`, no strike. |
-| stage is `plan` or `plan-review` | Probe the current branch for an OPEN PR: `gh pr list --head "$(git branch --show-current)" --state open` (an empty branch name, detached HEAD, counts as probe failure, not as an open PR). No open PR (including a fresh worktree branch or the default branch itself): stay on the current branch and dispatch. An open PR exists: `git checkout` the default branch (local `main`, else `master`); if that checkout fails (e.g. another worktree holds it), `NEEDS_HUMAN` naming the branch and the reason. Probe failure (gh unavailable or errors): attempt the default-branch checkout; if it fails, `NEEDS_HUMAN` (fail-safe: never plan onto a branch whose PR status is unknown). |
+| stage is `plan` or `plan-review` | Use the snapshot's `current_branch_prs` and `current_branch_probe_failed` (detached HEAD is a probe failure). No open PR (including a fresh worktree branch or the default branch itself): stay on the current branch and dispatch. An open PR exists: `git checkout` the default branch (local `main`, else `master`); if that checkout fails (e.g. another worktree holds it), `NEEDS_HUMAN` naming the branch and the reason. Probe failure (gh unavailable or errors): attempt the default-branch checkout; if it fails, `NEEDS_HUMAN` (fail-safe: never plan onto a branch whose PR status is unknown). |
 
 The invariant is that planning state is never written onto a branch with an open PR; the open-PR probe enforces it, wherever the run runs (shared checkout or secondary worktree). It guards the open-PR hazard only; a branch carrying another spec's not-yet-PR'd work is not detected. A long-horizon run may cross from a plan hop on the default branch to a work hop on the spec branch; each hop's row handles it.
 
@@ -561,8 +435,8 @@ Done when: the worktree is on the branch this stage's matrix row names (or the p
 
 Record the pre-dispatch evidence snapshot before invoking the stage skill:
 
-- `plan`: task count from `$FLOWCTL tasks --spec <id> --json`.
-- `plan-review`: `plan_review_status` from `$FLOWCTL show <id> --json`.
+- `plan`: task count from `before_dispatch`.
+- `plan-review`: `plan_review_status` from `selected.spec`.
 - `work`: per-task id/status list, spec status, and `completion_review_status`.
 - `qa`: absence of a fresh `qa_verdict` receipt (`QA_FRESH=0`), already proven by the classify-time freshness probe; the post-dispatch verify re-reads the receipt against the **code head** (HEAD peeled past the qa-verdict bookkeeping commit).
 - `make-pr`: no OPEN PR for the branch, already proven by the all-done probe.
@@ -580,7 +454,7 @@ if [ "${PILOT_AUTONOMY:-ready}" = "backlog" ]; then
         echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
         exit 1
       fi ;;
-    "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
+    "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync question"*) : ;;
     *)
       echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
       exit 1 ;;
@@ -770,14 +644,7 @@ PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(
 
 A `land` stage uses `references/tail.md`'s verdict mapping and cadence, never the healthy-no-advance strike path below. Keep the pilot ledger untouched on a landing wait or blocker; a verified advance may clear it. Under backlog, a dispatched waiting land tick records `--action blocked --stage land` once (the existing log enum has no wait action), with its actual wait reason in the output; this is not a strike. A confirmed merge ends the run with `ADVANCED`, including when the tracker touchpoint failed.
 
-On `ADVANCED`, clear the selected spec's ledger entry if present and write the ledger atomically with `jq` plus `mv`:
-
-```bash
-mkdir -p "$LEDGER_DIR"
-[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
-tmp="$LEDGER.tmp.$$"
-jq --arg spec "$SELECTED_SPEC" 'del(.[$spec])' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
-```
+On `ADVANCED`, if the snapshot has a strike for the selected spec, clear it with `$FLOWCTL pilot strikes clear "$SELECTED_SPEC" --json`. Do not clear an absent entry.
 
 Then apply the continuation rule in "The hop loop" above.
 
@@ -804,19 +671,11 @@ PILOT_VERDICT=BLOCKED spec=<id> stage=qa+make-pr reason="no advancement (strike 
 
 A `make-pr` that yields no open PR strikes under `make-pr` exactly as a standalone tick would; a driver grepping `PILOT_VERDICT=ADVANCED` keeps working.
 
-On healthy-but-no-advance, record a strike with count, stage, reason, and timestamp:
+On healthy-but-no-advance, record the cumulative strike and unready at two in one locked operation:
 
 ```bash
-mkdir -p "$LEDGER_DIR"
-[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
-tmp="$LEDGER.tmp.$$"
-jq --arg spec "$SELECTED_SPEC" --arg stage "$STAGE" --arg reason "$NO_ADVANCE_REASON" --arg ts "$TODAY" '
-  .[$spec].count = ((.[$spec].count // 0) + 1)
-  | .[$spec].stage = $stage
-  | .[$spec].reason = $reason
-  | .[$spec].ts = $ts
-' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
-STRIKE_COUNT="$(jq -r --arg spec "$SELECTED_SPEC" '.[$spec].count' "$LEDGER")"
+STRIKE_JSON="$($FLOWCTL pilot strikes record "$SELECTED_SPEC" --stage "$STAGE" --reason "$NO_ADVANCE_REASON" --json)" || exit 1
+STRIKE_COUNT="$(printf '%s' "$STRIKE_JSON" | jq -r '.count')"
 ```
 
 If `STRIKE_COUNT` is `1`, leave the spec ready, end the run, and print:
@@ -825,11 +684,7 @@ If `STRIKE_COUNT` is `1`, leave the spec ready, end the run, and print:
 PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 1/2): <why>"
 ```
 
-If `STRIKE_COUNT` is `2`, unready the spec, keep the ledger reason, and print:
-
-```bash
-$FLOWCTL spec unready "$SELECTED_SPEC"
-```
+If `STRIKE_COUNT` is `2` or greater, the command has unreadied the spec; keep the ledger reason and print:
 
 ```text
 PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>; clear with: flowctl pilot strikes clear <id>"

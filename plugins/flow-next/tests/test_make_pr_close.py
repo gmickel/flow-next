@@ -95,7 +95,8 @@ fi
             flowctl = self.executable("flowctl-fail", '#!/bin/bash\nif [[ "$1 $2" == "spec close" ]]; then echo "injected close failure" >&2; exit 9; fi\nexec ' + shlex.quote(str(SCRIPTS / "flowctl")) + ' "$@"\n')
         else:
             flowctl = SCRIPTS / "flowctl"
-        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", WORKFLOW.read_text(encoding="utf-8"), re.S) if "# --- §0.5:" in f)
+        fence = (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").split("# --- §0.5:", 1)[1]
+        fence = "# --- §0.5:" + fence
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), RALPH=str(int(ralph)), WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
         # Observe the exact head seen by the artifact/export phase and PR creation.
         tail = '''
@@ -280,8 +281,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         self.assertEqual(result.stdout, "local")
 
     def test_r2_head_move_stops_before_push(self):
-        document = WORKFLOW.with_name("create-and-finalize.md")
-        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", document.read_text(encoding="utf-8"), re.S) if "PUSH_OUT=$(git push" in f)
+        fence = next(f for f in (SCRIPTS / "make-pr-create.sh").read_text(encoding="utf-8").split("# end:block") if "PUSH_OUT=$(git push" in f)
         real_git = subprocess.run(["which", "git"], capture_output=True, text=True, check=True).stdout.strip()
         self.executable("git", '#!/bin/bash\nif [[ "$1" == push ]]; then touch "$OBSERVATIONS/pushed"; exit 7; fi\nexec ' + shlex.quote(real_git) + ' "$@"\n')
         for context in ({"head": self.git("rev-parse", "main"), "branch": "feature"}, {"head": self.git("rev-parse", "HEAD"), "branch": "other"}):

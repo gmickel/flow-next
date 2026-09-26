@@ -109,160 +109,18 @@ was durably consumed, without reserving or dispatching another review.
 Host and rp terminal status has one owner, `review-rounds record --status-target completion` (with a journaled receipt, that status leg lands when the receipt publishes); this checkpoint only repairs a write that did not land. A stored `not_required` (work's 3g policy skip) is neither `ship` nor `unknown` here: the checkpoint has no terminal attempt to resume for it, and an explicit manual invocation may still run a real review and overwrite it with `ship`/`needs_work` — the upgrade direction is legal, while the skip's own write stays gated on `unknown`.
 
 ```bash
-if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \
-  --kind plan --review-type completion --json)" \
-  || ! SPEC_STATE_JSON="$($FLOWCTL show "$SPEC_ID" --json)"; then
-  echo "<promise>RETRY</promise>"
-  exit 0
-fi
-
-LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].outcome // ""')"
-LATEST_SUPERSEDED_BY="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].superseded_by // ""')"
-VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].verdict // ""')"
-ATTEMPT_BACKEND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].backend // ""')"
-ATTEMPT_AT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.attempts[-1].timestamp // ""')"
-REVIEW_ROUND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.review_rounds // 0')"
-REVIEW_CAP="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
-  | jq -r '.review_rounds_cap // 0')"
-CURRENT_STATUS="$(printf '%s' "$SPEC_STATE_JSON" \
-  | jq -r '.completion_review_status // "unknown"')"
-CURRENT_REVIEWED_AT="$(printf '%s' "$SPEC_STATE_JSON" \
-  | jq -r '.completion_reviewed_at // ""')"
-
-TERMINAL_STATUS=""
-TERMINAL_EXIT=0
-if [[ -n "$LATEST_SUPERSEDED_BY" ]]; then
-  # A concurrent SHIP superseded this attempt: it reviewed a pre-SHIP artifact,
-  # charged no round, and must never write a terminal status here.
-  echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
-  echo "COMPLETION_REVIEW_STATUS=$CURRENT_STATUS"
-  exit 0
-fi
-if [[ "$LATEST_OUTCOME" == "verdict" && "$VERDICT" == "SHIP" ]]; then
-  TERMINAL_STATUS="ship"
-elif [[ "$LATEST_OUTCOME" == "verdict" \
-  && "$VERDICT" == "NEEDS_WORK" \
-  && "$REVIEW_CAP" -gt 0 \
-  && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
-  TERMINAL_STATUS="needs_work"
-  TERMINAL_EXIT=4
-elif [[ "$LATEST_OUTCOME" == "verdict" && "$VERDICT" == "NEEDS_HUMAN" ]]; then
-  # A reviewer-requested escalation is terminal at any round: persist it here
-  # and exit, never fall through and reserve another paid round.
-  TERMINAL_STATUS="needs_human"
-  TERMINAL_EXIT=4
-fi
-
-# A matching status means the terminal already persisted. A newer terminal
-# attempt means persistence is pending. A newer completion_reviewed_at is an
-# explicit later status decision (for example `unknown` to request re-review);
-# honor it instead of resurrecting the old verdict.
-if [[ -n "$TERMINAL_STATUS" \
-  && ( "$CURRENT_STATUS" == "$TERMINAL_STATUS" \
-    || ( -n "$ATTEMPT_AT" \
-      && ( -z "$CURRENT_REVIEWED_AT" \
-        || "$ATTEMPT_AT" > "$CURRENT_REVIEWED_AT" ) ) ) ]]; then
-  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/tmp/completion-review-receipt-${SPEC_ID}.json}"
-  RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
-
-  # A recovery payload belongs to exactly one durable attempt. Remove an older
-  # attempt's artifact before deciding whether this attempt requires a receipt;
-  # otherwise an optional RP receipt can become spuriously mandatory.
-  if [[ -f "$RECEIPT_RECOVERY" ]] \
-    && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
-      '.type == "completion_review"
-       and .id == $id
-       and .verdict == $verdict
-       and .mode == $mode
-       and .attempt_timestamp == $attempt_at' \
-      "$RECEIPT_RECOVERY" >/dev/null 2>&1; then
-    if ! rm -f "$RECEIPT_RECOVERY"; then
-      echo "<promise>RETRY</promise>"
-      exit 0
-    fi
-  fi
-
-  RECEIPT_REQUIRED=false
-  # Bind evidence requirements to the durable attempt being resumed, never
-  # the backend selected for this invocation (which may have changed).
-  case "$ATTEMPT_BACKEND" in
-    codex|copilot|cursor|claude|host) RECEIPT_REQUIRED=true ;;
-    rp)
-      [[ "$VERDICT" == "SHIP" \
-        && ( -n "${REVIEW_RECEIPT_PATH:-}" || -f "$RECEIPT_RECOVERY" ) ]] \
-        && RECEIPT_REQUIRED=true
-      ;;
-  esac
-
-  # The subprocess backends preserve the complete payload here before writing
-  # the caller-selected path (host/rp recover from the record journal). Restore
-  # it before status so a transient receipt-path failure never consumes another
-  # review or loses Ralph evidence.
-  if [[ -f "$RECEIPT_RECOVERY" ]]; then
-    if ! mkdir -p "$(dirname "$RECEIPT_PATH")" \
-      || ! cp "$RECEIPT_RECOVERY" "$RECEIPT_PATH"; then
-      echo "<promise>RETRY</promise>"
-      exit 0
-    fi
-    if ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
-      '.type == "completion_review"
-       and .id == $id
-       and .verdict == $verdict
-       and .mode == $mode
-       and .attempt_timestamp == $attempt_at' \
-      "$RECEIPT_PATH" >/dev/null; then
-      echo "<promise>RETRY</promise>"
-      exit 0
-    fi
-  fi
-
-  if [[ "$RECEIPT_REQUIRED" == true ]] \
-    && ! jq -e --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-      --arg mode "$ATTEMPT_BACKEND" --arg attempt_at "$ATTEMPT_AT" \
-      '.type == "completion_review"
-       and .id == $id
-       and .verdict == $verdict
-       and .mode == $mode
-       and .attempt_timestamp == $attempt_at' \
-      "$RECEIPT_PATH" >/dev/null 2>&1; then
-    echo "<promise>RETRY</promise>"
-    exit 0
-  fi
-
-  if [[ "$CURRENT_STATUS" != "$TERMINAL_STATUS" ]]; then
-    TERMINAL_WRITE_JSON="$($FLOWCTL spec set-completion-review-status "$SPEC_ID" \
-      --status "$TERMINAL_STATUS" --json)"
-    TERMINAL_WRITE_EXIT=$?
-    printf '%s\n' "$TERMINAL_WRITE_JSON"
-    if [[ "$TERMINAL_WRITE_EXIT" -ne 0 ]]; then
-      echo "<promise>RETRY</promise>"
-      exit 0
-    fi
-  fi
-  if ! rm -f "$RECEIPT_RECOVERY"; then
-    echo "<promise>RETRY</promise>"
-    exit 0
-  fi
-
-  if [[ "$TERMINAL_EXIT" -eq 4 ]]; then
-    if [[ "$TERMINAL_STATUS" == "needs_human" ]]; then
-      echo "ESCALATE: reviewer requested human review"
-    else
-      echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
-    fi
-    exit 4
-  fi
-  echo "VERDICT=SHIP"
-  exit 0
-fi
+TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds resume-terminal "$SPEC_ID" --review-type completion --json)" || exit $?
+TERMINAL_ACTION="$(printf '%s' "$TERMINAL_REVIEW_JSON" | jq -r '.action')"
+TERMINAL_STATUS="$(printf '%s' "$TERMINAL_REVIEW_JSON" | jq -r '.status')"
+TERMINAL_EXIT="$(printf '%s' "$TERMINAL_REVIEW_JSON" | jq -r '.exit')"
+case "$TERMINAL_ACTION" in
+  continue) ;;
+  retry) echo "<promise>RETRY</promise>"; exit "$TERMINAL_EXIT" ;;
+  ship) echo "VERDICT=SHIP"; exit "$TERMINAL_EXIT" ;;
+  superseded) echo "COMPLETION_REVIEW_STATUS=$TERMINAL_STATUS"; exit "$TERMINAL_EXIT" ;;
+  escalate) echo "ESCALATE: completion review $TERMINAL_STATUS"; exit "$TERMINAL_EXIT" ;;
+  *) echo "Unknown terminal review action: $TERMINAL_ACTION" >&2; exit 1 ;;
+esac
 ```
 
 An exit-4 cap refusal before this run has delivered a completion verdict is

@@ -129,7 +129,8 @@ def _schema_leaf_paths(schema: dict, prefix: str = "") -> set[str]:
 def _literal_accounted(text: str, canonical: set[str], *, fstr: bool) -> bool:
     """Return True iff a config-read literal is covered by canonical keys."""
     if not fstr:
-        return text in canonical
+        # ConfigSnapshot supports a declared subtree as well as its leaves.
+        return text in canonical or any(key.startswith(text + ".") for key in canonical)
     prefix = text.split("{", 1)[0]
     if not prefix or not prefix.endswith("."):
         return False

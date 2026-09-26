@@ -633,7 +633,8 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              attachment_id: Optional[str] = None,
              out_path: Optional[str] = None,
              flow_dir: Optional[Path] = None,
-             execute: Execute = default_execute) -> Result:
+             execute: Execute = default_execute,
+             _parent: Optional[dict] = None) -> Result:
     """Run one wire verb. Returns data dict or TrackerError — never raises."""
     if verb not in WIRE_VERBS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -678,7 +679,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
     if verb == "read":
         return mod.read(config, parsed, execute)  # type: ignore[arg-type]
     if verb == "update":
-        return mod.update(config, parsed, execute, title=title, body=body)  # type: ignore[arg-type]
+        return mod.update(config, parsed, execute, title=title, body=body, parent=_parent)  # type: ignore[arg-type]
     if verb == "comment-add":
         if body is None:
             return TrackerError(ErrorClass.INVALID_INPUT,

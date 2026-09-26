@@ -72,7 +72,7 @@ Without this PR's current session merge authorization, stop
 When calling flow authorizes the merge without a human's in-session merge
 authorization, require `land.patienceMinutes` since the last push. Use push
 evidence; for a null push date use the head commit's earliest check-suite creation time, else its committer date. Before the
-window expires, report `AWAITING_REVIEW` with remaining minutes and return;
+window expires, report `AWAITING_REVIEW` with `remaining_patience_seconds=<n>` (rounded up) and return;
 the caller owns cadence. A human's current merge authorization waives the wait.
 
 When set, run `land.mergeVerdictCommand` once per invocation, only when all

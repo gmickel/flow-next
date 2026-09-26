@@ -167,6 +167,10 @@ class ConfigMergeTests(unittest.TestCase):
                     self.assertEqual(p.read_bytes(), first)
                 first = p.read_bytes()
             self.assertTrue((dest / 'agents/agents-md-scout.toml').exists())
+            for script in ('make-pr-preflight.sh', 'make-pr-create.sh', 'map.sh'):
+                self.assertEqual((dest / 'scripts' / script).read_bytes(),
+                                 (ROOT / 'plugins/flow-next/scripts' / script).read_bytes())
+
 
 
 if __name__ == '__main__':

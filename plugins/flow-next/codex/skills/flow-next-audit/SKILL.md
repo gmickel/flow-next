@@ -15,7 +15,7 @@ This skill IS the audit. The host agent (Claude Code / Codex / Droid) walks `.fl
 
 Decision entries (`.flow/memory/knowledge/decisions/`) and glossary terms (`GLOSSARY.md` files at the repo root and on the ancestor chain) are walked alongside the rest of memory. Decisions get a calibrated judging question — "does the constraint that motivated this choice still hold?" — and Replace becomes a two-step supersession (write successor, mark old `decision_status: superseded`, never `git rm`). Glossary terms are scanned for code usage; zero-hit terms get a `<!-- stale: ... -->` HTML comment via Edit tool (no `flowctl glossary mark-stale` exists), `_Avoid_` aliases appearing in code surface as alias-creep findings.
 
-There is no Python audit-engine, no codex/copilot subprocess dispatch, no deterministic scorer. The host agent is already an LLM and does the work directly. flowctl provides only thin persistence plumbing (`memory mark-stale`, `memory mark-fresh`, `memory mark-hardened`, `memory search --status`). All judgment — is this recurring, is it mechanizable, which gate surface, what should the rule say — stays in this skill; there is no `flowctl gate` subcommand and never will be.
+There is no subprocess judgment or deterministic classification. `memory audit-scan --json` collects mechanical evidence; `memory apply --plan <file> --json` persists host-authored actions. The host agent is already an LLM and does the work directly. flowctl provides only thin persistence plumbing (`memory mark-stale`, `memory mark-fresh`, `memory mark-hardened`, `memory search --status`). All judgment — is this recurring, is it mechanizable, which gate surface, what should the rule say — stays in this skill; there is no `flowctl gate` subcommand and never will be.
 
 **Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the 6-outcomes lookup with memory-schema-specific calibration.**
 
@@ -38,7 +38,7 @@ Parse `$ARGUMENTS` for the literal token `mode:autofix`. If present, strip it fr
 ```bash
 RAW_ARGS="$ARGUMENTS"
 MODE="interactive"
-if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
+if [[ "$RAW_ARGS" == *"mode:autofix"* || "$RAW_ARGS" == *"mode:autonomous"* || -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" ]]; then
   MODE="autofix"
   # Strip token, collapse whitespace, trim.
   SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
@@ -89,7 +89,7 @@ The goal is automated maintenance with human oversight on judgment calls — not
 - **Demoting a lesson to a gate that was never verified to fire.** `memory mark-hardened` runs only after the gate is confirmed live (resolved lint config / a job that actually runs / the substantive instruction file). Verification failure leaves the entry `active` and reports a failed graduation. A gate that does not fire is worse than no gate.
 - **`git rm` on Harden.** Ever, on any track. The entry file stays on disk as a pointer at the gate — that is what keeps "why does this rule exist?" answerable.
 - **Scaffolding infrastructure to host a gate.** Never create a linter setup, a CI pipeline, or a config file that does not already exist. The gate lands in a surface the repo already has, degrades to the substantive instruction file, or the entry stays Keep.
-- **Inventing flowctl subcommands** beyond what ships (`memory mark-stale`, `memory mark-fresh`, `memory mark-hardened`, `memory search --status`). There is no `flowctl gate` subcommand — the gate artifact is skill-authored prose/config written via Edit/Write. flowctl ships only `glossary {add,list,read,remove}` — there is no `flowctl glossary mark-stale`; use Edit tool. Use Write tool + git for moves and deletes.
+- **Inventing flowctl subcommands** beyond what ships (`memory mark-stale`, `memory mark-fresh`, `memory mark-hardened`, `memory search --status`). There is no `flowctl gate` subcommand — the gate artifact is skill-authored prose/config written via Edit/Write. flowctl ships only `glossary {add,list,read,remove}` — there is no `flowctl glossary mark-stale`; use Edit tool. Use `memory apply --plan <file> --json` for memory moves, removals and reference rewrites.
 - **Mass-renaming code from a glossary alias-creep finding.** The audit reports file:line locations and stops there; code rename is the operator's call.
 - **Auto-committing without user awareness in interactive mode.** Phase 5 detects git context and asks. Autofix uses sensible defaults.
 - **Setting `context: fork`** — plain-text numbered prompt must stay reachable.

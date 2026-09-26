@@ -50,7 +50,7 @@ class BacklogWireContractTests(unittest.TestCase):
             self.assertIn(flag, STEPS)
 
     def test_tracker_only_parked_scan_executes_comment_read(self) -> None:
-        self.assertIn("list-comments", PILOT_WORKFLOW)
+        self.assertIn("tracker wire comment-list", PILOT_WORKFLOW)
         self.assertIn(
             "tracker wire comment-list --locator", PILOT_BACKLOG)
         self.assertIn(

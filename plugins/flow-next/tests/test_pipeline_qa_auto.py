@@ -18,6 +18,7 @@ judgment in the flow skill's routing reference; nothing here asserts prose.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -68,7 +69,7 @@ class AutoQaGateReadsEveryValue(unittest.TestCase):
     @_POSIX_BASH
     def test_fence_resolves_each_literal_to_its_flag(self) -> None:
         fence = _qa_gate_fence(_read(AUTO_MD))
-        self.assertIn(SNAPSHOT_LINE, fence, "snapshot path line drifted")
+        self.assertIn("PILOT_SNAPSHOT", fence)
         # value -> (QA_STAGE_ENABLED, QA_STAGE_AUTO)
         cases = (
             ("auto", "0", "1"),
@@ -83,22 +84,28 @@ class AutoQaGateReadsEveryValue(unittest.TestCase):
                 snap.write_text(
                     json.dumps({"key": None, "value": {"pipeline": {"qa": value}}})
                 )
-                script = fence.replace(
-                    SNAPSHOT_LINE, f'PILOT_CFG_SNAPSHOT="{snap}"'
-                ) + '\nprintf "\\nENABLED=%s AUTO=%s" "$QA_STAGE_ENABLED" "$QA_STAGE_AUTO"'
+                script = fence + '\nprintf "\\nENABLED=%s AUTO=%s" "$QA_STAGE_ENABLED" "$QA_STAGE_AUTO"'
                 res = subprocess.run(
-                    ["bash", "-c", script], capture_output=True, text=True
+                    ["bash", "-c", script], capture_output=True, text=True,
+                    env={**os.environ, "PILOT_SNAPSHOT": json.dumps({"config": {"pipeline": {"qa": value}}})},
                 )
                 self.assertEqual(res.returncode, 0, f"{value}: {res.stderr}")
                 self.assertTrue(
                     res.stdout.endswith(f"ENABLED={enabled} AUTO={auto}"),
                     f"{value}: {res.stdout!r}",
                 )
-                # `on` and `auto` both activate the freshness-probe sentinel;
-                # every other value leaves the reference unread.
-                self.assertEqual(
-                    "GATE ACTIVE" in res.stdout, value in ("on", "auto"), res.stdout
-                )
+
+
+
+    @_POSIX_BASH
+    def test_selected_candidate_false_freshness_does_not_fall_back_to_another_spec(self):
+        script = _qa_gate_fence(_read(AUTO_MD)) + '\nprintf "%s" "$QA_FRESH"'
+        payload = {"config": {"pipeline": {"qa": "on"}}, "selected": {"qa_fresh": True},
+                   "candidates": [{"id": "fn-2", "qa_fresh": False}]}
+        result = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                                env={**os.environ, "SELECTED_SPEC": "fn-2", "PILOT_SNAPSHOT": json.dumps(payload)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "false")
 
 
 class SetupLiveQaQuestion(unittest.TestCase):
@@ -123,7 +130,7 @@ class SetupLiveQaQuestion(unittest.TestCase):
             self.assertIn(f"config set pipeline.qa {value} --json", self.text)
 
     def test_probe_and_features_recommendation(self) -> None:
-        self.assertIn("config get pipeline.qa --raw --json", self.text)
+        self.assertIn("setup-status", self.text)
         self.assertIn("SETUP_FIRST_RUN", self.text)
         self.assertIn("/flow-next:features", self.text)
 

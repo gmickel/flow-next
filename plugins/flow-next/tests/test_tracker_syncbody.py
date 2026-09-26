@@ -959,8 +959,7 @@ class SyncBodyClaimSerialization(unittest.TestCase):
             self.assertEqual(out["kind"], "pushed")
             self.assertEqual(out["side_written"], "tracker")
             self.assertEqual([c.op for c in ex.calls],
-                             ["sync-body-parent-read", "wire-parent-read",
-                              "wire-update", "wire-read"])
+                             ["sync-body-parent-read", "wire-update", "wire-read"])
             self.assertFalse(rec_path.exists(),
                              "claim released after a normal run")
             receipts = _receipts(flow)

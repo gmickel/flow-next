@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "ee47658cadb22d011f0f13c402d1aa76ecdd3dd7e7173da38d034ebce7a9abb0"
+      "sha256": "25339835d06922a7b3c1fdd01d8b7693bb5d4e4d31d4c00628dfa5c42319e259"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -38,23 +38,27 @@
     },
     {
       "path": "flowctl_tracker/executor.py",
-      "sha256": "5adbb6b1406f24edd03cd94ae2136bafacff5850f10019c3cde14525b2861c9c"
+      "sha256": "fadbcf798a1e5b40cd9ecd437d8ab60dc889fe98d2442b49639cb949b6496656"
     },
     {
       "path": "flowctl_tracker/facade/__init__.py",
-      "sha256": "65f9383a55226b513c55a8cd24cd0c64cce6ec32ee7ef2ae8a65aa096583ff93"
+      "sha256": "2cf37ac38eb5f82f304f249ea6b5d302642e8d3a1dade4a91bf40e41aed4f0af"
     },
     {
       "path": "flowctl_tracker/facade/chart_projection.py",
-      "sha256": "8744a30f9d51ed30abf0e2c493030d147baf0435debd8e1134345cd74c20dae2"
+      "sha256": "68210f02dd4ef8d8e599eba6a50fce0d525b40bc01b115e09ccb4a06349946c7"
     },
     {
       "path": "flowctl_tracker/facade/helpers.py",
-      "sha256": "78d0c74cc72483d637eb27d2006f0f274d6079dcddb00a9529c39b3aa68cf7c5"
+      "sha256": "bbb753ac4e1947b5286b0cdbdeb6ec331c9f11263dbd523d26b68b5c6be42326"
     },
     {
       "path": "flowctl_tracker/facade/ops.py",
-      "sha256": "27c377a478032d66494d3f0a63cdb3914f93f74b37a66d1962e074f91669bd57"
+      "sha256": "c4e00cd84fa4b373720bbe58b2846dfb0eba3f130862cee2b0ffb3b78ba94d18"
+    },
+    {
+      "path": "flowctl_tracker/facade/preparation.py",
+      "sha256": "15c4dbff7ba2327a6cb3a1c1e8f6ed6e9445e710a282d57cba06fc4b68c270ce"
     },
     {
       "path": "flowctl_tracker/facade/projections.py",
@@ -62,7 +66,7 @@
     },
     {
       "path": "flowctl_tracker/facade/steps.py",
-      "sha256": "8647da8c63e1b790328beecf4026d1be848a04631a325b39d2259677a0add41b"
+      "sha256": "323617c99300938a8f99a5f33ea529a9bb10bb37c952b29ca0293ab7e01de1bd"
     },
     {
       "path": "flowctl_tracker/lifecycle/__init__.py",
@@ -114,7 +118,7 @@
     },
     {
       "path": "flowctl_tracker/relate/__init__.py",
-      "sha256": "a467e5226849742f1e531d6b746d4428e5d09fd8376d4c21e9a7bce72c4d60ff"
+      "sha256": "e5ae0fc2ce74bb74b445ebf621d4a878bc23da1c9461da290033bc147079261f"
     },
     {
       "path": "flowctl_tracker/relate/ledger.py",
@@ -154,7 +158,7 @@
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "9595afb293beb05e184ff83a42069d189bbffa2606b53a7b44cc4e39b4ac54cd"
+      "sha256": "33fc126f3b4d25927e07485c39a2d882adce3597b190e9d7f04de57c6299433f"
     },
     {
       "path": "flowctl_tracker/subjects.py",
@@ -162,7 +166,7 @@
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",
-      "sha256": "5f7f750d70df462cc9f642525228617290574fdb10ecd044d16349b36e7db61f"
+      "sha256": "5df38cec035f31b1463ca92c37522ac661b07e7b0ba958884828f18cb0e5eb82"
     },
     {
       "path": "flowctl_tracker/types.py",
@@ -170,23 +174,23 @@
     },
     {
       "path": "flowctl_tracker/wire/__init__.py",
-      "sha256": "d4e92fd557f08e37e1a61fa6ba5b5c49882f6b7954d737bf1a489375c12b1b5f"
+      "sha256": "aea2b7771b70f3ce35b35d295f71f30d620aaaae88a6df0f5099958e8af61632"
     },
     {
       "path": "flowctl_tracker/wire/github.py",
-      "sha256": "0fdcbe0fe41b478fb42838f9d24b0fa09a7a672d515ddf4a1f9e75d0b0a34503"
+      "sha256": "50f22da5abd62ea2e8a947a2f8ae5271e829b74c7f0a033a25c6db02fb78a422"
     },
     {
       "path": "flowctl_tracker/wire/gitlab.py",
-      "sha256": "112e910521931262a7bb994bf7d0ba47b4f9a5bcbf2e4d4629f23de89f6ce49c"
+      "sha256": "b21d0c3d7837ebd4177ebf3b15e96b70371e50825fca68acaa218c27e9c1ae64"
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "ed4a302ae810a998214526f272a96050d87249e2d98718c3dd6adb8e2d78fbcf"
+      "sha256": "68eb7ecda2f30d06bdee915b4b0fd44a6378fdca07eabaaf083451b7530dca43"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
-      "sha256": "e6318c1a79f22b2ea4db91408592982732ffa2093d0744a72ea586fef9ecab3d"
+      "sha256": "a4bd16d757a1d18656cffa73b91d49f44ec67aafa20bb807bab9cbd3d14e04ba"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

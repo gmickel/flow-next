@@ -29,18 +29,18 @@ class UnattendedSkillFences(unittest.TestCase):
                               capture_output=True, text=True)
 
     def test_scope_resolution_and_unresolved_stop(self):
-        code = fence("flow-next-flow/auto.md", 'if SCOPE_JSON=')
+        code = fence("flow-next-flow/auto.md", 'SNAPSHOT_ARGS=()')
         for output, rc, expected in (
-            ({"id": "wor-17-x", "tasks": []}, 0, "scope=wor-17-x"),
+            ({"selected": {"id": "wor-17-x"}}, 0, "scope=wor-17-x"),
             ({"error": "Spec missing does not exist"}, 2, "PILOT_VERDICT=NEEDS_HUMAN"),
-            ({"id": "wor-17-x.1", "status": "todo"}, 0, "PILOT_VERDICT=NEEDS_HUMAN"),
+            ({"error": "Expected spec id"}, 2, "PILOT_VERDICT=NEEDS_HUMAN"),
         ):
             with self.subTest(output=output):
                 stub = 'flowctl() { printf "config warning\\n" >&2; printf "%s" "$OUTPUT"; return "$RC"; }\n'
                 result = self.shell(stub + code + '\nprintf "scope=%s" "$PILOT_SPEC"',
                                     FLOWCTL="flowctl", PILOT_SPEC="wor-17-x", OUTPUT=json.dumps(output), RC=str(rc))
                 self.assertIn(expected, result.stdout)
-                if rc or "tasks" not in output:
+                if rc:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertNotIn("scope=", result.stdout)
                 else:
@@ -53,7 +53,9 @@ class UnattendedSkillFences(unittest.TestCase):
                                              ("rp", "ASK", "1|--review=rp")):
             with self.subTest(explicit=explicit, backend=backend):
                 result = self.shell(stub + code + '\nprintf "%s|%s" "$REVIEW_CONFIGURED" "$REVIEW_ARG"',
-                                    FLOWCTL="flowctl", SELECTED_SPEC="wor-17-x", PILOT_REVIEW=explicit, BACKEND=backend)
+                                    FLOWCTL="flowctl", SELECTED_SPEC="wor-17-x", PILOT_REVIEW=explicit, BACKEND=backend,
+                                    PILOT_SNAPSHOT=json.dumps({"review_backend": {"spec": "none"},
+                                        "candidates": [{"id": "wor-17-x", "review_backend": {"spec": backend}}]}))
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, expected)
                 self.assertNotIn("--review=ASK", result.stdout)

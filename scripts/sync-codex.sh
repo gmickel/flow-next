@@ -636,7 +636,7 @@ behind.
 
 `IMPLEMENTER` carries an explicit invocation model first; otherwise it may carry the confident mechanical tier's reachable fast-scout model from `references/judge-tier.md`. Omit it when neither applies. Pass the native model through the spawn-model parameter too. The conductor never bridges or composes the worker's brief.
 
-`BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
+`BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by commits changing only `.flow/` paths, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. On the wave route the first task receives no handoff. The rolling route instead runs a green spec-base baseline before its first admission and may hand that baseline to the first batch under the same `.flow/`-only rule. Check every intervening commit with `git log --format= --name-only <verified-sha>..HEAD`; any non-`.flow/` path invalidates the handoff, including changes later reverted.
 
 Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
 Those workers implement, test, commit, and return their workspace, commits, and

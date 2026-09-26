@@ -563,11 +563,87 @@ def relate(flow_dir, spec_id: str, *, blocked_by: str,
             _release_claim(rec_path)
 
 
+def relate_many(flow_dir: Path, spec_id: str, dependencies: list[str], *,
+                event: str, execute: Execute) -> list:
+    """Parallel read probes under pair claims; ordered, serialized mutations."""
+    from concurrent.futures import ThreadPoolExecutor
+    from ..resolve_verb import bound_executor
+    from ..types import CONCURRENCY_CAP
+
+    if not dependencies:
+        return []
+    config = read_config(flow_dir)
+    provider = tracker_type(config)
+    ex = bound_executor(config, execute)
+    claims = []
+    body_claim = None
+    try:
+        for dep in dependencies:
+            claim = _claim_relate_pair(flow_dir, spec_id, dep, provider)
+            if isinstance(claim, TrackerError):
+                return [claim]
+            claims.extend(claim)
+        source = load_spec(flow_dir, spec_id)
+        if isinstance(source, TrackerError):
+            return [source]
+        loc_a = _locator(merged_tracker(source[1]))
+        if isinstance(loc_a, TrackerError):
+            return [loc_a]
+        if provider == "gitlab":
+            body_claim = _claim_body_mutation(
+                flow_dir, provider, loc_a, operation="relate", spec_id=spec_id)
+            if isinstance(body_claim, TrackerError):
+                return [body_claim]
+        guard = P.display_durable_guard(provider, config, ex, locators=(loc_a,))
+        if guard:
+            return [guard]
+        if provider == "jira":
+            resolved = P.jira_blocks_type(config, ex)
+            if isinstance(resolved, TrackerError):
+                # Preserve the normal queued-capability behavior.
+                return [_relate_txn(flow_dir, spec_id, blocked_by=dep,
+                                    event=event, execute=execute, write_receipt=False)
+                        for dep in dependencies]
+
+        def prepare_dep(dep):
+            loaded = load_spec(flow_dir, dep)
+            if isinstance(loaded, TrackerError):
+                return loaded
+            loc_b = _locator(merged_tracker(loaded[1]))
+            if isinstance(loc_b, TrackerError):
+                return loc_b
+            err = P.display_durable_guard(provider, config, ex, locators=(loc_b,))
+            if err:
+                return err
+            remote = P.PROBES[provider](
+                config, ex, from_id=loc_a["durable"], to_id=loc_b["durable"],
+                from_display=loc_a["display"], to_display=loc_b["display"])
+            return {"config": config, "locators": (loc_a, loc_b),
+                    "guard": None, "remote": remote}
+
+        with ThreadPoolExecutor(max_workers=CONCURRENCY_CAP) as pool:
+            prepared = list(pool.map(prepare_dep, dependencies))
+        results = []
+        for dep, inputs in zip(dependencies, prepared, strict=True):
+            out = inputs if isinstance(inputs, TrackerError) else _relate_txn(
+                flow_dir, spec_id, blocked_by=dep, event=event, execute=execute,
+                write_receipt=False, prepared=inputs)
+            results.append(out)
+            if isinstance(out, TrackerError):
+                break
+        return results
+    finally:
+        if body_claim is not None and not isinstance(body_claim, TrackerError):
+            _release_claim(body_claim)
+        for path in claims:
+            _release_claim(path)
+
+
 def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
                 event: Optional[str], execute: Execute,
-                write_receipt: bool) -> Result:
+                write_receipt: bool, prepared: Optional[dict] = None) -> Result:
     """Run probe, mutation, and finalize while both spec claims are live."""
-    config = read_config(flow_dir)
+    config = prepared["config"] if prepared is not None else read_config(flow_dir)
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
@@ -650,8 +726,16 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     # validate display -> durable for BOTH ends BEFORE any probe or mutation
     # (wire write-verb parity), so a moved, repointed, or stale identifier
     # aborts instead of inspecting or relating unrelated issues.
-    verr = P.display_durable_guard(
-        provider, config, ex, locators=(loc_a, loc_b))
+    if prepared is not None:
+        if (loc_a, loc_b) != prepared["locators"]:
+            return _relinked_error(spec_id, blocked_by,
+                                   expected_from=prepared["locators"][0]["durable"],
+                                   expected_to=prepared["locators"][1]["durable"],
+                                   current_from=from_id, current_to=to_id)
+        verr = prepared["guard"]
+    else:
+        verr = P.display_durable_guard(
+            provider, config, ex, locators=(loc_a, loc_b))
     if verr:
         return verr
 
@@ -660,7 +744,7 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     # create/finalize was interrupted - it is OURS to complete, never a
     # collision (two-phase write: intent lands durably BEFORE the provider
     # mutation, so a ledger failure can no longer orphan ownership).
-    remote = probe(config, ex, **kwargs)
+    remote = prepared["remote"] if prepared is not None else probe(config, ex, **kwargs)
     if isinstance(remote, TrackerError):
         return remote
     entry = ledger_entry(tracker_a, key)

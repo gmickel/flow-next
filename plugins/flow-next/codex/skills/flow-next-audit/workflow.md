@@ -24,58 +24,23 @@ If `.flow/memory/` does not exist, print `No .flow/memory/ directory — run \`$
 
 **Goal:** find every categorized memory entry, group by module / category, skip legacy + `_*` directories with a counted warning, then pick the lightest interaction path.
 
-### 0.1 — Walk the categorized tree
+### 0.1 — Mechanical snapshot
 
-Use Glob (not shell `find`) to avoid permission prompts on platforms where shell file ops gate behind permissions:
+Run `$FLOWCTL memory audit-scan --json` once. Use `entries` (id, path,
+frontmatter, schema_errors, recurrence counts, module_exists, module_changed,
+hardened_rule_present), `legacy_files` and `legacy_entry_count` for discovery,
+the report's skipped count, and Phase 0.75.
+A null probe means unknown: investigate rather than auto-Keep. Rule presence
+is only literal presence; the host still verifies the rule is active.
+Read entry bodies and referenced code for judgment. Skip legacy files with
+`/flow-next:memory-migrate` guidance; never classify or delete from counts alone.
 
-```
-glob: .flow/memory/bug/**/*.md
-glob: .flow/memory/knowledge/**/*.md
-```
-
-Filter results:
-
-- **Skip** any path under `.flow/memory/_*` (e.g. `_audit/`, `_review/`).
-- **Skip** entries whose direct parent is `.flow/memory/` itself (those are legacy flat files, handled in §0.2).
-- **Keep** anything matching `.flow/memory/{bug,knowledge}/<category>/<slug>-<YYYY-MM-DD>.md`.
-
-For each kept path, read the frontmatter (parser pattern from `prospect/workflow.md` §0.2 — stdlib Python is fine; PyYAML when available is nicer). Capture: `entry_id` (from path), `track`, `category`, `slug`, `date`, `title`, `module`, `tags`, `status`, `last_audited` (empty when never audited — drives the §0.75 change-detection pre-filter), plus the body for later investigation.
-
-If the entry's `status` is `stale` already, surface it in the report under "Already stale" and skip investigation in autofix mode (mark-stale is idempotent — re-marking adds noise). In interactive mode, offer to refresh-investigate (rare path; user-driven).
-
-If the entry's `status` is `hardened`, capture its `hardened_into` value into the entry record. Hardened entries are **not** dropped from the walk: they get the cheap gate-liveness check in §0.75, never a full re-investigation. Note that `flowctl memory list` excludes hardened entries by default (same treatment as stale) — the audit's own Glob walk in §0.1 sees them regardless, which is why the walk, not `memory list`, is the source of truth here.
-
-**Decisions are auto-walked.** `MEMORY_CATEGORIES["knowledge"]` includes `decisions`, so the glob in §0.1 picks up `.flow/memory/knowledge/decisions/*.md` automatically — no separate phase. Decision entries get a calibrated judging question and a different `Replace` shape; see [phases.md](phases.md) §Decision-entry calibration. Decision-specific frontmatter (`decision_status`, `superseded_by`, `alternatives_considered`) is captured into the entry record for Phase 1 to use; entries with `decision_status: superseded` are surfaced as historical record and skipped (the audit target is the successor, not the superseded entry).
-
-### 0.2 — Detect legacy flat files
-
-```bash
-LEGACY_FILES=()
-for legacy in pitfalls.md conventions.md decisions.md; do
-  if [[ -f "$MEMORY_DIR/$legacy" ]]; then
-    LEGACY_FILES+=("$legacy")
-  fi
-done
-LEGACY_COUNT=$(( ${#LEGACY_FILES[@]} ))
-```
-
-If `LEGACY_COUNT > 0`, count entries inside (each legacy file is `---`-delimited segments — `flowctl memory list --json` surfaces them under a top-level `legacy` array):
-
-```bash
-LEGACY_ENTRY_COUNT=$("$FLOWCTL" memory list --json 2>/dev/null \
-  | jq '[.legacy[]?.entries] | add // 0' 2>/dev/null || echo 0)
-```
-
-**Skip them.** Auditing legacy entries is half-broken: no frontmatter to write `status: stale` to, no track / category for scoping, references too dense to verify mechanically. The report will print:
-
-```
-Skipped legacy: <LEGACY_ENTRY_COUNT> entries across <files>.
-Run `$flow-next-memory-migrate` first to make these auditable (or `flowctl memory migrate --yes` for deterministic mechanical-only conversion).
-```
-
-`<files>` is the comma-joined list (`pitfalls.md, conventions.md`). Continue with categorized entries only.
-
-**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+Surface already-stale entries separately: autofix skips reinvestigation;
+interactive mode may offer a refresh. Hardened entries stay in the snapshot
+and take the cheap gate-liveness check in §0.75. Decision entries with
+`decision_status: superseded` remain historical records: investigate their
+successors, not the superseded entries. Other decision entries use the
+constraint-still-holds calibration in [phases.md](phases.md).
 
 ### 0.3 — Apply scope hint (when present)
 
@@ -140,56 +105,18 @@ When the sentinel prints, STOP and Read [references/glossary-scan.md](references
 
 **Goal:** a mature store re-audited from scratch dispatches a Phase-1 investigation subagent *per entry*, even for entries whose referenced code hasn't moved since the last audit. Those are still current — auto-Keep them without investigation. This turns the dominant runtime cost from **O(all entries) → O(changed)** and concentrates the model's attention on entries with an actual drift signal.
 
-### 0.75.1 — Recurrence pre-scan (runs BEFORE the auto-Keep decision)
+### 0.75.1 — Recurrence evidence
 
-**Order matters, and it is load-bearing for Harden.** Auto-Keep below excludes unchanged-module entries from Phase 1 entirely. The entries most likely to deserve a gate are exactly the old, settled, repeatedly re-taught ones whose module stopped moving long ago — so gathering recurrence evidence inside Phase 1 would guarantee those entries are never seen. Gather it here instead, before anything is auto-Kept. The cost is three cheap file-local commands per entry, no code investigation:
-
-```bash
-# per entry: $entry_file (path from §0.1), $entry_id
-# `grep -c` PRINTS 0 and EXITS 1 on zero matches — a `|| echo 0` fallback would append a
-# SECOND zero and break the later numeric comparison. Swallow the exit status instead.
-UPDATE_HEADINGS=$(grep -c '^## Update ' "$entry_file" 2>/dev/null || true)
-UPDATE_HEADINGS=${UPDATE_HEADINGS:-0}
-# SUBSTANTIVE commits only — a raw `git log | wc -l` counts the audit's OWN bookkeeping
-# (every `mark-fresh` / `mark-stale` / `mark-hardened` rewrites `last_audited` & friends), so
-# in a repo that commits its audits three routine sweeps alone would clear the >= 4 threshold
-# and permanently bypass auto-Keep. One git call per entry; awk drops commits whose diff on
-# this file touches ONLY frontmatter bookkeeping fields.
-# `--follow` is REQUIRED: memory entries get moved (`flowctl memory migrate` relocates legacy
-# flat files into categorized paths; consolidation renames entries), and a path-limited log
-# stops dead at the rename — the pre-rename history vanishes and the entry silently falls
-# below the threshold, suppressing a Harden candidate. `--follow` takes exactly ONE pathspec
-# (`fatal: --follow requires exactly one pathspec` otherwise) — this scan is single-file, so
-# never add a second path here. A PURE rename emits `similarity index` / `rename from` /
-# `rename to` lines and no `+`/`-` content, so awk correctly does not count a `git mv` as a
-# re-teaching; a rename carrying real edits still counts once, as it should.
-ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --follow --format='COMMIT %H' --patch --unified=0 \
-  -- "$entry_file" 2>/dev/null | awk '
-  /^COMMIT /        { substantive = 0; next }        # new commit — reset the per-commit flag
-  /^(--- |\+\+\+ )/ { next }                         # skip file headers, not content
-  /^[+-]/ {
-    field = substr($0, 2)
-    if (field ~ /^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):/) next
-    if (!substantive) { substantive = 1; count++ }
-  }
-  END { print count + 0 }')                          # prints 0 for an untracked/new file
-ENTRY_COMMITS=${ENTRY_COMMITS:-0}
-# plus, from the frontmatter already parsed in §0.1: related_to length, last_updated
-```
+Use the snapshot's `recurrence.updates` as `UPDATE_HEADINGS` and
+`recurrence.commits` as `ENTRY_COMMITS`, plus `recurrence.related_to` and
+frontmatter for cluster membership. Do not recount these with shell snippets.
+Unknown commit counts require investigation, never auto-Keep.
 
 An entry is **recurrence-qualified** when `UPDATE_HEADINGS >= 2` OR `ENTRY_COMMITS >= 4`.
 
 `ENTRY_COMMITS` counts only commits that changed the lesson itself — the entry-creation commit and every later body/reference edit, **across renames** (`--follow`). Audit-stamp commits are not evidence the lesson was re-taught, and counting them would make the store's recurrence signal grow with audit diligence rather than with recurring pain, collapsing the O(changed) pre-filter over time. A `git mv` is not a re-teaching either — it neither counts as a substantive commit nor truncates the history behind it.
 
 A `related_to` **cluster** qualifies only as a corroborated whole, never on size alone: a cluster of `>= 3` entries qualifies when **any member** has at least one `## Update` heading, or **any member** meets the commit signal. Cluster aggregates must therefore be computed here too, before anything is auto-Kept — a cluster whose members all have unchanged modules would otherwise be auto-Kept entry-by-entry and never seen:
-
-```bash
-# per related_to cluster: sum/max the per-entry values gathered above
-CLUSTER_SIZE=<number of entries in the related_to cluster>
-CLUSTER_MAX_UPDATES=<max UPDATE_HEADINGS across members>
-CLUSTER_MAX_COMMITS=<max ENTRY_COMMITS across members>
-# qualified when: CLUSTER_SIZE >= 3 AND (CLUSTER_MAX_UPDATES >= 1 OR CLUSTER_MAX_COMMITS >= 4)
-```
 
 A bare `related_to >= 3` with no `## Update` anywhere and no member meeting the commit signal **proposes nothing** — see [phases.md](phases.md) §Harden for the thresholds and the calibration evidence behind them.
 
@@ -202,7 +129,7 @@ Recurrence is inferred from these **write-side artifacts plus LLM judgment**. Th
 
 ### 0.75.2 — Hardened entries: gate-liveness check only
 
-An entry with `status: hardened` skips both auto-Keep and full investigation. Instead, grep the `<path>` from its `hardened_into` for the `<rule-id>` **verbatim, as a literal substring** (that is the contract §4.7 composes against), and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
+An entry with `status: hardened` skips both auto-Keep and full investigation. Use the snapshot's `hardened_rule_present` literal-substring result, and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
 
 - **Gate present and active** → report as still-hardened. No investigation, no write.
 - **Gate gone or inactive** → propose un-graduation via `flowctl memory mark-fresh "$entry_id"` (returns the entry to `active` and drops `hardened_into`), citing which surface was checked and what was missing. Interactive asks in Phase 3; autofix reports it under Recommended without applying.
@@ -214,19 +141,10 @@ Without this check a reverted lint rule would strand the lesson permanently: exc
 
 For each remaining discovered entry (§0.1) — not recurrence-qualified, not hardened — decide whether it needs Phase-1 investigation:
 
-```bash
-# per entry: $entry_id, $module (frontmatter), $last_audited (frontmatter, may be empty),
-# $entry_status (the entry's `status` field — NOT named `status`: that is a read-only reserved
-# variable in zsh, which the skills' bash blocks run under; a bare `status=` assignment errors).
-NEEDS_INVESTIGATION=1
-if [[ -n "$module" && -n "$last_audited" && "$entry_status" != "stale" && -e "$module" ]]; then
-  # $module must be a real tracked path for this to be sound: a logical module NAME, or a
-  # DELETED module (path gone → a Delete candidate), both fail `-e` and fall through to investigation.
-  # Start of the UTC audit day: a bare date means that day at the current clock time and misses same-day commits.
-  CHANGED="$(git log --oneline --since="${last_audited}T00:00:00Z" -- "$module" 2>/dev/null | head -1)"
-  [[ -z "$CHANGED" ]] && NEEDS_INVESTIGATION=0   # module path untouched since the last audit → still current
-fi
-```
+Use `module_exists` and `module_changed` from the audit snapshot. Set
+`NEEDS_INVESTIGATION=0` only when both probes are conclusive (existing module,
+changed=false), `last_audited` exists, and status is not stale. Unknown or failed
+probes keep investigation enabled.
 
 - `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**. A stamp that exits non-zero (flowctl could not parse or validate the frontmatter) is not an auto-Keep: the entry stays in the Phase-1 set with flowctl's error as evidence, and its frontmatter repair is an Update.
 - Otherwise (never audited → no `last_audited`; no `module` or a logical name → can't change-detect; module path gone → possible Delete; module changed; or already `stale`) → keep it in the Phase-1 investigation set.
@@ -445,30 +363,32 @@ When all four conditions hold, classify as Delete and execute without asking (in
 
 ## Phase 4: Execute
 
+Persist approved memory actions with `$FLOWCTL memory apply --plan <file> --json`.
+Author `{"entries":[{"id":"bug/runtime-errors/example-2026-09-26",
+"stamp":true,"set":{"status":"active"}}]}`. Each entry supports `set`
+(frontmatter fields), `body` (replacement Markdown), `stamp` (UTC audit date),
+`move` (new categorized id), or `remove:true`; use `replacement` when removing
+an entry in favor of an existing canonical id. Moves and replacements re-point
+memory references. Unknown ids report errors while other entries apply; inspect
+`applied`, `errors`, and `modified_paths` before reporting success. Keep uses
+`stamp:true`; Update supplies only changed fields/body; Consolidate first updates
+the canonical entry, then removes subsumed entries with `replacement`. Decision
+supersession uses `set`, never removal. These persistence steps replace manual
+stamps, moves, removals, and reference edits in the outcome recipes below.
+Gate authoring, gate verification, successor prose, and glossary edits stay with
+the host; do not infer authority to Harden from the apply command.
+
 **Goal:** apply the decisions. Different flows per outcome.
 
 ### 4.1 — Keep flow
 
-No content edit — but **stamp `flowctl memory mark-fresh "$entry_id"`** and record `reviewed-without-edit` in the report. The stamp re-sets `last_audited` to today (idempotent — mark-fresh on a non-stale entry just stamps the date), so the next audit's §0.75 change-detection pre-filter can skip this entry for free while its module stays untouched. Without the stamp, every Keep re-investigates from scratch on every future run (the O(all)-not-O(changed) cost §0.75 exists to remove). A stamp that exits non-zero is reported on that entry with flowctl's error, never dropped.
+No content edit — add `stamp:true` to this entry in the apply plan and record `reviewed-without-edit` in the report. The stamp re-sets `last_audited` to today (idempotent — mark-fresh on a non-stale entry just stamps the date), so the next audit's §0.75 change-detection pre-filter can skip this entry for free while its module stays untouched. Without the stamp, every Keep re-investigates from scratch on every future run (the O(all)-not-O(changed) cost §0.75 exists to remove). A stamp that exits non-zero is reported on that entry with flowctl's error, never dropped.
 
 ### 4.2 — Update flow
 
-Agent edits the entry in place using the Write tool. **Frontmatter must round-trip** — preserve unknown fields (someone else's metadata on this entry must survive). One Update is not in place: a retrieval-fix placement move (§Update, retrieval-fix variant) is a `git mv` into the category directory the lesson belongs to, followed by the same in-place edit on the moved file — setting `category` without moving the file leaves path and metadata disagreeing, and category-scoped search still misses the entry.
-
-Pattern:
-
-1. Read the file.
-2. Parse frontmatter (split on the first two `---` lines).
-3. Mutate only the specific fields that need updating (e.g. `module: <new path>`).
-4. Re-emit frontmatter in the original key order if possible (PyYAML round-trip preserves it; stdlib parser preserves seen-fields order).
-5. Write the file back atomically.
-
-For frontmatter mutations the skill cannot guarantee round-trip on (entries with quirky YAML), prefer using the appropriate flowctl helper:
-
-- `flowctl memory mark-stale <id>` — for stale-flagging (handles round-trip via existing `write_memory_entry`).
-- `flowctl memory mark-fresh <id>` — for un-stale-flagging.
-
-For body-only edits (code snippets, prose), Write is fine — frontmatter doesn't change.
+Author the changed fields under `set` and, when needed, the full revised `body`.
+Use `move` for a retrieval-fix category change. `memory apply` preserves unknown
+frontmatter and untouched body bytes; do not hand-assemble YAML or shell moves.
 
 ### 4.3 — Consolidate flow
 
@@ -480,7 +400,7 @@ For each cluster from Phase 1.75:
 2. **Extract unique content** from subsumed entries — anything the canonical doesn't already cover. Edge cases, alternative approaches, extra prevention rules.
 3. **Merge into canonical** in a natural location. Don't append blindly — integrate where it logically belongs. Combine `tags` arrays (dedupe). Preserve canonical's `module`.
 4. **Re-point every `related_to` that names a subsumed entry** — other entries point at canonical instead; canonical drops the id rather than naming itself. No `related_to` may name an entry this run deletes.
-5. **`git rm` the subsumed entries.** Not archive — delete. Git history preserves them.
+5. Apply `remove:true` with `replacement:<canonical-id>` for each subsumed entry. Git history preserves them.
 
 If a cluster has 3+ overlapping entries, process pairwise: consolidate the two most overlapping first, then evaluate whether the merged result should consolidate with the next.
 
@@ -500,13 +420,10 @@ Runs only when the Phase 0.5 gate fired. The steps live in [references/glossary-
 
 ### 4.5 — Delete flow
 
-```bash
-git rm "$REPO_ROOT/.flow/memory/<entry-path>"
-```
+Use an apply-plan entry with `remove:true`. Recovery uses
+`git log --diff-filter=D -- .flow/memory/`.
 
-Do not archive. Do not move. Git history preserves every deleted file. Recovery: `git log --diff-filter=D -- .flow/memory/`.
-
-**Delete executes only when all four auto-Delete criteria hold** (Phase 2 §Auto-Delete). A `git rm` on an entry that met three of the four has broken this — that entry downgrades to Replace or mark-stale.
+**Delete executes only when all four auto-Delete criteria hold** (Phase 2 §Auto-Delete). A removal of an entry that met three of the four has broken this — that entry downgrades to Replace or mark-stale.
 
 ### 4.6 — Mark-stale flow (autofix ambiguous + Replace-insufficient)
 
@@ -806,7 +723,7 @@ The skill itself is markdown — there's no unit-test surface. The validation is
 - Phase 1 produces evidence per entry. For 3+ entries, parallel investigation subagents run.
 - Phase 2 classifies; Replace candidates with insufficient evidence reclassify as mark-stale. Decision entries use the calibrated judging question and the supersede shape for Replace. Precedence: correctness > Consolidate > Harden.
 - Phase 3 (interactive) groups Keeps / Updates for batched confirmation; presents Consolidate / Replace / Delete, Harden candidates (gate type + draft artifact + evidence + accept / different-gate-type / decline), and glossary alias-creep individually via plain-text numbered prompt.
-- Phase 4 executes via Write / `flowctl memory mark-stale` / `git rm`. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Harden writes the artifact, verifies the gate fires, then `flowctl memory mark-hardened <id> --gate-ref "..."` — verification failure leaves the entry `active`; never `git rm`. Glossary stale = Edit comment after term heading.
+- Phase 4 persists memory actions via `flowctl memory apply --plan`; specialized stale/harden helpers retain their status invariants. Decision Replace = supersede (write new + edit old's `decision_status` + `superseded_by`; never `git rm`). Harden writes the artifact, verifies the gate fires, then `flowctl memory mark-hardened <id> --gate-ref "..."` — verification failure leaves the entry `active`; never `git rm`. Glossary stale = Edit comment after term heading.
 - Phase 5 prints the report (memory section incl. `Hardened: N` with gate type / artifact path / gate-ref, glossary section + husk advisories); offers commit options based on git context.
 - Phase 6 checks CLAUDE.md / AGENTS.md for `.flow/memory/` mention; offers minimal addition if missing.
 

@@ -224,7 +224,7 @@ class PilotStrikesTestCase(unittest.TestCase):
         # Original content survives byte-for-byte and no temp file is left.
         self.assertEqual(self.ledger.read_text(encoding="utf-8"), before)
         self.assertEqual(sorted(p.name for p in self.ledger.parent.iterdir()),
-                         ["pilot-strikes.json"])
+                         ["pilot-strikes.json", "pilot-strikes.lock"])
 
     # --- worktrees ------------------------------------------------------
 

@@ -20,11 +20,11 @@ TODAY="$(date -u +%Y-%m-%d)"
 
 If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\` first.` and exit cleanly. Capture has nothing to write into.
 
-**ONE root config snapshot for the whole capture run** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
+**ONE preflight bundle for the whole capture run** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
 
 ```bash
 CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json"   # literal path
-"$FLOWCTL" config get --json > "$CAPTURE_CFG" 2>/dev/null || { printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"; echo "[CAPTURE]: config snapshot empty — flowctl unreachable; snapshot-derived gates degrade to defaults" >&2; }
+"$FLOWCTL" preflight --json > "$CAPTURE_CFG" 2>/dev/null || { printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"; echo "[CAPTURE]: config snapshot empty — flowctl unreachable; snapshot-derived gates degrade to defaults" >&2; }
 ```
 
 The Ralph-block (SKILL.md) runs before this preamble. Phase 0 starts after the Ralph-block and the preamble.
@@ -87,7 +87,7 @@ If the first search returns the `Memory not initialized` error, skip the rest of
 ```bash
 ACTIVE=0
 # NO pipelines in the probe — capture raw first, rc-checked; parse separately.
-RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(jq -ce 'if .probes.strategy.status == "ok" then .probes.strategy.value else error("strategy probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   VAL="$(printf '%s' "$RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "${VAL:-0}" -ge 1 ] 2>/dev/null && ACTIVE=1
@@ -327,7 +327,7 @@ Worked example — conversation: *"add timestamps to log lines"* (purely technic
 
 ```bash
 ACTIVE=0
-RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(jq -ce 'if .probes.glossary.status == "ok" then .probes.glossary.value else error("glossary probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   VAL="$(printf '%s' "$RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "${VAL:-0}" -gt 0 ] 2>/dev/null && ACTIVE=1
@@ -453,7 +453,7 @@ SPEC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
 
 # Tracker-first mint gate (distributed id allocation). Probe raw, rc-checked; parse separately.
 ACTIVE=0
-RAW="$("$FLOWCTL" sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(jq -ce 'if .probes.tracker.status == "ok" then .probes.tracker.value else error("tracker probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "$VAL" = "true" ] && ACTIVE=1

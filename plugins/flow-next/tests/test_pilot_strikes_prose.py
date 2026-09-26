@@ -92,7 +92,7 @@ class PilotStrikesProseTests(unittest.TestCase):
         """The exception that keeps a strike alive under a projection-set
         ready must, in the same breath, name the clear a human can run."""
         for path, anchor in (
-            (WORKFLOW, "survives a projection-set ready"),
+            (WORKFLOW, "tracker.readyState"),
             (BACKLOG_MODE, "do NOT clear a `count >= 2` strike on"),
         ):
             with self.subTest(surface=path.name):
@@ -124,8 +124,8 @@ class PilotStrikesProseTests(unittest.TestCase):
         # fragment in the Phase 1 item-3 clear instruction) and the armed
         # exception by its scoping token. Prose around them is free to evolve.
         workflow = _read(WORKFLOW)
-        self.assertIn('mkdir -p "$LEDGER_DIR"', workflow)
-        self.assertIn("with `tracker.readyState` set", workflow)
+        self.assertIn("pilot strikes clear", workflow)
+        self.assertIn("tracker.readyState", workflow)
         backlog = _read(BACKLOG_MODE)
         self.assertIn("human re-blessed", backlog)
 
@@ -136,13 +136,10 @@ class PilotStrikesProseTests(unittest.TestCase):
         self.assertTrue(block, "auto.md: strike 2/2 terminal line gone")
         self.assertIn(CLEAR_VERB, block)
 
-    def test_ledger_ownership_is_the_shared_contract(self) -> None:
-        """flowctl owns read + clear; the skill keeps its record write sites."""
-        block = _paragraph_with(_read(WORKFLOW), "Ledger schema:")
-        self.assertTrue(block, "auto.md: ledger schema paragraph gone")
-        self.assertNotIn("no flowctl plumbing", block)
-        self.assertIn(LIST_VERB, block)
-        self.assertIn(CLEAR_VERB, block)
+    def test_flowctl_owns_strike_recording(self) -> None:
+        text = _read(WORKFLOW)
+        self.assertIn('pilot strikes record', text)
+        self.assertNotIn('"$LEDGER.tmp.$$"', text)
 
     def test_tracker_sync_no_longer_claims_the_board_clears_strikes(self) -> None:
         text = _read(TRACKER_SYNC_MD)

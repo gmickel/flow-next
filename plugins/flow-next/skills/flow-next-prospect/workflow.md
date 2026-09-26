@@ -32,7 +32,9 @@ done
 ## Ralph-block (R8) — runs first, before everything else
 
 ```bash
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" \
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" \
+   || " ${ARGUMENTS:-} " == *" mode:autonomous "* ]]; then
   echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
   exit 2
 fi
@@ -684,97 +686,29 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 
 **Goal:** atomically write a single markdown artifact to `.flow/prospects/<slug>-<date>.md` so it survives Ctrl-C, concurrent runs, and resume on the next session. **Artifact lands on disk before Phase 6 fires.** Never gate the write on the handoff prompt.
 
-### 5.1 — Inputs assembled
+### 5.1 — Render the host-authored payload
 
-- `FOCUS_TEXT` — Phase 1's focus expansion (the literal text that goes under `## Focus`). When the user gave no hint, set this to `"_(open-ended)_"`.
-- `GROUNDING_SNAPSHOT` — Phase 1's structured 30-50 line snapshot, verbatim.
-- `RANKED` — Phase 4 §4.3 output. Three buckets: `high_leverage`, `worth_considering`, `if_you_have_the_time`. Each survivor entry carries `position, title, summary, leverage, size`, plus optional `affected_areas, risk_notes, persona` (Phase 2 candidate fields surface unchanged when present; the writer renders only what's there — never invents defaults).
-- `DROPS` — Phase 3 §3.3 rejected list. Each carries `title, taxonomy, reason`.
-- `VOLUME` — count of candidates fed into Phase 3 (pre-critique).
-- `REJECTION_RATE` — `len(DROPS) / VOLUME` rounded to two decimals.
-- Optional flags from upstream phases — written **only when set**:
-  - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
-  - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
-
-### 5.2 — Slug + artifact id allocation (R13)
-
-Use the bundled helpers — both are stdlib-only and concurrency-safe. They live in `flowctl.py` beside the resolved `$FLOWCTL`, so the block works without a plugin-root variable:
+Show the payload skeleton once:
 
 ```bash
-# Re-declare the whole Preamble block verbatim here first (vars die across tool calls).
-FLOWCTL_PY="$(dirname "$FLOWCTL")/flowctl.py"
-[ -f "$FLOWCTL_PY" ] || { echo "prospect: flowctl.py not found at $FLOWCTL_PY (expected <plugin-root>/scripts/flowctl.py)" >&2; exit 1; }
-
-$PY - "$FLOWCTL_PY" "$PROSPECTS_DIR" "<focus hint, empty when none>" "$TODAY" <<'PY'
-import importlib.util, sys
-from pathlib import Path
-
-flowctl_py, prospects_dir, focus_hint, today = sys.argv[1:5]
-spec = importlib.util.spec_from_file_location("fc", flowctl_py)  # load without invoking the CLI
-fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
-base_slug = fc._prospect_slug(focus_hint or None)
-print(fc._prospect_next_id(Path(prospects_dir), base_slug, today))
-PY
+$FLOWCTL prospect write --skeleton
 ```
 
-- First slot is `<base_slug>-<TODAY>` (e.g. `dx-improvements-2026-04-25`).
-- Same-day collisions append `-2`, `-3`, ... — the base slug stays stable so `flowctl prospect promote` lookup remains keyable on the artifact id.
-- Path-style hints (e.g. `plugins/flow-next/skills/`) collapse `/`, `\`, `.` to separators inside `_prospect_slug` so they slugify cleanly.
-- Empty / non-ASCII-only / pure-punctuation hints fall back to `open-ended`.
-
-### 5.3 — Build frontmatter + body, then atomic write
-
-Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Write the §5.1 inputs with the **Write tool** as one JSON file at a literal unique path (e.g. `/tmp/flow-prospect-inputs-<suffix>.json`):
-
-```json
-{
-  "focus_text": "<FOCUS_TEXT>",
-  "grounding_snapshot": "<GROUNDING_SNAPSHOT>",
-  "ranked": {"high_leverage": [], "worth_considering": [], "if_you_have_the_time": []},
-  "drops": [{"title": "...", "taxonomy": "...", "reason": "..."}],
-  "frontmatter": {
-    "title": "<focus or Open-ended prospect>",
-    "date": "<TODAY>",
-    "focus_hint": "<focus hint or empty>",
-    "volume": 0,
-    "survivor_count": 0,
-    "rejected_count": 0,
-    "rejection_rate": 0.0,
-    "artifact_id": "<§5.2 output>",
-    "promoted_ideas": [],
-    "status": "active"
-  }
-}
-```
-
-`ranked` holds the Phase 4 §4.3 buckets. Add `"floor_violation": true` / `"generation_under_volume": true` to `frontmatter` ONLY when upstream phases set them. `promoted_ideas` stays empty; `flowctl prospect promote` appends to it. Then render and write in one call with `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
+Fill it with Phase 1's focus and grounding snapshot, Phase 4's ranked buckets
+(each survivor has position, title, summary, leverage and size), and Phase 3's
+drops (title, taxonomy, reason). Write that JSON with the Write tool to a unique
+file under `${TMPDIR:-/tmp}`. Include `floor_violation` or
+`generation_under_volume` only when upstream set them.
 
 ```bash
-# Re-declare the whole Preamble block and the FLOWCTL_PY check from §5.2 first.
-$PY - "$FLOWCTL_PY" "$PROSPECTS_DIR" "/tmp/flow-prospect-inputs-<suffix>.json" <<'PY'
-import importlib.util, json, sys
-from pathlib import Path
-
-flowctl_py, prospects_dir, inputs = sys.argv[1:4]
-spec = importlib.util.spec_from_file_location("fc", flowctl_py)
-fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
-d = json.loads(Path(inputs).read_text(encoding="utf-8"))
-fm = d["frontmatter"]
-body = fc.render_prospect_body(d["focus_text"], d["grounding_snapshot"], d["ranked"], d["drops"])
-fc.write_prospect_artifact(Path(prospects_dir) / f"{fm['artifact_id']}.md", fm, body)
-PY
+$FLOWCTL prospect write --from-json "$PROSPECT_INPUT" --json
 ```
 
-Atomic semantics (R4 anchor):
-
-- Writer renders the whole document in memory before touching disk.
-- A per-pid temp file (`.tmp.<pid>.<artifact-id>.md`) is created alongside the target, then `os.link()`'d onto the final path. `link()` is atomic on POSIX and **fails on existing target** (`FileExistsError`) — guarantees a Ctrl-C mid-write never leaves a half-written artifact and that two concurrent runners can't silently clobber one another.
-- On filesystems without hard-link support, the writer falls back to `os.replace()` after re-checking existence.
-- The temp file is unlinked in `finally` — no `.tmp.*` files leak on success or failure.
-
-### 5.4 — Validation safety net
-
-`write_prospect_artifact` validates the frontmatter before writing. If a required field is missing, status is invalid, or `promoted_ideas` is not a list, it raises `ValueError` and the artifact is **not** written. Surface the error to the user as a normal failure; do not retry blindly.
+The verb allocates the same-day collision-safe artifact id, derives volume,
+survivor/rejected counts and rejection rate, validates every item, and renders
+and writes atomically. On invalid input it reports all errors without writing;
+correct those fields and retry. Keep the returned path for Phase 6. No Python
+imports or hand-authored frontmatter are needed.
 
 ### 5.5 — Body section ordering (frozen)
 

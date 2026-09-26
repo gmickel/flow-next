@@ -108,7 +108,7 @@ fi
 ### Host filing skeleton (dedup fold + commit tracking)
 
 `workflow.md` §5.4 executes this on the host the moment a FAIL is confirmed. It wraps the
-`memory add` above with the high-overlap fold and the `QA_FILED_MEMORY` tracking
+`memory add` above with the overlap probe and explicit update and the `QA_FILED_MEMORY` tracking
 that §6.3b's narrow-pathspec commit depends on:
 
 ```bash
@@ -118,30 +118,19 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
   # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
   # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the template above, then:
   # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
-  _out="$($FLOWCTL memory add \
+  # Probe first; the host reads matches and decides whether this is the same bug.
+  _out="$($FLOWCTL memory add --check-overlap \
     --track bug --category "<ui|runtime-errors|integration|data|...>" \
     --title "<persona> can't <goal> — <one-line symptom>" \
-    --module "<surface / route / component>" \
-    --tags "qa,<spec-id>,<surface>" \
+    --module "<surface / route / component>" --tags "qa,<spec-id>,<surface>" --json)"
+  # Then file exactly once with the same fields and body. For a confirmed
+  # rediscovery add --update <matched-id>; otherwise omit --update.
+  _out="$($FLOWCTL memory add \
+    --track bug --category "<same category>" --title "<same title>" \
+    --module "<same module>" --tags "qa,<spec-id>,<surface>" \
     --symptoms "<observed actual>" \
     --root-cause "(observed via live QA — unconfirmed)" \
     --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
-  # High-overlap match -> fold into the EXISTING entry and drop the
-  # just-created duplicate, so autonomous QA never commits a near-copy.
-  _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
-  _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
-  if [ "$_lvl" = "high" ]; then
-    _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
-    if [ -n "$_mid" ]; then
-      _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
-        --title "<same title>" --update "$_mid" \
-        --module "<same module>" --tags "qa,<spec-id>,<surface>" \
-        --symptoms "<same symptoms>" \
-        --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
-      # Remove the duplicate WE just created (safe: our own fresh file).
-      [ -n "$_dup" ] && rm -f "$_dup"
-    fi
-  fi
   _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
   # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
   # runs in a subshell, so the assignment would be lost and the memory left uncommitted.

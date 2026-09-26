@@ -1348,19 +1348,23 @@ def _project_chart_locked(
             new_body = _upsert_owned_block(
                 cur_body, DECISION_BLOCK_OPEN, DECISION_BLOCK_CLOSE, dbody,
             )
-            updated = _wire_update(
-                config, execute, child_loc, title=dtitle, body=new_body,
-            )
-            if isinstance(updated, TrackerError):
-                return fail_result(
-                    updated, completed=completed, statuses=statuses,
-                    flow_dir=flow_dir,
-                    spec_id=subject_marker_token("chart", chart_id),
-                    event=event, tracker_id=chart_tracker.get("id"),
-                    transport=provider,
+            unchanged = current.get("title") == dtitle and cur_body == new_body
+            if not unchanged:
+                updated = _wire_update(
+                    config, execute, child_loc, title=dtitle, body=new_body,
                 )
-            completed.append(f"update-child:{did}")
-            statuses.append("updated")
+                if isinstance(updated, TrackerError):
+                    return fail_result(
+                        updated, completed=completed, statuses=statuses,
+                        flow_dir=flow_dir,
+                        spec_id=subject_marker_token("chart", chart_id),
+                        event=event, tracker_id=chart_tracker.get("id"),
+                        transport=provider,
+                    )
+                completed.append(f"update-child:{did}")
+                statuses.append("updated")
+            else:
+                statuses.append("noop")
             # Re-assert hierarchy for linked children whose hierarchy step is
             # not marked complete (create-ok/hierarchy-fail retry path). Only
             # attempted where the provider supports it; degraded providers
@@ -1390,7 +1394,7 @@ def _project_chart_locked(
                     completed.append(f"hierarchy:{did}")
                     statuses.append("pushed")
             child_results.append({
-                "id": did, "kind": "updated",
+                "id": did, "kind": "noop" if unchanged else "updated",
                 "id_tracker": dtracker.get("id"),
                 "identifier": dtracker.get("identifier"),
             })

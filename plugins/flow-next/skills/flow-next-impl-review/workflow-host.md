@@ -133,19 +133,11 @@ printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
 # Standalone (no TASK_ID): no spec state, so no artifact, reservation or round.
 [[ -n "$TASK_ID" ]] || exit 0
 
-DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.diff"
-git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
-  || { echo "git diff failed; not reserving a round" >&2; exit 1; }
-[[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
-  || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
-ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.blob"
-"$FLOWCTL" review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" \
-  --output "$ARTIFACT_FILE" --json
 # --exclusive (PR #392 r22): the no-pending pre-check above is fast-fail UX
 # only — this flag makes the refusal ATOMIC inside the reservation lock, so
 # two concurrent coordinators cannot both reserve between the check and here.
 ROUND_JSON="$("$FLOWCTL" review-rounds increment "${TASK_ID%.*}" --kind impl \
-  --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --exclusive --json)"
+  --task "$TASK_ID" --review-type impl --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --exclusive --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
   printf '%s\n' "$ROUND_JSON"
@@ -240,7 +232,22 @@ host-dependent. The dispatch prompt additionally states working-tree conduct: th
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
-Give each reviewer subagent:
+Render each dispatch file with the same builder used by the codex backend:
+
+```bash
+for AXIS in correctness contracts integration; do
+  "$FLOWCTL" review-prompt impl "${TASK_ID:-branch}" --axis "$AXIS" \
+    --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --receipt "$RECEIPT_PATH" \
+    --out "${TMPDIR:-/tmp}/flow-review-${TASK_ID:-branch}-${AXIS}.md" --json || exit $?
+done
+```
+
+Give each reviewer its generated prompt file verbatim. For a single re-review,
+render once without `--axis`; the receipt supplies the prior-finding preamble.
+The generated prompt owns the rubric, scope, paths and reply grammar below;
+do not hand-assemble a second prompt.
+
+The generated prompt contains:
 - The impl-review rubric ([references/impl-review-prompt.md](references/impl-review-prompt.md))
 - The rubric's verification-budget rail travels with it (focused suites only; the full suite belongs to the run's final gate) — carried by pointer, never restated or widened in the dispatch prompt
 - Diff scope (`--base` / branch vs main as resolved in Phase 0)
@@ -386,7 +393,7 @@ fi
 RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
   --task "$TASK_ID" --review-type impl --backend host \
   --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
-  --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
+  --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --attach --json)"
 RECORD_EXIT=$?
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   printf '%s\n' "$RECORD_JSON"
@@ -396,13 +403,6 @@ if [[ "$RECORD_EXIT" -ne 0 ]]; then
 fi
 # Only the fields the next step reads; the full ledger stays in flowctl.
 printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-# A refunded (no-verdict) record journals nothing attachable — record already
-# completed its own bookkeeping; attach only a delivered verdict.
-if [[ -n "$VERDICT" ]]; then
-  "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
-    --receipt "$RECEIPT_PATH" \
-    --json
-fi
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   # Terminal escalation: no optional phase runs, so release the lease held

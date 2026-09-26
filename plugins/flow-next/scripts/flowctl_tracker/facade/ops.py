@@ -20,7 +20,7 @@ from ..lifecycle.helpers import (Execute, Result, atomic_write_json,
 from ..lifecycle.linkstate import complete_identifier_only, require_durable
 from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
                                _release_claim)
-from ..relate import relate
+from ..relate import relate_many
 from ..resolve_verb import bound_executor
 from ..syncbody import sync_body
 from ..status.policy import validate_conflict_tiebreak
@@ -57,34 +57,32 @@ def _project_relations(flow_dir: Path, spec_id: str, *, event: str,
         return loaded
     _path, spec, _tracker = loaded
     results = []
+    dependencies = []
+    positions = []
     for dep in spec.get("depends_on_epics") or []:
         if not isinstance(dep, str) or not dep or dep == spec_id:
             continue
         linked = load_tracker(flow_dir, dep)
         if isinstance(linked, TrackerError):
-            results.append({
-                "kind": "noop", "reason": "dependency_unresolved",
-                "dep_spec": dep,
-            })
+            results.append({"kind": "noop", "reason": "dependency_unresolved",
+                            "dep_spec": dep})
             statuses.append("noop")
-            continue
-        dep_tracker = linked[2]
-        if link_state_of(dep_tracker) != "linked":
-            results.append({
-                "kind": "noop", "reason": "dependency_unlinked",
-                "dep_spec": dep,
-            })
+        elif link_state_of(linked[2]) != "linked":
+            results.append({"kind": "noop", "reason": "dependency_unlinked",
+                            "dep_spec": dep})
             statuses.append("noop")
-            continue
-        out = relate(
-            flow_dir, spec_id, blocked_by=dep, event=event,
-            execute=execute, write_receipt=False,
-        )
+        elif dep not in dependencies:
+            dependencies.append(dep)
+            positions.append(len(results))
+            results.append(None)
+    projected = relate_many(flow_dir, spec_id, dependencies,
+                            event=event, execute=execute)
+    for dep, index, out in zip(dependencies, positions, projected, strict=False):
         if isinstance(out, TrackerError):
             return out
         completed.append(f"relation:{dep}")
         statuses.append(_relation_status(out))
-        results.append(out)
+        results[index] = out
     completed.append("relations")
     if not results:
         statuses.append("noop")
@@ -201,10 +199,13 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
 
-    flow_body = read_text_file(flow_file, label="--flow-file")
+    from .preparation import render_body
+    flow_body = (read_text_file(flow_file, label="--flow-file") if flow_file
+                 else local_spec_md(flow_dir, spec_id))
     if isinstance(flow_body, TrackerError):
         return flow_body
-    tracker_body = read_text_file(body_file, label="--body-file")
+    tracker_body = (read_text_file(body_file, label="--body-file") if body_file
+                    else render_body(flow_body))
     if isinstance(tracker_body, TrackerError):
         return tracker_body
     comment_text = None
@@ -273,12 +274,13 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     steps["create"] = created
     degraded = collect_degraded(created) or degraded
 
+    observed_parent: dict = {}
     if not status_only:
         body_out = sync_body(
             flow_dir, spec_id, flow_file_body=flow_body, direction="push",
             tracker_body=tracker_body, event=event, execute=execute,
             sync_title=True, refuse_tracker_divergence=not overwrite_diverged,
-            write_receipt=False,
+            write_receipt=False, _observed_parent=observed_parent,
         )
         if isinstance(body_out, TrackerError):
             if body_out.subtype == "tracker_diverged":
@@ -302,6 +304,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     status_out = run_status(
         flow_dir, spec_id, config=config, event=event, execute=execute,
         completed=completed, statuses=statuses,
+        parent=observed_parent or None,
     )
     if isinstance(status_out, TrackerError):
         loaded_p = load_tracker(flow_dir, spec_id)

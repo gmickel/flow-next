@@ -340,6 +340,8 @@ it does not make shared-checkout Git or filesystem mutations safe.
 
 Done when: every task in the selected wave reads `in_progress` under this actor, and any task whose claim failed has been dropped from the wave rather than dispatched.
 
+Before the run's first tracker gate, snapshot once to a run-unique file under `.flow/tmp/` with `$FLOWCTL sync active --json > <run-sync-active.json>`. Retain the path for every touchpoint below; its `ops` map already resolves per-event operations. If the probe fails, leave no usable snapshot and retain the existing fail-open read/dispatch behavior. Do not re-probe configuration at each task return.
+
 #### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
 
 **Optional. Runs only when the tracker bridge is active AND `work.firstClaim` is opted in. With no tracker configured this is a no-op — the work flow is unchanged.**
@@ -348,7 +350,7 @@ Done when: every task in the selected wave reads `in_progress` under this actor,
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(cat <run-sync-active.json> 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "$VAL" = "true" ] && ACTIVE=1
@@ -439,7 +441,7 @@ behind.
 
 `IMPLEMENTER` carries an explicit invocation model first; otherwise it may carry the confident mechanical tier's reachable fast-scout model from `references/judge-tier.md`. Omit it when neither applies. Pass the native model through the spawn-model parameter too. The conductor never bridges or composes the worker's brief.
 
-`BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
+`BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by commits changing only `.flow/` paths, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. On the wave route the first task receives no handoff. The rolling route instead runs a green spec-base baseline before its first admission and may hand that baseline to the first batch under the same `.flow/`-only rule. Check every intervening commit with `git log --format= --name-only <verified-sha>..HEAD`; any non-`.flow/` path invalidates the handoff, including changes later reverted.
 
 Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
 Those workers implement, test, commit, and return their workspace, commits, and
@@ -511,7 +513,7 @@ Done when: every dispatched task in the wave reads `done`, or has been escalated
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$(cat <run-sync-active.json> 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
   VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "$VAL" = "true" ] && ACTIVE=1
@@ -667,7 +669,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
      ACTIVE=0
      # NO pipelines in the probe — a failed producer masked by a healthy consumer
      # fails CLOSED. Capture raw first, rc-checked; parse separately.
-     RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+     RAW="$(cat <run-sync-active.json> 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
      if [ "$ACTIVE" = "0" ]; then
        VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
        [ "$VAL" = "true" ] && ACTIVE=1

@@ -49,11 +49,10 @@ Why both base forms: 3-way merge needs the ancestor in a form **comparable to ea
 side**. `mergeBaseFlow` is diffed against the live flow body; `mergeBaseTracker` is
 diffed against the pulled issue body.
 
-```bash
-# Read the base (both forms + the echo-fence hashes):
-STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)
-# .tracker.mergeBaseFlow / .mergeBaseTracker / .baseHashFlow / .baseHashTracker
-```
+Use `flowctl tracker sync <spec> --op pull|reconcile --event <event> --prepare`
+for all three inputs and the mechanical pre-reduction. Its private snapshot
+paths and original comments feed the following facade call; do not hand-assemble
+a second snapshot.
 
 ## Flow-owned `<!-- flow:deps -->` region: never merged, never folded
 
@@ -116,10 +115,10 @@ agent gets right — the reason the merge is agentic.
 
 ## Step 3 — Format translation (flow-structured ↔ tracker free-form) (R6)
 
-The two sides are in different formats; the merge spans the translation. The agent
-**translates** — it never byte-copies.
+The two sides are in different formats. Flowctl renders Flow-to-tracker on push;
+the agent folds tracker edits into Flow and judges conflicts.
 
-### flow → tracker (render structure into a readable issue)
+### flow → tracker (flowctl renders structure into a readable issue)
 
 - **Project the ENTIRE spec — every section, in full.** The render is a *format translation*, NOT a summary: never condense, truncate, abbreviate, or omit a section, an R-ID, or a paragraph. A reader of the issue must see the same content as the spec, just as clean free-form markdown. "Projection, not coordination" also means projection-in-full — a summarized issue is a data-loss bug, and the Step 3.5 structural gate ("no section silently dropped") fails it. The ONLY content intentionally not surfaced is the flow-internal scaffolding called out below (scope HTML comments, source-tag breakdown comment); everything else is rendered.
 - Render the structured spec into clean free-form markdown a PM reads comfortably:
@@ -202,7 +201,8 @@ resolves to "queue for the human" in autonomous mode (same policy, surface-depen
 delivery — mirrors flow-next-drive's surface-aware ladder).
 
 ```bash
-# Ralph (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set): queue the scoped conflict, write
+# Any autonomy marker (FLOW_RALPH, REVIEW_RECEIPT_PATH, FLOW_AUTONOMOUS,
+# AUTONOMOUS, or mode:autonomous): queue the scoped conflict, write
 # NO body, skip the facade call, continue the batch.
 $FLOWCTL sync defer "$SPEC_ID" \
   --summary "Goal section rewritten on both sides to mean different things (flow: OAuth-only; tracker: OAuth+SAML)" \
