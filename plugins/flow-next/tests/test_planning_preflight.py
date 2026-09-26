@@ -109,8 +109,10 @@ class PlanningPreflight(unittest.TestCase):
                 "strategy": {"status": status, "value": {"sections_filled": 0}},
             }}
             path = self._write("preflight.json", json.dumps(payload))
-            env = {**os.environ, "FLOWCTL": str(fake), "PREFLIGHT_PAYLOAD": path,
-                   "TMPDIR": str(self.tmpdir), "DOC_AWARE_FORCE": forced,
+            # POSIX paths: bash on Windows mangles backslash paths in the fence.
+            env = {**os.environ, "FLOWCTL": fake.as_posix(),
+                   "PREFLIGHT_PAYLOAD": Path(path).as_posix(),
+                   "TMPDIR": self.tmpdir.as_posix(), "DOC_AWARE_FORCE": forced,
                    "STRATEGY_AWARE_FORCE": forced}
             run = subprocess.run([bash, "-c", fence + '\nprintf "%s:%s" "$DOC_AWARE" "$STRATEGY_AWARE"'],
                                  env=env, capture_output=True, text=True)
