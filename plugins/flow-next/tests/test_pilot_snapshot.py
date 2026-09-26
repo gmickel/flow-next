@@ -129,6 +129,12 @@ class PilotSnapshotTests(unittest.TestCase):
             result = f.pilot_snapshot(None)
         self.assertTrue(result['pr_listing_failed'])
 
+    def test_empty_inventory_is_not_a_listing_failure(self):
+        with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f, 'iter_spec_json_files', return_value=[]), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
+            result = f.pilot_snapshot(None)
+        self.assertEqual(result['candidates'], [])
+        self.assertFalse(result['pr_listing_failed'])
+
     def test_probe_failure_does_not_guess_lifecycle(self):
         result = self.snapshot(failed=True)
         self.assertTrue(result['selected']['pr']['probe_failed'])

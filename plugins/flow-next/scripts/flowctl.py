@@ -44257,7 +44257,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                        "ready": sum(s.get("ready") is True for s in specs)},
             "candidates": result, "selected": selected, "review_backend": selected["review_backend"] if selected else None,
             "route": selected["route"] if selected else None,
-            "pr_listing_failed": rows is None,
+            "pr_listing_failed": bool(specs) and rows is None,
             "current_branch": current, "current_branch_prs": current_prs,
             "current_branch_probe_failed": rows is None or not current, "before_dispatch": selected["tasks"] if selected else []}
 
