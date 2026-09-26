@@ -119,6 +119,12 @@ class JudgeConsumerTests(unittest.TestCase):
         output = execute('skills/flow-next-flow/workflow.md', 'fence:judge-route-consumer',
                          result={'available': False, 'reason': 'transport', 'pr_probe_failed': True})
         self.assertTrue(output['host_route']['pr_probe_failed'])
+        # No key and an unmet code decision: name the reason, never an empty list.
+        output = execute('skills/flow-next-flow/workflow.md', 'fence:judge-route-consumer',
+                         result={'available': False, 'reason': 'no_key',
+                                 'decision': {'value': 'host', 'met': False, 'candidates': []}})
+        self.assertEqual(output['route_value'], 'host')
+        self.assertEqual(output['host_route']['line'], 'Route: host (jev-unavailable(no_key))')
 
 
     def tier(self, choice="mechanical", confidence=0.88, **overrides):

@@ -90,6 +90,35 @@ class PilotSnapshotTests(unittest.TestCase):
         self.assertFalse(unselected['pr']['history_complete'])
         self.assertNotIn('decision', unselected['route'])
 
+    def test_unscoped_candidates_skip_done_specs_without_an_open_pr(self):
+        done_ids = []
+        for i in range(30):
+            created = _run(self.repo, 'spec', 'create', '--title', f'Done fixture {i}', '--json')
+            sid = json.loads(created.stdout)['id']
+            path = next((self.repo / '.flow').rglob(f'{sid}.json'))
+            data = json.loads(path.read_text())
+            data.update(status='done', review_attempts=[{'bulk': 'x' * 2000}])
+            path.write_text(json.dumps(data))
+            done_ids.append((sid, data['branch_name']))
+        landing_id, landing_branch = done_ids[0]
+        rows = [{'number': 7, 'url': 'https://example.test/pr/7', 'state': 'OPEN',
+                 'headRefName': landing_branch, 'headRefOid': 'abc', 'mergedAt': None}]
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if command[0] == 'gh':
+                listed = [r for r in rows if '--head' in command or r['state'] == 'OPEN']
+                return SimpleNamespace(returncode=0, stdout=json.dumps(listed))
+            return real_run(command, *args, **kwargs)
+        with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
+            result = f.pilot_snapshot(None)
+        ids = {row['id'] for row in result['candidates']}
+        self.assertEqual(ids, {self.sid, landing_id})
+        self.assertEqual(result['counts']['total'], 31)
+        for row in result['candidates']:
+            self.assertNotIn('review_attempts', row['spec'])
+            self.assertNotIn('tracker', row['spec'])
+        self.assertLess(len(json.dumps(result)), 60_000)
+
     def test_probe_failure_does_not_guess_lifecycle(self):
         result = self.snapshot(failed=True)
         self.assertTrue(result['selected']['pr']['probe_failed'])

@@ -1277,6 +1277,23 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(result["needs_work_survivors"], 0)
         self.assertEqual(result["pre_existing_count"], 1)
 
+    def test_merge_plan_pre_existing_from_needs_work_draw_is_not_a_survivor(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            text = _merged_review(f"Finding {axis}", verdict="NEEDS_WORK" if axis == "correctness" else "SHIP")
+            if axis == "correctness":
+                text = text.replace("**Classification**: introduced", "**Classification**: pre_existing")
+            return text, f"sess-{axis}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["correctness:1"]}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        result = json.loads(out)
+        self.assertEqual(result["needs_work_survivors"], 0, out + err)
+        self.assertEqual(result["verdict"], "NEEDS_HUMAN")
+        self.assertIn("Finding correctness", result["review"])
+
     def test_merge_plan_reports_all_missing_refs_without_consuming(self) -> None:
         def fake(prompt, **kwargs):
             return _empty_merged_review(), "sess-test", 0, ""

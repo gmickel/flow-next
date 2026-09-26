@@ -59,7 +59,10 @@ if not result["available"] and "decision" not in result:
 else:
     decision = result["decision"]
     route_value = decision["value"] if decision["met"] else "host"
-    if route_value == "host":
+    if route_value == "host" and not result["available"]:
+        # No external answers: name why, never an empty below-floor list.
+        host_route = {"route": "host", "line": "Route: host (jev-unavailable(%s))" % result["reason"]}
+    elif route_value == "host":
         candidates = decision.get("candidates", [])
         detail = ", ".join("%s %.2f" % (kind, probability) for kind, probability in candidates)
         host_route = {"route": "host", "candidates": candidates,

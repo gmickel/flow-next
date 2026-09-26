@@ -134,8 +134,9 @@ Read each surviving draw's `<axis>.review.md` and author a merge-plan JSON:
 References are `<axis>:<parsed finding ordinal>`. `keep` orders the output;
 `collapse` maps a duplicate to its kept representative. Omitted findings are
 your evidence-gate drops. Targets must be kept; missing ids fail before recording.
-Flowctl renders the document and counts distinct survivors from NEEDS_WORK draws,
-including a NEEDS_WORK duplicate collapsed into a SHIP representative. The
+Flowctl renders the document and counts distinct `introduced` survivors from
+NEEDS_WORK draws, including a NEEDS_WORK duplicate collapsed into a SHIP
+representative; kept `pre_existing` items stay in the document but never count. The
 legacy `--merged-file` plus `--needs-work-survivors` route remains available for
 repairing unparseable draw output. Keep these judgment rules:
 

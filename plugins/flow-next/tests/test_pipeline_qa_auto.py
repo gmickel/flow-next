@@ -108,6 +108,21 @@ class AutoQaGateReadsEveryValue(unittest.TestCase):
         self.assertEqual(result.stdout, "false")
 
 
+    @_POSIX_BASH
+    def test_missing_snapshot_stops_instead_of_skipping_qa(self):
+        # pipeline.qa=on must never be read as "" because the snapshot was lost
+        # between tool calls; the fence stops NEEDS_HUMAN instead.
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
+        script = _qa_gate_fence(_read(AUTO_MD)) + '\nprintf "QA=%s" "$QA_STAGE_ENABLED"'
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            result = subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("NEEDS_HUMAN", result.stdout)
+        self.assertNotIn("QA=", result.stdout)
+
+
 class SetupLiveQaQuestion(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

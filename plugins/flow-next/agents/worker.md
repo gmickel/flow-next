@@ -492,7 +492,7 @@ uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
 On parallel-wave and host-deferred routes, write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path. On the standard contiguous-history route, `done --range` below derives the commit list and base; pass each actual test command and `GATE_SKIPPED` line with repeatable `--test` instead of hand-assembling evidence.
-Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
+For those two routes, re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
 in the SAME block, so no shell variable has to survive across tool calls.
 `base_commit` is an additive evidence field — always include it. Include any

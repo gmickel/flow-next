@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -215,6 +216,29 @@ class RefusalInversion(unittest.TestCase):
             self.assertIn(expected, result.stdout)
             if nested or dirty:
                 self.assertNotIn('PASSED', result.stdout)
+
+
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_snapshot_fences_fail_closed_in_a_fresh_shell(self) -> None:
+        # Shell variables do not survive between tool calls: a fence run in a
+        # fresh shell reads the snapshot file and stops when it is absent.
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            script = self._hard_guard_fence() + "\nprintf PASSED"
+            missing = subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
+                                     capture_output=True, text=True)
+            self.assertEqual(missing.returncode, 1)
+            self.assertIn("pilot snapshot missing or unreadable", missing.stdout)
+            self.assertNotIn("PASSED", missing.stdout)
+            snap = Path(tmp) / ".flow" / "tmp" / "pilot-snapshot.json"
+            snap.parent.mkdir(parents=True)
+            snap.write_text(json.dumps({"guards": {"nested": False, "dirty": []}}))
+            present = subprocess.run(["bash", "-c", script], cwd=tmp, env=env,
+                                     capture_output=True, text=True)
+            self.assertEqual(present.returncode, 0, present.stderr)
+            self.assertIn("PASSED", present.stdout)
 
 
 class ArgumentParseFence(unittest.TestCase):

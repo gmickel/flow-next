@@ -132,6 +132,11 @@ printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
   "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 # Standalone (no TASK_ID): no spec state, so no artifact, reservation or round.
 [[ -n "$TASK_ID" ]] || exit 0
+if [[ "$REVIEW_BASE_SHA" != "$REVIEW_HEAD_SHA" ]]; then
+  git diff --quiet "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA"; DIFF_RC=$?
+  [[ "$DIFF_RC" -ne 0 ]] || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+  [[ "$DIFF_RC" -eq 1 ]] || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+fi
 
 # --exclusive (PR #392 r22): the no-pending pre-check above is fast-fail UX
 # only — this flag makes the refusal ATOMIC inside the reservation lock, so

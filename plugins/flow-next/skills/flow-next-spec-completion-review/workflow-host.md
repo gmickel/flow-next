@@ -86,6 +86,11 @@ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
   || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
   "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+if [[ "$REVIEW_BASE_SHA" != "$REVIEW_HEAD_SHA" ]]; then
+  git diff --quiet "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA"; DIFF_RC=$?
+  [[ "$DIFF_RC" -ne 0 ]] || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+  [[ "$DIFF_RC" -eq 1 ]] || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+fi
 
 ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
   --review-type completion --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --json)"

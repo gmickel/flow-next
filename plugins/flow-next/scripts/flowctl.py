@@ -3210,10 +3210,7 @@ def cmd_setup_status(args: argparse.Namespace) -> None:
         "tracker_active": tracker_sync_active(),
         "judge_available": bool(os.environ.get("TYPESAFE_API_KEY")),
     }
-    if args.json:
-        json_output(result)
-    else:
-        print(json.dumps(result, indent=2))
+    json_output(result)
 
 
 def cmd_setup_block_check(args: argparse.Namespace) -> None:
@@ -20752,10 +20749,7 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         "value": config.get("memory", {}).get("enabled"),
     }
     payload = {"key": None, "value": config, "probes": probes}
-    if args.json:
-        json_output(payload)
-    else:
-        print(json.dumps(payload, indent=2))
+    json_output(payload)
 
 
 def cmd_config_set(args: argparse.Namespace) -> None:
@@ -22905,10 +22899,7 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
     if getattr(args, "check_overlap", False):
         payload = {"action": "check-overlap", "overlap_level": overlap["level"],
                    "matches": matches, "warnings": warnings}
-        if args.json:
-            json_output(payload)
-        else:
-            print(json.dumps(payload, indent=2))
+        json_output(payload)
         return
 
 
@@ -24930,10 +24921,7 @@ def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
     legacy_files = [name for name in MEMORY_LEGACY_FILES if (memory_dir / name).is_file()]
     payload = {"entries": entries, "legacy_files": legacy_files,
                "legacy_entry_count": sum(_memory_legacy_entry_count(memory_dir / name) for name in legacy_files)}
-    if args.json:
-        json_output(payload)
-    else:
-        print(json.dumps(payload, indent=2))
+    json_output(payload)
 
 
 def _memory_apply_item(memory_dir: Path, item: dict[str, Any]) -> list[str]:
@@ -25051,10 +25039,7 @@ def cmd_memory_apply(args: argparse.Namespace) -> None:
         except (OSError, ValueError, TypeError) as exc:
             errors.append({"id": item.get("id") if isinstance(item, dict) else None, "error": str(exc)})
     payload = {"applied": applied, "errors": errors}
-    if args.json:
-        json_output(payload, success=not errors)
-    else:
-        print(json.dumps(payload, indent=2))
+    json_output(payload, success=not errors)
     if errors:
         raise SystemExit(1)
 
@@ -44126,9 +44111,6 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
 
 def pilot_snapshot(spec_arg: str | None = None) -> dict:
     """One read-only hop inventory; all PRs join through one branch-keyed listing."""
-    import io
-    from contextlib import redirect_stdout
-
     repo, flow_dir = get_repo_root(), get_flow_dir()
     config = load_flow_config()
     spec_id = resolve_spec_id_arg(flow_dir, spec_arg, use_json=True) if spec_arg else None
@@ -44182,11 +44164,17 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                 "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed,
                 "history_complete": history}
 
-    candidates = [s for s in specs if (not spec_id or s["id"] == spec_id)
-                  and (spec_id or s.get("ready") is True or s["status"] == "done")]
     # Selection joins open PRs from one listing; only the selected branch gets
     # the full-history probe, so the listing never truncates on large repos.
-    rows = list_prs("--state", "open", limit=1000) if candidates else None
+    rows = list_prs("--state", "open", limit=1000) if specs else None
+    open_branches = {row["headRefName"] for row in rows or [] if row["state"] == "OPEN"}
+    # A done spec matters to an unscoped run only while its branch has an open
+    # PR (the landing path); listing every done spec made the snapshot huge.
+    if spec_id:
+        candidates = [s for s in specs if s["id"] == spec_id]
+    else:
+        candidates = [s for s in specs if (s["status"] != "done" and s.get("ready") is True)
+                      or (s["status"] == "done" and s.get("branch_name") in open_branches)]
     result = []
     remote_heads = RemoteHeads()
     for spec in candidates:
@@ -44223,7 +44211,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         would_clear = count >= 2 and spec.get("ready") is True and not _walk_config_value(config, "tracker.readyState")
         eligible = (spec["status"] == "open" and spec.get("ready") is True and chain["eligible"]
                     and not claims and (count < 2 or would_clear))
-        result.append({"id": sid, "spec": spec, "tasks": tasks, "chain": chain,
+        lean_spec = {k: v for k, v in spec.items() if k not in SPEC_SHOW_OMITTED_KEYS}
+        result.append({"id": sid, "spec": lean_spec, "tasks": tasks, "chain": chain,
                        "other_actor_claims": claims, "strikes": strikes.get(sid), "would_clear_strikes": would_clear,
                        "eligible": eligible, "pr": observation, "branch_name": branch,
                        "branch_exists": branch_head is not None, "branch_head": branch_head,
@@ -44233,9 +44222,11 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         selected["pr"] = observe(list_prs("--head", selected["branch_name"], "--state", "all", limit=100),
                                  selected["branch_name"], history=True)
     for candidate in result:
-        with redirect_stdout(io.StringIO()) as output:
-            cmd_review_backend(argparse.Namespace(id=candidate["id"], json=True))
-        candidate["review_backend"] = json.loads(output.getvalue())
+        out, err = _anchor_capture(cmd_review_backend,
+                                   argparse.Namespace(id=candidate["id"], json=True))
+        if err:
+            raise ValueError(f"review-backend {candidate['id']}: {err}: {out or ''}".strip())
+        candidate["review_backend"] = json.loads(out)
         spec, tasks = candidate["spec"], candidate["tasks"]
         prs = candidate["pr"]
         pr_ref = prs["open"] or prs["merged"] or next(iter(prs["closed"]), None)
@@ -47990,9 +47981,7 @@ def _review_fanout_refund_all_failed(
     )
 
 
-def _review_fanout_next_cmd(
-    task_id, base_branch, rid, receipt, needs_survivors=False,
-) -> str:
+def _review_fanout_next_cmd(rid) -> str:
     return (
         f"flowctl codex impl-review-fanout-finalize --rid {rid} "
         "--merge-plan <merge-plan.json>"
@@ -48005,12 +47994,7 @@ def _review_fanout_emit_dispatch(
     review_id = task_id if task_id else "branch"
     next_line = (
         "merge the surviving draws' findings, then run: "
-        + _review_fanout_next_cmd(
-            task_id, base_branch, rid, getattr(args, "receipt", None),
-            needs_survivors=any(
-                row.get("verdict") == "NEEDS_WORK" for row in results
-            ),
-        )
+        + _review_fanout_next_cmd(rid)
     )
     draws_out = [
         {
@@ -49723,8 +49707,13 @@ def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
         error_exit("--merge-plan missing draw items: " + ", ".join(missing), use_json=args.json, code=2)
     if set(collapse) & set(keep) or any(target not in keep for target in collapse.values()):
         error_exit("--merge-plan collapse sources must be omitted from keep and targets must be kept", use_json=args.json, code=2)
-    survivors = set(ref for ref in keep if verdicts[ref] == "NEEDS_WORK")
-    survivors.update(target for source, target in collapse.items() if verdicts[source] == "NEEDS_WORK")
+    # Only introduced findings from NEEDS_WORK draws are actionable survivors;
+    # pre_existing items stay in the document but never hold off the wedge.
+    def actionable(ref: str) -> bool:
+        return verdicts[ref] == "NEEDS_WORK" and items[ref]["classification"] == "introduced"
+
+    survivors = set(ref for ref in keep if actionable(ref))
+    survivors.update(target for source, target in collapse.items() if actionable(source))
     parts, counts = [], {"introduced": 0, "pre_existing": 0}
     for ordinal, ref in enumerate(keep, 1):
         item = items[ref]
@@ -50565,9 +50554,9 @@ def _triage_chore_is_version_only(
             if line.startswith("-"):
                 return False
             continue
-        if is_json and re.compile(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$').match(content):
+        if is_json and re.match(r'^\s*"version"\s*:\s*"[^"]*"\s*,?\s*$', content):
             continue
-        if is_toml and re.compile(r'^\s*version\s*=\s*"[^"]*"\s*$').match(content):
+        if is_toml and re.match(r'^\s*version\s*=\s*"[^"]*"\s*$', content):
             continue
         return False
     return saw_change
@@ -53770,7 +53759,7 @@ _PRIME_WELLKNOWN_ENV = frozenset(
 )
 
 # Patterns stay uncompiled until their collector runs; re caches compilation.
-_PRIME_ENV_PATTERNAD_PATTERN = r"""(?x)
+_PRIME_ENV_READ_PATTERN = r"""(?x)
       process\.env\.([A-Za-z_][A-Za-z0-9_]*)
     | process\.env\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
     | os\.environ(?:\.get)?\(?\[?\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]
@@ -53839,7 +53828,7 @@ def _prime_strip_prose_segments(lines: "list[str]") -> "list[str]":
             seg for seg in re.split(r"&&|\|\||;|\|", ln)
             if seg.strip()
             and not re.match(r"\s*(?:-\s*)?(?:echo|printf)\b", seg)
-            and not re.compile(_PRIME_INSTALLER_SEG_PATTERN).match(seg)
+            and not re.match(_PRIME_INSTALLER_SEG_PATTERN, seg)
         ]
         if kept:
             out.append(" ; ".join(s.strip() for s in kept))
@@ -53853,7 +53842,7 @@ def _prime_is_test_path(path: str) -> bool:
     segs = _prime_posix_segments(path)
     if any(s.lower() in _PRIME_TEST_DIR_SEGMENTS for s in segs[:-1]):
         return True
-    return bool(re.compile(_PRIME_TEST_BASENAME_PATTERN).search(segs[-1])) if segs else False
+    return bool(re.search(_PRIME_TEST_BASENAME_PATTERN, segs[-1])) if segs else False
 
 
 def _prime_env_declared(root: Path, deduped: "list[str]", c: "_PrimeCollector") -> "set[str]":
@@ -53912,7 +53901,7 @@ def _prime_collect_env_crossref(
         txt = _prime_read_tracked(root, rel, c)
         if not txt:
             continue
-        for m in re.compile(_PRIME_ENV_PATTERNAD_PATTERN).finditer(txt):
+        for m in re.finditer(_PRIME_ENV_READ_PATTERN, txt):
             name = next((g for g in m.groups() if g), None)
             if name:
                 read_vars.add(name)

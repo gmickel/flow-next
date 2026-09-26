@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "a2f1e57cb659a84fe928556254a27deb7a7bb462d9de0b34275bf5fc4e838439"
+      "sha256": "061b55255b1104dceac35e4194a04db64e7979789507a86c5dc9a91e7f55cdea"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -118,7 +118,7 @@
     },
     {
       "path": "flowctl_tracker/relate/__init__.py",
-      "sha256": "e5ae0fc2ce74bb74b445ebf621d4a878bc23da1c9461da290033bc147079261f"
+      "sha256": "0adb008edaf47bd89c50f8ded379a92709b6c7f7998d79cb00fccc8e3d23401f"
     },
     {
       "path": "flowctl_tracker/relate/ledger.py",
@@ -127,6 +127,10 @@
     {
       "path": "flowctl_tracker/relate/listing.py",
       "sha256": "0e30261bcb2dd4b094b7dcfd5ad9a2b73df1e10a9527862a9b17f9f1b7cc9928"
+    },
+    {
+      "path": "flowctl_tracker/relate/many.py",
+      "sha256": "c2e29a7c7ebb967230fc269d59b296abda6de2a17e532ed66fbbd353acc7772b"
     },
     {
       "path": "flowctl_tracker/relate/providers.py",

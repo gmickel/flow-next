@@ -108,6 +108,7 @@ class RelationBatch(unittest.TestCase):
     def test_shared_guard_parallel_probes_and_serial_writes(self):
         import threading
         from flowctl_tracker import relate as R
+        from flowctl_tracker.relate import many as M
         from flowctl_tracker.types import CONCURRENCY_CAP
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / '.flow'
@@ -140,8 +141,8 @@ class RelationBatch(unittest.TestCase):
 
             with patch.object(R.P, 'display_durable_guard', return_value=None) as guard, \
                     patch.dict(R.P.PROBES, {'github': probe}), \
-                    patch.object(R, '_relate_txn', side_effect=transaction), \
-                    patch.object(R, 'read_config', wraps=R.read_config) as config:
+                    patch.object(M, '_relate_txn', side_effect=transaction), \
+                    patch.object(M, 'read_config', wraps=M.read_config) as config:
                 results = R.relate_many(flow, SPEC_ID, deps, event='plan', execute=lambda _: None)
             self.assertEqual(len(results), len(deps))
             self.assertEqual(observed, deps)

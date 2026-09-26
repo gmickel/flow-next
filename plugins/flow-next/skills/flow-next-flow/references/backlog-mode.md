@@ -428,6 +428,8 @@ it to `ask` (Phase 3) instead of advancing - even when it is otherwise workable.
 empty / unset `gateClasses` (the default) gates nothing; full-auto is unconditional.
 
 ```bash
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 GATE_CLASSES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '(.config.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end')"
 ```
 

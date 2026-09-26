@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -60,6 +61,14 @@ def _bash_fence_after(text: str, marker: str) -> str:
     marker_at = text.index(marker)
     fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
     return text[fence_at:text.index("\n```", fence_at)]
+
+
+def _bash_fence_containing(text: str, needle: str) -> str:
+    """The first ```bash fence whose body contains `needle`."""
+    for body in re.findall(r"```bash\n(.*?)```", text, re.S):
+        if needle in body:
+            return body
+    raise AssertionError(f"no bash fence contains {needle!r}")
 
 
 def _bash_executable() -> str:
@@ -484,6 +493,34 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
 
 class TestHostStandaloneImplReview(unittest.TestCase):
     """fn-257 R2: a standalone host impl-review reserves nothing and attaches directly."""
+
+    def test_host_reservation_refuses_empty_diff_over_nonempty_range(self) -> None:
+        for rel, env_extra in (
+            ("flow-next-impl-review/workflow-host.md", {"TASK_ID": "fn-1.1"}),
+            ("flow-next-spec-completion-review/workflow-host.md", {"SPEC_ID": "fn-1"}),
+        ):
+            with self.subTest(workflow=rel), tempfile.TemporaryDirectory() as temp_dir:
+                reserve = _bash_fence_containing(_read(rel), "review-rounds increment")
+                temp = Path(temp_dir)
+                git = ["git", "-C", str(temp), "-c", "user.email=t@t.t", "-c", "user.name=t"]
+                subprocess.run([*git, "init", "-q"], check=True)
+                subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+                base = subprocess.run([*git, "rev-parse", "HEAD"], check=True,
+                                      capture_output=True, text=True).stdout.strip()
+                subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "no-op"], check=True)
+                log = temp / "flowctl.log"
+                stub = temp / "flowctl-stub"
+                stub.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "{log.as_posix()}"\necho "{{}}"\n',
+                                encoding="utf-8")
+                stub.chmod(0o755)
+                env = os.environ.copy()
+                env.update({"FLOWCTL": stub.as_posix(), "BASE_COMMIT": base, "TMPDIR": temp.as_posix(), **env_extra})
+                result = subprocess.run([_bash_executable(), "-c", reserve], cwd=temp, env=env,
+                                        text=True, capture_output=True, check=False)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("empty diff over a non-empty range", result.stderr)
+                calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+                self.assertFalse(any("increment" in call for call in calls), calls)
 
     def test_standalone_skips_reservation_and_attaches_directly(self) -> None:
         host = _read("flow-next-impl-review/workflow-host.md")

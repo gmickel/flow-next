@@ -68,20 +68,25 @@ done
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK
 ```
 
-Resolve the scope and capture the hop with one read-only call. Retain `PILOT_SNAPSHOT` as run context across tool calls; do not persist a config scratch file. An unresolved scope or snapshot error ends `NEEDS_HUMAN` with the error, never a host re-derivation or widened backlog.
+Resolve the scope and capture the hop with one read-only call. Shell variables do not survive between tool calls, so the snapshot is written to `.flow/tmp/pilot-snapshot.json` (gitignored), and every later fence that reads it starts with the same read line, which stops `NEEDS_HUMAN` when the file is missing or unparseable. An unresolved scope or snapshot error ends `NEEDS_HUMAN` with the error, never a host re-derivation or widened backlog.
 
 ```bash
 SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
+SNAPSHOT_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
+mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE"
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
   printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot failed: %s"\n' "$PILOT_SNAPSHOT"
   exit 1
 fi
+printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE"
 [ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
 ```
 
 ```bash
 # fence:pilot-guards
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.nested')" = true ]; then
   echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
   exit 1
@@ -94,7 +99,7 @@ if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq '.guards.dirty | length')" -gt 0 ]; t
 fi
 ```
 
-Apply `guards` now; never select or dispatch if either guard fails. The snapshot contains config, actor, strikes, ready candidates with chain and other-actor claims, branch-joined PR observations, selected spec/task state, review backend, route, QA freshness and before-dispatch tasks. Use those values throughout this hop. On later hops call `pilot snapshot --spec "$SELECTED_SPEC" --json` once and apply the same error and guard rules.
+Apply `guards` now; never select or dispatch if either guard fails. The snapshot contains config, actor, strikes, ready candidates with chain and other-actor claims, branch-joined PR observations, selected spec/task state, review backend, route, QA freshness and before-dispatch tasks. Use those values throughout this hop. On later hops rerun the snapshot fence with `PILOT_SPEC="$SELECTED_SPEC"`, which rewrites the file, and apply the same error and guard rules.
 
 No branch flag exists. Branch resolution is run-owned from the selected spec's `branch_name`.
 
@@ -102,7 +107,7 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`. The same retained snapshot supplies `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
+Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`. The same snapshot supplies `pipeline.qa`, `pipeline.chainStages`, and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
 
 When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute its backlog-only setup, then continue with Phase 1**. The reference owns the backlog-only verdict extension plus SELECT/TRIAGE/ASK context; this file keeps the enforcing guards and action sites. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
 
@@ -149,7 +154,7 @@ Run workflow.md Steps 2 to 4 with the unattended guards, branch resolution, evid
 
 - `AUTO_TICK=1`: print the terminal line and stop.
 - `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge; external waits may continue only at cadence with current consent.
-- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, refresh `PILOT_SNAPSHOT` for the same spec, and return to Phase 2 for the same spec.
+- `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, rerun the snapshot fence for the same spec, and return to Phase 2 for the same spec.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with `make-pr`: without landing authority, print the terminal line and stop. With `FLOW_UNTIL=merge` or current explicit scoped consent, bind the confirmed PR per `references/tail.md`, append `make-pr` to `DISPATCHED_STAGES` and re-classify this same item for land.
 - Any other outcome (`NEEDS_HUMAN`, `ASKED`, `BLOCKED`, `DEFERRED_TO_LAND`, `NO_WORK`) ends the run, except the observed landing wait explicitly handled above.
 
@@ -310,6 +315,8 @@ When no candidate is selectable, use the terminal split below:
 **Optional force-gate.** Read the sibling key `pilot.gateClasses` (an array, NOT `pilot.autonomy.gate`). When the selected item matches a configured gate class (the agent's read, like triage, no scorer), route it to `ask` even when otherwise workable:
 
 ```bash
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 GATE_CLASSES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '(.config.pilot.gateClasses // empty) | if type=="array" then .[] elif type=="string" then (if startswith("[") then (fromjson | .[]?) else . end) else empty end')"
 ```
 
@@ -333,11 +340,13 @@ When NOT explaining, route by class: **workable** sets `SELECTED_SPEC="$SUBJECT_
 
 ## Phase 2 - CLASSIFY from the routing reference (workflow.md Step 2)
 
-Derive dispatch flags from the retained snapshot. Only an explicit review option
+Derive dispatch flags from the snapshot. Only an explicit review option
 is forwarded; the stage otherwise resolves its configured backend.
 
 ```bash
 REVIEW_ARG=""
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 BACKEND_NAME="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"')"
 if [ -n "${PILOT_REVIEW:-}" ]; then
   BACKEND_NAME="$PILOT_REVIEW"
@@ -352,6 +361,8 @@ A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`.
 ```bash
 QA_STAGE_ENABLED=0
 QA_STAGE_AUTO=0
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')"
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1
 [ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1
@@ -362,6 +373,8 @@ QA_FRESH="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" 
 
 ```bash
 CHAIN_ENABLED=0
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
 CHAIN_STAGES="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.chainStages' 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR => off (fail closed)
 if [ "${CHAIN_STAGES:-}" = "on" ]; then
   if [ "${AUTO_TICK:-0}" = "1" ]; then
