@@ -31,19 +31,18 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-FLOWCTL_PY = ROOT / "scripts" / "flowctl.py"
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 def _fc(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     """Invoke the REAL flowctl CLI - no mock patching of the routing table."""
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,

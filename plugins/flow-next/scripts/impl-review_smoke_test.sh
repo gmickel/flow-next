@@ -536,56 +536,27 @@ else
 fi
 
 # =============================================================================
-# Ralph regression: ralph_smoke_test.sh under 4 env-var configurations.
-# Each run must complete green. The new env vars are read inside the
-# impl-review skill — Ralph's stub backend writes its own minimal receipts
-# regardless. We assert exit code 0 across the matrix.
-#
-# Run the 4 configurations in parallel (each creates a unique /tmp/ralph-smoke-$$
-# workspace via $$) to keep the 7-case smoke + regression sweep under 2 minutes.
+# Ralph regression: ralph_smoke_test.sh runs once. Nothing it exercises reads
+# FLOW_VALIDATE_REVIEW or FLOW_REVIEW_DEEP (only the impl-review skill does, and
+# Case 7 covers that parsing), so an env-var matrix would rerun the same sweep.
 # =============================================================================
-echo -e "${YELLOW}--- Ralph regression sweep (4 env-var configurations, parallel) ---${NC}"
+echo -e "${YELLOW}--- Ralph regression sweep ---${NC}"
 
 # Skip on Windows runners — ralph_smoke_test.sh embeds POSIX subprocess
 # patterns that don't translate to native-Windows Python; the regression
-# check's purpose is "impl-review env-var handling doesn't break ralph",
+# check's purpose is "impl-review changes don't break ralph",
 # unrelated to Windows portability of ralph itself.
 if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
   echo "Ralph regression sweep: skipped on Windows (ralph_smoke_test.sh isn't a primary Windows target)"
 else
-  # Spawn 4 background ralph runs
-  (env -u FLOW_VALIDATE_REVIEW -u FLOW_REVIEW_DEEP \
-     "$PLUGIN_ROOT/scripts/ralph_smoke_test.sh" >"$TEST_DIR/ralph-baseline.log" 2>&1
-   echo $? > "$TEST_DIR/ralph-baseline.rc") &
-  PID_BASE=$!
-
-  (env -u FLOW_REVIEW_DEEP FLOW_VALIDATE_REVIEW=1 \
-     "$PLUGIN_ROOT/scripts/ralph_smoke_test.sh" >"$TEST_DIR/ralph-validate.log" 2>&1
-   echo $? > "$TEST_DIR/ralph-validate.rc") &
-  PID_VAL=$!
-
-  (env -u FLOW_VALIDATE_REVIEW FLOW_REVIEW_DEEP=1 \
-     "$PLUGIN_ROOT/scripts/ralph_smoke_test.sh" >"$TEST_DIR/ralph-deep.log" 2>&1
-   echo $? > "$TEST_DIR/ralph-deep.rc") &
-  PID_DEEP=$!
-
-  (env FLOW_VALIDATE_REVIEW=1 FLOW_REVIEW_DEEP=1 \
-     "$PLUGIN_ROOT/scripts/ralph_smoke_test.sh" >"$TEST_DIR/ralph-both.log" 2>&1
-   echo $? > "$TEST_DIR/ralph-both.rc") &
-  PID_BOTH=$!
-
-  # Wait for all, then assert each
-  wait $PID_BASE $PID_VAL $PID_DEEP $PID_BOTH
-
-  for label in baseline validate deep both; do
-    rc="$(cat "$TEST_DIR/ralph-${label}.rc" 2>/dev/null || echo 255)"
-    if [[ "$rc" -eq 0 ]]; then
-      ok "Ralph regression [$label]: ralph_smoke_test.sh exit 0 (log: $TEST_DIR/ralph-${label}.log)"
-    else
-      fail "Ralph regression [$label]: ralph_smoke_test.sh exit $rc"
-      tail -40 "$TEST_DIR/ralph-${label}.log" >&2 2>/dev/null || true
-    fi
-  done
+  rc=0
+  "$PLUGIN_ROOT/scripts/ralph_smoke_test.sh" >"$TEST_DIR/ralph.log" 2>&1 || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    ok "Ralph regression: ralph_smoke_test.sh exit 0 (log: $TEST_DIR/ralph.log)"
+  else
+    fail "Ralph regression: ralph_smoke_test.sh exit $rc"
+    tail -40 "$TEST_DIR/ralph.log" >&2 2>/dev/null || true
+  fi
 fi
 
 echo ""

@@ -40,9 +40,11 @@ import pathlib
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -271,7 +273,7 @@ class DoneEvidenceProvenance(unittest.TestCase):
 
     def _flowctl(self, *args: str) -> "subprocess.CompletedProcess[str]":
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY)] + list(args),
+            [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,

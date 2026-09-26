@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -696,7 +698,7 @@ class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
             root = Path(tmp)
             _git(root, "init")
             subprocess.run(
-                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "init", "--json"],
+                [*FLOWCTL_CMD, "init", "--json"],
                 cwd=str(root),
                 capture_output=True,
                 check=True,
@@ -705,8 +707,7 @@ class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
             _git(root, "commit", "-m", "base")
             created = subprocess.run(
                 [
-                    sys.executable,
-                    str(SCRIPTS_DIR / "flowctl.py"),
+                    *FLOWCTL_CMD,
                     "spec",
                     "create",
                     "--title",
@@ -721,8 +722,7 @@ class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
             spec_id = _json.loads(created.stdout)["id"]
             subprocess.run(
                 [
-                    sys.executable,
-                    str(SCRIPTS_DIR / "flowctl.py"),
+                    *FLOWCTL_CMD,
                     "spec",
                     "set-plan",
                     spec_id,
@@ -738,8 +738,7 @@ class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
             )
             out = subprocess.run(
                 [
-                    sys.executable,
-                    str(SCRIPTS_DIR / "flowctl.py"),
+                    *FLOWCTL_CMD,
                     "spec",
                     "export-cognitive-aid",
                     spec_id,
@@ -800,7 +799,7 @@ class TestDeclaredVsEvidencedCoverage(unittest.TestCase):
 
     def _run(self, root: Path, *args: str, stdin: str | None = None) -> str:
         return subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=str(root),
             input=stdin,
             capture_output=True,

@@ -38,6 +38,8 @@ from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -209,7 +211,7 @@ class TaskBulkCreateTestCase(unittest.TestCase):
         self, *args: str, stdin: Optional[str] = None
     ) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=self.tmpdir,
             capture_output=True,
             text=True,
@@ -540,8 +542,7 @@ class TaskBulkCreateTestCase(unittest.TestCase):
         def run_bulk() -> subprocess.CompletedProcess:
             return subprocess.run(
                 [
-                    sys.executable,
-                    str(FLOWCTL_PY),
+                    *FLOWCTL_CMD,
                     "task",
                     "create",
                     "--spec",
@@ -558,8 +559,7 @@ class TaskBulkCreateTestCase(unittest.TestCase):
         def run_single(index: int) -> subprocess.CompletedProcess:
             return subprocess.run(
                 [
-                    sys.executable,
-                    str(FLOWCTL_PY),
+                    *FLOWCTL_CMD,
                     "task",
                     "create",
                     "--spec",

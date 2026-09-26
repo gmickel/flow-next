@@ -72,6 +72,8 @@ class CIPolicy(unittest.TestCase):
                 (None, 3, True, True), ([], 3, True, True),
                 (['agent_docs/project.md'], 1, False, False),
                 (['.flow/tasks/fn-1.1.json'], 1, False, False),
+                (['plugins/flow-next/skills/flow-next-work/SKILL.md'], 1, True, False),
+                (['plugins/flow-next/agents/worker.md', 'README.md'], 1, True, False),
                 (['plugins/flow-next/tests/fixture.md'], 3, True, False),
                 (['agent_docs/check.py'], 3, True, False),
                 (['plugins/flow-next/scripts/flowctl.cmd'], 3, True, True),

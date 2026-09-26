@@ -14,6 +14,8 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -442,7 +444,7 @@ class CliSurfaceContractTest(unittest.TestCase):
         for path in PLAN_INVOCATION_MANIFEST:
             self.assertIn(path, invocations, " ".join(path))
             result = subprocess.run(
-                [sys.executable, str(FLOWCTL_PY), *path, "--help"],
+                [*FLOWCTL_CMD, *path, "--help"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
