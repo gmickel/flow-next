@@ -26,7 +26,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 - **Every completed task passes through `flowctl done` and a verified `done` status.** A task treated as finished while `flowctl show <task>` still reads `todo` or `in_progress` has broken this.
 - **Staging is `git add -A`, never an explicit file list** — that is what pulls `.flow/` and `scripts/ralph/` (when present) into the commit. A commit whose diff omits the run's `.flow/` writes has broken this.
 - **Completion is claimed only after `flowctl show <task>` reports `status: done`.** A completion claim printed ahead of that read has broken this.
-- **`/flow-next:impl-review` is dispatched only on a green tree.** A review sent while tests or Quick commands are red has broken this.
+- **`$flow-next-impl-review` is dispatched only on a green tree.** A review sent while tests or Quick commands are red has broken this.
 
 **Role**: execution lead, plan fidelity first.
 **Goal**: complete every task in order with tests.
@@ -110,7 +110,7 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 - `--review=export` or "export review" or "external llm" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
 
-(All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
+(All non-`none` review modes route through `$flow-next-impl-review`, which resolves the
 configured/overridden backend — codex, copilot, cursor, claude, rp, or host — itself.)
 
 **No-plan (direct spec execution)**:
@@ -145,9 +145,9 @@ After setup questions answered, read [phases.md](phases.md) and execute each pha
 
 **Worker agent model**: Each task is implemented by the `worker` agent role with fresh context. This prevents context bleed between tasks and keeps re-anchor info with the implementation. The main conversation owns the ready frontier. By default it schedules on the rolling frontier (phases.md Phase 3 → `references/rolling-scheduler.md`): a new ready task is admitted at every worker-return event, each worker in an isolated workspace, with review and completion conductor-owned per task. It falls back to the wave loop - concurrent safe subsets joined at wave boundaries, or a single worker in the checkout - for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain; the route and reason print once as `Scheduling:`. On the rolling route, and in any concurrent wave (`PARALLEL_WAVE: true`), a worker implements, tests, and commits in its isolated workspace, then returns task-unique handover files without completing shared Flow state; the conductor integrates before review, completion, tracker projection, plan-sync, or the next admission. The wave route's single-worker path shares the conductor's checkout and self-completes.
 
-If user chose review, pass the resolved review mode to every worker. On the wave route's single-worker path the worker invokes `/flow-next:impl-review` itself after implementation and loops until SHIP. On the rolling route, and for any concurrent wave (`PARALLEL_WAVE: true`), the worker never reviews or completes: the conductor runs the review after integration and calls `flowctl done` only on SHIP.
+If user chose review, pass the resolved review mode to every worker. On the wave route's single-worker path the worker invokes `$flow-next-impl-review` itself after implementation and loops until SHIP. On the rolling route, and for any concurrent wave (`PARALLEL_WAVE: true`), the worker never reviews or completes: the conductor runs the review after integration and calls `flowctl done` only on SHIP.
 
-**Completion review gate**: Default-on in SPEC_MODE when a review backend is configured. After all tasks are done, phases.md 3g invokes `/flow-next:spec-completion-review` — except it skips when the spec has exactly one task, that task's per-task impl-review reached SHIP (`REVIEW_MODE` was not `none`), and every spec R-ID is covered by that task's declared `satisfies`. On skip, persist `completion_review_status` `not_required` via the CAS setter (`--if-current unknown`) and record the Phase 5 stage line; a miss that reads `not_required` is an already-excused re-entry (same skip branch), while a verdict-status miss falls through to the normal status check without a skip line — policy outcome, never a SHIP. `flowctl next --require-completion-review` is a flowctl-level gate for driver loops; this skill does not read it. The spec-completion-review skill handles the fix loop internally until SHIP.
+**Completion review gate**: Default-on in SPEC_MODE when a review backend is configured. After all tasks are done, phases.md 3g invokes `$flow-next-spec-completion-review` — except it skips when the spec has exactly one task, that task's per-task impl-review reached SHIP (`REVIEW_MODE` was not `none`), and every spec R-ID is covered by that task's declared `satisfies`. On skip, persist `completion_review_status` `not_required` via the CAS setter (`--if-current unknown`) and record the Phase 5 stage line; a miss that reads `not_required` is an already-excused re-entry (same skip branch), while a verdict-status miss falls through to the normal status check without a skip line — policy outcome, never a SHIP. `flowctl next --require-completion-review` is a flowctl-level gate for driver loops; this skill does not read it. The spec-completion-review skill handles the fix loop internally until SHIP.
 
 ## Tracker sync (opt-in, off by default)
 

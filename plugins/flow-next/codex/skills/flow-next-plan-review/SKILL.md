@@ -124,12 +124,14 @@ workspace. Fix that instead (Windows resolves via `auto`).
 When the verdict is `NEEDS_WORK`:
 
 1. Parse all valid issues from reviewer feedback.
-2. Fix the user-edited current spec, never a checkpoint copy:
+2. Fix the user-edited current spec, never a checkpoint copy: edit the spec
+   file in place (`spec_path` from `$FLOWCTL show <SPEC_ID> --json`), then
+   persist that file. The file on disk is the input, so an edit the user made
+   between cycles survives; on a `set-plan` failure, surface its error and stop
+   the cycle.
 
    ```bash
-   $FLOWCTL spec set-plan <SPEC_ID> --file - --json <<'EOF'
-   <updated current spec content>
-   EOF
+   $FLOWCTL spec set-plan <SPEC_ID> --file <spec path> --json
    ```
 
 3. Sync affected task specs when requirements, acceptance, design decisions,

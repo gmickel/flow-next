@@ -3,7 +3,7 @@
 Load this reference only when the user or autonomous defaults selected a review
 mode other than `none`.
 
-1. Invoke `/flow-next:plan-review` with the spec ID and selected mode. An
+1. Invoke `$flow-next-plan-review` with the spec ID and selected mode. An
    `export` choice must use Plan Review's export mode; do not substitute the
    configured backend.
 2. If review returns `Needs Work` or `Major Rethink`:
@@ -13,7 +13,7 @@ mode other than `none`.
      $FLOWCTL cat <spec-id>
      ```
    - Immediately fix the issues; the user already consented.
-   - Re-run `/flow-next:plan-review`.
+   - Re-run `$flow-next-plan-review`.
 3. Repeat until review returns `Ship`.
 
 No human gates here: the review-fix-review loop is fully automated. Re-anchoring

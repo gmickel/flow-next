@@ -37,7 +37,7 @@
     ]
   },
   "skill_contract_tokens": [
-    "/flow-next:chart",
+    "flow-next:flow-next-chart",
     "never mandatory",
     "oversized",
     "unclear",

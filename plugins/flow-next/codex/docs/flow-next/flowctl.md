@@ -770,7 +770,7 @@ flowctl show fn-1 [--json]     # Spec with tasks
 flowctl show fn-1.2 [--json]   # Task only
 ```
 
-Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ - absent on-disk key reads `false`, so consumers always see a stable boolean).
+Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ - absent on-disk key reads `false`, so consumers always see a stable boolean). It omits the two large ledgers, which have dedicated readers: the review-attempt ledger (`review-rounds attempts <spec> --kind ... --review-type ...`) and the tracker link state (`sync get-state <spec>`).
 
 Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file - a snapshot finalized by spec close; older or still-open work can be stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only - no status semantics change, and the field is never persisted.
 
@@ -873,7 +873,7 @@ flowctl anchor fn-1.2 --md     # Explicit markdown render
 flowctl anchor fn-1.2 --json   # Machine form (sections + dependencies)
 ```
 
-Sections come in fixed order, each the **verbatim captured stdout of the same production function the standalone command dispatches to** (no re-parsing, no filtering, no truncation): `show <task> --json`, `cat <task>`, `show <spec> --json`, `cat <spec>`, `git status`, `git log -5 --oneline`, `git rev-parse --abbrev-ref HEAD`, `config get memory.enabled --json`, `glossary list --json`, and `memory list --json` (captured only when `memory.enabled` resolves true - mirroring the worker's own conditional read; otherwise the section carries a skip `note`). A final dependencies section lists each `depends_on` task's id, title, status, and `## Done summary` (fence-aware section read), in the task file's recorded order. The byte-for-byte superset test (`tests/test_anchor_bundle.py`) locks every section against the real CLI wire-form output.
+Sections come in fixed order, each labeled with a command and carrying the **verbatim captured stdout of the same production function that command dispatches to** (no re-parsing, no truncation): `show <task> --json`, `cat <task>`, `show <spec> --json` (the spec record, without its review-attempt and tracker ledgers), `cat <spec>`, `git status --short --branch`, `git log -5 --oneline`, `git rev-parse --abbrev-ref HEAD`, `config get memory.enabled --json`, `glossary list --json --match "<task title + description>"` (only the entries whose term or avoid-alias the task's title or `## Description` names; when none match, or the glossary is absent or an empty husk, the section carries a skip `note`), and `memory list` (the text index - id, title, module per entry - captured only when `memory.enabled` resolves true; otherwise the section carries a skip `note`). A section whose command fails renders as `(section unavailable: ...)` naming the command to run directly. A final dependencies section lists each `depends_on` task's id, title, status, and `## Done summary` (fence-aware section read), in the task file's recorded order. `tests/test_anchor_bundle.py` locks every section byte-for-byte against its labeled command's real CLI output.
 
 `--json` shape:
 
@@ -2104,6 +2104,9 @@ flowctl glossary add <term> --definition "..." \
 
 # List defined terms across every GLOSSARY.md on the ancestor chain (nearest first)
 flowctl glossary list [--json]
+# Only entries whose term or avoid-alias occurs in TEXT (whole word,
+# case-insensitive, whitespace-collapsed); same output shape
+flowctl glossary list [--json] --match "<text>"
 
 # Read a term — walks ancestors, first match wins
 flowctl glossary read <term> [--json]

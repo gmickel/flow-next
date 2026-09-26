@@ -27,7 +27,7 @@ class SetupSnippetLockstepTest(unittest.TestCase):
     def test_twins_change_in_lockstep(self) -> None:
         claude = _read("claude-md-snippet.md")
         agents = _read("agents-md-snippet.md")
-        restored = re.sub(r"\$flow-next-([a-z-]+)", r"/flow-next:\1", agents)
+        restored = re.sub(r"\$flow-next-([a-z-]+)", r"flow-next:flow-next-\1", agents)
         self.assertEqual(
             restored,
             claude,

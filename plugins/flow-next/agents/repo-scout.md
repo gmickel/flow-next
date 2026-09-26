@@ -47,11 +47,11 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
    [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
    [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
    if [ -x "$FLOWCTL" ]; then
-     "$FLOWCTL" glossary list --json
+     "$FLOWCTL" glossary list --json --match "<request text>"
    fi
    ```
 
-   When no working `flowctl` resolves, the command fails, or `total_terms` is `0` (absent file or husk), skip silently — zero output, nothing changes. When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the request text (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries. These are the project's canonical definitions — use them when interpreting the request, and surface them in the `### Glossary Terms` output section (max 5, never the whole glossary).
+   `--match` returns only the entries whose `term` or `avoid` aliases occur in the request text (whole word, case-insensitive, whitespace-collapsed). When no working `flowctl` resolves, the command fails, or `total_terms` is `0` (absent file, husk, or no match), skip silently — zero output, nothing changes. The returned entries are the project's canonical definitions — use them when interpreting the request, and surface them in the `### Glossary Terms` output section (max 5, never the whole glossary).
 
 1. **Project docs first** (fast context)
    - CLAUDE.md, README.md, CONTRIBUTING.md, ARCHITECTURE.md, DESIGN.md

@@ -61,7 +61,7 @@ isolated workspace created from a committed base can show the task's local
 `.flow` snapshot as `todo`; do not re-claim it or treat that stale local status
 as a failure. Implement only the prompted task and leave Flow state untouched.
 
-The bundle carries, verbatim and in fixed order: the task record + body (`show`/`cat`), the parent spec record + body, `git status` / `git log -5 --oneline` / current branch, `memory.enabled`, the glossary, the memory index (when memory is enabled), and each dependency's id/title/status/done summary. If a section reports `(section unavailable: ...)`, run that one command directly — the bundle is fail-open.
+The bundle carries, in fixed order and each section verbatim from the command it is labeled with: the task record + body (`show`/`cat`), the parent spec record (without its review-attempt and tracker ledgers) + body, `git status --short --branch` / `git log -5 --oneline` / current branch, `memory.enabled`, the glossary entries matching the task, the text memory index (when memory is enabled), and each dependency's id/title/status/done summary. If a section reports `(section unavailable: ...)`, run that one command directly — the bundle is fail-open.
 
 **The bundle is a floor, not a ceiling.** It replaces the discrete Phase-1 reads — it does not cap your context. Query further whenever useful:
 
@@ -75,7 +75,7 @@ Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surf
 
 From the bundle's memory index, look for entries relevant to your task's technology/domain/module — then `memory search` / `memory read` the ones that matter.
 
-**Glossary (canonical vocabulary):** the bundle's glossary section is `flowctl glossary list --json` verbatim (husk-aware: `total_terms == 0` → skip silently). When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed). **Only the matching entries' definitions are kept** — they are the canonical meanings for naming and concepts in this task, and the implementation must not contradict them. Pulling the whole glossary into context has broken this. No glossary, a husk, or zero matches → skip, zero change.
+**Glossary (canonical vocabulary):** the bundle's glossary section already carries only the entries whose `term` or `avoid` aliases occur in the task title/description (whole word, case-insensitive, whitespace-collapsed). Their definitions are the canonical meanings for naming and concepts in this task, and the implementation must not contradict them. Pulling the whole glossary into context has broken this. A skip note (no glossary, a husk, or zero matches) → zero change.
 
 Parse the spec carefully. Identify:
 - Acceptance criteria
@@ -332,7 +332,7 @@ The review is the **reviewer** tier — a verdict from the writer's own family i
 Invoke impl-review through the Skill tool, never `flowctl` directly. If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
 ```
-/flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
+flow-next:flow-next-impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
 ```
 
 Pass `--review=$REVIEW_MODE` so an explicit run-wide `work --review=<backend>` override reaches

@@ -2,6 +2,7 @@
 name: chart
 description: Decision-map discovery for one oversized/unclear idea before capture - ground, chart a frontier, resolve one decision per invocation, brief for capture
 argument-hint: "[idea | <chart-id> [--decision <n>] [--status] | <tracker-url>]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-chart`

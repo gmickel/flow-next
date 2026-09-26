@@ -12,7 +12,7 @@ Refine a task/spec: conduct an extremely thorough interview and write the refine
 
 ### Chart boundary
 
-Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `/flow-next:flow --explain`.
+Existing-spec clarification stays **primary**. Interview refines a valid spec with unresolved judgment questions. Do **not** reopen discovery as `/flow-next:chart` unless the answers reveal that the **effort itself is not yet specifiable** - only then route backward to chart. Clear work that never needed a chart stays out of chart. Unsure of the hop: `flow-next:flow-next-flow --explain`.
 
 ## Preamble
 

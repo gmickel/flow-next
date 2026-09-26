@@ -330,14 +330,14 @@ Store detection results for use in questions. When showing options, indicate cur
 
 Choose the correct template based on platform:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
-- **Claude Code / Droid / Cursor / Grok**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` slash syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
-- **OpenCode** (`PLATFORM=opencode`): same Claude-flavor template as above, rewritten `/flow-next:` → `/flow-next-` (flat command names; never `$flow-next-`). Lifecycle snippet lands in AGENTS.md. Rewrite the template into a temp file *before* any `setup-block` call so the helper hashes the bytes actually applied:
+- **Claude Code / Droid / Cursor / Grok**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — names skills by id (`$flow-next-plan`) (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
+- **OpenCode** (`PLATFORM=opencode`): same Claude-flavor template as above, rewritten `/flow-next:` → `/flow-next-` (flat command names; never `$flow-next-`) and skill ids `flow-next:flow-next-` → `flow-next-`. Lifecycle snippet lands in AGENTS.md. Rewrite the template into a temp file *before* any `setup-block` call so the helper hashes the bytes actually applied:
 
   ```bash
   SNIPPET_TEMPLATE="${PLUGIN_ROOT}/skills/flow-next-setup/templates/claude-md-snippet.md"
   if [[ "$PLATFORM" == "opencode" ]]; then
     SNIPPET_TEMPLATE="${TMPDIR:-/tmp}/flow-next-opencode-snippet.md"
-    sed 's|/flow-next:|/flow-next-|g' \
+    sed -e 's|/flow-next:|/flow-next-|g' -e 's|flow-next:flow-next-|flow-next-|g' \
       "${PLUGIN_ROOT}/skills/flow-next-setup/templates/claude-md-snippet.md" \
       > "$SNIPPET_TEMPLATE"
   fi

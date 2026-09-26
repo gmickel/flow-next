@@ -2,6 +2,7 @@
 name: sync
 description: Manually trigger plan-sync to update downstream task specs after implementation drift
 argument-hint: "<id> [--dry-run]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-sync`

@@ -5,13 +5,14 @@ The comments-sync reconcile body behind the [../steps.md](../steps.md) `push` /
 evidence two-way, append-only**: flow lifecycle events post structured comments to
 the issue; tracker-side comments pull into the spec's sync log. Because both
 directions are **appends, there is no merge conflict** (unlike the body) — the whole
-problem is **dedup**: never post the same flow comment twice, never re-import a
-human-pasted copy of a flow comment.
+problem is **dedup**: never post the same flow comment twice (the facade's marker
+check), never re-import a human-pasted copy of a flow comment (the agent's pull
+fold).
 
 It operates ONLY on the normalized `comment` struct
 ([adapter-interface.md](adapter-interface.md)); the transport
-([linear-ladder.md](linear-ladder.md)) is the firewall, this file is the dedup +
-append policy.
+([linear-ladder.md](linear-ladder.md)) is the firewall, this file is the comment
+shape + pull fold policy.
 
 > **Append-only is the contract.** Comments are never edited or deleted by the
 > bridge. The ONE narrow exception is a single, clearly-marked, opt-in flow-owned
@@ -27,16 +28,16 @@ append policy.
 > is deferred to the post-PR smoke-testing phase** the maintainer drives (same
 > posture as the [linear-ladder.md](linear-ladder.md) round-trip spike,
 > [body-merge.md](body-merge.md), and [status-sync.md](status-sync.md)). Everything
-> else here — the marker format, the three-layer dedup, the normalized-text hash,
-> the lifecycle-event → comment mapping — is a complete, runnable procedure with
+> else here — the marker format, the pull fold rules, the lifecycle-event → comment
+> mapping — is a complete, runnable procedure with
 > worked fixtures and explicit oracles below, exercisable without a live tracker.
 
 ## Two directions, both append-only
 
 | Direction | What flows | Mechanism |
 |---|---|---|
-| **flow → tracker** | a structured comment per opted-in lifecycle event (work done + evidence, make-pr URL, completion-review verdict, …) | `postComment(trackerId, body-with-marker)` |
-| **tracker → flow** | genuine tracker-side comments (a PM's question, a reviewer's note) | `listComments(trackerId)` → fold into the spec's `## Sync Log` |
+| **flow → tracker** | a structured comment per opted-in lifecycle event (work done + evidence, make-pr URL, completion-review verdict, …) | the facade `comment` op (or push `comment-file`); the facade adds the marker and posts |
+| **tracker → flow** | genuine tracker-side comments (a PM's question, a reviewer's note) | the fetched comment listing → fold into the spec's `## Sync Log` |
 
 Neither direction overwrites the other; both are appends. The skill posts/pulls only
 for the events opted in via `tracker.perEvent.<event>` set to `comment` (or an event
@@ -69,8 +70,10 @@ in the lifecycle skills; this file defines the comment shape + dedup the wiring 
 
 ## Dedup — the whole problem (R8)
 
-Appends don't conflict, but a naive re-sync re-posts everything. Three independent
-layers, checked in order; **any** hit ⇒ skip the post/import:
+Appends don't conflict, but a naive re-sync re-posts everything. The facade
+deduplicates posts by marker. The pull fold is the agent's: it skips flow's own
+marked comments (Layer 1) and human-pasted copies of them (the human-paste fold
+rule); **any** hit ⇒ skip the import.
 
 ### Layer 1 — the embedded marker (primary, exact)
 
@@ -83,14 +86,14 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 
 - `issue=<issue-uuid>` — the tracker issue's stable UUID. **Primary, linkify-safe
   dedup key** (a UUID is not an issue-key pattern, so trackers never rewrite it —
-  see "Linkify hazard" below). Match on `issue` + `evt` + `evidence`.
+  see "Linkify hazard" below). The facade matches on `issue` + `spec` + `evt` +
+  `evidence`.
 - `spec=<spec-id>` — the flow spec this comment belongs to (e.g. `fn-42-add-oauth`
   or `wor-17-slug`). **For readability + the back-reference only — never the sole
   match key.** A tracker-first id (`wor-17-slug`) embeds the tracker key, which the
   tracker auto-linkifies (next note), mangling a literal `spec=` match.
 - `evt=<event>` — the lifecycle event (`work.done`, `makePr`,
-  `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
-  `comment.marker` (`flow-evt:<event>`)**.
+  `completionReview`, …).
 - `evidence=<stable-token>` — the caller-owned occurrence identity: a
   task/evidence commit, reviewed or tested head, spec-content fingerprint, or
   merge commit. Every synthesized lifecycle comment input starts with this
@@ -99,40 +102,28 @@ line. The marker is the canonical dedup key and the back-reference all at once:
   detectable even if the surrounding prose changed without collapsing later
   occurrences of the same event.
 
-**Retry rule — re-check before ANY re-post.** A post whose response you failed to
-parse may still have LANDED (body-escaping bugs corrupt the response read, not the
-write). Before retrying a `postComment`, re-run the Layer-1 marker check
-(`listComments`) and skip the retry if the marker is already present. Never retry
-blind: the dedup layers protect across runs, but a blind within-run retry is the
-one path that can still double-post (live-proof finding — one runner,
-three identical posts from two parse-failed retries).
+**Retry rule.** A post whose response failed to parse may still have LANDED.
+Retry by re-invoking the facade with the same `evidence=<token>`: every invocation
+lists the comments and skips the post when the marker is already present.
 
-> **Marker reconciliation.** The adapter ([linear-ladder.md](linear-ladder.md),
-> [linear-mcp.md](linear-mcp.md), [linear-graphql.md](linear-graphql.md)) detects
-> a flow-owned marker token and sets the normalized `comment.marker` field. The
-> flow-owned set is **closed** — `flow-next:sync` (→ `flow-evt:<event>`),
-> `flow-next:question` (→ `flow-evt:question`), and the rolling `flow-next:status`
-> (→ `flow-evt:status`) — see the marker-vocabulary table in
-> [adapter-interface.md](adapter-interface.md) § `comment`. An adapter that sets
-> `marker` ONLY for `flow-evt:<event>` would wrongly return a parked **question**
-> with `marker: null` and import it into the Sync Log — detect the whole set. This
-> file's richer HTML-comment forms (`<!-- flow-next:sync … -->` /
-> `<!-- flow-next:question … -->`) are what is actually *written into the body*; the
-> adapter's `flow-evt:<…>` token is the **shorthand it parses out of that line**
-> into `comment.marker`. **On read, normalize tracker mention-markup**
+> **Marker reconciliation.** The normalized wire comment
+> ([adapter-interface.md](adapter-interface.md)) has no marker field: recognize a
+> flow comment by the HTML-comment marker line in its `body`. The flow-owned set
+> is **closed** — `flow-next:sync`, `flow-next:question`, and the rolling
+> `flow-next:status`; detect the whole set, or a parked **question** is imported
+> into the Sync Log. **On read, normalize tracker mention-markup**
 > (`<issue …>KEY</issue>` → `KEY`) before parsing the line, so a linkified marker
-> still resolves. A comment whose `marker` is non-null is **flow's own** — skip it
-> on pull. The **one exception** is `flow-next:answer`: it is the human's reply
-> (genuine content), so `marker` stays `null`, but the adapter still surfaces its
-> `id`; the answer round-trip claims it by `id` BEFORE the generic Sync-Log append.
+> still resolves. The **one exception** is `flow-next:answer`: it is the human's
+> reply (genuine content), not a flow comment; the answer round-trip claims it by
+> `id` BEFORE the generic Sync-Log append.
 
-**On pull:** a tracker comment whose `marker` is non-null (the `flow-next:sync`
-marker is present) is **flow's own echo** → do **not** import it into the sync log
-(it originated in flow). Only `marker == null` comments are genuine tracker-side.
+**On pull:** a tracker comment carrying a flow-owned marker is **flow's own echo**
+→ do **not** import it into the sync log (it originated in flow). Only marker-less
+comments (and unmatched `flow-next:answer` replies) are genuine tracker-side.
 
-**On post:** before posting a flow comment, `listComments` and check whether a
-comment with the **same `issue` + `evt` + `evidence`** marker already exists → if so,
-**skip the post** (already synced). This is the exact-match fence.
+**On post:** the facade lists the comments and skips the post when a comment with
+the **same `issue` + `spec` + `evt` + `evidence`** marker already exists. This is
+the exact-match fence.
 
 > **Linkify hazard (verified against live Linear).** Linear (and
 > GitHub) **auto-linkify any issue-key substring** (`WOR-17`, case-insensitive)
@@ -155,71 +146,40 @@ comment with the **same `issue` + `evt` + `evidence`** marker already exists →
 > reference when `<id>` carries a tracker key. The label is the safe primary; a
 > `[<id>]` title prefix is linkify-prone and secondary at best.
 
-### Layer 2 — the stored posted-comment id (durable)
-
-When a flow comment is posted, its returned `comment.id` (the tracker UUID) is
-recorded on the receipt / sync state. On the next run, a comment whose id is in the
-posted-set is known-flow-originated even if its body were edited to strip the marker.
-This survives a marker mangle (e.g. a tracker that rewrites HTML comments).
-
-> flowctl persists the posted-comment ids it owns (the receipt records every post);
-> the skill reads them back from `sync get-state` / the receipt log to seed the
-> posted-set. (If the env's flowctl build doesn't yet expose a dedicated
-> posted-id store, the marker + normalized hash layers below are sufficient on their
-> own — the id layer is the durability belt-and-suspenders, not the sole fence.)
-
-### Layer 3 — normalized-text hash (catches the human paste)
+### Human-paste fold rule (agent-side)
 
 The hard case R8 names explicitly: **a human copy-pastes a flow comment** (e.g.
-pastes the evidence block into a *new* tracker comment, or into the body) — it has
-**no marker** and a **new id**, so Layers 1–2 miss it. Catch it with a
-**normalized-text hash**:
+pastes the evidence block into a *new* tracker comment) — it has **no marker** and
+a **new id**, so Layer 1 misses it. The facade receives an already-folded spec and
+does not filter pasted copies, so the pull fold applies this rule over the fetched
+listing:
 
-1. **Normalize** the comment text: strip the marker line, lowercase, collapse runs
-   of whitespace to a single space, trim, drop trailing punctuation-only lines.
-   (Normalization is what avoids a *whitespace false-new* — a paste with different
-   indentation/line-wrapping must hash identically to the original.)
-2. **Hash** the normalized text (the same `_content_hash` flowctl uses for body
-   echo-suppression — reuse it, don't invent a second hasher).
-3. Maintain a **seen-set** of normalized hashes for every flow-posted comment.
-   Before importing a marker-less tracker comment into the sync log, compute its
-   normalized hash; **if it matches a flow-posted comment's hash → it's a paste of
-   flow's own content → do NOT import** (and do not re-post).
+1. **Normalize** each comment body: strip mention markup, strip the marker line,
+   lowercase, collapse runs of whitespace to a single space, trim, drop trailing
+   punctuation-only lines. (Normalization is what avoids a *whitespace false-new* —
+   a paste with different indentation/line-wrapping must match the original.)
+2. A marker-less comment whose normalized body equals the normalized body of a
+   flow marker comment **in the same listing** is a paste of flow's own content →
+   **do NOT import** it.
 
-This is the layer that makes "a human-pasted copy of a flow comment must not be
-re-posted/re-imported" (R8) actually hold.
+This is the rule that makes "a human-pasted copy of a flow comment must not be
+re-imported" (R8) actually hold.
 
 ### Dedup decision flow
 
 ```
-# PULL (tracker → flow sync log):
-for c in listComments(trackerId):
-  if c.marker != null:            continue   # Layer 1: flow's own marked comment — skip
-                                             #   (flow-evt:<event> / flow-evt:question / flow-evt:status)
+# PULL (tracker → flow sync log), over the fetched listing:
+for c in listing:
+  if c.body has a flow-owned marker: continue   # Layer 1: flow's own marked comment — skip
+                                             #   (flow-next:sync / flow-next:question / flow-next:status)
   if c carries flow-next:answer id=<id>:     # human ANSWER (marker stays null): the round-trip
      claim it by <id> for the question-valve (steps.md Phase 7) BEFORE Sync-Log;
      if it MATCHED an open question:  continue   # imported under ## Open Questions, not the Sync Log
      # else (no matching open question) fall through — it is a genuine comment
-  if c.id ∈ postedIds:            continue   # Layer 2: known flow-originated id — skip
-  if normHash(c.body) ∈ seenSet:  continue   # Layer 3: human paste of flow content — skip
+  if norm(c.body) == norm(f.body) for any flow marker comment f in the listing:
+                                  continue   # human paste of flow content — skip
   append c to the spec's ## Sync Log         # a genuine tracker-side comment
-
-# POST (flow → tracker):
-marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<stable-token> -->"
-existing = listComments(trackerId)               # normalize each body first: strip <issue …>KEY</issue> → KEY
-if any(e has marker with same issue+evt+evidence):  skip   # Layer 1 exact-match: already posted
-else:
-  body = marker + "\n\n" + <structured comment text>
-  posted = postComment(trackerId, body)
-  record posted.id in postedIds; record normHash(body) in seenSet
 ```
-
-`lastSyncedAt` advances on a real TWO-WAY comment reconcile (a genuine import, or
-a post made as part of a reconcile run); a run that dedups everything to a no-op
-does **not** advance it (consistent with the body echo-fence). A one-way lifecycle
-comment append never advances `lastSyncedAt`: it writes its receipt and the
-tracker comment, nothing else. The two-way reconcile path is state-shaped and
-runs alone.
 
 ## The sync log on the flow side
 
@@ -242,7 +202,8 @@ like a requirement is **logged as a comment, never promoted to an R-ID** (same
 ## Evidence comments (R8) — the flow → tracker payload
 
 A `work.done` evidence comment renders the flow evidence (tests, PR) into a readable
-tracker comment, marker-fenced:
+tracker comment. The caller's file starts with `evidence=a1b2c3d`; the facade turns
+that line into the marker, so the posted comment reads:
 
 ```markdown
 <!-- flow-next:sync issue=9b1e… spec=fn-42-add-oauth evt=work.done evidence=a1b2c3d -->
@@ -255,7 +216,7 @@ tracker comment, marker-fenced:
 ```
 
 The `evidence=a1b2c3d` in the marker is the per-evidence dedup key: re-running
-`work.done` for the same commit finds the existing marker (Layer 1) and **skips** —
+`work.done` for the same commit, the facade finds the existing marker and **skips** —
 no duplicate evidence comment.
 
 ## The async question-valve markers
@@ -286,10 +247,9 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   by provider, durable issue id, and stable question id, and holds it through
   any post. A racing identical ask returns retryable `question_in_flight`; its
   retry then sees and deduplicates against the winner's open marker.
-- **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
-  ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
-  comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
-  marker vocabulary in [adapter-interface.md](adapter-interface.md) § `comment`). The
+- **`flow-next:question` is flow-posted ⇒ it carries a flow-owned marker ⇒ NOT
+  pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
+  comment, like every flow-marked comment). The
   question's durable home is the spec `## Open Questions` (spec-backed) or the tracker
   comment itself (tracker-only) — never the Sync Log.
 - **`flow-next:answer` is the HUMAN's reply** — it is genuine tracker-side content,
@@ -303,7 +263,7 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   the question anchor to `status=answered`. An answer that matches no open question
   falls through to the normal Sync-Log append (a genuine tracker comment).
 
-This is additive to the three-layer dedup — the question-valve markers are a second
+This is additive to the marker dedup — the question-valve markers are a second
 marker *vocabulary* on the same Layer-1 channel, not a new dedup mechanism.
 
 ## The ONE edit-in-place exception — the rolling "flow-next status" comment (opt-in)
@@ -338,33 +298,20 @@ Each fixture is an input comment set + the expected dedup/append outcome — the
 oracles for R8, exercisable by the host agent reading them (no live Linear; the live
 `postComment`/`listComments` is the smoke phase).
 
-### Fixture C-A — re-sync posts no duplicate (R8 headline)
-
-**Setup:** `work.done` already posted an evidence comment for commit `a1b2c3d`
-(marker `evt=work.done evidence=a1b2c3d` present on the issue).
-
-**Action:** re-run the `work.done` sync for the same spec + same commit.
-
-**Expected:** Layer 1 exact-match (`issue`+`evt`+`evidence`) finds the existing
-marker → **skip the post**. No second comment.
-
-**Oracle:** the issue still has exactly one `work.done evidence=a1b2c3d` comment;
-the re-sync is a `noop` (no `postComment`). PASS iff no duplicate is posted.
-
 ### Fixture C-B — human-pasted flow comment is NOT re-imported (R8 headline)
 
 **Setup:** flow posted an evidence comment (marker + body). A human then **copied
 that body** (without the marker) into a *new* tracker comment, with different
-indentation and line-wrapping.
+indentation and line-wrapping. Both comments are in the fetched listing.
 
 **Action:** pull comments into the sync log.
 
-**Expected:** the pasted comment has **no marker** (Layer 1 misses) and a **new id**
-(Layer 2 misses), but its **normalized-text hash matches** the flow-posted comment
-(Layer 3 hit) → **do NOT import** it into the sync log.
+**Expected:** the pasted comment has **no marker** (Layer 1 misses), but its
+normalized body **equals** the normalized body of the flow-marked comment in the
+same listing (human-paste fold rule) → **do NOT import** it into the sync log.
 
-**Oracle:** the sync log gains **zero** entries from the paste; the normalized hash
-matched despite the whitespace difference. PASS iff the paste is recognized as
+**Oracle:** the sync log gains **zero** entries from the paste; the normalized
+bodies matched despite the whitespace difference. PASS iff the paste is recognized as
 flow's own content and skipped (this is the R8 anti-echo guarantee).
 
 ### Fixture C-C — genuine tracker comment IS imported (R8)
@@ -373,8 +320,8 @@ flow's own content and skipped (this is the R8 anti-echo guarantee).
 
 **Action:** pull comments.
 
-**Expected:** marker null (Layer 1 pass), id not in posted-set (Layer 2 pass),
-normalized hash not in seen-set (Layer 3 pass) → **append to `## Sync Log`**,
+**Expected:** no marker (Layer 1 pass), normalized body matches no flow-marked
+comment in the listing (human-paste rule pass) → **append to `## Sync Log`**,
 crediting the PM + timestamp.
 
 **Oracle:** exactly one new sync-log line with the PM's text and author; it is NOT
@@ -382,12 +329,12 @@ promoted to an R-ID. PASS iff the genuine comment is logged (and only logged).
 
 ### Fixture C-D — flow's own marked comment is skipped on pull (R8)
 
-**Setup:** the issue has flow's `work.done` comment (marker present, so the adapter
-set `comment.marker = "flow-evt:work.done"`).
+**Setup:** the issue has flow's `work.done` comment (its body carries the
+`<!-- flow-next:sync … evt=work.done … -->` marker).
 
 **Action:** pull comments.
 
-**Expected:** Layer 1 — `comment.marker != null` → **skip** (flow's own echo);
+**Expected:** Layer 1 — the body carries a flow-owned marker → **skip** (flow's own echo);
 never re-import flow's structured comment into the sync log.
 
 **Oracle:** the sync log gains nothing from flow's own comment. PASS iff the marked
@@ -456,8 +403,9 @@ threaded one.
 - **Append-only is the default and the contract** — the rolling status comment is the
   SOLE edit-in-place exception, opt-in and droppable; it never weakens append-only
   for evidence / lifecycle / user comments.
-- **Dedup is three independent layers** — marker (exact), stored id (durable),
-  normalized-text hash (catches the human paste). Any hit ⇒ skip.
+- **Dedup is split** — the facade's exact marker check on post; on pull, the
+  agent skips flow-marked comments and marker-less comments whose normalized body
+  matches a flow-marked comment in the same listing. Any hit ⇒ skip.
 - **The question-valve markers** — `flow-next:question id=<hash>` /
   `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
   (free prose outside the hash, never a bare tracker key). The authoring + answer
@@ -465,8 +413,6 @@ threaded one.
   the `flow-next:answer`-vs-Sync-Log distinction.
 - **Never promote a tracker comment to an R-ID** — log it; promotion is a flow-
   authoring act (interview/plan), not a sync act. The bridge projects.
-- **State advances only on a real reconcile** — a run that dedups to a no-op does not
-  advance `lastSyncedAt`.
 - **Lifecycle wiring lives in the lifecycle skills** — this file defines the comment shape + dedup; the
   per-skill hooks that call it land there.
 - **Codex mirror** (sync-codex.sh) is regenerated by `scripts/sync-codex.sh` — keep this file

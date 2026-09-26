@@ -73,9 +73,9 @@ echo "What was done" > "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md"
 echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json"
 $FLOWCTL done fn-1-add-oauth.2 --summary-file "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md" --evidence-json "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json" --json
 
-# Validate structure
+# Validate structure (one spec; repo-wide through a counts-and-errors projection)
 $FLOWCTL validate --spec fn-1-add-oauth --json
-$FLOWCTL validate --all --json
+$FLOWCTL validate --all --json | jq '{valid, total_specs, total_tasks, total_errors, total_warnings, root_errors, failing: [.specs[] | select(.errors | length > 0) | {spec, errors}]}'
 ```
 
 ## Common Patterns
@@ -116,18 +116,20 @@ $FLOWCTL validate --all --json
 ### "What tasks are there?"
 
 ```bash
-# All specs
-$FLOWCTL specs --json
-
-# All tasks
-$FLOWCTL tasks --json
-
-# Tasks for specific spec
-$FLOWCTL tasks --spec fn-1-add-oauth --json
+# All tasks, projected (add --spec fn-1-add-oauth for one spec)
+$FLOWCTL tasks --json | jq -c '[.tasks[] | {id, title, status, spec}]'
 
 # Ready tasks for a spec
 $FLOWCTL ready --spec fn-1-add-oauth --json
 ```
+
+### "What's next?"
+
+```bash
+$FLOWCTL brief
+```
+
+`brief` is orientation only: it omits blocked and dependency-waiting tasks, so never answer a task listing from it.
 
 ### "Show me task X"
 

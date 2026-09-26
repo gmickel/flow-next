@@ -23,10 +23,10 @@ You receive:
 ### 1. List open specs
 
 ```bash
-<FLOWCTL> specs --json
+<FLOWCTL> specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'
 ```
 
-Filter to `status: "open"` specs only. Skip done specs.
+The projection keeps open specs only (id, title, status); done specs never reach you.
 
 ### 2. For each open spec, read it
 
@@ -78,7 +78,7 @@ drop one), but:
 - **No-Relationship is a COUNT, not an enumeration** — `N other open specs: no relationship` (never
   list each unrelated id; that list scales with the spec count and is pure noise).
 - **Negative claims carry their search basis** — the no-relationship count (and any "nothing depends
-  on this" verdict) names what it scanned (`26 open specs via specs --json; full cat on the
+  on this" verdict) names what it scanned (`26 open specs via the specs index; full cat on the
   8 touching shared files`): concrete commands and counts, never "everything". Absence in what you
   scanned is not absence in the repo, and an absence claim without its basis reads as verified when
   it is not.
@@ -110,7 +110,7 @@ No dependencies or overlaps detected with open specs.
 
 ## Rules
 
-- **Two-stage read (not "skim"):** triage on the `specs --json` titles/scope first, then
+- **Two-stage read (not "skim"):** triage on the open-spec index titles first, then
   `cat` every spec that plausibly shares files, APIs, or domain — a shared surface often
   isn't advertised in the title. Do not decide a relationship from the title alone.
 - Only report clear relationships, not maybes

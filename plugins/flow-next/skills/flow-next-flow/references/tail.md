@@ -39,9 +39,9 @@ tracker restrictions; never widen the target.
    for unfinished work; land reads matching specs and their closure at the PR
    head itself. A GitHub-confirmed MERGED PR ends the run with its merge commit,
    without requiring a surviving head branch or creating a successor PR.
-3. Invoke `/flow-next:land <PR> <current authorization>` via the Skill tool,
+3. Invoke `flow-next:flow-next-land <PR> <current authorization>` via the Skill tool,
    passing the exact PR URL and current consent with restrictions as ordinary
-   arguments. For example, `/flow-next:land https://github.com/owner/repo/pull/42
+   arguments. For example, `flow-next:flow-next-land https://github.com/owner/repo/pull/42
    The current --until=merge invocation authorizes convergence and merge of
    this PR only.` Land receives no internal shell handoff. `LAND_SCOPE_SPEC`,
    `LAND_SCOPE_PR` and `LAND_AUTHORIZED` are Flow-local dispatch checks only;

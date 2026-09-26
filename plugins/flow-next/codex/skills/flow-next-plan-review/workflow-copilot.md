@@ -18,7 +18,6 @@ Use only when `BACKEND="copilot"` after [workflow.md](workflow.md).
 SPEC_ID="<spec id resolved in workflow.md Phase 0>"   # substitute literally
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
 
-$FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 $FLOWCTL copilot plan-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 ```
 

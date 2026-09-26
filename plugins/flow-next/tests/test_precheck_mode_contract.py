@@ -20,7 +20,7 @@ SKILLS = ROOT / "skills"
 CODEX_SKILLS = ROOT / "codex" / "skills"
 CODEX_INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
 SNIPPET_TEMPLATES = {
-    "claude-md-snippet.md": "/flow-next:setup",
+    "claude-md-snippet.md": "flow-next:flow-next-setup",
     "agents-md-snippet.md": "$flow-next-setup",
 }
 

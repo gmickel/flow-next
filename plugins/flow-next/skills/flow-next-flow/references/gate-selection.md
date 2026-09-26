@@ -14,7 +14,7 @@ Runs per `review.backend` or the invocation's `--review=<backend>` flag; `/flow-
 
 ## Design review
 
-`/flow-next:plan-review <spec-id>` runs on an explicit request or when the route names design risk. It reviews a spec with zero tasks; task decomposition is never a prerequisite.
+`flow-next:flow-next-plan-review <spec-id>` runs on an explicit request or when the route names design risk. It reviews a spec with zero tasks; task decomposition is never a prerequisite.
 
 ## Live QA
 
@@ -52,7 +52,7 @@ Dispatch QA only when `qa_runs`; retain `qa_line` in this hop's report.
 
 ## Completion review
 
-Unchanged single-task policy: with one minted task whose acceptance is the whole spec, the per-task implementation review is the integration check and completion review records `skipped(policy: single-task, per-task SHIP covers spec surface)`. Multi-task plans run `/flow-next:spec-completion-review` as configured.
+Unchanged single-task policy: with one minted task whose acceptance is the whole spec, the per-task implementation review is the integration check and completion review records `skipped(policy: single-task, per-task SHIP covers spec surface)`. Multi-task plans run `flow-next:flow-next-spec-completion-review` as configured.
 
 ## Receipts
 

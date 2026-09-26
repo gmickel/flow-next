@@ -2,6 +2,7 @@
 name: prose
 description: Apply the artifact prose contract to a substantial reply or draft
 argument-hint: "[reply or draft to tighten]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-prose`

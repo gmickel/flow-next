@@ -88,6 +88,27 @@ python3 optimization/worker-anchor/run_eval.py --grade-only  # regrade saved run
 Frozen inputs and the answer key are never edited to make a run pass. To
 extend: add a NEW task to `gen_inputs.py` + `questions.json`, regenerate
 only the new task's inputs, run, and append rows to `results.tsv`. If a
-future bundle change drops a section, the superset CI test fails first;
-this harness is the comprehension backstop when a change survives that
-(e.g. a render reorder) — re-run it and attach rows before merging.
+future bundle change drops a section, the labeled-command CI test fails
+first; this harness is the comprehension backstop when a change survives
+that (e.g. a render reorder or a leaner section) — re-run it and attach rows
+before merging.
+
+## fn-258 R1 re-run (2026-09-26): lean bundle parity
+
+fn-258 R1 changed what the bundle carries (the text `memory list` index, only
+the glossary entries matching the task, the spec record without its
+`review_attempts` / `tracker` ledgers, `git status --short --branch`), so the
+superset test became a per-section labeled-command test and this key was
+re-run. `gen_fn258_inputs.py` froze two arms per task from one state:
+`bundle-current.md` (the fn-258 base commit's flowctl) and `bundle-lean.md`
+(the changed flowctl). Run: `run_eval.py --arms bundle-lean,bundle-current`
+(runs saved as `runs/<task>-bundle-{lean,current}.json`).
+
+**PASS:** lean 7/7 = current 7/7 on all three sets; the lean bundle is 57-65k
+chars against 165-190k. Caveat: the worktree the inputs came from had no
+runtime state, so the fn-64.3 and fn-81.2 dependency statuses read `todo`;
+both arms answered q4 `todo`, and the key's `\bdone\b` accept regex passed it
+on the words "not done" / "done summary". The false pass hits both arms
+equally, so it is no differential; scoring q4 as a fail, both arms are 6/6 on
+every set. The key stays frozen; a stricter q4 regex is an append-only
+follow-up.

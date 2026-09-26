@@ -654,7 +654,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 **If review needed** (policy skip did not fire):
 
-1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
+1. Invoke `$flow-next-spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
    - Skill handles rp/codex/copilot/cursor/claude/host backend dispatch
    - Skill runs its fix loop internally until SHIP and writes terminal
@@ -895,7 +895,7 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3 (route: rolling by default; w
   ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
   ├─ no more tasks → 3g
   │   ├─ policy skip (single-task + per-task SHIP covers spec surface) → CAS-persist not_required, record stage line → Phase 4
-  │   ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
+  │   ├─ status != ship → invoke $flow-next-spec-completion-review → skill fixes, writes SHIP once, returns
   │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
 ```

@@ -11,7 +11,7 @@ A committed directory (`.flow/features/`, beside `.flow/memory/`) records, from 
 
 Split that keeps existing contracts intact: **map = how a user gets there (compounds). Spec = what to prove this time. Live drive = proof.**
 
-**Read [seed.md](seed.md) for seed-mode phases.** Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md).
+Seed-mode phases live in [seed.md](seed.md); read it only once mode detection resolves `MODE=seed`. Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md).
 
 There is no flowctl features subcommand. The skill validates the four-H2 shape itself. The only flowctl calls are `memory list` for the `feature-map-drift` tag handoff and `memory add` (overlap-judged fold) for bug filing on the maintain path.
 

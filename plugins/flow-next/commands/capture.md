@@ -2,6 +2,7 @@
 name: capture
 description: Synthesize the current conversation into a flow-next spec at `.flow/specs/<spec-id>.md` — source-tagged, saved-spec review, no silent overwrite
 argument-hint: "[mode:autofix] [--rewrite <spec-id>] [--from-compacted-ok] [--yes]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-capture`

@@ -17,6 +17,8 @@ score AND bundle score >= the key threshold (6/7).
 Usage:
   python3 optimization/worker-anchor/run_eval.py            # run + grade
   python3 optimization/worker-anchor/run_eval.py --grade-only  # regrade saved runs
+  # fn-258 R1 parity: candidate vs control arm (same gate, other arms)
+  python3 optimization/worker-anchor/run_eval.py --arms bundle-lean,bundle-current
 """
 
 from __future__ import annotations
@@ -124,6 +126,9 @@ def grade(task_short: str, answer_text: str) -> "tuple[int, int, list]":
 
 def main() -> None:
     grade_only = "--grade-only" in sys.argv
+    candidate, control = "bundle", "statusquo"
+    if "--arms" in sys.argv:
+        candidate, control = sys.argv[sys.argv.index("--arms") + 1].split(",")
     today = date.today().isoformat()
     rows = []
     gate_ok = True
@@ -131,7 +136,7 @@ def main() -> None:
 
     for task_short in KEY["tasks"]:
         scores = {}
-        for arm in ("bundle", "statusquo"):
+        for arm in (candidate, control):
             run_path = RUNS / f"{task_short}-{arm}.json"
             if grade_only:
                 payload = json.loads(run_path.read_text(encoding="utf-8"))
@@ -144,10 +149,10 @@ def main() -> None:
             print(f"{task_short} [{arm}] {score}/{total}  model={model}")
             for qid, verdict, ans in detail:
                 print(f"    {qid}: {verdict}  {ans}")
-        if scores["bundle"] < scores["statusquo"]:
+        if scores[candidate] < scores[control]:
             gate_ok = False
-            print(f"  GATE FAIL: bundle < statusquo on {task_short}")
-        if scores["bundle"] < threshold_num:
+            print(f"  GATE FAIL: {candidate} < {control} on {task_short}")
+        if scores[candidate] < threshold_num:
             gate_ok = False
             print(f"  GATE FAIL: bundle below key threshold on {task_short}")
 

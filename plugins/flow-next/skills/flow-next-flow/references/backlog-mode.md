@@ -84,7 +84,7 @@ so a tracker-promoted spec reads `ready: true` from `flowctl ready --all` in 1b 
 any other:
 
 ```text
-/flow-next:tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1
+flow-next:flow-next-tracker-sync reconcile mode:autonomous     # FLOW_AUTONOMOUS=1
 ```
 
 - **No-op when the bridge is inactive** (no `tracker.type`, no transport reachable)
@@ -129,7 +129,7 @@ to `flowctl specs`. The inline tracker-sync wrapper supplies this half through
 flowctl's deterministic tracker transport:
 
 ```text
-/flow-next:tracker-sync list-open mode:autonomous
+flow-next:flow-next-tracker-sync list-open mode:autonomous
 ```
 
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
@@ -190,7 +190,7 @@ edges come from **two** sources and feed **one** existing sorter:
   blocked, `to` = blocker):
 
   ```text
-  /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
+  flow-next:flow-next-tracker-sync list-relations <tracker-id> mode:autonomous   # per tracker issue
   ```
 
   **The `<tracker-id>` passed is the candidate's `listOpenIssues` normalized
@@ -367,7 +367,7 @@ transport, marker dedup, and the normalized answer readback (tracker-sync steps.
 Phase 7 - backlog mode invokes it, never re-implements it):
 
 ```text
-/flow-next:tracker-sync question <spec-id | tracker-id> mode:autonomous
+flow-next:flow-next-tracker-sync question <spec-id | tracker-id> mode:autonomous
 ```
 
 For a **tracker-only** subject the `<tracker-id>` is the candidate's `list-open`

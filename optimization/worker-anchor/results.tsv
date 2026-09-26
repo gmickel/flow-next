@@ -6,3 +6,10 @@ date	task	arm	score	max_score	model	status	description
 2026-07-03	fn-81.2	bundle	7	7	claude-sonnet-5	pass	large task (fn-81-skill-runtime-token-plumbing-single.2, 8.1k task md) — incl. non-satisfies R12 question
 2026-07-03	fn-81.2	statusquo	7	7	claude-sonnet-5	pass	same questions, status-quo transcript only
 2026-07-03	MERGE-GATE	—	21	21	claude-sonnet-5	PASS	bundle >= statusquo on every set (7/7 vs 7/7 x3) AND bundle >= key threshold (6/7) on every set; inputs frozen @ 7d62856467be; zero comprehension loss measured
+2026-09-26	fn-64.3	bundle-lean	7	7	claude-sonnet-5	pass	fn-258 R1 lean bundle (57k chars: text memory index, task-matched glossary, spec record without review/tracker ledgers, short git status); q4 answered todo and passed on the key's done regex (README fn-258 note)
+2026-09-26	fn-64.3	bundle-current	7	7	claude-sonnet-5	pass	pre-fn-258 bundle (165k chars) from the same state; same q4 false pass
+2026-09-26	fn-74.2	bundle-lean	7	7	claude-sonnet-5	pass	fn-258 R1 lean bundle (65k chars)
+2026-09-26	fn-74.2	bundle-current	7	7	claude-sonnet-5	pass	pre-fn-258 bundle (190k chars) from the same state
+2026-09-26	fn-81.2	bundle-lean	7	7	claude-sonnet-5	pass	fn-258 R1 lean bundle (62k chars); same q4 false pass as current
+2026-09-26	fn-81.2	bundle-current	7	7	claude-sonnet-5	pass	pre-fn-258 bundle (175k chars) from the same state; same q4 false pass
+2026-09-26	MERGE-GATE-fn258	—	21	21	claude-sonnet-5	PASS	bundle-lean >= bundle-current on every set (7/7 vs 7/7 x3) AND >= 6/7; scoring the q4 false passes as fails, both arms are 6/6 on every set; inputs from one state (inputs/manifest-fn258.json)

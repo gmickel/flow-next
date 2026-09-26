@@ -387,7 +387,12 @@ RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
   --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
   --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
 RECORD_EXIT=$?
-printf '%s\n' "$RECORD_JSON"
+# Only the fields the next step reads; the full ledger stays in flowctl.
+if [[ "$RECORD_EXIT" -eq 0 ]]; then
+  printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .attempts[-1].verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
+else
+  printf '%s\n' "$RECORD_JSON"
+fi
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   # Release the lease we hold if the record did not land (nothing to fence).
   [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json >/dev/null 2>&1

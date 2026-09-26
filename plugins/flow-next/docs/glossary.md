@@ -27,6 +27,7 @@ flowctl glossary add <term> --definition "..." --avoid "alt1,alt2" --relates-to 
 # List defined terms (grouped by file, nearest first)
 flowctl glossary list                # text mode
 flowctl glossary list --json         # {groups, file_count, total_terms}
+flowctl glossary list --json --match "<text>"  # only entries whose term or avoid-alias occurs in <text>
 
 # Read a term — walks ancestors, first match wins
 flowctl glossary read <term>

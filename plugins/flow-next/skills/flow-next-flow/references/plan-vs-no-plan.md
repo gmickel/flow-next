@@ -10,7 +10,7 @@
 
 ## The rule
 
-**Direct execution through `/flow-next:work <spec-id> --no-plan` is the default for a ready spec.**
+**Direct execution through `flow-next:flow-next-work <spec-id> --no-plan` is the default for a ready spec.**
 
 Plan is chosen only on a positive signal:
 
@@ -18,7 +18,7 @@ Plan is chosen only on a positive signal:
 2. Separate human owners will implement.
 3. Delivery is staged across several PRs.
 
-Risk, size, and file count never trigger plan on their own. Design risk routes to `/flow-next:plan-review` (which reviews a spec with zero tasks). Unresolved product or authority choices route to `/flow-next:refine`. Unknown model identity creates no detector and no question.
+Risk, size, and file count never trigger plan on their own. Design risk routes to `flow-next:flow-next-plan-review` (which reviews a spec with zero tasks). Unresolved product or authority choices route to `flow-next:flow-next-refine`. Unknown model identity creates no detector and no question.
 
 ## What the direct route keeps
 

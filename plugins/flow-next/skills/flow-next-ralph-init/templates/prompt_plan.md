@@ -33,19 +33,19 @@ Ralph mode rules (must follow):
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
 3) Plan review gate (branch on bare backend; full spec is already in env):
-   - If PLAN_REVIEW_BACKEND=rp: run `/flow-next:plan-review {{SPEC_ID}} --review=rp`
-   - If PLAN_REVIEW_BACKEND=codex: run `/flow-next:plan-review {{SPEC_ID}} --review=codex`
-   - If PLAN_REVIEW_BACKEND=copilot: run `/flow-next:plan-review {{SPEC_ID}} --review=copilot`
-   - If PLAN_REVIEW_BACKEND=cursor: run `/flow-next:plan-review {{SPEC_ID}} --review=cursor`
-   - If PLAN_REVIEW_BACKEND=claude: run `/flow-next:plan-review {{SPEC_ID}} --review=claude`
-   - If PLAN_REVIEW_BACKEND=export: run `/flow-next:plan-review {{SPEC_ID}} --review=export`
+   - If PLAN_REVIEW_BACKEND=rp: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=rp`
+   - If PLAN_REVIEW_BACKEND=codex: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=codex`
+   - If PLAN_REVIEW_BACKEND=copilot: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=copilot`
+   - If PLAN_REVIEW_BACKEND=cursor: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=cursor`
+   - If PLAN_REVIEW_BACKEND=claude: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=claude`
+   - If PLAN_REVIEW_BACKEND=export: run `flow-next:flow-next-plan-review {{SPEC_ID}} --review=export`
    - If PLAN_REVIEW_BACKEND=none:
      - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.
      - Else: set ship and stop:
        `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
 
    Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-6-astra:high`), the
-   /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
+   flow-next:flow-next-plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
    automatically — no extra flag needed.
 
 4) A single review call may emit one reviewer tag: `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>`. This step returns control to Ralph only for SHIP, MAJOR_RETHINK, or NEEDS_HUMAN.

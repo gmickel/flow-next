@@ -70,7 +70,7 @@ Record the matched spec ids + their titles for the Phase 0.5 question.
 
 ### 0.3 — Duplicate detection: memory search cross-check
 
-If `flowctl memory list --json` reports memory is initialized, run a cross-check on the top-3 conversation keywords:
+Run a cross-check on the top-3 conversation keywords:
 
 ```bash
 "$FLOWCTL" memory search "<keyword-1>" --json --limit 5 2>/dev/null
@@ -80,7 +80,7 @@ If `flowctl memory list --json` reports memory is initialized, run a cross-check
 
 Memory hits are advisory — they signal "you may have prior art on this topic" without blocking. Aggregate hit ids + titles for the capture summary's "Related context" footnote (when ≥1 hits land). They do **not** trigger the duplicate-detection branch on their own; only spec-title overlap (0.2) does.
 
-If memory is not initialized (`memory list` returns the `Memory not initialized` error), skip this step silently. Memory search is a quality-of-life signal; absence is not blocking.
+If the first search returns the `Memory not initialized` error, skip the rest of this step silently. Any other search error is advisory, like the hits. Memory search is a quality-of-life signal; absence is not blocking.
 
 ### 0.3b — Strategy gate (advisory grounding input)
 

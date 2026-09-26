@@ -213,7 +213,7 @@ If `N == 0`, skip to Phase 10 (summary) with a "nothing new to address" message.
 
 ## Phase 3: Cluster analysis (gated)
 
-Read [cluster-analysis.md](cluster-analysis.md) for full gate logic and dispatch rules.
+In full mode without `--no-cluster`, read [cluster-analysis.md](cluster-analysis.md) for full gate logic and dispatch rules; targeted mode and `--no-cluster` never read it.
 
 **Targeted mode skips this phase entirely** — single-item dispatch, no cluster surface:
 

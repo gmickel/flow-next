@@ -2,6 +2,7 @@
 name: plan-review
 description: Carmack-level plan review via RepoPrompt or Codex
 argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none] [focus areas]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-plan-review`

@@ -2,6 +2,7 @@
 name: spec-completion-review
 description: Spec completion review - verify implementation matches spec
 argument-hint: "<fn-N> [--review=rp|codex|copilot|cursor|none]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-spec-completion-review`
