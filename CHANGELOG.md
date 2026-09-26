@@ -6,6 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Workers and skills read less output.** The worker anchor bundle carries the text memory index, only the glossary entries its task names, and short git status, cutting a typical bundle from about 160 KB to about 60 KB with no comprehension loss on the fn-83 eval. `flowctl show <spec> --json` no longer includes the `review_attempts` and `tracker` ledgers; read them with `flowctl review-rounds attempts` and `flowctl sync get-state`. `flowctl glossary list --match "<text>"` returns only the entries that text names. Review workflows print only the recorded fields they use, and the tracker-sync references drop steps the tracker facade already performs.
+- **Command shims are user-only.** Every `/flow-next:*` command carries `disable-model-invocation: true`, so the agent's skill listing shows each skill once; skills and agents invoke each other by skill id (`flow-next:flow-next-<name>`). Typed slash commands work as before.
+
 ### Fixed
 
 - **Unattended runs preserve their scope and stop on blocked work.** Tracker-key specs resolve through the same lookup as other commands, review overrides stay explicit, and branch setup uses the resolved default base and stops on git failures.

@@ -12,14 +12,14 @@ The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve m
 
 **Step 1: Execute task**
 ```
-/flow-next:work {{TASK_ID}} --branch={{BRANCH_MODE_EFFECTIVE}} --review={{WORK_REVIEW_BACKEND}}
+flow-next:flow-next-work {{TASK_ID}} --branch={{BRANCH_MODE_EFFECTIVE}} --review={{WORK_REVIEW_BACKEND}}
 ```
 `--review` takes the bare backend name (`rp`, `codex`, `copilot`, `cursor`, `claude`, `none`). If
 WORK_REVIEW was spec form (e.g. `copilot:gpt-6-astra:high` or `cursor:gpt-5.6-sol-high`), the exported
 `FLOW_REVIEW_BACKEND` carries the full spec through to flowctl which resolves
 model + effort automatically (cursor folds effort into the model name — no `:effort`).
 
-When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` internally.
+When `--review=rp`, the worker subagent invokes `flow-next:flow-next-impl-review` internally.
 When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
 When `--review=copilot`, the worker uses `flowctl copilot impl-review` for review.
 When `--review=cursor`, the worker uses `flowctl cursor impl-review` for review.

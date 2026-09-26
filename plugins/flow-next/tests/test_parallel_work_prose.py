@@ -87,7 +87,7 @@ class ParallelWorkConductorProse(unittest.TestCase):
     def test_canonical(self) -> None:
         self._assert_contract(CANONICAL_WORK, CANONICAL_WAVE_JOIN)
         self.assertIn(
-            "/flow-next:impl-review <task-id> --base "
+            "flow-next:flow-next-impl-review <task-id> --base "
             "<task-normalized-integrated-base> --review=<backend>",
             _read(CANONICAL_WAVE_JOIN),
         )

@@ -2,6 +2,7 @@
 name: refine
 description: Refine a spec, task, or spec file in-depth - question passes (business, technical, both) or a read-only research pass
 argument-hint: "[spec ID, task ID, or file path] [--scope=business|technical|both|research | --biz | --tech] [--docs | --no-docs] [--strategy | --no-strategy] [--force]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-refine`

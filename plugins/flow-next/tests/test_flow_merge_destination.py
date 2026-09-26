@@ -66,7 +66,7 @@ class MergeDestinationTest(unittest.TestCase):
     def test_r10_named_pr_handoff_removes_retired_inputs(self):
         root = PLUGIN / "skills/flow-next-flow"
         tail = (root / "references/tail.md").read_text()
-        self.assertIn("/flow-next:land <PR> <current authorization>", tail)
+        self.assertIn("flow-next:flow-next-land <PR> <current authorization>", tail)
         for path in root.rglob("*.md"):
             with self.subTest(path=path):
                 self.assertNotRegex(path.read_text(),

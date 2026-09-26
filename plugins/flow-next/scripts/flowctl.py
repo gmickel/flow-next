@@ -688,6 +688,24 @@ def _glossary_term_matches(a: str, b: str) -> bool:
     )
 
 
+def _glossary_entry_occurs(entry: dict[str, Any], text: str) -> bool:
+    """True when the entry's term or an avoid-alias occurs in *text*.
+
+    Case-insensitive and whitespace-collapsed like `_glossary_term_matches`;
+    an occurrence is a whole-word one (not flanked by word characters), so a
+    short alias such as `CI` or `pin` does not hit inside `decision` or
+    `shipping`; a plural suffix (`receipts`, `specs`) still counts.
+    """
+    haystack = re.sub(r"\s+", " ", text.lower())
+    for name in [entry.get("term") or "", *(entry.get("avoid") or [])]:
+        needle = re.sub(r"\s+", " ", str(name).strip().lower())
+        if needle and re.search(
+            rf"(?<!\w){re.escape(needle)}(?:e?s)?(?!\w)", haystack
+        ):
+            return True
+    return False
+
+
 # --- Strategy helpers (fn-39.1) ---
 #
 # Shape on disk:
@@ -26699,11 +26717,16 @@ def cmd_glossary_list(args: argparse.Namespace) -> None:
     appear as a group with `entries: []`.
     """
     use_json = bool(getattr(args, "json", False))
+    match_text = getattr(args, "match", None)
     paths = find_all_glossaries()
 
     groups: list[dict[str, Any]] = []
     for path in paths:
         entries = _glossary_load(path)
+        if match_text is not None:
+            entries = [
+                e for e in entries if _glossary_entry_occurs(e, match_text)
+            ]
         groups.append(
             {
                 "path": str(path),
@@ -26738,7 +26761,11 @@ def cmd_glossary_list(args: argparse.Namespace) -> None:
                 if entry.get("definition") else ""
             print(f"  {entry['term']}: {first_line}{avoid_disp}")
         if not g["entries"]:
-            print("  (no terms — empty husk)")
+            print(
+                "  (no matching terms)"
+                if match_text is not None
+                else "  (no terms — empty husk)"
+            )
         print()
 
 
@@ -31350,6 +31377,9 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
         print(f"Dependency {args.depends_on} added to {args.task}")
 
 
+SPEC_SHOW_OMITTED_KEYS = frozenset({"review_attempts", "tracker"})
+
+
 def cmd_show(args: argparse.Namespace) -> None:
     """Show spec or task details."""
     if not ensure_flow_exists():
@@ -31398,7 +31428,16 @@ def cmd_show(args: argparse.Namespace) -> None:
         # tasks order by suffix (parse_id is fn-only → None for wor-* tasks).
         tasks.sort(key=lambda t: id_sort_key(t["id"]))
 
-        result = {**epic_data, "tasks": tasks}
+        # fn-258 R2: the two large ledgers have dedicated readers
+        # (`review-rounds attempts`, `sync get-state`); the record omits them.
+        result = {
+            **{
+                k: v
+                for k, v in epic_data.items()
+                if k not in SPEC_SHOW_OMITTED_KEYS
+            },
+            "tasks": tasks,
+        }
         # fn-58.1 (R1): lazy on-disk, explicit in output — the spread omits an
         # absent `ready` key, so default it explicitly (absent reads false).
         result["ready"] = bool(epic_data.get("ready", False))
@@ -38177,21 +38216,20 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 # `flowctl anchor <task-id>` — single-call worker anchor bundle (fn-83.3, R8).
 #
-# One pure read delivering the VERBATIM outputs of every discrete command the
-# worker's Phase-1 re-anchor historically ran (now the single `anchor` call in
-# agents/worker.md Phase 1) in one deterministic payload — plus the dependency
-# tasks' ids/titles/statuses/done-summaries. The bundle is a FLOOR, never a
-# ceiling: no filtering, no truncation, no summarization; the worker keeps
-# memory keyword-search and all read-more freedom (wired in fn-83.4). Worker-invoked at its
-# own Phase 1 — never host-precomputed — so it observes the previous task's
-# plan-sync edits (point-in-time semantics unchanged).
+# One pure read delivering the worker's Phase-1 re-anchor reads (now the
+# single `anchor` call in agents/worker.md Phase 1) in one deterministic
+# payload — plus the dependency tasks' ids/titles/statuses/done-summaries.
+# fn-258 R1 trimmed what each read requests (text memory index, glossary
+# entries matching the task, lean spec record, short git status); the bundle
+# is still a FLOOR, never a ceiling: no truncation, no summarization, and the
+# worker keeps memory keyword-search and all read-more freedom. Worker-invoked
+# at its own Phase 1 — never host-precomputed — so it observes the previous
+# task's plan-sync edits (point-in-time semantics unchanged).
 #
 # Verbatim-by-construction: each section is the captured stdout of the SAME
-# production cmd_* function the standalone CLI command dispatches to (clone
-# of the export-command assembly discipline, but zero re-parsing). The
-# deterministic superset test (tests/test_anchor_bundle.py) locks this — it
-# compares every section byte-for-byte against the real CLI wire-form output
-# and is the standing guardrail future edits run against.
+# production cmd_* function the command it is labeled with dispatches to
+# (zero re-parsing). tests/test_anchor_bundle.py locks this: every section
+# equals its labeled command's real CLI output byte-for-byte.
 
 
 def _psp_run_git(git_args: list, repo_root: Path):
@@ -38240,12 +38278,26 @@ def _anchor_capture(func, ns: argparse.Namespace):
     return buf.getvalue(), None
 
 
-def _anchor_sections(task_id: str, spec_id: str) -> list:
-    """Assemble the ordered anchor sections (deterministic order, verbatim).
+def _anchor_match_text(task_id: str) -> str:
+    """The task's title plus its `## Description` section (glossary input)."""
+    task_data = load_task_with_state(task_id, use_json=True)
+    md_path = get_flow_dir() / TASKS_DIR / f"{task_id}.md"
+    try:
+        content = md_path.read_text(encoding="utf-8")
+    except OSError:
+        content = ""
+    return f"{task_data.get('title', '')}\n" + get_task_section(
+        content, "## Description"
+    )
 
-    Section order mirrors worker.md Phase 1's read order: task record, task
-    spec, parent spec record, parent spec body, git state, memory flag,
-    glossary, memory index.
+
+def _anchor_sections(task_id: str, spec_id: str) -> list:
+    """Assemble the ordered anchor sections (deterministic order).
+
+    Each section is the verbatim output of the command it is labeled with.
+    Order: task record, task spec, parent spec record, parent spec body, git
+    state, memory flag, glossary (entries matching the task only), memory
+    index (text form).
     """
     repo_root = get_repo_root()
     sections: list = []
@@ -38283,8 +38335,8 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
     out, err = _anchor_capture(cmd_cat, argparse.Namespace(id=spec_id))
     add("spec_md", f"flowctl cat {spec_id}", out, err)
 
-    out, err = _psp_run_git(["status"], repo_root)
-    add("git_status", "git status", out, err)
+    out, err = _psp_run_git(["status", "--short", "--branch"], repo_root)
+    add("git_status", "git status --short --branch", out, err)
 
     out, err = _psp_run_git(["log", "-5", "--oneline"], repo_root)
     add("git_log", "git log -5 --oneline", out, err)
@@ -38303,8 +38355,20 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         mem_err,
     )
 
-    out, err = _anchor_capture(cmd_glossary_list, argparse.Namespace(json=True))
-    add("glossary", "flowctl glossary list --json", out, err)
+    # fn-258 R1: only the entries the task's title or description names.
+    glossary_cmd = (
+        'flowctl glossary list --json --match "<task title + description>"'
+    )
+    out, err = _anchor_capture(
+        lambda _ns: cmd_glossary_list(
+            argparse.Namespace(json=True, match=_anchor_match_text(task_id))
+        ),
+        None,
+    )
+    note = None
+    if err is None and not json.loads(out).get("total_terms"):
+        note = "no glossary entry matches the task title or description - skipped"
+    add("glossary", glossary_cmd, out, err, note=note)
 
     # memory index only when memory.enabled resolves true — mirroring the
     # worker's own conditional read (worker.md Phase 1). The flag is parsed from
@@ -38320,14 +38384,14 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         out, err = _anchor_capture(
             cmd_memory_list,
             argparse.Namespace(
-                json=True, track=None, category=None, status="active"
+                json=False, track=None, category=None, status="active"
             ),
         )
-        add("memory_index", "flowctl memory list --json", out, err)
+        add("memory_index", "flowctl memory list", out, err)
     else:
         add(
             "memory_index",
-            "flowctl memory list --json",
+            "flowctl memory list",
             None,
             None,
             note=(
@@ -38426,8 +38490,8 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     lines: list = [
         f"# Worker anchor bundle - {task_id} (spec {spec_id})",
         "",
-        "Verbatim outputs of the worker Phase-1 re-anchor reads, fixed "
-        "order, no filtering or truncation. The bundle is a floor, not a "
+        "Each section is the verbatim output of the command it is labeled "
+        "with, in fixed order, untruncated. The bundle is a floor, not a "
         "ceiling - memory keyword-search and every further read remain "
         "available.",
         "",
@@ -56251,6 +56315,14 @@ def main() -> None:
         ),
     )
     p_glossary_list.add_argument("--json", action="store_true", help="JSON output")
+    p_glossary_list.add_argument(
+        "--match",
+        metavar="TEXT",
+        help=(
+            "Only entries whose term or avoid-alias occurs in TEXT "
+            "(whole word, case-insensitive, whitespace-collapsed)"
+        ),
+    )
     p_glossary_list.set_defaults(func=cmd_glossary_list)
 
     p_glossary_read = glossary_sub.add_parser(

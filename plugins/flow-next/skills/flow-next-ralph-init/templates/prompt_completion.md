@@ -32,16 +32,16 @@ Ralph mode rules (must follow):
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
 3) Completion review gate (branch on bare backend; full spec is already in env):
-   - If COMPLETION_REVIEW_BACKEND=rp: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=rp`
-   - If COMPLETION_REVIEW_BACKEND=codex: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=codex`
-   - If COMPLETION_REVIEW_BACKEND=copilot: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=copilot`
-   - If COMPLETION_REVIEW_BACKEND=cursor: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=cursor`
-   - If COMPLETION_REVIEW_BACKEND=claude: run `/flow-next:spec-completion-review {{SPEC_ID}} --review=claude`
+   - If COMPLETION_REVIEW_BACKEND=rp: run `flow-next:flow-next-spec-completion-review {{SPEC_ID}} --review=rp`
+   - If COMPLETION_REVIEW_BACKEND=codex: run `flow-next:flow-next-spec-completion-review {{SPEC_ID}} --review=codex`
+   - If COMPLETION_REVIEW_BACKEND=copilot: run `flow-next:flow-next-spec-completion-review {{SPEC_ID}} --review=copilot`
+   - If COMPLETION_REVIEW_BACKEND=cursor: run `flow-next:flow-next-spec-completion-review {{SPEC_ID}} --review=cursor`
+   - If COMPLETION_REVIEW_BACKEND=claude: run `flow-next:flow-next-spec-completion-review {{SPEC_ID}} --review=claude`
    - If COMPLETION_REVIEW_BACKEND=none: set ship and stop:
      `scripts/ralph/flowctl spec set-completion-review-status {{SPEC_ID}} --status ship --json`
 
    Note: when COMPLETION_REVIEW is spec form (e.g. `codex:gpt-6-astra:high`), the
-   /flow-next:spec-completion-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
+   flow-next:flow-next-spec-completion-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
    automatically — no extra flag needed.
 
 4) A single review call may emit one reviewer tag: `<verdict>SHIP|NEEDS_WORK|NEEDS_HUMAN</verdict>`. This step returns control to Ralph only for SHIP or NEEDS_HUMAN.

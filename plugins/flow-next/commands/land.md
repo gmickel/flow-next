@@ -2,6 +2,7 @@
 name: land
 description: Resolve and squash merge one named, currently authorized pull request
 argument-hint: "<PR> [--dry-run]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-land`

@@ -405,7 +405,7 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. On the wave route's single-worker path only, when the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
+**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. On the wave route's single-worker path only, when the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `flow-next:flow-next-impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
 
 All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
@@ -485,7 +485,7 @@ $FLOWCTL show <task-id> --json
 
 #### 3d.0 host-deferred gate (runs FIRST on the single-worker path when this task's REVIEW_MODE was `host-deferred`)
 
-A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
+A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `flow-next:flow-next-impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
 **Progress is side effects only** — commits in the lane's workspace, a moved
 task status, handover files on disk. A lane past its `TIMEBOX` with none of
@@ -663,7 +663,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 **If review needed** (policy skip did not fire):
 
-1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
+1. Invoke `flow-next:flow-next-spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
    - Skill handles rp/codex/copilot/cursor/claude/host backend dispatch
    - Skill runs its fix loop internally until SHIP and writes terminal
@@ -904,7 +904,7 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3 (route: rolling by default; w
   ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
   ├─ no more tasks → 3g
   │   ├─ policy skip (single-task + per-task SHIP covers spec surface) → CAS-persist not_required, record stage line → Phase 4
-  │   ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
+  │   ├─ status != ship → invoke flow-next:flow-next-spec-completion-review → skill fixes, writes SHIP once, returns
   │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
 ```

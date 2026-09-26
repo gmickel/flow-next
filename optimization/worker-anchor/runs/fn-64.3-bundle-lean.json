@@ -1,0 +1,97 @@
+{
+  "duration_api_ms": 3121,
+  "stop_reason": "end_turn",
+  "session_id": "11cbf722-de1f-4704-8031-8ea786de552a",
+  "total_cost_usd": 0.2309682,
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 56540,
+    "cache_read_input_tokens": 10221,
+    "output_tokens": 276,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 56540,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 276,
+        "cache_read_input_tokens": 10221,
+        "cache_creation_input_tokens": 56540,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 56540
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-5": {
+      "inputTokens": 2,
+      "outputTokens": 276,
+      "cacheReadInputTokens": 10221,
+      "cacheCreationInputTokens": 56540,
+      "webSearchRequests": 0,
+      "costUSD": 0.2309682,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "permission_denials": [],
+  "terminal_reason": "completed",
+  "fast_mode_state": "off",
+  "fast_mode_disabled_reason": "sdk_opt_in_required",
+  "subagent_stats": {
+    "spawned": 0,
+    "requested": {
+      "background": 0,
+      "foreground": 0,
+      "unset": 0
+    },
+    "started_in_background": 0,
+    "max_depth": 0,
+    "spawned_by_subagents": 0,
+    "completed": 0,
+    "failed": 0,
+    "killed": {
+      "parent": 0,
+      "user": 0,
+      "system": 0
+    },
+    "refused": {
+      "depth_limit": 0,
+      "concurrency_limit": 0,
+      "budget": 0
+    },
+    "by_type": {}
+  },
+  "is_error": false,
+  "num_turns": 1,
+  "subtype": "success",
+  "api_error_status": null,
+  "result": "q1: R1, R3\nq2: `linear-mcp.md`, `linear-graphql.md`, `linear-ladder.md`\nq3: No; only direct `depends_on_epics` edges are projected, each as an independent direct relation (no graph traversal or transitive expansion).\nq4: todo (not done), though its done summary says the contract doc is written.\nq5: `issueRelationCreate(input:{issueId, relatedIssueId, type: blocks})`, type value lowercase `blocks`; \"A blocked by B\" uses `issueId:B, relatedIssueId:A`.\nq6: Never remove them; relations not in the `depRelations` ledger (or outside the GitHub fenced block) are preserved on both adapters.\nq7: `relations` and `inverseRelations`, each requiring an explicit `first:` argument.",
+  "ttft_ms": 3154,
+  "type": "result",
+  "duration_ms": 3189,
+  "uuid": "37918ab1-6562-4fd9-8930-7672ec0fe4a0",
+  "ttft_stream_ms": 1168,
+  "time_to_request_ms": 66,
+  "first_content_frame_ms": 1168,
+  "queued_turn_count": 0,
+  "result_index": 0
+}

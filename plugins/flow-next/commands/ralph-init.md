@@ -1,6 +1,7 @@
 ---
 name: ralph-init
 description: Scaffold repo-local Ralph autonomous harness (scripts/ralph/)
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-ralph-init`

@@ -2,6 +2,7 @@
 name: visual
 description: Restate a spec, task, diff, or the current topic as a compact markdown visual digest
 argument-hint: "[spec id | task id | git range | free-form topic]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-visual`

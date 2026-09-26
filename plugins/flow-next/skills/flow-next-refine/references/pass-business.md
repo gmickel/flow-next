@@ -38,7 +38,7 @@ Read — in order, with the bounded reads called out so this doesn't balloon int
 3. `STRATEGY.md` (repo root) — full read.
 4. `GLOSSARY.md` (repo root) — full read.
 5. `knowledge/decisions/` (or `.flow/memory/knowledge/decisions/` — `flowctl memory list --track knowledge --category decisions --json` enumerates entries) — read the table-of-contents + first paragraph of each of the most-recent 10 entries (NOT full bodies; the first paragraph carries the decision; deeper drill-down is on-demand).
-6. `.flow/specs/` index (`flowctl specs --json` lists open specs) — scan titles + status; full-read only specs whose titles plausibly overlap the current spec's domain.
+6. `.flow/specs/` index (`flowctl specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'` lists open specs) — scan titles + status; full-read only specs whose titles plausibly overlap the current spec's domain.
 7. `docs/` directory (if present at repo root) — scan filenames; full-read only files whose names plausibly overlap.
 
 Classify biz questions via the **Pre-Question Taxonomy** before asking:

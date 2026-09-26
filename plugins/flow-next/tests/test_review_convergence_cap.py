@@ -1480,6 +1480,47 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertEqual(payload["refunded_attempts"], 1)
         self.assertEqual(payload["attempts"][0]["backend"], "rp")
 
+    def test_spec_show_omits_ledgers_that_dedicated_readers_return(self):
+        """fn-258 R2: `show <spec> --json` drops review_attempts + tracker;
+        `review-rounds attempts` and `sync get-state` still return them."""
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text("response without a verdict")
+        self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "rp", "--output-file", str(output_path), "--json",
+        )
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = self._spec_json()
+        data["tracker"] = {**data.get("tracker", {}), "identifier": "WOR-7"}
+        spec_path.write_text(json.dumps(data))
+        stored = self._spec_json()
+        self.assertTrue(stored["review_attempts"])
+
+        code, out, _ = self._run("show", self.spec_id, "--json")
+        self.assertEqual(code, 0)
+        shown = json.loads(out)
+        self.assertNotIn("review_attempts", shown)
+        self.assertNotIn("tracker", shown)
+        for key in set(stored) - {"review_attempts", "tracker"}:
+            self.assertIn(key, shown)
+
+        code, out, _ = self._run(
+            "review-rounds", "attempts", self.spec_id,
+            "--kind", "plan", "--review-type", "plan", "--json",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            json.loads(out)["attempts"][0]["backend"],
+            stored["review_attempts"][0]["backend"],
+        )
+        code, out, _ = self._run("sync", "get-state", self.spec_id, "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["tracker"]["identifier"], "WOR-7")
+
     def test_record_cli_row_is_the_head_sha_fallback_fixture(self):
         """fn-183 (#312): the rp/host `review-rounds record` path has no
         pre-dispatch snapshot, so its row must mark head_sha as UNOBSERVED,

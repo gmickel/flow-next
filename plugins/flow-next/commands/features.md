@@ -2,6 +2,7 @@
 name: features
 description: Seed or maintain the committed user-POV feature map at `.flow/features/`
 argument-hint: "[--init]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-features`

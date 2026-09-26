@@ -2,6 +2,7 @@
 name: prime
 description: Analyze codebase for agent readiness and propose improvements
 argument-hint: "[--report-only] [--fix-all] [path]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-prime`

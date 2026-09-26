@@ -16,12 +16,13 @@ merge bug stays here.
 > the semantic 3-way merge (does this Linear edit *contradict* this flow edit, or
 > just touch a different part of the same section?) is exactly what the agent is
 > for. **Do NOT build a deterministic fallback merge engine** (the anti-pattern
-> list literally names it). flowctl owns the deterministic parts — snapshot the
-> base (`sync set-merge-base`), advance state (`sync set-last-synced`), emit the
-> receipt (`sync receipt`), queue a conflict (`sync defer`). This file owns the
-> merge, the translation, and the conflict judgment. The **deterministic
-> pre-reduction** and the **structural gate** below are the only mechanical steps —
-> and they exist to *narrow* what the agent judges, not to replace the judgment.
+> list literally names it). The lifecycle facade owns the deterministic parts —
+> the tracker write, server readback, `flow:deps` handling, the paired merge-base
+> and `lastSyncedAt` writes, and the one aggregate receipt; the agent queues a
+> conflict with `sync defer`. This file owns the merge, the translation, and the
+> conflict judgment. The **deterministic pre-reduction** and the **structural
+> gate** below are the only mechanical steps — and they exist to *narrow* what
+> the agent judges, not to replace the judgment.
 
 > **Live-verification status (this environment).** A full end-to-end exercise of the
 > merge over a real Linear round-trip needs live credentials (a registered MCP
@@ -46,10 +47,7 @@ flowctl + the transport:
 
 Why both base forms: 3-way merge needs the ancestor in a form **comparable to each
 side**. `mergeBaseFlow` is diffed against the live flow body; `mergeBaseTracker` is
-diffed against the pulled issue body. flowctl stores both (and their hashes) and
-enforces the **paired-snapshot invariant** — `sync set-merge-base` requires BOTH
-`--flow*` AND `--tracker*` together; never write one half alone (memory:
-`paired-snapshot-setter-must-write-both`).
+diffed against the pulled issue body.
 
 ```bash
 # Read the base (both forms + the echo-fence hashes):
@@ -57,35 +55,15 @@ STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)
 # .tracker.mergeBaseFlow / .mergeBaseTracker / .baseHashFlow / .baseHashTracker
 ```
 
-## Step 0.5 — Flow-owned fenced regions: the *tracker-body-for-merge* transform
+## Flow-owned `<!-- flow:deps -->` region: never merged, never folded
 
-Some regions of the tracker body are **flow's, not the spec's** — flow writes them, flow owns them, and they must NEVER round-trip back into the spec or be re-litigated as tracker divergence. That is the dependency block flow writes:
-
-```markdown
-<!-- flow:deps -->
-**Blocked by:** #12, #15, #23
-<!-- /flow:deps -->
-```
-
-(written by `setIssueRelation` — on **GitHub's fenced fallback** when native dependencies are unavailable ([github.md](github.md) § Relation transport), and on **GitLab on every tier** ([gitlab.md](gitlab.md) § Relation transport): GitLab carries the block as the durable direction/provenance source on BOTH the Premium/Ultimate native `is_blocked_by` path AND the Free/personal `relates_to` degrade, since the native link alone is board-visible but the block is the authoritative direction record. The marker is its provenance boundary.)
-
-**The rule (load-bearing):** define a canonical **`trackerBodyForMerge(rawBody)`** transform that **strips the entire `<!-- flow:deps -->` … `<!-- /flow:deps -->` fenced region** (markers included), and apply it to the tracker body **before EVERY hash / merge-base / divergence comparison in this file** — specifically:
-
-- the `baseHashTracker` content hash and the stored `mergeBaseTracker` snapshot (Step 5 writes the *stripped* tracker form, so the next reconcile compares like-with-like);
-- the echo-fence check (Step 1 "Echo / no real change") and ALL of Step 1's pre-reduction comparisons;
-- the `fetchIssue(trackerId).body` fed into Steps 2–4.
-
-```bash
-# Pseudo: everywhere this file reads issue.body for comparison/merge, read it through the transform.
-TRACKER_BODY=$(trackerBodyForMerge "$RAW_ISSUE_BODY")   # <!-- flow:deps -->…<!-- /flow:deps --> stripped
-```
-
-**Reinject / preserve on every issue-body write for an adapter that carries the block — GitHub on its fenced fallback, GitLab on every tier.** The fenced block is reattached (by `setIssueRelation`, which edits *only inside* its own markers — github.md / gitlab.md) when writing the issue body; the *merge* never sees it, never produces it, and never copies it into `.flow/specs/<id>.md`. (GitLab carries the block on the native `is_blocked_by` path too — so a GitLab `writeIssue` UPDATE must preserve it on **every** update regardless of license tier, never only on the degrade.) Concretely:
-
-- **Reconcile never folds flow's own block back into the spec.** Because the block is stripped before tracker→flow folding (Step 3 / Step 2), a `## ` section or stray `**Blocked by:**` line can never be invented into the spec from flow's own projection.
-- **Render never overwrites it — but only because the WRITE preserves it.** `renderFlowToTracker` (flow→tracker) produces the spec body only; the dep block is a separate, additive `setIssueRelation` write that operates inside its markers. `renderFlowToTracker`'s output therefore does NOT contain the block, so a full-body `writeIssue` UPDATE path (GitHub's `gh issue edit --body-file -`, or GitLab's `PUT /issues/:iid` description write — github.md / gitlab.md § `writeIssue`) MUST read the current issue body and carry the existing `<!-- flow:deps -->` region forward before writing. Skip that carry-forward and a normal push self-deletes the block, and the very next `projectDepRelations` misreads the still-ledgered edge as a remote removal → false collision (queued, never recreated). The strip-on-read / retain-on-write seam is symmetric: the merge is blind to the block; the write keeps it. The dep projection, in turn, does not clobber the rendered spec body (it edits only inside its markers).
-
-> **Why at the hash boundary, not just visually:** raw full-body hashing would see flow's just-written `<!-- flow:deps -->` block as a tracker-side change on the very next pull, flag a phantom divergence, and break echo-suppression. The strip MUST happen where the hash is computed — `trackerBodyForMerge` is the seam. (Linear native relations need no transform: relations are not in the body. The transform applies wherever the block lives in the body — GitHub's fenced fallback and GitLab on every tier — but lives here, transport-blind, as a body-merge rule.)
+The `<!-- flow:deps -->` … `<!-- /flow:deps -->` region in a tracker body
+(GitHub's fenced dependency fallback, GitLab on every tier) is flow's own
+projection, not spec content. Ignore it when comparing the tracker side with
+`mergeBaseTracker` (the stored base already excludes it) and never fold its
+`**Blocked by:**` line, or anything else inside it, into `.flow/specs/<id>.md`.
+The facade strips it at the hash boundary and carries it forward on every body
+write, so the rendered tracker body you pass never needs to contain it.
 
 This generalizes the existing flow-internal-scaffolding exclusions (the `<!-- scope: … -->` HTML comments and the source-tag breakdown comment are likewise never surfaced as tracker text, Step 3) — `<!-- flow:deps -->` is the same idea on the tracker side: a flow-owned region the merge is blind to.
 
@@ -102,19 +80,11 @@ before wiki conversion is unchanged when its stored body equals the base.
 
 | Case | Condition | Action |
 |---|---|---|
-| **Echo / no real change** | tracker body hash == `baseHashTracker` (flow's own last push echoed back) | tracker side contributed nothing → treat as unchanged; `noop` if flow also unchanged |
-| **Both byte-identical to base** | flow == `mergeBaseFlow` AND tracker == `mergeBaseTracker` | nothing to merge → `noop`, do NOT advance `lastSyncedAt` |
-| **Only flow changed** | tracker == `mergeBaseTracker` (or echo), flow != `mergeBaseFlow` | fast-forward **flow → tracker**: render flow, `writeIssue`, snapshot. No conflict possible. |
-| **Only tracker changed** | flow == `mergeBaseFlow`, tracker != `mergeBaseTracker` (and not an echo) | fast-forward **tracker → flow**: fold tracker free-text into flow sections, write spec, snapshot. No conflict possible. |
+| **Echo / no real change** | tracker body (without the `flow:deps` region) == `mergeBaseTracker` (flow's own last push echoed back) | tracker side contributed nothing → treat as unchanged; `noop` if flow also unchanged |
+| **Both byte-identical to base** | flow == `mergeBaseFlow` AND tracker == `mergeBaseTracker` | nothing to merge → `noop` |
+| **Only flow changed** | tracker == `mergeBaseTracker` (or echo), flow != `mergeBaseFlow` | fast-forward **flow → tracker**: render flow and push it. No conflict possible. |
+| **Only tracker changed** | flow == `mergeBaseFlow`, tracker != `mergeBaseTracker` (and not an echo) | fast-forward **tracker → flow**: fold tracker free-text into flow sections and write the spec. No conflict possible. |
 | **Both changed** | flow != `mergeBaseFlow` AND tracker != `mergeBaseTracker` (not an echo) | → **Step 2** (the agent's real job). |
-
-The echo check uses the stored `baseHashTracker` content hash (flowctl's
-`_content_hash`) — computed over the **`trackerBodyForMerge`-stripped** body (Step
-0.5), so flow's own `<!-- flow:deps -->` block never registers as a tracker-side
-change: a post-push pull whose stripped body hash matches what flow pushed is
-flow's **own echo**, not a tracker-side edit — a `noop`, never a phantom conflict.
-`lastSyncedAt` advances only on a real reconciliation (a fast-forward or a merge),
-**never on an echo or a no-op pull**.
 
 > Pre-reduction is mechanical *comparison* only (hash/byte equality). It does NOT
 > attempt a text merge — the moment both sides diverged, the agent takes over. This
@@ -161,12 +131,10 @@ The two sides are in different formats; the merge spans the translation. The age
   the `<!-- scope: ... -->` HTML-comment annotations or the source-tag breakdown
   comment as visible issue text.
 - **Idempotent for unchanged content** — rendering an unchanged flow body must
-  produce a tracker body byte-identical to `mergeBaseTracker` (so flow→tracker→flow
-  is no churn). If the tracker renderer canonicalizes markdown in a stable way
-  (Linear normalizing list markers, collapsing blank lines), record that canonical
-  form as the snapshot so the next reconcile compares like-with-like — see the
-  [linear-ladder.md](linear-ladder.md) round-trip spike, whose whole job is to pin
-  this canonical form *before* this merge runs on top of it.
+  produce the same tracker body every time, so flow→tracker→flow is no churn.
+  Trackers rewrite markdown on save (Linear linkifies slash-joined filenames and
+  turns a list item starting with `>` into a blockquote); avoiding those constructs
+  reduces stored-versus-sent noise.
 
 ### tracker → flow (fold free-text into the right flow sections)
 
@@ -185,9 +153,9 @@ The two sides are in different formats; the merge spans the translation. The age
 
 ## Step 3.5 — Structural verification gate (before ANY write-back) (R6)
 
-A mechanical gate the merged body MUST pass **before** `writeIssue` or writing the
-spec. This is the second (and last) deterministic step — it guards the agent's
-output, it does not replace the merge:
+A mechanical gate the merged body MUST pass **before** writing the spec or calling
+the facade. This is the second (and last) deterministic step — it guards the
+agent's output, it does not replace the merge:
 
 - **No section silently dropped.** Every `##` section present in base, flow-side, OR
   tracker-side must be present in the merged output (unless a side *deliberately and
@@ -200,17 +168,10 @@ output, it does not replace the merge:
 - **No invented structure.** The merged flow body introduces no R-ID / source tag
   that did not exist in flow-side (Step 3's "never invent" rule, checked).
 
-```bash
-# The gate is a host-agent self-check (read the merged body, verify the three
-# invariants above against base/flow/tracker). If it FAILS, do NOT write back —
-# emit an errored receipt and re-merge or queue. ($EVENT = the lifecycle event tag
-# from steps.md Phase 0; empty on manual runs, so the expansion omits the flag.)
-$FLOWCTL sync receipt "$SPEC_ID" --status errored --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
-  --note "structural gate failed: <which invariant> — write-back aborted, base unchanged"
-```
-
-A gate failure is treated like a transport failure: **no write-back, no state
-advance, base unchanged** — never a partial/half-merged write.
+The gate is a host-agent self-check (read the merged body, verify the three
+invariants above against base/flow/tracker). If it FAILS, do NOT write the spec and
+do NOT call the facade — re-merge, or queue it with `sync defer`. Never a
+partial or half-merged write.
 
 ## Step 4 — Scoped conflict (genuine contradiction only) (R9)
 
@@ -226,9 +187,7 @@ Show the human the **merged body** (every cleanly-merged section already folded)
 - Options scoped to the one section: keep flow's framing · keep the tracker's ·
   accept a proposed merge of the two · edit by hand.
 - On choice → apply to that section only → re-run the **structural gate** → write
-  back (`writeIssue` + write the spec) → `sync set-merge-base` (BOTH halves) +
-  `sync set-last-synced` → `sync receipt --status merged` (+ `--event` on a
-  lifecycle run — steps.md Phase 0).
+  back (Step 5).
 
 The confirmation shows the *whole merged body* (so the human sees the merge is
 correct everywhere else) but the *decision* is scoped to the contradicting section.
@@ -244,13 +203,11 @@ delivery — mirrors flow-next-drive's surface-aware ladder).
 
 ```bash
 # Ralph (FLOW_RALPH=1 / REVIEW_RECEIPT_PATH set): queue the scoped conflict, write
-# NO body, advance NO state, continue the batch.
+# NO body, skip the facade call, continue the batch.
 $FLOWCTL sync defer "$SPEC_ID" \
   --summary "Goal section rewritten on both sides to mean different things (flow: OAuth-only; tracker: OAuth+SAML)" \
   --suggested "Human picks: keep flow's framing, the tracker's, or a merge of the two" \
   --reason "genuine-contradiction"
-$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
-  --note "scoped conflict queued (Goal section); base unchanged"
 ```
 
 The conflict-tiebreak default (`flow-wins | tracker-wins | always-ask`, R1) governs
@@ -258,69 +215,14 @@ the rare unresolvable case: `flow-wins`/`tracker-wins` auto-resolve the scoped
 section to that side (still a confident merge → proceed); `always-ask` queues in
 Ralph (above) and prompts interactively.
 
-## Step 5 — Write-back + snapshot + receipt (state advances ONLY on success) (R6)
+## Step 5 — Write-back
 
-State (`lastSyncedAt`, the merge base) is written **ONLY after a fully successful
-reconcile + write-back**. This is the no-half-advance invariant:
-
-```bash
-# 1. write-back (transport + spec) — both must succeed:
-#    writeIssue(merged)            [transport — linear-ladder.md]
-#    write the merged flow body to .flow/specs/<id>.md
-# 2. ONLY THEN advance state — snapshot BOTH forms together (paired invariant).
-#    The flow half IS the just-written spec file — pass it directly; never re-emit
-#    the merged body to a second temp copy. The tracker form has no on-disk home,
-#    so it keeps a unique temp file (path-persistence rule: literal agent-composed
-#    paths, written and consumed in this same block):
-MERGED_TRACKER="${TMPDIR:-/tmp}/flow-merged-tracker-<spec-id>-<suffix>.md"   # tracker-form snapshot: the FETCHED-BACK stored body (fetch-back rule below), NOT the render that was sent
-$FLOWCTL sync set-merge-base "$SPEC_ID" --flow-file ".flow/specs/${SPEC_ID}.md" --tracker-file "$MERGED_TRACKER"
-$FLOWCTL sync set-last-synced "$SPEC_ID"
-# 3. receipt records the merge for audit / rollback (--merges-file = the merge log, unique temp path):
-$FLOWCTL sync receipt "$SPEC_ID" --status merged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
-  --merges-file "${TMPDIR:-/tmp}/flow-merges-<spec-id>-<suffix>.json" \
-  --note "3-way merge: 2 sections folded, 0 conflicts"
-```
-
-### Fetch-back rule - snapshot the STORED body, never the SENT render (transport-blind, load-bearing)
-
-After every successful `writeIssue` (create AND update, on every path that snapshots a base: this Step 5, the flow-first bootstrap below, steps.md Phase 2a and create-if-unlinked), the tracker half of the merge base MUST be a **fetch-back of what the tracker actually stored** (`fetchIssue` immediately after the write; apply `trackerBodyForMerge` as always), NOT the `renderFlowToTracker` output that was sent. Trackers rewrite markdown on save, so sent != stored:
-
-- **Linear (confirmed live, 2026-07-11):** ProseMirror-backed storage auto-linkifies slash-joined filenames (`CLAUDE.md/AGENTS.md` becomes a `[..](<http://...>)` link), inserts blank lines before list blocks, and rewrites a list item whose text starts with `>` into a blockquote. A base seeded from the sent render diverged by 149 lines with ZERO human edits - the next reconcile's echo-fence reported a false conflict.
-- **Jira Cloud (`/rest/api/3`):** bodies round-trip through ADF (markdown -> ADF -> markdown); the translation is lossy by design (see jira.md § ADF translation) - fetch-back is the only correct base there.
-- **GitHub / GitLab:** store bodies verbatim, so the echo SHOULD be byte-exact - but the fetch-back costs one bounded read and keeps the rule uniform, so apply it everywhere rather than special-casing backends.
-
-Failure handling: the fetch-back is part of the write-back step - if it errors, treat it like any Step 5 non-success (do NOT advance state from the sent render; emit `errored`). Renderer hygiene (secondary, optional): avoid emitting constructs known to be rewritten (bare `>` at the start of a list item's text; consider backtick-wrapping slash-joined filenames) - this reduces stored-vs-sent noise but never replaces the fetch-back.
-
-**Failure leaves prior state intact.** A failed/errored fetch or write (404,
-transport error, structural-gate failure, partial batch) does NOT advance
-`lastSyncedAt` and does NOT overwrite the merge base — it emits an `errored` (or
-`queued`) receipt and leaves the base from the last good sync. Batch sync is
-**item-level**: one spec's failure gets its own `errored` receipt + no state write,
-and the run continues with the rest (the orchestration loop in [../steps.md](../steps.md)
-catches per-item; this file's contract is "never advance state on a non-success").
-
-### Merge-log record shape (`--merges-file`)
-
-`sync receipt --merges-file` takes a JSON **list** of merge records (flowctl stores
-them verbatim on the receipt for audit/rollback). Each record documents one
-reconcile for traceability — minimum useful shape:
-
-```json
-[
-  {
-    "spec": "fn-42-add-oauth",
-    "trackerId": "uuid-...",
-    "outcome": "merged",
-    "sectionsFolded": ["Goal & Context", "Acceptance Criteria"],
-    "conflicts": [],
-    "baseHashFlowBefore": "…",
-    "baseHashTrackerBefore": "…"
-  }
-]
-```
-
-The pre-`set-merge-base` hashes let a human roll back to the prior base if a merge
-later proves wrong — the receipt is the audit trail (R12).
+Write the merged flow body to `.flow/specs/<id>.md` first; the facade refuses a
+pull or reconcile whose `--flow-file` differs from the spec on disk
+(`flow_form_not_applied`). Then call the facade with the files in the
+[../steps.md](../steps.md) input matrix. The facade performs the tracker write,
+the server readback, the paired merge-base and `lastSyncedAt` writes, and the
+aggregate receipt; a failure there leaves the prior base intact.
 
 ## First-sync / no-base bootstrap (no merge base yet) (R6)
 
@@ -329,18 +231,14 @@ there is no 3-way ancestor — so **never run Step 2** (it would over-surface th
 whole body as a conflict). Bootstrap by origin:
 
 - **Flow-first push, no base** → pure **projection / fast-forward**: render flow →
-  tracker, `writeIssue`, then snapshot (`set-merge-base` from the flow body + the
-  FETCHED-BACK stored tracker body per the Step 5 fetch-back rule, then
-  `set-last-synced`). Never a conflict — there is nothing on the tracker side to
+  tracker and push. Never a conflict — there is nothing on the tracker side to
   contradict.
-- **Tracker-first link** ("grab issue X and spec it") → **seed the base from the
-  current issue body**, first pass is **pull-only** (fold the issue into the new
-  spec's sections), then snapshot. The seeded base IS the issue, so the next
-  reconcile has a real ancestor and the first sync never surfaces the whole issue as
-  a conflict.
+- **Tracker-first link** ("grab issue X and spec it") → first pass is
+  **pull-only**: fold the issue into the new spec's sections. The facade seeds the
+  base from the current issue body, so the next reconcile has a real ancestor and
+  the first sync never surfaces the whole issue as a conflict.
 
-The link/unlink ceremony that calls these is in [../steps.md](../steps.md) Phase 2;
-this file supplies the flow-form + tracker-form snapshots `set-merge-base` requires.
+The link/unlink ceremony that calls these is in [../steps.md](../steps.md) Phase 2.
 
 ## Worked fixtures (runnable without a live tracker)
 
@@ -452,74 +350,10 @@ things** (flow excludes SAML; tracker includes it) → Step 4 scoped conflict.
 $FLOWCTL sync defer "$SPEC_ID" \
   --summary "Goal contradicts: flow excludes SAML, tracker includes it" \
   --suggested "Human picks OAuth-only vs OAuth+SAML" --reason "genuine-contradiction"
-$FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport none ${EVENT:+--event "$EVENT"} \
-  --note "1 scoped conflict (Goal); Acceptance merged cleanly; base unchanged"
 ```
 
 PASS iff the conflict names ONLY the Goal section and the Acceptance merge is not
 re-litigated.
-
-### Fixture D — echo-loop fence (push then pull is a no-op) (R6)
-
-After a flow→tracker push, `baseHashTracker` holds the hash of exactly what flow
-pushed. A pull immediately after returns that same body (the tracker echoing flow's
-write).
-
-**Oracle:** pulled tracker body hash == stored `baseHashTracker` → **echo** →
-`noop`, NOT a phantom conflict; `lastSyncedAt` does NOT advance.
-
-```bash
-# Echo detection is a hash compare against the stored fence:
-STATE=$($FLOWCTL sync get-state "$SPEC_ID" --json)   # → .tracker.baseHashTracker
-# pulled_hash == baseHashTracker  ⇒  emit noop, do not reconcile, do not advance state:
-$FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
-  --note "post-push pull matched baseHashTracker — flow's own echo, no reconcile"
-```
-
-PASS iff the matching-hash pull is a `noop` and state is unchanged.
-
-### Fixture E — flow-owned `<!-- flow:deps -->` block excluded from divergence
-
-The GitHub adapter's fenced dependency block is flow's own write. A pull that
-returns it MUST NOT register as a tracker-side edit, and a reconcile MUST NOT fold
-it into the spec. This is the `trackerBodyForMerge` transform (Step 0.5) under test.
-
-**Base** (`mergeBaseTracker`, already a *stripped* snapshot — Step 5 stores the
-stripped form):
-
-~~~markdown
-## Goal & Context
-Add login to the dashboard.
-~~~
-
-**Tracker-side** (`fetchIssue.body` — raw, with flow's just-written dep block; NO
-human edit):
-
-~~~markdown
-## Goal & Context
-Add login to the dashboard.
-
-<!-- flow:deps -->
-**Blocked by:** #12, #15
-<!-- /flow:deps -->
-~~~
-
-**Transform:** `trackerBodyForMerge(raw)` strips the `<!-- flow:deps -->` … `<!-- /flow:deps -->`
-region (markers included) → the stripped body is byte-identical to
-`mergeBaseTracker`.
-
-**Oracle:** after the transform, tracker hash == `baseHashTracker` → **echo /
-no-change** → `noop`; the `**Blocked by:**` line is NEVER folded into
-`## Goal & Context` (or any spec section); `lastSyncedAt` does not advance. PASS iff
-the dep block causes neither a phantom divergence nor a spec edit.
-
-> **Companion negative case (R6 collision, owned in [../steps.md](../steps.md)
-> § projectDepRelations):** an edge in the `depRelations` ledger AND still in
-> `depends_on_epics` but MISSING from `listIssueRelations` (a tracker user removed
-> flow's relation) is evaluated BEFORE any per-side rule → `sync defer` + a
-> `queued` receipt, NEVER silently recreated. The collision check belongs to the
-> relation hook, not this body merge; it is cross-referenced here because both are
-> the same "flow-owned, never-clobber" posture applied to relations vs body.
 
 ## Boundaries
 
@@ -530,9 +364,6 @@ the dep block causes neither a phantom divergence nor a spec edit.
 - **No deterministic fallback merge engine.** The pre-reduction and the structural
   gate are the only mechanical steps — equality and invariants, not a text merge.
   The merge itself is the host agent's judgment (CLAUDE.md agentic-vs-deterministic).
-- **State advances only on a fully successful reconcile.** A failure (404, transport
-  error, gate failure, partial batch) leaves the prior base intact + an `errored`
-  receipt; batch sync is item-level.
 - **Never invent R-IDs / source tags** on a tracker→flow fold — the bridge projects,
   it does not author requirements.
 - **Codex mirror** (sync-codex.sh) is regenerated by `scripts/sync-codex.sh` — keep this file

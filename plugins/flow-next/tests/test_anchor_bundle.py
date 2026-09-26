@@ -1,26 +1,22 @@
-"""Deterministic SUPERSET test for `flowctl anchor` (fn-83.3, R8).
+"""Per-section labeled-command test for `flowctl anchor` (fn-83.3, fn-258 R1).
 
-THE STANDING GUARDRAIL: the REQUIRED ANCHOR PAYLOAD — every artifact of the
-legacy discrete-read baseline the worker's Phase 1 used to run one-by-one
-(show/cat task+spec, git status, git log -5 --oneline, branch, config get
-memory.enabled, glossary list, memory list index; since fn-83.4 the worker
-runs the single `flowctl anchor <task-id> --md` call instead) — must be
-present VERBATIM (byte-for-byte) — or strictly richer — in the anchor
-bundle. This test validates bundle CONTENT against that baseline; it must
-never be collapsed into merely checking that `anchor` runs. Both arms drive the PRODUCTION CLI wire form
-via subprocess (memory: test-production-path, never a parallel
-construction): the expected side is the exact command the worker would run;
-the actual side is the section `flowctl anchor <task-id> --json` carries.
+THE STANDING GUARDRAIL: every bundle section must equal, byte-for-byte, the
+production CLI output of the command it is labeled with (task/spec show and
+cat, short git status, git log -5 --oneline, branch, config get
+memory.enabled, the task-matched glossary list, the text memory index).
+Both arms drive the PRODUCTION CLI wire form via subprocess (memory:
+test-production-path, never a parallel construction): the expected side is
+the labeled command; the actual side is the section `flowctl anchor
+<task-id> --json` carries. fn-258 R1 replaced the earlier verbatim-superset
+table (the bundle now requests leaner reads); a section that paraphrases or
+truncates its labeled command's output still fails here.
 
-Any future edit that filters, truncates, or paraphrases a section fails
-here. Extending the worker's Phase-1 read list without extending the bundle
-must be caught by updating WORKER_PHASE1_COMMANDS alongside worker.md.
-
-Also covered: dependency enrichment (ids/titles/statuses/done-summaries,
-fence-aware summary read), markdown render (fixed banner order, verbatim
-content, default form), determinism (byte-identical across runs),
-memory-disabled skip, short-id resolution, fail-open git sections, and the
---json/--md mutual exclusion.
+Also covered: glossary skip reasons (no glossary, no matching entry),
+dependency enrichment (ids/titles/statuses/done-summaries, fence-aware
+summary read), markdown render (fixed banner order, verbatim content,
+default form), determinism (byte-identical across runs), memory-disabled
+skip, short-id resolution, fail-open git sections, and the --json/--md
+mutual exclusion.
 
 Fixtures: importlib load of flowctl.py, TemporaryDirectory + real
 `git init`.
@@ -257,12 +253,15 @@ class AnchorRepoTestCase(unittest.TestCase):
 
     def _flowctl(self, *args: str) -> "subprocess.CompletedProcess[str]":
         """Run the production CLI wire form (exactly what the worker runs)."""
+        # Pin UTF-8 both ways: the text memory index carries an em dash, and a
+        # Windows locale code page would otherwise decode the two sides apart.
         return subprocess.run(
             [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,
-            env=self._pinned_env(),
+            encoding="utf-8",
+            env={**self._pinned_env(), "PYTHONIOENCODING": "utf-8"},
         )
 
     def _bundle(self, task_id: str = "fn-9.2") -> dict:
@@ -277,29 +276,33 @@ class AnchorRepoTestCase(unittest.TestCase):
         return {s["name"]: s for s in payload["sections"]}
 
 
-# ── The superset guardrail ────────────────────────────────────────────────
+# ── The labeled-command guardrail ─────────────────────────────────────────
 
-# REQUIRED ANCHOR PAYLOAD — the legacy discrete-read baseline (the commands
-# worker.md Phase 1 ran one-by-one before the single `flowctl anchor
-# <task-id> --md` call replaced them in fn-83.4). This table pins what the
-# bundle must carry, byte-for-byte. Update THIS table in the same change as
-# any worker.md Phase-1 anchor-content edit — the bundle must stay a
-# verbatim superset of the baseline; never reduce this test to "anchor
-# exits 0".
-WORKER_PHASE1_COMMANDS = [
-    ("task_show", ("show", "fn-9.2", "--json")),
-    ("task_md", ("cat", "fn-9.2")),
-    ("spec_show", ("show", "fn-9", "--json")),
-    ("spec_md", ("cat", "fn-9")),
-    ("memory_enabled", ("config", "get", "memory.enabled", "--json")),
-    ("glossary", ("glossary", "list", "--json")),
-    ("memory_index", ("memory", "list", "--json")),
+# Section name -> (the command label the bundle carries, the CLI argv that
+# label denotes). The glossary label names the task's title + description;
+# the fixture title "Build gadget" selects exactly the entries that text does.
+LABELED_FLOWCTL = [
+    ("task_show", "flowctl show fn-9.2 --json", ("show", "fn-9.2", "--json")),
+    ("task_md", "flowctl cat fn-9.2", ("cat", "fn-9.2")),
+    ("spec_show", "flowctl show fn-9 --json", ("show", "fn-9", "--json")),
+    ("spec_md", "flowctl cat fn-9", ("cat", "fn-9")),
+    (
+        "memory_enabled",
+        "flowctl config get memory.enabled --json",
+        ("config", "get", "memory.enabled", "--json"),
+    ),
+    (
+        "glossary",
+        'flowctl glossary list --json --match "<task title + description>"',
+        ("glossary", "list", "--json", "--match", "Build gadget"),
+    ),
+    ("memory_index", "flowctl memory list", ("memory", "list")),
 ]
 
-WORKER_PHASE1_GIT = [
-    ("git_status", ("status",)),
-    ("git_log", ("log", "-5", "--oneline")),
-    ("git_branch", ("rev-parse", "--abbrev-ref", "HEAD")),
+LABELED_GIT = [
+    ("git_status", "git status --short --branch", ("status", "--short", "--branch")),
+    ("git_log", "git log -5 --oneline", ("log", "-5", "--oneline")),
+    ("git_branch", "git rev-parse --abbrev-ref HEAD", ("rev-parse", "--abbrev-ref", "HEAD")),
 ]
 
 EXPECTED_SECTION_ORDER = [
@@ -316,24 +319,20 @@ EXPECTED_SECTION_ORDER = [
 ]
 
 
-class SupersetTest(AnchorRepoTestCase):
-    def test_every_worker_read_verbatim_in_bundle(self) -> None:
-        """Each worker Phase-1 flowctl read == its bundle section, byte-for-byte."""
-        payload = self._bundle()
-        sections = self._sections_by_name(payload)
-        for name, argv in WORKER_PHASE1_COMMANDS:
+class LabeledCommandTest(AnchorRepoTestCase):
+    def test_every_flowctl_section_equals_its_labeled_command(self) -> None:
+        sections = self._sections_by_name(self._bundle())
+        for name, label, argv in LABELED_FLOWCTL:
             with self.subTest(section=name):
                 cli = self._flowctl(*argv)
                 self.assertEqual(cli.returncode, 0, cli.stdout + cli.stderr)
-                self.assertIn(name, sections)
+                self.assertEqual(sections[name]["command"], label)
                 self.assertIsNone(sections[name]["error"])
                 self.assertEqual(sections[name]["output"], cli.stdout)
 
-    def test_every_worker_git_read_verbatim_in_bundle(self) -> None:
-        """git status / log -5 --oneline / branch == bundle sections."""
-        payload = self._bundle()
-        sections = self._sections_by_name(payload)
-        for name, git_argv in WORKER_PHASE1_GIT:
+    def test_every_git_section_equals_its_labeled_command(self) -> None:
+        sections = self._sections_by_name(self._bundle())
+        for name, label, git_argv in LABELED_GIT:
             with self.subTest(section=name):
                 cli = subprocess.run(
                     ["git"] + list(git_argv),
@@ -343,8 +342,16 @@ class SupersetTest(AnchorRepoTestCase):
                     check=True,
                     env=self._pinned_env(),
                 )
+                self.assertEqual(sections[name]["command"], label)
                 self.assertIsNone(sections[name]["error"])
                 self.assertEqual(sections[name]["output"], cli.stdout)
+
+    def test_glossary_carries_only_matching_entries(self) -> None:
+        glossary = json.loads(
+            self._sections_by_name(self._bundle())["glossary"]["output"]
+        )
+        terms = [e["term"] for g in glossary["groups"] for e in g["entries"]]
+        self.assertEqual(terms, ["Gadget"])
 
     def test_section_order_fixed(self) -> None:
         payload = self._bundle()
@@ -365,6 +372,41 @@ class SupersetTest(AnchorRepoTestCase):
         """FULL spec body verbatim — no R-ID filtering, no truncation."""
         sections = self._sections_by_name(self._bundle())
         self.assertEqual(sections["spec_md"]["output"], SPEC_BODY + "\n")
+
+
+class UnreadableTaskBodyTest(AnchorRepoTestCase):
+    def test_bundle_stays_fail_open(self) -> None:
+        """A task body that is not UTF-8 marks its sections unavailable only."""
+        (self.tmpdir / ".flow" / "tasks" / "fn-9.2.md").write_bytes(b"\xff\xfe bad")
+        sections = self._sections_by_name(self._bundle())
+        self.assertEqual(list(sections), EXPECTED_SECTION_ORDER)
+        self.assertIsNotNone(sections["glossary"]["error"])
+        self.assertIsNone(sections["spec_md"]["error"])
+
+
+class GlossarySkipReasonTest(AnchorRepoTestCase):
+    def test_skip_reasons(self) -> None:
+        cases = [
+            ("no glossary", None, "no glossary entry matches"),
+            ("empty husk", "# Glossary\n", "no glossary entry matches"),
+            (
+                "no matching entry",
+                "# Glossary\n\n## Sprocket\n\nUnrelated.\n",
+                "no glossary entry matches",
+            ),
+        ]
+        glossary = self.tmpdir / "GLOSSARY.md"
+        for label, content, reason in cases:
+            with self.subTest(case=label):
+                if content is None:
+                    glossary.unlink(missing_ok=True)
+                else:
+                    glossary.write_text(content, encoding="utf-8")
+                section = self._sections_by_name(self._bundle())["glossary"]
+                self.assertIsNone(section["error"])
+                self.assertIn(reason, section["note"])
+                md = self._flowctl("anchor", "fn-9.2", "--md").stdout
+                self.assertIn(f"({section['note']})", md)
 
 
 # ── Strictly-richer: dependencies ─────────────────────────────────────────

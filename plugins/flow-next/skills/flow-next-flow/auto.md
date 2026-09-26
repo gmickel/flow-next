@@ -177,7 +177,7 @@ Driver condition examples (the default recipe is one `flow --auto` per item; the
 ## Forbidden
 
 - Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. In backlog mode, ambiguity that needs a person is surfaced **async** via the `ask` stage (`ASKED`), never an interactive `AskUserQuestion`. `references/prototype-before-ask.md` licenses no blocking question here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `/flow-next:tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops**, read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), never a pipeline stage, and only on the backlog path. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge belong to land downstream of the PR; release is separate).
+- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `flow-next:flow-next-tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops**, read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), never a pipeline stage, and only on the backlog path. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge belong to land downstream of the PR; release is separate).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. The one exception is `--tick` under `pipeline.chainStages==on`: `make-pr` after this tick's `qa` verified a fresh terminal verdict (Phase 5, Chained stage), which is the `qa+make-pr` tick the deprecated key still buys for one release.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring plus answer round-trip live in tracker-sync; backlog mode invokes them, never re-implements them.
 - **Never execute merge steps inline.** Without current landing authority, either mode ends at the draft PR. The only driver-composition exception is the scoped land stage under `references/tail.md`; backlog mode alone grants no merge authority. Never dispatch another flow, pilot, Ralph, or host loop.
@@ -290,7 +290,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch: /flow-next:tracker-sync reconcile mode:autonomous   (FLOW_AUTONOMOUS=1; no-op when the bridge is inactive)
+     # -> dispatch: flow-next:flow-next-tracker-sync reconcile mode:autonomous   (FLOW_AUTONOMOUS=1; no-op when the bridge is inactive)
    fi
    ```
 
@@ -300,7 +300,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch: /flow-next:tracker-sync list-open mode:autonomous   (no-ops when tracker.readyState unset -> flow-ready specs only)
+     # -> dispatch: flow-next:flow-next-tracker-sync list-open mode:autonomous   (no-ops when tracker.readyState unset -> flow-ready specs only)
    fi
    ```
 
@@ -308,7 +308,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch per tracker-only issue: /flow-next:tracker-sync list-comments <tracker-id> mode:autonomous
+     # -> dispatch per tracker-only issue: flow-next:flow-next-tracker-sync list-comments <tracker-id> mode:autonomous
      # Any error or truncated listing fails closed: do not select from an
      # incomplete question/answer history.
    fi
@@ -319,7 +319,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
    ```bash
    if [ "$DRY" = "0" ]; then
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
-     # -> dispatch per tracker issue: /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous
+     # -> dispatch per tracker issue: flow-next:flow-next-tracker-sync list-relations <tracker-id> mode:autonomous
      #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
      #   GitLab indexes /issues/:iid from the <project>#<iid> it carries - a global id is
      #   NOT a valid path index), never the opaque global id.
@@ -592,12 +592,12 @@ Append `--review=$PILOT_REVIEW` to plan, plan-review, and work only when the use
 
 Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
-- `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> <REVIEW_ARG-if-nonempty>`
-- `plan-review`: `/flow-next:plan-review <spec-id> <REVIEW_ARG-if-nonempty>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
-- `qa`: `/flow-next:qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
-- `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
-- `land`: `/flow-next:land` for one run, with the ordinary PR and current authorization arguments from `references/tail.md`; land's own guards and gates remain authoritative.
+- `plan`: `flow-next:flow-next-plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> <REVIEW_ARG-if-nonempty>`
+- `plan-review`: `flow-next:flow-next-plan-review <spec-id> <REVIEW_ARG-if-nonempty>`
+- `work`: `flow-next:flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
+- `qa`: `flow-next:flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
+- `make-pr`: `flow-next:flow-next-make-pr <spec-id> mode:autonomous`
+- `land`: `flow-next:flow-next-land` for one run, with the ordinary PR and current authorization arguments from `references/tail.md`; land's own guards and gates remain authoritative.
 
 If a sub-skill returns `NEEDS_HUMAN` or `ESCALATE:`, stop this run with `NEEDS_HUMAN` and its reason before advancement/strike handling, even if it committed partial progress. Never re-dispatch that escalated task in this run; its persisted `in_progress` state falls under the stale-claim guard on a later run. If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, also stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 
@@ -725,7 +725,7 @@ When the row is entered, run the chained `make-pr` exactly as the standalone sta
 
 1. Phase 3 branch row for `make-pr` with the branch existing: the qa checkout already put the worktree on `BRANCH_NAME`, so there is no second checkout.
 2. Phase 4 pre-dispatch evidence for `make-pr`: no OPEN PR, already proven by this tick's all-done probe. In backlog mode execute Phase 4's inline allowlist fence with `STAGE=make-pr` immediately before this dispatch.
-3. The Phase 4 dispatch line: `/flow-next:make-pr <spec-id> mode:autonomous`. The PR stays draft under autonomy; this tick ends there. An authorized landing continuation starts in a later invocation, never as a second chained stage.
+3. The Phase 4 dispatch line: `flow-next:flow-next-make-pr <spec-id> mode:autonomous`. The PR stays draft under autonomy; this tick ends there. An authorized landing continuation starts in a later invocation, never as a second chained stage.
 4. The Phase 5 `make-pr` verify above: the same gh open-PR probe, a second `Evidence:` block (`stage=make-pr`), and its own `stage:` outcome line. The qa stage's evidence block and outcome line stay in the transcript as already echoed; one evidence block and one `stage:` line per dispatched stage.
 5. Phase 6 under `stage=qa+make-pr`: the qa `ADVANCED` ledger clear first, then make-pr's own clear or strike with `STAGE=make-pr`. A dirty non-`.flow/` tree or a verify-probe failure (`PR_VERIFY_FAILED=1`) after the chained dispatch is crash-class `NEEDS_HUMAN`, no strike, as for any stage.
 
@@ -755,7 +755,7 @@ fi
 The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:
 
 ```text
-/flow-next:tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id (spec-backed) OR the list-open issue.identifier (tracker-only: the display handle, NOT the global id; GitLab needs the <project>#<iid> it carries to post …/issues/:iid/notes)
+flow-next:flow-next-tracker-sync question <SUBJECT_ID> mode:autonomous     # <SUBJECT_ID> = spec id (spec-backed) OR the list-open issue.identifier (tracker-only: the display handle, NOT the global id; GitLab needs the <project>#<iid> it carries to post …/issues/:iid/notes)
 ```
 
 Where the question parks (spec-backed `## Open Questions` anchor plus mirrored tracker comment, versus tracker-only comment ALONE, never a spec stub), the idempotent anchor-id dedup, and the spec-first floor / no-transport `NEEDS_HUMAN` degradation are single-sourced in [references/backlog-mode.md](references/backlog-mode.md) Phase 3; execute them as written there.

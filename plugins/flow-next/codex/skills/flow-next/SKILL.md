@@ -73,9 +73,9 @@ echo "What was done" > "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md"
 echo '{"commits":["abc123"],"tests":["npm test"],"prs":[]}' > "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json"
 $FLOWCTL done fn-1-add-oauth.2 --summary-file "${TMPDIR:-/tmp}/flow-summary-fn-1-add-oauth.2.md" --evidence-json "${TMPDIR:-/tmp}/flow-evidence-fn-1-add-oauth.2.json" --json
 
-# Validate structure
+# Validate structure (one spec; repo-wide through a counts-and-errors projection)
 $FLOWCTL validate --spec fn-1-add-oauth --json
-$FLOWCTL validate --all --json
+$FLOWCTL validate --all --json | jq '{valid, total_specs, total_tasks, total_errors, total_warnings, root_errors, failing: [.specs[] | select(.errors | length > 0) | {spec, errors}]}'
 ```
 
 ## Common Patterns
@@ -116,18 +116,20 @@ $FLOWCTL validate --all --json
 ### "What tasks are there?"
 
 ```bash
-# All specs
-$FLOWCTL specs --json
-
-# All tasks
-$FLOWCTL tasks --json
-
-# Tasks for specific spec
-$FLOWCTL tasks --spec fn-1-add-oauth --json
+# All tasks, projected (add --spec fn-1-add-oauth for one spec)
+$FLOWCTL tasks --json | jq -c '[.tasks[] | {id, title, status, spec}]'
 
 # Ready tasks for a spec
 $FLOWCTL ready --spec fn-1-add-oauth --json
 ```
+
+### "What's next?"
+
+```bash
+$FLOWCTL brief
+```
+
+`brief` is orientation only: it omits blocked and dependency-waiting tasks, so never answer a task listing from it.
 
 ### "Show me task X"
 
@@ -168,4 +170,4 @@ Legacy formats `fn-N` and `fn-N-xxx` (random 3-char suffix) are still supported.
 - **Every write goes through a flowctl subcommand**, except the `.flow/memory/declined/*.md` file above, which has no flowctl verb. A session that edits `.flow/` JSON or task markdown by hand has broken this.
 - **Every read comes from `.flow/` state**, via `--json` (`detect`, `list`, `specs`, `tasks`, `show`, `ready`) or `cat` for markdown. An answer assembled from files skimmed by hand has broken this.
 - **A task marked complete is closed with `flowctl done` carrying both `--summary-file` and `--evidence-json`.** A bare status flip has broken this.
-- **Requests that need real planning or execution are handed off**, to `/flow-next:plan` and `/flow-next:work`. Improvising them here has broken this.
+- **Requests that need real planning or execution are handed off**, to `$flow-next-plan` and `$flow-next-work`. Improvising them here has broken this.

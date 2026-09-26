@@ -44,7 +44,7 @@
   },
   "skill_contract_tokens": [
     "structured brief",
-    "/flow-next:capture",
+    "flow-next:flow-next-capture",
     "read-back",
     "Skip chart",
     "refine"

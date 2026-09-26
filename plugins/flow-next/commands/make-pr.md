@@ -2,6 +2,7 @@
 name: make-pr
 description: Render a cognitive-aid PR body from flow-next state and open via gh
 argument-hint: "[spec-id] [--draft|--ready] [--base <ref>] [--memory] [--dry-run]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-make-pr`

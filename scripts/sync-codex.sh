@@ -459,12 +459,7 @@ for nf in \
   sed -i.bak \
     -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
     -e 's|Recommended next: /flow-next:\([a-z-]*\) <spec-id>|Recommended next: $flow-next-\1 <spec-id>|g' \
-    -e 's|through `/flow-next:work <spec-id> --no-plan`|through `$flow-next-work <spec-id> --no-plan`|g' \
-    -e 's|then `/flow-next:make-pr <spec-id>`|then `$flow-next-make-pr <spec-id>`|g' \
     -e 's|(`/flow-next:resolve-pr`, CI fixes|(`$flow-next-resolve-pr`, CI fixes|g' \
-    -e 's|or `/flow-next:plan` only on a positive signal|or `$flow-next-plan` only on a positive signal|g' \
-    -e 's|then `/flow-next:work` and review|then `$flow-next-work` and review|g' \
-    -e 's;| `/flow-next:work <spec-id>` on the planned route;| `$flow-next-work <spec-id>` on the planned route;g' \
     -e 's|^  /flow-next:\([a-z-]*\) <SPEC_ID>|  $flow-next-\1 <SPEC_ID>|' \
     -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
     -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
@@ -505,25 +500,17 @@ for nf in \
     -e 's|`/flow-next:memory-migrate` first to make these auditable|`$flow-next-memory-migrate` first to make these auditable|g' \
     -e 's|redirect to plain `/flow-next:work <spec-id> --no-plan`|redirect to plain `$flow-next-work <spec-id> --no-plan`|g' \
     -e 's|recommend `/flow-next:work fn-N --no-plan`|recommend `$flow-next-work fn-N --no-plan`|g' \
-    -e 's;| `/flow-next:work <spec-id> --no-plan`;| `$flow-next-work <spec-id> --no-plan`;g' \
-    -e 's;| `/flow-next:plan-review <spec-id>`;| `$flow-next-plan-review <spec-id>`;g' \
     -e 's|Recommend `/flow-next:work <SPEC_ID> --no-plan`|Recommend `$flow-next-work <SPEC_ID> --no-plan`|g' \
     -e 's|Recommend `/flow-next:work <spec-id> --no-plan`|Recommend `$flow-next-work <spec-id> --no-plan`|g' \
     -e 's|use `/flow-next:plan-review fn-N`|use `$flow-next-plan-review fn-N`|g' \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
-    -e 's|- `plan`: `/flow-next:plan |- `plan`: `$flow-next-plan |g' \
-    -e 's|- `plan-review`: `/flow-next:plan-review |- `plan-review`: `$flow-next-plan-review |g' \
-    -e 's|- `work`: `/flow-next:work |- `work`: `$flow-next-work |g' \
-    -e 's|- `qa`: `/flow-next:qa |- `qa`: `$flow-next-qa |g' \
-    -e 's|- `make-pr`: `/flow-next:make-pr |- `make-pr`: `$flow-next-make-pr |g' \
     -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
     -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
     -e 's|`/flow-next:refine` — never mint an empty task|`$flow-next-refine` — never mint an empty task|g' \
     -e 's|`/flow-next:flow --explain|`$flow-next-flow --explain|g' \
-    -e 's@| `/flow-next:\([a-z-]*\)`@| `$flow-next-\1`@g' \
     "$nf"
   rm -f "${nf}.bak"
 done
@@ -536,13 +523,11 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
+# Skill-id dispatches (`flow-next:flow-next-<name>`) are rewritten mirror-wide
+# after agent generation; these are the remaining slash-form mentions.
 targets = {
-    "auto.md": {"land", "tracker-sync", "make-pr"},
-    "workflow.md": {"capture", "work"},
-    "references/tail.md": {"land"},
-    "references/route-matrix.md": {"land", "refine", "visual"},
-    "references/plan-vs-no-plan.md": {"refine"},
-    "references/gate-selection.md": {"plan-review", "qa", "spec-completion-review"},
+    "auto.md": {"land"},
+    "references/gate-selection.md": {"qa"},
     "references/backlog-mode.md": {"land", "capture", "refine"},
 }
 for relative, names in targets.items():
@@ -552,31 +537,15 @@ for relative, names in targets.items():
     for line in path.read_text().splitlines(keepends=True):
         if "DISPATCH_TARGET=" not in line:
             line = pattern.sub(r"`$flow-next-\1", line)
-        if re.match(r"\s*/flow-next:tracker-sync\s", line) or re.match(
-            r"\s*# -> dispatch\b", line
-        ):
-            line = line.replace("/flow-next:tracker-sync", "$flow-next-tracker-sync")
-        if relative == "references/tail.md":
-            line = line.replace("via the Skill tool", "by reading and following its SKILL.md")
         lines.append(line)
     path.write_text("".join(lines))
+tail = root / "references/tail.md"
+tail.write_text(
+    tail.read_text().replace("via the Skill tool", "by reading and following its SKILL.md")
+)
 FLOW_DISPATCH_TRANSFORM
 
 # --- STRUCTURAL: Task tool → agent invocation ---
-
-# flow-next-work: phases.md + its reached-path references (wave-join.md,
-# host-deferred-review.md, rolling-scheduler.md carry the same actionable
-# invocations post branch-disclosure).
-for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md; do
-  [ -f "$wf" ] || continue
-  # Actionable impl-review invocations must use the Codex skill name. Passive
-  # /flow-next: mentions elsewhere stay.
-  sed -i.bak \
-    -e 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' \
-    -e 's|`/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|g' \
-    "$wf"
-  rm -f "${wf}.bak"
-done
 
 phases="$CODEX_DIR/skills/flow-next-work/phases.md"
 if [ -f "$phases" ]; then
@@ -2077,6 +2046,25 @@ done
 
 echo -e "  ${GREEN}✓${NC} $agent_count agents generated"
 
+# ─── Skill-id invocations → Codex skill mentions (fn-258 R6) ──────────────────
+# Canonical model-side invocations name the Claude skill id
+# (`flow-next:flow-next-<name>`); Codex invokes skills as `$flow-next-<name>`.
+# A slash command spelled with the full skill name (`/flow-next:flow-next-drive`
+# in docs) is a different surface and stays.
+python3 - "$CODEX_DIR" <<'SKILL_ID_TRANSFORM'
+import re
+import sys
+from pathlib import Path
+
+pattern = re.compile(r"(?<![/\w$])flow-next:flow-next-(?=[a-z])")
+for path in sorted(Path(sys.argv[1]).rglob("*")):
+    if path.suffix in {".md", ".toml"} and path.is_file():
+        text = path.read_text()
+        rewritten = pattern.sub("$flow-next-", text)
+        if rewritten != text:
+            path.write_text(rewritten)
+SKILL_ID_TRANSFORM
+
 # ─── 3. Hooks (none by default; fn-114) ───────────────────────────────────────
 # Codex mirror ships ZERO hooks. Plugin hooks/ is gone; Ralph guard registration
 # is agent-driven via /flow-next:ralph-init into project .codex/hooks.json.
@@ -2503,7 +2491,7 @@ passive = {
     ("references/route-matrix.md", "flow"),
     ("references/gate-selection.md", "impl-review"),
 }
-inline = re.compile(r"`(/flow-next:|\$flow-next-)([a-z-]+)([^`]*)`")
+inline = re.compile(r"`(/flow-next:|flow-next:flow-next-|\$flow-next-)([a-z-]+)([^`]*)`")
 
 def calls(path, relative):
     result = []
@@ -2514,10 +2502,10 @@ def calls(path, relative):
             if relative == "auto.md" and skill == "make-pr" and not arguments and "DISPATCH_TARGET=" in line:
                 continue  # parenthetical allowlist identity, not a dispatch
             result.append((prefix, skill, arguments, number))
-        if re.match(r"\s*(?:/flow-next:|\$flow-next-)tracker-sync\s", line) or re.match(
+        if re.match(r"\s*(?:/flow-next:|flow-next:flow-next-|\$flow-next-)tracker-sync\s", line) or re.match(
             r"\s*# -> dispatch\b", line
         ):
-            match = re.search(r"(/flow-next:|\$flow-next-)(tracker-sync)(.*)", line)
+            match = re.search(r"(/flow-next:|flow-next:flow-next-|\$flow-next-)(tracker-sync)(.*)", line)
             if match:
                 result.append((*match.groups(), number))
     return result

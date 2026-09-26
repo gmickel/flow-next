@@ -2,6 +2,7 @@
 name: qa
 description: Live-app real-user QA pass derived from the spec
 argument-hint: "<fn-N>"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-qa`

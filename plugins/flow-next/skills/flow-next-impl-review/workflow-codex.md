@@ -196,7 +196,13 @@ OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
 PHASES_RESUME_SESSION="<1 or 0 printed by Step 0>"
 [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && args+=(--hold-for-phases "$OPTIONAL_PHASES_COUNT")
 [ "$PHASES_RESUME_SESSION" = "1" ] && args+=(--phases-resume-session)
-$FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
+FINALIZE_JSON="$($FLOWCTL codex impl-review-fanout-finalize "${args[@]}")"
+FINALIZE_EXIT=$?
+# The merged body is the file you just wrote; print everything else plus the
+# verdict tag (an empty tag when no verdict came back, which is a failure).
+printf '%s' "$FINALIZE_JSON" | jq -c 'del(.review)' 2>/dev/null || printf '%s\n' "$FINALIZE_JSON"
+printf '<verdict>%s</verdict>\n' "$(printf '%s' "$FINALIZE_JSON" | jq -r '.verdict // empty' 2>/dev/null)"
+exit "$FINALIZE_EXIT"
 ```
 
 If the finalize refuses with `no resumable primary session` (the primary

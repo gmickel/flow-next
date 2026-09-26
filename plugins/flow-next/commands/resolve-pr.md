@@ -2,6 +2,7 @@
 name: resolve-pr
 description: Resolve PR review feedback — fetch unresolved threads, triage, dispatch resolver agents, reply + resolve via GraphQL.
 argument-hint: "[PR number | comment URL | blank for current branch's PR] [--dry-run] [--no-cluster]"
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-resolve-pr`

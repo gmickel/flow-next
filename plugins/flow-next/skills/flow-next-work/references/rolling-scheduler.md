@@ -304,7 +304,7 @@ Before accepting the return or integrating, apply [phases.md Phase 3d](../phases
    `.flow/tmp/base_commit`; a missing base is `BLOCKED`, never an empty review base.
 2. When the task's resolved `REVIEW_MODE` is not `none`, LAUNCH its review
    conductor-side
-   (`/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+   (`flow-next:flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
    from a safe review context per wave-join.md) **as a concurrent activity via
    the thin-wrapper-subagent pattern from the project's orchestration
    guidance - do not wait for the verdict here.** The task transitions to the

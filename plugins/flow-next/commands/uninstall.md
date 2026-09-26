@@ -1,6 +1,7 @@
 ---
 name: uninstall
 description: Remove flow-next files from project
+disable-model-invocation: true
 ---
 
 # Flow-Next Uninstall

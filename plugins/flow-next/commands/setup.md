@@ -1,6 +1,7 @@
 ---
 name: setup
 description: Optional local install of flowctl CLI and project docs
+disable-model-invocation: true
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-setup`

@@ -72,7 +72,8 @@ $FLOWCTL cat "$SPEC_ID"
 $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
-This re-anchor is mandatory before every fix cycle. A user-edited spec is the
+This re-anchor is mandatory before every fix cycle, and its checkpoint is the
+cycle's only one: backend files never save another. A user-edited spec is the
 source of truth; never review or restore a stale generated/checkpoint copy
 unless recovering after context compaction.
 

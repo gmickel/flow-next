@@ -210,13 +210,15 @@ TEMPLATE_HASHES = {
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most. fn-159.6 clarifies that a review
     # call's tag set differs from the step's return set: NEEDS_WORK loops
-    # in-step, while only terminal tags return control to Ralph.
+    # in-step, while only terminal tags return control to Ralph. fn-258 R6:
+    # the rendered prompts name skill ids (`flow-next:flow-next-<name>`), since
+    # command shims are no longer model-invocable (deliberate bump).
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":
-        "1204f37761d6ea6820b909f0b4e3fa95bee8b83e21c8e8c254b0fcdc5ff3c57a",
+        "cfc128637d0a0993221d595943f693b4dc47789ed148eb9a3ddf3a587450d61e",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_work.md":
-        "248442c76588028224774c67f7f0ebb466182e2934e6443ec7d30ece387f2a3f",
+        "e77215dfc42a1c04e0e72d94d2a273b8080b4a12d61e7ce81cd049fda5c4faa7",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_completion.md":
-        "f99bd8e419557c66c6346c581a49a4f8a741bada251988a4a79d37e75cd35e0c",
+        "d3117e907e3b28d1cca2a10c94c5c8b0311a55d829cd081c42350e0e0a1f71f6",
 }
 
 
