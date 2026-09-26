@@ -58,6 +58,7 @@ Final gate run skipped=6 vs baseline 7: the load-dependent timing benchmark in t
 Follow-up (not built): test_chain_consumer_fixtures.py is now the local critical path. It spawns a staged bin/flowctl launcher 183 times, and the bootstrap recompiles flowctl.py from source on each spawn.
 
 stage: impl-review - ran (codex gpt-6-astra high; 3-draw fan-out NEEDS_WORK, re-review SHIP)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
 - Commits: 1de2913b268e934cffe583a3f30c10fc40f1ae7e, 2da699be88b8f05161e4cc59847115b57dadbd9a, 6550384d8d9d06e0dcb074e23f5cc0dc315e42db
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., bash plugins/flow-next/scripts/impl-review_smoke_test.sh (run from scratchpad; 71 passed), ./scripts/sync-codex.sh --check, baseline: green (python3 scripts/run_tests_parallel.py pre-edit: files=234 ran=5044 skipped=7)
