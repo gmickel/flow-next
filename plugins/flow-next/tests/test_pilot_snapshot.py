@@ -119,6 +119,16 @@ class PilotSnapshotTests(unittest.TestCase):
             self.assertNotIn('tracker', row['spec'])
         self.assertLess(len(json.dumps(result)), 60_000)
 
+    def test_failed_open_pr_listing_is_reported(self):
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if command[0] == 'gh':
+                return SimpleNamespace(returncode=1, stdout='')
+            return real_run(command, *args, **kwargs)
+        with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
+            result = f.pilot_snapshot(None)
+        self.assertTrue(result['pr_listing_failed'])
+
     def test_probe_failure_does_not_guess_lifecycle(self):
         result = self.snapshot(failed=True)
         self.assertTrue(result['selected']['pr']['probe_failed'])

@@ -241,6 +241,26 @@ class RefusalInversion(unittest.TestCase):
             self.assertIn("PASSED", present.stdout)
 
 
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_snapshot_write_failure_stops(self) -> None:
+        fence = _fence_from(_read(AUTO_MD), "SNAPSHOT_ARGS=()")
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            (Path(tmp) / ".flow").mkdir()
+            (Path(tmp) / ".flow" / "tmp").write_text("not a directory")
+            stub = Path(tmp) / "flowctl-stub"
+            stub.write_text('#!/usr/bin/env bash\nprintf \'{"guards":{}}\'\n')
+            stub.chmod(0o755)
+            result = subprocess.run(["bash", "-c", fence + "\nprintf PASSED"], cwd=tmp,
+                                    env={**env, "FLOWCTL": str(stub), "PILOT_SPEC": ""},
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("NEEDS_HUMAN", result.stdout)
+        self.assertNotIn("PASSED", result.stdout)
+
+
 class ArgumentParseFence(unittest.TestCase):
     """(8) The argument-parse fence, run for real."""
 

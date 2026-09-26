@@ -74,12 +74,14 @@ Resolve the scope and capture the hop with one read-only call. Shell variables d
 SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
 SNAPSHOT_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
-mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE"
+mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE" \
+  || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot reset the pilot snapshot file"'; exit 1; }
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
   printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot failed: %s"\n' "$PILOT_SNAPSHOT"
   exit 1
 fi
-printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE"
+printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE" \
+  || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot write the pilot snapshot file"'; exit 1; }
 [ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
 ```
 
@@ -196,7 +198,9 @@ it as deferred without current authority. Apply this in backlog mode before
 its wider SELECT as well. A named MERGED PR ends the run `NO_WORK` with its
 merge commit in the reason, an already-bound one per `references/tail.md`;
 missing or closed-unmerged targets stop `NEEDS_HUMAN`, never make-pr. Failed or
-ambiguous probes stop safely. This landing path does not reopen a spec, mint
+ambiguous probes stop safely; an unscoped run whose snapshot reports
+`pr_listing_failed: true` stops `NEEDS_HUMAN`, because done specs with open
+PRs are listed only from that listing. This landing path does not reopen a spec, mint
 tasks, or pass it through build readiness/strike admission.
 
 Consume `counts` and `candidates` from the snapshot in stable id order. A named scope never widens. Each candidate supplies its normalized `spec`, full `tasks`, `chain`, `other_actor_claims`, `strikes`, `would_clear_strikes`, `eligible`, branch and PR observation. `chain.eligible` is the existing dependency predicate; preserve its reason on a hold. Nonempty `other_actor_claims` holds the item. Use `actor` from the snapshot, never resolve it again.

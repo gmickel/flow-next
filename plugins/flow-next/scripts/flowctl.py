@@ -44257,6 +44257,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                        "ready": sum(s.get("ready") is True for s in specs)},
             "candidates": result, "selected": selected, "review_backend": selected["review_backend"] if selected else None,
             "route": selected["route"] if selected else None,
+            "pr_listing_failed": rows is None,
             "current_branch": current, "current_branch_prs": current_prs,
             "current_branch_probe_failed": rows is None or not current, "before_dispatch": selected["tasks"] if selected else []}
 
@@ -49707,6 +49708,13 @@ def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
         error_exit("--merge-plan missing draw items: " + ", ".join(missing), use_json=args.json, code=2)
     if set(collapse) & set(keep) or any(target not in keep for target in collapse.values()):
         error_exit("--merge-plan collapse sources must be omitted from keep and targets must be kept", use_json=args.json, code=2)
+    downgraded = sorted(source for source, target in collapse.items()
+                        if items[source]["classification"] == "introduced"
+                        and items[target]["classification"] != "introduced")
+    if downgraded:
+        error_exit("--merge-plan collapses introduced findings into a pre_existing representative: "
+                   + ", ".join(downgraded) + "; keep the introduced finding as the representative",
+                   use_json=args.json, code=2)
     # Only introduced findings from NEEDS_WORK draws are actionable survivors;
     # pre_existing items stay in the document but never hold off the wedge.
     def actionable(ref: str) -> bool:
