@@ -1565,12 +1565,13 @@ class SubstanceDestructiveTestCase(_SubstanceBase):
             "ls old | xargs rm -f 2>/dev/null\n"
             "find . -name '*.tmp' -exec rm -rf {} +\n"
             "rm -rf > wipe.log\n"
-            "rm -rf dist >/dev/null 2>&1\n",
+            "rm -rf dist >/dev/null 2>&1\n"
+            "find . -exec rm -rf {} + | tee audit.log\n",
         )
         payload = self._classify_full()
         targets = {h["target"] for h in payload["substance"]["destructive_scan"]["hits"]}
         self.assertIn("dist", targets)
-        for junk in ("2>/dev/null", "{}", ">", "wipe.log", ">/dev/null"):
+        for junk in ("2>/dev/null", "{}", ">", "wipe.log", ">/dev/null", "tee"):
             self.assertNotIn(junk, targets)
         self.assertEqual(
             payload["substance"]["tool_managed"]["regenerated_dir_candidates"], ["dist"]

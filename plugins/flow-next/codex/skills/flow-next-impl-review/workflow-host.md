@@ -364,7 +364,7 @@ if [[ -z "$TASK_ID" ]]; then
   if [[ -n "$VERDICT" ]]; then
     "$FLOWCTL" review-findings attach --input "$RECEIPT_INPUT" \
       --receipt "$RECEIPT_PATH" --review-file "$REVIEW_OUTPUT_FILE" \
-      --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --json
+      --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --json || exit $?
   fi
   if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
     echo "ESCALATE: reviewer requested human review" >&2

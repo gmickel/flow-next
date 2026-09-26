@@ -22061,7 +22061,19 @@ def validate_memory_frontmatter(
     )
     unknown = set(frontmatter.keys()) - allowed
     if allow_unknown:
-        unknown = {k for k in unknown if not (isinstance(k, str) and k.isidentifier())}
+        # Keep only plain field names whose value the writer round-trips (a
+        # scalar or flat list); a mapping would be rewritten as a string.
+        unknown = {
+            k for k in unknown
+            if not (
+                isinstance(k, str) and k.isidentifier()
+                and not isinstance(frontmatter[k], dict)
+                and not (
+                    isinstance(frontmatter[k], list)
+                    and any(isinstance(i, (dict, list)) for i in frontmatter[k])
+                )
+            )
+        }
     if unknown:
         errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
 
@@ -52661,6 +52673,8 @@ def _prime_destructive_target(tail: str) -> str:
     skip_operand = False
     for tok in tokens:
         tok = tok.strip("'\"")  # nested quoting (e.g. inside a trap string)
+        if tok in ("|", "|&", "&"):
+            break  # the next command's words are never this command's target
         if skip_operand:
             skip_operand = False
             continue

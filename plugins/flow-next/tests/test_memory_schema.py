@@ -363,6 +363,15 @@ class TestValidateFrontmatter(unittest.TestCase):
         self.assertTrue(any("- option a" in e for e in errors))
         self.assertFalse(any("audit_consolidates" in e for e in errors))
 
+    def test_allow_unknown_rejects_values_the_writer_cannot_round_trip(self) -> None:
+        # A mapping would be rewritten as a quoted string, so a stamp refuses it.
+        for value in ({"owner": "gordon"}, [{"owner": "gordon"}]):
+            with self.subTest(value=value):
+                fm = _valid_bug_frontmatter()
+                fm["custom"] = value
+                errors = flowctl.validate_memory_frontmatter(fm, allow_unknown=True)
+                self.assertTrue(any("custom" in e for e in errors))
+
     def test_invalid_problem_type(self) -> None:
         fm = _valid_bug_frontmatter()
         fm["problem_type"] = "wat"

@@ -908,3 +908,11 @@ class TestHostStandaloneImplReview(unittest.TestCase):
             self.assertEqual(len(calls), 1, calls)
             self.assertTrue(calls[0].startswith("review-findings attach --input in.json"))
             self.assertIn(f"--base {head} --head {head}", calls[0])
+
+            # A failed attach is the run's failure, never a silent exit 0.
+            stub.write_text("#!/usr/bin/env bash\nexit 7\n", encoding="utf-8")
+            result = subprocess.run(
+                [_bash_executable(), "-c", record], cwd=temp, env=env,
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 7, result.stdout + result.stderr)

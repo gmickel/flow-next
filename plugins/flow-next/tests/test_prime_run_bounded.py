@@ -67,7 +67,11 @@ class RunBoundedTest(unittest.TestCase):
             for n, definition in enumerate(self.defs):
                 with self.subTest(shell=shell, definition=n), tempfile.TemporaryDirectory() as tmp:
                     pidfile = Path(tmp) / "grandchild.pid"
-                    call = f"run_bounded 1 sh -c 'sleep 30 & echo $! > {pidfile}; wait'"
+                    # The descendant ignores TERM, so only the KILL escalation ends it.
+                    call = (
+                        f"run_bounded 1 sh -c '( trap \"\" TERM; sleep 30 ) & "
+                        f"echo $! > {pidfile}; wait'"
+                    )
                     proc = self._run(shell, definition, call)
                     self.assertIn("rc=124", proc.stdout, proc.stdout + proc.stderr)
                     self.assertIn("TIMEOUT", proc.stdout)
@@ -83,6 +87,15 @@ class RunBoundedTest(unittest.TestCase):
                 with self.subTest(shell=shell, definition=n):
                     proc = self._run(shell, definition, "run_bounded 5 sh -c 'exit 3'")
                     self.assertIn("rc=3", proc.stdout, proc.stdout + proc.stderr)
+                    self.assertNotIn("TIMEOUT", proc.stdout)
+
+    def test_probe_crossing_a_second_boundary_is_not_a_timeout(self) -> None:
+        for shell in SHELLS:
+            for n, definition in enumerate(self.defs):
+                with self.subTest(shell=shell, definition=n):
+                    time.sleep((0.8 - time.time() % 1) % 1)  # start late in a second
+                    proc = self._run(shell, definition, "run_bounded 1 sh -c 'sleep 0.4'")
+                    self.assertIn("rc=0", proc.stdout, proc.stdout + proc.stderr)
                     self.assertNotIn("TIMEOUT", proc.stdout)
 
 

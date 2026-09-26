@@ -145,13 +145,13 @@ character classes** in every probe pattern (per classification.md's edge-case ru
 # The command leads its own process group (python3 setsid; job control is off in
 # a non-interactive zsh), so a timeout kills everything it started.
 run_bounded() {
-  _limit="$1"; shift; _t0=$(date +%s)
+  _limit="$1"; shift; _mark=$(mktemp)
   python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!
-  ( sleep "$_limit"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!
+  ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!
   wait "$_pid" 2>/dev/null; _rc=$?
-  kill "$_watch" 2>/dev/null
-  [ $(( $(date +%s) - _t0 )) -lt "$_limit" ] || { echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; }
-  return "$_rc"
+  if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124
+  else kill "$_watch" 2>/dev/null; fi
+  rm -f "$_mark"; return "$_rc"
 }
 ```
 
@@ -191,7 +191,7 @@ the worktree guard:
 
 ```bash
 ROOT="${ROOT:-.}"
-run_bounded() { _limit="$1"; shift; _t0=$(date +%s); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; [ $(( $(date +%s) - _t0 )) -lt "$_limit" ] || { echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; }; return "$_rc"; }
+run_bounded() { _limit="$1"; shift; _mark=$(mktemp); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; else kill "$_watch" 2>/dev/null; fi; rm -f "$_mark"; return "$_rc"; }
 PRE_SNAP="$(git -C "$ROOT" status --porcelain 2>/dev/null)"
 # Capture the BUILD's exit status BEFORE truncating output - `$?` after a
 # pipeline is the LAST command's status (tail), which would mark a broken
@@ -249,7 +249,7 @@ BS3 and for AO3 (parseable ready line + deterministic port). Rules:
 
 ```bash
 ROOT="${ROOT:-.}"
-run_bounded() { _limit="$1"; shift; _t0=$(date +%s); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; kill "$_watch" 2>/dev/null; [ $(( $(date +%s) - _t0 )) -lt "$_limit" ] || { echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; }; return "$_rc"; }
+run_bounded() { _limit="$1"; shift; _mark=$(mktemp); python3 -c 'import os,sys; getattr(os,"setsid",int)(); os.execvp(sys.argv[1],sys.argv[1:])' "$@" & _pid=$!; ( sleep "$_limit"; echo fired > "$_mark"; kill -TERM -- -"$_pid" || kill -TERM "$_pid"; sleep 2; kill -KILL -- -"$_pid" || kill -KILL "$_pid" ) >/dev/null 2>&1 & _watch=$!; wait "$_pid" 2>/dev/null; _rc=$?; if [ -s "$_mark" ]; then wait "$_watch" 2>/dev/null; echo "TIMEOUT: exceeded ${_limit}s"; _rc=124; else kill "$_watch" 2>/dev/null; fi; rm -f "$_mark"; return "$_rc"; }
 # Boot only behind a detected ready signal; capture the ready line + bound port as evidence.
 run_bounded 60 sh -c 'cd "$0" && <stacks.md dev/boot command>' "$ROOT" 2>&1 | grep -aiE '(ready|listening|started).*[0-9]{2,5}' | head -3
 ```
