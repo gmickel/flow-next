@@ -201,17 +201,17 @@ A harness fix from Phase 5 is re-driven live (this same Doctor + drive + proof l
 
 **Edit scope.** `.flow/features/**` plus harness scripts the map already names as launch, seed, or drive helpers. Never product code. A path the map does not already own is out of scope.
 
-**Provenance refresh.** A feature file whose route proved in the Phase 4 live pass gets a fresh `**Last proven:** <UTC date> at <git rev-parse --short HEAD>` line when it was a due row in `$RUN_DIR/features-status.json` or was corrected this pass. A file that was already current keeps its line, so a clean pass stays `CLEAN`. The new line replaces a malformed one.
+**Provenance refresh.** Every feature file whose route proved in the Phase 4 live pass gets a `**Last proven:** <UTC date> at <git rev-parse --short HEAD>` line, replacing any older or malformed one. The line changes only when the date or commit does, so a same-day re-run at the same commit stays `CLEAN`.
 
-**Drift-note retirement.** For each Phase 1 drift memo whose named route proved this pass (corrected or already matching), mark it stale per the contract's "Writers and drift notes" section: `"$FLOWCTL" memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>" --json`, failure-tolerant under `set -e` like bug filing. Keep each returned `path` for Phase 6 staging. A memo whose route did not prove stays open. Memory disabled: nothing is marked.
+**Drift-note retirement.** For each Phase 1 drift memo whose named route proved this pass (corrected or already matching), mark it stale per the contract's "Writers and drift notes" section: `"$FLOWCTL" memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>" --json`, failure-tolerant under `set -e` like bug filing. First require `git status --porcelain -- <path>` to be empty for that note (`path` from `open_drift` in `$RUN_DIR/features-status.json`); a note with uncommitted edits stays open and is named in the run notes, so Phase 6's staging and the `BLOCKED` restore only ever touch this run's own retirement. Keep each retired `path` for Phase 6 staging. A memo whose route did not prove stays open. Memory disabled: nothing is marked.
 
 Re-drive every harness fix before leaving this phase. Then teardown (Phase 4 rule) if the instance is still up.
 
 ### Done when
 
 - Every live finding is in exactly one bucket.
-- Map and harness edits exist only for doc drift, re-driven harness gaps, and provenance refreshes of proven due or corrected files.
-- Every drift memo whose route proved is marked stale (memory enabled); none whose route did not prove is.
+- Map and harness edits exist only for doc drift, re-driven harness gaps, and the provenance lines of proven files.
+- Every drift memo whose route proved and whose file was clean is marked stale (memory enabled); none whose route did not prove is.
 - Product bugs are reported and listed for the reason line; none of them are in the staged diff.
 - Every harness fix has a post-fix live proof at a named path, or it was not queued to ship.
 

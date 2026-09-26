@@ -51782,9 +51782,11 @@ def _features_surface_commits(repo_root: Path, base: str, since: list[str]) -> O
 
 
 def cmd_features_status(args: argparse.Namespace) -> None:
-    """Report the feature map's seed/maintain facts; never judges or edits."""
-    if not ensure_flow_exists():
-        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    """Report the feature map's seed/maintain facts; never judges or edits.
+
+    A repo without `.flow/` has no map, so it reads as `seed` (prime assesses
+    uninitialised repos) rather than erroring.
+    """
     features_dir = get_flow_dir() / "features"
     threshold = get_features_stale_after_commits()
     map_exists = features_dir.is_dir()
@@ -51793,7 +51795,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
     memory_dir = get_flow_dir() / MEMORY_DIR
     if get_config("memory.enabled", False) and memory_dir.is_dir():
         open_drift = [
-            {"id": e["entry_id"], "title": e["title"]}
+            {"id": e["entry_id"], "title": e["title"], "path": e["path"]}
             for e in _memory_iter_entries(memory_dir, track="knowledge")
             if e["status"] not in ("stale", "hardened")
             and FEATURES_DRIFT_TAG in (e["tags"] or [])

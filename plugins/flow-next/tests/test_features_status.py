@@ -87,6 +87,12 @@ class FeaturesStatus(MemoryRepoTemplate, unittest.TestCase):
         self.assertEqual(result["recommendation"], "seed")
         self.assertFalse(result["due"])
 
+    def test_repo_without_flow_dir_reads_as_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as bare:
+            subprocess.run(["git", "init", "-q"], cwd=bare, check=True)
+            result = _flowctl(Path(bare), "features", "status", "--json")
+        self.assertEqual((result["recommendation"], result["open_drift"]), ("seed", None))
+
     def test_last_proven_line_states(self) -> None:
         head = self.git("rev-parse", "--short", "HEAD")
         cases = {
@@ -143,11 +149,20 @@ class FeaturesStatus(MemoryRepoTemplate, unittest.TestCase):
         self.write_feature("checkout.md", "**Surface:** web\n**Last proven:** 2026-09-01 at " + head)
         body = self.repo / "drift.md"
         body.write_text("Expected: Settings\nObserved: Preferences\n", encoding="utf-8")
-        added = _flowctl(
-            self.repo, "memory", "upsert", "--track", "knowledge", "--category", "workflow",
-            "--title", "drift: web/checkout checkout.pay", "--tags", "feature-map-drift",
-            "--body-file", str(body), "--json",
-        )
+
+        def report() -> dict[str, Any]:
+            # The reader contract: upsert, then reopen an updated (possibly
+            # retired) note with mark-fresh.
+            out = _flowctl(
+                self.repo, "memory", "upsert", "--track", "knowledge", "--category", "workflow",
+                "--title", "drift: web/checkout checkout.pay", "--tags", "feature-map-drift",
+                "--body-file", str(body), "--json",
+            )
+            if out["action"] == "updated":
+                _flowctl(self.repo, "memory", "mark-fresh", out["entry_id"], "--json")
+            return out
+
+        added = report()
         result = self.status()
         self.assertEqual([d["title"] for d in result["open_drift"]], ["drift: web/checkout checkout.pay"])
         self.assertEqual(result["recommendation"], "maintain")
@@ -155,6 +170,9 @@ class FeaturesStatus(MemoryRepoTemplate, unittest.TestCase):
         result = self.status()
         self.assertEqual(result["open_drift"], [])
         self.assertEqual(result["recommendation"], "none")
+        # The same route drifting again reopens the retired note.
+        self.assertEqual(report()["entry_id"], added["entry_id"])
+        self.assertEqual(self.status()["recommendation"], "maintain")
 
     def test_memory_disabled_leaves_age_condition_alone(self) -> None:
         _flowctl(self.repo, "config", "set", "memory.enabled", "false", "--json")

@@ -445,6 +445,11 @@ EOF
     --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"; then
     _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
     [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
+    # A recurrence reopens a note a maintain pass or work update retired
+    # (upsert keeps a stale note stale). Best-effort, like the upsert.
+    if [ "$(printf '%s' "$_out" | jq -r '.action // empty')" = "updated" ]; then
+      $FLOWCTL memory mark-fresh "$(printf '%s' "$_out" | jq -r '.entry_id')" --json >/dev/null || true
+    fi
   fi
   # On the failure branch: record Expected/Observed plus the listed entry ids
   # in the run notes (same posture as memory-disabled) - never guess an id.
