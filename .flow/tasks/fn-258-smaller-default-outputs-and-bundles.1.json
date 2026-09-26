@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-26T13:01:40.164461Z",
+  "depends_on": [],
+  "id": "fn-258-smaller-default-outputs-and-bundles.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-258-smaller-default-outputs-and-bundles",
+  "spec_path": ".flow/tasks/fn-258-smaller-default-outputs-and-bundles.1.md",
+  "status": "todo",
+  "title": "Implement Smaller default outputs and bundles (audit wave 4)",
+  "updated_at": "2026-09-26T13:01:40.164461Z"
+}
