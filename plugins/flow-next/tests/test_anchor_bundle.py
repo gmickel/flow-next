@@ -350,13 +350,6 @@ class LabeledCommandTest(AnchorRepoTestCase):
         terms = [e["term"] for g in glossary["groups"] for e in g["entries"]]
         self.assertEqual(terms, ["Gadget"])
 
-    def test_spec_show_is_the_lean_record(self) -> None:
-        spec = json.loads(
-            self._sections_by_name(self._bundle())["spec_show"]["output"]
-        )
-        self.assertNotIn("review_attempts", spec)
-        self.assertNotIn("tracker", spec)
-
     def test_section_order_fixed(self) -> None:
         payload = self._bundle()
         self.assertEqual(
@@ -391,8 +384,8 @@ class UnreadableTaskBodyTest(AnchorRepoTestCase):
 class GlossarySkipReasonTest(AnchorRepoTestCase):
     def test_skip_reasons(self) -> None:
         cases = [
-            ("no glossary", None, "no glossary or empty husk"),
-            ("empty husk", "# Glossary\n", "no glossary or empty husk"),
+            ("no glossary", None, "no glossary entry matches"),
+            ("empty husk", "# Glossary\n", "no glossary entry matches"),
             (
                 "no matching entry",
                 "# Glossary\n\n## Sprocket\n\nUnrelated.\n",

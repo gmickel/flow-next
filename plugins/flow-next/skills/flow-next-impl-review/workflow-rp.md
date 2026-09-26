@@ -136,15 +136,12 @@ if [[ "$SETUP_EXIT" -ne 0 ]]; then
       --output-file "$RESPONSE_FILE" --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
       --exit-code "$SETUP_EXIT" --json)"
     RECORD_EXIT=$?
-    # Only the fields the next step reads; the full ledger stays in flowctl.
-    if [[ "$RECORD_EXIT" -eq 0 ]]; then
-      printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .attempts[-1].verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-    else
-      printf '%s\n' "$RECORD_JSON"
-    fi
     if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      printf '%s\n' "$RECORD_JSON"
       exit "$RECORD_EXIT"
     fi
+    # Only the fields the next step reads; the full ledger stays in flowctl.
+    printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
   fi
   exit "$SETUP_EXIT"
 fi
@@ -429,15 +426,12 @@ if [[ -n "$TASK_ID" ]]; then
     ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} \
     --exit-code "$RP_EXIT" --json)"
   RECORD_EXIT=$?
-  # Only the fields the next step reads; the full ledger stays in flowctl.
-  if [[ "$RECORD_EXIT" -eq 0 ]]; then
-    printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .attempts[-1].verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-  else
-    printf '%s\n' "$RECORD_JSON"
-  fi
   if [[ "$RECORD_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$RECORD_JSON"
     exit "$RECORD_EXIT"
   fi
+  # Only the fields the next step reads; the full ledger stays in flowctl.
+  printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
   # A concurrent SHIP landed while this review ran: the verdict was recorded
   # as evidence, charged no round, and wrote no status. Routing it as a live
   # terminal would fix-loop against a pre-SHIP artifact.

@@ -72,10 +72,10 @@ in the lifecycle skills; this file defines the comment shape + dedup the wiring 
 
 Appends don't conflict, but a naive re-sync re-posts everything. The facade
 deduplicates posts by marker. The pull fold is the agent's: it skips flow's own
-marked comments (Layer 1) and human-pasted copies of them (the human-paste fold
+marked comments (the marker check) and human-pasted copies of them (the human-paste fold
 rule); **any** hit ⇒ skip the import.
 
-### Layer 1 — the embedded marker (primary, exact)
+### Marker check — the embedded marker (primary, exact)
 
 Every flow-posted comment carries a **hidden HTML-comment marker** as its first
 line. The marker is the canonical dedup key and the back-reference all at once:
@@ -150,7 +150,7 @@ the exact-match fence.
 
 The hard case R8 names explicitly: **a human copy-pastes a flow comment** (e.g.
 pastes the evidence block into a *new* tracker comment) — it has **no marker** and
-a **new id**, so Layer 1 misses it. The facade receives an already-folded spec and
+a **new id**, so the marker check misses it. The facade receives an already-folded spec and
 does not filter pasted copies, so the pull fold applies this rule over the fetched
 listing:
 
@@ -170,7 +170,7 @@ re-imported" (R8) actually hold.
 ```
 # PULL (tracker → flow sync log), over the fetched listing:
 for c in listing:
-  if c.body has a flow-owned marker: continue   # Layer 1: flow's own marked comment — skip
+  if c.body has a flow-owned marker: continue   # marker check: flow's own marked comment — skip
                                              #   (flow-next:sync / flow-next:question / flow-next:status)
   if c carries flow-next:answer id=<id>:     # human ANSWER (marker stays null): the round-trip
      claim it by <id> for the question-valve (steps.md Phase 7) BEFORE Sync-Log;
@@ -222,7 +222,7 @@ no duplicate evidence comment.
 ## The async question-valve markers
 
 Backlog mode's `ask` stage posts a **question-valve comment** through this same
-`postComment` channel, behind a **distinct marker family** that rides the Layer-1
+`postComment` channel, behind a **distinct marker family** that rides the marker
 dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
 
 ```html
@@ -236,7 +236,7 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
   mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
   hash**, so rephrasing the question never spawns a duplicate anchor.
-- **Round-aware dedup by `id` (Layer 1).** Before posting a question,
+- **Round-aware dedup by `id` (marker check).** Before posting a question,
   `listComments` and collect matching `flow-next:question` and
   `flow-next:answer` markers. Compare normalized immutable `created_at` values:
   latest question → **skip** (the subject is parked); latest answer → post a new
@@ -248,7 +248,7 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   any post. A racing identical ask returns retryable `question_in_flight`; its
   retry then sees and deduplicates against the winner's open marker.
 - **`flow-next:question` is flow-posted ⇒ it carries a flow-owned marker ⇒ NOT
-  pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
+  pulled into the Sync Log** (the marker check on pull — it is flow's own structured
   comment, like every flow-marked comment). The
   question's durable home is the spec `## Open Questions` (spec-backed) or the tracker
   comment itself (tracker-only) — never the Sync Log.
@@ -264,7 +264,7 @@ dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
   falls through to the normal Sync-Log append (a genuine tracker comment).
 
 This is additive to the marker dedup — the question-valve markers are a second
-marker *vocabulary* on the same Layer-1 channel, not a new dedup mechanism.
+marker *vocabulary* on the same marker channel, not a new dedup mechanism.
 
 ## The ONE edit-in-place exception — the rolling "flow-next status" comment (opt-in)
 
@@ -306,7 +306,7 @@ indentation and line-wrapping. Both comments are in the fetched listing.
 
 **Action:** pull comments into the sync log.
 
-**Expected:** the pasted comment has **no marker** (Layer 1 misses), but its
+**Expected:** the pasted comment has **no marker** (the marker check misses), but its
 normalized body **equals** the normalized body of the flow-marked comment in the
 same listing (human-paste fold rule) → **do NOT import** it into the sync log.
 
@@ -320,7 +320,7 @@ flow's own content and skipped (this is the R8 anti-echo guarantee).
 
 **Action:** pull comments.
 
-**Expected:** no marker (Layer 1 pass), normalized body matches no flow-marked
+**Expected:** no marker (the marker check passes), normalized body matches no flow-marked
 comment in the listing (human-paste rule pass) → **append to `## Sync Log`**,
 crediting the PM + timestamp.
 
@@ -334,7 +334,7 @@ promoted to an R-ID. PASS iff the genuine comment is logged (and only logged).
 
 **Action:** pull comments.
 
-**Expected:** Layer 1 — the body carries a flow-owned marker → **skip** (flow's own echo);
+**Expected:** marker check — the body carries a flow-owned marker → **skip** (flow's own echo);
 never re-import flow's structured comment into the sync log.
 
 **Oracle:** the sync log gains nothing from flow's own comment. PASS iff the marked
@@ -366,7 +366,7 @@ reason.
 **Action:** the `question` op recomputes `id` and `listComments` before posting.
 
 **Expected:** the rephrase leaves `id == H1` (prose is OUTSIDE the hash) →
-Layer-1 dedup finds the latest marker is the existing
+the marker check finds the latest marker is the existing
 `flow-next:question id=H1` → **skip the re-post**. No duplicate open question.
 
 If a later `flow-next:answer id=H1` exists, the next ask posts a new question
@@ -407,7 +407,7 @@ threaded one.
   agent skips flow-marked comments and marker-less comments whose normalized body
   matches a flow-marked comment in the same listing. Any hit ⇒ skip.
 - **The question-valve markers** — `flow-next:question id=<hash>` /
-  `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
+  `flow-next:answer id=<hash>` — ride the marker channel keyed on a STABLE `id`
   (free prose outside the hash, never a bare tracker key). The authoring + answer
   round-trip live in [steps.md](../steps.md) Phase 7; this file owns their dedup +
   the `flow-next:answer`-vs-Sync-Log distinction.

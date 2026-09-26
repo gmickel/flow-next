@@ -53,6 +53,8 @@ class GlossaryMatchTest(unittest.TestCase):
             ("avoid-alias hit", "ask the judge", ["Review backend"]),
             ("case + whitespace", "the REVIEW\n   Backend and a gate", ["Review backend", "Gate"]),
             ("whole word only", "a decision on precise judgement", []),
+            ("plural forms", "two review backends and several gates", ["Review backend", "Gate"]),
+            ("plural alias", "ask the judges", ["Review backend"]),
             ("no match", "nothing relevant", []),
         ]
         for label, text, expected in cases:

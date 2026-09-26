@@ -694,13 +694,13 @@ def _glossary_entry_occurs(entry: dict[str, Any], text: str) -> bool:
     Case-insensitive and whitespace-collapsed like `_glossary_term_matches`;
     an occurrence is a whole-word one (not flanked by word characters), so a
     short alias such as `CI` or `pin` does not hit inside `decision` or
-    `shipping`.
+    `shipping`; a plural suffix (`receipts`, `specs`) still counts.
     """
     haystack = re.sub(r"\s+", " ", text.lower())
     for name in [entry.get("term") or "", *(entry.get("avoid") or [])]:
         needle = re.sub(r"\s+", " ", str(name).strip().lower())
         if needle and re.search(
-            rf"(?<!\w){re.escape(needle)}(?!\w)", haystack
+            rf"(?<!\w){re.escape(needle)}(?:e?s)?(?!\w)", haystack
         ):
             return True
     return False
@@ -38366,17 +38366,8 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         None,
     )
     note = None
-    if err is None:
-        try:
-            if not json.loads(out).get("total_terms"):
-                note = (
-                    "no glossary entry matches the task title or description"
-                    " - skipped"
-                    if any(_glossary_load(p) for p in find_all_glossaries())
-                    else "no glossary or empty husk - skipped"
-                )
-        except (ValueError, AttributeError) as exc:
-            err = f"unparseable glossary output: {exc}"
+    if err is None and not json.loads(out).get("total_terms"):
+        note = "no glossary entry matches the task title or description - skipped"
     add("glossary", glossary_cmd, out, err, note=note)
 
     # memory index only when memory.enabled resolves true — mirroring the

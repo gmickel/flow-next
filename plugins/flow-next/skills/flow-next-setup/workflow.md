@@ -69,7 +69,7 @@ Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
 - Which docs file to prefer (CLAUDE.md vs AGENTS.md)
 - Whether to copy Codex agents to project (hooks are **not** copied here — Ralph is opt-in via the Ralph question + `/flow-next:ralph-init`)
-- Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor** / **Grok**; `/flow-next-plan` flat form for **OpenCode**; `$flow-next-plan` for Codex)
+- Which command-name syntax the docs snippet uses (skill ids such as `flow-next:flow-next-plan` for Claude Code / Droid / **Cursor** / **Grok**; `/flow-next-plan` flat form for **OpenCode**; `$flow-next-plan` for Codex)
 
 ### Done when
 
@@ -564,13 +564,13 @@ For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (
 }
 ```
 
-For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; lifecycle snippet defaults to CLAUDE.md (canonical Claude-format target, `/flow-next:` slash syntax — NOT the Codex `$flow-next-` one). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped; text outside markers untouched). The routing block still targets AGENTS.md (where host-review workflows read it):
+For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; lifecycle snippet defaults to CLAUDE.md (canonical Claude-format target, named by skill id (`flow-next:flow-next-plan`) — NOT the Codex `$flow-next-` form). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped; text outside markers untouched). The routing block still targets AGENTS.md (where host-review workflows read it):
 ```json
 {
   "header": "Docs",
   "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched. Grok loads both CLAUDE.md and AGENTS.md.",
   "options": [
-    {"label": "CLAUDE.md only (Recommended)", "description": "Add flow-next section to CLAUDE.md (canonical Grok lifecycle target; /flow-next: slash syntax)"},
+    {"label": "CLAUDE.md only (Recommended)", "description": "Add flow-next section to CLAUDE.md (canonical Grok lifecycle target; Claude-format skill ids)"},
     {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
     {"label": "Both", "description": "Add flow-next section to both files (recommended when you also want the routing block's sibling lifecycle snippet nearby)"},
     {"label": "Skip", "description": "Don't update documentation"}
@@ -725,7 +725,7 @@ esac
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
-- AGENTS.md on **Claude Code / Droid / Cursor / Grok**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` slash syntax — Cursor and Grok run the slash commands, so their AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
+- AGENTS.md on **Claude Code / Droid / Cursor / Grok**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (names skills by id, `flow-next:flow-next-plan` — Cursor and Grok resolve those ids, so their AGENTS.md must carry this snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
 - AGENTS.md on **OpenCode**: use the Claude-flavor snippet rewritten `/flow-next:` → `/flow-next-` via the 6b temp-template block (`$SNIPPET_TEMPLATE`). Never the Codex `$flow-next-` form. Pass that rewritten file as `--template` to every `setup-block apply` / `resolve` for this platform so hashes match the bytes written.
 - CLAUDE.md (any platform — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md). On OpenCode, if CLAUDE.md is also a resolved target, apply the same `/flow-next:` → `/flow-next-` rewrite (same `$SNIPPET_TEMPLATE`) so both files carry the flat form.
 

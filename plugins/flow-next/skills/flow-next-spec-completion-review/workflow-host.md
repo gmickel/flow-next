@@ -245,13 +245,12 @@ RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
   --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --json)"
 RECORD_EXIT=$?
-# Only the fields the next step reads; the full ledger stays in flowctl.
-if [[ "$RECORD_EXIT" -eq 0 ]]; then
-  printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .attempts[-1].verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
-else
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
   printf '%s\n' "$RECORD_JSON"
+  exit "$RECORD_EXIT"
 fi
-[[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
+# Only the fields the next step reads; the full ledger stays in flowctl.
+printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict: .verdict, timestamp: .attempts[-1].timestamp, review_rounds}'
 # A refunded (no-verdict) record journals nothing attachable — record already
 # completed its own bookkeeping; attach only a delivered verdict.
 if [[ -n "$VERDICT" ]]; then
