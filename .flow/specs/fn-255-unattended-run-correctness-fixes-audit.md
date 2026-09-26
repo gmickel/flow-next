@@ -70,6 +70,8 @@ These fixes remove wrong outcomes on unattended paths, so they come before any e
 
 Removed at review as overengineering (round 1): defaulting push's `--flow-file` to the local spec - unrelated to the divergence fix; updating aggregate fan-out metadata after every draw - the per-draw files are already durable.
 
+R8 guard convergence: commands containing grouping syntax (parentheses, backticks) or text the tokenizer cannot read get the base guard's full text rules as a floor, so they are never less strict than before; plain commands use command-word matching, which removes the false blocks and also catches quoting tricks the base text screen missed (`co''dex exec`). Rejected at review (round 7): chasing deliberate obfuscation such as `env -S "codex exec hi"` - the guard is a rail against an agent's accidental direct calls, not an adversarial boundary, and the base screen never was one.
+
 ## Strategy Alignment
 
 - Design principle "deterministic machinery is reserved for unattended-trust rails (receipts, rollback, guard shapes, schemas)": R1-R4, R8, R14 and R15 repair exactly those rails.
