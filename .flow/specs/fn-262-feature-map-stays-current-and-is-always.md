@@ -71,6 +71,8 @@ The maintainer wants feature maps across most of flow's routes to cut wall-clock
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: feature-map-aware bug intake (fn-261), the feature map across live-app routes, a hardened defect route, the hill-climb loop, answering questions by experiment, sharper handovers, a read-only PR status answer, diagnosing a captured profile, and resume and review hygiene. fn-261 and the live-app-routes spec depend on this one.
 
+Related open work: fn-260 R5 studies trimming the drive skill's main file to save tokens, and R3 and R4 study moving rarely used work and worker content into references loaded only when their condition holds. New drive, work and worker text from this spec goes into those conditional references, not the always-loaded files.
+
 ## Strategy Alignment
 
 Serves **Self-improving through normal work** directly: the map stays true as a side effect of work, drift reports and a due trigger replace remembering an extra command, and the maintain pass becomes an occasional clean-up rather than the only upkeep.

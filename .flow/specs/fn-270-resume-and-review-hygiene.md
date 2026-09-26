@@ -59,6 +59,8 @@ The maintainer asked for every improvement from this review, including the lower
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: the feature map stays current, feature-map-aware bug intake (fn-261), the feature map across live-app routes, a hardened defect route, the hill-climb loop, answering questions by experiment, sharper handovers, a read-only PR status answer, and diagnosing a captured profile. It stands alone.
 
+Related open work: fn-260 R3 and R4 study moving rarely used work and worker content into references loaded only when their condition holds. The pause and pilot-before-batch guidance added here is rarely reached, so it goes into those conditional references rather than the always-loaded work and worker files.
+
 ## Strategy Alignment
 
 Serves **Self-improving through normal work**: review-bot patterns accrete from resolve-pr runs and are read back without a separate ceremony.

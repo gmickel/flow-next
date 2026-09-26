@@ -59,6 +59,8 @@ The maintainer asked for this set of flow improvements to be captured and made e
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: the feature map stays current, feature-map-aware bug intake (fn-261), the feature map across live-app routes, a hardened defect route, the hill-climb loop, sharper handovers, a read-only PR status answer, diagnosing a captured profile, and resume and review hygiene. It stands alone.
 
+Related open work: fn-260 R8 studies refine's question count against a sealed answer key. This spec changes refine's question categories, so sequence the two: land this spec before that study's baseline is drawn, or after its result, never between its draws.
+
 ## Strategy Alignment
 
 Serves the approach line that material product or authority choices need refinement while everything else stays with the owner: experiments move factual questions off the user.

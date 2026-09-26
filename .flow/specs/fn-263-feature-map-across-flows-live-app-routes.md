@@ -61,6 +61,8 @@ The maintainer wants the feature map in most routes ("we would add the features 
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: the feature map stays current, feature-map-aware bug intake (fn-261), a hardened defect route, the hill-climb loop, answering questions by experiment, sharper handovers, a read-only PR status answer, diagnosing a captured profile, and resume and review hygiene. It depends on "feature map stays current" and on fn-261.
 
+Related open work: fn-260 R5 studies trimming the drive skill's main file to save tokens. New drive text from this spec goes into drive's existing references, not its always-loaded file.
+
 ## Strategy Alignment
 
 Serves the approach line that flow is the one dial on the default path: the routes it chooses get faster when the map exists. Serves **Self-improving through normal work**: the map becomes a shared asset every live route reads and reports drift against.

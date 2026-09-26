@@ -62,6 +62,8 @@ The maintainer asked for every improvement from this review to be captured and d
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: the feature map stays current, feature-map-aware bug intake (fn-261), the feature map across live-app routes, a hardened defect route, the hill-climb loop, answering questions by experiment, a read-only PR status answer, diagnosing a captured profile, and resume and review hygiene. It stands alone.
 
+Related open work: fn-260 R3 and R4 study moving rarely used work and worker content into references loaded only when their condition holds. The escalation-format lines added here belong to the always-reached escalation path, so they stay where the escalation format lives; nothing here adds to the rare branches those studies move.
+
 ## Strategy Alignment
 
 Serves the approach line of reviewable handover objects between idea and merge: both changes make an existing handover object carry the reasoning a human needs.

@@ -66,6 +66,8 @@ The maintainer asked for all of the flow improvements from this review to be cap
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: keeping the feature map current, feature-map-aware bug intake (fn-261), the feature map across live-app routes, a hardened defect route, the hill-climb loop, answering questions by experiment, sharper handovers, a read-only PR status answer, and resume and review hygiene. It stands alone; its recommended next routes may point at the hill-climb and defect specs once they ship.
 
+Related open work: fn-260 R2 studies splitting what `flow --auto` loads per hop, including intake-only routing rows. The new captured-profile row is intake-only (auto never takes raw intent) and is placed so it joins whatever intake-only split that study keeps.
+
 ## Strategy Alignment
 
 Serves the approach line that flow reads whatever the user has, including artifacts, and routes it through one shared routing reference; evidence over narration is kept by the confidence labels.

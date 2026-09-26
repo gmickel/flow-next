@@ -78,6 +78,8 @@ The maintainer wants flow to be as powerful as possible and asked for every one 
 
 This spec is one of a set captured together to strengthen `/flow-next:flow`: keeping the feature map current, feature-map-aware bug intake (fn-261), the feature map across live-app routes, the hill-climb loop, answering questions by experiment, sharper handovers, a read-only PR status answer, diagnosing a captured profile, and resume and review hygiene. It depends on fn-261 because both change the defect route's reproduction step; landing fn-261 first avoids two conflicting edits of the same step.
 
+Related open work: fn-260 R2 studies splitting what `flow --auto` loads per hop, including intake-only routing content. The defect route's step detail lives with work and the worker, and any routing-row wording stays within the row so auto's per-hop load does not grow; worker additions follow fn-260 R4's conditional-reference placement.
+
 ## Strategy Alignment
 
 Serves the approach line that flow reads whatever the user has and routes it through one shared routing reference; this makes the most common route do its job fully. Serves **Self-improving through normal work**: refuted hypotheses and root causes flow into the bug track, and the prior-fix check reads them back.
