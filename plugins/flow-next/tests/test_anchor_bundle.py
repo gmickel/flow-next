@@ -253,12 +253,15 @@ class AnchorRepoTestCase(unittest.TestCase):
 
     def _flowctl(self, *args: str) -> "subprocess.CompletedProcess[str]":
         """Run the production CLI wire form (exactly what the worker runs)."""
+        # Pin UTF-8 both ways: the text memory index carries an em dash, and a
+        # Windows locale code page would otherwise decode the two sides apart.
         return subprocess.run(
             [*FLOWCTL_CMD] + list(args),
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,
-            env=self._pinned_env(),
+            encoding="utf-8",
+            env={**self._pinned_env(), "PYTHONIOENCODING": "utf-8"},
         )
 
     def _bundle(self, task_id: str = "fn-9.2") -> dict:
