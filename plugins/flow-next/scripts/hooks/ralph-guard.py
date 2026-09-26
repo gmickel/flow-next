@@ -221,10 +221,10 @@ def _raw_receipt_write(command: str, receipt_path: str) -> bool:
 
 
 def _needs_text_floor(command: str) -> bool:
-    """Grouping syntax (`(`, `)`, backticks) outside single quotes defeats argv
-    classification in ways that keep surfacing as bypasses, so such commands
-    also get the pre-tokenizer text screens: never less strict than before."""
-    return bool(re.search(r"[`()]", re.sub(r"'[^']*'", "", command)))
+    """Grouping syntax (`(`, `)`, backticks) defeats argv classification in ways
+    that keep surfacing as bypasses, so any command containing it also gets the
+    pre-tokenizer text screens: never less strict than before."""
+    return bool(re.search(r"[`()]", command))
 
 
 def _raw_launch_violation(command: str) -> Optional[str]:
