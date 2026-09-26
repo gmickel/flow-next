@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-257-correctness-and-hygiene-sweep-audit",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-09-25T20:30:51.244889Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-255-unattended-run-correctness-fixes-audit"
   ],
   "id": "fn-257-correctness-and-hygiene-sweep-audit",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-257-correctness-and-hygiene-sweep-audit.md",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T20:33:41.379779Z"
+  "updated_at": "2026-09-26T10:09:12.754008Z"
 }
