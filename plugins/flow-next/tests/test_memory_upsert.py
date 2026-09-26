@@ -31,22 +31,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
-from flowctl_test_support import FLOWCTL_CMD
-
-
-def _init_repo(tmp: Path) -> Path:
-    """Initialize a fresh .flow/ repo with memory enabled + tree created."""
-    for cmd in (
-        ["init", "--json"],
-        ["config", "set", "memory.enabled", "true", "--json"],
-        ["memory", "init", "--json"],
-    ):
-        subprocess.check_call(
-            [*FLOWCTL_CMD, *cmd],
-            cwd=tmp,
-            stdout=subprocess.DEVNULL,
-        )
-    return tmp / ".flow" / "memory"
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD, MemoryRepoTemplate
 
 
 def _run(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
@@ -83,11 +70,11 @@ def _entry_files(memory_dir: Path) -> list[Path]:
 TITLE = "drift: web/login sub-1"
 
 
-class TestMemoryUpsert(unittest.TestCase):
+class TestMemoryUpsert(MemoryRepoTemplate, unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
-        self.memory_dir = _init_repo(self.tmp)
+        self.memory_dir = self.init_repo(self.tmp)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -366,7 +353,7 @@ def _pyyaml_available() -> bool:
     return True
 
 
-class TestUpsertTitleRoundTrip(unittest.TestCase):
+class TestUpsertTitleRoundTrip(MemoryRepoTemplate, unittest.TestCase):
     """A stored title must survive write+read byte-for-byte (PR #385 review).
 
     Unquoted YAML-coercible titles (e.g. `2026-08-30T00:00:00Z`) parsed to
@@ -380,7 +367,7 @@ class TestUpsertTitleRoundTrip(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
-        self.memory_dir = _init_repo(self.tmp)
+        self.memory_dir = self.init_repo(self.tmp)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()

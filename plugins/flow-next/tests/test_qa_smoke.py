@@ -39,9 +39,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
-
-HERE = Path(__file__).resolve()
 
 SPEC_TITLE = "QA smoke probe"
 # A minimal plan body carrying the two sections the QA skill derives from.

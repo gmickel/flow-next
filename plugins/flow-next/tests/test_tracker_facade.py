@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]

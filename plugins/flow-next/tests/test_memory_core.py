@@ -65,6 +65,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import flowctl  # noqa: E402  (path-injected import)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD, MemoryRepoTemplate  # noqa: E402
 
 

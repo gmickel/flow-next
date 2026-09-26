@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
 
 PLUGIN = Path(__file__).resolve().parents[1]

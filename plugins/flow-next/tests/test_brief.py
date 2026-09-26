@@ -44,6 +44,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))

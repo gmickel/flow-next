@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import Mock, patch
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
