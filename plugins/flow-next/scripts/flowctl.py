@@ -39208,8 +39208,8 @@ def _anchor_match_text(task_id: str) -> str:
     md_path = get_flow_dir() / TASKS_DIR / f"{task_id}.md"
     try:
         content = md_path.read_text(encoding="utf-8")
-    except OSError:
-        content = ""
+    except (OSError, UnicodeDecodeError):
+        content = ""  # unreadable description: match on the title alone
     return f"{task_data.get('title', '')}\n" + get_task_section(
         content, "## Description"
     )
@@ -39290,8 +39290,14 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         None,
     )
     note = None
-    if err is None and not json.loads(out).get("total_terms"):
-        note = "no glossary entry matches the task title or description - skipped"
+    if err is None:
+        try:
+            matched = bool(json.loads(out).get("total_terms"))
+        except (ValueError, AttributeError):
+            err = "glossary output was not a JSON object"
+        else:
+            if not matched:
+                note = "no glossary entry matches the task title or description - skipped"
     add("glossary", glossary_cmd, out, err, note=note)
 
     # memory index only when memory.enabled resolves true — mirroring the
