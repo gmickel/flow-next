@@ -6,6 +6,17 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Work keeps the feature map current as part of the change.** When a spec changes how a user reaches a mapped feature (a renamed button, a moved page, a removed sub-feature), work's quality phase updates only those feature files, proves each new route with one live drive, and ships the map diff in the same PR as the code. If the app cannot start, or the change cannot be tied to one file, work leaves the map alone and files a drift note for the next maintain pass instead of guessing.
+- **Flow tells you when the map needs a maintain pass.** With no argument, `/flow-next:flow` prints `Also recommended: /flow-next:features` when an open `feature-map-drift` note exists or a feature was last proven 50 or more code-changing commits ago on the default branch. Flow recommends the pass and never runs it; `/flow-next:features` stays user-invoked. Change the threshold with `flowctl config set features.staleAfterCommits <n>`.
+- **Feature files record when they were last proven.** Seed, maintain and work write a `**Last proven:** <date> at <short commit>` line under `**Surface:**`. Existing maps stay valid; files without the line read as never proven, so the first due report asks for one maintain pass. `flowctl features status [--json]` reports the line, each file's age and the open drift notes.
+
+### Changed
+
+- **Setup and prime always recommend the feature map.** Setup prints the `/flow-next:features` line on every run, not only when live QA is on: seed when no map exists, maintain when one is due. Prime's report carries the same line beside its QA-readiness line.
+- **Drift notes close when a route is re-proven.** A maintain pass or work update that proves the route a `feature-map-drift` note names marks the note stale, so the open count means open drift. Drive now files the same note as QA when a mapped route no longer matches the live app.
+
 ## [flow-next 6.1.1] - 2026-09-26
 
 The Flow-Next block that setup writes into CLAUDE.md and AGENTS.md now points agents at the prose skill they can actually call, and plan dispatches its scouts one step faster.

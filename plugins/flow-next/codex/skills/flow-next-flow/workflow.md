@@ -26,6 +26,8 @@ With no argument, resolve the item from the most recent thing Flow can see, firs
 
 5. Ask once what to work on (`plain-text numbered prompt`, or the plain-text fallback).
 
+On that no-argument reading, also run `$FLOWCTL features status --json` once. When its `recommendation` is `maintain` (a map exists and an open drift note or a feature's last-proven age makes it due), print `Also recommended: /flow-next:features - feature map due a maintain pass (<reasons>)` after the report's `Next:` line. Flow recommends it and never dispatches it; the skill stays user-invoked.
+
 ## Step 2: Route
 
 Read [references/route-matrix.md](references/route-matrix.md). In auto mode use the route already returned by `pilot snapshot`; in attended mode call once per hop:

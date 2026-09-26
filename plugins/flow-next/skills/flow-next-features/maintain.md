@@ -6,7 +6,7 @@ Autonomy refusal and `MODE=maintain` are already resolved in [SKILL.md](SKILL.md
 
 **Live driving consumes the drive skill by pointer.** Read [`plugins/flow-next/skills/flow-next-drive/SKILL.md`](../flow-next-drive/SKILL.md) (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this. Execute the universal flow (`observe → snapshot fresh refs → act → verify → capture`) yourself. A transcript that "calls" flow-next-drive as if it were an API has broken this too.
 
-Maintain is not a second QA pass and never replaces QA. Edit scope is `.flow/features/` plus harness scripts the map already names as launch, seed, or drive helpers. Never product code.
+Maintain is not a second QA pass and never replaces QA. Edit scope is `.flow/features/` plus harness scripts the map already names as launch, seed, or drive helpers, plus the status of the drift notes it retires. Never product code.
 
 Run notes and live evidence land under `.flow/tmp/features-<run-id>/` (gitignored, same per-run tmp convention QA uses), referenced by path, never inlined. The `changed` PR carries `.flow/features/**` plus owned harness corrections. Run notes, scratch, and evidence stay out.
 
@@ -35,7 +35,7 @@ mkdir -p "$RUN_DIR"
 2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
 3. **Record the base revision.** Persist `git rev-parse origin/<default>` (e.g. to `$RUN_DIR/entry_base`) - Phase 6's staleness recheck compares revisions, never the working tree, so the run's own later edits can never masquerade as base movement.
 
-`jq` and a working Python (`python3`, `python`, or `py -3`) must be on PATH. `$FLOWCTL` is required for `memory list` on the `feature-map-drift` tag and `memory add` for bug filing. Memory disabled or uninitialised: treat drift search and bug filing as empty, record that in the run notes, continue.
+`jq` and a working Python (`python3`, `python`, or `py -3`) must be on PATH. `$FLOWCTL` is required for `features status`, `memory list` on the `feature-map-drift` tag, `memory mark-stale` for drift-note retirement, and `memory add` for bug filing. Memory disabled or uninitialised: treat drift search and bug filing as empty, record that in the run notes, continue.
 
 This file is self-sufficient. Do not assume SKILL.md already exported `$FLOWCTL`.
 
@@ -69,6 +69,14 @@ Empty → no memos, continue. Fold every listed memo into this pass's targets (f
 **Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
 
 Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay in the live-pass queue and are marked doc drift for Phase 5.
+
+**Provenance facts.** Record the map's last-proven state before any edit:
+
+```bash
+"$FLOWCTL" features status --json > "$RUN_DIR/features-status.json"
+```
+
+Rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
 
 **Partial-seed retries.** The index's "identified, not yet proven" entries (a prior seed named them as failed routes) join this pass's live-pass queue as candidates - proving them is the retry the seed verdict promised. One that proves gains its feature file; one that fails again stays named in the index and in this run's outcome reason.
 
@@ -193,12 +201,17 @@ A harness fix from Phase 5 is re-driven live (this same Doctor + drive + proof l
 
 **Edit scope.** `.flow/features/**` plus harness scripts the map already names as launch, seed, or drive helpers. Never product code. A path the map does not already own is out of scope.
 
+**Provenance refresh.** A feature file whose route proved in the Phase 4 live pass gets a fresh `**Last proven:** <UTC date> at <git rev-parse --short HEAD>` line when it was a due row in `$RUN_DIR/features-status.json` or was corrected this pass. A file that was already current keeps its line, so a clean pass stays `CLEAN`. The new line replaces a malformed one.
+
+**Drift-note retirement.** For each Phase 1 drift memo whose named route proved this pass (corrected or already matching), mark it stale per the contract's "Writers and drift notes" section: `"$FLOWCTL" memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>" --json`, failure-tolerant under `set -e` like bug filing. Keep each returned `path` for Phase 6 staging. A memo whose route did not prove stays open. Memory disabled: nothing is marked.
+
 Re-drive every harness fix before leaving this phase. Then teardown (Phase 4 rule) if the instance is still up.
 
 ### Done when
 
 - Every live finding is in exactly one bucket.
-- Map and harness edits exist only for doc drift and re-driven harness gaps.
+- Map and harness edits exist only for doc drift, re-driven harness gaps, and provenance refreshes of proven due or corrected files.
+- Every drift memo whose route proved is marked stale (memory enabled); none whose route did not prove is.
 - Product bugs are reported and listed for the reason line; none of them are in the staged diff.
 - Every harness fix has a post-fix live proof at a named path, or it was not queued to ship.
 
@@ -214,18 +227,18 @@ Pick exactly one. `blocked-for-this-pass` features prevent `CLEAN` (coverage was
 
 ### CLEAN
 
-Every feature was covered (live exercise, `verified-unreachable` with the required pair, or source-confirmed deletion). No map or owned-harness change. **No branch, no PR.**
+Every feature was covered (live exercise, `verified-unreachable` with the required pair, or source-confirmed deletion). No map or owned-harness change, no provenance refresh, no retired drift note. **No branch, no PR.**
 
 `features=<n>` is the count of feature files remaining in the map.
 
 ### CHANGED
 
-At least one proven map or owned-harness correction.
+At least one proven map or owned-harness correction, provenance refresh, or retired drift note.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
 2. **Re-fetch and re-verify the base first**: fetch `origin/<default>` again and compare `git rev-parse origin/<default>` against the entry-recorded base revision (`$RUN_DIR/entry_base`) - a revision comparison only, never a working-tree diff: the run's own map and harness edits are dirty by design at this point, and the entry gate already proved the tree matched the base it recorded. A base that advanced during the source/live passes means the proofs no longer describe the code the PR will be reviewed against; end `BLOCKED` naming the moved base (re-run maintain from the updated checkout). Then create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>-<run-id>` (the preamble's `$RUN_ID` suffix keeps a second same-day pass collision-free locally and on the remote) from `origin/<default>` (both gates just proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. If the repo runs a formatter over markdown (pre-commit hook, `biome`, `oxfmt`, `prettier`), run it over the edited owned paths first — a pre-commit hook that rewrites the files mid-commit ships a diff nobody re-read, or forces a formatter-artifact follow-up commit. Re-read anything the formatter changed.
-4. Stage **only** `.flow/features/**` plus the owned harness files that were re-driven. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
+4. Stage **only** `.flow/features/**`, the owned harness files that were re-driven, and the memory files of the drift notes Phase 5 retired. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
 5. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
 
 ```bash
@@ -249,7 +262,7 @@ If the push or `gh pr create` fails: do not claim `CHANGED`. End `BLOCKED` namin
 
 A named blocker stopped the pass: orphaned port, concurrent isolation failure, source-reader collapse, or a `gh pr create` failure after proven commits. Reason names what blocked.
 
-**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. Restore uncommitted map/harness edits to HEAD - the entry gate proved owned paths were clean at start, so everything dirty under them is this run's own work; pre-existing user edits were never admitted. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
+**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. Restore uncommitted map/harness edits and the drift notes this run retired to HEAD - the entry gate proved owned paths were clean at start, so everything dirty under them is this run's own work; pre-existing user edits were never admitted. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
 
 `features=<n>` is the count of features fully covered before the block (`0` if none).
 

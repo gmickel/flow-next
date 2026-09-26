@@ -263,6 +263,7 @@ Rules:
   the spec. Neither are filesystem-identity, permission, or concurrency guards
   (realpath/symlink containment, lock-guarded writes, forced excludes of
   runtime state) — never trim a guard as scope.
+- Never edit `.flow/features/`: the conductor updates the feature map at its quality phase ([feature-map-update.md](../skills/flow-next-work/references/feature-map-update.md)); when this task changes how a user reaches a mapped feature, name the changed route in the done summary.
 - Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
 - **Confirm a new test fails for the intended reason before fixing** — run it

@@ -367,6 +367,13 @@ DESCRIPTIONS: dict[str, str] = {
         "release-claim --break-stale --reason is allowed only after a claim "
         "is at least this old; always audited (actor, prior owner, age, reason)."
     ),
+    "features": "Feature-map settings (fn-262): the maintain-pass due trigger.",
+    "features.staleAfterCommits": (
+        "Due threshold (default 50). flowctl features status reports the "
+        "feature map due a maintain pass when a feature file's last proof is "
+        "at least this many default-branch commits old, counting only commits "
+        "that change a file outside .flow/ and docs."
+    ),
     "pilot": "/flow-next:flow --auto settings (the pilot key name is kept).",
     "pilot.autonomy": (
         "Backlog mode for flow --auto (--backlog forces it per run). Scalar string-enum (ready | backlog), "
@@ -631,6 +638,8 @@ def _build_table() -> list[tuple[str, dict]]:
         ("chart", {"kind": "object", "open": False}),
         ("chart.maxDecisions", {"type": "integer"}),
         ("chart.claimStaleAfter", {"type": "number"}),
+        ("features", {"kind": "object", "open": False}),
+        ("features.staleAfterCommits", {"type": "integer", "minimum": 1}),
         ("pilot", {"kind": "object", "open": False}),
         ("pilot.autonomy", {"enum": ["ready", "backlog"]}),
         (

@@ -22,6 +22,14 @@ Every feature file opens with:
 
 `<id>` is a short deterministic token such as `web` or `cli`. The index groups entries by it. Consumers select by surface + sub-feature IDs. Enumeration is observation, not a question for the user.
 
+4. An optional provenance line as the first non-blank line after the surface line:
+
+```text
+**Last proven:** <YYYY-MM-DD> at <short commit>
+```
+
+The date is the day (UTC) a live drive proved this file's route, and the commit is `git rev-parse --short HEAD` at that drive. Seed, maintain and work's feature-map update step write or refresh it when their live drive proves the route. A file without the line reads as never proven. A malformed line (any other shape or position, or a second copy) reads as absent, and maintain reports it. `flowctl features status --json` parses the line and measures each file's age. The line names no source paths.
+
 Then **exactly four H2s, in this order, no others**:
 
 | H2 | Owns |
@@ -58,6 +66,20 @@ Partial seed: the index names features that were identified but failed to prove,
 
 ---
 
+## Writers and drift notes
+
+Two writers exist. `/flow-next:features` seeds and maintains the whole map, and work's update step (`flow-next-work/references/feature-map-update.md`) edits only the entries its own change altered. Every other stage that drives from the map (QA, drive, bug intake, and later live-app routes) is a reader and never edits the map mid-run.
+
+A reader that finds a mapped route no longer matching the live app files a drift note, then continues with live route discovery:
+
+- Identity: knowledge track, category `workflow`, tag `feature-map-drift`, title exactly `drift: <surface>/<feature-slug> <sub-feature-id>`. The title is the dedup key, so a changed spelling files a duplicate.
+- Write: `flowctl memory upsert` with that title, body two lines, `Expected: <mapped route or command>` and `Observed: <what the live app did>`. QA's §5.5 fence in `flow-next-qa/workflow.md` is the reference invocation. A failed upsert never aborts the run.
+- Memory disabled: record Expected/Observed in the stage's run notes instead.
+
+**Retirement.** A maintain pass or a work update that proves the route a note names (corrected or not) marks that note stale, so an open count means open drift: `flowctl memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>"`. The note list comes from `flowctl features status --json` (`open_drift`, ids plus titles). Memory disabled: nothing is marked.
+
+---
+
 ## Worked example
 
 A small notes app. Invented. The file below is a complete feature file a seed run would write after one live drive of each listed route.
@@ -68,6 +90,7 @@ A small notes app. Invented. The file below is a complete feature file a seed ru
 The notes list is the home surface: a signed-in user sees every note they own, newest first, and can open one or start a new note.
 
 **Surface:** web
+**Last proven:** 2026-09-20 at 4f2c9ab
 
 ## Sub-features
 

@@ -416,6 +416,8 @@ Emit exactly one QA-readiness line:
 - **anything less** (tier < 3 or any DR-core member failing) -> "QA stage would fail here: <name the missing DR-core items>", so the team fixes the prerequisites before switching the stage on.
 - **shape/tier-capped repo** (library / plugin / prose, or a tier 1-2 ceiling stack per [classification.md](classification.md)) -> "QA stage not applicable to this shape" - never a gap, never a fabricated pass.
 
+Beside it, always emit one **feature-map line**, whatever the QA-readiness outcome or shape, from `.recommendation` of `$FLOWCTL features status --json` (read-only; a repo with no `.flow/` reads as `seed`): `seed` -> "Feature map: run `/flow-next:features` to seed `.flow/features/` so QA, drive and bug intake reuse how a user reaches each feature"; `maintain` -> "Feature map: due a maintain pass (<reasons>) - run `/flow-next:features`"; `none` -> "Feature map: current". A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
+
 ### Feedback latency (FH8, report-only) + gh-CLI host line (FH9, informational)
 
 **FH8 latency - time only what ALREADY executed (resolution 3).** Local suite wall time is taken from the Phase 2 runs that ALREADY happened - the bounded build (§2.3), the test-discovery run (§2.2), the verify command when a gate ran it. **NEVER run a full suite for timing.** When nothing timeable executed, report **"not measured locally"** and fall back to the CI median. Build-caching config (turbo / nx / actions-cache) is reported alongside. FH8 is report-only - no fix, no score.
@@ -484,7 +486,7 @@ Assemble the inputs the Phase 4 headline renders. The maturity level is DEMOTED 
 3. **Hard-gate status** - G1 / G2 / G3 from §2.10; any failing gate is NAMED here and caps the maturity level at 2.
 4. **Top-5 ranked next-actions** - drawn from the [playbooks.md](playbooks.md) ranked-actions catalog in leverage order, selected from the ACTUAL gaps across Pillars 1-5 + the scored groups (AO / DR / TO / HP / FH-scored). File-level and specific; each carries its catalog tier (Critical / High / Medium / Bonus) and consent boundary. Reference the catalog - never restate it.
 
-Thread the three lines computed above into the headline block: the **QA-readiness line** (DR-core), the **FH8 latency** line, and the **FH9 gh-CLI** host line. **P0 findings** (HP9 inline secret, HP7 suspicious hook) surface in the headline regardless of any score.
+Thread the four lines computed above into the headline block: the **QA-readiness line** (DR-core), the **feature-map line** beside it, the **FH8 latency** line, and the **FH9 gh-CLI** host line. **P0 findings** (HP9 inline secret, HP7 suspicious hook) surface in the headline regardless of any score.
 
 The verdict is the DATA assembled here; the shape-specific RENDERING (report body per classification, the passing-row compression rule) is Phase 4 / [playbooks.md](playbooks.md), and playbook SELECTION is the Phase 0.5 classification block. Under `--report-only` the verdict still assembles and renders (Phase 4), only remediation is skipped.
 
@@ -494,7 +496,7 @@ The verdict is the DATA assembled here; the shape-specific RENDERING (report bod
 
 **This phase RENDERS the Phase 3 verdict assembly - it never recomputes it.** The classification
 block, the operability tier + cheapest move, the hard-gate status, the top-5 ranked actions, the
-QA-readiness line, the FH8 latency line, the FH9 gh-CLI host line, and the P0 findings are all
+QA-readiness line, the feature-map line, the FH8 latency line, the FH9 gh-CLI host line, and the P0 findings are all
 DATA already assembled in Phase 3's "Verdict assembly" section - Phase 4 lays them out. Playbook
 SELECTION happened in Phase 0.5; the per-shape BODY templates live in [playbooks.md](playbooks.md)
 ("Report shapes per classification") and the compression rule lives there too - reference them,
@@ -532,6 +534,8 @@ Drawn from the [playbooks.md](playbooks.md) ranked-actions catalog in leverage o
 5. …
 
 **QA-readiness**: [the single line from Phase 3's DR-core determination - RENDER ONLY, never recompute: "QA-ready: consider `/flow-next:qa` / enabling `pipeline.qa`" | "QA stage would fail here: <missing DR-core items>" | "QA stage not applicable to this shape"].
+
+**Feature map**: [the feature-map line from Phase 3, beside the QA-readiness line - RENDER ONLY].
 
 **Feedback latency** (FH8, report-only): [local suite wall time from the Phase 2 runs that already executed, or "not measured locally"] · CI median: [from `gh run list`, or "not available (gh)"] · build caching: [turbo/nx/actions-cache or none].
 

@@ -13,7 +13,9 @@ Split that keeps existing contracts intact: **map = how a user gets there (compo
 
 Seed-mode phases live in [seed.md](seed.md); read it only once mode detection resolves `MODE=seed`. Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md).
 
-There is no flowctl features subcommand. The skill validates the four-H2 shape itself. The only flowctl calls are `memory list` for the `feature-map-drift` tag handoff and `memory add` (overlap-judged fold) for bug filing on the maintain path.
+The skill validates the four-H2 shape itself. Its flowctl calls on the maintain path are `features status` (read-only: last-proven age and open drift notes), `memory list` for the `feature-map-drift` tag handoff, `memory mark-stale` to retire drift notes whose route proved, and `memory add` (overlap-judged fold) for bug filing.
+
+This skill and work's feature-map update step (entries its own change altered, [feature-map-update.md](../flow-next-work/references/feature-map-update.md)) are the only map writers; every other stage reads the map and files drift notes ([references/feature-entry-contract.md](references/feature-entry-contract.md), "Writers and drift notes").
 
 ## Preamble
 

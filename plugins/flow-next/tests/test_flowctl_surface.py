@@ -111,6 +111,7 @@ cursor validate
 dep add
 detect
 done
+features status
 gate check
 gate classify
 gate receipt

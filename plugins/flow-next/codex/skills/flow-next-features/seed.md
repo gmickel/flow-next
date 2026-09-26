@@ -111,7 +111,7 @@ Never drive an instance this run did not start.
 
 Write `.flow/features/README.md` from the index shape in [references/feature-entry-contract.md](references/feature-entry-contract.md). Required operating-rule sections: baseline preconditions, driving conventions, proof standards, feature-entry contract pointer. Group entries by `**Surface:**`. State isolation (side-by-side ports/profiles, or a run refuses to double-drive a shared instance).
 
-Write **one file per proven feature**. Each opens with H1 title + one paragraph of user-visible behavior + a one-line `**Surface:**` identifier, then exactly four H2s in order: `Sub-features` / `How to get to it (user POV)` / `Driving it` / `Gotchas`. Driving it starts with `Preconditions:`, then labeled bullets pairing each user action with an exact command and its observable result.
+Write **one file per proven feature**. Each opens with H1 title + one paragraph of user-visible behavior + a one-line `**Surface:**` identifier + a `**Last proven:** <UTC date of the Phase 4 drive> at <git rev-parse --short HEAD>` line directly under it, then exactly four H2s in order: `Sub-features` / `How to get to it (user POV)` / `Driving it` / `Gotchas`. Driving it starts with `Preconditions:`, then labeled bullets pairing each user action with an exact command and its observable result.
 
 Partial seed: write the proven files; name failures in the index and in the verdict `reason`. Do not write a file for a failed route.
 
@@ -122,7 +122,7 @@ If the repo runs a formatter over markdown (pre-commit hook, `biome`, `oxfmt`, `
 ### Done when
 
 - The index carries the four operating-rule sections plus surface grouping/selection semantics (consumers select by surface + sub-feature IDs).
-- Each feature file matches the four-H2 + `**Surface:**` contract.
+- Each feature file matches the four-H2 + `**Surface:**` contract and carries a `**Last proven:**` line for its Phase 4 drive.
 - Failures are named. Zero undriven files sit under `.flow/features/`.
 - A zero-proven run wrote nothing: `.flow/features/` does not exist, so the next run re-enters seed.
 

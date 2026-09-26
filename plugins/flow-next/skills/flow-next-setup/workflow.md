@@ -627,7 +627,7 @@ Only process answers for questions that were asked (config values that were unse
 - If "on": `"${PLUGIN_ROOT}/scripts/flowctl" config set pipeline.qa on --json`
 - If "auto": `"${PLUGIN_ROOT}/scripts/flowctl" config set pipeline.qa auto --json`
 - Any other answer: leave the persisted value alone (it stays the materialized `off`) and say so in the summary.
-- When the persisted value is `on` or `auto`, Step 8 prints the one-line `/flow-next:features` recommendation.
+- Step 8 prints the one-line `/flow-next:features` recommendation whatever the persisted value.
 
 **Criteria** (if question was asked):
 - If "Scaffold": copy the bundled template (resolved from the plugin install - the file is user content from this moment on, so no re-run ever refreshes or compares it):
@@ -849,9 +849,18 @@ Optional next step — connect a tracker:
   Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
 
-**Feature-map recommendation (only when the persisted `pipeline.qa` is `on` or `auto`).** Print one line after the tracker proposal so the live pass can reuse how a user reaches each feature:
+**Feature-map recommendation (always, whatever `pipeline.qa` says).** Print one line after the tracker proposal, chosen by `"${PLUGIN_ROOT}/scripts/flowctl" features status --json` `.recommendation`. The map lets QA, drive and bug intake reuse how a user reaches each feature instead of rediscovering it. Setup never runs the seed itself: it launches and drives the live app. A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
 
-```
-Recommended next step: run /flow-next:features to seed .flow/features/ - live QA reads it to navigate the app.
-```
+- `seed` (no `.flow/features/`):
+  ```
+  Recommended next step: run /flow-next:features to seed .flow/features/ - QA, drive and bug intake read it to reach each feature without rediscovering the route.
+  ```
+- `maintain` (a map is due):
+  ```
+  Recommended next step: run /flow-next:features to maintain .flow/features/ - it is due (<reasons joined by "; ">).
+  ```
+- `none` (a current map):
+  ```
+  Feature map: current. Run /flow-next:features when flow or setup reports it due.
+  ```
 

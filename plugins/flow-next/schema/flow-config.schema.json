@@ -679,6 +679,19 @@
         }
       }
     },
+    "features": {
+      "description": "Feature-map settings (fn-262): the maintain-pass due trigger.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "staleAfterCommits": {
+          "description": "Due threshold (default 50). flowctl features status reports the feature map due a maintain pass when a feature file's last proof is at least this many default-branch commits old, counting only commits that change a file outside .flow/ and docs.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 50
+        }
+      }
+    },
     "pilot": {
       "description": "/flow-next:flow --auto settings (the pilot key name is kept).",
       "type": "object",

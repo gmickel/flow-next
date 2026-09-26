@@ -91,7 +91,7 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 └── .cache/                # (auto-gitignored) CLI model-resolution cache
 ```
 
-`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs). `features/` appears on first `/flow-next:features` seed (tracked like specs; the skill validates the four-H2 shape itself - there is no `flowctl features` subcommand).
+`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs). `features/` appears on first `/flow-next:features` seed (tracked like specs; the skill validates the four-H2 shape itself, and the only flowctl surface is the read-only `flowctl features status`).
 
 ### Charts layout (fn-135)
 
@@ -109,12 +109,18 @@ Multi-file chart mutations (map + sidecars + ledger + dependent cascade) are one
 
 ### Feature-map layout (fn-211)
 
-The feature map is committed team knowledge, like specs and memory: a directory a cold agent can drive from. Consumers (QA, drive) discover it by existence check only. Absent directory is today's behavior at zero added cost. There is no config key, no registration, and no `flowctl` validation of the four-H2 shape - `/flow-next:features` validates that itself.
+The feature map is committed team knowledge, like specs and memory: a directory a cold agent can drive from. Consumers (QA, drive, and the live-app routes of flow) discover it by existence check only. Absent directory is today's behavior at zero added cost. There is no registration and no `flowctl` validation of the four-H2 shape - `/flow-next:features` validates that itself.
 
 | Path | Role |
 |---|---|
 | `.flow/features/README.md` | Index and operating rules: baseline preconditions, driving conventions, proof standards, feature-entry contract, surfaces grouped by `**Surface:**`. |
-| `.flow/features/<feature>.md` | One file per user-facing feature. H1 + one paragraph of user-visible behavior, required `**Surface:**` line, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it`, `Gotchas`. |
+| `.flow/features/<feature>.md` | One file per user-facing feature. H1 + one paragraph of user-visible behavior, required `**Surface:**` line, optional `**Last proven:** <date> at <short commit>` line under it, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it`, `Gotchas`. |
+
+**Keeping it current (fn-262).** Three mechanisms keep the map true without a remembered command:
+
+- **Work updates it with the code.** At work's quality phase, when `.flow/features/` exists, the conductor updates only the feature files whose user route this spec's change altered, proves each new route with one live drive, and refreshes their last-proven lines ([`feature-map-update.md`](../skills/flow-next-work/references/feature-map-update.md)). An app that cannot start, or a change it cannot tie to one file, becomes a drift note instead of an edit. Besides `/flow-next:features`, this is the only map writer.
+- **Every reader reports drift.** QA, drive, and every live-app route that drives from the map file a `feature-map-drift` knowledge note (deterministic title `drift: <surface>/<feature-slug> <sub-feature-id>`, `memory upsert`) when a mapped route no longer matches the live app, and never edit the map mid-run. A maintain pass or work update that proves the named route marks the note stale, so an open count means open drift.
+- **A due trigger.** `flowctl features status` reports the map due when an open drift note exists or a feature's last proof is at least `features.staleAfterCommits` (default 50) surface-touching default-branch commits old. Flow's no-argument what-next reading recommends `/flow-next:features` then; setup and prime always print the seed or maintain recommendation. None of them dispatch it: the maintain pass stays user-invoked, or runs from a host loop the human starts.
 
 Maintain's `changed` PR ships `.flow/features/**` plus owned harness corrections. Run notes, scratch state, and live-pass evidence stay under the gitignored per-run tmp convention. Skill: [`../skills/flow-next-features/SKILL.md`](../skills/flow-next-features/SKILL.md).
 

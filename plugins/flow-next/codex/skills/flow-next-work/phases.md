@@ -722,6 +722,7 @@ Context optimization. Each task gets fresh context:
 
 After all tasks complete (or periodically for large specs):
 
+- When `.flow/features/` exists, once all tasks are done, run [references/feature-map-update.md](references/feature-map-update.md) first: it updates the feature files whose user route this change altered.
 - Run `$FLOWCTL gate classify --base "$(cat .flow/tmp/spec_base)"`; exit 0 means docs-only tier-B: run lint/format only and note `Gates: docs-only tier-B` for the Phase 5 final summary. On nonzero, run the full gates.
 - For each full gate (test) command that would run, first probe `$FLOWCTL gate check --gate <gate_id> --command "<cmd>"`; exit 0 means skip that re-run and note `Gates: baseline reused (green receipt <sha8>)` for the Phase 5 final summary. On nonzero, run it. After any passing full gate run here, write its receipt with `$FLOWCTL gate receipt --gate <gate_id> --command "<cmd>"`.
 - Run lint/format per repo

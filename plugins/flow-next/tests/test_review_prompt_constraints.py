@@ -278,6 +278,9 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_gate_status_paths"): 1,
                 ("subprocess.run", "_gate_walk_candidate_ok"): 3,
                 ("subprocess.run", "cmd_gate_classify"): 1,
+                # fn-262: `features status` reads rev-parse and log for the
+                # feature map's last-proven age (plain git plumbing, no LLM).
+                ("subprocess.run", "_features_git"): 1,
                 ("subprocess.run", "_prime_git"): 1,
                 ("subprocess.Popen", "_prime_parse_ls_files_staged"): 1,
                 ("subprocess.run", "_prime_git_free_tool"): 1,

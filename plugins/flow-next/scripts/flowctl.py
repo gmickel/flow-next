@@ -211,6 +211,9 @@ CHARTS_RESOURCE_LOCK_NAME = "charts-resource.lock"
 CHART_DEFAULT_MAX_DECISIONS = 12
 # Stale-claim age threshold in hours; break-stale requires age >= this.
 CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS = 24
+# Feature-map due trigger (fn-262): surface-touching default-branch commits
+# since a feature file's last proof before a maintain pass is due.
+FEATURES_DEFAULT_STALE_AFTER_COMMITS = 50
 CHART_DECISION_TYPES = frozenset(
     {"research", "probe", "eval", "prototype", "interview", "task"}
 )
@@ -1468,6 +1471,10 @@ def get_default_config() -> dict:
             "maxDecisions": CHART_DEFAULT_MAX_DECISIONS,
             "claimStaleAfter": CHART_DEFAULT_CLAIM_STALE_AFTER_HOURS,
         },
+        # fn-262 — feature-map due trigger: a mapped feature whose last proof
+        # is this many surface-touching default-branch commits old makes
+        # `flowctl features status` report the map due a maintain pass.
+        "features": {"staleAfterCommits": FEATURES_DEFAULT_STALE_AFTER_COMMITS},
         # fn-68.1 — pilot backlog-mode autonomy gate, seeded so
         # `config get pilot.autonomy` returns the enum string "ready" (NOT
         # null) on a fresh repo via the defaults MERGE. SCALAR STRING-ENUM
@@ -51696,6 +51703,177 @@ def cmd_gate_classify(args: argparse.Namespace) -> None:
     sys.exit(0 if tier == "tier-b" else 1)
 
 
+# --- Feature-map status (fn-262) ---
+
+FEATURES_DRIFT_TAG = "feature-map-drift"
+_FEATURES_LAST_PROVEN_PREFIX = "**Last proven:**"
+_FEATURES_LAST_PROVEN_RE = re.compile(
+    r"^\*\*Last proven:\*\* (\d{4}-\d{2}-\d{2}) at ([0-9a-f]{7,40})$"
+)
+
+
+def get_features_stale_after_commits() -> int:
+    """Configured due threshold in surface-touching commits (default 50)."""
+    raw = get_config("features.staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+    if isinstance(raw, bool):
+        return FEATURES_DEFAULT_STALE_AFTER_COMMITS
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return FEATURES_DEFAULT_STALE_AFTER_COMMITS
+    return n if n >= 1 else FEATURES_DEFAULT_STALE_AFTER_COMMITS
+
+
+def _features_parse_last_proven(text: str) -> tuple[str, Optional[dict]]:
+    """Return (state, {date, commit}) for one feature file's provenance line.
+
+    state is `proven`, `never-proven` (no line), or `malformed` (anything but
+    exactly one well-formed `**Last proven:** <date> at <commit>` line as the
+    first non-blank line after `**Surface:**`). Malformed reads as absent.
+    """
+    lines = [line.strip() for line in text.replace("\r\n", "\n").split("\n")]
+    hits = [i for i, line in enumerate(lines) if line.startswith(_FEATURES_LAST_PROVEN_PREFIX)]
+    if not hits:
+        return "never-proven", None
+    surface = next((i for i, line in enumerate(lines) if line.startswith("**Surface:**")), None)
+    if len(hits) != 1 or surface is None:
+        return "malformed", None
+    following = next((i for i in range(surface + 1, len(lines)) if lines[i]), None)
+    match = _FEATURES_LAST_PROVEN_RE.match(lines[hits[0]])
+    if following != hits[0] or not match:
+        return "malformed", None
+    try:
+        datetime.strptime(match.group(1), "%Y-%m-%d")
+    except ValueError:
+        return "malformed", None
+    return "proven", {"date": match.group(1), "commit": match.group(2)}
+
+
+def _features_git(repo_root: Path, *argv: str) -> Optional[str]:
+    """stdout of one git call, or None on any failure."""
+    try:
+        proc = subprocess.run(
+            ["git", *argv], cwd=repo_root, capture_output=True,
+            text=True, encoding="utf-8", check=False,
+        )
+    except OSError:
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def _features_surface_commits(repo_root: Path, base: str, since: list[str]) -> Optional[int]:
+    """Count commits in `git log <since> <base>` that touch a path outside
+    `.flow/` which the docs-only gate classifier does not call safe."""
+    out = _features_git(
+        repo_root, "log", "--no-renames", "--format=%x00%H", "--name-only", *since, base, "--"
+    )
+    if out is None:
+        return None
+    count = 0
+    for chunk in out.split("\0"):
+        paths = [line.strip() for line in chunk.split("\n")[1:] if line.strip()]
+        if any(
+            not _normalize_repo_path(path).startswith(".flow/")
+            and _classify_gate_path(path)[0] != "safe"
+            for path in paths
+        ):
+            count += 1
+    return count
+
+
+def cmd_features_status(args: argparse.Namespace) -> None:
+    """Report the feature map's seed/maintain facts; never judges or edits."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json)
+    features_dir = get_flow_dir() / "features"
+    threshold = get_features_stale_after_commits()
+    map_exists = features_dir.is_dir()
+
+    open_drift: Optional[list[dict[str, str]]] = None
+    memory_dir = get_flow_dir() / MEMORY_DIR
+    if get_config("memory.enabled", False) and memory_dir.is_dir():
+        open_drift = [
+            {"id": e["entry_id"], "title": e["title"]}
+            for e in _memory_iter_entries(memory_dir, track="knowledge")
+            if e["status"] not in ("stale", "hardened")
+            and FEATURES_DRIFT_TAG in (e["tags"] or [])
+        ]
+
+    repo_root, _head, _err = _gate_repo_and_head()
+    base: Optional[str] = None
+    if repo_root is not None:
+        for candidate in [*_default_branch_candidates(repo_root), "HEAD"]:
+            if _features_git(repo_root, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"):
+                base = candidate
+                break
+
+    features: list[dict[str, Any]] = []
+    reasons: list[str] = []
+    if map_exists and open_drift:
+        reasons.append(f"{len(open_drift)} open {FEATURES_DRIFT_TAG} note(s)")
+    counted: dict[tuple[str, ...], Optional[int]] = {}
+    for path in sorted(features_dir.glob("*.md")) if map_exists else []:
+        if path.name == "README.md" or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        state, proven = _features_parse_last_proven(text)
+        row: dict[str, Any] = {
+            "file": path.name, "state": state, "last_proven": proven,
+            "measured_from": None, "commits_since": None, "stale": state != "proven",
+        }
+        if proven and repo_root is not None and base is not None:
+            commit = proven["commit"]
+            if _features_git(repo_root, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"):
+                row["measured_from"], since = "commit", [f"^{commit}"]
+            else:
+                # An unreachable commit (a squashed branch head) falls back to
+                # the proof date, so every clone measures the same age.
+                row["measured_from"], since = "date", [f"--since={proven['date']}T00:00:00"]
+            key = tuple(since)
+            if key not in counted:
+                counted[key] = _features_surface_commits(repo_root, base, since)
+            row["commits_since"] = counted[key]
+            row["stale"] = row["commits_since"] is not None and row["commits_since"] >= threshold
+        if state == "never-proven":
+            reasons.append(f"{path.name}: never proven")
+        elif state == "malformed":
+            reasons.append(f"{path.name}: malformed last-proven line (read as never proven)")
+        elif row["stale"]:
+            reasons.append(
+                f"{path.name}: {row['commits_since']} surface commits since last proven"
+                f" (threshold {threshold})"
+            )
+        features.append(row)
+
+    due = map_exists and bool(reasons)
+    recommendation = "seed" if not map_exists else ("maintain" if due else "none")
+    if args.json:
+        json_output({
+            "map_exists": map_exists,
+            "recommendation": recommendation,
+            "due": due,
+            "reasons": reasons,
+            "open_drift": open_drift,
+            "threshold": threshold,
+            "base": base,
+            "features": features,
+        })
+        return
+    if recommendation == "seed":
+        print("No feature map: run /flow-next:features to seed .flow/features/")
+    elif recommendation == "maintain":
+        print("Feature map due a maintain pass: run /flow-next:features")
+        for reason in reasons:
+            print(f"  - {reason}")
+    else:
+        print("Feature map current")
+    if open_drift is None:
+        print("  (memory disabled: drift notes not counted)")
+
+
 # --- Checkpoint commands ---
 
 
@@ -58578,6 +58756,16 @@ def main() -> None:
     )
     p_gate_classify.add_argument("--json", action="store_true", help="JSON output")
     p_gate_classify.set_defaults(func=cmd_gate_classify)
+
+    # features (fn-262)
+    p_features = subparsers.add_parser("features", help="Feature-map facts (fn-262)")
+    features_sub = p_features.add_subparsers(dest="features_cmd", required=True)
+    p_features_status = features_sub.add_parser(
+        "status",
+        help="Seed/maintain recommendation: open drift notes + last-proven age per feature file",
+    )
+    p_features_status.add_argument("--json", action="store_true", help="JSON output")
+    p_features_status.set_defaults(func=cmd_features_status)
 
     # checkpoint
     p_checkpoint = subparsers.add_parser("checkpoint", help="Checkpoint commands")
