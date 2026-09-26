@@ -90,10 +90,13 @@ class PlanningPreflight(unittest.TestCase):
         self.assertEqual(result['probes']['decisions']['value'], {'entry_count': 2})
 
     def test_refine_gate_preserves_fail_open_and_explicit_off(self):
-        if not shutil.which("bash") or not shutil.which("jq"):
+        # Resolve bash on PATH: a bare "bash" on Windows can hit System32's WSL
+        # launcher before Git Bash.
+        bash = shutil.which("bash")
+        if not bash or not shutil.which("jq"):
             self.skipTest("bash and jq required for executable skill gate")
         skill = Path(__file__).resolve().parents[1] / "skills/flow-next-refine/SKILL.md"
-        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", skill.read_text(), re.S)
+        fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", skill.read_text(encoding="utf-8"), re.S)
                      if "# One preflight bundle" in f)
         fake = self.tmpdir / "preflight"
         fake.write_text('#!/bin/sh\ncat "$PREFLIGHT_PAYLOAD"\n')
@@ -109,7 +112,7 @@ class PlanningPreflight(unittest.TestCase):
             env = {**os.environ, "FLOWCTL": str(fake), "PREFLIGHT_PAYLOAD": path,
                    "TMPDIR": str(self.tmpdir), "DOC_AWARE_FORCE": forced,
                    "STRATEGY_AWARE_FORCE": forced}
-            run = subprocess.run(["bash", "-c", fence + '\nprintf "%s:%s" "$DOC_AWARE" "$STRATEGY_AWARE"'],
+            run = subprocess.run([bash, "-c", fence + '\nprintf "%s:%s" "$DOC_AWARE" "$STRATEGY_AWARE"'],
                                  env=env, capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertTrue(run.stdout.endswith(expected), run.stdout)

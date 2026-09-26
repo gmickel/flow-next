@@ -514,7 +514,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         ops = {event: ("off" if value == "off" else "push" if event == "work.firstClaim" else "comment")
                for event in WORK_EVENTS} if active else {}
         snapshot.write_text(json.dumps({"active": active, "ops": ops}), encoding="utf-8")
-        outer_source = self._work_outer_fence(caller_id).replace("<run-sync-active.json>", str(snapshot))
+        outer_source = self._work_outer_fence(caller_id).replace("<run-sync-active.json>", snapshot.as_posix())
         outer = self._run_shell(outer_source, value=value, active=active)
         self.assertEqual(outer.returncode, 0, outer.stderr)
         if "GATE ACTIVE" not in outer.stdout:
@@ -522,7 +522,7 @@ class TrackerCallerExecutionTests(unittest.TestCase):
 
         with self.import_log.open("a", encoding="utf-8") as handle:
             handle.write("references/tracker-touchpoints.md\n")
-        inner = self._instrumented_fence(caller_id, '"$OP"').replace("<run-sync-active.json>", str(snapshot))
+        inner = self._instrumented_fence(caller_id, '"$OP"').replace("<run-sync-active.json>", snapshot.as_posix())
         return self._run_shell(inner, value=value, active=active)
 
     def _run_make_pr(

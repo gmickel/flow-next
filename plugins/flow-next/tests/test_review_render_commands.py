@@ -72,7 +72,7 @@ class TestReviewRenderCommands(_JournalReplayBase):
         expected = flowctl.build_review_persona_override() + flowctl.build_review_prompt(
             'impl', context_hints='hints', review_scope='1\t0\tfile.py',
             diff_range='a'*40+'..'+'b'*40, spec_path=task.relative_to(self.root).as_posix(), axis='correctness')
-        self.assertEqual(target.read_text(), expected)
+        self.assertEqual(target.read_text(encoding='utf-8'), expected)
 
     def test_plan_prompt_matches_backend_paths_and_rubric(self):
         spec = self.root / '.flow/specs' / (self.spec_id+'.md')
@@ -91,7 +91,7 @@ class TestReviewRenderCommands(_JournalReplayBase):
         expected = flowctl.build_review_persona_override() + flowctl.build_review_prompt(
             'plan', context_hints='hints', spec_path=spec.relative_to(self.root).as_posix(),
             task_spec_paths=[task.relative_to(self.root).as_posix()])
-        self.assertEqual(target.read_text(), expected)
+        self.assertEqual(target.read_text(encoding='utf-8'), expected)
 
     def test_plan_prompt_needs_no_default_branch(self):
         spec = self.root / '.flow/specs' / (self.spec_id+'.md')

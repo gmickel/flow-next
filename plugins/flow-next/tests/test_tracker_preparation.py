@@ -80,7 +80,9 @@ class Preparation(unittest.TestCase):
                 self.assertEqual(out['classification'], kind)
                 self.assertEqual([c['id'] for c in out['genuine_comments']], ['3', '4'])
                 for path in out['files'].values():
-                    self.assertEqual(stat.S_IMODE(Path(path).stat().st_mode), 0o600)
+                    self.assertTrue(Path(path).is_file())
+                    if os.name != "nt":  # Windows has no POSIX permission bits.
+                        self.assertEqual(stat.S_IMODE(Path(path).stat().st_mode), 0o600)
                 self.assertEqual(len(json.loads(Path(out['files']['comments_file']).read_text())), 4)
                 ex = fake_execute(_noop_push_responses(flow_body))
                 F.sync(flow, SPEC_ID, op='push', event='plan', status_only=True, execute=ex)
