@@ -57482,9 +57482,13 @@ def main() -> None:
         sys.stdout.flush()
     except CrossProcessLockError as e:
         error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)
-    except BrokenPipeError:
+    except OSError as e:
         # fn-257 R19: the reader closed stdout (`| head`); exit without a
         # traceback, and point stdout at devnull so the exit flush is silent.
+        # Windows reports a closed pipe as EINVAL rather than BrokenPipeError.
+        if not (isinstance(e, BrokenPipeError)
+                or (os.name == "nt" and e.errno == errno.EINVAL)):
+            raise
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         sys.exit(1)
 
