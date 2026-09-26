@@ -421,7 +421,7 @@ surface/file in a running list for Phase 6. **A PASS asserted from reading sourc
 
 ### 5.5 - Stale mapped routes
 
-When Phase 1.3 loaded the map and a mapped route does not match the live app, file a knowledge-track memory entry tagged `feature-map-drift` (the reader contract every map consumer shares: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), "Writers and drift notes"). Title names the feature and the route. Body is two lines: Expected, Observed. QA never edits `.flow/features/` mid-run. This is not a P0/P1/P2 product finding - **and it never strands the scenario**: after recording the memo, derive an alternate route for that scenario exactly as Phase 2 does without a map and continue verifying the AC (the map supplied navigation, not the verdict); only when no route at all reaches the surface does the scenario take the ordinary no-live-scenario / blocked handling.
+When Phase 1.3 loaded the map and a mapped route does not match the live app, file a knowledge-track memory entry tagged `feature-map-drift` (the reader contract every map consumer shares: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), "Writers and drift notes"). Title is exactly `drift: <surface>/<feature-slug> <sub-feature-id>`, the contract's dedup key. Body is two lines: Expected, Observed. QA never edits `.flow/features/` mid-run. This is not a P0/P1/P2 product finding - **and it never strands the scenario**: after recording the memo, derive an alternate route for that scenario exactly as Phase 2 does without a map and continue verifying the AC (the map supplied navigation, not the verdict); only when no route at all reaches the surface does the scenario take the ordinary no-live-scenario / blocked handling.
 
 ```bash
 # Same memory.enabled no-op + QA_FILED_MEMORY path tracking as §5.4. Never --no-overlap-check.
@@ -446,9 +446,13 @@ EOF
     _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
     [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
     # A recurrence reopens a note a maintain pass or work update retired
-    # (upsert keeps a stale note stale). Best-effort, like the upsert.
+    # (upsert keeps a stale note stale). Only a stale note is reopened: a
+    # hardened or active one keeps its status. Best-effort, like the upsert.
     if [ "$(printf '%s' "$_out" | jq -r '.action // empty')" = "updated" ]; then
-      $FLOWCTL memory mark-fresh "$(printf '%s' "$_out" | jq -r '.entry_id')" --json >/dev/null || true
+      _id="$(printf '%s' "$_out" | jq -r '.entry_id')"
+      if [ "$($FLOWCTL memory read "$_id" --json 2>/dev/null | jq -r '.frontmatter.status // empty')" = "stale" ]; then
+        $FLOWCTL memory mark-fresh "$_id" --json >/dev/null || true
+      fi
     fi
   fi
   # On the failure branch: record Expected/Observed plus the listed entry ids
