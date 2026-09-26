@@ -94,11 +94,8 @@ class AliasStubForwardsAndIsNonTriggering(unittest.TestCase):
         self.assertIn("flow-next-refine", fm["description"])
         self.assertIn("flow-next-refine", _read(STUB))
 
-    def test_stub_shim_forwards_to_refine(self) -> None:
-        shim = _read(STUB_SHIM)
-        self.assertEqual(_frontmatter(shim)["name"], "interview")
-        self.assertIn("flow-next-refine", shim)
-        self.assertIn("/flow-next:refine", shim)
+    def test_interview_shim_is_retired_and_refine_shim_forwards(self) -> None:
+        self.assertFalse(STUB_SHIM.exists())
         refine = _read(REFINE_SHIM)
         self.assertEqual(_frontmatter(refine)["name"], "refine")
         self.assertIn("flow-next-refine", refine)

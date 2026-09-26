@@ -1,4 +1,4 @@
-"""Tests for `_export_parse_acceptance_criteria` heading tolerance + R-ID forms.
+"""Tests for `_export_scan_acceptance_criteria` heading tolerance + R-ID forms.
 
 Canonical heading since 1.1.4 is `## Acceptance Criteria` (matches the
 canonical template at `plugins/flow-next/templates/spec.md`). The parser
@@ -28,6 +28,10 @@ if str(SCRIPTS_DIR) not in sys.path:
 import flowctl  # noqa: E402  (path-injected import)
 
 
+def _criteria(spec_text: str) -> list[dict]:
+    return flowctl._export_scan_acceptance_criteria(spec_text)[0]
+
+
 _BODY_TEMPLATE = """# Spec Title
 
 ## Goal & Context
@@ -47,7 +51,7 @@ Some boundaries.
 
 class TestAcceptanceCriteriaHeadingTolerance(unittest.TestCase):
     def _parse(self, heading: str) -> list[dict]:
-        return flowctl._export_parse_acceptance_criteria(
+        return _criteria(
             _BODY_TEMPLATE.format(heading=heading)
         )
 
@@ -67,13 +71,13 @@ class TestAcceptanceCriteriaHeadingTolerance(unittest.TestCase):
 
     def test_no_acceptance_section_returns_empty(self) -> None:
         body = "# Spec\n\n## Goal\n\nText.\n\n## Boundaries\n\nText.\n"
-        self.assertEqual(flowctl._export_parse_acceptance_criteria(body), [])
+        self.assertEqual(_criteria(body), [])
 
     def test_unrelated_section_with_acceptance_prefix_does_not_match(self) -> None:
         """`## Acceptance Tests` (not Criteria) should NOT match — distinct concept."""
         body = _BODY_TEMPLATE.format(heading="## Acceptance Tests")
         # The R-IDs under "Acceptance Tests" must not leak through as accepted criteria.
-        self.assertEqual(flowctl._export_parse_acceptance_criteria(body), [])
+        self.assertEqual(_criteria(body), [])
 
 
 class TestAcceptanceCriteriaRIdSuffix(unittest.TestCase):
@@ -85,7 +89,7 @@ class TestAcceptanceCriteriaRIdSuffix(unittest.TestCase):
     """
 
     def _parse(self, body: str) -> list[dict]:
-        return flowctl._export_parse_acceptance_criteria(body)
+        return _criteria(body)
 
     def test_all_suffixed_R_ids_parse_in_declaration_order(self) -> None:
         """A spec with only suffixed R-IDs surfaces every one in body order."""
@@ -214,21 +218,21 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
     )
 
     def test_issue_303_repro_parses_five_of_five(self) -> None:
-        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        crits = _criteria(self.REPRO)
         self.assertEqual(
             [c["id"] for c in crits], ["R1", "R5a", "R14", "R15", "R16"]
         )
 
     def test_R5a_control_still_parses(self) -> None:
         """The #147 positive control: this bug is about the run, not the token."""
-        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        crits = _criteria(self.REPRO)
         entry = next(c for c in crits if c["id"] == "R5a")
         self.assertEqual(
             entry["text"], "a qualified sibling id, also accepted here."
         )
 
     def test_title_form_keeps_title_and_body(self) -> None:
-        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        crits = _criteria(self.REPRO)
         entry = next(c for c in crits if c["id"] == "R14")
         self.assertEqual(
             entry["text"],
@@ -236,12 +240,12 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
         )
 
     def test_parenthetical_form_keeps_qualifier_and_body(self) -> None:
-        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        crits = _criteria(self.REPRO)
         entry = next(c for c in crits if c["id"] == "R15")
         self.assertEqual(entry["text"], "(the parenthetical form): body text.")
 
     def test_wrapped_text_keeps_continuation_lines(self) -> None:
-        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        crits = _criteria(self.REPRO)
         entry = next(c for c in crits if c["id"] == "R16")
         self.assertEqual(
             entry["text"],
@@ -257,7 +261,7 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
             "\n## Boundaries\n\nText.\n"
         )
         self.assertEqual(
-            flowctl._export_parse_acceptance_criteria(body),
+            _criteria(body),
             [{"id": "R1", "text": "outside-colon form.", "tag": "user"}],
         )
 
@@ -273,7 +277,7 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
             "\n## Boundaries\n\nText.\n"
         )
         self.assertEqual(
-            flowctl._export_parse_acceptance_criteria(body),
+            _criteria(body),
             [
                 {"id": "R1", "text": "first continues here.", "tag": ""},
                 {"id": "R2", "text": "second.", "tag": ""},
@@ -290,7 +294,7 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
             "\n## Boundaries\n\nText.\n"
         )
         self.assertEqual(
-            [c["text"] for c in flowctl._export_parse_acceptance_criteria(body)],
+            [c["text"] for c in _criteria(body)],
             ["parent text.", "next."],
         )
 
@@ -303,7 +307,7 @@ class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
             "\n## Boundaries\n\nText.\n"
         )
         self.assertEqual(
-            flowctl._export_parse_acceptance_criteria(body),
+            _criteria(body),
             [
                 {
                     "id": "R1",

@@ -93,7 +93,7 @@ If empty, ask: "What should I plan? Give me the feature or bug in 1-5 sentences.
 Parse `$ARGUMENTS` for the literal token `mode:autonomous` (strip it, same shape as capture's `mode:autofix` — a NEW parse branch, never overloading that token). Also honor the env var `FLOW_AUTONOMOUS=1` as a secondary signal (process-level drivers). Either signal → `AUTONOMOUS=1`.
 
 Under `AUTONOMOUS=1`:
-- **No setup question is asked.** A question surfaced under `AUTONOMOUS=1` has broken this. Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `repo-scout`, review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
+- **No setup question is asked.** A question surfaced under `AUTONOMOUS=1` has broken this. Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the defaults: depth per **Plan depth** below, research = `repo-scout`, review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
 - **Never hang on a question.** If a genuinely unanswerable ambiguity remains (e.g. empty input), stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
 - Autonomy ≠ Ralph: neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt path — they gate question suppression only.
 
@@ -116,7 +116,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 - `--depth=short` or "quick" or "minimal" → SHORT
 - `--depth=standard` or "normal" → STANDARD
 - `--depth=deep` or "comprehensive" or "detailed" → DEEP
-- Default: SHORT (simpler is better)
+- Default: SHORT (simpler is better). The one depth default, fixed here before Step 1 picks the scout tier; steps.md Step 4 renders its sections.
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 

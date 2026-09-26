@@ -36,7 +36,11 @@ When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:
 
 ```bash
-SPEC_ID="${1:-}"
+# Substitute the spec id from $ARGUMENTS literally: a Bash-tool call leaves $1
+# empty, which would silently route to the global backend.
+SPEC_ID="<fn-N spec id from \$ARGUMENTS>"
+$FLOWCTL show "$SPEC_ID" --json >/dev/null \
+  || { echo "Error: no spec '$SPEC_ID' - pass the spec id to review" >&2; exit 1; }
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 ```
 
@@ -72,9 +76,7 @@ This re-anchor is mandatory before every fix cycle. A user-edited spec is the
 source of truth; never review or restore a stale generated/checkpoint copy
 unless recovering after context compaction.
 
-For Codex/Copilot/Cursor/Claude, derive reviewer code anchors from the current spec in
-the selected backend's single atomic dispatch fence. For host and rp, provide
-the same current spec/task material and review focus.
+For host and rp, provide the current spec/task material and review focus.
 
 ## Phase 2: Select One Backend Workflow
 

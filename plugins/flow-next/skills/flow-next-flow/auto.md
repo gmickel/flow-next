@@ -235,7 +235,8 @@ named spec (or closed specs in the candidate inventory) and its exact known PR
 per `references/tail.md`. A closed spec with an OPEN PR remains eligible for
 landing even when no longer ready: retain it for authorized landing, or record
 it as deferred without current authority. Apply this in backlog mode before
-its wider SELECT as well. A named or already-bound MERGED PR ends the run;
+its wider SELECT as well. A named MERGED PR ends the run `NO_WORK` with its
+merge commit in the reason, an already-bound one per `references/tail.md`;
 missing or closed-unmerged targets stop `NEEDS_HUMAN`, never make-pr. Failed or
 ambiguous probes stop safely. This landing path does not reopen a spec, mint
 tasks, or pass it through build readiness/strike admission.
@@ -510,7 +511,7 @@ Apply these existing outcomes to the observed PR for `existing_pr_tail` or `all_
 - OPEN PR exists: with the merge destination or current explicit scoped consent, read `references/tail.md`, bind the unique target, set `STAGE=land`, and retain this selected spec. Without that authority this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
 - No PR exists, the spec is open, and no target was previously bound: `QA_FRESH` is the freshness input; `references/gate-selection.md` decides whether `qa` runs and `references/route-matrix.md` names what follows (a skip records the `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` line in this hop's evidence). A fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
 - MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads, `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). A previously bound PR instead ends the run on its confirmed merge; it can never be replaced by a successor. Without that authority, heads equal: `NEEDS_HUMAN` (the merged branch has no new work, but the spec remains open). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
-- MERGED PR exists and the spec is closed: report its confirmed merge commit and end the run.
+- MERGED PR exists and the spec is closed: end the run with `PILOT_VERDICT=NO_WORK spec=<id> stage=- reason="already merged: <merge commit>"`, so a driver keyed on `NO_WORK` stops.
 - No PR exists and the spec is closed: `NEEDS_HUMAN`; never create a replacement.
 - CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and the run never silently reopens human-rejected work.
 

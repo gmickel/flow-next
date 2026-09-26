@@ -227,7 +227,7 @@ class CaptureSavedSpecContract(unittest.TestCase):
     def test_saved_review_follows_spec_write(self) -> None:
         workflow = _read(CAPTURE_WORKFLOW)
         review = workflow.index("### 5.6a")
-        self.assertLess(workflow.index('spec set-plan "$SPEC_ID" --file'), review)
+        self.assertLess(workflow.index('spec create --title "$SPEC_TITLE" --plan-file'), review)
         self.assertLess(review, workflow.index("### 5.8"))
         self.assertLess(review, workflow.index("### 5.9"))
         # Refine retains the shared pre-write approval options.

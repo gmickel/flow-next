@@ -115,7 +115,7 @@ Analyze whichever is present (prefer `AGENTS.md`; if only `AGENTS.md` exists, an
 Codex-first repo with a rich AGENTS.md must not be scored as if it had nothing). If BOTH exist as
 real files, diff their build/test commands and flag any contradiction as a finding.
 
-**Coverage Score: X/8** (one point per row below - do NOT report X/10; there are 8 rows).
+**DC2 Coverage Score: X/8** (one point per row below - do NOT report X/10; there are 8 rows).
 Score each row on the **substance tells above**, not heading presence: a row earns its
 point only when its content is repo-specific, concrete, and (for command rows)
 manifest-backed / runnable - a bare heading over generic advice or a placeholder scores

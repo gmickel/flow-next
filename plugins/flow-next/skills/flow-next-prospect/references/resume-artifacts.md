@@ -12,7 +12,7 @@ Contents:
 - [0.4 — Blocking question](#04--blocking-question)
 - [0.5 — Routing](#05--routing)
 
-`$PROSPECTS_DIR`, `$TODAY`, and `$PY` come from the workflow.md Preamble. **Bash vars do NOT survive across tool calls** — the §0.2 block below must re-declare the Preamble's canonical Python picker block VERBATIM at its top before invoking `$PY`.
+`$PROSPECTS_DIR`, `$TODAY`, and `$PY` come from the workflow.md Preamble. **Bash vars do NOT survive across tool calls** — the §0.2 block below must re-declare the whole Preamble block VERBATIM at its top before invoking `$PY`.
 
 ---
 
@@ -31,8 +31,7 @@ Mark `status: corrupt` if any of those checks fail. Mark `status: stale` if the 
 A single Python helper keeps this cheap and dependency-free. Inline it directly in the skill rather than shelling out per file:
 
 ```bash
-# Re-resolve $PY: re-declare the Preamble's canonical picker block verbatim
-# here first (vars die across tool calls).
+# Re-declare the whole Preamble block verbatim here first (vars die across tool calls).
 
 $PY - "$PROSPECTS_DIR" "$TODAY" <<'PY'
 import os, sys, json, re

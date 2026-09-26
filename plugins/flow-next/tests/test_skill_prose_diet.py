@@ -311,10 +311,12 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
                       "fn-90 deterministic-cap paragraph removed")
 
     def test_subprocess_fences_redeclare_spec_id(self):
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "claude"):
             path = SKILLS / "flow-next-plan-review" / f"workflow-{backend}.md"
             text = read(path)
-            self.assertIn('SPEC_ID="${1:-}"', text)
+            self.assertIn('SPEC_ID="<', text)
+            # fn-257 R1: a Bash-tool call leaves $1 empty; the id is literal.
+            self.assertNotIn("${1:-}", text)
             self.assertIn(f"$FLOWCTL {backend} plan-review", text)
 
     def test_no_agent_side_iteration_counting(self):

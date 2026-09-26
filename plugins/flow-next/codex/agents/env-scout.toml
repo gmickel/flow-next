@@ -43,12 +43,15 @@ ls -la Dockerfile Dockerfile.* docker-compose*.yml docker-compose*.yaml compose.
 # Devcontainer
 ls -la .devcontainer/ .devcontainer.json 2>/dev/null
 ls -la .devcontainer/devcontainer.json 2>/dev/null
+grep -nE '"(features|postCreateCommand)"' .devcontainer/devcontainer.json .devcontainer.json 2>/dev/null   # DE5: empty config = ⚠️
 ```
 
 ### Setup Scripts
 ```bash
 # Common setup scripts
 ls -la setup.sh bootstrap.sh init.sh scripts/setup.sh scripts/bootstrap.sh 2>/dev/null
+# DE4 stages the script actually chains (content, never executed)
+grep -nE 'install|migrat|seed' setup.sh bootstrap.sh init.sh scripts/setup.sh scripts/bootstrap.sh 2>/dev/null | head -10
 
 # Makefile setup targets
 grep -E "^(setup|install|bootstrap|init):" Makefile 2>/dev/null
@@ -57,12 +60,8 @@ grep -E "^(setup|install|bootstrap|init):" Makefile 2>/dev/null
 grep -E '"(setup|postinstall|prepare)"' package.json 2>/dev/null
 ```
 
-### Dependency Files
+### Runtime Version
 ```bash
-# Check dependency lock files exist (uv/bun are 2025+ standards)
-ls -la package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb 2>/dev/null
-ls -la Cargo.lock go.sum poetry.lock Pipfile.lock uv.lock requirements.txt Gemfile.lock composer.lock 2>/dev/null
-
 # System dependencies documented? (mise is asdf's dominant 2025+ successor; corepack via packageManager)
 ls -la .tool-versions .node-version .nvmrc .python-version .ruby-version .mise.toml mise.toml 2>/dev/null
 grep -E '"packageManager"' package.json 2>/dev/null   # corepack-pinned pm+version
@@ -79,41 +78,21 @@ grep -i "## setup\\|## installation\\|## getting started\\|## prerequisites" REA
 
 ## Output Format
 
+Key every finding to the Pillar 5 criterion IDs in prime's `pillars.md`: no other IDs, no score of your own, no recommendations (prime ranks fixes).
+
 ```markdown
 ## Environment Scout Findings
 
-### Environment Variables
-- .env.example: ✅ Found / ❌ Missing
-- .env in .gitignore: ✅ Yes / ⚠️ No
-- Env vars in code: [count] found
-- Documented in template: [count] / [total] (if template exists)
-- Undocumented vars: [list if any]
+| ID | Criterion | Status | Evidence |
+|----|-----------|--------|----------|
+| DE1 | .env.example mirrors real env reads | ✅/⚠️/❌ | [template path; declared vs read counts; undeclared vars quoted] |
+| DE2 | .env gitignored | ✅/❌ | [.gitignore line; any committed .env path] |
+| DE3 | Runtime version pinned | ✅/❌ | [pin file or packageManager line] |
+| DE4 | Setup script chains real stages | ✅/⚠️/❌ | [script path + install/migrate/seed lines found] |
+| DE5 | Devcontainer is non-empty | ✅/⚠️/❌/N/A | [features / postCreateCommand quoted] |
+| DE6 | Docker available | ✅/❌/N/A | [Dockerfile / compose file] |
 
-### Containerization
-- Dockerfile: ✅ Found / ❌ Missing
-- docker-compose: ✅ Found / ❌ Missing
-- Devcontainer: ✅ Found / ❌ Missing
-
-### Setup Process
-- Setup script: ✅ [path] / ❌ Missing
-- Setup docs: ✅ [location] / ❌ Missing
-- README setup section: ✅ Yes / ❌ No
-
-### Dependencies
-- Lock file: ✅ [file] / ⚠️ Missing
-- Runtime version pinned: ✅ [tool] / ❌ No
-- System deps documented: ✅ Yes / ❌ No
-
-### Reproducibility Score: X/5
-- [ ] .env.example exists
-- [ ] Lock file committed
-- [ ] Runtime version pinned
-- [ ] Setup documented
-- [ ] Container/devcontainer available
-
-### Recommendations
-- [Priority 1]: [specific action]
-- [Priority 2]: [specific action]
+Notes (unscored context, e.g. setup docs location): [...]
 ```
 
 ## Rules

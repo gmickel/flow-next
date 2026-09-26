@@ -12,7 +12,7 @@ For each legacy entry, classify it into exactly one `(track, category)` pair. Ca
 | `conventions.md`| `knowledge/conventions` |
 | `decisions.md` | `knowledge/tooling-decisions` |
 
-This is what `flowctl memory list-legacy --json` emits as `mechanical_track` + `mechanical_category` per file. Take this default unless the entry's title + body unambiguously points at a different category.
+This is what `flowctl memory list-legacy --json` emits as `mechanical_track` + `mechanical_category` on each entry. Take this default unless the entry's title + body unambiguously points at a different category.
 
 ---
 
@@ -38,6 +38,7 @@ The skill must only write entries with these pairs. `flowctl memory add` validat
 - `tooling-decisions` — tool choice rationale ("use pnpm not npm because <reason>")
 - `workflow` — process / branching / review patterns ("PRs are squash-merged", "feature branches off main")
 - `best-practices` — generic guidance not specific to a tool or pattern ("always validate inputs at boundaries")
+- `decisions` — a recorded choice whose rejected alternatives are part of the record ("nearest-ancestor lookup; always-root was rejected because <reason>")
 
 ---
 

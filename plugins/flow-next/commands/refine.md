@@ -10,7 +10,7 @@ The ONLY purpose of this command is to call the `flow-next-refine` skill. You MU
 
 **User input:** $ARGUMENTS
 
-Pass the user input to the skill. The skill handles the question passes and the research pass. `/flow-next:interview` is the deprecated alias for one release.
+Pass the user input to the skill. The skill handles the question passes and the research pass.
 
 ## Optional flags
 

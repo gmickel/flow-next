@@ -519,69 +519,6 @@ class TestParseReviewCriteria(unittest.TestCase):
         self.assertIsNone(flowctl.parse_review_criteria(123))  # type: ignore[arg-type]
 
 
-class TestValidateReviewReceiptCriteria(unittest.TestCase):
-    def test_absent_criteria_ok(self) -> None:
-        self.assertTrue(
-            flowctl.validate_review_receipt_criteria(
-                {"type": "completion_review", "id": "fn-1"}
-            )
-        )
-
-    def test_valid_completion_list(self) -> None:
-        receipt = {
-            "type": "completion_review",
-            "criteria": [
-                {"id": "G1", "status": "met", "note": "ok"},
-                {"id": "G2", "status": "n/a"},
-            ],
-        }
-        self.assertTrue(flowctl.validate_review_receipt_criteria(receipt))
-
-    def test_wrong_type_rejected(self) -> None:
-        receipt = {
-            "type": "impl_review",
-            "criteria": [{"id": "G1", "status": "met"}],
-        }
-        self.assertFalse(flowctl.validate_review_receipt_criteria(receipt))
-
-    def test_bad_status_id_duplicate_extra_empty(self) -> None:
-        base = {"type": "completion_review"}
-        self.assertFalse(
-            flowctl.validate_review_receipt_criteria(
-                {**base, "criteria": [{"id": "G1", "status": "pass"}]}
-            )
-        )
-        self.assertFalse(
-            flowctl.validate_review_receipt_criteria(
-                {**base, "criteria": [{"id": "X1", "status": "met"}]}
-            )
-        )
-        self.assertFalse(
-            flowctl.validate_review_receipt_criteria(
-                {
-                    **base,
-                    "criteria": [
-                        {"id": "G1", "status": "met"},
-                        {"id": "G1", "status": "violated"},
-                    ],
-                }
-            )
-        )
-        self.assertFalse(
-            flowctl.validate_review_receipt_criteria(
-                {
-                    **base,
-                    "criteria": [
-                        {"id": "G1", "status": "met", "extra": True},
-                    ],
-                }
-            )
-        )
-        self.assertFalse(
-            flowctl.validate_review_receipt_criteria({**base, "criteria": []})
-        )
-
-
 class TestCriteriaReceiptCli(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -1023,7 +960,7 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
 
 
 class TestGidNumberGrammar(unittest.TestCase):
-    """Round 15: G-IDs start at 1, no leading zeros - consistently on all three surfaces."""
+    """Round 15: G-IDs start at 1, no leading zeros - consistently on both surfaces."""
 
     def test_source_g0_and_zero_padded_fail_closed(self):
         _, errors = flowctl._criteria_parse("- **G0:** zero\n")
@@ -1038,10 +975,6 @@ class TestGidNumberGrammar(unittest.TestCase):
     def test_receipt_zero_padded_degrades(self):
         text = "## Global criteria\nG01: met - padded\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
-
-    def test_validator_rejects_zero_padded_id(self):
-        receipt = {"type": "completion_review", "criteria": [{"id": "G01", "status": "met"}]}
-        self.assertFalse(flowctl.validate_review_receipt_criteria(receipt))
 
     def test_g10_still_valid_everywhere(self):
         entries, errors = flowctl._criteria_parse("- **G10:** tenth\n")
@@ -1060,7 +993,3 @@ class TestAsciiDigitGids(unittest.TestCase):
 
     def test_unicode_digit_receipt_degrades(self):
         self.assertIsNone(flowctl.parse_review_criteria("## Global criteria\nG1١: met - x\n"))
-
-    def test_unicode_digit_validator_rejects(self):
-        r = {"type": "completion_review", "criteria": [{"id": "G1０", "status": "met"}]}
-        self.assertFalse(flowctl.validate_review_receipt_criteria(r))

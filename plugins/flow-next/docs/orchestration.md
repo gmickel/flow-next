@@ -378,7 +378,7 @@ Direct execution through `/flow-next:work <id> --no-plan` is the default for a r
 | **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../skills/flow-next-impl-review/SKILL.md#step-05-trivial-diff-triage), [`flowctl triage-skip`](flowctl.md#triage-skip) |
 | **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round three-draw fan-out, fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
 
-Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Attended and unattended flow read the same routing references; `/flow-next:pilot` is its one-release alias for `flow --auto --tick`.
+Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Attended and unattended flow read the same routing references.
 
 Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [single CI fix and patience window](../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to refine, an ambiguous diff gets the full review.
 
@@ -506,7 +506,7 @@ On a host without stable long sessions, run one hop per loop interval with `--ti
   Stop when flow prints NO_WORK, or on BLOCKED or NEEDS_HUMAN.
 ```
 
-`/flow-next:pilot` in an existing driver prompt keeps working for one release as an alias for `flow --auto --tick`; it prints one deprecation line to stderr and the verdict grammar is unchanged, so no driver needs rewriting on the day of the upgrade.
+The `/flow-next:pilot` command is removed: replace it with `/flow-next:flow --auto --tick` in driver prompts. The verdict grammar is unchanged.
 
 ### Within one invocation vs across driver invocations
 

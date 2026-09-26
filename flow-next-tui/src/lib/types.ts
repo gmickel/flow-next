@@ -1,7 +1,7 @@
 // Task status types
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked';
 
-// Epic status types (matches flowctl EPIC_STATUS: ["open", "done"])
+// Epic status types (matches flowctl SPEC_STATUS: ["open", "done"])
 export type EpicStatus = 'open' | 'done';
 
 // Run state (derived from progress.txt)

@@ -185,7 +185,7 @@ Why this exists: a PM invoking `/flow-next:refine <spec-id>` bare used to get a 
 
 ### Question Format: Lead with Recommendation
 
-Every `plain-text numbered prompt` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md:64` ("Lead with the recommended option and a one-sentence rationale").
+Every `plain-text numbered prompt` body must include the agent's recommended option AND a confidence tier. Mirrors the canonical phrasing in `flow-next-audit/SKILL.md` Interaction Principles ("Lead with the recommended option and a one-sentence rationale").
 
 Pattern:
 
@@ -368,7 +368,7 @@ When the user declines a feature or scope **as product judgment** — we could b
 
 Interviews grow specs - and an epic-shaped input sometimes turns out to be more than one spec. Before the write-back, when the refined criteria set trips the spec-count tripwire, read [`spec-count.md`](../flow-next-flow/references/spec-count.md) (it owns the tripwire, what counts, and the independence partition) and propose a split only when its partition yields more than one spec.
 
-Present the concrete allocation as ordinary printed markdown (per-spec titles, allocated criteria, dependency edges), then one short `plain-text numbered prompt`: `keep-single` (default) / `split-as-proposed` / `adjust`. On split: create each sibling via `spec create` + `spec set-plan` (self-contained body; allocated criteria renumbered from R1 in the NEW spec), remove the moved criteria from the source spec's write-back, and record edges via `spec add-dep`. **Renumbering guard:** criteria a review cycle has already judged are never moved or renumbered — for those, keep them in place and record the proposal in `## Decision Context` instead. Autonomous/receipt-driven runs never split — record the proposal in `## Decision Context` as `### Split proposal (unactioned)`.
+Present the concrete allocation as ordinary printed markdown (per-spec titles, allocated criteria, dependency edges), then one short `plain-text numbered prompt`: `keep-single` (default) / `split-as-proposed` / `adjust`. On split: create each sibling via one `spec create --plan-file` (self-contained body; allocated criteria renumbered from R1 in the NEW spec), remove the moved criteria from the source spec's write-back, and record edges via `spec add-dep`. **Renumbering guard:** criteria a review cycle has already judged are never moved or renumbered — for those, keep them in place and record the proposal in `## Decision Context` instead. Autonomous/receipt-driven runs never split — record the proposal in `## Decision Context` as `### Split proposal (unactioned)`.
 
 ## NOT in scope (defer to /flow-next:plan)
 
@@ -445,7 +445,7 @@ Suggest next step based on input type:
 - New idea / spec without tasks → recommend `$flow-next-work fn-N --no-plan` for a ready cohesive spec. Use `$flow-next-plan fn-N` when dependencies, ownership, staged delivery, or execution constraints make decomposition useful; use `$flow-next-plan-review fn-N` for independent design review. Risk or multiple files alone do not require decomposition.
 - Spec with tasks → `$flow-next-work fn-N` (or more interview on specific tasks)
 - Task → `$flow-next-work fn-N.M`
-- File → `$flow-next-plan <file>`
+- File → `$flow-next-capture` to turn the refined document into a spec
 - Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `$flow-next-visual fn-N` for a spec input, `$flow-next-visual fn-N.M` for a task input, `$flow-next-visual <file-path>` for the file input (an option the user picks, never run for them).
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.

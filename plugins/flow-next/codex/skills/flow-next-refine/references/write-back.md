@@ -25,7 +25,7 @@ Spec prose written back here follows the artifact prose contract in [docs/prose.
 
 Done when: exactly one input-type branch below has run; the body was Written once to its literal path, summarized, and approved; flowctl consumed that same literal path; and every section the write-policy listed as preserved is byte-identical to the copy read at Detect Input Type.
 
-The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
+The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
 **The `flowctl scope write-policy` result is the source of truth for which sections this scope writes and which it preserves** — it governs the whole write-back, together with the section-write rules from the scope-aware pass behavior (SKILL.md plus the pass reference read for the resolved scope). A section rewritten that this pass's `writable` list does not name has broken this. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
 
@@ -65,7 +65,7 @@ Hard rules:
 
 Create spec with interview output. **This branch writes a spec and zero tasks** — task creation belongs to plan or work's direct route. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
 **Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot. Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
 
@@ -83,7 +83,7 @@ if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
   # Named existing issue → read it first ($FLOWCTL tracker wire read) for {id, identifier, url}
   # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body) → {id, identifier, url}
   # Either way, mint linked, then seed the merge base (tracker-sync steps.md §2 Identity and linking):
-  #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "..." --json
+  #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --tracker-id "$TRACKER_ID" --tracker-url "$TRACKER_URL" --title "..." --plan-file "${TMPDIR:-/tmp}/flow-interview-spec-<title-slug>-<suffix>.md" --json
   # Assign SPEC_OUTPUT on every path that succeeds here.
   :
 fi
@@ -96,27 +96,17 @@ fi
 # create-first made an issue must surface identifier + url + retryKey and stop,
 # never silently create an fn-N spec that leaves the issue orphaned.
 if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
-  SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --json)
+  SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --plan-file "${TMPDIR:-/tmp}/flow-interview-spec-<title-slug>-<suffix>.md" --json)
 fi
-
-# Build the spec body in-memory:
-#   1. Seed from the canonical template FILE (`flowctl spec skeleton` renders
-#      the same file through the same cascade; the walker is used
-#      here because TEMPLATE_PATH is needed for the scope-owner markers).
-#
-#      Resolve the template via the 3-tier discovery cascade. The full walker
-#      (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
-#      fallback) is single-sourced in ../../references/spec-template-discovery.md —
-#      Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.
-#      Fill section bodies from interview answers under your scope's writable
-#      sections per the write-policy (frontmatter + scope-owner markers may be
-#      stripped from the final spec body — authoring guidance, not spec content).
-#   2. Append the auxiliary interview-audit sections (only those that fired):
 ```
+
+This block runs after the body below is Written: `--plan-file` creates the spec and its body in one call.
+
+Build the body: seed it from the canonical template FILE (`flowctl spec skeleton` renders the same file through the same cascade; the walker is used here because `TEMPLATE_PATH` is needed for the scope-owner markers). Resolve the template with the walker single-sourced in [`spec-template-discovery.md`](../../../references/spec-template-discovery.md) (cascade order, case-insensitive FS probe, both-exist warning, plugin-root fallback) to set `TEMPLATE_PATH` + `TEMPLATE`. Fill section bodies from interview answers under your scope's writable sections per the write-policy (frontmatter + scope-owner markers may be stripped from the final spec body — authoring guidance, not spec content), then append the auxiliary interview-audit sections (only those that fired).
 
 **Source-tag every acceptance criterion written here** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). This branch mints the spec, so every criterion in it is one you authored this pass: an answered question yields `[user]` or `[paraphrase]`, agent gap-fill yields `[inferred]`.
 
-Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** — per the single-emission write pattern above. The body:
+Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<title-slug>-<suffix>.md`; no spec id exists yet) via the **Write tool** — per the single-emission write pattern above. The body opens with `# <title>`:
 
 ```markdown
 <canonical body from skeleton, with interview-answered prose under each
@@ -148,11 +138,7 @@ One bullet per genuinely-unknown item, each naming what would resolve it. Fog-or
 Unresolved items that need research during planning, plus every skipped interview question (owner hint + the agent's unconfirmed leaning — SKILL.md skip contract). When the write-back checkpoint chose fill-assumptions, the filled prose carries inline `*(assumed — unconfirmed)*` markers and one entry here points at them.
 ```
 
-Then hand flowctl the draft file — the literal path typed verbatim (never a shell variable across prompt turns):
-
-```bash
-$FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
-```
+Then run the creation block above with that literal path typed verbatim in `--plan-file` (never a shell variable across prompt turns).
 
 Then print the `Recommended next:` line judged from [`plan-vs-no-plan.md`](../../flow-next-flow/references/plan-vs-no-plan.md) (read it when judging; `/flow-next:plan-review fn-N` when design risk wants an independent assessment, which works without tasks; `$flow-next-flow --explain fn-N` when signals conflict).
 
@@ -167,7 +153,7 @@ $FLOWCTL tasks --spec <id> --json
 
 **If no tasks:** Update the spec and use the same next-step judgment above.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 
 **Reuse the spec body already fetched at Detect Input Type** (`$FLOWCTL cat <id>` ran there) — do NOT re-fetch here. Re-fetch only if the interview mutated the spec on disk since that read (e.g. an earlier partial write-back in this run).
 
@@ -242,6 +228,6 @@ Rewrite the file with refined spec:
 - Add sections for areas covered in interview
 - Include edge cases, acceptance criteria
 - Keep it requirements-focused (what, not how)
-- **No source tags here:** this is the user's own document, not a `.flow` spec — preserving its structure outranks injecting our tag grammar. Tags start when `/flow-next:plan <file>` promotes it to a spec.
+- **No source tags here:** this is the user's own document, not a `.flow` spec — preserving its structure outranks injecting our tag grammar. Tags start when capture turns it into a spec.
 
-This is typically a pre-spec doc. After interview, suggest `$flow-next-plan <file>` to create spec + tasks.
+This is typically a pre-spec doc. After interview, suggest `$flow-next-capture` to turn it into a spec.

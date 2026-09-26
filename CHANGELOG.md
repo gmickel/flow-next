@@ -12,6 +12,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 - **Review receipts agree with the recorded review.** Contradictory verdicts and counts are refused, open reviews survive trivial-diff triage, concurrent spec updates retain review rounds, and interrupted fan-out can recover completed draws.
 - **Worker handovers stay separate across concurrent tasks.** The conductor supplies task-unique paths and integrated review bases, captures lessons after a NEEDS_WORK-to-SHIP recovery, and passes readable inputs to plan-sync.
 - **Invalid configuration and tracker co-edits remain intact.** Configuration writes refuse unreadable or malformed files; body-writing tracker pushes return `tracker_diverged` until reconcile handles remote edits. Ralph checks shell commands and redirect targets without blocking harmless mentions, and keeps worker completion evidence mandatory.
+- **Review commands need fewer arguments.** Plan review runs without a `--files` list, impl review resolves an omitted `--base` to the repository's default branch, and plan and completion receipts default to the checkout's `.flow/tmp/` so two repos never share one. Host impl review also runs a standalone review with no task id.
+- **`flowctl done` checks its evidence and records the plan-sync skip itself.** Evidence without `commits`, `tests` or `prs` is refused, unknown keys print a warning, `done` and `block` check status under the task lock, and with plan-sync off the receipt carries its `stage: plan-sync - skipped(...)` line without a hand edit. Error hints name `flowctl start <id>` before `--force`, and output piped into `head` no longer ends in a traceback.
+- **Skills read what flowctl actually writes.** Capture writes a spec in one atomic call and checks duplicates against open specs only; plan seeds new specs from the template; prospect's snippets run without PyYAML or `CLAUDE_PLUGIN_ROOT`; memory-migrate reads `entry_id`; audit stamps keep fields outside the schema; setup stays within the question tool's limits; prime keys scout findings to its criterion IDs; and shipped links resolve in an installed plugin.
+
+### Removed
+
+- **The `/flow-next:pilot` and `/flow-next:interview` command shims.** Use `/flow-next:flow --auto --tick` and `/flow-next:refine`. The skill stubs remain for one more release.
 
 ## [flow-next 6.0.2] - 2026-09-24
 

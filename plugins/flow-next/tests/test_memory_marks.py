@@ -1105,6 +1105,47 @@ class TestHardenedWriteValidation(unittest.TestCase):
         self.assertIn("hardened_into", flowctl.MEMORY_FIELD_ORDER)
 
 
+class TestMarkPreservesFieldsOutsideSchema(unittest.TestCase):
+    """fn-257 R15: a `mark-*` stamp keeps frontmatter fields it does not own."""
+
+    EXTRA = ["bug/runtime-errors/a-2026-01-01", "bug/runtime-errors/b-2026-01-02"]
+
+    def _seed_with_extra(self, mem: Path) -> Path:
+        path = _seed_entry(mem)
+        text = path.read_text(encoding="utf-8")
+        extra = "audit_consolidates: [" + ", ".join(self.EXTRA) + "]\n"
+        path.write_text(text.replace("---\n", "---\n" + extra, 1), encoding="utf-8")
+        return path
+
+    def test_extra_field_survives_every_stamp(self) -> None:
+        for cmd in (
+            ("mark-fresh",),
+            ("mark-stale", "--reason", "drifted"),
+            ("mark-hardened", "--gate-ref", GATE_REF),
+        ):
+            with self.subTest(cmd=cmd[0]), tempfile.TemporaryDirectory() as tmp:
+                mem = _init_repo(Path(tmp))
+                path = self._seed_with_extra(mem)
+                _run(Path(tmp), "memory", *cmd[:1], ENTRY_ID, *cmd[1:], "--json")
+                fm = flowctl._memory_read_entry(path)["frontmatter"]
+                self.assertEqual(fm["audit_consolidates"], self.EXTRA)
+                self.assertEqual(fm["last_audited"], _today())
+
+    def test_malformed_frontmatter_is_reported_and_left_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mem = _init_repo(Path(tmp))
+            path = _seed_entry(mem)
+            text = path.read_text(encoding="utf-8")
+            broken = text.replace("---\n", "---\nthis line is not yaml\n", 1)
+            path.write_text(broken, encoding="utf-8")
+            result = _run(
+                Path(tmp), "memory", "mark-fresh", ENTRY_ID, "--json", expect_rc=1
+            )
+            self.assertFalse(result["success"])
+            self.assertIn("malformed frontmatter", result["error"])
+            self.assertEqual(path.read_text(encoding="utf-8"), broken)
+
+
 class TestHardenedStatusFilters(unittest.TestCase):
     def _seed_and_harden(self, tmp: Path) -> Path:
         mem = _init_repo(tmp)

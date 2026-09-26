@@ -633,7 +633,7 @@ _Relates to_: Driver, Long-horizon run, Tick
 
 ## Pilot
 
-The deprecated one-release alias `/flow-next:pilot` for `/flow-next:flow --auto --tick`: it maps `--spec <id>` to the positional id, passes `--backlog`, `--dry-run`, `--review`, `--research`, `--depth` through, prints one deprecation line to stderr, and behaves byte-for-byte as the tick. The spelling survives in config keys (`pilot.autonomy`, `pilot.gateClasses`), flowctl verbs (`flowctl pilot strikes`, `flowctl pilot-log`), the ledger and decision-log paths (`.flow/pilot-runs/`), and the `PILOT_VERDICT` name; those are not renamed.
+The deprecated alias for `/flow-next:flow --auto --tick`. Its `/flow-next:pilot` command is removed; the `flow-next-pilot` skill stub remains until the next release and maps `--spec <id>` to the positional id, passes `--backlog`, `--dry-run`, `--review`, `--research`, `--depth` through, prints one deprecation line to stderr, and behaves byte-for-byte as the tick. The spelling survives in config keys (`pilot.autonomy`, `pilot.gateClasses`), flowctl verbs (`flowctl pilot strikes`, `flowctl pilot-log`), the ledger and decision-log paths (`.flow/pilot-runs/`), and the `PILOT_VERDICT` name; those are not renamed.
 
 _Avoid_: the pilot skill, pilot loop, build-loop conductor
 
@@ -653,7 +653,7 @@ Classify a fork before asking the user. An answer observable by running somethin
 
 ## Refine
 
-The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release; `/flow-next:interview` forwards for one release). A deep question pass over a spec, task, or spec file under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
+The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release). A deep question pass over a spec, task, or spec file under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
 
 _Avoid_: interview skill, interview command
 

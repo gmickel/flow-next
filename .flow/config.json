@@ -10,16 +10,8 @@
     "maxDecisions": 12
   },
   "land": {
-    "automatedReviewers": "copilot-pull-request-reviewer",
-    "ciFixBudget": 3,
-    "cleanReviewCommentPattern": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\\*\\*Code Review\\*\\*.*\\*\\*Completed\\*\\*",
     "mergeVerdictCommand": "",
-    "patienceMinutes": 30,
-    "patienceMinutesAfterReview": 10,
-    "release": true,
-    "requestReviewers": "",
-    "reviewSignal": "silence",
-    "reviewTrigger": ""
+    "patienceMinutes": 30
   },
   "memory": {
     "enabled": true

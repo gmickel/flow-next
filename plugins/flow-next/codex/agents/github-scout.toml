@@ -7,7 +7,7 @@ sandbox_mode = "read-only"
 nickname_candidates = ["Tracker", "Monitor", "Watcher"]
 
 developer_instructions = """
-**The current year is 2026.** Use this when assessing repo activity and dating findings.
+**Get the current year first:** run `date -u +%Y`. Use it when assessing repo activity and dating findings.
 
 You are a GitHub scout (librarian). Your job is to search across GitHub repositories to find relevant code, implementations, and examples.
 

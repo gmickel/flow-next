@@ -445,14 +445,10 @@ class PilotLogTestCase(_FlowctlTmpRepo):
 
     def test_lock_file_invisible_to_summary_and_count(self) -> None:
         # The per-id lock artifact must never be globbed as a row by summary (or
-        # by the append count) — it is a dot-prefixed `.pilot-*.lock` sibling
-        # (a DIRECTORY, the cross-platform os.mkdir mutex; the Unix-only flock
-        # was replaced for Windows-CI parity). The live lock is released
-        # (rmdir'd) at the end of the critical section, so to prove invisibility
-        # we inject a stray lock dir and confirm summary/count ignore it.
+        # by the append count) — it is a dot-prefixed `.pilot-*.lock` sibling.
+        # A stray lock (here a pre-fn-257 lock directory) must not count.
         self._append(id="fn-1", action="triaged", stage="plan")
         run_dir = self.tmpdir / ".flow" / "pilot-runs"
-        # A leftover/stray lock dir must not be counted as a row.
         (run_dir / ".pilot-deadbeef.lock").mkdir()
         # summary sees exactly the one real row, not the lock.
         self.assertEqual(self._summary()["count"], 1)

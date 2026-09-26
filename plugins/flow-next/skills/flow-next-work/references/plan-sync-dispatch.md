@@ -1,9 +1,8 @@
 # Plan-sync dispatch (gated reference)
 
 > **Loaded only when phases.md 3e read `planSync.enabled == true`.** A run with
-> plan-sync disabled (null/false/missing — the default) never reads this file; it
-> records its `stage: plan-sync - skipped(config: planSync.enabled != true)` outcome
-> line on each completed task inline and advances to 3f. The mandatory per-task
+> plan-sync disabled (null/false/missing — the default) never reads this file;
+> `flowctl done` records its skip line. The mandatory per-task
 > stage-outcome lines themselves stay inline in phases.md 3e and are recorded
 > whatever happens here.
 

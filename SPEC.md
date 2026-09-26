@@ -210,8 +210,9 @@ This section has TWO shapes. Pick exactly one:
 <!--
 OPTIONAL AUXILIARY SECTION — `## Resolved via Research`:
 Written by `/flow-next:refine --scope=research`, or by plan when its Step 1 ran
-the research scouts (docs-scout, practice-scout, docs-gap-scout, memory-scout;
-github-scout when gated on). One `###` sub-block per scout that ran, one bullet
+docs-scout or practice-scout (then with every research scout that ran:
+docs-scout, practice-scout, docs-gap-scout, memory-scout; github-scout when
+gated on). One `###` sub-block per scout that ran, one bullet
 per finding (library version, changed API, gotcha, doc that must change, memory
 entry that applies), each ending in `Source: <url|path|entry-id>`; a provenance
 line under the heading names the writer and the scouts. Its presence is the skip

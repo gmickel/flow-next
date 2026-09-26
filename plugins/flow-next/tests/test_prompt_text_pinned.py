@@ -187,8 +187,10 @@ TEMPLATE_HASHES = {
         # comment says capture adds no section the template leaves out. The
         # `Conversation Evidence` and `Requirement coverage` entries also state
         # their default placement, so position is the template's call too
+        # (deliberate bump). fn-257 R10: the Resolved-via-Research comment says
+        # plan writes the section only when docs-scout or practice-scout ran
         # (deliberate bump).
-        "1d32373730f112696b567222cfe38f4e83dfaefc0c311f07f325393e2e07fbee",
+        "25ac517ee0081ddb498ab6cb01ddd1e4d28d2c6051179c00dd303b560efc4aec",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
         "e95af5266a1a943423ca774b51a4d235fb205753b9615d12c051a78e4cc650e3",

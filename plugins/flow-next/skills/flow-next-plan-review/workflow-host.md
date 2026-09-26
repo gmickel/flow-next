@@ -142,7 +142,7 @@ present wins and disables the aggregate. The `unaddressed` array in the JSON tai
 Use:
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/plan-review-receipt-${SPEC_ID}.json}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
 ```
 
 Write:
@@ -157,6 +157,7 @@ Write:
   "spec": "host",
   "session_id": null,
   "review": "<full reviewer output>",
+  "head": "<REVIEW_HEAD_SHA>",
   "timestamp": "<ISO-8601>"
 }
 ```

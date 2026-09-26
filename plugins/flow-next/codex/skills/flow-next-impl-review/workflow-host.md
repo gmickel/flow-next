@@ -129,6 +129,8 @@ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
   || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
   "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+# Standalone (no TASK_ID): no spec state, so no artifact, reservation or round.
+[[ -n "$TASK_ID" ]] || exit 0
 
 DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.diff"
 git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
@@ -330,6 +332,8 @@ Write a receipt compatible with existing consumers:
   "spec": "host",
   "session_id": null,
   "review": "<full reviewer output text - findings + verdict>",
+  "base": "<REVIEW_BASE_SHA>",
+  "head": "<REVIEW_HEAD_SHA>",
   "draws": [{"axis": "<axis>", "model": "<slug>", "session_id": null, "verdict": "<tag or null>", "failed": false}],
   "timestamp": "<ISO-8601>"
 }
@@ -354,6 +358,20 @@ the merge, against the one reservation from Step 2's fence — never once per
 draw (three cap slots for one merged round would triple-charge the cap):**
 
 ```bash
+if [[ -z "$TASK_ID" ]]; then
+  # Standalone: no reservation, round or lease exists; attach directly, in the
+  # same form the rp standalone path uses.
+  if [[ -n "$VERDICT" ]]; then
+    "$FLOWCTL" review-findings attach --input "$RECEIPT_INPUT" \
+      --receipt "$RECEIPT_PATH" --review-file "$REVIEW_OUTPUT_FILE" \
+      --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --json
+  fi
+  if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+    echo "ESCALATE: reviewer requested human review" >&2
+    exit 4
+  fi
+  exit 0
+fi
 # Scope ownership through the optional phases (PR #392, sol round 3): hold
 # the lease BEFORE the record — while the exclusive reservation still stands,
 # so no other dispatch can enter between consumption and lease. Acquisition
@@ -406,8 +424,8 @@ When `--deep` / `--validate` / `--interactive` flags are set, run the gated phas
 
 Never silently drop a required gate without a note.
 
-When the enabled phases have all run, release the scope lease held in Step 3
-(before the fix pass):
+When the enabled phases have all run on a task review, release the scope lease
+held in Step 3 (before the fix pass); a standalone review holds none:
 
 ```bash
 "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json

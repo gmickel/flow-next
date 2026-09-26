@@ -31,7 +31,7 @@ Quick setup before planning:
 
 1. **Plan depth** — How detailed?
    a) Short — problem, acceptance, key context only
-   b) Standard (default) — + approach, risks, test notes
+   b) Standard — + approach, risks, test notes
    c) Deep — + phases, alternatives, rollout plan
 
 2. **Review** — Run Carmack-level review after?
@@ -50,7 +50,7 @@ Quick setup before planning:
 
 1. **Plan depth** — How detailed?
    a) Short — problem, acceptance, key context only
-   b) Standard (default) — + approach, risks, test notes
+   b) Standard — + approach, risks, test notes
    c) Deep — + phases, alternatives, rollout plan
 
 2. **Review** — Run Carmack-level review after?
@@ -64,6 +64,6 @@ Quick setup before planning:
 Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble via voice.
 
 **Defaults when empty/ambiguous:**
-- Depth = `standard` (balanced detail)
+- Depth = the SKILL.md **Plan depth** default
 - Research = `repo-scout`
 - Review = configured backend if set, else `none`

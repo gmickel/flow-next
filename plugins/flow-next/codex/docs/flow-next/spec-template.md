@@ -116,7 +116,7 @@ These four headings are parsed by `flowctl`. Renaming or deleting one does not e
 
 | Heading | What reads it | Consequence if renamed or removed |
 |---|---|---|
-| `## Acceptance Criteria` | R-ID extraction (`_export_parse_acceptance_criteria`) | R-IDs stop being found. Coverage tables in `make-pr` and the review skills come out empty, task `satisfies:` mapping breaks, and unaddressed-R-ID verdict gating stops firing. Legacy `## Acceptance criteria` and bare `## Acceptance` are tolerated; anything else is not. |
+| `## Acceptance Criteria` | R-ID extraction (`_export_scan_acceptance_criteria`) | R-IDs stop being found. Coverage tables in `make-pr` and the review skills come out empty, task `satisfies:` mapping breaks, and unaddressed-R-ID verdict gating stops firing. Legacy `## Acceptance criteria` and bare `## Acceptance` are tolerated; anything else is not. |
 | `## Boundaries` | exact-match regex on the heading | The "Not in this PR" section of a generated PR body loses its source. |
 | `## Goal & Context` | interview business-scope routing | `--scope=business` loses a write target; the business pass has nowhere canonical to put framing. |
 | `## Decision Context` | flat-vs-substructured detection | The `### Motivation` / `### Implementation Tradeoffs` promotion logic cannot tell which shape the spec is in. |

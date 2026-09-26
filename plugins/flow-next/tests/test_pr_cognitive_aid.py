@@ -383,7 +383,7 @@ class ValidationTests(unittest.TestCase):
 class SuffixedRIdTests(unittest.TestCase):
     """Issue #300: the sub-scoped sibling form (`R4a`) is a canonical R-ID.
 
-    The spec parser (`_export_parse_acceptance_criteria`) emits `R5a` and the
+    The spec parser (`_export_scan_acceptance_criteria`) emits `R5a` and the
     review-output extractor accepts it; this validator was the straggler, so
     the producer and the consumer disagreed inside one process. Because an
     `rIds[]` entry needs a same-record `rid` source, a single rejected suffix

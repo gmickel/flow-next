@@ -290,7 +290,7 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             self.assertTrue((custom_codex / "plugin.json").is_file())
             worktree_skill = custom_codex / "skills" / "flow-next-worktree-kit" / "SKILL.md"
             self.assertIn(
-                'bash "${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh"',
+                '"${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh"',
                 worktree_skill.read_text(encoding="utf-8"),
                 "worktree-kit command must quote the Codex-home expansion",
             )

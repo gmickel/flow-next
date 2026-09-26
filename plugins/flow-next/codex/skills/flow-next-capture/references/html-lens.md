@@ -1,22 +1,22 @@
 # capture — HTML render lens (loaded on demand, opt-in)
 
-> Loaded ONLY when `artifacts.html.enabled` is true. The default capture run reads the one-line
-> config gate (in workflow.md §5.10) and, when off, never touches this file — so its ~57 lines are
-> not part of the always-loaded prompt.
+> Loaded ONLY when `artifacts.html.enabled` is true. The default capture run reads the gate from
+> its config snapshot (workflow.md §5.10) and, when off, never touches this file — so its ~57 lines
+> are not part of the always-loaded prompt.
 
 ### 5.10 — HTML render lens (opt-in) — spec artifact + link line
 
 **Gated on `artifacts.html.enabled` — this check is the ONLY addition when the mode is off.** Runs last in Phase 5 (after 5.7–5.9 have settled the spec body and metadata), so the lens renders the final state.
 
 ```bash
-HTML_LENS=$("$FLOWCTL" config get artifacts.html.enabled --json | jq -r 'if .value == true then "true" else "false" end')
+HTML_LENS=$(jq -r 'if .value.artifacts.html.enabled == true then "true" else "false" end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null || echo false)   # preamble snapshot, same literal path
 ```
 
-When `HTML_LENS != true` (off or unset): **skip this entire section.** Load no reference file, write no artifact, open no session, print no artifact-related output — the gate read above is the only cost.
+When `HTML_LENS != true` (off or unset): **skip this entire section.** Load no reference file, write no artifact, open no session, print no artifact-related output — the snapshot read above is the only cost.
 
 When `HTML_LENS = true`:
 
-1. **Load the disclosure reference** [`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md) (relative cross-link — resolves from this skill dir in every install layout, same shape as the spec-template link). It owns ALL design and generation rules — hard rules, design contract, spec-lens content, DAG discipline, Lavish flow, pre-publish checklist. Never duplicate its rules here; follow it top to bottom.
+1. **Load the disclosure reference** [`references/html-artifacts.md`](../../../references/html-artifacts.md) (plugin-root relative). It owns ALL design and generation rules — hard rules, design contract, spec-lens content, DAG discipline, Lavish flow, pre-publish checklist. Never duplicate its rules here; follow it top to bottom.
 2. **Generate the artifact** at the fixed path (reference §1.3):
 
    ```bash

@@ -16,7 +16,6 @@ Agents waste cycles when:
 - No linter → waits for CI to catch syntax errors
 - No formatter → style drift causes noisy diffs
 - No type checker → runtime errors instead of compile-time
-- No pre-commit → feedback delayed until CI
 
 ## Scan Targets
 
@@ -105,40 +104,22 @@ grep -E "^(lint|format|typecheck|check):" Makefile 2>/dev/null
 
 ## Output Format
 
+Key every finding to the Pillar 1 criterion IDs in prime's `pillars.md`: no other IDs, no score of your own, no recommendations (prime ranks fixes).
+
 ```markdown
 ## Tooling Scout Findings
 
-### Detected Stack
 - Language(s): [detected]
-- Package manager: [npm/pnpm/yarn/pip/cargo/go]
+- Package manager: [npm/pnpm/yarn/bun/pip/uv/cargo/go]
 
-### Linting
-- Status: ✅ Configured / ⚠️ Partial / ❌ Missing
-- Tool: [tool name] or "None found"
-- Config: [file path] or "N/A"
-- Script: [command] or "Not in package.json/Makefile"
-
-### Formatting
-- Status: ✅ Configured / ⚠️ Partial / ❌ Missing
-- Tool: [tool name] or "None found"
-- Config: [file path] or "N/A"
-- Script: [command] or "Not in package.json/Makefile"
-
-### Type Checking
-- Status: ✅ Configured / ⚠️ Partial / ❌ Missing
-- Tool: [tool name] or "None found"
-- Config: [file path] or "N/A"
-- Strict mode: Yes / No / N/A
-- Script: [command] or "Not in package.json/Makefile"
-
-### Pre-commit Hooks
-- Status: ✅ Configured / ❌ Missing
-- Tool: [husky/pre-commit/lefthook/none]
-- Runs: [what checks run on commit]
-
-### Recommendations
-- [Priority 1]: [specific action]
-- [Priority 2]: [specific action]
+| ID | Criterion | Status | Evidence |
+|----|-----------|--------|----------|
+| SV1 | Linter configured | ✅/⚠️/❌ | [tool + config path] |
+| SV2 | Formatter configured | ✅/⚠️/❌ | [tool + config path] |
+| SV3 | Type-checking depth | ✅/⚠️/❌ | [strict / extends lines quoted] |
+| SV4 | Deterministic feedback gate | ✅/⚠️/❌ | [hook tool + what it runs, quoted; prime grades the gate topology] |
+| SV5 | Lint script exists | ✅/❌ | [script + where it is defined; prime runs it] |
+| SV6 | Format script exists (check mode) | ✅/❌ | [script + its check-mode form, or "no check mode"] |
 ```
 
 ## Rules
@@ -147,4 +128,4 @@ grep -E "^(lint|format|typecheck|check):" Makefile 2>/dev/null
 - Note what's missing, not just what exists
 - Check for scripts that run the tools (lint command existence)
 - Don't read full config files - just confirm existence
-- Flag partial setups (e.g., eslint exists but no pre-commit)
+- Never recommend adding pre-commit hooks: SV4 counts missing git hooks as headroom, not a gap

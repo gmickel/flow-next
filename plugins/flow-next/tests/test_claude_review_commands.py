@@ -418,5 +418,71 @@ class ClaudeFailures(unittest.TestCase):
                     self.assertEqual(calls, [])
 
 
+class ReviewArgumentDefaults(unittest.TestCase):
+    """fn-257 R3-R5: omitted --files / --receipt / --base resolve per repo."""
+
+    def _without_receipt_env(self):
+        env = {k: v for k, v in os.environ.items() if k != "REVIEW_RECEIPT_PATH"}
+        return mock.patch.dict(os.environ, env, clear=True)
+
+    def test_plan_review_runs_without_files_and_keys_receipt_to_repo(self):
+        with _flow_repo() as (repo, base), self._without_receipt_env():
+            with _fake_claude() as calls:
+                code, _out, err = _run_cli(
+                    "claude", "plan-review", EPIC_ID, "--base", base, "--json")
+            self.assertEqual(code, 0, err)
+            self.assertNotIn("<requested_files>", calls[0]["stdin"])
+            receipt = repo / ".flow" / "tmp" / f"plan-review-receipt-{EPIC_ID}.json"
+            self.assertEqual(_read_json(receipt)["type"], "plan_review")
+
+    def test_plan_review_still_rejects_a_missing_files_entry(self):
+        with _flow_repo() as (_repo, base), _fake_claude() as calls:
+            code, out, err = _run_cli(
+                "claude", "plan-review", EPIC_ID, "--files", "src/absent.py",
+                "--base", base, "--json")
+        self.assertNotEqual(code, 0)
+        self.assertIn("src/absent.py (not found)", err)
+        self.assertIn("No valid file paths", out)
+        self.assertEqual(calls, [])
+
+    def test_explicit_receipt_env_wins_over_repo_default(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "env-receipt.json"
+            with mock.patch.dict(os.environ, {"REVIEW_RECEIPT_PATH": str(receipt)}), \
+                    _fake_claude():
+                code, _out, err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--base", base, "--json")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(_read_json(receipt)["type"], "completion_review")
+            default = repo / ".flow" / "tmp" / f"completion-review-receipt-{EPIC_ID}.json"
+            self.assertFalse(default.exists())
+
+    def test_impl_review_without_base_uses_the_default_branch(self):
+        with _flow_repo() as (repo, base):
+            _git(repo, "checkout", "-q", "-b", "work")
+            _git(repo, "branch", "-f", "main", base)
+            receipt = repo / "receipt.json"
+            with _fake_claude() as calls:
+                code, _out, err = _run_cli(
+                    "claude", "impl-review", TASK_ID, "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(_read_json(receipt)["base"], "main")
+            self.assertIn(f"{base}..", calls[0]["stdin"])
+
+    def test_impl_review_without_base_or_default_branch_names_base(self):
+        with _flow_repo() as (repo, _base):
+            _git(repo, "checkout", "-q", "-b", "work")
+            for name in ("main", "master"):
+                subprocess.run(
+                    ["git", "-C", str(repo), "branch", "-D", name],
+                    capture_output=True, check=False,
+                )
+            with _fake_claude() as calls:
+                code, out, _err = _run_cli("claude", "impl-review", TASK_ID, "--json")
+        self.assertEqual(code, 2)
+        self.assertIn("pass --base", json.loads(out)["error"])
+        self.assertEqual(calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

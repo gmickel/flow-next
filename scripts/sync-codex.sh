@@ -471,14 +471,14 @@ for nf in \
     -e 's|Use `/flow-next:plan fn-N`|Use `$flow-next-plan fn-N`|g' \
     -e 's|→ `/flow-next:work fn-N` (or more interview|→ `$flow-next-work fn-N` (or more interview|g' \
     -e 's|→ `/flow-next:work fn-N.M`|→ `$flow-next-work fn-N.M`|g' \
-    -e 's|→ `/flow-next:plan <file>`|→ `$flow-next-plan <file>`|g' \
+    -e 's|→ `/flow-next:capture` to turn the refined document|→ `$flow-next-capture` to turn the refined document|g' \
     -e 's|`/flow-next:visual fn-N` for a spec input|`$flow-next-visual fn-N` for a spec input|g' \
     -e 's|`/flow-next:visual fn-N.M` for a task input|`$flow-next-visual fn-N.M` for a task input|g' \
     -e 's|`/flow-next:visual <file-path>` for the file input|`$flow-next-visual <file-path>` for the file input|g' \
     -e 's|recommend `/flow-next:work fn-N --no-plan`|recommend `$flow-next-work fn-N --no-plan`|g' \
     -e 's|Use `/flow-next:plan-review fn-N`|Use `$flow-next-plan-review fn-N`|g' \
     -e 's|instead: `/flow-next:refine <spec-id>`|instead: `$flow-next-refine <spec-id>`|g' \
-    -e 's|suggest `/flow-next:plan <file>` to create spec + tasks|suggest `$flow-next-plan <file>` to create spec + tasks|g' \
+    -e 's|suggest `/flow-next:capture` to turn it into a spec|suggest `$flow-next-capture` to turn it into a spec|g' \
     -e 's|(ask /flow-next:refine what to refine)|(ask $flow-next-refine what to refine)|g' \
     -e 's|Run /flow-next:chart on the selected survivor|Run $flow-next-chart on the selected survivor|g' \
     -e 's|Run /flow-next:refine <spec-or-task-id> to refine|Run $flow-next-refine <spec-or-task-id> to refine|g' \
@@ -1761,8 +1761,8 @@ generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured b
 generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" true "Work on: "
 generate_openai_yaml "flow-next-refine"    "Flow Refine"    "Refine a spec or task: deep Q&A, or a read-only external-docs research pass" "#3B82F6" true
 # fn-238 R15: one-release deprecated alias. Catalog flag OFF so prose never resolves it;
-# the stub forwards to flow-next-refine. Remove this line, the stub dir, and the
-# commands/interview.md shim in the release after the rename ships.
+# the stub forwards to flow-next-refine. Remove this line and the stub dir in the
+# release after the rename ships.
 generate_openai_yaml "flow-next-interview" "Flow Interview (deprecated alias)" "Deprecated alias for flow-next-refine; invoke the refine skill instead" "#3B82F6" false
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
 generate_openai_yaml "flow-next-prospect"  "Flow Prospect"  "Generate ranked candidate ideas grounded in the repo" "#3B82F6" true "What should we build next? "
@@ -1777,8 +1777,8 @@ generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid 
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
 # fn-239 R4: one-release deprecated alias. Catalog flag OFF so prose never resolves it;
-# the stub forwards to flow-next-flow --auto --tick. Remove this line, the stub dir, and
-# the commands/pilot.md shim in the release after flow --auto ships.
+# the stub forwards to flow-next-flow --auto --tick. Remove this line and the stub dir in
+# the release after flow --auto ships.
 generate_openai_yaml "flow-next-pilot" "Flow Pilot (deprecated alias)" "Deprecated alias for flow-next-flow --auto --tick; invoke the flow skill with --auto instead" "#3B82F6" false
 generate_openai_yaml "flow-next-land" "Flow Land" "Resolve and merge one named, authorized PR; terminal LAND_VERDICT line" "#3B82F6" true
 
@@ -2426,12 +2426,12 @@ flow-next-make-pr/create-and-finalize.md	re-run /flow-next:make-pr (skill detect
 flow-next-refine/SKILL.md	Use `/flow-next:plan fn-N`	Use `$flow-next-plan fn-N`
 flow-next-refine/SKILL.md	→ `/flow-next:work fn-N` (or more interview	→ `$flow-next-work fn-N` (or more interview
 flow-next-refine/SKILL.md	→ `/flow-next:work fn-N.M`	→ `$flow-next-work fn-N.M`
-flow-next-refine/SKILL.md	→ `/flow-next:plan <file>`	→ `$flow-next-plan <file>`
+flow-next-refine/SKILL.md	→ `/flow-next:capture` to turn the refined document	→ `$flow-next-capture` to turn the refined document
 flow-next-refine/SKILL.md	`/flow-next:visual fn-N` for a spec input	`$flow-next-visual fn-N` for a spec input
 flow-next-refine/SKILL.md	`/flow-next:visual fn-N.M` for a task input	`$flow-next-visual fn-N.M` for a task input
 flow-next-refine/SKILL.md	`/flow-next:visual <file-path>` for the file input	`$flow-next-visual <file-path>` for the file input
 flow-next-refine/references/write-back.md	instead: `/flow-next:refine <spec-id>`	instead: `$flow-next-refine <spec-id>`
-flow-next-refine/references/write-back.md	suggest `/flow-next:plan <file>` to create spec + tasks	suggest `$flow-next-plan <file>` to create spec + tasks
+flow-next-refine/references/write-back.md	suggest `/flow-next:capture` to turn it into a spec	suggest `$flow-next-capture` to turn it into a spec
 flow-next-prospect/workflow.md	(ask /flow-next:refine what to refine)	(ask $flow-next-refine what to refine)
 flow-next-prospect/workflow.md	Run /flow-next:chart on the selected survivor	Run $flow-next-chart on the selected survivor
 flow-next-prospect/workflow.md	Run /flow-next:refine <spec-or-task-id> to refine	Run $flow-next-refine <spec-or-task-id> to refine

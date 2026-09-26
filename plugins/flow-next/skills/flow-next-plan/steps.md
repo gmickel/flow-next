@@ -1,6 +1,6 @@
 # Flow Plan Steps
 
-**Steps 1-3 (research, gap analysis, depth) run on every input type.** A plan that skipped one of them because the input "looked like a refine" has broken this.
+**Steps 1-3 (research, scope check, gap analysis) run on every input type.** A plan that skipped one of them because the input "looked like a refine" has broken this.
 
 **CRITICAL**: If you are about to create:
 - a markdown TODO list,
@@ -178,9 +178,9 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 | **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
 | **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
 
-Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; `flow --auto` defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
+Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is the default (SKILL.md **Plan depth**), so a plan nobody sized loses only the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
-**Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When the research scouts do run, Step 5 writes their findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
+**Research skip.** On a Route A spec, apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names before dispatching them, and record the outcome with its reason; the decomposition scouts (`repo-scout`, `spec-scout`, Step 3's `flow-gap-analyst`) always run. When docs-scout or practice-scout ran, Step 5 writes the research scouts' findings into the section that reference defines, as well as into the task bodies, so research is gathered once on either route.
 
 ---
 
@@ -297,32 +297,13 @@ Fold gaps + questions into the plan.
 
 **Done when:** the analyst has returned, and each gap it raised is either folded into the plan or listed as an open question.
 
-## Step 4: Pick depth
+## Step 4: Render sections for the chosen depth
 
-Default to standard unless complexity demands more or less.
+The depth was fixed before Step 1 (SKILL.md **Plan depth**). It decides which template sections Step 5 fills; plan's own sections (Step 5) are written at every depth, and a section with nothing to say stays absent.
 
-**SHORT** (bugs, small changes)
-- Problem or goal
-- Acceptance checks
-- Key context
-
-**STANDARD** (most features)
-- Overview + scope
-- Approach
-- Risks / dependencies
-- Acceptance checks
-- Test notes
-- References
-- Mermaid diagram if data model changes
-
-**DEEP** (large/critical)
-- Detailed phases
-- Alternatives considered
-- Non-functional targets
-- Architecture/data flow diagram (mermaid)
-- Rollout/rollback
-- Docs + metrics
-- Risks + mitigations
+- **SHORT** (bugs, small changes): `Goal & Context`, `Acceptance Criteria`, `Boundaries`; any other section only where the plan has content for it (a rejected design's line in `Decision Context`, a technical section the change needs).
+- **STANDARD** (most features): SHORT plus `Architecture & Data Models` (a mermaid diagram when the data model changes), `Edge Cases & Constraints` (risks, dependencies) and `Decision Context`; `API Contracts` when an interface changes.
+- **DEEP** (large/critical): every template section, adding phases, alternatives considered, non-functional targets, an architecture/data-flow diagram, rollout/rollback, docs and metrics, and risks with mitigations in the sections that own them.
 
 ## Step 5: Write to .flow
 
@@ -353,10 +334,10 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
 1. Compose the plan FIRST, then create spec + plan in ONE call — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot — **no new `config get`**. Explicit user override in the invocation always wins.
 
-   The plan markdown (step 2's scaffold) is fed to the creation call via `--plan-file` so create + set-plan collapse into one invocation (`--plan-file` validates before id allocation and composes unchanged with the tracker-first flags). **Author-as-file rule:** compose the plan with the **Write tool** at a literal agent-composed path — NOT inside a bash heredoc. Resolve `${TMPDIR:-/tmp}` yourself and type the RESOLVED literal path (e.g. `/tmp/flow-plan-body-ab12.md`) identically in the Write call and the Bash block — file tools do not expand shell variables; the path is literal in both tool calls, so no shell variable crosses calls. If plan review or a fix loop demands revisions, revise this file with **Edit** (span edits) and re-run only the affected flowctl call — never re-emit the document. Delete the file only after the spec (and any revision loop) is finalized; the durable plan lives in `.flow/` via the create call.
+   The plan markdown (step 2: the resolved template plus plan's sections) is fed to the creation call via `--plan-file` so create + set-plan collapse into one invocation (`--plan-file` validates before id allocation and composes unchanged with the tracker-first flags). **Author-as-file rule:** compose the plan with the **Write tool** at a literal agent-composed path — NOT inside a bash heredoc. Resolve `${TMPDIR:-/tmp}` yourself and type the RESOLVED literal path (e.g. `/tmp/flow-plan-body-ab12.md`) identically in the Write call and the Bash block — file tools do not expand shell variables; the path is literal in both tool calls, so no shell variable crosses calls. If plan review or a fix loop demands revisions, revise this file with **Edit** (span edits) and re-run only the affected flowctl call — never re-emit the document. Delete the file only after the spec (and any revision loop) is finalized; the durable plan lives in `.flow/` via the create call.
 
    ```
-   Write tool -> /tmp/flow-plan-body-<suffix>.md   (full plan markdown — step 2's scaffold; a RESOLVED literal path — substitute your resolved temp dir, never an unexpanded ${TMPDIR} expression)
+   Write tool -> /tmp/flow-plan-body-<suffix>.md   (full plan markdown per step 2; a RESOLVED literal path — substitute your resolved temp dir, never an unexpanded ${TMPDIR} expression)
    ```
    ```bash
    # Creation block references the SAME literal path (no cross-call variable):
@@ -405,60 +386,14 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
    This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --plan-file "$PLAN_FILE" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.
 
-2. The plan content (this scaffold is what the Write tool composes into step 1's `$PLAN_FILE`; `spec set-plan` is the Route A / editing path, not part of Route B creation):
+2. The plan content. Seed it from the resolved template: run `$FLOWCTL spec skeleton` once (it renders the template through the `SPEC.md` → `spec.md` → bundled cascade of [`spec-template-discovery.md`](../../references/spec-template-discovery.md), frontmatter stripped) and Write step 1's `$PLAN_FILE` from its output. The template owns the section names, their order and the per-section guidance; never duplicate its section list inline. Replace its `# <spec-id> <Title>` heading with `# <Title>`, fill the sections Step 4 chose for the depth, and replace the guidance prose and comments with plan content. Acceptance criteria use the `- **R1:** <testable criterion>. Errors: <enumerated cases, or "no error surface beyond X">` shape (R-ID rule below). `spec set-plan` is the Route A / editing path, not part of Route B creation.
 
-   The canonical scaffold lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — section list, scope-owner annotations, and the `## Decision Context` flat-vs-H3 conditional. At runtime the template is resolved via the 3-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. The full walker (case-insensitive FS probe, both-exist warning, plugin-root fallback) is single-sourced in [`plugins/flow-next/references/spec-template-discovery.md`](../../references/spec-template-discovery.md). Read the resolved template before authoring; never duplicate its section list inline. The plan skill extends that scaffold with the plan-specific sections shown below (Overview, Quick commands, Strategy Alignment, Strategy drift, Early proof point, Requirement coverage).
-
-   ```
-   Include: Overview, Scope, Approach, Quick commands (REQUIRED),
-   Acceptance Criteria, Early proof point, Requirement coverage, References.
-   Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
-   ## Strategy drift flagged for review (when plan scope conflicts with an active track).
-   ## Resolved via Research (when the research scouts RAN in Step 1, in the section shape from
-   flow-next-refine/references/research-scope.md with `plan` as the provenance; when Step 1 skipped
-   them because the section was already present, it comes back byte-for-byte).
-   Add mermaid diagram if data model or architecture changes.
-   Write tool -> $PLAN_FILE (author-as-file rule — full scaffold below):
-
-   # Spec Title
-
-   ## Overview
-   ...
-
-   ## Quick commands
-   ```bash
-   # At least one smoke test command
-   ```
-
-   ## Boundaries / non-goals
-   - <what this spec explicitly does NOT cover>
-
-   <!-- ## Strategy Alignment and ## Strategy drift flagged for review go HERE,
-        between ## Boundaries / non-goals and ## Decision context, ONLY when
-        STRATEGY_PRESENT=true from Step 1 — their shapes and rules live in
-        references/strategy-alignment.md. When STRATEGY_PRESENT=false, omit both
-        entirely. -->
-
-   ## Decision context
-   - <why this approach over alternatives>
-
-   ## Acceptance Criteria
-   - **R1:** <testable criterion>. Errors: <enumerated cases, or "no error surface beyond X">
-   - **R2:** <testable criterion>. Errors: <cases, or "no error surface beyond X">
-   - **R3:** <testable criterion>. Errors: <cases, or "no error surface beyond X">
-
-   ## Early proof point
-   Task fn-N-slug.1 validates the core approach (<what it proves>).
-   If it fails, re-evaluate <strategy> before continuing with fn-N-slug.2+.
-
-   ## Requirement coverage
-
-   | Req | Description | Task(s) | Gap justification |
-   |-----|-------------|---------|-------------------|
-   | R1  | <criterion from Acceptance Criteria> | fn-N-slug.1, fn-N-slug.2 | — |
-   | R2  | <another criterion> | fn-N-slug.3 | — |
-   | R3  | <deferred item> | — | Deferred to fn-M-slug |
-   ```
+   Plan adds only these sections to the template:
+   - `## Quick commands` (REQUIRED): at least one smoke-test command in a bash fence.
+   - `## Strategy Alignment` and `## Strategy drift flagged for review`: only when `STRATEGY_PRESENT=true` (Step 1); shapes and placement in [`references/strategy-alignment.md`](references/strategy-alignment.md).
+   - `## Resolved via Research`: only when docs-scout or practice-scout ran in Step 1 (docs-gap-scout and memory-scout alone never write it, so a later STANDARD run still gets its web research). Section shape from `flow-next-refine/references/research-scope.md`, `plan` as the provenance, one sub-block per research scout that ran; when Step 1 skipped them because the section was already present, it comes back byte-for-byte.
+   - `## Early proof point`, after Acceptance Criteria: `Task fn-N-slug.1 validates the core approach (<what it proves>). If it fails, re-evaluate <strategy> before continuing with fn-N-slug.2+.`
+   - `## Requirement coverage`, last: a `| Req | Description | Task(s) | Gap justification |` table, one row per R-ID, for example `| R1 | <criterion> | fn-N-slug.1, fn-N-slug.2 | — |` and `| R3 | <deferred item> | — | Deferred to fn-M-slug |`.
 
    **Early proof point rules:**
    - Identify which task proves the fundamental approach works

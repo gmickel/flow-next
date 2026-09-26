@@ -229,9 +229,6 @@ CHART_TYPE_ATTENDANCE = {
     "interview": "attended",
 }
 CHART_ATTENDANCE_VALUES = frozenset({"attended", "unattended"})
-CHART_DECISION_STATUS_VALUES = frozenset(
-    {"open", "resolved", "superseded", "out-of-scope"}
-)
 CHART_CLOSED_STATUSES = frozenset({"resolved", "superseded", "out-of-scope"})
 CONFIG_FILE = "config.json"
 # Post-1.0 layout sentinel. Presence of `.flow/.flow_version` means the repo
@@ -283,7 +280,6 @@ STRATEGY_EMPTY_SENTINELS: frozenset[str] = frozenset(
     {STRATEGY_HUSK_SENTINEL, STRATEGY_DRAFT_PLACEHOLDER}
 )
 SPEC_STATUS = ["open", "done"]
-EPIC_STATUS = SPEC_STATUS  # Backward-compat alias (removed in 2.0).
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
 
 # fn-205 R2/R3/R7: completion-review status vocabulary. Canonical declaration
@@ -2638,7 +2634,16 @@ def atomic_write(path: Path, content: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             f.write(content)
-        os.replace(tmp_path, path)
+        # fn-257 R19: Windows refuses to replace a target another process has
+        # open (WinError 5/32); retry briefly, then raise the original error.
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                break
+            except PermissionError as e:
+                if getattr(e, "winerror", None) not in (5, 32) or attempt == 4:
+                    raise
+                _sleep_secs(0.05 * (attempt + 1))
     except Exception:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -2686,7 +2691,13 @@ def load_json(path: Path) -> dict:
 def load_json_or_exit(path: Path, what: str, use_json: bool = True) -> dict:
     """Load JSON file with safe error handling."""
     if not path.exists():
-        error_exit(f"{what} missing: {path}", use_json=use_json)
+        # fn-257 R19: a missed spec/task id lookup names the listing command.
+        kind, _, ident = what.partition(" ")
+        hint = {
+            "Spec": ". List specs: flowctl specs",
+            "Task": f". List tasks: flowctl tasks --spec {ident.rsplit('.', 1)[0]}",
+        }.get(kind, "") if ident and " " not in ident else ""
+        error_exit(f"{what} missing: {path}{hint}", use_json=use_json)
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
@@ -6772,47 +6783,6 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
         return None
 
 
-def validate_review_receipt_criteria(receipt: object) -> bool:
-    """Validate the optional additive `criteria` field; legacy receipts stay valid."""
-    if not isinstance(receipt, dict):
-        return False
-    criteria = receipt.get("criteria")
-    if criteria is None:
-        return True
-    if receipt.get("type") != "completion_review":
-        return False
-    if (
-        not isinstance(criteria, list)
-        or not criteria
-        or len(criteria) > _REVIEW_CRITERIA_MAX_ENTRIES
-    ):
-        return False
-    seen: set[str] = set()
-    for item in criteria:
-        if not isinstance(item, dict):
-            return False
-        if not set(item) <= {"id", "status", "note"}:
-            return False
-        cid = item.get("id")
-        if (
-            not isinstance(cid, str)
-            or not re.fullmatch(r"G[1-9][0-9]*", cid)
-            or cid in seen
-        ):
-            return False
-        seen.add(cid)
-        if item.get("status") not in ("met", "violated", "n/a"):
-            return False
-        note = item.get("note")
-        if note is not None and (
-            not isinstance(note, str)
-            or not note
-            or len(note) > _REVIEW_CRITERIA_MAX_NOTE
-        ):
-            return False
-    return True
-
-
 def bind_review_criteria(
     criteria: Optional[list[dict]],
 ) -> Optional[list[dict]]:
@@ -7644,7 +7614,7 @@ def _parse_unaddressed_rids_prose(output: str) -> Optional[list[str]]:
         seen: set[str] = set()
         ordered: list[str] = []
         # Match `R<digits>` with an optional single-letter suffix (R4a / R4b).
-        # Keep in lockstep with the spec parser (`_export_parse_acceptance_criteria`,
+        # Keep in lockstep with the spec parser (`_export_scan_acceptance_criteria`,
         # `R\d+[a-z]?` since fn-49.1) so suffixed R-IDs survive the review-output
         # path (coverage gate + fix-loop targeting). Bare `R\d+` here silently
         # dropped `R4a` / `R4b` — fn-49 fixed the spec parser but not this one.
@@ -13661,15 +13631,6 @@ def _write_text_fsync(path: Path, content: str) -> None:
 def _write_json_fsync(path: Path, data: dict) -> None:
     content = json.dumps(data, indent=2, sort_keys=True) + "\n"
     _write_text_fsync(path, content)
-
-
-def _chart_relpath(flow_dir: Path, path: Path) -> str:
-    """Path relative to charts/ for journal entries."""
-    charts = charts_dir(flow_dir)
-    try:
-        return path.resolve().relative_to(charts.resolve()).as_posix()
-    except ValueError:
-        return path.name
 
 
 def chart_body_text(
@@ -21422,6 +21383,7 @@ def write_memory_entry(
     body: str,
     *,
     raw_body: Optional[str] = None,
+    allow_unknown: bool = False,
 ) -> None:
     """Write a memory entry with deterministic field order.
 
@@ -21433,8 +21395,11 @@ def write_memory_entry(
     emitted byte for byte and `body` is ignored — frontmatter-only mutations
     (the audit `mark-*` handlers) must not reflow a body they never edited.
     Omit it for new entries and let the normalizing path run.
+
+    `allow_unknown` lets those same handlers keep fields outside the schema
+    that someone else wrote (see `validate_memory_frontmatter`).
     """
-    errors = validate_memory_frontmatter(frontmatter)
+    errors = validate_memory_frontmatter(frontmatter, allow_unknown=allow_unknown)
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -22032,7 +21997,9 @@ def _prospect_artifact_status(
     return (status or "active", age_days)
 
 
-def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
+def validate_memory_frontmatter(
+    frontmatter: dict[str, Any], *, allow_unknown: bool = False
+) -> list[str]:
     """Return a list of validation errors (empty = valid).
 
     Checks:
@@ -22040,7 +22007,9 @@ def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
       - track value in MEMORY_TRACKS
       - category value in MEMORY_CATEGORIES[track]
       - track-specific required fields present
-      - no unknown top-level fields
+      - no unknown top-level fields (`allow_unknown` admits unknown keys
+        that are plain field names; a key like `- option a` is a mis-parsed
+        block scalar and still fails)
       - enum values for problem_type / resolution_type / status
     """
     errors: list[str] = []
@@ -22091,6 +22060,8 @@ def validate_memory_frontmatter(frontmatter: dict[str, Any]) -> list[str]:
         | MEMORY_DECISION_FIELDS
     )
     unknown = set(frontmatter.keys()) - allowed
+    if allow_unknown:
+        unknown = {k for k in unknown if not (isinstance(k, str) and k.isidentifier())}
     if unknown:
         errors.append(f"unknown fields: {', '.join(sorted(unknown))}")
 
@@ -24634,6 +24605,14 @@ def _memory_resolve_categorized_entry(
     """
     resolved = _memory_resolve_read_target(memory_dir, entry_id)
     if resolved is None:
+        # A full id whose file exists but did not resolve has frontmatter the
+        # parser rejected; say so rather than claim the entry is missing.
+        entry_path = memory_dir / f"{entry_id}.md"
+        if entry_id.count("/") == 2 and entry_path.is_file():
+            error_exit(
+                f"entry '{entry_id}' has malformed frontmatter: {entry_path}",
+                use_json=use_json,
+            )
         error_exit(
             f"entry '{entry_id}' not found. "
             f"Use `flowctl memory list` to see valid ids.",
@@ -24717,7 +24696,7 @@ def cmd_memory_mark_stale(args: argparse.Namespace) -> None:
     fm.pop("hardened_into", None)
 
     try:
-        write_memory_entry(path, fm, body, raw_body=raw_body)
+        write_memory_entry(path, fm, body, raw_body=raw_body, allow_unknown=True)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -24784,7 +24763,7 @@ def cmd_memory_mark_fresh(args: argparse.Namespace) -> None:
     fm["last_audited"] = today
 
     try:
-        write_memory_entry(path, fm, body, raw_body=raw_body)
+        write_memory_entry(path, fm, body, raw_body=raw_body, allow_unknown=True)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -24872,7 +24851,7 @@ def cmd_memory_mark_hardened(args: argparse.Namespace) -> None:
         fm.pop("audit_notes", None)
 
     try:
-        write_memory_entry(path, fm, body, raw_body=raw_body)
+        write_memory_entry(path, fm, body, raw_body=raw_body, allow_unknown=True)
     except ValueError as exc:
         error_exit(f"failed to write entry: {exc}", use_json=args.json)
 
@@ -29182,7 +29161,7 @@ PR_COGNITIVE_AID_ATTENTION_CLASSES = frozenset(
 _PR_COGNITIVE_AID_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 _PR_COGNITIVE_AID_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
 # Canonical R-ID grammar, in lockstep with the spec parser
-# (`_export_parse_acceptance_criteria`) and the review-output extractor
+# (`_export_scan_acceptance_criteria`) and the review-output extractor
 # (`parse_unaddressed_rids`): a single-letter suffix (`R4a`, `R4b`) is the
 # sub-scoped sibling form the spec template emits. Multi-letter suffixes
 # (`R4ab`) and separators (`R-4`) stay rejected. Both call sites (the
@@ -33552,16 +33531,6 @@ def _export_scan_acceptance_criteria(
     return entries, residue
 
 
-def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
-    """Extract R-ID acceptance criteria from an epic spec.
-
-    Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
-    if no acceptance section or no R-IDs. See `_export_scan_acceptance_criteria`
-    for the shapes recognized and for the residue count.
-    """
-    return _export_scan_acceptance_criteria(spec_text)[0]
-
-
 def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
     """Return the body text under a single H2 heading (stripped).
 
@@ -36148,6 +36117,16 @@ def _spec_close_in_head_history(repo_root: Path, spec_data: dict, read_spec_clos
     return "", ""
 
 
+def _default_branch_candidates(repo_root: Path) -> list[str]:
+    """Default-branch refs in resolution order: origin/HEAD, then main/master."""
+    head = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+        cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
+    )
+    candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
+    return list(dict.fromkeys([*candidates, "origin/main", "main", "origin/master", "master"]))
+
+
 def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[bool, str, str]:
     """Return (landed, error, diagnostic) from base evidence, then ancestry.
 
@@ -36165,12 +36144,7 @@ def spec_landed_at_base(flow_dir: Path, spec_id: str, spec_data: dict) -> tuple[
         cwd = Path.cwd()
         cached = _SPEC_BASE_CACHE.get(cwd)
         if cached is None:
-            head = subprocess.run(
-                ["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
-                cwd=repo_root, capture_output=True, text=True, encoding="utf-8",
-            )
-            candidates = [head.stdout.strip()] if head.returncode == 0 and head.stdout.strip() else []
-            candidates = list(dict.fromkeys([*candidates, "origin/main", "main", "origin/master", "master"]))
+            candidates = _default_branch_candidates(repo_root)
             for candidate in candidates:
                 probe = subprocess.run(
                     ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
@@ -37075,32 +37049,8 @@ def cmd_done(args: argparse.Namespace) -> None:
     args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
     task_spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
 
-    # Load task with merged runtime state (fail early before any writes)
-    task_data = load_task_with_state(args.id, use_json=args.json)
-
-    # MU-2: Require in_progress status (unless --force)
-    if not args.force and task_data["status"] != "in_progress":
-        status = task_data["status"]
-        if status == "done":
-            error_exit(
-                f"Task {args.id} is already done.",
-                use_json=args.json,
-            )
-        else:
-            error_exit(
-                f"Task {args.id} is '{status}', not 'in_progress'. Use --force to override.",
-                use_json=args.json,
-            )
-
-    # MU-2: Prevent cross-actor completion (unless --force)
-    current_actor = get_actor()
-    existing_assignee = task_data.get("assignee")
-    if not args.force and existing_assignee and existing_assignee != current_actor:
-        error_exit(
-            f"Cannot complete task {args.id}: claimed by '{existing_assignee}'. "
-            f"Use --force to override.",
-            use_json=args.json,
-        )
+    # Fail early on an unknown task, before taking its lock.
+    task_def = load_task_definition(args.id, use_json=args.json)
 
     # Get summary: file > inline > default
     summary: str
@@ -37136,6 +37086,32 @@ def cmd_done(args: argparse.Namespace) -> None:
             "Evidence JSON must be an object with keys: commits/tests/prs",
             use_json=args.json,
         )
+    if not {"commits", "tests", "prs"} & evidence.keys():
+        error_exit(
+            "Evidence JSON must carry at least one of: commits, tests, prs",
+            use_json=args.json,
+        )
+    # `files` / `files_touched` feed the PR cognitive-aid export.
+    unknown_keys = sorted(
+        evidence.keys()
+        - {"commits", "tests", "prs", "base_commit", "files", "files_touched"}
+    )
+    if unknown_keys:
+        print(
+            f"Warning: unknown evidence key(s) not rendered in the receipt: "
+            f"{', '.join(unknown_keys)}",
+            file=sys.stderr,
+        )
+
+    # fn-257 R18: plan-sync off is a config fact, so the receipt records its
+    # stage line here instead of a conductor hand-edit after `done`.
+    if get_config("planSync.enabled") is not True and not re.search(
+        r"(?im)^\s*stage:\s*plan-sync\b", summary
+    ):
+        summary = (
+            f"{summary.rstrip()}\n\n"
+            "stage: plan-sync - skipped(config: planSync.enabled != true)"
+        )
 
     # Format evidence as markdown (coerce to strings, handle string-vs-array)
     def to_list(val: Any) -> list:
@@ -37154,23 +37130,54 @@ def cmd_done(args: argparse.Namespace) -> None:
     evidence_md.append(f"- PRs: {', '.join(prs)}" if prs else "- PRs:")
     evidence_content = "\n".join(evidence_md)
 
-    # Read current spec
-    current_spec = read_text_or_exit(
-        task_spec_path, f"Task {args.id} spec", use_json=args.json
-    )
+    current_actor = get_actor()
+    store = get_state_store()
+    # fn-257 R18: status/assignee checks and both writes share the task lock,
+    # as `start` does, so a concurrent `block` cannot be overwritten.
+    with store.lock_task(args.id):
+        runtime = store.load_runtime(args.id)
+        task_data = merge_task_runtime(task_def, runtime)
 
-    # Patch sections
-    try:
-        updated_spec = patch_task_section(current_spec, "## Done summary", summary)
-        updated_spec = patch_task_section(updated_spec, "## Evidence", evidence_content)
-    except ValueError as e:
-        error_exit(str(e), use_json=args.json)
+        # MU-2: Require in_progress status (unless --force)
+        if not args.force and task_data["status"] != "in_progress":
+            status = task_data["status"]
+            if status == "done":
+                error_exit(
+                    f"Task {args.id} is already done.",
+                    use_json=args.json,
+                )
+            else:
+                error_exit(
+                    f"Task {args.id} is '{status}', not 'in_progress'. Run "
+                    f"`flowctl start {args.id}` first (--force skips this check).",
+                    use_json=args.json,
+                )
 
-    # All validation passed - now write (spec to tracked file, runtime to state-dir)
-    atomic_write(task_spec_path, updated_spec)
+        # MU-2: Prevent cross-actor completion (unless --force)
+        existing_assignee = task_data.get("assignee")
+        if not args.force and existing_assignee and existing_assignee != current_actor:
+            error_exit(
+                f"Cannot complete task {args.id}: claimed by '{existing_assignee}'. "
+                f"Use --force to override.",
+                use_json=args.json,
+            )
 
-    # Write runtime state to state-dir (not definition file)
-    save_task_runtime(args.id, {"status": "done", "evidence": evidence})
+        current_spec = read_text_or_exit(
+            task_spec_path, f"Task {args.id} spec", use_json=args.json
+        )
+        try:
+            updated_spec = patch_task_section(current_spec, "## Done summary", summary)
+            updated_spec = patch_task_section(updated_spec, "## Evidence", evidence_content)
+        except ValueError as e:
+            error_exit(str(e), use_json=args.json)
+
+        # All validation passed - now write (spec to tracked file, runtime to state-dir)
+        atomic_write(task_spec_path, updated_spec)
+        store.save_runtime(
+            args.id,
+            {**(runtime or {"status": "todo"}), "status": "done",
+             "evidence": evidence, "updated_at": now_iso()},
+        )
 
     # NOTE: We no longer update epic timestamp on task done.
     # This reduces merge conflicts in multi-user scenarios.
@@ -37210,13 +37217,8 @@ def cmd_block(args: argparse.Namespace) -> None:
     args.id = resolve_task_arg(flow_dir, args.id, use_json=args.json)
     task_spec_path = flow_dir / TASKS_DIR / f"{args.id}.md"
 
-    # Load task with merged runtime state
-    task_data = load_task_with_state(args.id, use_json=args.json)
-
-    if task_data["status"] == "done":
-        error_exit(
-            f"Cannot block task {args.id}: status is 'done'.", use_json=args.json
-        )
+    # Fail early on an unknown task, before taking its lock.
+    task_def = load_task_definition(args.id, use_json=args.json)
 
     reason = read_text_or_exit(
         Path(args.reason_file), "Reason file", use_json=args.json
@@ -37224,24 +37226,35 @@ def cmd_block(args: argparse.Namespace) -> None:
     if not reason:
         error_exit("Reason file is empty", use_json=args.json)
 
-    current_spec = read_text_or_exit(
-        task_spec_path, f"Task {args.id} spec", use_json=args.json
-    )
-    summary = get_task_section(current_spec, "## Done summary")
-    if summary.strip().lower() in ["tbd", ""]:
-        new_summary = f"Blocked:\n{reason}"
-    else:
-        new_summary = f"{summary}\n\nBlocked:\n{reason}"
+    store = get_state_store()
+    # fn-257 R18: the status check and both writes share the task lock.
+    with store.lock_task(args.id):
+        runtime = store.load_runtime(args.id)
+        if merge_task_runtime(task_def, runtime)["status"] == "done":
+            error_exit(
+                f"Cannot block task {args.id}: status is 'done'.", use_json=args.json
+            )
 
-    try:
-        updated_spec = patch_task_section(current_spec, "## Done summary", new_summary)
-    except ValueError as e:
-        error_exit(str(e), use_json=args.json)
+        current_spec = read_text_or_exit(
+            task_spec_path, f"Task {args.id} spec", use_json=args.json
+        )
+        summary = get_task_section(current_spec, "## Done summary")
+        if summary.strip().lower() in ["tbd", ""]:
+            new_summary = f"Blocked:\n{reason}"
+        else:
+            new_summary = f"{summary}\n\nBlocked:\n{reason}"
 
-    atomic_write(task_spec_path, updated_spec)
+        try:
+            updated_spec = patch_task_section(current_spec, "## Done summary", new_summary)
+        except ValueError as e:
+            error_exit(str(e), use_json=args.json)
 
-    # Write runtime state to state-dir (not definition file)
-    save_task_runtime(args.id, {"status": "blocked", "blocked_reason": reason})
+        atomic_write(task_spec_path, updated_spec)
+        store.save_runtime(
+            args.id,
+            {**(runtime or {"status": "todo"}), "status": "blocked",
+             "blocked_reason": reason, "updated_at": now_iso()},
+        )
 
     if args.json:
         json_output(
@@ -37266,7 +37279,7 @@ def _monotonic_now() -> float:
 
 
 def _sleep_secs(seconds: float) -> None:
-    """Thin sleep wrapper (pilot-log lock spin; was shared with migrate lock)."""
+    """Thin sleep wrapper (lock polling and write retries; tests patch it)."""
     import time as _time
 
     _time.sleep(seconds)
@@ -41073,87 +41086,6 @@ def _pilot_log_id_slug(raw_id: str) -> str:
     return slug or "unknown"
 
 
-# Pilot-log per-id tick allocation is serialized by a CROSS-PLATFORM directory
-# lock (`os.mkdir` — atomic on POSIX + Windows), NOT raw `fcntl.flock` (Unix-only
-# advisory locks don't serialize concurrent same-id appends on Windows, so two
-# processes would both read N rows and both write tick=N+1). This mirrors the
-# cross-platform os.mkdir lock primitive (gate + crashed-peer reclaim) but is a
-# short, in-flight critical section so its bounds are far tighter.
-PILOT_LOG_LOCK_WAIT_SECS = 30  # generous: subprocess fan-out + cold imports
-PILOT_LOG_LOCK_POLL_SECS = 0.02  # tight spin — the held section is a few I/O ops
-PILOT_LOG_LOCK_STALE_SECS = 60  # reclaim a lock dir older than this (crashed peer)
-
-
-@contextmanager
-def _pilot_log_lock(lock_dir: Path):
-    """Cross-platform exclusive lock for one pilot-log id's count+write section.
-
-    Uses `os.mkdir(lock_dir)` as the atomic create gate (works on POSIX AND
-    Windows, unlike `fcntl.flock` which is Unix-only and a no-op on Windows). On
-    contention, spin-wait up to PILOT_LOG_LOCK_WAIT_SECS; reclaim a lock dir
-    older than PILOT_LOG_LOCK_STALE_SECS (a crashed peer that never released).
-    The directory itself is the mutex — nothing is written inside, so it never
-    collides with the `pilot-*.json` row glob or the summary glob, and it still
-    matches the `.pilot-*.lock` glob the dot-prefixed sibling name preserves.
-    """
-    deadline = _monotonic_now() + PILOT_LOG_LOCK_WAIT_SECS
-    acquired = False
-    while True:
-        try:
-            os.mkdir(lock_dir)
-            acquired = True
-            break
-        except OSError:
-            # Held by a peer (FileExistsError), OR a Windows transient: under
-            # rapid mkdir/rmdir churn `os.mkdir` can raise PermissionError
-            # [WinError 5] / other OSErrors instead of FileExistsError while the
-            # dir is mid-create/delete — catching only FileExistsError let those
-            # propagate and fail the append (fn-68 Windows-CI flake). Route every
-            # mkdir failure through the same stat → stale/deadline → wait path.
-            # Reclaim only if the lock is stale (crashed peer); else wait.
-            try:
-                age = _pilot_log_now() - lock_dir.stat().st_mtime
-            except OSError:
-                # No lock dir (peer released, or a transient mkdir error that
-                # left nothing) — back off briefly and retry.
-                if _monotonic_now() >= deadline:
-                    continue
-                _sleep_secs(PILOT_LOG_LOCK_POLL_SECS)
-                continue
-            if age >= PILOT_LOG_LOCK_STALE_SECS:
-                try:
-                    os.rmdir(lock_dir)
-                except OSError:
-                    pass  # another process raced us to reclaim; loop again
-                continue
-            if _monotonic_now() >= deadline:
-                # Last resort: reclaim and proceed rather than fail the append.
-                # A live append holds the lock for milliseconds, so reaching the
-                # deadline means the holder is wedged — take it over.
-                try:
-                    os.rmdir(lock_dir)
-                except OSError:
-                    pass
-                continue
-            _sleep_secs(PILOT_LOG_LOCK_POLL_SECS)
-    try:
-        yield
-    finally:
-        if acquired:
-            try:
-                os.rmdir(lock_dir)
-            except OSError:
-                pass
-
-
-def _pilot_log_now() -> float:
-    """Wall-clock indirection (the lock-dir mtime is wall-clock, so its staleness
-    age must be compared against wall-clock too — not monotonic)."""
-    import time as _time
-
-    return _time.time()
-
-
 def _pilot_log_recover_next_tick(
     run_dir: Path,
     id_slug: str,
@@ -43076,19 +43008,16 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     full_id_hash = hashlib.sha1(raw_id.encode("utf-8")).hexdigest()
     id_hash = full_id_hash[:8]
 
-    # Tick reservation + write is serialized under a per-id CROSS-PLATFORM lock
-    # so two concurrent same-id appends can't both reserve N+1 and both write
-    # tick=N+1 (review finding #1 follow-up — duplicate-tick race). The lock is a
-    # `.pilot-<id-hash>.lock` DIRECTORY: `os.mkdir` is atomic on POSIX AND Windows
-    # (raw `fcntl.flock` is Unix-only and a no-op on Windows, so it failed to
-    # serialize concurrent appends there — fn-68 Windows-CI fix). Keyed by the
-    # id-hash (exact per raw id, not per slug). The dot-prefixed `.lock` dir is a
-    # sibling, never itself a `pilot-*.json` row, so neither the count glob nor
-    # the summary glob ever sees it (and it still matches the `.pilot-*.lock`
-    # glob a caller may use to spot the lock).
-    lock_path = run_dir / f".pilot-{id_hash}.lock"
+    # Tick reservation + write is serialized under a per-id kernel lock so two
+    # concurrent same-id appends can't both reserve N+1 and both write tick=N+1
+    # (review finding #1 follow-up — duplicate-tick race). Keyed by the id-hash
+    # (exact per raw id, not per slug). The dot-prefixed lock file is never a
+    # `pilot-*.json` row, so neither the count glob nor the summary glob sees
+    # it; its name differs from the pre-fn-257 `.pilot-<hash>.lock` directory
+    # so a leftover directory never blocks the regular-file lock.
+    lock_path = run_dir / f".pilot-{id_hash}.kernel.lock"
     counter_path = run_dir / f".pilot-{full_id_hash}.counter.json"
-    with _pilot_log_lock(lock_path):
+    with cross_process_lock(lock_path):
         # Steady state reads one counter + its one-row commit witness. Missing,
         # malformed, mismatched, or crash-ahead state reconstructs once from
         # historical rows, then self-heals the counter below.
@@ -44176,6 +44105,17 @@ def _completion_review_receipt_recovery_path(review_id: str) -> Path:
     )
 
 
+def _spec_review_receipt_default(kind: str, spec_id: str) -> str:
+    """Repo-keyed default receipt for a plan/completion review.
+
+    The spec-scoped counterpart of ``_review_route_receipt_default``: it lives
+    in this checkout's ``.flow/tmp`` (beside the recovery copy above), so
+    clones and worktrees never share it and skill prose can name the same
+    path. ``--receipt`` and ``REVIEW_RECEIPT_PATH`` win at the caller.
+    """
+    return str(get_flow_dir() / "tmp" / f"{kind}-review-receipt-{spec_id}.json")
+
+
 def _resolve_review_sha(ref: str) -> Optional[str]:
     """Resolve a review anchor locally; never dispatch or contact a remote."""
     try:
@@ -44214,6 +44154,20 @@ def _capture_review_snapshot(base_ref: str) -> tuple[str, str]:
     if proc.returncode != 0 or not base_sha:
         raise ValueError(f"cannot resolve review merge base: {base_ref}...HEAD")
     return base_sha, head_sha
+
+
+def _default_review_base(use_json: bool) -> str:
+    """Resolve an omitted review ``--base`` to the repository's default branch."""
+    candidates = _default_branch_candidates(get_repo_root())
+    for candidate in candidates:
+        if _resolve_review_sha(candidate):
+            return candidate
+    error_exit(
+        f"no default branch resolved (tried {', '.join(candidates)}); "
+        "pass --base <ref>",
+        use_json=use_json,
+        code=2,
+    )
 
 
 def _build_backend_review_findings(
@@ -44617,14 +44571,10 @@ def _parse_plan_review_files(
     *,
     use_json: bool,
 ) -> list[str]:
-    """Validate --files for plan-review; warn on invalids; require >=1 valid."""
+    """Validate optional --files for plan-review; when supplied, warn on
+    invalids and require >=1 valid."""
     if not files_arg:
-        error_exit(
-            "plan-review requires --files argument (comma-separated CODE file paths). "
-            "Used as a relevance list for the reviewer. "
-            "Example: --files src/main.py,src/utils.py",
-            use_json=use_json,
-        )
+        return []
     repo_root = get_repo_root()
     file_paths: list[str] = []
     invalid_paths: list[str] = []
@@ -45026,6 +44976,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     """Shared impl-review pipeline; per-backend variance via registry hooks."""
     reg = BACKEND_REGISTRY[backend]
     task_id = args.task
+    args.base = args.base or _default_review_base(args.json)
     base_branch = args.base
     focus = getattr(args, "focus", None) or _receipt_focus(
         getattr(args, "receipt", None)
@@ -45607,7 +45558,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             f"to this plan:\n{files_list}\n</requested_files>"
         )
 
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    receipt_path = (
+        getattr(args, "receipt", None)
+        or os.environ.get("REVIEW_RECEIPT_PATH")
+        or _spec_review_receipt_default("plan", epic_id)
+    )
     session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
         _resume_session_from_receipt(
             receipt_path,
@@ -45890,7 +45845,11 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     )
 
     base_branch = args.base if hasattr(args, "base") and args.base else "main"
-    receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    receipt_path = (
+        getattr(args, "receipt", None)
+        or os.environ.get("REVIEW_RECEIPT_PATH")
+        or _spec_review_receipt_default("completion", epic_id)
+    )
     repo_root = get_repo_root()
     resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
 
@@ -47666,6 +47625,7 @@ def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
 
 def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
+    args.base = args.base or _default_review_base(args.json)
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
     _review_fanout_default_receipt(args, task_id)
     if task_id and getattr(args, "focus", None):
@@ -48480,6 +48440,7 @@ def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
 
 def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
+    args.base = args.base or _default_review_base(args.json)
     task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
     rid = args.rid
     # PR #392 r14 (P2): both rid mints are 32 lowercase hex (uuid4().hex /
@@ -52689,12 +52650,37 @@ def _prime_scan_scripts(root: Path, deduped: "list[str]", c: "_PrimeCollector") 
     return out
 
 
+def _prime_destructive_target(tail: str) -> str:
+    """First operand after a destructive match, shell-tokenized (quotes
+    stripped). Options, redirections (and a bare operator's file operand) and
+    punctuation-only tokens such as `find -exec`'s `{}` are never a target."""
+    try:
+        tokens = shlex.split(tail)
+    except ValueError:
+        tokens = tail.split()
+    skip_operand = False
+    for tok in tokens:
+        tok = tok.strip("'\"")  # nested quoting (e.g. inside a trap string)
+        if skip_operand:
+            skip_operand = False
+            continue
+        redirect = re.match(r"^(?:\d*|&)[<>]+&?(.*)$", tok)
+        if redirect:
+            skip_operand = not redirect.group(1)
+            continue
+        if tok.startswith("-") or not re.search(r"[\w$~./]", tok):
+            continue
+        return tok
+    return ""
+
+
 def _prime_collect_destructive(
     root: Path, deduped: "list[str]"
 ) -> "tuple[dict[str, Any], _PrimeCollector]":
     """FH5: raw destructive-command hits WITH context class (never executed)."""
     c = _PrimeCollector("substance-destructive", budget=500)
     hits: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
     for path, text in _prime_scan_scripts(root, deduped, c):
         for line in text.splitlines():
             # Classify by the SEGMENT containing the match, not the whole
@@ -52707,16 +52693,9 @@ def _prime_collect_destructive(
                     m = pat.search(seg)
                     if not m:
                         continue
-                    # Extract a target token following the match for context class.
-                    tail = seg[m.end():].strip()
-                    target = tail.split()[0] if tail and not tail.startswith("-") else (
-                        tail.split()[1] if len(tail.split()) > 1 else ""
-                    )
-                    # Strip surrounding quotes so a parameterized target like
-                    # "$BUILD_DIR" or '"${TARGET}"' classifies into the
-                    # variable/unbounded tier instead of downgrading to
-                    # self-managed on the leading quote character.
-                    target = target.strip("'\"")
+                    # Quote stripping keeps a parameterized "$BUILD_DIR" in the
+                    # variable/unbounded tier instead of self-managed.
+                    target = _prime_destructive_target(seg[m.end():])
                     ctx = (
                         "comment"
                         if comment_prefix
@@ -52731,6 +52710,10 @@ def _prime_collect_destructive(
                         "self-managed", "bounded"
                     ):
                         ctx = "unbounded"
+                    key = (path, label, ctx, target[:80])
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     hits.append(
                         {
                             "file": path,
@@ -54065,7 +54048,9 @@ def _add_impl_review_parser(sub, backend: str):
         default=None,
         help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
     )
-    p.add_argument("--base", required=True, help="Base branch for diff")
+    p.add_argument(
+        "--base", help="Base branch for diff (default: the repo's default branch)"
+    )
     p.add_argument(
         "--focus", help="Focus areas for standalone review (comma-separated)"
     )
@@ -54138,7 +54123,9 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         default=None,
         help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
     )
-    p.add_argument("--base", required=True, help="Base branch for diff")
+    p.add_argument(
+        "--base", help="Base branch for diff (default: the repo's default branch)"
+    )
     p.add_argument(
         "--focus", help="Focus areas for standalone review (comma-separated)",
     )
@@ -54192,7 +54179,9 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         default=None,
         help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
     )
-    p2.add_argument("--base", required=True, help="Base branch for diff")
+    p2.add_argument(
+        "--base", help="Base branch for diff (default: the repo's default branch)"
+    )
     p2.add_argument(
         "--rid",
         required=True,
@@ -54280,8 +54269,7 @@ def _add_plan_review_parser(sub, backend: str):
     p = sub.add_parser("plan-review", help="Plan review")
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument(
-        "--files", required=True,
-        help="Comma-separated relevant code file paths (required)",
+        "--files", help="Optional comma-separated relevant code file paths",
     )
     p.add_argument("--base", default="main", help="Base branch for context")
     p.add_argument("--receipt", help="Receipt file path for session continuity")
@@ -57471,8 +57459,14 @@ def main() -> None:
     args = parser.parse_args()
     try:
         args.func(args)
+        sys.stdout.flush()
     except CrossProcessLockError as e:
         error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)
+    except BrokenPipeError:
+        # fn-257 R19: the reader closed stdout (`| head`); exit without a
+        # traceback, and point stdout at devnull so the exit flush is silent.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(1)
 
 
 if __name__ == "__main__":

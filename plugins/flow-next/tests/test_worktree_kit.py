@@ -208,5 +208,23 @@ class WorktreeCreateTracking(RepoCase):
         self.assertNotEqual(upstream.returncode, 0, upstream.stdout)
 
 
+class WorktreeSkillFence(RepoCase):
+    def test_fence_resolves_script_without_plugin_root_env(self) -> None:
+        """Cursor/Grok set no plugin-root variable; the derived rung carries."""
+        skill = SCRIPT.parents[1] / "SKILL.md"
+        text = skill.read_text(encoding="utf-8")
+        start = text.index("```bash\n") + len("```bash\n")
+        fence = text[start:text.index("```", start)]
+        fence = fence.replace("<plugin-root>", SCRIPT.parents[3].as_posix())
+        fence = fence.replace("<command> [args]", "list")
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("CLAUDE_PLUGIN_ROOT", "DROID_PLUGIN_ROOT")}
+        proc = subprocess.run(
+            [_bash_executable(), "-c", fence], cwd=self.repo, env=env,
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1068,8 +1068,8 @@ while (( iter <= MAX_ITERATIONS )); do
   fi
 
   if [[ "$status" == "plan" && "$reason" == "needs_tasks" ]]; then
-    log "zero-task spec $spec_id - stopping (run /flow-next:plan $spec_id)"
-    ui_complete "spec $spec_id has no tasks - run /flow-next:plan $spec_id"
+    log "zero-task spec $spec_id - stopping (choose /flow-next:work $spec_id --no-plan or /flow-next:plan $spec_id)"
+    ui_complete "spec $spec_id has no tasks - choose /flow-next:work $spec_id --no-plan or /flow-next:plan $spec_id"
     write_completion_marker "NEEDS_TASKS"
     exit 0
   fi

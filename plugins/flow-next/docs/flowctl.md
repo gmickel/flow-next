@@ -953,7 +953,7 @@ Returns **deterministic eligibility facts only** for every open flow spec: `read
 
 ### pilot strikes
 
-Read and clear the **strikes ledger** of `/flow-next:flow --auto` (and its one-release alias `/flow-next:pilot`) - the don't-thrash counter the flow skill's auto workflow writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
+Read and clear the **strikes ledger** of `/flow-next:flow --auto` - the don't-thrash counter the flow skill's auto workflow writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
 
 ```bash
 flowctl pilot strikes list [--json]
@@ -1038,6 +1038,8 @@ flowctl done fn-1.2 --summary "short summary" --evidence '{"commits":["abc"],"te
 - `--summary-file` / `--summary` - done-summary markdown (file or inline text). One of the pair is required.
 - `--evidence-json` / `--evidence` - evidence JSON (file or inline string). With neither flag the CLI records empty commit, test, and PR lists; the work and review contracts, and the Ralph guard, require evidence.
 - `--force` - skip the `in_progress` status check.
+- Evidence must carry at least one of `commits`, `tests`, `prs`. Keys other than those, `base_commit`, `files` and `files_touched` print a stderr warning and are not rendered.
+- When `planSync.enabled` is not `true`, `done` appends `stage: plan-sync - skipped(config: planSync.enabled != true)` to the summary unless it already carries a plan-sync stage line.
 
 Evidence JSON format:
 ```json
@@ -2322,13 +2324,14 @@ codex auth
 
 ```bash
 # Implementation review (reviews code changes for a task)
-flowctl codex impl-review <task-id> --base <branch> [--sandbox <mode>] [--receipt <path>] [--json]
+flowctl codex impl-review <task-id> [--base <branch>] [--sandbox <mode>] [--receipt <path>] [--json]
 # Example: flowctl codex impl-review fn-1.3 --base main --sandbox auto --receipt /tmp/impl-fn-1.3.json
 
 # Plan review (reviews spec before implementation)
-flowctl codex plan-review <spec-id> --files <file1,file2,...> [--sandbox <mode>] [--receipt <path>] [--json]
-# Example: flowctl codex plan-review fn-1 --files "src/auth.ts,src/config.ts" --sandbox auto --receipt /tmp/plan-fn-1.json
-# Note: Spec/task markdown is included automatically; --files should be CODE files for repository context.
+flowctl codex plan-review <spec-id> [--files <file1,file2,...>] [--sandbox <mode>] [--receipt <path>] [--json]
+# Example: flowctl codex plan-review fn-1 --sandbox auto --receipt /tmp/plan-fn-1.json
+# Note: Spec/task markdown is included automatically; optional --files adds CODE files for repository context.
+# Omitted --base resolves the default branch (origin/HEAD, then main/master).
 
 # Completion review (reviews spec implementation against acceptance criteria)
 flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] [--require-managed-execution] [--json]
@@ -2349,7 +2352,7 @@ and failure rules.
 
 ```bash
 # Phase one - reserve ONE round, dispatch the axis draws concurrently, finalize nothing
-flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
+flowctl codex impl-review-fanout <task-id> [--base <branch>] [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
 # Default draws: correctness, contracts, integration on the resolved backend spec.
 # Explicit --draw args override (1-3 draws): a single `--draw correctness` is the
 # one-reviewer economy round; three per-draw backend specs are the cross-family round.
@@ -2359,7 +2362,7 @@ flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND
 # Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
 
 # Phase two - one deterministic finalizer, after the coordinator's merge
-flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> --merged-file <path> --needs-work-survivors <n> [--receipt <path>] [--json]
+flowctl codex impl-review-fanout-finalize <task-id> [--base <branch>] --rid <rid> --merged-file <path> --needs-work-survivors <n> [--receipt <path>] [--json]
 # --needs-work-survivors is the coordinator-counted actionable findings surviving
 # from the NEEDS_WORK draws after the evidence gate. REQUIRED when any draw
 # returned NEEDS_WORK (0 escalates the round to NEEDS_HUMAN - the wedge);
@@ -2563,7 +2566,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 **Receipt convergence-ratchet fields (fn-90, back-compatible):**
 
 - The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review each round. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) - full back-compat. The **rp backend needs no injected ratchet**: its re-reviews deliberately stay in the SAME RepoPrompt chat (no `--new-chat`), so the reviewer retains genuine conversational memory of its own prior findings - the fresh-blind churn the ratchet compensates for does not occur there; on rp only the cap applies.
-- **Receipt default paths are spec/task-scoped.** The skill/workflow defaults are now `/tmp/plan-review-receipt-<spec>.json`, `/tmp/completion-review-receipt-<spec>.json`, and `/tmp/impl-review-receipt-<task>.json` (standalone branch review with no task falls back to the unscoped name) - concurrent reviews of different specs/tasks no longer collide on one shared `/tmp` receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
+- **Receipt default paths are spec/task-scoped.** Plan and completion reviews default to `<repo>/.flow/tmp/plan-review-receipt-<spec>.json` and `<repo>/.flow/tmp/completion-review-receipt-<spec>.json`; impl review defaults to `/tmp/impl-review-receipt-<repo-hash>-<scope>.json`, where the scope is the task id or a hash of the branch ref for a standalone review - concurrent reviews in different repos, specs, or tasks never share a receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
 - **Codex/copilot verdict extraction is honest.** The verdict parse isolates the **final agent message** from the stream (dropping `command_execution` / `aggregated_output` tool output) and takes the **last** `<verdict>` match - a verdict literal echoed in tool output or a quoted-grammar literal in the final message can no longer beat the reviewer's real verdict. The offline regression that locks this in: `optimization/review-prompt/reveval_parse_guard.py` (runs in the gate via `test_reveval_parse_guard.py`).
 
 **Sandbox mode (`--sandbox`):** Controls Codex CLI's file system access. Available modes:
@@ -2609,10 +2612,10 @@ GitHub Copilot CLI wrappers - alternative review backend, parallel to codex. Sam
 
 ```bash
 # Implementation review
-flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec copilot:<model>:high] [--json]
+flowctl copilot impl-review <task-id> [--base <branch>] [--receipt <path>] [--spec copilot:<model>:high] [--json]
 
 # Plan review
-flowctl copilot plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+flowctl copilot plan-review <spec-id> [--files <file1,file2,...>] [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
 flowctl copilot completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]
@@ -2633,10 +2636,10 @@ Cursor `cursor-agent` CLI wrappers - alternative review backend, parallel to cod
 
 ```bash
 # Implementation review
-flowctl cursor impl-review <task-id> --base <branch> [--receipt <path>] [--spec cursor:<model>] [--json]
+flowctl cursor impl-review <task-id> [--base <branch>] [--receipt <path>] [--spec cursor:<model>] [--json]
 
 # Plan review
-flowctl cursor plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+flowctl cursor plan-review <spec-id> [--files <file1,file2,...>] [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
 flowctl cursor completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]
@@ -2657,10 +2660,10 @@ Claude Code CLI wrappers (`claude -p`) - the Claude-family review backend, paral
 
 ```bash
 # Implementation review
-flowctl claude impl-review <task-id> --base <branch> [--receipt <path>] [--spec claude:<model>:high] [--json]
+flowctl claude impl-review <task-id> [--base <branch>] [--receipt <path>] [--spec claude:<model>:high] [--json]
 
 # Plan review
-flowctl claude plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+flowctl claude plan-review <spec-id> [--files <file1,file2,...>] [--receipt <path>] [--spec ...] [--json]
 
 # Completion review
 flowctl claude completion-review <spec-id> [--receipt <path>] [--spec ...] [--require-managed-execution] [--json]

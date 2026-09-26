@@ -117,4 +117,4 @@ No dependencies or overlaps detected with open specs.
 - Only report clear relationships, not maybes
 - Skip done specs entirely; skip `SPEC_ID` (the spec being planned) entirely
 - Return structured output for the planner to auto-set deps — for a **Reverse Dependency**, the
-  planner records `<that-spec> depends-on <new-spec>` (see plan Step 4), so name the spec id precisely.
+  planner records `<that-spec> depends-on <new-spec>` (see plan Step 5, spec dependencies), so name the spec id precisely.

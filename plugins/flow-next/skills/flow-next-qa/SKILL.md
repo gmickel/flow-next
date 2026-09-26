@@ -88,8 +88,8 @@ Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow
 
 A skill is not a function. **The host agent reads flow-next-drive's workflow + references and executes the universal driving flow itself** — `observe → snapshot fresh refs → act → verify → capture`. A transcript that "calls" flow-next-drive as if it were an API has broken this. flow-next-drive owns the driver ladder and all actuation prose; QA owns scenario authoring, evidence capture, and the verdict. **CDP / agent-browser / Computer-Use prose stays in flow-next-drive's references** — a copy of it in this skill has broken this too. Point at them:
 
-- Surface detection + universal flow + the web/native ladder: `plugins/flow-next/skills/flow-next-drive/SKILL.md`
-- Driver command detail (per rung): `plugins/flow-next/skills/flow-next-drive/references/` (`agent-browser.md`, `chrome-devtools-mcp.md`, `playwright.md`, `computer-use.md`, …)
+- Surface detection + universal flow + the web/native ladder: [`skills/flow-next-drive/SKILL.md`](../flow-next-drive/SKILL.md)
+- Driver command detail (per rung): `skills/flow-next-drive/references/` (`agent-browser.md`, `chrome-devtools-mcp.md`, `playwright.md`, `computer-use.md`, …)
 
 Per scenario, record an **evidence tuple**: `{driver_rung, target_url, viewport, screenshot_path, console_path}`. flow-next-drive's SKILL.md explicitly defers the QA workflow — scenario authoring, bug filing, verdict — downstream to this skill; the seam is designed, QA orchestrates and flow-next-drive actuates.
 

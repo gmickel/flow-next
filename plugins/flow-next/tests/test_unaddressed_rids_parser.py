@@ -2,7 +2,7 @@
 
 This is the *review-output* parser (reads a reviewer's `Unaddressed R-IDs:`
 summary line or a `## Requirements coverage` table), distinct from the *spec*
-acceptance-criteria parser (`_export_parse_acceptance_criteria`, covered by
+acceptance-criteria parser (`_export_scan_acceptance_criteria`, covered by
 `test_acceptance_criteria_parser.py`).
 
 Regression context: fn-49.1 (1.2.1) taught the spec parser the `R\\d+[a-z]?`

@@ -191,7 +191,7 @@ Every entry carries an implicit `status`. The field is optional in frontmatter -
 | `stale` | Audit flagged the advice as no longer accurate | `mark-stale` | `last_audited`, `audit_notes` (from `--reason`) | `hardened_into` |
 | `hardened` | The lesson graduated into an enforced gate - lint rule, CI step, or instruction-file rule | `mark-hardened` | `hardened_into` (from `--gate-ref`), `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date` |
 
-**Validation is enum-only.** `validate_memory_frontmatter` checks that `status` is one of `active | stale | hardened` and that unknown keys are rejected; it does **not** require any companion field for a given status. The column above describes what the `mark-*` handlers write and clear, which is the contract that matters in practice - a hand-edited entry carrying `status: stale` with no `stale_reason` still validates.
+**Validation is enum-only.** `validate_memory_frontmatter` checks that `status` is one of `active | stale | hardened` and that unknown keys are rejected (the `mark-*` handlers keep unknown plain field names, so a stamp preserves fields another writer added); it does **not** require any companion field for a given status. The column above describes what the `mark-*` handlers write and clear, which is the contract that matters in practice - a hand-edited entry carrying `status: stale` with no `stale_reason` still validates.
 
 `stale_reason` / `stale_date` are legal optional fields that flowctl's own `mark-stale` does not currently populate (it records the reason in `audit_notes` instead); they exist for hand-written and older entries, and the handlers clear them on any transition out of `stale`.
 

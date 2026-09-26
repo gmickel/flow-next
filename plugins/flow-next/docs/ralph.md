@@ -221,7 +221,7 @@ Driver recipes:
 - Claude Code `/loop` v2.1.72+ (loops expire after 7 days), one hop per interval: `/loop 10m /flow-next:flow --auto --tick`
 - Claude Code `/goal` v2.1.139+ (`/goal` validators are transcript-blind, so phrase the stop condition against the verdict grammar): `/goal keep running /flow-next:flow --auto --tick until it prints PILOT_VERDICT=NO_WORK, or stop after 20 turns` - note `PILOT_VERDICT=DEFERRED_TO_LAND` is its own terminal (an all-done spec whose open PR land owns); route it to `/flow-next:land <PR>`, not a re-run. In **backlog mode** the grammar also carries `PILOT_VERDICT=ASKED <id> (<n>)` - a durable park, not a stop: the loop simply continues to the next item next tick, and the human answers async in the spec / tracker.
 - Codex: `$flow-next-flow --auto` in a session is the default shape. Codex `/goal` (opt-in `[features] goals = true`, CLI >= 0.128.0) has no `$skill-in-goal` syntax - write a plain-text objective that names `flow --auto --tick` behavior and `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>` (`DEFERRED_TO_LAND` routes to land, not a re-run; `ASKED` - backlog mode only - is a park, the loop continues).
-- Existing `/flow-next:pilot` recipes keep working for one release; the alias runs `flow --auto --tick` and prints one deprecation line to stderr.
+- The `/flow-next:pilot` command is removed; replace it with `/flow-next:flow --auto --tick` in existing recipes.
 - Ship loop (after the build loop's draft PRs are open - babysitting waits on external CI/reviewer events, so use a cadence): `/loop 30m /flow-next:land <PR>`
 
 **A pipeline with separate build and landing owners** can run default `flow --auto` and land concurrently on different items. The build owner checks out spec branches; land keeps the invoking checkout unchanged and repairs in isolation. Keep scopes disjoint and use separate clones or workspaces for independent build work. GitHub is the shared state: make-pr commits completed spec and task statuses before opening the PR, and the merge carries them to the base. A `--until=merge` flow owns landing for its selected PR and must not compete with standalone land on that item. For repository-wide scheduling, use the [open-PR selection recipe](flowctl.md#landing-upgrade).
@@ -595,7 +595,7 @@ When using `PLAN_REVIEW=codex` or `WORK_REVIEW=codex`:
 
 ```bash
 flowctl codex impl-review ...          # Run impl review
-flowctl codex plan-review <id> --files "src/auth.ts,src/config.ts"
+flowctl codex plan-review <id> [--files "src/auth.ts,src/config.ts"]
 ```
 
 **Requirements:**

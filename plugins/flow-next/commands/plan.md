@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Draft a structured build plan from a short request
-argument-hint: "<idea or fn-N> [--research=rp|grep] [--review=rp|export|none]"
+argument-hint: "<idea or fn-N> [--depth=short|standard|deep] [--review=rp|codex|copilot|cursor|claude|host|export|none]"
 ---
 
 # IMPORTANT: This command MUST invoke the skill `flow-next-plan`

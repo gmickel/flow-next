@@ -679,7 +679,6 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
             published["criteria"],
             [{"id": "G1", "status": "met", "note": "contract regenerated"}],
         )
-        self.assertTrue(flowctl.validate_review_receipt_criteria(published))
 
     def test_mixed_verdict_two_incomplete_journals_zero_dispatch(self):
         first, second = self._reserve(), self._reserve()
@@ -2390,11 +2389,17 @@ class TestInProcessReceiptJournaledPreConsumption(_InProcessBackendReviewBase):
         self.assertEqual(published["findings"], journaled_container)
         self.assertEqual(published["review_reservation_id"], reservation_id)
 
-    def test_receiptless_run_keeps_receipt_leg_not_applicable(self):
-        payload, _ = self._dispatch_plan(None)
+    def test_omitted_receipt_publishes_the_repo_keyed_default(self):
+        # fn-257 R4: no --receipt / REVIEW_RECEIPT_PATH -> the spec-scoped
+        # default under this checkout's .flow/tmp, never a receiptless run.
+        with mock.patch.dict(os.environ):
+            os.environ.pop("REVIEW_RECEIPT_PATH", None)
+            payload, _ = self._dispatch_plan(None)
         self.assertEqual(payload["verdict"], "NEEDS_WORK")
         row = self._data()["review_attempts"][-1]
-        self.assertEqual(row["finalized"]["receipt"], "not_applicable")
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        default = self.root / ".flow" / "tmp" / f"plan-review-receipt-{self.spec_id}.json"
+        self.assertTrue(default.exists())
         self.assertTrue(row["round_consumed"])
         self.assertEqual(self._data().get("review_pending_rounds", {}), {})
 

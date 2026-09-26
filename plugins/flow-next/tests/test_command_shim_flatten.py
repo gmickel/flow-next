@@ -41,18 +41,16 @@ FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
 # The exact canonical command surface after the fn-124 flatten (+ chart from
 # fn-135.4, + features from fn-211.4, + flow from fn-238 replacing guide,
-# + refine from fn-238 R15 renaming interview (the `interview` shim stays for
-# ONE release as a forwarding alias and is removed the release after; the
-# `pilot` shim likewise stays ONE release as a redirect onto
-# `flow --auto --tick`);
+# + refine from fn-238 R15 renaming interview; the `interview` and `pilot`
+# alias shims retired in fn-257 R21;
 # epic-review retired; work-rolling graduated into work's default scheduler,
 # fn-218).
 # Pinned so a silent delete-one-add-one swap fails CI: adding or removing a
 # command is a deliberate surface change that MUST update this set. Keep
 # alphabetical.
 EXPECTED_COMMANDS = frozenset({
-    "audit", "capture", "chart", "features", "flow", "impl-review", "interview",
-    "land", "make-pr", "map", "memory-migrate", "pilot", "plan", "plan-review",
+    "audit", "capture", "chart", "features", "flow", "impl-review",
+    "land", "make-pr", "map", "memory-migrate", "plan", "plan-review",
     "prime", "prose", "prospect", "qa", "ralph-init", "refine", "resolve-pr",
     "setup", "spec-completion-review",
     "strategy", "sync", "tracker-sync", "uninstall", "visual", "work",
