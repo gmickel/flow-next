@@ -247,6 +247,11 @@ def _raw_launch_violation(command: str) -> Optional[str]:
         r"flowctl\s+copilot|FLOWCTL.*copilot", command
     ):
         return "BLOCKED: Do not call 'copilot' directly. Use the 'flowctl copilot' review commands."
+    if re.search(r"\bcopilot\b", command) and re.search(r"--continue\b", command):
+        return (
+            "BLOCKED: Do not use '--continue' with copilot. "
+            "Session continuity is managed via session_id (UUID) in receipts."
+        )
     if (
         re.search(r"\bdone\b", command)
         and ("flowctl" in command or "FLOWCTL" in command)

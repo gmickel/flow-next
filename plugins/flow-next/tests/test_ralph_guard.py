@@ -284,6 +284,7 @@ class UnattendedGuardMatchingTestCase(unittest.TestCase):
             "x=$(echo $(date); codex exec hi)",
             "x=$(echo $(date); flowctl done fn-1.2)",
             "(cd /tmp; codex exec hi)",
+            "x=$(echo $(date); flowctl copilot impl-review fn-1.2 --continue)",
             "bash -c 'x=$(echo $(date); codex exec hi)'",
             "echo \"'$(echo $(date); codex exec hi)'\"",
         ):
