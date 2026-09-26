@@ -1628,17 +1628,45 @@ def get_config(key: str, default=None):
 _CONFIG_RAW_SENTINEL = object()
 
 
-def _load_raw_flow_config() -> Optional[dict]:
-    """Read the persisted config object, or None when absent or unreadable."""
-    config_path = get_flow_dir() / CONFIG_FILE
-    if config_path.exists():
-        try:
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data
-        except Exception:
-            pass
-    return None
+_config_read_warnings: set[str] = set()
+
+
+def _read_flow_config_file(config_path: Path) -> Optional[dict]:
+    """Return None only for a missing file; reject invalid persisted config."""
+    try:
+        from flowctl_tracker.config_io import read_config_file
+    except ImportError:
+        pass  # Standalone copied flowctl has no tracker package.
+    else:
+        return read_config_file(config_path)
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{config_path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{config_path}: expected a JSON object")
+    return data
+
+
+def _load_raw_flow_config(config_path: Optional[Path] = None) -> Optional[dict]:
+    """Read config, warning once on invalid content before using defaults."""
+    config_path = config_path if config_path is not None else get_flow_dir() / CONFIG_FILE
+    try:
+        from flowctl_tracker.config_io import load_raw_config
+    except ImportError:
+        pass
+    else:
+        return load_raw_config(config_path)
+    try:
+        return _read_flow_config_file(config_path)
+    except ValueError as exc:
+        message = str(exc)
+        if message not in _config_read_warnings:
+            print(f"Warning: {message}", file=sys.stderr)
+            _config_read_warnings.add(message)
+        return {}
 
 
 def _get_config_from_file(key: str):
@@ -1667,9 +1695,8 @@ def _get_config_from_file(key: str):
 class ConfigSnapshot:
     """Command-scoped view of .flow/config.json.
 
-    - ``raw``    — the parsed on-disk dict, or ``None`` when the file is
-      absent, unreadable, or not a JSON object (mirrors the failure modes of
-      `_get_config_from_file` / `load_flow_config`).
+    - ``raw``    — the parsed on-disk dict, ``None`` only when absent, or
+      an empty dict after warning about invalid persisted config.
     - ``merged`` — defaults deep-merged with the raw tree (alias map empty;
       byte-equal to `load_flow_config()`).
     """
@@ -1877,12 +1904,11 @@ def set_config(key: str, value) -> dict:
 
 def _set_config_locked(flow_dir: Path, key: str, value) -> dict:
     config_path = flow_dir / CONFIG_FILE
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, Exception):
-            config = get_default_config()
-    else:
+    try:
+        config = _read_flow_config_file(config_path)
+    except ValueError as exc:
+        error_exit(str(exc), code=2)
+    if config is None:
         config = get_default_config()
 
     # Navigate/create nested path
@@ -20177,11 +20203,9 @@ def cmd_init(args: argparse.Namespace) -> None:
         else:
             # Load raw config, compare with merged (which includes new defaults)
             try:
-                raw = json.loads(config_path.read_text(encoding="utf-8"))
-                if not isinstance(raw, dict):
-                    raw = {}
-            except (json.JSONDecodeError, Exception):
-                raw = {}
+                raw = _read_flow_config_file(config_path)
+            except ValueError as exc:
+                error_exit(str(exc), use_json=args.json, code=2)
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
@@ -23683,6 +23707,9 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
             "spec_body": body, "status": spec["status"],
             "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
             "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
+            "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
+            "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}"
+                                for t in tasks if t["status"] == "blocked"],
             "pr_exists": None, "pr_ref": None,
         }
         branch = spec.get("branch_name")
@@ -23748,6 +23775,9 @@ def judge_route_lifecycle(state: dict) -> dict | None:
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
     if total:
+        if state.get("tasks_blocked", 0) == total - state["tasks_done"]:
+            reasons = "; ".join(state.get("blocked_reasons", []))
+            return decision("host", reasons or "all remaining tasks blocked")
         return decision("work_planned", "recorded task route")
     if not state["ready"]:
         return decision("host", "spec not ready")
@@ -26253,8 +26283,11 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
         prospected_date=prospected_date,
     )
 
-    atomic_write_json(epic_json_path, epic_data)
-    atomic_write(epic_spec_path, spec_content)
+    with _review_sidecar_lock(flow_dir, epic_id):
+        if canonical_collision.exists() or legacy_collision.exists() or epic_spec_path.exists():
+            error_exit(f"Refusing to overwrite existing spec {epic_id}", use_json=args.json)
+        atomic_write_json(epic_json_path, epic_data)
+        atomic_write(epic_spec_path, spec_content)
 
     # Update artifact frontmatter atomically. Failure here doesn't roll
     # back the epic — surface a warning so the caller can re-run with
@@ -30870,12 +30903,15 @@ def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> Optional[Path]
     spec_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_path.exists():
         return None
-    spec_data = load_json(spec_path)
-    if spec_data.get("status") != "done":
+    if load_json(spec_path).get("status") != "done":
         return None
-    spec_data["status"] = "open"
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_path, spec_data)
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = load_json(spec_path)
+        if spec_data.get("status") != "done":
+            return None
+        spec_data["status"] = "open"
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_path, spec_data)
     return spec_path
 
 
@@ -31704,9 +31740,12 @@ def _apply_spec_plan_writes(
     verb. One-shot create wraps this and removes all created paths on any raise.
     Mutates ``spec_data`` in place (sets ``updated_at``).
     """
-    atomic_write(spec_md_path, content)
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+    with _review_sidecar_lock(get_flow_dir(), spec_json_path.stem):
+        current = load_json(spec_json_path)
+        atomic_write(spec_md_path, content)
+        current["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, current)
+        spec_data.update(current)
 
 
 def cmd_spec_set_plan(args: argparse.Namespace) -> None:
@@ -32289,6 +32328,26 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+    if receipt_payload is not None and verdict:
+        counts = parse_classification_counts(output) or {}
+        derived = {
+            "verdict": verdict,
+            "suppressed_count": parse_suppressed_count(output),
+            "introduced_count": counts.get("introduced"),
+            "pre_existing_count": counts.get("pre_existing"),
+            "unaddressed": parse_unaddressed_rids(output),
+        }
+        for field, value in derived.items():
+            if field in receipt_payload and receipt_payload[field] != value:
+                error_exit(
+                    f"Receipt payload {field} contradicts the recorded review output",
+                    use_json=args.json,
+                    code=2,
+                )
+        # The review text is copied from the recorded output, never compared:
+        # an embedded copy that differs only in whitespace is not a contradiction.
+        derived["review"] = output
+        receipt_payload.update({k: v for k, v in derived.items() if v is not None})
     result = record_review_attempt(
         spec_id,
         args.kind,
@@ -32491,14 +32550,15 @@ def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    changed = bool(spec_data.get("ready", False)) != target
-    if changed:
-        spec_data["ready"] = target
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(spec_json_path, spec_data)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        changed = bool(spec_data.get("ready", False)) != target
+        if changed:
+            spec_data["ready"] = target
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
 
     verb = "marked ready" if target else "marked not ready"
     suffix = "" if changed else " (no change)"
@@ -32561,14 +32621,15 @@ def _cmd_spec_set_no_plan(args: argparse.Namespace, *, target: bool) -> None:
             use_json=args.json,
         )
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    changed = bool(spec_data.get("no_plan", False)) != target
-    if changed:
-        spec_data["no_plan"] = target
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(spec_json_path, spec_data)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        changed = bool(spec_data.get("no_plan", False)) != target
+        if changed:
+            spec_data["no_plan"] = target
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
 
     verb = "marked no-plan" if target else "cleared no-plan"
     suffix = "" if changed else " (no change)"
@@ -32613,12 +32674,13 @@ def cmd_spec_set_branch(args: argparse.Namespace) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    spec_data["branch_name"] = args.branch
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        spec_data["branch_name"] = args.branch
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -32656,139 +32718,144 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     # side-effect of a rename; the user opted into alias-mode).
     spec_json_parent = old_spec_path.parent
 
-    spec_data = normalize_epic(
-        load_json_or_exit(old_spec_path, f"Spec {old_id}", use_json=args.json)
-    )
+    with ExitStack() as locks:
+        locks.enter_context(_review_sidecar_lock(flow_dir, old_id))
+        spec_data = normalize_epic(
+            load_json_or_exit(old_spec_path, f"Spec {old_id}", use_json=args.json)
+        )
 
-    # fn-52.10 (R16) — NO-RENAME for tracker-linked specs. A spec is linked if
-    # its canonical id is a tracker key (`wor-*`) OR it carries a stored
-    # `tracker.identifier`. Renaming the slug would desync the tracker linkage /
-    # branch / back-reference, so set-title updates the TITLE (and body H1)
-    # ONLY — never the canonical id, branch, or filenames. Unlinked `fn-*`
-    # specs keep today's rename behavior (the code below).
-    parsed_old = parse_any_id(old_id)
-    is_tracker_id = parsed_old is not None and parsed_old[0] == "tracker"
-    tracker_block = spec_data.get("tracker") or {}
-    has_tracker_identifier = bool(tracker_block.get("identifier"))
-    if is_tracker_id or has_tracker_identifier:
-        spec_data["title"] = args.title
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(old_spec_path, spec_data)
-        # Update only the body H1 (`# <id> <title>`), preserving the id.
-        spec_md_path = flow_dir / SPECS_DIR / f"{old_id}.md"
-        if spec_md_path.exists():
-            try:
-                lines = spec_md_path.read_text(encoding="utf-8").splitlines(
-                    keepends=True
+        # fn-52.10 (R16) — NO-RENAME for tracker-linked specs. A spec is linked if
+        # its canonical id is a tracker key (`wor-*`) OR it carries a stored
+        # `tracker.identifier`. Renaming the slug would desync the tracker linkage /
+        # branch / back-reference, so set-title updates the TITLE (and body H1)
+        # ONLY — never the canonical id, branch, or filenames. Unlinked `fn-*`
+        # specs keep today's rename behavior (the code below).
+        parsed_old = parse_any_id(old_id)
+        is_tracker_id = parsed_old is not None and parsed_old[0] == "tracker"
+        tracker_block = spec_data.get("tracker") or {}
+        has_tracker_identifier = bool(tracker_block.get("identifier"))
+        if is_tracker_id or has_tracker_identifier:
+            spec_data["title"] = args.title
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(old_spec_path, spec_data)
+            # Update only the body H1 (`# <id> <title>`), preserving the id.
+            spec_md_path = flow_dir / SPECS_DIR / f"{old_id}.md"
+            if spec_md_path.exists():
+                try:
+                    lines = spec_md_path.read_text(encoding="utf-8").splitlines(
+                        keepends=True
+                    )
+                    for i, line in enumerate(lines):
+                        if line.startswith("# "):
+                            newline = "\n" if line.endswith("\n") else ""
+                            lines[i] = f"# {old_id} {args.title}{newline}"
+                            break
+                    atomic_write(spec_md_path, "".join(lines))
+                except OSError:
+                    pass  # Non-critical — JSON title is the source of truth.
+            result = {
+                "id": old_id,
+                "title": args.title,
+                "renamed": False,
+                "message": (
+                    f"Spec {old_id} title updated (tracker-linked — id/branch "
+                    "not renamed)"
+                ),
+            }
+            if args.json:
+                json_output(result)
+            else:
+                print(result["message"])
+            return
+
+        # Extract spec number from old ID
+        spec_num, _ = parse_id(old_id)
+        if spec_num is None:
+            error_exit(f"Could not parse spec number from {old_id}", use_json=args.json)
+
+        # Generate new ID with slugified title
+        new_slug = slugify(args.title)
+        new_suffix = new_slug if new_slug else generate_epic_suffix()
+        new_id = f"fn-{spec_num}-{new_suffix}"
+
+        if new_id != old_id:
+            locks.enter_context(_review_sidecar_lock(flow_dir, new_id))
+
+        # Check if new ID already exists (and isn't same as old) — probe both layouts.
+        if new_id != old_id:
+            new_canonical = flow_dir / SPECS_JSON_DIR / f"{new_id}.json"
+            new_legacy = flow_dir / EPICS_DIR / f"{new_id}.json"
+            if new_canonical.exists() or new_legacy.exists():
+                error_exit(
+                    f"Spec {new_id} already exists. Choose a different title.",
+                    use_json=args.json,
                 )
-                for i, line in enumerate(lines):
-                    if line.startswith("# "):
-                        newline = "\n" if line.endswith("\n") else ""
-                        lines[i] = f"# {old_id} {args.title}{newline}"
-                        break
-                atomic_write(spec_md_path, "".join(lines))
-            except OSError:
-                pass  # Non-critical — JSON title is the source of truth.
-        result = {
-            "id": old_id,
-            "title": args.title,
-            "renamed": False,
-            "message": (
-                f"Spec {old_id} title updated (tracker-linked — id/branch "
-                "not renamed)"
-            ),
-        }
-        if args.json:
-            json_output(result)
-        else:
-            print(result["message"])
-        return
 
-    # Extract spec number from old ID
-    spec_num, _ = parse_id(old_id)
-    if spec_num is None:
-        error_exit(f"Could not parse spec number from {old_id}", use_json=args.json)
+        # Collect files to rename
+        renames: list[tuple[Path, Path]] = []
+        specs_dir = flow_dir / SPECS_DIR
+        tasks_dir = flow_dir / TASKS_DIR
 
-    # Generate new ID with slugified title
-    new_slug = slugify(args.title)
-    new_suffix = new_slug if new_slug else generate_epic_suffix()
-    new_id = f"fn-{spec_num}-{new_suffix}"
+        # Spec JSON — rename in place (same parent dir).
+        renames.append((old_spec_path, spec_json_parent / f"{new_id}.json"))
 
-    # Check if new ID already exists (and isn't same as old) — probe both layouts.
-    if new_id != old_id:
-        new_canonical = flow_dir / SPECS_JSON_DIR / f"{new_id}.json"
-        new_legacy = flow_dir / EPICS_DIR / f"{new_id}.json"
-        if new_canonical.exists() or new_legacy.exists():
+        # Spec markdown
+        old_spec_md = specs_dir / f"{old_id}.md"
+        if old_spec_md.exists():
+            renames.append((old_spec_md, specs_dir / f"{new_id}.md"))
+
+        # Task files (JSON and MD)
+        task_files: list[tuple[str, str]] = []  # (old_task_id, new_task_id)
+        if tasks_dir.exists():
+            for task_file in tasks_dir.glob(f"{old_id}.*.json"):
+                task_id = task_file.stem
+                if not is_task_id(task_id):
+                    continue
+                # Extract task number
+                _, task_num = parse_id(task_id)
+                if task_num is not None:
+                    new_task_id = f"{new_id}.{task_num}"
+                    task_files.append((task_id, new_task_id))
+                    # JSON file
+                    renames.append((task_file, tasks_dir / f"{new_task_id}.json"))
+                    # MD file
+                    old_task_md = tasks_dir / f"{task_id}.md"
+                    if old_task_md.exists():
+                        renames.append((old_task_md, tasks_dir / f"{new_task_id}.md"))
+
+        # Checkpoint file
+        old_checkpoint = flow_dir / f".checkpoint-{old_id}.json"
+        if old_checkpoint.exists():
+            renames.append((old_checkpoint, flow_dir / f".checkpoint-{new_id}.json"))
+
+        # Perform renames (collect errors but continue)
+        rename_errors: list[str] = []
+        for old_path, new_path in renames:
+            try:
+                old_path.rename(new_path)
+            except OSError as e:
+                rename_errors.append(f"{old_path.name} -> {new_path.name}: {e}")
+
+        if rename_errors:
             error_exit(
-                f"Spec {new_id} already exists. Choose a different title.",
+                f"Failed to rename some files: {'; '.join(rename_errors)}",
                 use_json=args.json,
             )
 
-    # Collect files to rename
-    renames: list[tuple[Path, Path]] = []
-    specs_dir = flow_dir / SPECS_DIR
-    tasks_dir = flow_dir / TASKS_DIR
-
-    # Spec JSON — rename in place (same parent dir).
-    renames.append((old_spec_path, spec_json_parent / f"{new_id}.json"))
-
-    # Spec markdown
-    old_spec_md = specs_dir / f"{old_id}.md"
-    if old_spec_md.exists():
-        renames.append((old_spec_md, specs_dir / f"{new_id}.md"))
-
-    # Task files (JSON and MD)
-    task_files: list[tuple[str, str]] = []  # (old_task_id, new_task_id)
-    if tasks_dir.exists():
-        for task_file in tasks_dir.glob(f"{old_id}.*.json"):
-            task_id = task_file.stem
-            if not is_task_id(task_id):
-                continue
-            # Extract task number
-            _, task_num = parse_id(task_id)
-            if task_num is not None:
-                new_task_id = f"{new_id}.{task_num}"
-                task_files.append((task_id, new_task_id))
-                # JSON file
-                renames.append((task_file, tasks_dir / f"{new_task_id}.json"))
-                # MD file
-                old_task_md = tasks_dir / f"{task_id}.md"
-                if old_task_md.exists():
-                    renames.append((old_task_md, tasks_dir / f"{new_task_id}.md"))
-
-    # Checkpoint file
-    old_checkpoint = flow_dir / f".checkpoint-{old_id}.json"
-    if old_checkpoint.exists():
-        renames.append((old_checkpoint, flow_dir / f".checkpoint-{new_id}.json"))
-
-    # Perform renames (collect errors but continue)
-    rename_errors: list[str] = []
-    for old_path, new_path in renames:
-        try:
-            old_path.rename(new_path)
-        except OSError as e:
-            rename_errors.append(f"{old_path.name} -> {new_path.name}: {e}")
-
-    if rename_errors:
-        error_exit(
-            f"Failed to rename some files: {'; '.join(rename_errors)}",
-            use_json=args.json,
-        )
-
-    # Update spec JSON content
-    spec_data["id"] = new_id
-    spec_data["title"] = args.title
-    spec_data["spec_path"] = f"{FLOW_DIR}/{SPECS_DIR}/{new_id}.md"
-    # branch_name defaults to the spec id at create time; a rename that left
-    # it at the old slug silently broke land's PR discovery and autonomous
-    # work's branch naming (observed on fn-218). Re-derive it ONLY when it
-    # still equals the old spec id (its create-time default); any other
-    # value - whatever set it - is kept.
-    branch_rederived = spec_data.get("branch_name") == old_id
-    if branch_rederived:
-        spec_data["branch_name"] = new_id
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_parent / f"{new_id}.json", spec_data)
+        # Update spec JSON content
+        spec_data["id"] = new_id
+        spec_data["title"] = args.title
+        spec_data["spec_path"] = f"{FLOW_DIR}/{SPECS_DIR}/{new_id}.md"
+        # branch_name defaults to the spec id at create time; a rename that left
+        # it at the old slug silently broke land's PR discovery and autonomous
+        # work's branch naming (observed on fn-218). Re-derive it ONLY when it
+        # still equals the old spec id (its create-time default); any other
+        # value - whatever set it - is kept.
+        branch_rederived = spec_data.get("branch_name") == old_id
+        if branch_rederived:
+            spec_data["branch_name"] = new_id
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_parent / f"{new_id}.json", spec_data)
 
     # Update task JSON content
     task_id_map = dict(task_files)  # old_task_id -> new_task_id
@@ -32816,15 +32883,16 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
         if other_spec_file.stem == new_id:
             continue  # Skip self
         try:
-            other_data = load_json(other_spec_file)
-            deps = other_data.get("depends_on_epics", [])
-            if old_id in deps:
-                other_data["depends_on_epics"] = [
-                    new_id if d == old_id else d for d in deps
-                ]
-                other_data["updated_at"] = now_iso()
-                atomic_write_json(other_spec_file, other_data)
-                updated_deps_in.append(other_data.get("id", other_spec_file.stem))
+            with _review_sidecar_lock(flow_dir, other_spec_file.stem):
+                other_data = load_json(other_spec_file)
+                deps = other_data.get("depends_on_epics", [])
+                if old_id in deps:
+                    other_data["depends_on_epics"] = [
+                        new_id if d == old_id else d for d in deps
+                    ]
+                    other_data["updated_at"] = now_iso()
+                    atomic_write_json(other_spec_file, other_data)
+                    updated_deps_in.append(other_data.get("id", other_spec_file.stem))
         except (json.JSONDecodeError, OSError):
             pass  # Skip files that can't be parsed
 
@@ -32910,28 +32978,29 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
     if not dep_path.exists():
         error_exit(f"Spec {dep_id} not found", use_json=args.json)
 
-    spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
-    deps = spec_data.get("depends_on_epics", [])
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
+        deps = spec_data.get("depends_on_epics", [])
 
-    if dep_id in deps:
-        # Already exists, no-op success
-        if args.json:
-            json_output(
-                {
-                    "success": True,
-                    "id": spec_id,
-                    "depends_on_epics": deps,
-                    "message": f"{dep_id} already in dependencies",
-                }
-            )
-        else:
-            print(f"{dep_id} already in {spec_id} dependencies")
-        return
+        if dep_id in deps:
+            # Already exists, no-op success
+            if args.json:
+                json_output(
+                    {
+                        "success": True,
+                        "id": spec_id,
+                        "depends_on_epics": deps,
+                        "message": f"{dep_id} already in dependencies",
+                    }
+                )
+            else:
+                print(f"{dep_id} already in {spec_id} dependencies")
+            return
 
-    deps.append(dep_id)
-    spec_data["depends_on_epics"] = deps
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_path, spec_data)
+        deps.append(dep_id)
+        spec_data["depends_on_epics"] = deps
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
@@ -32977,28 +33046,29 @@ def cmd_spec_rm_dep(args: argparse.Namespace) -> None:
     if not spec_path.exists():
         error_exit(f"Spec {spec_id} not found", use_json=args.json)
 
-    spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
-    deps = spec_data.get("depends_on_epics", [])
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
+        deps = spec_data.get("depends_on_epics", [])
 
-    if dep_id not in deps:
-        # Not in deps, no-op success
-        if args.json:
-            json_output(
-                {
-                    "success": True,
-                    "id": spec_id,
-                    "depends_on_epics": deps,
-                    "message": f"{dep_id} not in dependencies",
-                }
-            )
-        else:
-            print(f"{dep_id} not in {spec_id} dependencies")
-        return
+        if dep_id not in deps:
+            # Not in deps, no-op success
+            if args.json:
+                json_output(
+                    {
+                        "success": True,
+                        "id": spec_id,
+                        "depends_on_epics": deps,
+                        "message": f"{dep_id} not in dependencies",
+                    }
+                )
+            else:
+                print(f"{dep_id} not in {spec_id} dependencies")
+            return
 
-    deps.remove(dep_id)
-    spec_data["depends_on_epics"] = deps
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_path, spec_data)
+        deps.remove(dep_id)
+        spec_data["depends_on_epics"] = deps
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
@@ -33038,40 +33108,41 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
     if not spec_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
-    )
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+        )
 
-    # Validate each non-empty spec up front — reject bad specs before we touch
-    # disk. Empty string is a clear-signal and skips validation.
-    for _field_name, value in (
-        ("--impl", args.impl),
-        ("--review", args.review),
-        ("--sync", args.sync),
-    ):
-        if value:
-            try:
-                BackendSpec.parse(value)
-            except ValueError as e:
-                error_exit(
-                    f"Invalid spec for {field}: {e}", use_json=args.json
-                )
+        # Validate each non-empty spec up front — reject bad specs before we touch
+        # disk. Empty string is a clear-signal and skips validation.
+        for _field_name, value in (
+            ("--impl", args.impl),
+            ("--review", args.review),
+            ("--sync", args.sync),
+        ):
+            if value:
+                try:
+                    BackendSpec.parse(value)
+                except ValueError as e:
+                    error_exit(
+                        f"Invalid spec for {field}: {e}", use_json=args.json
+                    )
 
-    # Update fields (empty string means clear). Store raw strings as typed —
-    # no normalization — so users see back exactly what they set.
-    updated = []
-    if args.impl is not None:
-        spec_data["default_impl"] = args.impl if args.impl else None
-        updated.append(f"default_impl={args.impl or 'null'}")
-    if args.review is not None:
-        spec_data["default_review"] = args.review if args.review else None
-        updated.append(f"default_review={args.review or 'null'}")
-    if args.sync is not None:
-        spec_data["default_sync"] = args.sync if args.sync else None
-        updated.append(f"default_sync={args.sync or 'null'}")
+        # Update fields (empty string means clear). Store raw strings as typed —
+        # no normalization — so users see back exactly what they set.
+        updated = []
+        if args.impl is not None:
+            spec_data["default_impl"] = args.impl if args.impl else None
+            updated.append(f"default_impl={args.impl or 'null'}")
+        if args.review is not None:
+            spec_data["default_review"] = args.review if args.review else None
+            updated.append(f"default_review={args.review or 'null'}")
+        if args.sync is not None:
+            spec_data["default_sync"] = args.sync if args.sync else None
+            updated.append(f"default_sync={args.sync or 'null'}")
 
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_path, spec_data)
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
@@ -37241,20 +37312,21 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
-    modified_paths = [spec_path]
-    # Validate the whole spec before publishing any final task status. Keep
-    # runtime claims and evidence local; only the status must travel with git.
-    for task_file, definition, status in final_tasks:
-        if definition.get("status") != status:
-            definition["status"] = status
-            canonicalize_task_for_write(definition)
-            atomic_write_json(task_file, definition)
-            modified_paths.append(task_file)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
+        modified_paths = [spec_path]
+        # Validate the whole spec before publishing any final task status. Keep
+        # runtime claims and evidence local; only the status must travel with git.
+        for task_file, definition, status in final_tasks:
+            if definition.get("status") != status:
+                definition["status"] = status
+                canonicalize_task_for_write(definition)
+                atomic_write_json(task_file, definition)
+                modified_paths.append(task_file)
 
-    spec_data["status"] = "done"
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_path, spec_data)
+        spec_data["status"] = "done"
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_path, spec_data)
 
     if args.json:
         json_output(
@@ -37444,6 +37516,11 @@ class EvidenceReachability:
 def validate_flow_root(flow_dir: Path) -> list[str]:
     """Validate .flow/ root invariants. Returns list of errors."""
     errors = []
+
+    try:
+        _read_flow_config_file(flow_dir / CONFIG_FILE)
+    except ValueError as exc:
+        errors.append(str(exc))
 
     # Check meta.json exists and is valid
     meta_path = flow_dir / META_FILE
@@ -38588,14 +38665,8 @@ def _brief_done_summary_line(
 
 def _brief_memory_enabled(flow_dir: Path) -> bool:
     """Read memory.enabled from .flow/config.json without get_config/git."""
-    config_path = flow_dir / CONFIG_FILE
-    if not config_path.exists():
-        return False
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, UnicodeError):
-        return False
-    if not isinstance(data, dict):
+    data = _load_raw_flow_config(flow_dir / CONFIG_FILE)
+    if data is None:
         return False
     memory = data.get("memory")
     if not isinstance(memory, dict):
@@ -41589,20 +41660,22 @@ def _locked_sync_state_update(args: argparse.Namespace, *, action: str,
     flow_dir = get_flow_dir()
     try:
         with _shared_config_lock(flow_dir):
-            spec_json_path, spec_data = _resolve_sync_spec(args)
-            live = _live_spec_operation_claim(flow_dir, args.id)
-            if live is not None:
-                error_exit(
-                    f"spec {args.id} has a tracker {live['op']} operation in "
-                    f"flight (claim {live['file']}, pid {live['pid']} on "
-                    f"{live['host']}); refusing to {action} while it holds "
-                    "the claim; retry after the operation finishes",
-                    use_json=args.json,
-                )
-            result = mutate(spec_data["tracker"])
-            if result is not False:
-                _write_sync_state(spec_json_path, spec_data)
-            return spec_data, result
+            args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+            with _review_sidecar_lock(flow_dir, args.id):
+                spec_json_path, spec_data = _resolve_sync_spec(args)
+                live = _live_spec_operation_claim(flow_dir, args.id)
+                if live is not None:
+                    error_exit(
+                        f"spec {args.id} has a tracker {live['op']} operation in "
+                        f"flight (claim {live['file']}, pid {live['pid']} on "
+                        f"{live['host']}); refusing to {action} while it holds "
+                        "the claim; retry after the operation finishes",
+                        use_json=args.json,
+                    )
+                result = mutate(spec_data["tracker"])
+                if result is not False:
+                    _write_sync_state(spec_json_path, spec_data)
+                return spec_data, result
     except TimeoutError as exc:
         error_exit(
             f"could not acquire the config writer lock for {action}: {exc}",
@@ -41657,49 +41730,51 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     try:
         with _shared_config_lock(flow_dir):
-            spec_json_path, spec_data = _resolve_sync_spec(args)
+            args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+            with _review_sidecar_lock(flow_dir, args.id):
+                spec_json_path, spec_data = _resolve_sync_spec(args)
 
-            # PR #246: honor LIVE per-spec operation claims (create/sync-body/
-            # status). A verb's identity recheck can only detect a relink
-            # AFTER its provider mutation landed on the old issue; refusing
-            # here keeps the relink out of the whole claimed window. The
-            # operation is short-lived and releases its claim on completion -
-            # this refusal is retryable.
-            live = _live_spec_operation_claim(flow_dir, args.id)
-            if live is not None:
-                error_exit(
-                    f"spec {args.id} has a tracker {live['op']} operation in "
-                    f"flight (claim {live['file']}, pid {live['pid']} on "
-                    f"{live['host']}); refusing to relink while it holds the "
-                    "claim; retry after the operation finishes",
-                    use_json=args.json,
+                # PR #246: honor LIVE per-spec operation claims (create/sync-body/
+                # status). A verb's identity recheck can only detect a relink
+                # AFTER its provider mutation landed on the old issue; refusing
+                # here keeps the relink out of the whole claimed window. The
+                # operation is short-lived and releases its claim on completion -
+                # this refusal is retryable.
+                live = _live_spec_operation_claim(flow_dir, args.id)
+                if live is not None:
+                    error_exit(
+                        f"spec {args.id} has a tracker {live['op']} operation in "
+                        f"flight (claim {live['file']}, pid {live['pid']} on "
+                        f"{live['host']}); refusing to relink while it holds the "
+                        "claim; retry after the operation finishes",
+                        use_json=args.json,
+                    )
+
+                # Collision guard (R5): refuse to link two specs to one tracker
+                # UUID unless forced (re-link of the same spec is always fine).
+                owner_id = _tracker_id_owner(
+                    flow_dir, args.tracker_id, exclude_spec_id=args.id
                 )
+                if owner_id is not None and not getattr(args, "force", False):
+                    error_exit(
+                        f"Tracker id {args.tracker_id} already linked to spec "
+                        f"{owner_id}. Pass --force to override (rare; usually a "
+                        f"duplicate-issue mistake).",
+                        use_json=args.json,
+                    )
 
-            # Collision guard (R5): refuse to link two specs to one tracker
-            # UUID unless forced (re-link of the same spec is always fine).
-            owner_id = _tracker_id_owner(
-                flow_dir, args.tracker_id, exclude_spec_id=args.id
-            )
-            if owner_id is not None and not getattr(args, "force", False):
-                error_exit(
-                    f"Tracker id {args.tracker_id} already linked to spec "
-                    f"{owner_id}. Pass --force to override (rare; usually a "
-                    f"duplicate-issue mistake).",
-                    use_json=args.json,
-                )
-
-            state = spec_data["tracker"]
-            state["id"] = args.tracker_id
-            # A durable provider id completes an identifier-only MCP link.
-            # derive_link_state gives this explicit field precedence, so
-            # leaving it unchanged would keep durable-only verbs blocked.
-            state["linkState"] = "linked"
-            if validated_identifier is not None:
-                # Persist the canonical stripped display form (e.g. "WOR-17").
-                state["identifier"] = validated_identifier[2]
-            if args.url is not None:
-                state["url"] = args.url
-            _write_sync_state(spec_json_path, spec_data)
+                state = spec_data["tracker"]
+                state["id"] = args.tracker_id
+                # A durable provider id completes an identifier-only MCP link.
+                # derive_link_state gives this explicit field precedence, so
+                # leaving it unchanged would keep durable-only verbs blocked.
+                state["linkState"] = "linked"
+                if validated_identifier is not None:
+                    # Persist the canonical stripped display form (e.g. "WOR-17").
+                    state["identifier"] = validated_identifier[2]
+                if args.url is not None:
+                    state["url"] = args.url
+                _write_sync_state(spec_json_path, spec_data)
     except TimeoutError as exc:
         # ConfigLockTimeout (a TimeoutError): another writer holds the lock
         # past the acquisition deadline. Surface cleanly instead of a
@@ -41820,18 +41895,20 @@ def cmd_sync_clear(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     try:
         with _shared_config_lock(flow_dir):
-            spec_json_path, spec_data = _resolve_sync_spec(args)
-            live = _live_spec_operation_claim(flow_dir, args.id)
-            if live is not None:
-                error_exit(
-                    f"spec {args.id} has a tracker {live['op']} operation in "
-                    f"flight (claim {live['file']}, pid {live['pid']} on "
-                    f"{live['host']}); refusing to unlink while it holds the "
-                    "claim; retry after the operation finishes",
-                    use_json=args.json,
-                )
-            spec_data["tracker"] = default_spec_tracker_state()
-            _write_sync_state(spec_json_path, spec_data)
+            args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+            with _review_sidecar_lock(flow_dir, args.id):
+                spec_json_path, spec_data = _resolve_sync_spec(args)
+                live = _live_spec_operation_claim(flow_dir, args.id)
+                if live is not None:
+                    error_exit(
+                        f"spec {args.id} has a tracker {live['op']} operation in "
+                        f"flight (claim {live['file']}, pid {live['pid']} on "
+                        f"{live['host']}); refusing to unlink while it holds the "
+                        "claim; retry after the operation finishes",
+                        use_json=args.json,
+                    )
+                spec_data["tracker"] = default_spec_tracker_state()
+                _write_sync_state(spec_json_path, spec_data)
     except TimeoutError as exc:
         error_exit(
             f"could not acquire the config writer lock for sync clear: {exc}",
@@ -42574,6 +42651,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         comment_file=getattr(args, "comment_file", None),
         pr_url=getattr(args, "pr_url", None),
         status_only=getattr(args, "status_only", False),
+        overwrite_diverged=getattr(args, "overwrite_diverged", False),
     )
     print(payload)
     sys.exit(code)
@@ -47772,7 +47850,11 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
                     code=REVIEW_TRANSPORT_EXIT_CODE,
                 )
         error_exit(str(exc), use_json=args.json, code=2)
-    results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
+    results = [
+        {"axis": draw["axis"], "backend": draw["spec"].backend,
+         "verdict": None, "failed": True, "failure_class": "dispatch_interrupted"}
+        for draw in draws
+    ]
     try:
         _review_fanout_write_meta(
             sidecar, task_id, standalone, base_branch,
@@ -47788,14 +47870,25 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         # charged behind the live-journal lease. Drive the same single-refund
         # path an all-failed dispatch uses (standalone: plain error).
         for row in results:
-            row["failure_class"] = (
-                row.get("failure_class") or "sidecar_publish_failed"
-            )
+            row["failure_class"] = "sidecar_publish_failed"
         _review_fanout_refund_all_failed(
             args, task_id, standalone, results, primary_axis,
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
+    results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
+    try:
+        _review_fanout_write_meta(
+            sidecar, task_id, standalone, base_branch,
+            reviewed_base_sha, reviewed_head_sha, artifact_sha256,
+            reservation_id, rid, primary_axis, results,
+            focus=getattr(args, "focus", None),
+            receipt_path=getattr(args, "receipt", None),
+            claim_token=getattr(args, "_claim_token", None),
+        )
+    except OSError as exc:
+        print(f"Warning: fan-out aggregate refresh failed; per-draw results retained: {exc}", file=sys.stderr)
+
     if all(not row.get("verdict") for row in results):
         _review_fanout_refund_all_failed(
             args, task_id, standalone, results, primary_axis,
@@ -47822,6 +47915,22 @@ def _review_fanout_load_meta(flow_dir: Path, rid: str, args) -> dict:
         )
     if not isinstance(meta, dict) or meta.get("type") != "impl_review_fanout":
         error_exit(f"fan-out meta invalid: {path}", use_json=args.json, code=2)
+    # Dispatch may have died before returning; each completed draw publishes
+    # its own result atomically and is authoritative over the pending entry.
+    for index, pending in enumerate(meta.get("draws", [])):
+        axis = pending.get("axis")
+        if axis not in REVIEW_FANOUT_AXIS_LINES:
+            error_exit("fan-out meta has invalid draw axis", use_json=args.json, code=2)
+        result_path = path.parent / f"{axis}.json"
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as exc:
+            error_exit(f"fan-out draw unparseable: {result_path}: {exc}", use_json=args.json, code=2)
+        if not isinstance(result, dict) or result.get("axis") != axis:
+            error_exit(f"fan-out draw invalid: {result_path}", use_json=args.json, code=2)
+        meta["draws"][index] = result
     return meta
 
 
@@ -48382,6 +48491,14 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         error_exit("invalid --rid", use_json=args.json, code=2)
     meta = _review_fanout_load_meta(flow_dir, rid, args)
     _review_fanout_check_finalize_meta(meta, task_id, standalone, args)
+    meta_draws = meta.get("draws") if isinstance(meta.get("draws"), list) else []
+    if meta_draws and not _review_fanout_worst_verdict(meta_draws):
+        _review_fanout_refund_all_failed(
+            args, task_id, standalone, meta_draws, meta.get("primary_axis"),
+            meta.get("reservation_id"), meta.get("reviewed_head_sha"),
+            meta.get("reviewed_base_sha"),
+        )
+        return
     try:
         merged_text = Path(args.merged_file).read_text(encoding="utf-8")
     except OSError as exc:
@@ -49575,10 +49692,19 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
         stamp_ralph_iteration(receipt_data)
         try:
             Path(args.receipt).parent.mkdir(parents=True, exist_ok=True)
-            Path(args.receipt).write_text(
-                json.dumps(receipt_data, indent=2) + "\n", encoding="utf-8"
-            )
-            receipt_written = args.receipt
+            receipt_path = Path(args.receipt)
+            with cross_process_lock(_review_receipt_lock_path(receipt_path)):
+                existing = _review_route_read_receipt(receipt_path)
+                if existing and existing.get("verdict") in ("NEEDS_WORK", "MAJOR_RETHINK", "NEEDS_HUMAN"):
+                    verdict = "REVIEW"
+                    reason = "existing review requires the full review route"
+                else:
+                    atomic_write_json(receipt_path, receipt_data)
+                    receipt_written = args.receipt
+        except CrossProcessLockError as e:
+            # A busy receipt lock means another review owns it: take the full review.
+            verdict = "REVIEW"
+            reason = f"receipt lock busy ({e}); defaulting to REVIEW"
         except OSError as e:
             error_exit(
                 f"failed to write receipt {args.receipt}: {e}",
@@ -50413,9 +50539,21 @@ def cmd_checkpoint_restore(args: argparse.Namespace) -> None:
     spec_path = flow_dir / SPECS_DIR / f"{epic_id}.md"
     spec_path.parent.mkdir(parents=True, exist_ok=True)
 
-    epic_data = checkpoint_spec_block["data"]
-    epic_data["updated_at"] = now_iso()
-    atomic_write_json(epic_path, epic_data)
+    with _review_sidecar_lock(flow_dir, epic_id):
+        current = load_json(epic_path) if epic_path.exists() else {}
+        epic_data = dict(checkpoint_spec_block["data"])
+        # A checkpoint restores work state, not reservations held by live reviews.
+        for key in (
+            "plan_review_rounds", "impl_review_rounds", "review_attempts",
+            "review_hash_epoch", "review_pending_rounds", "review_reservations",
+            "review_transport_failures", "review_phase_leases",
+        ):
+            if key in current:
+                epic_data[key] = current[key]
+            else:
+                epic_data.pop(key, None)
+        epic_data["updated_at"] = now_iso()
+        atomic_write_json(epic_path, epic_data)
 
     if checkpoint_spec_block.get("spec"):
         atomic_write(spec_path, checkpoint_spec_block["spec"])
@@ -50613,12 +50751,19 @@ def cmd_validate(args: argparse.Namespace) -> None:
     errors, warnings, task_count = validate_epic(
         flow_dir, spec_id_arg, use_json=args.json
     )
+    root_errors = []
+    try:
+        _read_flow_config_file(flow_dir / CONFIG_FILE)
+    except ValueError as exc:
+        root_errors.append(str(exc))
+    errors = root_errors + errors
     valid = len(errors) == 0
 
     if args.json:
         json_output(
             {
                 "spec": spec_id_arg,
+                "root_errors": root_errors,
                 "valid": valid,
                 "errors": errors,
                 "warnings": warnings,
@@ -54651,6 +54796,11 @@ def main() -> None:
         "--status-only", action="store_true", dest="status_only",
         help="For --op push, create/link if needed and project status only; "
              "skip body and relation writes",
+    )
+    p_tracker_sync.add_argument(
+        "--overwrite-diverged", action="store_true", dest="overwrite_diverged",
+        help="For a body-writing --op push, overwrite a tracker body that "
+             "diverged from the merge base (after a human confirmed it)",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")

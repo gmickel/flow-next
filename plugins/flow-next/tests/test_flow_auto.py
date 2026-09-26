@@ -278,6 +278,7 @@ class ArgumentParseFence(unittest.TestCase):
                     "PILOT_DEPTH": "long",
                 },
             ),
+            ("wor-17-x", {"PILOT_SPEC": "wor-17-x"}),
             ("fn-9 --dry-run", {"PILOT_SPEC": "fn-9", "PILOT_DRY_RUN": "1"}),
             ("--auto fn-4 --tick", {"PILOT_SPEC": "fn-4", "AUTO_TICK": "1"}),
             ("--review codex --depth long --research=rp", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "rp"}),

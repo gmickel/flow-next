@@ -283,6 +283,13 @@ upserts a remote link with a URL-comment fallback, and Linear creates its rich
 `attachmentLinkURL` attachment. Merge evidence determines lifecycle state; it
 does not carry the URL.
 
+A body-writing `push` on a linked spec compares the current tracker body with
+its recorded tracker merge base. Divergence returns `conflict` with subtype
+`tracker_diverged` and writes nothing; run reconcile to merge the edits. An
+attended run asks first and can overwrite the tracker body with
+`--overwrite-diverged` once a human confirms; unattended runs never overwrite.
+A first push without a recorded base retains its existing behavior.
+
 Work's `firstClaim` caller uses `push --status-only`: an already-linked issue
 receives status only, preserving tracker-side body and relation co-edits. An
 unlinked spec still creates, links, seeds the paired merge base, and then

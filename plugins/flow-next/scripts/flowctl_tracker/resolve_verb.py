@@ -127,12 +127,9 @@ def _config_shape_error(config: dict) -> Optional[TrackerError]:
 
 
 def _read_raw(flow_dir: Path) -> dict:
-    import json
-    try:
-        data = json.loads((Path(flow_dir) / "config.json").read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    from .config_io import load_raw_config  # noqa: PLC0415
+
+    return load_raw_config(Path(flow_dir) / "config.json") or {}
 
 
 def _assignment_to_data(assignment: Assignment) -> Union[dict, TrackerError]:

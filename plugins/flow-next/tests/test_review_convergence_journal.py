@@ -865,7 +865,8 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         # Byte-equivalent receipt replay after process restart.
         self.assertEqual(
             json.loads(target.read_text()),
-            {**self._payload(), "review_reservation_id": reservation_id},
+            {**self._payload(), "review_reservation_id": reservation_id,
+             "verdict": "NEEDS_WORK", "review": "<verdict>NEEDS_WORK</verdict>"},
         )
         data = self._data()
         self.assertEqual(data.get("review_reservations", {}), {})

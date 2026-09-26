@@ -1,0 +1,196 @@
+{
+  "branch_name": "fn-255-unattended-run-correctness-fixes-audit",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-25T22:02:12.141558Z",
+  "created_at": "2026-09-25T20:30:50.471627Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-255-unattended-run-correctness-fixes-audit",
+  "impl_review_rounds": {
+    "fn-255-unattended-run-correctness-fixes-audit.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "ff9bb34a0c388fd6be8d580bc3136ccede8f225c75915111be5c21399d691efe",
+      "backend": "codex",
+      "base_sha": "77fc224877cdeb7f061ec8faa8abaf2a9f8ee6e3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-dcfcac1fd17919595da1daa1ce0b444e",
+            "classification": "introduced",
+            "findingId": "finding-dcfcac1fd17919595da1daa1ce0b444e",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7f596cddc657e85fc00aa1f6df171927",
+            "classification": "introduced",
+            "findingId": "finding-7f596cddc657e85fc00aa1f6df171927",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f5b55634f3f8f676a7278e0a390a8b50",
+            "classification": "introduced",
+            "findingId": "finding-f5b55634f3f8f676a7278e0a390a8b50",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4fc531c3dd2daa195aa8605b4643f5ef",
+            "classification": "introduced",
+            "findingId": "finding-4fc531c3dd2daa195aa8605b4643f5ef",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4feeca6282ebcce93ef3c2e0d6cd84b7",
+            "classification": "introduced",
+            "findingId": "finding-4feeca6282ebcce93ef3c2e0d6cd84b7",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "26e87d2790f8a3842ceedb31ca3cf5dbce5989ea",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4656,
+      "output_sha256": "76c6053aadd2934cc75921f1f0c268fb31f351a333fd1db6ae51ae1d1dc6e4f5",
+      "reservation_id": "8fa8a24221254aaf9ad82f2f1000670b",
+      "round_consumed": true,
+      "scope": "impl:fn-255-unattended-run-correctness-fixes-audit.1",
+      "superseded_by": null,
+      "task": "fn-255-unattended-run-correctness-fixes-audit.1",
+      "timestamp": "2026-09-25T21:53:32.134767Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "11667e4fbb519587ddc8d9fd8d542b0425d45b6a924ae9c25da0b8072584612a",
+      "backend": "codex",
+      "base_sha": "77fc224877cdeb7f061ec8faa8abaf2a9f8ee6e3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-dcfcac1fd17919595da1daa1ce0b444e",
+            "classification": "introduced",
+            "findingId": "finding-dcfcac1fd17919595da1daa1ce0b444e",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-7f596cddc657e85fc00aa1f6df171927",
+            "classification": "introduced",
+            "findingId": "finding-7f596cddc657e85fc00aa1f6df171927",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-f5b55634f3f8f676a7278e0a390a8b50",
+            "classification": "introduced",
+            "findingId": "finding-f5b55634f3f8f676a7278e0a390a8b50",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4fc531c3dd2daa195aa8605b4643f5ef",
+            "classification": "introduced",
+            "findingId": "finding-4fc531c3dd2daa195aa8605b4643f5ef",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4feeca6282ebcce93ef3c2e0d6cd84b7",
+            "classification": "introduced",
+            "findingId": "finding-4feeca6282ebcce93ef3c2e0d6cd84b7",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f61f048ee7cf42d9b73522f78631d82b80ea0655",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1979,
+      "output_sha256": "640fb8b69f6cbe091b3691f599198a3de265f51b9bf07485799f06594b6f9d77",
+      "reservation_id": "99d5bdf792ab4c11a669cba48f76b54c",
+      "round_consumed": true,
+      "scope": "impl:fn-255-unattended-run-correctness-fixes-audit.1",
+      "superseded_by": null,
+      "task": "fn-255-unattended-run-correctness-fixes-audit.1",
+      "timestamp": "2026-09-25T22:01:02.219806Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-255-unattended-run-correctness-fixes-audit.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-255-unattended-run-correctness-fixes-audit.1": 0
+  },
+  "spec_path": ".flow/specs/fn-255-unattended-run-correctness-fixes-audit.md",
+  "status": "done",
+  "title": "Unattended-run correctness fixes (audit wave 1)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-25T22:41:09.354830Z"
+}

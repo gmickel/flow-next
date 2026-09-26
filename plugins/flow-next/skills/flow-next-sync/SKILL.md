@@ -85,7 +85,7 @@ Filter to `status: todo` or `status: blocked`. Exclude the source task itself.
 $FLOWCTL tasks --spec "<spec-id>" --json
 ```
 
-1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_ID`):
+1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_IDS`):
    - Prefer most recently updated task with `status: done`
    - Else: most recently updated task with `status: in_progress`
    - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
@@ -107,30 +107,36 @@ Stop here (success, nothing to do).
 
 Three extra context types help the agent catch drift the spec text alone can't reveal: project-glossary terms (renames where the old spec used a term whose `_Avoid_` alias now appears in code), active decision constraints (current code may touch files mentioned in a decision's `Consequences` section), and strategic-intent drift (completed task contradicts an active `STRATEGY.md` track or approach).
 
+Write the three inputs to files; dispatch only their paths. Empty or failed reads
+use the same defaults as an absent source.
+
 ```bash
-GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null \
-  || echo '{"groups":[],"file_count":0,"total_terms":0}')"
-DECISIONS_JSON="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null \
-  || echo '{"entries":[],"legacy":[],"count":0,"status":"active"}')"
-STRATEGY_CONTENT="$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')"
+# fence:plan-sync-inputs — FLOWCTL is the resolved executable path
+mkdir -p .flow/tmp
+SYNC_CONTEXT=$(mktemp -d "$(pwd)/.flow/tmp/plan-sync.XXXXXX") || exit 2
+GLOSSARY_JSON_FILE="$SYNC_CONTEXT/glossary.json"
+DECISIONS_JSON_FILE="$SYNC_CONTEXT/decisions.json"
+STRATEGY_CONTENT_FILE="$SYNC_CONTEXT/strategy.json"
+if ! "$FLOWCTL" glossary list --json > "$GLOSSARY_JSON_FILE" 2>/dev/null || [ ! -s "$GLOSSARY_JSON_FILE" ]; then
+  printf '%s\n' '{"groups":[],"file_count":0,"total_terms":0}' > "$GLOSSARY_JSON_FILE"
+fi
+if ! "$FLOWCTL" memory list --track knowledge --category decisions --json > "$DECISIONS_JSON_FILE" 2>/dev/null || [ ! -s "$DECISIONS_JSON_FILE" ]; then
+  printf '%s\n' '{"entries":[],"legacy":[],"count":0,"status":"active"}' > "$DECISIONS_JSON_FILE"
+fi
+if ! "$FLOWCTL" strategy read --json > "$STRATEGY_CONTENT_FILE" 2>/dev/null || [ ! -s "$STRATEGY_CONTENT_FILE" ]; then
+  printf '%s\n' '{}' > "$STRATEGY_CONTENT_FILE"
+fi
+printf '%s\n' "$GLOSSARY_JSON_FILE" "$DECISIONS_JSON_FILE" "$STRATEGY_CONTENT_FILE"
 ```
 
-All three calls are best-effort — empty defaults keep the agent prompt valid when flowctl returns nothing or fails.
-
-**Husk short-circuit** — when all three of the following hold, skip the extra context entirely (pass the empty defaults; the agent's husk short-circuit at the top of Phase 3b will skip the whole section):
-
-- `GLOSSARY_JSON.total_terms == 0` (glossary missing or husk)
-- `DECISIONS_JSON.count == 0` (no decision entries)
-- `STRATEGY_CONTENT.sections_filled == 0` OR `STRATEGY_CONTENT == {}` (no STRATEGY.md or husk — verify with `flowctl strategy status --json | jq '.sections_filled // 0'`)
-
-When any of the three has signal, pass through all three (untouched) and let the agent run the matching subsection (3b.1 / 3b.2 / 3b.3) and skip the empty ones.
-
-When `GLOSSARY_JSON.total_terms == 0` but `file_count > 0`, every group is a husk. Husks carry no signal for drift detection — pass the JSON through untouched and let the agent skip them.
+Record the printed absolute paths for the dispatch; variables do not persist
+across shell calls. The agent reads the files and applies its Phase 3b husk
+short-circuit. Keep all three files through the agent's return.
 
 #### Done when
 
-- All three variables are populated — **with the documented empty default preserved on failure**, never dropped. A prompt built with a missing `GLOSSARY_JSON` / `DECISIONS_JSON` / `STRATEGY_CONTENT` key has broken this.
-- The husk short-circuit passes the empty defaults through when all three carry no signal, and passes all three untouched when any one has signal.
+- All three files exist, preserving the empty defaults on failure.
+- The dispatch carries file paths, never embedded glossary, decision, or strategy JSON.
 
 ### Step 6: Spawn Plan-Sync Agent
 
@@ -145,16 +151,16 @@ Build context and spawn via Task tool:
 ```
 Sync task specs from <source> to downstream tasks.
 
-COMPLETED_TASK_ID: <source task id - the input task, or selected source for spec mode>
-FLOWCTL: ${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl
+COMPLETED_TASK_IDS: <source task id - the input task, or selected source for spec mode>
+FLOWCTL: <resolved executable path from the preamble>
 SPEC_ID: <spec id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
 DRY_RUN: <true|false>
 CROSS_SPEC: <the $CROSS_SPEC value read below — literal "true" or "false", NOT "true|false">
 
-GLOSSARY_JSON: <output of `flowctl glossary list --json` from step 5>
-DECISIONS_JSON: <output of `flowctl memory list --track knowledge --category decisions --json` from step 5>
-STRATEGY_CONTENT: <output of `flowctl strategy read --json` from step 5>
+GLOSSARY_JSON_FILE: <absolute glossary.json path from step 5>
+DECISIONS_JSON_FILE: <absolute decisions.json path from step 5>
+STRATEGY_CONTENT_FILE: <absolute strategy.json path from step 5>
 
 <if DRY_RUN is true>
 DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze and report drift.
@@ -163,7 +169,7 @@ DRY RUN MODE: Report what would change but do NOT use Edit tool. Only analyze an
 
 Use Task tool with `subagent_type: flow-next:plan-sync` (sync-codex.sh rewrites `Task` to `spawn_agent` for the Codex mirror).
 
-**Note:** `COMPLETED_TASK_ID` is always provided - for task-mode it's the input task, for spec-mode it's the source task selected in Step 4.
+**Note:** `COMPLETED_TASK_IDS` is always provided - for task-mode it's the input task, for spec-mode it's the source task selected in Step 4.
 
 #### Done when
 

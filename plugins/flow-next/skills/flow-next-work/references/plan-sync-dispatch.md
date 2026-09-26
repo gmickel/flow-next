@@ -28,6 +28,8 @@ Read the cross-spec flag (single config-leaf read — plan-sync.md documents `CR
 CROSS_SPEC=$($FLOWCTL config get planSync.crossSpec --json | jq -r '.value')
 ```
 
+Before dispatch, read [manual sync Step 5](../../flow-next-sync/SKILL.md#step-5-gather-glossary-decisions-strategy-context) and run its `plan-sync-inputs` fence using the resolved `$FLOWCTL`. Record the three absolute output paths, including empty-default files. Pass paths only, never JSON bodies.
+
 Use the Task tool to spawn the `plan-sync` subagent with this prompt. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
 ```
@@ -37,6 +39,9 @@ COMPLETED_TASK_IDS: fn-X.Y,fn-X.Z
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
 DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
+GLOSSARY_JSON_FILE: <absolute glossary.json path>
+DECISIONS_JSON_FILE: <absolute decisions.json path>
+STRATEGY_CONTENT_FILE: <absolute strategy.json path>
 CROSS_SPEC: <the $CROSS_SPEC value read above — literal "true" or "false", NOT the string "true|false">
 
 Follow your phases in plan-sync.md exactly.

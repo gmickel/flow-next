@@ -1166,6 +1166,11 @@ and `startable_target_fact` for reuse by the tail and QA gates.
 
 Manage project configuration stored in `.flow/config.json`.
 
+A missing file uses defaults. An unreadable, malformed, or non-object file
+produces a diagnostic naming the file; JSON syntax errors include line and
+column. Readers warn once per process, `config set` refuses to overwrite the
+file, and `validate` reports a root error.
+
 ```bash
 # Get a config value (scalar key)
 flowctl config get memory.enabled [--json]
@@ -2364,6 +2369,10 @@ flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> 
 # omit it only on a round with no NEEDS_WORK draw.
 ```
 
+Fan-out saves its round identity before dispatch. If dispatch is interrupted,
+finalize recovers completed draws from their result files under that round
+directory. A round with no completed verdicts uses the normal single refund.
+
 ```bash
 # Routing - the ONE verb the review workflows call before any dispatch
 flowctl review-route [<task-id>] [--receipt <path>] [--rotate-stale] [--force] [--json]
@@ -2489,6 +2498,12 @@ Completion review receipt:
 When the project defines global criteria in `.flow/criteria.md`, completion-review receipts additionally carry the additive per-criterion compliance array `criteria: [{id, status, note?}]` (`status` in `met` / `violated` / `n/a`), projected deterministically from the reviewer's `## Global criteria` output section; unparseable compliance degrades to absent, never an error. See [`review-findings.md`](review-findings.md) § Global-criteria compliance.
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
+
+`review-rounds record --output-file F` derives the receipt verdict, review text,
+suppressed and classification counts, and unaddressed R-IDs from that output.
+Structured findings take precedence over prose, including suffixed IDs such as
+`R4a`. Omitted derived fields are filled in; a contradictory receipt payload
+exits 2 before changing state. Payload-only metadata passes through unchanged.
 
 **Deterministic review cap + convergence (fn-90/fn-159 - all backends: codex/copilot/cursor/claude internally; rp via `flowctl review-rounds`):**
 

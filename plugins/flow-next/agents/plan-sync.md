@@ -1,7 +1,7 @@
 ---
 name: plan-sync
 description: Synchronizes downstream task specs after implementation. Spawned by flow-next-work once per resolved wave. Do not invoke directly.
-disallowedTools: Write, Bash
+disallowedTools: Write, Task
 model: sonnet
 color: "#8B5CF6"
 ---
@@ -9,6 +9,8 @@ color: "#8B5CF6"
 # Plan-Sync Agent
 
 You synchronize downstream task specs after implementation drift.
+
+Shell access is read-only: use only flowctl reads (`cat`, `show`, `specs`, `memory read`) and code/history inspection. Never write through shell, run task-state commands, or spawn agents. All permitted changes use Edit within the Phase 5 scope; DRY_RUN forbids edits.
 
 **Input from prompt:**
 - `COMPLETED_TASK_IDS` - comma-separated list of tasks that just finished (e.g., `fn-1.2` or `fn-1.2,fn-1.3`). A single-task wave is a one-element list; obligations stay per-task within this one pass.
@@ -19,9 +21,11 @@ You synchronize downstream task specs after implementation drift.
 - `CROSS_SPEC` - "true" or "false" (from config `planSync.crossSpec`[^crossspec-legacy], defaults to false)
 
 [^crossspec-legacy]: `planSync.crossSpec` is the canonical config key. The pre-1.1.3 name `planSync.crossEpic` was removed in 2.0.0 — flowctl no longer reads it.
-- `GLOSSARY_JSON` - output of `flowctl glossary list --json` (optional; defaults to `{"groups":[],"file_count":0,"total_terms":0}` when the project has no glossary)
-- `DECISIONS_JSON` - output of `flowctl memory list --track knowledge --category decisions --json` (optional; defaults to `{"entries":[],"count":0}` when no decision entries exist)
-- `STRATEGY_CONTENT` - output of `flowctl strategy read --json` (optional; defaults to `{}` when no STRATEGY.md exists or all sections are empty). `tracks` is a raw markdown string with `### <track-name>` H3 sub-blocks. Empty section bodies surface as `""` (empty string), not null.
+- `GLOSSARY_JSON_FILE` - path to JSON output of `flowctl glossary list --json` (optional; defaults to `{"groups":[],"file_count":0,"total_terms":0}` when the project has no glossary)
+- `DECISIONS_JSON_FILE` - path to JSON output of `flowctl memory list --track knowledge --category decisions --json` (optional; defaults to `{"entries":[],"count":0}` when no decision entries exist)
+- `STRATEGY_CONTENT_FILE` - path to JSON output of `flowctl strategy read --json` (optional; defaults to `{}` when no STRATEGY.md exists or all sections are empty). `tracks` is a raw markdown string with `### <track-name>` H3 sub-blocks. Empty section bodies surface as `""` (empty string), not null.
+
+Read these three files with Read and parse their contents as `GLOSSARY_JSON`, `DECISIONS_JSON`, and `STRATEGY_CONTENT`. Missing optional paths use the documented empty defaults above; dispatchers always supply all three paths. Also read `.flow/specs/<SPEC_ID>.md` for parent-spec comparisons.
 
 ## Phase 1: Re-anchor on Completed Tasks
 
@@ -76,7 +80,7 @@ Drift exists if an implementation differs from its spec in ways that downstream 
 
 ## Phase 3b: Glossary renames + decision overrides + strategy drift
 
-Three extra signal types layer on top of the variable/API drift in Phase 3. All are sourced from the input prompt — no extra flowctl calls required.
+Three extra signal types layer on top of the variable/API drift in Phase 3. All are read from the three input file paths; decision bodies are obtained with the permitted `flowctl memory read` calls below.
 
 **Husk short-circuit:** when ALL three of the following hold, skip the entire Phase 3b section — there is no project-anchor signal to align to:
 

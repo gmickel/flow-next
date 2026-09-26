@@ -562,7 +562,7 @@ class PushFacade(unittest.TestCase):
                 self.assertEqual(payload["title"], "Demo")
                 return ok(_gh_issue(tracker_render))
 
-            parent = _gh_issue("old remote")
+            parent = _gh_issue("PRIOR TRACKER")
             written = _gh_issue(tracker_render)
             ex = fake_execute({
                 "sync-body-parent-read": ok(parent),
@@ -805,7 +805,7 @@ class PushFacade(unittest.TestCase):
                 mergeBaseFlow="PRIOR\n", mergeBaseTracker="PRIOR",
             ))
             ff = _flow_file(root, "NEW BODY\n")
-            parent = _gh_issue("old")
+            parent = _gh_issue("PRIOR")
             ex = fake_execute({
                 "sync-body-parent-read": ok(parent),
                 "wire-parent-read": ok(parent),
@@ -2712,7 +2712,7 @@ class FacadeOuterClaim(unittest.TestCase):
                     .read_text(encoding="utf-8"))
                 seen["syncbody_nested"] = (facade.get("status"),
                                            inner.get("status"))
-                return ok(_gh_issue("old"))
+                return ok(_gh_issue("PRIOR"))
 
             def assert_nested_status(req):
                 facade = json.loads(facade_rec.read_text(encoding="utf-8"))
@@ -2726,7 +2726,7 @@ class FacadeOuterClaim(unittest.TestCase):
             written = _gh_issue("NEW BODY\n")
             ex = fake_execute({
                 "sync-body-parent-read": assert_nested_syncbody,
-                "wire-parent-read": ok(_gh_issue("old")),
+                "wire-parent-read": ok(_gh_issue("PRIOR")),
                 "wire-update": ok(written),
                 "wire-read": ok(written),
                 "status-parent-read": assert_nested_status,
@@ -2898,7 +2898,7 @@ class FacadeMatrix(unittest.TestCase):
             if op == "push":
                 new_body = "## Goal\nShip it rewritten.\n"
                 ff = _flow_file(root, new_body)
-                old = mk_issue("old remote body")
+                old = mk_issue(FLOW_BODY)
                 written = mk_issue(new_body)
                 responses = {
                     **_status_noop_responses(provider, written),
@@ -3063,6 +3063,71 @@ class FacadeMatrix(unittest.TestCase):
                     self._run_cell(provider, cfg_fn, durable, display,
                                    mk_issue, op)
 
+    def test_matrix_push_refuses_tracker_divergence(self) -> None:
+        for provider, cfg_fn, durable, display, mk_issue in ADAPTERS:
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                flow = root / ".flow"
+                _write_flow(flow, cfg_fn(), tracker=_linked(
+                    id=durable, identifier=display, url="https://x",
+                    mergeBaseFlow=FLOW_BODY,
+                    mergeBaseTracker=FLOW_BODY.rstrip("\n")))
+                path = flow / "specs" / f"{SPEC_ID}.json"
+                before = path.read_bytes()
+                ex = fake_execute({
+                    "sync-body-parent-read": _parent_resp(
+                        provider, mk_issue("remote edit")),
+                })
+                env = {"LINEAR_API_KEY": "lin_test"} if provider == "linear" else {}
+                with mock.patch.dict(os.environ, env, clear=False):
+                    out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                                 flow_file=_flow_file(root, FLOW_BODY),
+                                 body_file=_body_file(root, FLOW_BODY), execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.CONFLICT)
+                self.assertEqual(out.subtype, "tracker_diverged")
+                self.assertIn("reconcile", out.message)
+                self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(_receipts(flow), [])
+                self.assertEqual([c.op for c in ex.calls], ["sync-body-parent-read"])
+
+    def test_push_overwrite_diverged_writes_past_divergence(self) -> None:
+        """A human-confirmed --overwrite-diverged push writes the body anyway."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gl_cfg(), tracker=_linked(
+                id=str(GL_ID), identifier="g/p#12", url="https://x",
+                mergeBaseFlow="PRIOR\n", mergeBaseTracker="PRIOR",
+            ))
+            parent = _gl_issue("remote edit")
+            ex = fake_execute({
+                "sync-body-parent-read": ok(parent),
+                "wire-parent-read": ok(parent),
+                "wire-update": ok(_gl_issue("NEW BODY")),
+                "wire-read": TrackerError(ErrorClass.TRANSPORT, "stop here",
+                                          subtype="readback"),
+            })
+            out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                         flow_file=_flow_file(root, "NEW BODY\n"),
+                         body_file=_body_file(root, "NEW BODY\n"),
+                         overwrite_diverged=True, execute=ex)
+            self.assertNotEqual(getattr(out, "subtype", None), "tracker_diverged")
+            self.assertIn("wire-update", [c.op for c in ex.calls])
+
+    def test_overwrite_diverged_only_with_body_writing_push(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, gl_cfg())
+            for kwargs in ({"op": "pull"}, {"op": "push", "status_only": True}):
+                with self.subTest(**kwargs):
+                    out = F.sync(flow, SPEC_ID, event="work.done",
+                                 overwrite_diverged=True, execute=fake_execute({}),
+                                 **kwargs)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertEqual(out.cls, ErrorClass.INVALID_INPUT)
+                    self.assertIn("--overwrite-diverged", out.message)
+
     def test_matrix_partial_failure_readback_one_adapter(self) -> None:
         """sync-body readback error on gitlab: success:false + completed_steps."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -3073,7 +3138,7 @@ class FacadeMatrix(unittest.TestCase):
                 mergeBaseFlow="PRIOR\n", mergeBaseTracker="PRIOR",
             ))
             ff = _flow_file(root, "NEW BODY\n")
-            parent = _gl_issue("old")
+            parent = _gl_issue("PRIOR")
             ex = fake_execute({
                 "sync-body-parent-read": ok(parent),
                 "wire-parent-read": ok(parent),

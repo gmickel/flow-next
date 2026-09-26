@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 import os
 import re
 import tempfile
@@ -116,11 +117,9 @@ def destination(config: dict) -> Union[dict, TrackerError]:
 
 
 def read_config(flow_dir: Path) -> dict:
-    try:
-        data = json.loads((Path(flow_dir) / "config.json").read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    from ..config_io import load_raw_config  # noqa: PLC0415
+
+    return load_raw_config(Path(flow_dir) / "config.json") or {}
 
 
 def atomic_write_json(path: Path, data: dict) -> Optional[TrackerError]:
@@ -267,6 +266,29 @@ def collision(flow_dir: Path, durable_id: str, *, except_spec: Optional[str] = N
     return None
 
 
+SPEC_SIDECAR_LOCK_WAIT_SECS = 30.0
+
+
+def spec_sidecar_lock_path(flow_dir: Path, spec_id: str) -> Path:
+    """Must equal flowctl's `_review_sidecar_lock_path` (pinned by a parity test)."""
+    import hashlib  # noqa: PLC0415
+
+    digest = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()
+    return Path(flow_dir) / "locks" / f"review-rounds-{digest}.lock"
+
+
+@contextmanager
+def spec_sidecar_lock(flow_dir: Path, spec_id: str):
+    """Same kernel lock and filename as the review ledger; config lock first."""
+    from ..subjects import _bounded_file_lock  # noqa: PLC0415
+
+    with _bounded_file_lock(
+        spec_sidecar_lock_path(flow_dir, spec_id),
+        timeout_s=SPEC_SIDECAR_LOCK_WAIT_SECS, label="spec sidecar",
+    ):
+        yield
+
+
 def write_tracker_block(path: Path, spec_data: dict, tracker: dict
                         ) -> Optional[TrackerError]:
     spec_data = dict(spec_data)
@@ -293,7 +315,7 @@ def locked_tracker_write(flow_dir: Path, spec_id: str, mutate, *,
     or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded

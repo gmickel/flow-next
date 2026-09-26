@@ -50,15 +50,15 @@ class MergeDestinationTest(unittest.TestCase):
 
 
     def test_backlog_land_dispatch_requires_current_scoped_authority(self):
-        code = fence("flow-next-flow/auto.md", "assert_allowed_dispatch()")
+        code = fence("flow-next-flow/auto.md", 'DISPATCH_TARGET="/flow-next:$STAGE"')
         for authorized, spec, pr, allowed in (("0", "fn-1", "https://x/1", False),
                                              ("1", "", "https://x/1", False),
                                              ("1", "fn-1", "", False),
                                              ("1", "fn-1", "https://x/1", True)):
             with self.subTest(authorized=authorized, spec=spec, pr=pr):
-                result = self.run_fence(code, env={"PILOT_AUTONOMY": "backlog",
+                result = self.run_fence(code, env={"PILOT_AUTONOMY": "backlog", "STAGE": "land",
                     "LAND_AUTHORIZED": authorized, "LAND_SCOPE_SPEC": spec, "LAND_SCOPE_PR": pr},
-                    after='assert_allowed_dispatch /flow-next:land\nprintf dispatched')
+                    after='printf dispatched')
                 self.assertEqual(result.returncode == 0, allowed, result.stdout)
                 self.assertEqual("dispatched" in result.stdout, allowed)
 

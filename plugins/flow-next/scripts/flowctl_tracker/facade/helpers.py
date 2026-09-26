@@ -95,6 +95,7 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
                     event: Optional[str], comment_file: Optional[str] = None,
                     pr_url: Optional[str] = None,
                     status_only: bool = False,
+                    overwrite_diverged: bool = False,
                     ) -> Optional[TrackerError]:
     if op not in OPS:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -107,6 +108,12 @@ def validate_inputs(op: str, *, flow_file: Optional[str],
         return TrackerError(
             ErrorClass.INVALID_INPUT,
             "--status-only is valid only with --op push",
+            subtype="args",
+        )
+    if overwrite_diverged and (op != "push" or status_only):
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            "--overwrite-diverged is valid only with a body-writing --op push",
             subtype="args",
         )
     # The event is a marker field (and a receipt/claim key): reject values

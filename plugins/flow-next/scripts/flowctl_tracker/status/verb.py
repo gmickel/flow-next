@@ -20,7 +20,7 @@ from ..executor import execute as default_execute
 from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
                                  leaf_is_safe, load_spec, merged_tracker,
                                  now_iso, read_config, tracker_type,
-                                 write_sync_receipt, write_tracker_block)
+                                 write_sync_receipt, write_tracker_block, spec_sidecar_lock)
 from ..lifecycle.linkstate import require_durable
 from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
                                _release_claim)
@@ -146,7 +146,7 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
     TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir):
+        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded

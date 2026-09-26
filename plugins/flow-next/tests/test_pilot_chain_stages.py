@@ -138,8 +138,12 @@ class ChainTableTestCase(unittest.TestCase):
 
     def test_backlog_dispatch_is_guarded_before_the_chained_make_pr(self):
         for path, block in self.blocks():
-            self.assertIn('assert_allowed_dispatch "$DISPATCH_TARGET"', block, path)
-            self.assertIn('DISPATCH_TARGET="/flow-next:make-pr"', block, path)
+            self.assertIn('STAGE=make-pr', block, path)
+            text = read(path)
+            start = text.index('DISPATCH_TARGET="/flow-next:$STAGE"')
+            guard = text[start:text.index("```", start)]
+            self.assertIn('case "$DISPATCH_TARGET" in', guard, path)
+            self.assertIn('/flow-next:make-pr)', guard, path)
 
 
 class VerdictGrammarTestCase(unittest.TestCase):

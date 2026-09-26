@@ -88,12 +88,28 @@ for ARG in $RAW_ARGS; do
     --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
     --depth=*)    PILOT_DEPTH="${ARG#--depth=}" ;;
     -*) echo "Unknown flag: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
-    fn-*) [ -z "$PILOT_SPEC" ] && PILOT_SPEC="$ARG" || echo "Unknown argument: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
-    *)  echo "Unknown argument: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
+    *) [ -z "$PILOT_SPEC" ] && PILOT_SPEC="$ARG" || echo "Unknown argument: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
   esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:flow --auto)" >&2
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK
+```
+
+Resolve the scope through flowctl, before selection; tracker-key IDs use the same resolver as every other spec. An unresolved argument stops this run rather than widening it to the ready backlog:
+
+```bash
+if [[ -n "$PILOT_SPEC" ]]; then
+  if SCOPE_JSON="$($FLOWCTL show "$PILOT_SPEC" --json)" \
+      && [[ "$(printf '%s' "$SCOPE_JSON" | jq -r '.tasks | type')" == "array" ]]; then
+    PILOT_SPEC="$(printf '%s' "$SCOPE_JSON" | jq -r '.id')"
+    export PILOT_SPEC
+  else
+    SCOPE_REASON="$(printf '%s' "$SCOPE_JSON" | jq -r '.error // "argument is not a spec"' 2>/dev/null || printf '%s' "$SCOPE_JSON")"
+    SCOPE_REASON="$(printf '%s' "$SCOPE_REASON" | tr '\n"' '  ')"
+    printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot resolve spec %s: %s"\n' "$PILOT_SPEC" "$SCOPE_REASON"
+    exit 1
+  fi
+fi
 ```
 
 No branch flag exists. Branch resolution is run-owned from the selected spec's `branch_name`.
@@ -202,34 +218,11 @@ else
   # agentic SELECT/TRIAGE/ASK workflow) now; Phase 1.5 / 1.6 / 3.5 execute it.
   export FLOW_AUTONOMOUS=1
 
-  # Existing pipeline and tracker operations keep their dispatch boundary.
-  # Land is admitted only for the currently authorized host-bound tuple.
-  assert_allowed_dispatch() {  # $1 = the slash command about to be invoked
-    case "$1" in
-      /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) return 0 ;;
-      /flow-next:land)
-        if [ "${LAND_AUTHORIZED:-0}" = 1 ] && [ -n "${LAND_SCOPE_SPEC:-}" ] && [ -n "${LAND_SCOPE_PR:-}" ]; then return 0; fi
-        echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
-        exit 1 ;;
-      "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) return 0 ;;
-      *)
-        echo "Evidence: backlog mode attempted a forbidden dispatch ($1)"
-        echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
-        exit 1 ;;
-    esac
-  }
-
   # Invariant #2 - never author a spec. The ask stage may write spec-side ONLY when
   # the spec file ALREADY exists (fill an obvious blank in an existing spec). A
   # tracker-only item has NO spec; its question parks in the tracker comment ALONE.
-  # Called inline in Phase 3.5 before any spec-side write.
-  assert_spec_write_allowed() {  # $1 = SUBJECT_ID, $2 = SPEC_PATH (empty for tracker-only)
-    if [ -z "$2" ] || [ ! -f "$2" ]; then
-      echo "Evidence: backlog mode attempted to author a spec for a specless item ($1)"
-      echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
-      exit 1
-    fi
-  }
+  # Phase 3.5 enforces this inline in its own block (shell functions do not
+  # survive between tool calls).
 fi
 ```
 
@@ -292,43 +285,39 @@ Done when: exactly one candidate has passed the full predicate, or none has and 
 DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, flow-side facts only
 ```
 
-1. **1a - pull-before-scan** (backlog-mode.md 1a). **Skipped under `--explain`** (dispatch-free; the explain readiness read is whatever `ready --all` already reflects locally). Otherwise guard the dispatch (invariant #1), then dispatch:
+1. **1a - pull-before-scan** (backlog-mode.md 1a). **Skipped under `--explain`** (dispatch-free; the explain readiness read is whatever `ready --all` already reflects locally). Otherwise dispatch this fixed, allowlisted read:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync reconcile"; assert_allowed_dispatch "$DISPATCH_TARGET"
      # -> dispatch: /flow-next:tracker-sync reconcile mode:autonomous   (FLOW_AUTONOMOUS=1; no-op when the bridge is inactive)
    fi
    ```
 
 2. **1b - scan the flow side (facts)** (backlog-mode.md 1b): `READY_ALL_JSON="$($FLOWCTL ready --all --json)"`.
 
-3. **1c - union the tracker side (`list-open`)** (backlog-mode.md 1c). **Skipped under `--explain`**; the candidate set is then the flow specs (1b) only. Otherwise guard the dispatch (invariant #1), then dispatch:
+3. **1c - union the tracker side (`list-open`)** (backlog-mode.md 1c). **Skipped under `--explain`**; the candidate set is then the flow specs (1b) only. Otherwise dispatch this fixed, allowlisted read:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync list-open"; assert_allowed_dispatch "$DISPATCH_TARGET"
      # -> dispatch: /flow-next:tracker-sync list-open mode:autonomous   (no-ops when tracker.readyState unset -> flow-ready specs only)
    fi
    ```
 
-4. **1d - skip parked subjects** (backlog-mode.md 1d). For every tracker-only candidate, guard and execute the missing comment read before deciding whether its latest question round is parked:
+4. **1d - skip parked subjects** (backlog-mode.md 1d). For every tracker-only candidate, execute the missing comment read before deciding whether its latest question round is parked:
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     DISPATCH_TARGET="/flow-next:tracker-sync list-comments"; assert_allowed_dispatch "$DISPATCH_TARGET"
      # -> dispatch per tracker-only issue: /flow-next:tracker-sync list-comments <tracker-id> mode:autonomous
      # Any error or truncated listing fails closed: do not select from an
      # incomplete question/answer history.
    fi
    ```
 
-5. **1e - dep-order the survivors** (backlog-mode.md 1e). The tracker relation edges come from the guarded per-issue `list-relations` READ (invariant #1: on the allowlist, never a merge):
+5. **1e - dep-order the survivors** (backlog-mode.md 1e). The tracker relation edges come from the per-issue `list-relations` READ (invariant #1: on the allowlist, never a merge):
 
    ```bash
    if [ "$DRY" = "0" ]; then
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
-     DISPATCH_TARGET="/flow-next:tracker-sync list-relations"; assert_allowed_dispatch "$DISPATCH_TARGET"
      # -> dispatch per tracker issue: /flow-next:tracker-sync list-relations <tracker-id> mode:autonomous
      #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
      #   GitLab indexes /issues/:iid from the <project>#<iid> it carries - a global id is
@@ -337,7 +326,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
    fi
    ```
 
-   (Under `--explain` there are no tracker candidates, 1c was skipped, so 1e uses the flow `blockedBy` edges only and issues no tracker read; the guarded dispatch above is skipped.) **Invariant #4: a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal, never fall through to re-pick it next run:
+   (Under `--explain` there are no tracker candidates, 1c was skipped, so 1e uses the flow `blockedBy` edges only and issues no tracker read; the dispatch above is skipped.) **Invariant #4: a cycle/deadlock is surfaced, never spun on.** When the topo-sort cannot place the chosen candidate because its dep chain is circular or a dep is itself parked/unsatisfiable, set `DEP_DEADLOCK=1` and route it to a state-changing terminal, never fall through to re-pick it next run:
 
    ```bash
    if [ "${DEP_DEADLOCK:-0}" = "1" ]; then
@@ -424,10 +413,12 @@ When NOT explaining, route by class: **workable** sets `SELECTED_SPEC="$SUBJECT_
 Resolve the review backend before classification:
 
 ```bash
+REVIEW_ARG=""
 if [[ -n "${PILOT_REVIEW:-}" ]]; then
+  REVIEW_ARG="--review=$PILOT_REVIEW"
   REVIEW_BACKEND="$PILOT_REVIEW"
 else
-  REVIEW_BACKEND="$($FLOWCTL review-backend)"   # prints the backend, or ASK when unset
+  REVIEW_BACKEND="$($FLOWCTL review-backend "$SELECTED_SPEC")"   # prints the backend, or ASK when unset
 fi
 case "$REVIEW_BACKEND" in
   none|ASK|"") REVIEW_CONFIGURED=0 ;;
@@ -483,6 +474,7 @@ Run workflow Step 2's `judge --preset route --spec <spec-id> --json` once for th
 - **Route echo.** Step 2 records the route it resolved from plan-vs-no-plan.md. Echo `route: direct - <signal absent>` or `route: plan - <the positive signal the rule named>` so a transcript-only driver sees what decided it. Under `--explain` the recording is printed as would-record and nothing is written.
 - **Refusal when a selected gate needs a backend the run lacks.** A design review the reference selects (an explicit request, or a recorded `needs_work` / `needs_human` plan review) with `REVIEW_CONFIGURED=0` is `NEEDS_HUMAN`, reason `explicit design review needs a review backend` or `unresolved plan review needs a review backend`. The run never lowers a gate.
 - **Resume consent.** The spec's sole direct owner (exactly one task, `implicit_owner == true`, `no_plan == true`) is `in_progress`, its assignee matches this resolved actor (re-read `$FLOWCTL show <owner-id> --json` before admitting), and positive evidence proves its prior run ended (a terminal host session/process record, or an explicit user confirmation of that run's termination): `work`, resuming that owner through spec-level work, with the owner ID and the evidence reference passed as dispatch context. A claim's age, an empty ready list, missing output, or an unassigned claim is not proof; with absent or ambiguous proof keep `NEEDS_HUMAN`, never infer termination or steal a claim. `flowctl start` refuses an `in_progress` task held by this same actor unless `--reclaim` is passed; this row's evidence check is what licenses the flag, and work passes it only for the owner admitted through it - never as a driver default.
+- **Blocked owners.** When every remaining non-`done` task is `blocked` or escalated, stop `NEEDS_HUMAN` with the tasks' block/escalation reasons before dispatch; record no strike. Mixed blocked and ready tasks continue on the ready tasks.
 - **Stale claim.** The only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) and no resume proof exists: `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it`. An own claim here may belong to a second live run of this actor on the same clone; without proof it ended, no run adds `--reclaim`.
 
 ### The all-done PR probe
@@ -575,25 +567,38 @@ Record the pre-dispatch evidence snapshot before invoking the stage skill:
 - `make-pr`: no OPEN PR for the branch, already proven by the all-done probe.
 - `land`: the bound spec/PR, fresh PR state and merge commit (if any), and current scope of consent per `references/tail.md`.
 
-**Backlog mode: guard the dispatch (invariant #1).** When `PILOT_AUTONOMY=backlog`, set `DISPATCH_TARGET` to the stage's slash command and call the allowlist assert immediately before invoking it; a forbidden or unauthorized target hard-exits `NEEDS_HUMAN` rather than dispatching:
+**Backlog mode: guard the dispatch (invariant #1).** When `PILOT_AUTONOMY=backlog`, set `DISPATCH_TARGET` to the stage's slash command and run the inline allowlist check immediately before invoking it; a forbidden or unauthorized target hard-exits `NEEDS_HUMAN` rather than dispatching:
 
 ```bash
 if [ "${PILOT_AUTONOMY:-ready}" = "backlog" ]; then
   DISPATCH_TARGET="/flow-next:$STAGE"      # e.g. /flow-next:work
-  assert_allowed_dispatch "$DISPATCH_TARGET"
+  case "$DISPATCH_TARGET" in
+    /flow-next:plan|/flow-next:plan-review|/flow-next:work|/flow-next:qa|/flow-next:make-pr) : ;;
+    /flow-next:land)
+      if [ "${LAND_AUTHORIZED:-0}" != 1 ] || [ -z "${LAND_SCOPE_SPEC:-}" ] || [ -z "${LAND_SCOPE_PR:-}" ]; then
+        echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=land reason="land needs current scoped authority"'
+        exit 1
+      fi ;;
+    "/flow-next:tracker-sync reconcile"*|"/flow-next:tracker-sync list-open"*|"/flow-next:tracker-sync list-comments"*|"/flow-next:tracker-sync list-relations"*|"/flow-next:tracker-sync question"*) : ;;
+    *)
+      echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="backlog mode dispatch allowlist — unauthorized stage"'
+      exit 1 ;;
+  esac
 fi
 ```
 
+Append `--review=$PILOT_REVIEW` to plan, plan-review, and work only when the user supplied it (`PILOT_REVIEW` nonempty). Never pass a resolved default or `ASK`; each stage resolves its own configured backend.
+
 Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
-- `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
-- `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
+- `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> <REVIEW_ARG-if-nonempty>`
+- `plan-review`: `/flow-next:plan-review <spec-id> <REVIEW_ARG-if-nonempty>`
+- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 - `land`: `/flow-next:land` for one run, with the ordinary PR and current authorization arguments from `references/tail.md`; land's own guards and gates remain authoritative.
 
-If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
+If a sub-skill returns `NEEDS_HUMAN` or `ESCALATE:`, stop this run with `NEEDS_HUMAN` and its reason before advancement/strike handling, even if it committed partial progress. Never re-dispatch that escalated task in this run; its persisted `in_progress` state falls under the stale-claim guard on a later run. If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, also stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 
 Done when: exactly one stage skill has been invoked and has returned; a hop that dispatched a second stage has broken the contract, with one gated exception: under `--tick` with `pipeline.chainStages` on, Phase 5's Chained stage dispatches `make-pr` after this tick's `qa` stage verified `QA_ADVANCED=true`; any other second dispatch still breaks it.
 
@@ -713,12 +718,12 @@ The chain table is closed: one row, one switch, no per-pair knobs, and it is ent
 |---|---|---|
 | `qa` | `make-pr` | `CHAIN_ENABLED=1` (Phase 2, which requires `AUTO_TICK=1`) **and** this tick's qa verify decided `QA_ADVANCED=true`: any fresh terminal `qa_outcome` (SHIP, NEEDS_WORK, NA, BLOCKED), exactly the set the unchained next tick would make-pr on |
 
-`plan` heads no row: the plan dispatch already carries `--review=<backend>` and the plan skill's own Step 7 runs its review fix loop to SHIP inside that dispatch, so a successful plan tick already classifies `work` next; a second review of the unchanged plan would be a paid no-op (or a `NOT_RETRYABLE` terminal). `work` heads no row and is never a target: a NEEDS_WORK review, an unfinished implementation, and the completion gate are human territory. `make-pr` heads no row (a tick stops there even with a merge destination). A missing/stale receipt (`QA_ADVANCED=false`) never chains; it takes the healthy-no-advance strike path with `stage=qa`.
+`plan` heads no row: the plan skill's own Step 7 resolves the configured or explicitly supplied backend and runs its review fix loop inside that dispatch, so a successful plan tick already classifies `work` next; a second review of the unchanged plan would be a paid no-op (or a `NOT_RETRYABLE` terminal). `work` heads no row and is never a target: a NEEDS_WORK review, an unfinished implementation, and the completion gate are human territory. `make-pr` heads no row (a tick stops there even with a merge destination). A missing/stale receipt (`QA_ADVANCED=false`) never chains; it takes the healthy-no-advance strike path with `stage=qa`.
 
 When the row is entered, run the chained `make-pr` exactly as the standalone stage runs it; reference those phases, never restate them:
 
 1. Phase 3 branch row for `make-pr` with the branch existing: the qa checkout already put the worktree on `BRANCH_NAME`, so there is no second checkout.
-2. Phase 4 pre-dispatch evidence for `make-pr`: no OPEN PR, already proven by this tick's all-done probe. In backlog mode guard the dispatch first: `DISPATCH_TARGET="/flow-next:make-pr"; assert_allowed_dispatch "$DISPATCH_TARGET"` (`/flow-next:make-pr` is on the allowlist; the assert still runs before every dispatch).
+2. Phase 4 pre-dispatch evidence for `make-pr`: no OPEN PR, already proven by this tick's all-done probe. In backlog mode execute Phase 4's inline allowlist fence with `STAGE=make-pr` immediately before this dispatch.
 3. The Phase 4 dispatch line: `/flow-next:make-pr <spec-id> mode:autonomous`. The PR stays draft under autonomy; this tick ends there. An authorized landing continuation starts in a later invocation, never as a second chained stage.
 4. The Phase 5 `make-pr` verify above: the same gh open-PR probe, a second `Evidence:` block (`stage=make-pr`), and its own `stage:` outcome line. The qa stage's evidence block and outcome line stay in the transcript as already echoed; one evidence block and one `stage:` line per dispatched stage.
 5. Phase 6 under `stage=qa+make-pr`: the qa `ADVANCED` ledger clear first, then make-pr's own clear or strike with `STAGE=make-pr`. A dirty non-`.flow/` tree or a verify-probe failure (`PR_VERIFY_FAILED=1`) after the chained dispatch is crash-class `NEEDS_HUMAN`, no strike, as for any stage.
@@ -731,7 +736,7 @@ Done when: every dispatched stage's before/after evidence block and `stage:` out
 
 **Active only when `PILOT_AUTONOMY=backlog` AND Phase 1.6 routed the subject to `ask`** (ready-but-thin / needs-spec / needs-human / force-gated). Execute [references/backlog-mode.md](references/backlog-mode.md) Phase 3, the async question valve. **Never asks interactively** (`AskUserQuestion` is forbidden on the run path; the human answers later via the spec or the tracker).
 
-**Enforce invariant #2 inline before any spec-side write.** A spec-backed subject writes `## Open Questions`; a tracker-only subject (empty/absent `SPEC_PATH`) must hard-exit rather than author a spec stub. Call the assert with the resolved paths, then guard the dispatch (invariant #1):
+**Enforce invariant #2 inline before any spec-side write.** A spec-backed subject writes `## Open Questions`; a tracker-only subject (empty/absent `SPEC_PATH`) must hard-exit rather than author a spec stub. Call the assert with the resolved paths:
 
 ```bash
 # Spec-backed: SPEC_PATH points at an EXISTING spec file -> the assert passes and the op writes the
@@ -739,8 +744,11 @@ Done when: every dispatched stage's before/after evidence block and `stage:` out
 # invoked WITHOUT touching any spec (the question lives in the tracker comment alone). Run the assert
 # ONLY when a spec-side write is intended (HAS_SPEC=1); a tracker-only subject skips it and parks in
 # the tracker.
-[ "${HAS_SPEC:-0}" = "1" ] && assert_spec_write_allowed "$SUBJECT_ID" "$SPEC_PATH"
-DISPATCH_TARGET="/flow-next:tracker-sync question"; assert_allowed_dispatch "$DISPATCH_TARGET"
+if [ "${HAS_SPEC:-0}" = "1" ] && { [ -z "$SPEC_PATH" ] || [ ! -f "$SPEC_PATH" ]; }; then
+  echo "Evidence: backlog mode attempted to author a spec for a specless item ($SUBJECT_ID)"
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=ask reason="backlog mode never authors specs — surfaced as needs capture/interview gap (R3/R4)"'
+  exit 1
+fi
 ```
 
 The question is then posted through tracker-sync's inline `question` wrapper. The skill owns semantic question authoring and structured recovery; flowctl owns deterministic comment transport, marker dedup, and normalized answer readback. Backlog mode invokes the wrapper and never re-implements it:

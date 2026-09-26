@@ -125,8 +125,8 @@ class ParallelWorkerHandoverProse(unittest.TestCase):
         self.assertIn("DO NOT run `flowctl done`", text)
         self.assertIn("`in_progress`", text)
         # Standard-branch completion keeps its executable evidence fragments.
-        self.assertIn('SUMMARY_FILE="/tmp/summary.md"', text)
-        self.assertIn('EVIDENCE_FILE="/tmp/evidence.json"', text)
+        self.assertIn('SUMMARY_FILE="<resolved task-unique HANDOVER_SUMMARY path>"', text)
+        self.assertIn('EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"', text)
         self.assertIn(
             '--summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"', text
         )

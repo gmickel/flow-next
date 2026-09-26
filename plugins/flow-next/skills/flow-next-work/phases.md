@@ -125,7 +125,12 @@ Before any scout dispatch apply [references/judge-tier.md](references/judge-tier
 **Chain check first (fn-152 R4).** Before any branch is created or any task starts, ask flowctl whether the spec is chain-eligible; the predicate lives in one place and this skill never re-derives it. A dependent spec whose parent is open with every task done and its branch on origin is **chained**: the spec branch is created from the parent's fetched remote-tracking ref, and that ref is the base for the spec base, gate classification, and the quality auditor's diff range. Work never creates a local branch named after the parent and never deletes or resets an existing parent branch. An `eligible: false` answer (an unfinished parent, two open parents, an unpushed parent, a sibling already chained, a failed remote query) stops the run with `BLOCKED: <reason from the command>` before any task starts; the same reason parked the spec at selection under `flow --auto`.
 
 ```bash
-# fence:work-branch — inputs: FLOWCTL, SPEC_ID, BRANCH_NAME, BRANCH_MODE (new|current), DEFAULT_BASE (e.g. origin/main); origin reachable
+# fence:work-branch — inputs: FLOWCTL, SPEC_ID, BRANCH_NAME, BRANCH_MODE (new|current), DEFAULT_BASE (optional; defaults to origin/HEAD); origin reachable
+branch_git() {
+  local output
+  output=$(git "$@" 2>&1) || { printf "BLOCKED: git %s: %s\n" "$*" "$output" >&2; exit 2; }
+  printf "%s\n" "$output"
+}
 CHAIN_JSON=$("$FLOWCTL" spec chain "$SPEC_ID" --json) || { echo "BLOCKED: spec chain failed for $SPEC_ID"; exit 2; }
 CHAIN_PARENT=$(printf '%s' "$CHAIN_JSON" | jq -r '.parent // empty')
 CHAIN_PARENT_BRANCH=$(printf '%s' "$CHAIN_JSON" | jq -r '.parent_branch // empty')
@@ -137,37 +142,59 @@ if [[ -n "$CHAIN_PARENT" ]]; then
     || { echo "BLOCKED: cannot fetch parent branch $CHAIN_PARENT_BRANCH from origin"; exit 2; }
   BASE_BRANCH="origin/$CHAIN_PARENT_BRANCH"
 else
-  BASE_BRANCH="$DEFAULT_BASE"
+  # Unset DEFAULT_BASE resolves from origin's HEAD, never a guessed branch name.
+  BASE_BRANCH="${DEFAULT_BASE:-$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)}"
 fi
 case "$BRANCH_MODE" in
   new)
-    if [[ -n "$CHAIN_PARENT" ]]; then
-      PRE_HEAD=$(git rev-parse HEAD)
-      git checkout -q -b "$BRANCH_NAME" "$BASE_BRANCH"          # from the parent tip; the parent branch itself is never touched
-      # The parent tip may predate this spec's tracked .flow files (planned on the default branch
-      # after the parent branched); carry the spec's own spec/task files across so admission sees them.
+    if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+      branch_git checkout -q "$BRANCH_NAME"
+    else
+      PRE_HEAD=$(branch_git rev-parse HEAD) || exit 2
+      # Refresh the resolved remote base without checking out the default branch.
+      if [[ -z "$CHAIN_PARENT" && "$BASE_BRANCH" == origin/* ]]; then
+        branch_git fetch -q origin "refs/heads/${BASE_BRANCH#origin/}:refs/remotes/$BASE_BRANCH"
+      fi
+      START_REF="$BASE_BRANCH"
+      if [[ -z "$CHAIN_PARENT" && "$BASE_BRANCH" == origin/* ]] \
+        && git show-ref --verify --quiet "refs/heads/${BASE_BRANCH#origin/}" \
+        && git merge-base --is-ancestor "$BASE_BRANCH" "${BASE_BRANCH#origin/}"; then
+        # Preserve local planning commits, as pulling the resolved default would.
+        START_REF="${BASE_BRANCH#origin/}"
+      fi
+      branch_git checkout -q -b "$BRANCH_NAME" "$START_REF"
+      # The resolved base may predate this spec's tracked planning files.
       SPEC_FILES=$(git ls-tree -r --name-only "$PRE_HEAD" -- .flow/specs .flow/tasks 2>/dev/null \
         | grep -E "^\.flow/(specs/$SPEC_ID\.(md|json)|tasks/$SPEC_ID\.[0-9]+\.(md|json))$" || true)
       if [[ -n "$SPEC_FILES" ]]; then
-        printf '%s\n' "$SPEC_FILES" | xargs git checkout -q "$PRE_HEAD" --
-        git diff --cached --quiet || git commit -q -m "chore(flow): carry $SPEC_ID spec files onto the chain branch"
+        CARRIED_FILES=()
+        while IFS= read -r SPEC_FILE; do
+          # Uncommitted planning edits rode the checkout (it refuses when the
+          # committed versions differ); carry only committed content that differs.
+          git diff --quiet HEAD -- "$SPEC_FILE" || continue
+          if [[ "$(git rev-parse -q --verify "HEAD:$SPEC_FILE")" != "$(git rev-parse "$PRE_HEAD:$SPEC_FILE")" ]]; then
+            branch_git checkout -q "$PRE_HEAD" -- "$SPEC_FILE"
+            CARRIED_FILES+=("$SPEC_FILE")
+          fi
+        done <<< "$SPEC_FILES"
+        if (( ${#CARRIED_FILES[@]} > 0 )); then
+          branch_git commit -q --only -m "chore(flow): carry $SPEC_ID spec files onto the task branch" -- "${CARRIED_FILES[@]}"
+        fi
       fi
-    else
-      git checkout -q main && git pull -q origin main && git checkout -q -b "$BRANCH_NAME"
     fi ;;
   current)
     if [[ -n "$CHAIN_PARENT" ]] && ! git merge-base --is-ancestor "$BASE_BRANCH" HEAD; then
       echo "BLOCKED: current branch $(git branch --show-current) does not contain the parent tip $BASE_BRANCH ($CHAIN_PARENT)"; exit 2
     fi ;;
 esac
-mkdir -p .flow/tmp
-git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base
+mkdir -p .flow/tmp || { echo "BLOCKED: cannot create .flow/tmp"; exit 2; }
+branch_git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base || exit 2
 ```
 
 Based on user's answer from setup questions (`BRANCH_MODE`):
 
 - **Worktree**: use `skill: flow-next-worktree-kit`, with the same `BASE_BRANCH` the fence resolved (the parent's remote-tracking ref on a chained spec, the default branch otherwise).
-- **New branch**: the fence's `new` arm - from `origin/<parent_branch>` on a chained spec (carrying the spec's own tracked `.flow/specs/<id>.*` and `.flow/tasks/<id>.*` files from the pre-checkout commit when the parent tip lacks them, as one bookkeeping commit), else `main` pulled from origin.
+- **New branch**: the fence's `new` arm - from `origin/<parent_branch>` on a chained spec (carrying the spec's own tracked `.flow/specs/<id>.*` and `.flow/tasks/<id>.*` files from the pre-checkout commit when the start point lacks them or holds an older version, as one bookkeeping commit), else the resolved default base (refreshed from origin when remote). Existing task branches are checked out unchanged.
 - **Current branch**: proceed (user already confirmed); on a chained spec the fence's `current` arm requires the parent tip in the branch's ancestry and blocks naming the missing ancestry otherwise.
 
 The fence persists the SPEC-RUN BASE once (`git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base`); the base is the run's `BASE_BRANCH`, never a hard-coded `origin/main`. Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls and the auditor dispatch. Publication is unchanged: the spec branch is pushed as today, and no PR exists until make-pr, which detects the chain from history (`flow-next-make-pr/workflow.md` Phase 0).
@@ -344,7 +371,7 @@ Before spawning, apply [references/judge-tier.md](references/judge-tier.md) once
 Use the Task tool to spawn a `worker` subagent. For a multi-task wave, create
 one isolated mutable workspace and task-unique summary/evidence paths per
 worker, then dispatch the selected workers concurrently. For a one-task wave,
-use the existing single-worker path.
+use the existing single-worker path. On every route, choose and pass absolute, task-unique `HANDOVER_SUMMARY` and `HANDOVER_EVIDENCE` paths before dispatch; create their parent directory.
 
 **Commit the spec and task files BEFORE creating the workspaces.** A wave
 workspace is branched from a commit, so anything still uncommitted in the
@@ -378,7 +405,7 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
+**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. On the wave route's single-worker path only, when the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
 
 All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
@@ -388,7 +415,7 @@ Implement flow-next task.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
-REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host-deferred
+REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host|host-deferred
 RALPH_MODE: true|false
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>

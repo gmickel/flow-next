@@ -13,11 +13,11 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, cursor, claude, or host-deferred (host review runs at the conductor level after you return - the agent that wrote the code never dispatches or issues its own review verdict. Under host-deferred you skip the Phase 4 review dispatch, claim no review verdict, and defer Phase 5's `flowctl done`: write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself. A host-deferred return that reports the task review-passed or `done` has broken this)
+- `REVIEW_MODE` - none, rp, codex, copilot, cursor, claude, host (parallel-wave only), or host-deferred (host review runs at the conductor level after you return - the agent that wrote the code never dispatches or issues its own review verdict. Under host-deferred you skip the Phase 4 review dispatch, claim no review verdict, and defer Phase 5's `flowctl done`: write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself. A host-deferred return that reports the task review-passed or `done` has broken this)
 - `RALPH_MODE` - true if running autonomously
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
-- `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
+- `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths on every route. If omitted in a direct manual run, choose `.flow/tmp/<TASK_ID>-summary.md` and `.flow/tmp/<TASK_ID>-evidence.json`, create the directory, and report both paths. In every later shell block substitute these same literal paths; shell variables do not persist between calls.
 - `TIER_LINE` - the conductor's dispatch decision; retain in the done summary, adding the evidenced actual model only after execution.
 - `IMPLEMENTER` - optional; present for an explicit invocation model (`<model>` or `<model> at <effort>`) or a conductor-selected confident mechanical fast tier; an explicit invocation always wins. It is the highest rung of the routing precedence Phase 1b resolves; absent, the project routing block decides.
 
@@ -165,7 +165,7 @@ Done when (bridged branch only): the bridge run is recorded as an `implement` st
 
 ## Phase 1.5: Pre-implementation Investigation
 
-**If the task spec contains `## Investigation targets`:**
+**If the task spec contains `## Investigation targets` or `### Investigation targets` (task creation demotes H2 headings):**
 
 1. **Read every Required file** listed before writing any code. Note:
    - Patterns to follow (function signatures, naming, structure)
@@ -211,7 +211,7 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
 
 5. Continue to Phase 2 only after investigation is complete.
 
-Done when: every Required file named by `## Investigation targets` has been read, the similar-code search has been reported (reuse / extend / new), and no code has been written yet.
+Done when: every Required file named by either Investigation targets heading has been read, the similar-code search has been reported (reuse / extend / new), and no code has been written yet.
 
 ## Phase 2: Implement
 
@@ -489,8 +489,7 @@ assigned handovers, return `in_progress`, and report the exact workspace plus
 uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
-Write the evidence file — use the exact `HANDOVER_EVIDENCE` path in
-parallel-wave mode; otherwise use the existing `/tmp/evidence.json` path.
+Write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path on every route.
 Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
 in the SAME block, so no shell variable has to survive across tool calls.
@@ -501,11 +500,7 @@ objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 ```bash
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
-if [ "<PARALLEL_WAVE>" = "true" ]; then
-  EVIDENCE_FILE="<exact HANDOVER_EVIDENCE path from prompt>"
-else
-  EVIDENCE_FILE="/tmp/evidence.json"
-fi
+EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"
 cat > "$EVIDENCE_FILE" << EOF
 {"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": []}
 EOF
@@ -513,14 +508,9 @@ EOF
 
 Done-summary prose follows the artifact prose contract in [docs/prose.md](../docs/prose.md); proceed without it when the doc is absent.
 
-Write summary file — use exact `HANDOVER_SUMMARY` in parallel-wave mode,
-otherwise `/tmp/summary.md`:
+Write summary file to the resolved task-unique `HANDOVER_SUMMARY` path:
 ```bash
-if [ "<PARALLEL_WAVE>" = "true" ]; then
-  SUMMARY_FILE="<exact HANDOVER_SUMMARY path from prompt>"
-else
-  SUMMARY_FILE="/tmp/summary.md"
-fi
+SUMMARY_FILE="<resolved task-unique HANDOVER_SUMMARY path>"
 cat > "$SUMMARY_FILE" << 'EOF'
 <1-2 sentence summary of what was implemented>
 
@@ -544,8 +534,8 @@ branches return before this command). Recompute both standard paths in this
 same shell block — variables from the evidence/summary creation calls do not
 survive into a later tool call:
 ```bash
-SUMMARY_FILE="/tmp/summary.md"
-EVIDENCE_FILE="/tmp/evidence.json"
+SUMMARY_FILE="<resolved task-unique HANDOVER_SUMMARY path>"
+EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"
 <FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
 ```
 
@@ -571,9 +561,7 @@ Return a pointer, not a restatement. The conductor has repo access and Phase 5
 just wrote the substrate — the return names WHERE the outcome lives, never a
 second copy of what it says:
 - `TASK_ID` and the terminal status (`done` | `in_progress`)
-- The summary and evidence paths — `/tmp/summary.md` and `/tmp/evidence.json`
-  on the standard path; the exact `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE`
-  task-unique paths on the parallel-wave and host-deferred paths
+- The resolved task-unique `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` paths on every route
 - The assigned workspace path and gate results, on the parallel-wave path only
   (Phase 5's parallel-wave branch requires them at join)
 - The commit range `<BASE_COMMIT>..HEAD` — never a restated file list
