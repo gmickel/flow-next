@@ -380,7 +380,9 @@ class UnreadableTaskBodyTest(AnchorRepoTestCase):
         (self.tmpdir / ".flow" / "tasks" / "fn-9.2.md").write_bytes(b"\xff\xfe bad")
         sections = self._sections_by_name(self._bundle())
         self.assertEqual(list(sections), EXPECTED_SECTION_ORDER)
-        self.assertIsNotNone(sections["glossary"]["error"])
+        # The unreadable description falls back to title-only glossary matching.
+        self.assertIsNone(sections["glossary"]["error"])
+        self.assertIn("Gadget", sections["glossary"]["output"])
         self.assertIsNone(sections["spec_md"]["error"])
 
 

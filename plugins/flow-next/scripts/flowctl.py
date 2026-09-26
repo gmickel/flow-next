@@ -38284,8 +38284,8 @@ def _anchor_match_text(task_id: str) -> str:
     md_path = get_flow_dir() / TASKS_DIR / f"{task_id}.md"
     try:
         content = md_path.read_text(encoding="utf-8")
-    except OSError:
-        content = ""
+    except (OSError, UnicodeDecodeError):
+        content = ""  # unreadable description: match on the title alone
     return f"{task_data.get('title', '')}\n" + get_task_section(
         content, "## Description"
     )
