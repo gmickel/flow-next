@@ -171,10 +171,46 @@
       "task": "fn-259-flowctl-renders-what-agents-hand.1",
       "timestamp": "2026-09-26T15:07:15.171544Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "edbbf149cbaef90c08b95f8128629cb5a3f8b01cd7de592d27cd9ef4cc728b68",
+      "backend": "codex",
+      "base_sha": "b05a87bfc1a5a551975ec2caebe05a55b5482d34",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "68e0aec8c7243e732493c07a2af2baa723765379",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 125068,
+      "output_sha256": "10b228b6eb971c094b35852429791e7f6c733cc85b427891df73005c54d7f626",
+      "reservation_id": "88ab59c801654150a3f19a3138f6a766",
+      "round_consumed": true,
+      "scope": "impl:fn-259-flowctl-renders-what-agents-hand.1",
+      "superseded_by": null,
+      "task": "fn-259-flowctl-renders-what-agents-hand.1",
+      "timestamp": "2026-09-26T15:32:52.458045Z",
+      "tool_calls": 13,
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-259-flowctl-renders-what-agents-hand.1": 1
+    "impl:fn-259-flowctl-renders-what-agents-hand.1": 2
   },
   "review_pending_rounds": {},
   "review_reservations": {},
@@ -195,5 +231,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T15:07:15.175911Z"
+  "updated_at": "2026-09-26T15:32:52.462457Z"
 }

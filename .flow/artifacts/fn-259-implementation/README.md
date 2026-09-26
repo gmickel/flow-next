@@ -15,7 +15,7 @@ This is implementation evidence, not a completion-review receipt.
 | R4 | Locked cumulative strike recording; unready at two; clear shares the lock. |
 | R5 | Tail wait uses bounded CI watch/patience/interval and defers after two unchanged human-review ticks. |
 | R6 | Backlog reads use tracker wire; reconcile and questions retain the tracker skill. |
-| R7 | Make-pr preflight/close and create/update/stack plumbing extracted to bundled scripts, with behavioral tests and installed-script parity. Measurement blocked below. |
+| R7 | Make-pr preflight/close and create/update/stack plumbing extracted to bundled scripts, with behavioral tests and installed-script parity. Measurement below: tokens down 7.5%, median tool calls +1. |
 | R8 | Green rolling quiesce emits reusable gate receipts; focused integrated verification remains task Quick commands. |
 | R9 | Baseline permits intervening Flow-only commits; initial rolling batch receives a baseline and reusable full-gate receipts. |
 | R10 | Ready metadata and mechanical admission cover dependencies, Touches, serial surfaces and cap; host retains holds. |
@@ -85,10 +85,23 @@ claim is inferred from these mechanical timings.
 
 - R1: macOS and Windows OS smoke/unit legs were not available locally. No push
   was authorized, so CI for this branch was not triggered.
-- R7: `.flow/artifacts/fn-249-make-pr-measurement/measure.sh` launches a headless
-  Claude process and resets/cleans an external fixture. The no-bridge and
-  worktree-only rails prevent that measurement here. Token/tool-call improvement
-  is unverified.
+- R7: measured by the host after the bridge returned, with the fn-249 harness
+  (`measure.sh`, `make-pr --dry-run` on the pr449 fixture, `claude-fable-5-1`),
+  six runs per arm, before = `fc93b0a4` plugin, after = this branch. Raw rows are
+  in `make-pr-measurement/`.
+
+  | Point | Median output tokens | Median tool calls | Median wall s |
+  |---|---:|---:|---:|
+  | p5 before (`fc93b0a4`) | 13,097 | 13.5 | 169.8 |
+  | p6 after, as bridged | 17,698.5 | 16.5 | 242.8 |
+  | p7 after, dry-run SHA base fixed (`68e0aec8`) | 12,117 | 14.5 | 175.6 |
+
+  The fixture passes `--base <sha>`. The preflight rewrote every non-`refs/` base
+  to `origin/<base>`, so the bundled script failed on a SHA and every p6 run spent
+  extra turns reading it; the inline-era agent had worked around the same defect
+  by hand. With the dry-run SHA base accepted (p7), output tokens fall 7.5%. The
+  median tool count is one call higher (mean 14.0 vs 15.2, lower); on six noisy
+  samples this half of the criterion is not demonstrated.
 - R13: the six literal audit draw artifacts were absent from this checkout;
   representative parser regressions are green, exact corpus replay is pending.
 - R31: import-time evidence is positive, whole-command startup evidence is not.
