@@ -84,6 +84,17 @@ class MemoryAuditBundleTests(MemoryRepoTemplate, unittest.TestCase):
         self.assertNotIn(old['entry_id'], text)
         self.assertNotIn(canonical['entry_id'], text)
 
+    def test_recategorized_decision_cannot_be_removed(self):
+        decision = self.run_cli('memory', 'add', '--track', 'knowledge', '--category',
+                                'decisions', '--title', 'Keep receipts additive',
+                                '--module', 'src.py')
+        path = Path(decision['path'])
+        before = path.read_bytes()
+        out = self.apply([{'id': decision['entry_id'], 'remove': True,
+                           'set': {'track': 'bug', 'category': 'runtime-errors'}}], rc=1)
+        self.assertIn('superseded, not removed', json.dumps(out['errors']))
+        self.assertEqual(path.read_bytes(), before)
+
     def test_scan_substantive_history_ignores_audit_stamp(self):
         for args in [('init', '-q'), ('config', 'user.name', 'test'),
                      ('config', 'user.email', 'test@example.com')]:

@@ -24967,7 +24967,13 @@ def _memory_apply_item(memory_dir: Path, item: dict[str, Any]) -> list[str]:
         raise ValueError("remove and stamp must be booleans")
     if remove and item.get("move"):
         raise ValueError("remove and move are mutually exclusive")
-    if remove and fm.get("track") == "knowledge" and fm.get("category") == "decisions":
+    # Judge the entry as stored, before this item's `set`, so re-categorizing
+    # and removing in one item cannot delete a decision.
+    original = data["frontmatter"]
+    is_decision = item["id"].split("/")[:2] == ["knowledge", "decisions"] or (
+        original.get("track") == "knowledge" and original.get("category") == "decisions"
+    )
+    if remove and is_decision:
         raise ValueError("decision entries must be superseded, not removed")
     replacement = item.get("replacement") or (item.get("move") if target != source else None)
     if replacement and replacement != item.get("move") and not resolve(replacement).is_file():
