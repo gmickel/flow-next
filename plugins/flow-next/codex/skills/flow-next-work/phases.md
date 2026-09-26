@@ -476,7 +476,7 @@ $FLOWCTL show <task-id> --json
 
 #### 3d.0 host-deferred gate (runs FIRST on the single-worker path when this task's REVIEW_MODE was `host-deferred`)
 
-A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
+A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `$flow-next-impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
 **Progress is side effects only** — commits in the lane's workspace, a moved
 task status, handover files on disk. A lane past its `TIMEBOX` with none of

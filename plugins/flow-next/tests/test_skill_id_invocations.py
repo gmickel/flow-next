@@ -18,6 +18,14 @@ from pathlib import Path
 PLUGIN = Path(__file__).resolve().parents[1]
 SKILL_ID = re.compile(r"(?<![/\w$])flow-next:flow-next-([a-z][a-z-]*[a-z])")
 SOURCE_DIRS = ("skills", "agents", "references", "templates")
+# User-facing text that names a command after an invoke/run verb: deprecated
+# stub descriptions shown to the user, an exit message, and a hypothetical.
+USER_FACING = {
+    "skills/flow-next-interview/SKILL.md: Invoke /flow-next:refine",
+    "skills/flow-next-pilot/SKILL.md: Invoke /flow-next:flow",
+    "skills/flow-next-capture/references/duplicate-branch.md: invoke /flow-next:refine",
+    "skills/flow-next-capture/references/must-ask-cases.md: runs `/flow-next:plan",
+}
 
 
 def _frontmatter(path: Path) -> str:
@@ -56,6 +64,29 @@ class SkillIdInvocationTest(unittest.TestCase):
                 skill_dir = PLUGIN / "skills" / f"flow-next-{name}"
                 self.assertTrue((skill_dir / "SKILL.md").is_file())
                 self.assertTrue(_model_invocable(skill_dir))
+
+    def test_no_invoke_or_dispatch_names_a_command(self) -> None:
+        """An invoke/dispatch/run verb never targets a `/flow-next:` command,
+        except where the user invokes it, the line forbids it, or the text is
+        listed in USER_FACING."""
+        verb = re.compile(
+            r"\b(invoke[sd]?|dispatch(?:es)?|runs|run the mandatory|handed off,? to)"
+            r"\s+`?/flow-next:([a-z-]+)",
+            re.IGNORECASE,
+        )
+        hits = []
+        for top in SOURCE_DIRS:
+            for path in (PLUGIN / top).rglob("*.md"):
+                text = path.read_text(encoding="utf-8")
+                for match in verb.finditer(text):
+                    before = text[max(0, match.start() - 12) : match.start()].lower()
+                    if any(w in before for w in ("user ", "you ", "never ")):
+                        continue
+                    rel = path.relative_to(PLUGIN).as_posix()
+                    hit = f"{rel}: {' '.join(match.group(0).split())}"
+                    if hit not in USER_FACING:
+                        hits.append(hit)
+        self.assertEqual(hits, [])
 
     def test_named_dispatch_sites_use_skill_ids(self) -> None:
         sites = [

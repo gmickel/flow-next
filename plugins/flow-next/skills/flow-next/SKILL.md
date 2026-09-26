@@ -170,4 +170,4 @@ Legacy formats `fn-N` and `fn-N-xxx` (random 3-char suffix) are still supported.
 - **Every write goes through a flowctl subcommand**, except the `.flow/memory/declined/*.md` file above, which has no flowctl verb. A session that edits `.flow/` JSON or task markdown by hand has broken this.
 - **Every read comes from `.flow/` state**, via `--json` (`detect`, `list`, `specs`, `tasks`, `show`, `ready`) or `cat` for markdown. An answer assembled from files skimmed by hand has broken this.
 - **A task marked complete is closed with `flowctl done` carrying both `--summary-file` and `--evidence-json`.** A bare status flip has broken this.
-- **Requests that need real planning or execution are handed off**, to `/flow-next:plan` and `/flow-next:work`. Improvising them here has broken this.
+- **Requests that need real planning or execution are handed off**, to `flow-next:flow-next-plan` and `flow-next:flow-next-work`. Improvising them here has broken this.

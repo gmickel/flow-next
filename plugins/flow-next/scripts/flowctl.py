@@ -38360,8 +38360,10 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         'flowctl glossary list --json --match "<task title + description>"'
     )
     out, err = _anchor_capture(
-        cmd_glossary_list,
-        argparse.Namespace(json=True, match=_anchor_match_text(task_id)),
+        lambda _ns: cmd_glossary_list(
+            argparse.Namespace(json=True, match=_anchor_match_text(task_id))
+        ),
+        None,
     )
     note = None
     if err is None:

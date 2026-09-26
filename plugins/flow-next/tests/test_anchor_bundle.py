@@ -378,6 +378,16 @@ class LabeledCommandTest(AnchorRepoTestCase):
         self.assertEqual(sections["spec_md"]["output"], SPEC_BODY + "\n")
 
 
+class UnreadableTaskBodyTest(AnchorRepoTestCase):
+    def test_bundle_stays_fail_open(self) -> None:
+        """A task body that is not UTF-8 marks its sections unavailable only."""
+        (self.tmpdir / ".flow" / "tasks" / "fn-9.2.md").write_bytes(b"\xff\xfe bad")
+        sections = self._sections_by_name(self._bundle())
+        self.assertEqual(list(sections), EXPECTED_SECTION_ORDER)
+        self.assertIsNotNone(sections["glossary"]["error"])
+        self.assertIsNone(sections["spec_md"]["error"])
+
+
 class GlossarySkipReasonTest(AnchorRepoTestCase):
     def test_skip_reasons(self) -> None:
         cases = [

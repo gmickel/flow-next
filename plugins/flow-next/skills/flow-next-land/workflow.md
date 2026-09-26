@@ -42,7 +42,7 @@ merge. If behind its base, use server-side `gh pr update-branch <PR> --repo
 `BLOCKED` naming the branch needing a rebase. Re-read after catch-up.
 
 Next enumerate all review threads with pagination. Open threads invoke
-`/flow-next:resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an
+`flow-next:flow-next-resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an
 isolated checkout; the invoking checkout stays untouched. Resolver refusal
 `NOT_RETRYABLE: artifact unchanged since last verdict` stops `NEEDS_HUMAN`.
 Re-read the head
