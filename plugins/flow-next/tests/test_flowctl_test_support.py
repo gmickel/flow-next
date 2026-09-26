@@ -60,7 +60,8 @@ class MemoryRepoTemplateTests(MemoryRepoTemplate, unittest.TestCase):
             dest.write_text("", encoding="utf-8")
             with self.assertRaises(OSError) as ctx:
                 self.init_repo(dest)
-            self.assertIn(str(dest), str(ctx.exception))
+            # The exception text quotes the path (Windows doubles its backslashes).
+            self.assertEqual(ctx.exception.filename, str(dest))
 
 
 if __name__ == "__main__":
