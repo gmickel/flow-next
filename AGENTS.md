@@ -17,7 +17,7 @@ use Claude names because the Codex mirror is generated; that is not an
 instruction to call unavailable tools in this development session.
 
 <!-- BEGIN FLOW-NEXT -->
-<!-- flow-next:snippet:v2 -->
+<!-- flow-next:snippet:v3 -->
 ## Flow-Next
 
 This repo tracks implementation specs/tasks through Flow-Next. See

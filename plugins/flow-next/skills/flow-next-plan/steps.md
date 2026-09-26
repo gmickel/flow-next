@@ -188,8 +188,6 @@ Run ALL of these scouts in parallel:
 
 **Dispatch ownership and timing.** When github-scout is enabled and dispatched, it alone owns GitHub code search; repo-scout stays local and docs/practice scouts use primary documentation rather than duplicating GitHub searches. On a non-blocking host, dispatch Step 3's flow-gap-analyst as soon as the repo-grounded scouts (repo, spec, and enabled memory/docs-gap) return; pass their findings and the requested scope while web scouts finish. Reconcile later web findings before drafting and join every scout before Step 5. Step 3 consumes this result without a duplicate dispatch. On blocking hosts keep the existing Step 1 → Step 2 → Step 3 order.
 
-**Before each scout dispatch**, apply [judge-tier.md](../flow-next-work/references/judge-tier.md) to its assignment and use the actual spawn-model parameter when selected. Explicit invocation choices win; otherwise the fallback tiers below remain unchanged.
-
 **Scout model tiers.** `repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`,
 `practice-scout` and `github-scout` — and Step 3's `flow-gap-analyst` — are
 **thinking scout** dispatches: requirement analysis and pattern judgment

@@ -9,18 +9,20 @@ For skill/platform changes also read [cross-platform patterns](agent_docs/adding
 
 ## Host guidance
 
-On Claude Code, invoke skills as `/flow-next:<name>`. Other consumers of this
-file use their supported native equivalent. Distinguish Claude-native product
-source examples from the tools available to the current development session.
+On Claude Code, invoke skills by skill id, `flow-next:flow-next-<name>`; the
+`/flow-next:<name>` commands are typed by the user and hidden from the model.
+Other consumers of this file use their supported native equivalent. Distinguish
+Claude-native product source examples from the tools available to the current
+development session.
 
 <!-- BEGIN FLOW-NEXT -->
-<!-- flow-next:snippet:v2 -->
+<!-- flow-next:snippet:v3 -->
 ## Flow-Next
 
 This repo tracks implementation specs/tasks through Flow-Next. See
 [repository work and delivery](agent_docs/project.md#repository-work-and-delivery)
 for state, templates, and command discovery. Invoke the selected skill with
-`/flow-next:<name>` on Claude Code; follow its task-specific contract.
+`flow-next:flow-next-<name>` on Claude Code; follow its task-specific contract.
 This is a repo-customized block. Keep maintainer additions outside its markers.
 <!-- END FLOW-NEXT -->
 

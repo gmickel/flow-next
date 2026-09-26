@@ -343,8 +343,8 @@ DESCRIPTIONS: dict[str, str] = {
         "docs/running-lean.md."
     ),
     "pipeline.chainStages": (
-        "Deprecated; removed with the /flow-next:pilot alias in the next "
-        "release. String-enum, NOT a bool: only the literal on activates; "
+        "Deprecated; removal is scheduled for a later release. "
+        "String-enum, NOT a bool: only the literal on activates; "
         "any other value, including bool true, is OFF. It is honoured only "
         "under flow --auto --tick (and the pilot alias), where a tick that "
         "completed the qa stage with a fresh terminal verdict runs make-pr "

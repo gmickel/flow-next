@@ -1,5 +1,5 @@
 <!-- BEGIN FLOW-NEXT -->
-<!-- flow-next:snippet:v2 -->
+<!-- flow-next:snippet:v3 -->
 ## Flow-Next
 
 This project uses Flow-Next for ALL task tracking. `flowctl` comes from the flow-next plugin install — every flow-next skill resolves it itself, and on Claude Code it is also on PATH. Do NOT create markdown TODOs or use TodoWrite. Cold session: `flowctl brief` first — one bounded call (specs, ready tasks, memory); go deeper with `show`/`cat`/`anchor <task-id>`.

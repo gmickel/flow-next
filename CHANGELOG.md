@@ -6,6 +6,17 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+**What changes when you upgrade.** Re-run `/flow-next:setup` once in each repository that has a Flow-Next block in its CLAUDE.md or AGENTS.md. The block's version moves to 3, and setup offers the refresh. The refreshed block tells the agent to apply the prose contract through the skill id (`flow-next:flow-next-prose`); the old block's `/flow-next:prose` line stopped working in 6.1.0, when commands became typed-only.
+
+### Fixed
+
+- **The setup block's prose reminder works again.** 6.1.0 made `/flow-next:*` commands typed-only, so the old block's instruction to invoke `/flow-next:prose` pointed the agent at a command it can no longer call. The setup snippet now names the skill id and its schema version is 3, which re-arms setup's one consented refresh per repository.
+- **`pipeline.chainStages` is documented as deprecated, not removed.** The key still works under `flow --auto --tick`; the config schema and the flowctl reference no longer say it goes in the release after pilot's alias.
+
+### Changed
+
+- **Plan no longer runs the tier judge before each scout.** Plan scouts already have fixed tiers: memory-scout is the only fast scout and every other scout runs as a thinking scout, so the per-scout judge call cost a step and decided nothing. Work still runs the judge for task dispatches.
+
 ## [flow-next 6.1.0] - 2026-09-26
 
 Unattended runs now stop where they used to guess. `flow --auto` keeps the spec you
