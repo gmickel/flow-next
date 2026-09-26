@@ -115,7 +115,7 @@
     "impl:fn-256-test-suite-and-ci-wall-clock-audit-wave.1": 0
   },
   "spec_path": ".flow/specs/fn-256-test-suite-and-ci-wall-clock-audit-wave.md",
-  "status": "open",
+  "status": "done",
   "title": "Test suite and CI wall-clock (audit wave 2)",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T09:02:09.144072Z"
+  "updated_at": "2026-09-26T10:07:40.201131Z"
 }

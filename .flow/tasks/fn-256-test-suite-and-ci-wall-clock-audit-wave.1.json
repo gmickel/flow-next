@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-256-test-suite-and-ci-wall-clock-audit-wave",
   "spec_path": ".flow/tasks/fn-256-test-suite-and-ci-wall-clock-audit-wave.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Test suite and CI wall-clock (audit wave 2)",
   "updated_at": "2026-09-26T08:58:07.041158Z"
 }
