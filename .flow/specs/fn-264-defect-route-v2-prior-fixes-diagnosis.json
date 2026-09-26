@@ -1,0 +1,26 @@
+{
+  "branch_name": "fn-264-defect-route-v2-prior-fixes-diagnosis",
+  "created_at": "2026-09-26T13:34:49.708044Z",
+  "depends_on_epics": [
+    "fn-261-feature-map-aware-bug-intake-in-flow"
+  ],
+  "id": "fn-264-defect-route-v2-prior-fixes-diagnosis",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-264-defect-route-v2-prior-fixes-diagnosis.md",
+  "status": "open",
+  "title": "Defect route v2: prior fixes, diagnosis, bisect, base vs head",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-26T13:34:59.732185Z"
+}
