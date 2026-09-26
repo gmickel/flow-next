@@ -131,6 +131,12 @@ jobs:
           python -m pip install --disable-pip-version-check ruff==0.16.0
           ruff check .
 
+      # The committed Codex mirror and tracker manifest must match a fresh
+      # regeneration; --check builds into a temp dir and never writes.
+      - name: Codex mirror freshness — sync-codex.sh --check
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: ./scripts/sync-codex.sh --check
+
       - name: Syntax check — ralph.sh
         run: bash -n plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh
 
@@ -201,7 +207,8 @@ jobs:
 
   # ──────────── Smokes (cursor install + functional bash smokes) ────────────
   # Runs in parallel with the units job on each OS; skipped entirely on
-  # docs-only PR and main push ranges.
+  # docs-only PR and main push ranges unless they touch plugin skill or agent
+  # markdown, which the smokes check.
   smokes:
     timeout-minutes: 30
     needs: changes
@@ -327,7 +334,7 @@ jobs:
           cd "$RUNNER_TEMP"
           bash "$GITHUB_WORKSPACE/plugins/flow-next/scripts/map_smoke_test.sh"
 
-      - name: impl-review_smoke_test.sh (74 cases, ~70s)
+      - name: impl-review_smoke_test.sh (71 cases, ~70s)
         if: always()
         run: |
           cd "$RUNNER_TEMP"

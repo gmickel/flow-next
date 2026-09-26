@@ -13,14 +13,13 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Optional
-
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 TAKEOVER_NOTE = "Taken over from other-actor"
 REPAIR_NOTE = "Reclaimed from other-actor (identity repair)"
@@ -46,7 +45,7 @@ class StartReclaimTest(unittest.TestCase):
         if actor:
             env["FLOW_ACTOR"] = actor
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *args, "--json"],
+            [*FLOWCTL_CMD, *args, "--json"],
             cwd=self.repo,
             env=env,
             capture_output=True,

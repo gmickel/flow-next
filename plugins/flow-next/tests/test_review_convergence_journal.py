@@ -35,6 +35,8 @@ import unittest
 from pathlib import Path
 from typing import Any
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -127,9 +129,6 @@ def _init_flow_repo(root: Path) -> Path:
     }
     (flow / "specs" / f"{spec_id}.json").write_text(json.dumps(spec_json))
     return flow
-
-
-FLOWCTL_PY = REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
 
 
 class _JournalReplayBase(unittest.TestCase):
@@ -234,7 +233,7 @@ class _JournalReplayBase(unittest.TestCase):
         env = dict(os.environ)
         env.pop("MAX_REVIEW_ITERATIONS", None)
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *argv],
+            [*FLOWCTL_CMD, *argv],
             cwd=self.root, env=env, capture_output=True, text=True,
         )
 
@@ -1760,7 +1759,7 @@ class TestOverlappingReviewProcesses(_JournalReplayBase):
         env = dict(os.environ)
         env.pop("MAX_REVIEW_ITERATIONS", None)
         argv = [
-            sys.executable, str(FLOWCTL_PY), "review-rounds", "increment",
+            *FLOWCTL_CMD, "review-rounds", "increment",
             self.spec_id, "--kind", "plan", "--json",
         ]
         procs = [
@@ -1795,7 +1794,7 @@ class TestOverlappingReviewProcesses(_JournalReplayBase):
         env.pop("MAX_REVIEW_ITERATIONS", None)
         record = subprocess.Popen(
             [
-                sys.executable, str(FLOWCTL_PY), "review-rounds", "record",
+                *FLOWCTL_CMD, "review-rounds", "record",
                 self.spec_id, "--kind", "plan", "--review-type", "plan",
                 "--output-file", str(response),
                 "--reservation-id", reservation_id, "--json",
@@ -1805,7 +1804,7 @@ class TestOverlappingReviewProcesses(_JournalReplayBase):
         )
         reset = subprocess.Popen(
             [
-                sys.executable, str(FLOWCTL_PY), "spec",
+                *FLOWCTL_CMD, "spec",
                 "reset-review-rounds", self.spec_id, "--json",
             ],
             cwd=self.root, env=env,
@@ -2044,7 +2043,7 @@ class TestExecutableFenceChain(unittest.TestCase):
         env = dict(os.environ)
         env.pop("MAX_REVIEW_ITERATIONS", None)
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *argv],
+            [*FLOWCTL_CMD, *argv],
             cwd=self.root, env=env, capture_output=True, text=True,
         )
 
@@ -2254,7 +2253,7 @@ class _InProcessBackendReviewBase(unittest.TestCase):
         env = dict(os.environ)
         env.pop("MAX_REVIEW_ITERATIONS", None)
         return subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), *argv],
+            [*FLOWCTL_CMD, *argv],
             cwd=self.root, env=env, capture_output=True, text=True,
         )
 

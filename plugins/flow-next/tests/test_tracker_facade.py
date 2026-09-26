@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -2558,9 +2560,8 @@ class FacadeOuterClaim(unittest.TestCase):
         return spec["tracker"]["id"]
 
     def _relink_cli(self, root: Path) -> "subprocess.CompletedProcess":
-        flowctl_py = ROOT / "scripts" / "flowctl.py"
         return subprocess.run(
-            [sys.executable, str(flowctl_py), "sync", "set-tracker-id",
+            [*FLOWCTL_CMD, "sync", "set-tracker-id",
              SPEC_ID, self.NEW_UUID, "--json"],
             cwd=root, capture_output=True, text=True, check=False)
 
@@ -3089,6 +3090,43 @@ class FacadeMatrix(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), before)
                 self.assertEqual(_receipts(flow), [])
                 self.assertEqual([c.op for c in ex.calls], ["sync-body-parent-read"])
+
+    def test_push_overwrite_diverged_writes_past_divergence(self) -> None:
+        """A human-confirmed --overwrite-diverged push writes the body anyway."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            _write_flow(flow, gl_cfg(), tracker=_linked(
+                id=str(GL_ID), identifier="g/p#12", url="https://x",
+                mergeBaseFlow="PRIOR\n", mergeBaseTracker="PRIOR",
+            ))
+            parent = _gl_issue("remote edit")
+            ex = fake_execute({
+                "sync-body-parent-read": ok(parent),
+                "wire-parent-read": ok(parent),
+                "wire-update": ok(_gl_issue("NEW BODY")),
+                "wire-read": TrackerError(ErrorClass.TRANSPORT, "stop here",
+                                          subtype="readback"),
+            })
+            out = F.sync(flow, SPEC_ID, op="push", event="work.done",
+                         flow_file=_flow_file(root, "NEW BODY\n"),
+                         body_file=_body_file(root, "NEW BODY\n"),
+                         overwrite_diverged=True, execute=ex)
+            self.assertNotEqual(getattr(out, "subtype", None), "tracker_diverged")
+            self.assertIn("wire-update", [c.op for c in ex.calls])
+
+    def test_overwrite_diverged_only_with_body_writing_push(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(flow, gl_cfg())
+            for kwargs in ({"op": "pull"}, {"op": "push", "status_only": True}):
+                with self.subTest(**kwargs):
+                    out = F.sync(flow, SPEC_ID, event="work.done",
+                                 overwrite_diverged=True, execute=fake_execute({}),
+                                 **kwargs)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertEqual(out.cls, ErrorClass.INVALID_INPUT)
+                    self.assertIn("--overwrite-diverged", out.message)
 
     def test_matrix_partial_failure_readback_one_adapter(self) -> None:
         """sync-body readback error on gitlab: success:false + completed_steps."""

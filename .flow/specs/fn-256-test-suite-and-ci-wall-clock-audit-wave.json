@@ -1,13 +1,121 @@
 {
   "branch_name": "fn-256-test-suite-and-ci-wall-clock-audit-wave",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-26T09:02:09.144065Z",
   "created_at": "2026-09-25T20:30:50.857952Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-256-test-suite-and-ci-wall-clock-audit-wave",
+  "impl_review_rounds": {
+    "fn-256-test-suite-and-ci-wall-clock-audit-wave.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "6fb24c864523ccba6d7aee1015f8dafc4138d52a9b2ecf9b3af5873f42d10a12",
+      "backend": "codex",
+      "base_sha": "2f87305454cd5ba10fa8b3895288bbffcee383b0",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b3aa37090bad3d00710348e0ec1b1271",
+            "classification": "introduced",
+            "findingId": "finding-b3aa37090bad3d00710348e0ec1b1271",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1de2913b268e934cffe583a3f30c10fc40f1ae7e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1038,
+      "output_sha256": "55277aaabfb25986ffc80232b88888aefe9086c544bf4a6c37ed44f8db66f487",
+      "reservation_id": "ef832cd255f24b58a2f6599206d1dc15",
+      "round_consumed": true,
+      "scope": "impl:fn-256-test-suite-and-ci-wall-clock-audit-wave.1",
+      "superseded_by": null,
+      "task": "fn-256-test-suite-and-ci-wall-clock-audit-wave.1",
+      "timestamp": "2026-09-26T08:57:40.199395Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "65130157e19b785c353baa8a2417f04a76a7003738a1186b458566ad0dcc6d5f",
+      "backend": "codex",
+      "base_sha": "2f87305454cd5ba10fa8b3895288bbffcee383b0",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b3aa37090bad3d00710348e0ec1b1271",
+            "classification": "introduced",
+            "findingId": "finding-b3aa37090bad3d00710348e0ec1b1271",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2da699be88b8f05161e4cc59847115b57dadbd9a",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1350,
+      "output_sha256": "f85bbf070ce6e42ea7ba1983c02ba183486c418a3c3007ca00cb43ec3d5df0be",
+      "reservation_id": "bc1361beedd54252bb33693a83b6d2b4",
+      "round_consumed": true,
+      "scope": "impl:fn-256-test-suite-and-ci-wall-clock-audit-wave.1",
+      "superseded_by": null,
+      "task": "fn-256-test-suite-and-ci-wall-clock-audit-wave.1",
+      "timestamp": "2026-09-26T08:59:01.274903Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-256-test-suite-and-ci-wall-clock-audit-wave.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-256-test-suite-and-ci-wall-clock-audit-wave.1": 0
+  },
   "spec_path": ".flow/specs/fn-256-test-suite-and-ci-wall-clock-audit-wave.md",
-  "status": "open",
+  "status": "done",
   "title": "Test suite and CI wall-clock (audit wave 2)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-25T20:33:11.006185Z"
+  "updated_at": "2026-09-26T10:07:40.201131Z"
 }

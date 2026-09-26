@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -119,7 +121,7 @@ class TestCriteriaCli(unittest.TestCase):
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=self.root,
             capture_output=True,
             text=True,
@@ -534,7 +536,7 @@ class TestCriteriaReceiptCli(unittest.TestCase):
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), *args],
+            [*FLOWCTL_CMD, *args],
             cwd=self.root,
             capture_output=True,
             text=True,
@@ -764,8 +766,7 @@ class TestCriteriaTemplate(unittest.TestCase):
             )
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(SCRIPTS_DIR / "flowctl.py"),
+                    *FLOWCTL_CMD,
                     "criteria",
                     "list",
                     "--json",
@@ -863,7 +864,7 @@ class TestCriteriaLooksLikeRound9(unittest.TestCase):
             with open(p, "wb") as fh:
                 fh.write(b"- **G1:** \xff\xfe invalid utf8\n")
             r = subprocess.run(
-                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "criteria", "list", "--json"],
+                [*FLOWCTL_CMD, "criteria", "list", "--json"],
                 capture_output=True, text=True, cwd=td,
             )
             self.assertNotEqual(r.returncode, 0)
@@ -952,7 +953,7 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
             _os.makedirs(flow)
             _os.symlink(_os.path.join(td, "nonexistent-target.md"), _os.path.join(flow, "criteria.md"))
             r = subprocess.run(
-                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "criteria", "list", "--json"],
+                [*FLOWCTL_CMD, "criteria", "list", "--json"],
                 capture_output=True, text=True, cwd=td,
             )
             self.assertNotEqual(r.returncode, 0)

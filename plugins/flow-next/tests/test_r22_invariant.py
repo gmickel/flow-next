@@ -31,6 +31,8 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -46,7 +48,7 @@ CAPTURE_DIR = PLUGIN_DIR / "skills" / "flow-next-capture"
 
 def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         capture_output=True,
         text=True,
         # flowctl reconfigures its stdio to UTF-8; decode the same way, or a

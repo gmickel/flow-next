@@ -21,15 +21,16 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import sys
 import unittest
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
 REPO_ROOT = PLUGIN.parent.parent
 SKILLS = PLUGIN / "skills"
-FLOWCTL = PLUGIN / "scripts" / "flowctl.py"
 
 REFINE = SKILLS / "flow-next-refine"
 STUB = SKILLS / "flow-next-interview" / "SKILL.md"
@@ -73,7 +74,7 @@ def _frontmatter(text: str) -> dict[str, str]:
 
 def _flowctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(FLOWCTL), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
@@ -130,7 +131,7 @@ class ResearchScopePlumbing(unittest.TestCase):
 
     def test_write_policy_writes_only_the_research_section(self) -> None:
         r = subprocess.run(
-            [sys.executable, str(FLOWCTL), "scope", "write-policy", "research",
+            [*FLOWCTL_CMD, "scope", "write-policy", "research",
              "--current-sections-json", "-"],
             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60,
             input='{"decision_context_has_h3": true}',

@@ -42595,6 +42595,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
         comment_file=getattr(args, "comment_file", None),
         pr_url=getattr(args, "pr_url", None),
         status_only=getattr(args, "status_only", False),
+        overwrite_diverged=getattr(args, "overwrite_diverged", False),
     )
     print(payload)
     sys.exit(code)
@@ -54797,6 +54798,11 @@ def main() -> None:
         "--status-only", action="store_true", dest="status_only",
         help="For --op push, create/link if needed and project status only; "
              "skip body and relation writes",
+    )
+    p_tracker_sync.add_argument(
+        "--overwrite-diverged", action="store_true", dest="overwrite_diverged",
+        help="For a body-writing --op push, overwrite a tracker body that "
+             "diverged from the merge base (after a human confirmed it)",
     )
     p_tracker_sync.add_argument("--json", action="store_true",
                                 help="Accepted and ignored (output is always JSON)")

@@ -31,11 +31,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
-FLOWCTL = SCRIPTS_DIR / "flowctl.py"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -107,7 +108,7 @@ class CursorCleanTreeLive(unittest.TestCase):
             try:
                 try:
                     subprocess.run(
-                        [sys.executable, str(FLOWCTL), "cursor", "impl-review",
+                        [*FLOWCTL_CMD, "cursor", "impl-review",
                          TASK_ID, "--base", base, "--receipt", str(receipt),
                          "--json"],
                         cwd=str(repo), capture_output=True, text=True,

@@ -191,6 +191,7 @@ def _claim_facade(flow_dir: Path, spec_id: str, rec_path: Path,
 def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
             event: str, comment_file: Optional[str] = None,
             status_only: bool = False,
+            overwrite_diverged: bool = False,
             execute: Execute = default_execute) -> Result:
     config = read_config(flow_dir)
     conflict_tiebreak = validate_conflict_tiebreak(config)
@@ -233,7 +234,8 @@ def op_push(flow_dir: Path, spec_id: str, *, flow_file: str, body_file: str,
             tracker_body=tracker_body, config=config, provider=provider,
             event=event, comment_text=comment_text,
             comment_evidence=comment_evidence,
-            status_only=status_only, execute=execute)
+            status_only=status_only,
+            overwrite_diverged=overwrite_diverged, execute=execute)
     finally:
         # Release on every exit: the aggregate receipt, not the claim file,
         # is the durable record of what landed.
@@ -244,7 +246,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
                    tracker_body: str, config: dict, provider: str,
                    event: str, comment_text: Optional[str],
                    comment_evidence: Optional[str],
-                   status_only: bool, execute: Execute) -> Result:
+                   status_only: bool, execute: Execute,
+                   overwrite_diverged: bool = False) -> Result:
     loaded = load_tracker(flow_dir, spec_id)
     if isinstance(loaded, TrackerError):
         return loaded
@@ -274,7 +277,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         body_out = sync_body(
             flow_dir, spec_id, flow_file_body=flow_body, direction="push",
             tracker_body=tracker_body, event=event, execute=execute,
-            sync_title=True, refuse_tracker_divergence=True, write_receipt=False,
+            sync_title=True, refuse_tracker_divergence=not overwrite_diverged,
+            write_receipt=False,
         )
         if isinstance(body_out, TrackerError):
             if body_out.subtype == "tracker_diverged":

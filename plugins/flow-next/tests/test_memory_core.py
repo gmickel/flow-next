@@ -65,6 +65,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import flowctl  # noqa: E402  (path-injected import)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD, MemoryRepoTemplate  # noqa: E402
 
 
 HERE = Path(__file__).resolve()
@@ -81,51 +83,13 @@ def _chdir(target: Path):
         os.chdir(prev)
 
 
-def _init_repo(tmp: Path, *, git: bool = False) -> Path:
-    """Initialize a fresh .flow/ repo with memory enabled + tree created."""
-    if git:
-        subprocess.check_call(
-            ["git", "init", "-q"], cwd=tmp, stdout=subprocess.DEVNULL
-        )
-        subprocess.check_call(
-            ["git", "config", "user.email", "t@t"], cwd=tmp
-        )
-        subprocess.check_call(
-            ["git", "config", "user.name", "t"], cwd=tmp
-        )
-    subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "init", "--json"],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        [
-            sys.executable,
-            str(FLOWCTL_PY),
-            "config",
-            "set",
-            "memory.enabled",
-            "true",
-            "--json",
-        ],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "memory", "init", "--json"],
-        cwd=tmp,
-        stdout=subprocess.DEVNULL,
-    )
-    return tmp / ".flow" / "memory"
-
-
 def _run_add(cwd: Path, *args: str, expect_rc: int = 0, input_bytes: bytes | None = None) -> dict[str, Any]:
     """Run `flowctl memory add ...` and return parsed JSON (success path).
 
     Set expect_rc to assert a non-zero exit; returns the raw stdout string
     in that case.
     """
-    cmd = [sys.executable, str(FLOWCTL_PY), "memory", "add", *args, "--json"]
+    cmd = [*FLOWCTL_CMD, "memory", "add", *args, "--json"]
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -146,7 +110,7 @@ def _run_add(cwd: Path, *args: str, expect_rc: int = 0, input_bytes: bytes | Non
 
 
 def _run(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
-    cmd = [sys.executable, str(FLOWCTL_PY), *args, "--json"]
+    cmd = [*FLOWCTL_CMD, *args, "--json"]
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -166,7 +130,7 @@ def _run(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
 
 def _run_raw(cwd: Path, *args: str) -> tuple[int, str, str]:
     proc = subprocess.run(
-        [sys.executable, str(FLOWCTL_PY), *args],
+        [*FLOWCTL_CMD, *args],
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -464,13 +428,13 @@ class TestLegacyTypeMapping(unittest.TestCase):
 # --- add: end-to-end via subprocess ---
 
 
-class TestMemoryAddE2E(unittest.TestCase):
+class TestMemoryAddE2E(MemoryRepoTemplate, unittest.TestCase):
     """Integration: run `memory add` as a subprocess, verify outputs + files."""
 
     def test_new_schema_creates_entry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             data = _run_add(
                 tmp,
                 "--track", "bug",
@@ -497,7 +461,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_legacy_type_backcompat(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             data = _run_add(tmp, "--type", "pitfall", "Oops entry")
             self.assertEqual(data["action"], "created")
             self.assertTrue(data["entry_id"].startswith("bug/build-errors/"))
@@ -512,7 +476,7 @@ class TestMemoryAddE2E(unittest.TestCase):
         """fn-113: high overlap WITHOUT --update creates; matches emitted."""
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             # First add.
             first = _run_add(
                 tmp,
@@ -552,7 +516,7 @@ class TestMemoryAddE2E(unittest.TestCase):
         """fn-113: --update <id> is the only path that mutates an existing entry."""
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             first = _run_add(
                 tmp,
                 "--track", "bug",
@@ -596,7 +560,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_update_unknown_id_exits(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             out = _run_add(
                 tmp,
                 "--track", "bug",
@@ -612,7 +576,7 @@ class TestMemoryAddE2E(unittest.TestCase):
         """--update must not mutate an entry outside the requested track/category."""
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             first = _run_add(
                 tmp,
                 "--track", "bug",
@@ -633,7 +597,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_moderate_overlap_related_to(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             first = _run_add(
                 tmp,
                 "--track", "knowledge",
@@ -661,7 +625,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_no_overlap_check_forces_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             _run_add(
                 tmp,
                 "--track", "bug", "--category", "runtime-errors",
@@ -684,7 +648,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_missing_title_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             out = _run_add(
                 tmp,
                 "--track", "bug", "--category", "runtime-errors",
@@ -695,7 +659,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_invalid_category_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             out = _run_add(
                 tmp,
                 "--track", "bug", "--category", "not-a-real-category",
@@ -708,7 +672,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_stdin_body(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             data = _run_add(
                 tmp,
                 "--track", "knowledge", "--category", "workflow",
@@ -724,7 +688,7 @@ class TestMemoryAddE2E(unittest.TestCase):
     def test_bug_track_default_problem_type(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
             tmp = Path(tmp_str)
-            _init_repo(tmp)
+            self.init_repo(tmp)
             data = _run_add(
                 tmp,
                 "--track", "bug", "--category", "test-failures",
@@ -739,10 +703,10 @@ class TestMemoryAddE2E(unittest.TestCase):
 # --- list ---
 
 
-class TestMemoryList(unittest.TestCase):
+class TestMemoryList(MemoryRepoTemplate, unittest.TestCase):
     def test_list_groups_by_category(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             with _chdir(Path(tmp)):
                 data = _run(Path(tmp), "memory", "list")
@@ -762,7 +726,7 @@ class TestMemoryList(unittest.TestCase):
 
     def test_list_filter_track(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "list", "--track", "bug")
             tracks = {e["track"] for e in data["entries"]}
@@ -772,7 +736,7 @@ class TestMemoryList(unittest.TestCase):
 
     def test_list_filter_category(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -788,7 +752,7 @@ class TestMemoryList(unittest.TestCase):
 
     def test_list_status_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "list", "--status", "stale")
             ids = [e["entry_id"] for e in data["entries"]]
@@ -797,7 +761,7 @@ class TestMemoryList(unittest.TestCase):
 
     def test_list_status_all(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "list", "--status", "all")
             statuses = {e["status"] for e in data["entries"]}
@@ -806,7 +770,7 @@ class TestMemoryList(unittest.TestCase):
 
     def test_list_invalid_category(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             out = _run(
                 Path(tmp),
@@ -824,10 +788,10 @@ class TestMemoryList(unittest.TestCase):
 # --- read ---
 
 
-class TestMemoryRead(unittest.TestCase):
+class TestMemoryRead(MemoryRepoTemplate, unittest.TestCase):
     def test_read_full_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -843,7 +807,7 @@ class TestMemoryRead(unittest.TestCase):
 
     def test_read_slug_plus_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -855,7 +819,7 @@ class TestMemoryRead(unittest.TestCase):
 
     def test_read_slug_latest_wins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "read", "null-deref-in-auth")
             # Two entries share the slug; 2026-06-01 is newer.
@@ -863,7 +827,7 @@ class TestMemoryRead(unittest.TestCase):
 
     def test_read_legacy_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "read", "legacy/pitfalls")
             self.assertTrue(data["legacy"])
@@ -871,7 +835,7 @@ class TestMemoryRead(unittest.TestCase):
 
     def test_read_legacy_entry_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "read", "legacy/pitfalls#2")
             self.assertEqual(data["index"], 2)
@@ -879,7 +843,7 @@ class TestMemoryRead(unittest.TestCase):
 
     def test_read_unknown_id(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             out = _run(
                 Path(tmp), "memory", "read", "does-not-exist", expect_rc=1
@@ -890,10 +854,10 @@ class TestMemoryRead(unittest.TestCase):
 # --- search ---
 
 
-class TestMemorySearch(unittest.TestCase):
+class TestMemorySearch(MemoryRepoTemplate, unittest.TestCase):
     def test_search_ranks_by_title(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -908,7 +872,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_covers_legacy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(Path(tmp), "memory", "search", "caching")
             ids = [m["entry_id"] for m in data["matches"]]
@@ -920,7 +884,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_track_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -935,7 +899,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_module_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -952,7 +916,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_tag_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -966,7 +930,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_limit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             data = _run(
                 Path(tmp),
@@ -980,7 +944,7 @@ class TestMemorySearch(unittest.TestCase):
 
     def test_search_empty_query_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_entries(mem)
             out = _run(Path(tmp), "memory", "search", "   ", expect_rc=1)
             self.assertIn("empty", out["_stdout"] + out["_stderr"])
@@ -1085,10 +1049,10 @@ class TestSearchScoring(unittest.TestCase):
 # --- search --status (fn-34 task 2) ---
 
 
-class TestMemorySearchStatus(unittest.TestCase):
+class TestMemorySearchStatus(MemoryRepoTemplate, unittest.TestCase):
     def test_default_active_excludes_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_webpack_entries(mem)
             data = _run(Path(tmp), "memory", "search", "webpack")
             ids = _categorized_ids(data["matches"])
@@ -1098,7 +1062,7 @@ class TestMemorySearchStatus(unittest.TestCase):
 
     def test_status_stale_returns_only_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_webpack_entries(mem)
             data = _run(
                 Path(tmp), "memory", "search", "webpack", "--status", "stale"
@@ -1110,7 +1074,7 @@ class TestMemorySearchStatus(unittest.TestCase):
 
     def test_status_all_returns_both(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_webpack_entries(mem)
             data = _run(
                 Path(tmp), "memory", "search", "webpack", "--status", "all"
@@ -1122,7 +1086,7 @@ class TestMemorySearchStatus(unittest.TestCase):
 
     def test_invalid_status_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_webpack_entries(mem)
             # argparse's choices=... fails with rc=2 before the cmd runs.
             result = _run(
@@ -1139,7 +1103,7 @@ class TestMemorySearchStatus(unittest.TestCase):
     def test_list_status_still_works(self) -> None:
         """No regression on the existing `memory list --status` filter."""
         with tempfile.TemporaryDirectory() as tmp:
-            mem = _init_repo(Path(tmp))
+            mem = self.init_repo(Path(tmp))
             _seed_webpack_entries(mem)
             data = _run(Path(tmp), "memory", "list", "--status", "stale")
             ids = {e["entry_id"] for e in data["entries"]}
@@ -1151,13 +1115,15 @@ class TestMemorySearchStatus(unittest.TestCase):
 # --- list-legacy (fn-35.2) ---
 
 
-class TestMemoryListLegacy(unittest.TestCase):
+class TestMemoryListLegacy(MemoryRepoTemplate, unittest.TestCase):
     """`flowctl memory list-legacy` — text + JSON shape contract."""
+
+    TEMPLATE_GIT = True
 
     def test_empty_repo_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            _init_repo(tmp_path, git=True)
+            self.init_repo(tmp_path)
             rc, out, err = _run_raw(tmp_path, "memory", "list-legacy")
             self.assertEqual(rc, 0, f"rc={rc} stderr={err}")
             self.assertIn("No legacy files found", out)
@@ -1165,7 +1131,7 @@ class TestMemoryListLegacy(unittest.TestCase):
     def test_empty_repo_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            _init_repo(tmp_path, git=True)
+            self.init_repo(tmp_path)
             rc, out, err = _run_raw(tmp_path, "memory", "list-legacy", "--json")
             self.assertEqual(rc, 0, f"rc={rc} stderr={err}")
             data = json.loads(out)
@@ -1176,7 +1142,7 @@ class TestMemoryListLegacy(unittest.TestCase):
         """Pitfalls with two entries → entry_count=2, mechanical defaults bug/build-errors."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "pitfalls.md").write_text(
                 "# Pitfalls\n\n"
                 "## 2026-03-01 Race condition\n"
@@ -1207,7 +1173,7 @@ class TestMemoryListLegacy(unittest.TestCase):
     def test_text_mode_lists_filename_and_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "conventions.md").write_text(
                 "# Conventions\n\n## Use pnpm\nProject standard.\n",
                 encoding="utf-8",
@@ -1222,7 +1188,7 @@ class TestMemoryListLegacy(unittest.TestCase):
     def test_multiple_legacy_files_separate_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "pitfalls.md").write_text(
                 "# Pitfalls\n\n## 2026-03-01 Race\nx.\n", encoding="utf-8"
             )
@@ -1247,14 +1213,16 @@ class TestMemoryListLegacy(unittest.TestCase):
             )
 
 
-class TestMemoryMigrateMechanicalOnly(unittest.TestCase):
+class TestMemoryMigrateMechanicalOnly(MemoryRepoTemplate, unittest.TestCase):
     """fn-35.2: migrate is now mechanical-only; --no-llm is a no-op."""
+
+    TEMPLATE_GIT = True
 
     def test_method_mechanical_model_null_in_json(self) -> None:
         """JSON receipt shape preserved: method=mechanical, model=null."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "pitfalls.md").write_text(
                 "# Pitfalls\n\n## 2026-03-01 Race\nx.\n", encoding="utf-8"
             )
@@ -1273,7 +1241,7 @@ class TestMemoryMigrateMechanicalOnly(unittest.TestCase):
         """--no-llm runs identical mechanical path (kept for backcompat)."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "pitfalls.md").write_text(
                 "# Pitfalls\n\n## 2026-03-01 Race\nx.\n", encoding="utf-8"
             )
@@ -1290,7 +1258,7 @@ class TestMemoryMigrateMechanicalOnly(unittest.TestCase):
         """Even with FLOW_MEMORY_CLASSIFIER_BACKEND set, --json stdout stays parseable."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            mem = _init_repo(tmp_path, git=True)
+            mem = self.init_repo(tmp_path)
             (mem / "pitfalls.md").write_text(
                 "# Pitfalls\n\n## 2026-03-01 Race\nx.\n", encoding="utf-8"
             )
@@ -1301,8 +1269,7 @@ class TestMemoryMigrateMechanicalOnly(unittest.TestCase):
             }
             proc = subprocess.run(
                 [
-                    sys.executable,
-                    str(FLOWCTL_PY),
+                    *FLOWCTL_CMD,
                     "memory",
                     "migrate",
                     "--yes",

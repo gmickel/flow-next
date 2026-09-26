@@ -28,13 +28,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-
-HERE = Path(__file__).resolve()
-FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
 
 SPEC_ID = "fn-1-sample-spec"
 TASK_ID = "fn-1-sample-spec.1"
@@ -117,7 +116,7 @@ class UpstreamAdvisoryTest(unittest.TestCase):
         self, *args: str, shim: bool = False, cwd: "Path | None" = None
     ) -> "subprocess.CompletedProcess[str]":
         result = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY)] + list(args),
+            [*FLOWCTL_CMD] + list(args),
             cwd=str(cwd or self.repo),
             capture_output=True,
             text=True,

@@ -5,12 +5,28 @@
 #
 # Idempotent — running twice produces identical output.
 # Run after modifying skills/ or agents/ and commit the result.
+# --check: regenerate into a temporary directory, compare it with the committed
+# mirror and the tracker manifest, and exit non-zero when either is stale.
+# Never modifies the working tree. CI runs it.
 set -euo pipefail
+
+CHECK=0
+case "${1:-}" in
+  "") ;;
+  --check) CHECK=1 ;;
+  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 PLUGIN_DIR="$REPO_ROOT/plugins/flow-next"
 CODEX_DIR="$PLUGIN_DIR/codex"
+if [ "$CHECK" -eq 1 ]; then
+  COMMITTED_CODEX_DIR="$CODEX_DIR"
+  CHECK_TMP="$(mktemp -d)"
+  trap 'rm -rf "$CHECK_TMP"' EXIT
+  CODEX_DIR="$CHECK_TMP/codex"
+fi
 SRC_SKILLS="$PLUGIN_DIR/skills"
 SRC_AGENTS="$PLUGIN_DIR/agents"
 
@@ -2783,6 +2799,18 @@ echo
 if [ "$errors" -gt 0 ]; then
   echo -e "${RED}Sync completed with $errors error(s)${NC}"
   exit 1
+fi
+
+if [ "$CHECK" -eq 1 ]; then
+  stale=0
+  diff -rq "$COMMITTED_CODEX_DIR" "$CODEX_DIR" || stale=1
+  python3 "$SCRIPT_DIR/gen_tracker_manifest.py" --check || stale=1
+  if [ "$stale" -ne 0 ]; then
+    echo -e "${RED}Codex mirror or tracker manifest is stale:${NC} run ./scripts/sync-codex.sh and commit the result" >&2
+    exit 1
+  fi
+  echo -e "${GREEN}Codex mirror and tracker manifest are fresh${NC}"
+  exit 0
 fi
 
 # fn-139.5: keep the flowctl_tracker distribution manifest fresh as part of the

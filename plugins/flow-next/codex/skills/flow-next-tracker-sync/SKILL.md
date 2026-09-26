@@ -120,8 +120,10 @@ the deterministic GraphQL route. If an MCP create returns only a display key,
 - `rate_limited` is retried only when the envelope says `retryable: true`.
 - `auth`, `unresolved`, `stale_id`, `conflict`, `capability`, and
   `external_action_required` follow the recovery table in `steps.md`.
-- In Ralph or a forked lifecycle call, queue a decision that needs a person.
-  Never attempt an interactive prompt from the fork.
+- In any unattended run (Ralph, a stage `flow --auto` dispatched, any
+  `mode:autonomous` caller) or a forked lifecycle call, queue a decision that
+  needs a person with `flowctl sync defer`. Never attempt an interactive prompt
+  there.
 
 ## Boundaries
 

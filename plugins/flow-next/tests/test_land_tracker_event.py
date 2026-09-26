@@ -29,7 +29,7 @@ Asserts:
      verb (no enum change was needed — only the semantics of the leaf changed).
 
 Hermetic: each test runs in its own `tempfile.TemporaryDirectory`, inits a
-throwaway `.flow/`, and shells `sys.executable scripts/flowctl.py` (no network, no
+throwaway `.flow/`, and shells flowctl through `FLOWCTL_CMD` (no network, no
 LLM). Windows-portable: `pathlib` everywhere, `sys.executable`, no shell string.
 
 Run:
@@ -47,6 +47,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
+from flowctl_test_support import FLOWCTL_CMD
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -74,7 +76,7 @@ def _load_flowctl() -> Any:
 
 def _flowctl(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
     """Run the production CLI as a subprocess; parse the `--json` payload."""
-    cmd = [sys.executable, str(FLOWCTL_PY), *args, "--json"]
+    cmd = [*FLOWCTL_CMD, *args, "--json"]
     proc = subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -92,7 +94,7 @@ def _flowctl(cwd: Path, *args: str, expect_rc: int = 0) -> dict[str, Any]:
 
 def _init_repo(tmp: Path) -> None:
     subprocess.check_call(
-        [sys.executable, str(FLOWCTL_PY), "init", "--json"],
+        [*FLOWCTL_CMD, "init", "--json"],
         cwd=str(tmp),
         stdout=subprocess.DEVNULL,
     )
