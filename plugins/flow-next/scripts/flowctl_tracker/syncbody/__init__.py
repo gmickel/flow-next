@@ -322,7 +322,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               event: Optional[str] = None,
               execute: Execute = default_execute,
               write_receipt: bool = True,
-              _observed_parent: Optional[dict] = None) -> Result:
+              _observed_parent: Optional[dict] = None,
+              _rendered_body: bool = False) -> Result:
     """Write (optional) + readback + paired merge base. Never raises.
 
     Serialized per spec via a create-first claim taken before any tracker
@@ -384,7 +385,7 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             refuse_tracker_divergence=refuse_tracker_divergence,
             direction=direction,
             event=event, execute=execute, write_receipt=write_receipt,
-            observed_parent=_observed_parent)
+            observed_parent=_observed_parent, rendered_body=_rendered_body)
     finally:
         _release_claim(body_claim)
         _release_claim(rec_path)
@@ -399,7 +400,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    refuse_tracker_divergence: bool,
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool,
-                   observed_parent: Optional[dict] = None) -> Result:
+                   observed_parent: Optional[dict] = None,
+                   rendered_body: bool = False) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
     the echo-fence/no-op checks see the base a just-finished sibling wrote,
     never a pre-claim snapshot."""
@@ -591,7 +593,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     # tracker body, and any explicitly supplied tracker body):
     #   * matches_current - the outgoing body already equals the tracker at
     #     the hash boundary: nothing to write.
-    #   * echo fence - ONLY when no explicit tracker body was supplied: the
+    #   * echo fence - ONLY when no explicit tracker body was supplied (a
+    #     flowctl-rendered push body is not an approved result): the
     #     flow side equals mergeBaseFlow and the tracker equals
     #     mergeBaseTracker, so Linear's rewrite of the last push must not look
     #     like divergence. An explicitly supplied --tracker-body-file is a
@@ -603,7 +606,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
         trackerBodyForMerge(outgoing) == trackerBodyForMerge(current_body))
     title_matches = desired_title is None or current_title == desired_title
     echo_fence = (
-        tracker_body is None
+        (tracker_body is None or rendered_body)
         and has_base
         and flow_file_body == tracker.get("mergeBaseFlow")
         and tracker_unchanged)

@@ -73,6 +73,23 @@ class PilotSnapshotTests(unittest.TestCase):
         self.assertEqual(result['route']['decision']['value'], 'existing_pr_tail')
         self.assertEqual(result['route']['decision']['pr_ref']['number'], 1)
 
+    def test_unselected_candidate_has_no_lifecycle_without_history(self):
+        created = _run(self.repo, 'spec', 'create', '--title', 'Second fixture', '--json')
+        other = json.loads(created.stdout)['id']
+        self.assertEqual(_run(self.repo, 'spec', 'ready', other).returncode, 0)
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if command[0] == 'gh':
+                return SimpleNamespace(returncode=0, stdout='[]')
+            return real_run(command, *args, **kwargs)
+        with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
+            result = f.pilot_snapshot(None)
+        rows = {row['id']: row for row in result['candidates']}
+        unselected = rows[other if result['selected']['id'] == self.sid else self.sid]
+        self.assertTrue(result['selected']['pr']['history_complete'])
+        self.assertFalse(unselected['pr']['history_complete'])
+        self.assertNotIn('decision', unselected['route'])
+
     def test_probe_failure_does_not_guess_lifecycle(self):
         result = self.snapshot(failed=True)
         self.assertTrue(result['selected']['pr']['probe_failed'])

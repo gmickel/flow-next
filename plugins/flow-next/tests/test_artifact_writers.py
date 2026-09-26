@@ -46,6 +46,10 @@ class ArtifactWritersTest(unittest.TestCase):
         self.assertGreaterEqual(len(error["errors"]), 8)
         self.assertEqual(len(list((self.root / ".flow/prospects").glob("*.md"))), 2)
 
+    def test_qa_receipt_accepts_tracker_spec_id(self):
+        result = self.cli("qa", "receipt", data={"id": "wor-12", "qa_outcome": "SHIP", "findings": [], "rid_coverage": {"rids": []}})
+        self.assertEqual(json.loads(Path(result["receipt"]).read_text())["id"], "wor-12")
+
     def test_qa_carryover_and_invalid_payload_preserves_receipt(self):
         data = {"id": "fn-1-example", "qa_outcome": "NEEDS_WORK", "findings": [{"id": "bug-one", "severity": "P1", "confidence": 100, "classification": "introduced", "reason": 'quoted "snow" 雪', "file": "app.py:1"}], "rid_coverage": {"rids": [{"id": "R1", "coverage": "live"}]}}
         result = self.cli("qa", "receipt", data=data)

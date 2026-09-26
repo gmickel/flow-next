@@ -39,6 +39,18 @@ class Preparation(unittest.TestCase):
                 self.assertNotIsInstance(out, TrackerError, out)
                 self.assertEqual(out['steps']['sync_body']['kind'], 'seeded' if index == 0 else 'noop')
 
+    def test_rendered_push_keeps_echo_fence_for_tracker_rewrites(self):
+        # The tracker normalized the last push (Linear-style rewrite); neither side moved since.
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / '.flow'
+            _write_flow(flow, gh_cfg(), tracker=_linked(mergeBaseFlow=FLOW_BODY,
+                        mergeBaseTracker='TRACKER REWRITE OF THE LAST PUSH'))
+            ex = fake_execute(_noop_push_responses('TRACKER REWRITE OF THE LAST PUSH'))
+            out = F.sync(flow, SPEC_ID, op='push', event='plan', execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out['steps']['sync_body']['kind'], 'noop')
+            self.assertFalse(any(c.op == 'wire-update' for c in ex.calls))
+
     def test_status_only_without_body(self):
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / '.flow'

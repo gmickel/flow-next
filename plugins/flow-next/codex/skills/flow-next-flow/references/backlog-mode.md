@@ -159,8 +159,8 @@ surfaced and is waiting on a human; re-picking it every run is exactly the naggi
 - **Spec-backed** - scan the spec's `## Open Questions` for a
   `<!-- flow-next:question id=… status=open -->` anchor.
 - **Tracker-only** (no spec) - `list-open` returns issues, not comments. Before
-  deciding parked state, run `$FLOWCTL tracker wire comment-list --locator <tracker-id> --json` exactly once for
-  that candidate. It maps to the normalized `comment-list` wire read. Compare
+  deciding parked state, run `$FLOWCTL tracker wire comment-list --locator "$LOCATOR" --json` exactly once for
+  that candidate (`LOCATOR` as built in 1e below). It maps to the normalized `comment-list` wire read. Compare
   matching `flow-next:question` / `flow-next:answer` markers by stable `id` and
   immutable `created_at`: the subject is parked when its latest matching marker
   is a question, and answered when its latest matching marker is an answer.
@@ -190,23 +190,18 @@ edges come from **two** sources and feed **one** existing sorter:
   blocked, `to` = blocker):
 
   ```text
-  $FLOWCTL tracker wire relation-list --locator <tracker-id> --json   # per tracker issue
+  $FLOWCTL tracker wire relation-list --locator "$LOCATOR" --json   # per tracker issue
   ```
 
-  **The `<tracker-id>` passed is the candidate's `listOpenIssues` normalized
-  `issue.identifier` (the display handle `<project>#<iid>` / `WOR-17` / `#123`), NOT the
-  opaque global `id`.** On GitLab the global id can't index the
-  `/projects/:id/issues/:iid` path - the adapter needs the `<project>#<iid>` the
-  identifier carries (gitlab.md § identity). `list-open` already returns `identifier`
-  for every provider. On GitHub this read validates the issue and returns no
-  dependency edges: parent/sub-issue hierarchy is not blocked-by and never feeds
-  the sorter. (Spec-backed candidates pass the spec/tracker id,
-  which resolves to the stored `tracker.identifier`.)
+  **`LOCATOR` is JSON, never a bare id:** `{"durable":issue.id,"display":issue.identifier}`
+  from the candidate's `list-open` row (a spec-backed candidate uses its stored
+  `tracker.id` / `tracker.identifier`); the wire verb rejects a bare identifier. On
+  GitLab the adapter indexes `/projects/:id/issues/:iid` from the `<project>#<iid>`
+  the display half carries (gitlab.md § identity). On GitHub this read validates the
+  issue and returns no dependency edges: parent/sub-issue hierarchy is not
+  blocked-by and never feeds the sorter.
 
-  (The inline tracker-sync wrapper builds
-  `{"durable":issue.id,"display":issue.identifier}` and calls
-  `flowctl tracker wire relation-list --locator "$LOCATOR" --json`; see
-  tracker-sync `steps.md` Phase 7. Backlog mode never calls a tracker API
+  (Backlog mode never calls a tracker API
   directly. It is a **READ** - on the run's dispatch allowlist, never a
   merge/write. It no-ops when the bridge is inactive or the issue has no
   relations. A structured `subtype: truncated` error is a failed read, never a
@@ -444,7 +439,7 @@ selected item belongs to one.)
 
 ## Deterministic, multi-tracker
 
-Backlog reads use `$FLOWCTL tracker wire list-open --json`, `comment-list --locator <durable/display> --json`, and `relation-list --locator <durable/display> --json` directly. Their existing envelopes and failure behavior are unchanged; flow never adds a tracker-specific API or branches on tracker type. Keep tracker-sync for `reconcile` and `question`, where semantic folding and question authoring remain host work.
+Backlog reads use `$FLOWCTL tracker wire list-open --json`, `comment-list --locator "$LOCATOR" --json`, and `relation-list --locator "$LOCATOR" --json` (`LOCATOR` = `{"durable":…,"display":…}` JSON) directly. Their existing envelopes and failure behavior are unchanged; flow never adds a tracker-specific API or branches on tracker type. Keep tracker-sync for `reconcile` and `question`, where semantic folding and question authoring remain host work.
 
 - **Ships on Linear, GitHub, GitLab + Jira** - the four adapters that implement
   `listOpenIssues` / `listIssueRelations` / the comment ops.

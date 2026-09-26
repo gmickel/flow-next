@@ -196,7 +196,7 @@ tasks, or pass it through build readiness/strike admission.
 
 Consume `counts` and `candidates` from the snapshot in stable id order. A named scope never widens. Each candidate supplies its normalized `spec`, full `tasks`, `chain`, `other_actor_claims`, `strikes`, `would_clear_strikes`, `eligible`, branch and PR observation. `chain.eligible` is the existing dependency predicate; preserve its reason on a hold. Nonempty `other_actor_claims` holds the item. Use `actor` from the snapshot, never resolve it again.
 
-A named scope still must pass `eligible` unless it takes the existing-PR landing path. Keep the selected row as `SPEC_JSON` / `TASKS_JSON`, `CHAIN_PARENT=chain.parent`, and `LEDGER_JSON=strikes`. A candidate with `would_clear_strikes=true` was human re-blessed: call `$FLOWCTL pilot strikes clear <id> --json` before dispatch, or report would-clear under explain. With `tracker.readyState` armed, a count of two survives board projection until the human calls `flowctl pilot strikes clear <spec-id>`. Selection does not write readiness. Existing PR candidates follow the landing consent rule above; record deferred candidates when authority is absent and continue over this same snapshot's candidates.
+A named scope still must pass `eligible` unless it takes the existing-PR landing path. Keep the selected row as `SPEC_JSON` / `TASKS_JSON`, `CHAIN_PARENT=chain.parent`, and `LEDGER_JSON=strikes`. A candidate with `would_clear_strikes=true` was human re-blessed: call `$FLOWCTL pilot strikes clear <id> --json` before dispatch, or report would-clear under explain. With `tracker.readyState` armed, a count of two survives board projection until the human calls `flowctl pilot strikes clear <spec-id>`. Selection does not write readiness. Existing PR candidates follow the landing consent rule above; record deferred candidates when authority is absent and continue over this same snapshot's candidates. Only `selected` carries full PR history; before classifying any other candidate (`pr.history_complete: false`), refresh with `$FLOWCTL pilot snapshot --spec <id> --json` and use its `selected` row. Never classify from an incomplete PR observation.
 
 There are no per-candidate `show`, `tasks`, `spec chain`, actor or `gh` calls: the snapshot joins PRs by branch from one listing and shares the chain remote read. A failed PR observation is `NEEDS_HUMAN`, never absent. The host keeps consent, triage and resume-evidence judgment.
 
@@ -238,7 +238,8 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     # -> dispatch per tracker-only issue: $FLOWCTL tracker wire comment-list --locator <tracker-id> --json
+     # -> dispatch per tracker-only issue: $FLOWCTL tracker wire comment-list --locator "$LOCATOR" --json
+     #   LOCATOR = {"durable":issue.id,"display":issue.identifier} from the list-open row.
      # Any error or truncated listing fails closed: do not select from an
      # incomplete question/answer history.
    fi
@@ -249,10 +250,9 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
    ```bash
    if [ "$DRY" = "0" ]; then
      # For each TRACKER candidate, read its relations to add the tracker dep edges.
-     # -> dispatch per tracker issue: $FLOWCTL tracker wire relation-list --locator <tracker-id> --json
-     #   <tracker-id> = the candidate's list-open `issue.identifier` (the display handle:
-     #   GitLab indexes /issues/:iid from the <project>#<iid> it carries - a global id is
-     #   NOT a valid path index), never the opaque global id.
+     # -> dispatch per tracker issue: $FLOWCTL tracker wire relation-list --locator "$LOCATOR" --json
+     #   LOCATOR = {"durable":issue.id,"display":issue.identifier} from the list-open row
+     #   (GitLab indexes /issues/:iid from the <project>#<iid> the display handle carries).
      #   (the listIssueRelations read; no-op/empty when the bridge is inactive or the issue has no relations)
    fi
    ```
@@ -384,7 +384,7 @@ Use the selected candidate's `route` as `ROUTE_JSON` (the top-level `route` alia
 
 ### The all-done PR probe
 
-Consume `selected.pr` directly: `open`, `merged`, `merged_head`, `closed`, and `probe_failed`. Set the existing `OPEN_PR`, `MERGED_PR`, `MERGED_HEAD`, `CLOSED_PR` and `PR_PROBE_FAILED` variables from those fields. `selected.branch_name`, `branch_head`, and `branch_exists` supply branch facts. No fallback PR listing is allowed when judge answers are unavailable.
+Consume `selected.pr` directly (it always has `history_complete: true`): `open`, `merged`, `merged_head`, `closed`, and `probe_failed`. Set the existing `OPEN_PR`, `MERGED_PR`, `MERGED_HEAD`, `CLOSED_PR` and `PR_PROBE_FAILED` variables from those fields. `selected.branch_name`, `branch_head`, and `branch_exists` supply branch facts. No fallback PR listing is allowed when judge answers are unavailable.
 
 If a PR identity was already bound by this run, bypass branch-history selection: re-read that exact PR per `references/tail.md`. Missing, mismatched or closed-unmerged targets stop; never substitute another PR. On first binding, failed/unparseable or truncated reads and multiple plausible PRs stop `NEEDS_HUMAN` before dispatch.
 

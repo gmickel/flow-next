@@ -26390,7 +26390,7 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
     data = _artifact_payload(args)
     errors = []
     review_id = data.get("id")
-    if not isinstance(review_id, str) or not re.fullmatch(r"fn-[A-Za-z0-9-]+", review_id):
+    if not isinstance(review_id, str) or not is_spec_id(review_id):
         errors.append("id: expected a spec id")
     outcome = data.get("qa_outcome")
     if outcome not in ("SHIP", "NEEDS_WORK", "NA", "BLOCKED"):
@@ -33132,7 +33132,13 @@ def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
 def cmd_review_prompt(args: argparse.Namespace) -> None:
     """Render the shared backend prompt for a host-native review dispatch."""
     repo_root = get_repo_root()
-    base = args.base or (_default_review_base(args.json) if args.kind == "impl" else "main")
+    if args.base:
+        base = args.base
+    elif args.kind == "plan":
+        # A plan prompt carries no diff: a missing default branch only empties its context hints.
+        base = next((ref for ref in _default_branch_candidates(repo_root) if _resolve_review_sha(ref)), "HEAD")
+    else:
+        base = _default_review_base(args.json)
     try:
         base_sha, head_sha = _capture_review_snapshot(base)
         if args.head:
@@ -44165,7 +44171,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
             and isinstance(row.get("headRefName"), str) for row in listed)
         return listed if valid else None
 
-    def observe(listed: Optional[list], branch: Optional[str]) -> dict:
+    def observe(listed: Optional[list], branch: Optional[str], *, history: bool) -> dict:
         prs = sorted([row for row in listed or [] if row["headRefName"] == branch],
                      key=lambda row: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[row["state"]],
                                       row.get("mergedAt") or "", row["number"]), reverse=True)
@@ -44173,7 +44179,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         merged = next((row for row in prs if row["state"] == "MERGED"), None)
         return {"open": next((row for row in prs if row["state"] == "OPEN"), None),
                 "merged": merged, "merged_head": merged.get("headRefOid") if merged else None,
-                "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed}
+                "closed": [row for row in prs if row["state"] == "CLOSED"], "probe_failed": failed,
+                "history_complete": history}
 
     candidates = [s for s in specs if (not spec_id or s["id"] == spec_id)
                   and (spec_id or s.get("ready") is True or s["status"] == "done")]
@@ -44185,7 +44192,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     for spec in candidates:
         sid, branch = spec["id"], spec.get("branch_name")
         tasks = inventory.by_spec.get(sid, [])
-        observation = observe(rows, branch)
+        observation = observe(rows, branch, history=not branch)
         branch_head = None
         if branch:
             head = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
@@ -44224,7 +44231,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     selected = next((row for row in result if spec_id or row["pr"]["open"] or row["eligible"]), None)
     if selected and selected["branch_name"]:
         selected["pr"] = observe(list_prs("--head", selected["branch_name"], "--state", "all", limit=100),
-                                 selected["branch_name"])
+                                 selected["branch_name"], history=True)
     for candidate in result:
         with redirect_stdout(io.StringIO()) as output:
             cmd_review_backend(argparse.Namespace(id=candidate["id"], json=True))
@@ -44244,7 +44251,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         candidate["route"] = {"success": True, "available": False, "preset": "route", "reason": "not_selected"}
         if prs["probe_failed"]:
             candidate["route"]["pr_probe_failed"] = True
-        else:
+        elif prs["history_complete"]:
             candidate["route"]["decision"] = {**decision, "pr_ref": pr_ref,
                                                "startable_target_fact": state.get("startable_target_fact")}
         if candidate is selected:

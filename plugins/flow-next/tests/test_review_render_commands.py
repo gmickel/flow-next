@@ -92,3 +92,17 @@ class TestReviewRenderCommands(_JournalReplayBase):
             'plan', context_hints='hints', spec_path=spec.relative_to(self.root).as_posix(),
             task_spec_paths=[task.relative_to(self.root).as_posix()])
         self.assertEqual(target.read_text(), expected)
+
+    def test_plan_prompt_needs_no_default_branch(self):
+        spec = self.root / '.flow/specs' / (self.spec_id+'.md')
+        spec.write_text('# Demo\n')
+        args = argparse.Namespace(kind='plan', id=self.spec_id, base=None,
+                                  head=None, axis=None, focus=None,
+                                  receipt=str(self.root/'absent.json'), out=str(self.root/'prompt.md'), json=True)
+        with mock.patch.object(flowctl, 'get_repo_root', return_value=self.root), \
+             mock.patch.object(flowctl, '_resolve_review_sha', return_value=None), \
+             mock.patch.object(flowctl, '_capture_review_snapshot', return_value=('a'*40, 'a'*40)) as snapshot, \
+             mock.patch.object(flowctl, 'gather_context_hints', return_value=''), \
+             contextlib.redirect_stdout(io.StringIO()):
+            flowctl.cmd_review_prompt(args)
+        snapshot.assert_called_once_with('HEAD')
