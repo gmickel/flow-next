@@ -218,7 +218,7 @@
     "impl:fn-259-flowctl-renders-what-agents-hand.1": 0
   },
   "spec_path": ".flow/specs/fn-259-flowctl-renders-what-agents-hand.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl renders what agents hand-assemble (audit wave 5)",
   "tracker": {
     "baseHashFlow": null,
@@ -231,5 +231,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T15:49:41.877147Z"
+  "updated_at": "2026-09-26T16:29:09.553860Z"
 }
