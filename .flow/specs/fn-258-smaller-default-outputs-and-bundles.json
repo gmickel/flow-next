@@ -11,7 +11,7 @@
   ],
   "id": "fn-258-smaller-default-outputs-and-bundles",
   "impl_review_rounds": {
-    "fn-258-smaller-default-outputs-and-bundles.1": 1
+    "fn-258-smaller-default-outputs-and-bundles.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -70,9 +70,63 @@
       "task": "fn-258-smaller-default-outputs-and-bundles.1",
       "timestamp": "2026-09-26T13:41:58.690563Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "2225018ad2fd02a6cdc7672e37c51f1b579b593c2ae853b58cf45e68ef7065ff",
+      "backend": "codex",
+      "base_sha": "c13a4d526db6674ef53620af78486a7814885d19",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6dd13e49a8e66ae08abe1e6efde51a25",
+            "classification": "introduced",
+            "findingId": "finding-6dd13e49a8e66ae08abe1e6efde51a25",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-172a52ec8cd9be60f30fdd103db8ac3c",
+            "classification": "introduced",
+            "findingId": "finding-172a52ec8cd9be60f30fdd103db8ac3c",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a96b3b0a3daea8081b117572b47419f75678a0d7",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1525,
+      "output_sha256": "e52c42eb7da2e7837b2502ff1632e80f11aabe26c08aaa12378d5d28bf1b48e8",
+      "reservation_id": "68eee0d7d5b8466088a529d52d8dffd8",
+      "round_consumed": true,
+      "scope": "impl:fn-258-smaller-default-outputs-and-bundles.1",
+      "superseded_by": null,
+      "task": "fn-258-smaller-default-outputs-and-bundles.1",
+      "timestamp": "2026-09-26T13:43:30.133590Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-258-smaller-default-outputs-and-bundles.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -92,5 +146,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T13:41:58.693250Z"
+  "updated_at": "2026-09-26T13:43:30.135844Z"
 }
