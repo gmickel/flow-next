@@ -50,17 +50,14 @@ The local critical path is now `test_chain_consumer_fixtures.py` (~110-140s): 18
 Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly.
 
 ## Done summary
-Remote REST callers (the fn-181 localClient rule) and every HTTP MCP caller no longer receive owner configuration paths: /api/status, /api/collections(/:name), /api/connectors(/install) drop configPath, dbPath and path fields through the existing redaction wrapper, and MCP gno_status omits configPath, dbPath and collection roots (its text summary drops the Config/Database lines). Local owners, stdio MCP, CLI and SDK are unchanged. The Web UI tolerates the omitted fields, the production SPA snapshot was rebuilt (the stale snapshot crashed the remote Collections page), and the disk health text no longer names the model cache folder for any caller. Schemas (status, collection-list), docs/API.md, docs/MCP.md, CHANGELOG [Unreleased] and gno.sh (branch fn-188-remote-config-paths, not pushed) are updated.
+Tests now spawn flowctl through a shared test-only runner (tests/flowctl_runner.py via flowctl_test_support.FLOWCTL_CMD) that imports the module, so bytecode is cached. The runner submits the largest files first. The memory core and marks suites copy one initialized repo per class. Skill and agent markdown now selects the CI smokes. `sync-codex.sh --check` verifies mirror and manifest freshness in the ubuntu units job. The impl-review smoke runs the Ralph sweep once, the two identical hanging-shard timeout tests share one run, and the interview source-tag and work reached-path tests assert tokens and routes. Local full suite: 213.36s before and 126.46s after, measured back to back on the same machine. R8 cause is git cost on Windows (dispatched run 36230507407); per-test Windows timings were not captured. The task Description carries the full R1/R8/R9 evidence.
 
-R-ID tests: test/spec/schemas/host-paths.test.ts ("REST owner config paths" and "MCP gno_status owner config paths": one local and one remote caller each, schema-validated).
+Tier: session (jev intelligent 0.26)
+Review: codex fan-out round 1 NEEDS_WORK (R8 evidence not recorded; no code defects) -> round 2 SHIP.
+Final gate run skipped=6 vs baseline 7: the load-dependent timing benchmark in test_spec_id_allocation.py ran instead of skipping. Both paired runs showed skipped=7.
+Follow-up (not built): test_chain_consumer_fixtures.py is now the local critical path. It spawns a staged bin/flowctl launcher 183 times, and the bootstrap recompiles flowctl.py from source on each spawn.
 
-Live QA evidence: .flow/tmp/qa-fn-188-remote-status-and-collection-responses/ (temp root /tmp/gno-qa188 on port 3871: remote REST and HTTP MCP responses contain 0 temp-root hits and 0 path keys; local and stdio keep them; Collections page renders locally with paths and remotely without, no page errors).
-
-Follow-up (not built): document mutation routes still return a host `path` field to remote callers (create doc, rename, move, create folder, editable-copy file:// uri in src/serve/routes/api.ts); fn-181 only stripped `absPath`. Worth a separate spec.
-
-Tier: session (actual_model: claude-opus-5-5)
-
-stage: impl-review - ran (codex gpt-6-astra medium, 3-draw fan-out, SHIP first round)
+stage: impl-review - ran (codex gpt-6-astra high; 3-draw fan-out NEEDS_WORK, re-review SHIP)
 ## Evidence
 - Commits: 1de2913b268e934cffe583a3f30c10fc40f1ae7e, 2da699be88b8f05161e4cc59847115b57dadbd9a, 6550384d8d9d06e0dcb074e23f5cc0dc315e42db
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., bash plugins/flow-next/scripts/impl-review_smoke_test.sh (run from scratchpad; 71 passed), ./scripts/sync-codex.sh --check, baseline: green (python3 scripts/run_tests_parallel.py pre-edit: files=234 ran=5044 skipped=7)
