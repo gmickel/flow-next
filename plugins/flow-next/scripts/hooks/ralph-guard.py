@@ -229,6 +229,11 @@ def _raw_launch_violation(command: str) -> Optional[str]:
             "BLOCKED: Do not call codex directly. "
             "Use 'flowctl codex impl-review' or 'flowctl codex plan-review'."
         )
+    if re.search(r"\bcodex\b", command) and re.search(r"--last\b", command):
+        return (
+            "BLOCKED: Do not use '--last' with codex. "
+            "Session continuity is managed via session_id in receipts."
+        )
     if re.search(r"\bcopilot\b", command) and not re.search(
         r"flowctl\s+copilot|FLOWCTL.*copilot", command
     ):
@@ -1026,11 +1031,21 @@ def _substitution_bodies(text: str) -> list[str]:
                 bodies.append(text[tick:index])
                 tick = None
         elif tick is None and text.startswith("$(", index):
-            depth, end = 0, index + 1
+            depth, end, quote = 0, index + 1, None
             while end < len(text):
-                depth += {"(": 1, ")": -1}.get(text[end], 0)
-                if depth == 0:
-                    break
+                ch = text[end]
+                if ch == "\\" and quote != "'":
+                    end += 2
+                    continue
+                if quote:
+                    if ch == quote:
+                        quote = None
+                elif ch in "'\"":
+                    quote = ch
+                else:
+                    depth += {"(": 1, ")": -1}.get(ch, 0)
+                    if depth == 0:
+                        break
                 end += 1
             bodies.append(text[index + 2 : end])
             index = end
