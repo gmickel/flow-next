@@ -12,7 +12,7 @@
   ],
   "id": "fn-259-flowctl-renders-what-agents-hand",
   "impl_review_rounds": {
-    "fn-259-flowctl-renders-what-agents-hand.1": 1
+    "fn-259-flowctl-renders-what-agents-hand.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -95,9 +95,87 @@
       "task": "fn-259-flowctl-renders-what-agents-hand.1",
       "timestamp": "2026-09-26T15:02:10.457972Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "40a9071fba93be2fb307fbd755c24a6d2b4d131ce495f023106e3affc6d3a038",
+      "backend": "codex",
+      "base_sha": "fc93b0a442a677fcbaa270da936f2dbc97a0b4f6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "classification": "introduced",
+            "findingId": "finding-eb97a960830ca9e2763a618f4363ad9e",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "classification": "introduced",
+            "findingId": "finding-cc3a8ab8e558413e249cffbd1c9ccfed",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "classification": "introduced",
+            "findingId": "finding-895a7cc9b60f843b117e3a1bac1944d9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "classification": "introduced",
+            "findingId": "finding-efa2d8af3ca8fb96d5879546afa429fb",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-e31c52424e34531d9a03de0d0193df41",
+            "classification": "introduced",
+            "findingId": "finding-e31c52424e34531d9a03de0d0193df41",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b05a87bfc1a5a551975ec2caebe05a55b5482d34",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3187,
+      "output_sha256": "63226a0f193ea7242a7dda0be30ed13b4a9f13a226dcbaad6217afd8106a7ec9",
+      "reservation_id": "d0c7f6f0dc4a4f9698a3c702a58608d7",
+      "round_consumed": true,
+      "scope": "impl:fn-259-flowctl-renders-what-agents-hand.1",
+      "superseded_by": null,
+      "task": "fn-259-flowctl-renders-what-agents-hand.1",
+      "timestamp": "2026-09-26T15:07:15.171544Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-259-flowctl-renders-what-agents-hand.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -117,5 +195,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T15:02:10.460902Z"
+  "updated_at": "2026-09-26T15:07:15.175911Z"
 }

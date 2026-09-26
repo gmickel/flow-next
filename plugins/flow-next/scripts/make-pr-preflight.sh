@@ -13,7 +13,10 @@ if [[ "$DRY_RUN" != "1" ]]; then
 fi
 # end:block
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
-if [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
+# A dry run may preview against a commit SHA; a live PR base must be a branch.
+if [[ "$DRY_RUN" == "1" && "$BASE_REF" =~ ^[0-9a-f]{7,40}$ ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null 2>&1; then
+  :
+elif [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
   BASE_BRANCH="${BASE_REF#origin/}"
   if [[ "$DRY_RUN" != "1" ]]; then
     git -C "$REPO_ROOT" fetch -q origin "refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" || { echo "Error: cannot refresh origin/$BASE_BRANCH" >&2; exit 1; }

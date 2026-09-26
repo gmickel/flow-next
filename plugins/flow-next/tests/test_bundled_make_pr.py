@@ -70,3 +70,26 @@ esac''',
         self.assertEqual(result.returncode, 1)
         self.assertIn("head changed", result.stderr)
         self.assertFalse((self.root / "calls").exists())
+
+
+@unittest.skipIf(os.name == "nt" or not shutil.which("bash") or not shutil.which("git"), "POSIX bash and git")
+class PreflightBaseRefTests(unittest.TestCase):
+    def test_dry_run_keeps_a_commit_sha_base_and_live_runs_keep_branch_form(self):
+        from chain_fixture_support import fence, git
+        block = fence(SCRIPT.parent / "make-pr-preflight.sh", "chain-detect").split("CHAIN_BASE=\"\"", 1)[0]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            git(root, "init", "-q", "-b", "main")
+            git(root, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "base")
+            sha = git(root, "rev-parse", "HEAD")
+            for dry_run, expected in (("1", sha), ("0", "origin/" + sha)):
+                with self.subTest(dry_run=dry_run):
+                    result = subprocess.run(["bash", "-c", block + 'printf "BASE=%s" "$BASE_REF"'], cwd=root,
+                                            env=dict(os.environ, REPO_ROOT=temp, BASE_REF=sha, DRY_RUN=dry_run),
+                                            text=True, capture_output=True)
+                    if dry_run == "1":
+                        self.assertEqual(result.stdout, "BASE=" + sha, result.stderr)
+                    else:
+                        # A live run still refreshes a branch named by the ref and fails closed on a SHA.
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("cannot refresh " + expected, result.stderr)
