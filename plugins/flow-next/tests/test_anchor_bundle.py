@@ -386,6 +386,28 @@ class UnreadableTaskBodyTest(AnchorRepoTestCase):
         self.assertIsNone(sections["spec_md"]["error"])
 
 
+class GlossaryNonJsonOutputTest(AnchorRepoTestCase):
+    def test_non_json_glossary_output_marks_only_that_section(self) -> None:
+        from unittest import mock
+
+        def not_json(_args):
+            print("not json")
+
+        cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        try:
+            with mock.patch.object(flowctl, "cmd_glossary_list", not_json):
+                sections = {
+                    s["name"]: s
+                    for s in flowctl._anchor_sections("fn-9.2", "fn-9")
+                }
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(list(sections), EXPECTED_SECTION_ORDER)
+        self.assertIsNotNone(sections["glossary"]["error"])
+        self.assertIsNone(sections["spec_md"]["error"])
+
+
 class GlossarySkipReasonTest(AnchorRepoTestCase):
     def test_skip_reasons(self) -> None:
         cases = [

@@ -38366,8 +38366,14 @@ def _anchor_sections(task_id: str, spec_id: str) -> list:
         None,
     )
     note = None
-    if err is None and not json.loads(out).get("total_terms"):
-        note = "no glossary entry matches the task title or description - skipped"
+    if err is None:
+        try:
+            matched = bool(json.loads(out).get("total_terms"))
+        except (ValueError, AttributeError):
+            err = "glossary output was not a JSON object"
+        else:
+            if not matched:
+                note = "no glossary entry matches the task title or description - skipped"
     add("glossary", glossary_cmd, out, err, note=note)
 
     # memory index only when memory.enabled resolves true — mirroring the
