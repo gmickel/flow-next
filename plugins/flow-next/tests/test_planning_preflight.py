@@ -98,6 +98,9 @@ class PlanningPreflight(unittest.TestCase):
         skill = Path(__file__).resolve().parents[1] / "skills/flow-next-refine/SKILL.md"
         fence = next(f for f in re.findall(r"```bash\n(.*?)\n```", skill.read_text(encoding="utf-8"), re.S)
                      if "# One preflight bundle" in f)
+        # The agent substitutes <suffix> before running the fence; `<` and `>`
+        # are not valid in Windows file names.
+        fence = fence.replace("<suffix>", "t1")
         # FLOWCTL=bash turns the fence's `"$FLOWCTL" preflight --json` into
         # `bash preflight`, a script in cwd: no exec bit or shebang, which Git
         # Bash on Windows does not honor for a bare script path.
