@@ -2,7 +2,7 @@
 
 This page is the shape a cold agent seeds and drives from. The map lives at `.flow/features/`. The index is `.flow/features/README.md`. One file per user-facing feature sits beside it. No other paths belong in this contract.
 
-Consumers (QA, drive, flow's bug intake) discover the map by existence check only. They select a feature deterministically by its `**Surface:**` identifier plus sub-feature IDs.
+Consumers (QA, drive, flow's bug intake and the other live-app stages below) discover the map by existence check only. They select a feature deterministically by its `**Surface:**` identifier plus sub-feature IDs.
 
 The map records how a user gets there. Specs still say what to prove this time. Live captured evidence is still the only proof.
 
@@ -68,7 +68,7 @@ Partial seed: the index names features that were identified but failed to prove,
 
 ## Writers and drift notes
 
-Two writers exist. `/flow-next:features` seeds and maintains the whole map, and work's update step (`flow-next-work/references/feature-map-update.md`) edits only the entries its own change altered. Every other stage that drives from the map (QA, drive, bug intake, and later live-app routes) is a reader and never edits the map mid-run.
+Two writers exist. `/flow-next:features` seeds and maintains the whole map, and work's update step (`flow-next-work/references/feature-map-update.md`) edits only the entries its own change altered. Every other stage that drives from the map (QA, drive, bug intake and the live-app stages below) is a reader and never edits the map mid-run.
 
 A reader that finds a mapped route no longer matching the live app files a drift note, then continues with live route discovery:
 
@@ -85,7 +85,16 @@ A reader that resolves a report or target to a mapped feature records the result
 - An object with exactly these keys: `surface` (the `**Surface:**` identifier), `sub_feature` (one sub-feature ID), `file` (the feature file's name under `.flow/features/`), `last_proven` (the file's `**Last proven:**` value, such as `2026-09-20 at 4f2c9ab`, or `null` when the file has none), and `stage` (the stage that resolved it, such as `flow`).
 - The string `"unmapped"`: the map exists and nothing in it matched.
 
-A worker whose spec carries a `resolved_feature: <value>` line passes the value to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. The newest record for a spec is on the last task in `flowctl spec export-cognitive-aid` order that carries `evidence.resolved_feature`.
+A worker whose spec carries a `resolved_feature: <value>` line passes the value to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. QA carries the record as `resolved_feature` in its `flowctl qa receipt` payload, validated the same way.
+
+## Live-app stages
+
+Every stage about to drive a running app reads the map this way: flow's measured-slowness baseline, work's post-change measurement, the defect route's live proof on base and head, QA, and any live check a PR reports. Stages with no running app (questions, refactors, capture, plan, refine) never read the map, and a stage that cannot start the app reads nothing for navigation. Flow's bug intake keeps its own gate ([defect-intake.md](../../flow-next-flow/references/defect-intake.md)).
+
+1. **Check existence.** No `.flow/features/`: drive as before.
+2. **Reuse this spec's newest record.** Stages write in pipeline order, so the newest is the first found of: the spec's QA receipt `resolved_feature`, the last task in `flowctl spec export-cognitive-aid` order carrying `evidence.resolved_feature`, the spec's `resolved_feature:` line. Another spec's record is never read. An object record is reused as is (read its file, skip the index) unless the file is gone or its `**Last proven:**` value no longer equals the record's `last_proven`; then resolve again. `unmapped` means live discovery, no retry.
+3. **Otherwise resolve.** Read the index, match the target to its Surfaces row, and read only that feature file, even when the target names its page: `Driving it` and `Gotchas` carry controls that misbehave and state the accessibility tree misreports. Several candidates: read them most specific first and use the one that reaches the target. None: `unmapped`, live discovery. Never read the whole map.
+4. **Drive and record.** Name the file and sub-feature to `$flow-next-drive`; a stale route gets a drift note as above. A stage that resolved writes the record with `stage` naming itself: flow as the spec's `resolved_feature:` line (defect-intake.md step 3), a worker through `done --resolved-feature`, QA in its receipt payload.
 
 ---
 

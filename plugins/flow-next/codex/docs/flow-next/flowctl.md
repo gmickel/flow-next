@@ -1660,7 +1660,8 @@ flowctl qa receipt --from-json qa.json [--receipt receipt.json] --json
 ```
 
 The payload supplies `id`, `qa_outcome`, findings and R-ID coverage; optional
-mode and BLOCKED/NA reasons are host-authored. The command derives commit,
+mode, BLOCKED/NA reasons and the `resolved_feature` record (the same shape
+`done --resolved-feature` accepts) are host-authored. The command derives commit,
 branch, timestamps, counts and prior-finding lineage, then writes atomically.
 BLOCKED or NA does not close unobserved prior findings. Invalid payloads report
 all errors without replacing the previous receipt. QA resolves unattended

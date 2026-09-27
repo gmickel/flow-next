@@ -266,7 +266,7 @@ Rules:
   the spec. Neither are filesystem-identity, permission, or concurrency guards
   (realpath/symlink containment, lock-guarded writes, forced excludes of
   runtime state) — never trim a guard as scope.
-- Never edit `.flow/features/`: the conductor updates the feature map at its quality phase ([feature-map-update.md](../skills/flow-next-work/references/feature-map-update.md)); when this task changes how a user reaches a mapped feature, name the changed route in the done summary.
+- Never edit `.flow/features/`: the conductor updates the feature map at its quality phase ([feature-map-update.md](../skills/flow-next-work/references/feature-map-update.md)); when this task changes how a user reaches a mapped feature, name the changed route in the done summary. Before driving the running app (a post-change measurement, a defect route's live proof), read the map per the "Live-app stages" section of [feature-entry-contract.md](../skills/flow-next-features/references/feature-entry-contract.md).
 - Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
 - **Confirm a new test fails for the intended reason before fixing** — run it
@@ -497,7 +497,7 @@ uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
 On parallel-wave and host-deferred routes, write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path. On the standard contiguous-history route, `done --range` below derives the commit list and base; pass each actual test command and `GATE_SKIPPED` line with repeatable `--test` instead of hand-assembling evidence.
-When the spec carries a `resolved_feature: <value>` line (flow's bug intake resolved the defect to a feature-map entry), record that value verbatim: `done --resolved-feature '<value>'` on the standard route, the evidence JSON's `resolved_feature` key on the other two.
+When the spec carries a `resolved_feature: <value>` line (an earlier flow stage resolved the target to a feature-map entry), or this task's live drive resolved a record itself, record that value verbatim: `done --resolved-feature '<value>'` on the standard route, the evidence JSON's `resolved_feature` key on the other two.
 For those two routes, re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
 in the SAME block, so no shell variable has to survive across tool calls.

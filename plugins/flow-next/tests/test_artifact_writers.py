@@ -50,6 +50,21 @@ class ArtifactWritersTest(unittest.TestCase):
         result = self.cli("qa", "receipt", data={"id": "wor-12", "qa_outcome": "SHIP", "findings": [], "rid_coverage": {"rids": []}})
         self.assertEqual(json.loads(Path(result["receipt"]).read_text())["id"], "wor-12")
 
+    def test_qa_receipt_carries_a_valid_resolved_feature_only(self):
+        # fn-263 R2/R3: QA records the feature it drove; make-pr reads it back.
+        record = {"surface": "web", "sub_feature": "notes.list", "file": "notes-list.md",
+                  "last_proven": None, "stage": "qa"}
+        data = {"id": "fn-1-example", "qa_outcome": "SHIP", "findings": [], "rid_coverage": {"rids": []}}
+        path = Path(self.cli("qa", "receipt", data=data)["receipt"])
+        self.assertNotIn("resolved_feature", json.loads(path.read_text()))
+        for value in (record, "unmapped"):
+            self.cli("qa", "receipt", data={**data, "resolved_feature": value})
+            self.assertEqual(json.loads(path.read_text())["resolved_feature"], value)
+        before = path.read_bytes()
+        error = self.cli("qa", "receipt", data={**data, "resolved_feature": {"surface": "web"}}, code=2)
+        self.assertTrue(any(e.startswith("resolved_feature:") for e in error["errors"]))
+        self.assertEqual(path.read_bytes(), before)
+
     def test_qa_carryover_and_invalid_payload_preserves_receipt(self):
         data = {"id": "fn-1-example", "qa_outcome": "NEEDS_WORK", "findings": [{"id": "bug-one", "severity": "P1", "confidence": 100, "classification": "introduced", "reason": 'quoted "snow" 雪', "file": "app.py:1"}], "rid_coverage": {"rids": [{"id": "R1", "coverage": "live"}]}}
         result = self.cli("qa", "receipt", data=data)

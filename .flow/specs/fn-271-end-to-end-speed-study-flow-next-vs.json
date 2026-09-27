@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-271-end-to-end-speed-study-flow-next-vs",
+  "created_at": "2026-09-27T19:51:43.914272Z",
+  "depends_on_epics": [],
+  "id": "fn-271-end-to-end-speed-study-flow-next-vs",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-271-end-to-end-speed-study-flow-next-vs.md",
+  "status": "open",
+  "title": "End-to-end speed study: flow-next vs vanilla Claude Code",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-27T19:51:43.916866Z"
+}

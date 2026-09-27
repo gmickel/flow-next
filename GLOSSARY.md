@@ -581,7 +581,7 @@ _Relates to_: Spec, Task, R-ID
 
 ## Feature map
 
-The committed user-POV directory (`.flow/features/`) recording how a user reaches and drives each user-facing feature, consumed by QA, drive and flow's bug intake for navigation and kept current by work's scoped updates and `/flow-next:features`; distinct from the code-POV `/flow-next:map` index.
+The committed user-POV directory (`.flow/features/`) recording how a user reaches and drives each user-facing feature, consumed for navigation by flow's bug intake and every stage that drives the running app (QA, drive, live measurements and live proofs) and kept current by work's scoped updates and `/flow-next:features`; distinct from the code-POV `/flow-next:map` index.
 
 ## Doctor
 

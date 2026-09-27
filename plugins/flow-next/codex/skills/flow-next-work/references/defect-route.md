@@ -59,7 +59,7 @@ Run the same reproduction on the base (the revision before the fix: the failing-
 
 - It must fail on base and pass on head.
 - **It passes on base:** it does not capture this defect. Record that, do not claim the fix, and return to step 2 for a reproduction that does.
-- **A live surface** (a web or desktop app): the pre-fix reproduction on the live app is the base observation; repeat it on the head through `$flow-next-drive`, following the feature file when the spec carries a `resolved_feature` line. When the app cannot be started, the test-level proof stands and the live check is recorded as not run, with the reason.
+- **A live surface** (a web or desktop app): the pre-fix reproduction on the live app is the base observation; repeat it on the head through `$flow-next-drive`. Both drives read the feature map first per the "Live-app stages" section of [feature-entry-contract.md](../../flow-next-features/references/feature-entry-contract.md). When the app cannot be started, the test-level proof stands and the live check is recorded as not run, with the reason.
 - **A library with no live surface:** the test alone is the proof.
 
 ## Record

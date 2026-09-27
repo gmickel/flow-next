@@ -180,13 +180,13 @@ The map supplies navigation only. This run's ACs/R-IDs still come from the spec 
 
 ```bash
 if [ -d "$REPO_ROOT/.flow/features" ]; then
-  : "Read $REPO_ROOT/.flow/features/README.md, then matching feature files"
+  : "Resolve the target per the contract's Live-app stages section"
 fi
 ```
 
-When the directory exists: Read the index README. Select features whose `**Surface:**` identifier matches the surface this run targets, plus those features' sub-feature IDs (the index `Surfaces` grouping). Load the matching files' `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps. Selection and file shape: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md). When a `$PAYLOAD` task carries `evidence.resolved_feature` (the last such task in payload order), the defect's feature is already resolved: select that Surface and sub-feature first instead of re-deriving it (`"unmapped"` selects nothing).
+When the directory exists: follow the "Live-app stages" section of [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), reusing this spec's newest record (the prior receipt at `.flow/review-receipts/qa-$SPEC_ID.json`, then `$PAYLOAD` task evidence) or resolving the spec's target from the index to one feature file. Load that file's `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps, and keep the record for the §6.3 payload.
 
-**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
+**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) records `unmapped` and falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
 
 When it is absent: skip. Behavior is byte-identical to today; the only added cost is the existence check.
 
@@ -195,7 +195,7 @@ When it is absent: skip. Behavior is byte-identical to today; the only added cos
 - `SPEC_ID` names a spec (`.tasks != null`), resolved from the argument, the `branch_name` match, or an info prompt. Under `NO_PROMPT=1` an unresolved id ended the run as the documented hard error rather than a default.
 - `BASE_REF` resolved through the cascade and validated, **or** the autonomous no-base path set `QA_OUTCOME=BLOCKED` with a `blocked_reason` and short-circuited to §6.3. A hang or a prompt on the autonomous path has broken this.
 - `$PAYLOAD` holds one `spec export-cognitive-aid` result carrying both `spec.spec_sections` and the top-level `tasks[]`. **Phase 2 reads that payload.** A second export call, or a `flowctl show` used as the evidence source, has broken this.
-- If `.flow/features/` existed, matching feature files were loaded for navigation; a per-target miss fell back to normal derivation; if absent, only the existence check ran.
+- If `.flow/features/` existed, the reused or matched feature file was loaded for navigation, never the whole map; a per-target miss fell back to normal derivation; if absent, only the existence check ran.
 
 ---
 
@@ -536,8 +536,8 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 Show `$FLOWCTL qa receipt --skeleton` once. Write a JSON payload with the Write
 tool to `$QA_RECEIPT_INPUT`: `id`, `qa_outcome`, all Phase 5 `findings`
 (`id`, `severity`, `confidence`, `classification`, `reason`, `file`),
-`rid_coverage.rids`, and the outcome's `blocked_reason` or `na_reason` when
-applicable. The verb derives verdict, timestamp, HEAD, branch, coverage counts,
+`rid_coverage.rids`, the outcome's `blocked_reason` or `na_reason` when
+applicable, and `resolved_feature` when Phase 1.3 read the map. The verb derives verdict, timestamp, HEAD, branch, coverage counts,
 open P0/P1 and prior-finding carry-over; judgment stays in the payload.
 
 ```bash
