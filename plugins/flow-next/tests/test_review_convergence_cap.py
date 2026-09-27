@@ -1481,8 +1481,13 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertEqual(payload["attempts"][0]["backend"], "rp")
 
     def test_spec_show_omits_ledgers_that_dedicated_readers_return(self):
-        """fn-258 R2: `show <spec> --json` drops review_attempts + tracker;
-        `review-rounds attempts` and `sync get-state` still return them."""
+        """fn-258 R2 (corrected): `show <spec> --json` drops review_attempts
+        entirely (a large ledger with a dedicated reader). `tracker` keeps
+        its small identity fields in `show` too — they're cheap and several
+        documented consumer recipes read `.tracker.id` straight off `show`
+        rather than `sync get-state` — but still drops its two large
+        full-body duplicates (`mergeBaseFlow` / `mergeBaseTracker`), which
+        `sync get-state` remains the dedicated reader for."""
         self._run(
             "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
         )
@@ -1495,7 +1500,12 @@ class TestReviewRoundsCLI(unittest.TestCase):
         )
         spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
         data = self._spec_json()
-        data["tracker"] = {**data.get("tracker", {}), "identifier": "WOR-7"}
+        data["tracker"] = {
+            **data.get("tracker", {}),
+            "identifier": "WOR-7",
+            "mergeBaseFlow": "full spec body...",
+            "mergeBaseTracker": "full spec body...",
+        }
         spec_path.write_text(json.dumps(data))
         stored = self._spec_json()
         self.assertTrue(stored["review_attempts"])
@@ -1504,7 +1514,10 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertEqual(code, 0)
         shown = json.loads(out)
         self.assertNotIn("review_attempts", shown)
-        self.assertNotIn("tracker", shown)
+        self.assertIn("tracker", shown)
+        self.assertEqual(shown["tracker"]["identifier"], "WOR-7")
+        self.assertNotIn("mergeBaseFlow", shown["tracker"])
+        self.assertNotIn("mergeBaseTracker", shown["tracker"])
         for key in set(stored) - {"review_attempts", "tracker"}:
             self.assertIn(key, shown)
 

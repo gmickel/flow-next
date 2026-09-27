@@ -218,6 +218,29 @@ class ResolutionTestCase(unittest.TestCase):
         res = self._call(func=self.flowctl.cmd_show, id="wor-17")
         self.assertEqual(res["id"], canonical)
 
+    def test_show_keeps_small_tracker_fields_but_trims_merge_bases(self) -> None:
+        # `show` used to drop the WHOLE `tracker` key (fn-258 R2), which broke
+        # every documented `show <id> --json | jq '.tracker.id'` link-verify
+        # recipe with a false negative — the link is real, `show` just never
+        # reported it. The two full-body duplicates (`mergeBaseFlow` /
+        # `mergeBaseTracker`) are the actual bulk `sync get-state` exists to
+        # serve; the small identity fields belong in `show` too.
+        canonical = self._create_tracker_spec("Fix login", "WOR-17")
+        self._set_tracker(canonical, "uuid-17", "WOR-17", force=True)
+        spec_path = self.flow_dir / "specs" / f"{canonical}.json"
+        data = json.loads(spec_path.read_text())
+        data["tracker"]["mergeBaseFlow"] = "# Fix login\n\nfull spec body...\n"
+        data["tracker"]["mergeBaseTracker"] = "# Fix login\n\nfull spec body...\n"
+        spec_path.write_text(json.dumps(data))
+
+        res = self._call(func=self.flowctl.cmd_show, id=canonical)
+
+        self.assertIn("tracker", res)
+        self.assertEqual(res["tracker"]["identifier"], "WOR-17")
+        self.assertEqual(res["tracker"]["id"], "uuid-17")
+        self.assertNotIn("mergeBaseFlow", res["tracker"])
+        self.assertNotIn("mergeBaseTracker", res["tracker"])
+
     def test_case_insensitive_handle(self) -> None:
         canonical = self._create_tracker_spec("Fix login", "WOR-17")
         # Resolution is case-insensitive on the alias index; the on-disk id is

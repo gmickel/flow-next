@@ -31995,6 +31995,23 @@ def cmd_dep_add(args: argparse.Namespace) -> None:
 
 
 SPEC_SHOW_OMITTED_KEYS = frozenset({"review_attempts", "tracker"})
+# `pilot_snapshot`'s `lean_spec` (below) also spreads through this constant —
+# deliberately: its `tracker` exclusion serves a token-budget context where
+# even the trimmed identity fields are unwanted noise. `cmd_show` below is a
+# DIFFERENT consumer with a different need and gets its own, narrower set;
+# it must not share this one.
+#
+# fn-258 R2 dropped the whole `tracker` key from `cmd_show`'s output
+# alongside `review_attempts`, but `tracker`'s bulk is only its two
+# full-body duplicates (`mergeBaseFlow` / `mergeBaseTracker`, each a
+# byte-for-byte copy of the spec's markdown). The small fields (`id`,
+# `identifier`, `linkState`, `url`, the base hashes, `lastSyncedAt`) are
+# cheap and load-bearing: several documented consumer recipes (a
+# linked-at-birth verification: `show <id> --json | jq '.tracker.id'`) read
+# them directly from `show` rather than `sync get-state`. `cmd_show` keeps
+# them and trims only the two large fields.
+CMD_SHOW_OMITTED_KEYS = frozenset({"review_attempts"})
+TRACKER_SHOW_OMITTED_KEYS = frozenset({"mergeBaseFlow", "mergeBaseTracker"})
 
 
 def cmd_show(args: argparse.Namespace) -> None:
@@ -32045,16 +32062,25 @@ def cmd_show(args: argparse.Namespace) -> None:
         # tasks order by suffix (parse_id is fn-only → None for wor-* tasks).
         tasks.sort(key=lambda t: id_sort_key(t["id"]))
 
-        # fn-258 R2: the two large ledgers have dedicated readers
-        # (`review-rounds attempts`, `sync get-state`); the record omits them.
+        # fn-258 R2: `review_attempts` is a large ledger with a dedicated
+        # reader (`review-rounds attempts`); the record omits it entirely.
+        # `tracker` keeps its small fields here and only drops its two large
+        # full-body duplicates, which `sync get-state` is the dedicated
+        # reader for.
         result = {
             **{
                 k: v
                 for k, v in epic_data.items()
-                if k not in SPEC_SHOW_OMITTED_KEYS
+                if k not in CMD_SHOW_OMITTED_KEYS
             },
             "tasks": tasks,
         }
+        if isinstance(result.get("tracker"), dict):
+            result["tracker"] = {
+                k: v
+                for k, v in result["tracker"].items()
+                if k not in TRACKER_SHOW_OMITTED_KEYS
+            }
         # fn-58.1 (R1): lazy on-disk, explicit in output — the spread omits an
         # absent `ready` key, so default it explicitly (absent reads false).
         result["ready"] = bool(epic_data.get("ready", False))
