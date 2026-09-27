@@ -8,6 +8,8 @@
 > user (turn 2, part 3): "the issue with model: inherit is if the user is using fable for planning for example"
 > user (turn 3): "this is fine until the new sonnet comes out this week, which we can note into our memory to recheck mid week."
 > user (turn 4): "leave copilot on haiku, carry on"
+> user (turn 5): "https://github.com/gmickel/flow-next/issues/486 might be something we can add to that small spec, looks simple"
+> user (turn 5, part 2): "also mark it ready and make sure it's done after these two get through"
 
 ## Goal & Context
 <!-- scope: business -->
@@ -26,6 +28,7 @@ Target user: every flow-next user whose sessions dispatch the bundled scouts, on
 - **Codex mirror baselines.** The generator's fast-tier baseline moves from gpt-5.6-luna to gpt-6-luna, and its intelligent-tier baseline from gpt-5.6-terra to gpt-6-sol (no gpt-6-terra is served). After the Claude change every mapped agent resolves to the intelligent tier, so the fast baseline stays current but may have no default consumer. The committed mirror is regenerated from the generator, never hand-edited. [paraphrase]
 - **Codex triage judge.** The codex review backend's triage-judge baseline moves from gpt-5.6-luna to gpt-6-luna, keeping its current effort. The copilot backend's triage judge stays on claude-haiku-4.5. [paraphrase]
 - **Codex reviewer fallback ranking.** gpt-6-sol joins the codex backend's model ranking directly after gpt-6-astra, so a withheld astra steps down to the same generation first. [inferred]
+- **Resumed codex reviews keep their model (issue #486, reported by @TechupBusiness).** A codex review resumes its reviewer session for every fix-loop re-review, validator pass and deep pass, and today the resume sends effort, sandbox and project-doc settings but no model, on the assumption that a session keeps the model of its original dispatch. Since codex-cli 0.154 a resumed session runs on the model in Codex's own config instead, so a review pinned to one model silently re-reviews on another while the receipt still records the pin. The resume re-pins the model the original dispatch actually ran, whether it was named explicitly or resolved through the fallback ladder. [paraphrase]
 - **Pins that assert these values** (the mirror floor check, model-resolution baselines) move with the change in the same commit. [inferred]
 
 ## Edge Cases & Constraints
@@ -44,6 +47,7 @@ Target user: every flow-next user whose sessions dispatch the bundled scouts, on
 - **R4:** The codex reviewer fallback ranking lists gpt-6-sol immediately after gpt-6-astra. [inferred]
 - **R5:** User-facing docs that name scout models or per-tier defaults (reach pages, orchestration and running-lean guidance, and the flow-next.dev pages that repeat them) state the new defaults, and the CHANGELOG entry for the release names the baseline bump. [inferred]
 - **R6:** The full test suite passes with the pins that assert model values updated to the new defaults. [inferred]
+- **R7:** Every resumed codex review turn (re-review, validator, deep pass) runs on the model the session's original dispatch used, for explicit pins and ladder-resolved models alike; a regression test asserts the resume invocation carries that model, and the release notes credit the reporter of issue #486. Errors: if the original dispatch model is unknown, the resume behaves as today rather than guessing. [paraphrase]
 
 ## Boundaries
 <!-- scope: business -->
@@ -60,7 +64,7 @@ Target user: every flow-next user whose sessions dispatch the bundled scouts, on
 
 Haiku-pinned scouts and last-generation Codex models give users weaker scouting than the models they already have access to, and the maintainer wants the strongest current defaults ("move all to opus 5.5"). [paraphrase] Opus rather than `inherit` bounds cost for Fable sessions. [paraphrase] The choice is explicitly interim until the new Sonnet ships; a recheck around 2026-09-30 decides whether Sonnet replaces Opus as the scout pin. [paraphrase]
 
-Delivery order: after fn-265 and fn-266, shipped in the 6.4.0 release. [user]
+Delivery order: after fn-265 and fn-266 (recorded as dependencies), shipped in the 6.4.0 release. [paraphrase] Issue #486 is folded in because it is the same concern, a model pin that silently does not hold, and the fix is small. [paraphrase]
 
 ## Strategy Alignment
 
