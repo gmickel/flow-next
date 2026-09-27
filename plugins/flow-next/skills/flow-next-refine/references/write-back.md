@@ -120,6 +120,10 @@ Items the agent answered via Read / Grep / Glob, with file:line evidence. Separa
 (optional — written by the business pass per R26 when project-docs investigation resolved items)
 Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Symmetric to `## Resolved via Codebase` but biz-pass-only.
 
+## Resolved via Experiment
+(optional — written by either pass when an experiment-answerable question was settled by running something)
+One entry per question: the question, what was run, what was observed (the numbers or output), and the decision it settled — or "inconclusive", with the question moved to the user. The experiment itself stays in `.flow/tmp/experiments/` and never ships.
+
 ## Glossary Conflicts
 (optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
 Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical / redefine / this-is-different), file:line of the canonical entry. Lets reviewers see where vocabulary tightened.
@@ -169,8 +173,9 @@ Refine canonical sections under your scope's writable list (per write-policy) wh
 
 <then the auxiliary interview-audit sections — same headings, same contents,
  and same only-when conditions as the NEW IDEA branch above (Resolved via
- Codebase / Resolved via Project Docs / Glossary Conflicts / Strategy
- Conflicts / Parked unknowns / Open Questions); emit only those that fired.
+ Codebase / Resolved via Project Docs / Resolved via Experiment / Glossary
+ Conflicts / Strategy Conflicts / Parked unknowns / Open Questions); emit
+ only those that fired.
  One difference on this branch: `## Parked unknowns` is the pre-existing list
  minus every bullet this pass resolved, plus any new fog — omit the heading
  when it empties out.>

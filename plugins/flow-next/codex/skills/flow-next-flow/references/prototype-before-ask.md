@@ -40,9 +40,17 @@ else:
 
 `none` continues without a question; `observable` runs the experiment; `product_or_preference` follows the question/autonomy rules; `host` uses the original table judgment. Print `fork_line` in the hop report.
 
+## Build the prototype
+
+- **Competing variants behind one switcher.** When the fork has two or more viable answers, build each as a variant of the same prototype behind one switcher: a toggle, flag or keypress that swaps between them, with each variant labelled. The variants are then compared in one place, under the same data and conditions. Variants behind one switcher are one artefact, so chart's one-artefact prototype rule still holds. A fork with only one viable variant gets a single prototype.
+- **Open design space: prior art first.** When the variants are not yet known, gather references before building: how this repo and comparable products or libraries already solve it. Show the user a few directions, each with its source, and let them pick one; then build it, or the picked directions behind a switcher. Picking a direction is a preference call.
+- **Scratch only.** Build in `.flow/tmp/experiments/` (gitignored) or another throwaway location. Nothing there is staged or shipped.
+
+Example: a search box could refresh results on every keystroke or after a pause. Build both behind a toggle, type a 12-character query against the local index, and measure: per-keystroke refresh takes 180 ms per update and stutters, a 150 ms pause feels immediate. Report the numbers and continue with the pause.
+
 ## Rules
 
 - An observable fork is never a question. Run the smallest experiment that discriminates the branches, record what ran, and continue.
 - A product or preference fork becomes at most one plain-text numbered prompt, asked with `plain-text numbered prompt` (plain-text numbered fallback on hosts without it), only when the two routes would materially differ.
-- Under any autonomy marker a product or preference fork stops with `NEEDS_HUMAN` and the observed facts; a prototype still runs when it is cheap and reversible.
+- Under any autonomy marker a product or preference fork stops with `NEEDS_HUMAN` and the observed facts; a prototype still runs when it is cheap and reversible. Choosing among gathered directions is such a fork: it stops with the references in hand.
 - A prototype is evidence, never a deliverable: it is discarded or folded into the routed stage's work, and its result is named in the report.

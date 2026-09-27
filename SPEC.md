@@ -24,6 +24,7 @@ auxiliary_sections:
   - Glossary Conflicts       # written when doc-aware mode detects a vocabulary mismatch
   - Resolved via Codebase    # written by /flow-next:refine --scope=technical
   - Resolved via Project Docs  # written by /flow-next:refine --scope=business
+  - Resolved via Experiment  # written by /flow-next:refine (either pass) when a question was settled by running something
   - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
   - Requirement coverage     # written by /flow-next:capture on a planned route; /flow-next:plan fills it; closes the body unless you place it as a heading

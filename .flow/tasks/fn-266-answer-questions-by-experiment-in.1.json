@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-27T22:24:28.157507Z",
+  "depends_on": [],
+  "id": "fn-266-answer-questions-by-experiment-in.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-266-answer-questions-by-experiment-in",
+  "spec_path": ".flow/tasks/fn-266-answer-questions-by-experiment-in.1.md",
+  "status": "todo",
+  "title": "Implement Answer questions by experiment in refine and prototypes",
+  "updated_at": "2026-09-27T22:24:28.157507Z"
+}

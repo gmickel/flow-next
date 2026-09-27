@@ -51,6 +51,7 @@ AUXILIARY_SECTIONS = [
     "Conversation Evidence",
     "Resolved via Codebase",
     "Resolved via Project Docs",
+    "Resolved via Experiment",
     "Parked unknowns",
 ]
 

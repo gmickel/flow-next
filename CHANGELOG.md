@@ -6,6 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Refine answers factual questions by running something instead of asking you.** Whether a parser accepts an input, how long a query takes, whether a layout fits at 320 px, whether an eval separates two variants: refine runs a throwaway experiment and records the question, what ran, what it observed, and the decision under a new `## Resolved via Experiment` section. An experiment that would touch live state, credentials or the network becomes a question, and so does a result too noisy to decide; you get the data with it. Product and preference calls still come to you.
+- **Flow's prototypes compare competing ideas side by side.** When a design fork has more than one viable answer, the prototype builds the variants behind one labelled switcher, so you compare them in one place. When the options are still open, flow first gathers prior art and lets you pick a direction. A prototype stays evidence and is never shipped.
+
 ## [flow-next 6.3.0] - 2026-09-27
 
 Bug fixes now come with their cause and their proof, and every stage that drives your running app starts from the feature map. Before writing a fix, flow checks whether someone already fixed or is fixing the bug, confirms the cause with runtime evidence, and bisects to the change that introduced it when a known-good revision exists. The fix is proven by the same reproduction failing on the base and passing on the head. Performance baselines, QA, bug-fix proofs and PR live checks read the map before driving. On one fixture app with one model, tasks that did not say where their target was took about 40% fewer turns and a third to half less wall time, with success no lower.
