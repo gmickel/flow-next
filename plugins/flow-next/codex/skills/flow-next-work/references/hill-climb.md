@@ -39,7 +39,7 @@ Before the first attempt:
 3. Make a change that produces a **wrong output** (a wrong value, a skipped result). The harness must reject it: a non-zero exit or a failed output check, never a score. A harness that scores a wrong output would reward a change that skips the work.
 4. Revert every probe, confirm a clean tree, and freeze: record the harness command and a `sha256` of the harness files and any inputs it reads in the ledger header.
 
-A failed ranking, gaps inside the noise, or a harness that accepts a wrong output means no attempts run. Attended, revise the harness or the workload with the user; unattended, `BLOCKED: SPEC_UNCLEAR` becomes `NEEDS_HUMAN`. Re-check the hash before every measurement. A changed harness or input invalidates earlier measurements: record a `break` row in the ledger, re-measure the baseline at the current best, and continue from there.
+A failed ranking, gaps inside the noise, or a harness that accepts a wrong output means no attempts run. Attended, revise the harness or the workload with the user; unattended, `BLOCKED: SPEC_UNCLEAR` becomes `NEEDS_HUMAN`. Re-check the hash before every measurement. A changed harness or input invalidates earlier measurements: record a `break` row in the ledger, then repeat this section against the current best (baseline, probes, wrong-output check, new hash) before the next attempt.
 
 ## 4. One attempt
 
@@ -79,7 +79,7 @@ Read the ledger before each attempt, so a refuted idea is never retried unchange
 | # | Family | Mechanism | Change | Before (median, range) | After (median, range) | Delta | Gate | Verdict | Reason | Commit |
 ```
 
-`Verdict` is `kept`, `reverted` or `inconclusive`. Rows that are not attempts carry `-` in `#`: a `break` (the harness changed and the baseline was re-measured) or a `pivot` (a plateau changed the family or triggered a re-profile, with the reason).
+`Verdict` is `kept`, `reverted` or `inconclusive`. Rows that are not attempts carry `-` in `#`: a `break` (the harness changed and was proven again), a `pivot` (a plateau changed the family or triggered a re-profile, with the reason), or a `review-fix` (section 7).
 
 ## 6. Stop rules
 
@@ -92,7 +92,7 @@ Stop only when one of these holds, and record which:
 
 Three non-kept attempts in a row are a plateau, not a stop. Change the hypothesis family, combine near misses into one new hypothesis, or re-profile, and write the pivot into the ledger.
 
-When the run stops with the target unmet, the task still completes honestly: the record reports the gap, the target's criterion stays unverified and is never marked satisfied, and under `flow --auto` the draft PR carries the gap.
+When the run stops with the target unmet, the task still completes honestly: the record reports the gap, the target's criterion stays unverified and is never marked satisfied, and under `flow --auto` the draft PR carries the gap. Before review, add the outcome to the task's description (`flowctl task set-description`): the stop rule, the gap, and that the target criterion is reported unverified. Review then judges the kept commits and the record; a finding that only restates the unmet target is answered from the record, never with attempts past the budget.
 
 ## 7. Verify, then record
 
@@ -100,7 +100,7 @@ Before `flowctl done`, check the range `$(cat .flow/tmp/base_commit)..HEAD` agai
 
 - every attempt has exactly one row, and the row count matches the attempts made;
 - every kept row names exactly one commit, and that commit touches only the attempt's files;
-- no commit in the range changes measured code without a kept row (setup before the loop, such as adding the harness, and review fixes are named in the record);
+- no commit in the range changes measured code without a kept row. Setup before the loop, such as adding the harness, is named in the record. A review fix that changes measured code gets a `review-fix` row: it is measured against the best like an attempt and kept only when its median is not worse by the effective minimum detectable effect and the gate is green;
 - the final value is measured at the final head, after any review fix, and the regression gate is green there.
 
 A missing row, an unmeasured change, or a kept change spread over several commits fails this check; fix the record or the history before done.
