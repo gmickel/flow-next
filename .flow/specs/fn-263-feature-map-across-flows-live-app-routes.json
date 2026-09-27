@@ -147,7 +147,7 @@
     "impl:fn-263-feature-map-across-flows-live-app-routes.1": 0
   },
   "spec_path": ".flow/specs/fn-263-feature-map-across-flows-live-app-routes.md",
-  "status": "open",
+  "status": "done",
   "title": "Feature map across flow's live-app routes",
   "tracker": {
     "baseHashFlow": null,
@@ -160,5 +160,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T20:44:14.183086Z"
+  "updated_at": "2026-09-27T20:44:25.834662Z"
 }
