@@ -99,6 +99,7 @@ $FLOWCTL spec clear-no-plan <spec-id> --json    # a positive plan signal was pre
 Invoke the stage skill by name with its normal arguments; pass `--review=<backend>` through when `REVIEW_OVERRIDE` is set. Flow never copies a stage's steps inline. Stage-specific notes:
 
 - **Capture under flow** is invoked with the exact token `from:flow`. Capture then applies `references/plan-vs-no-plan.md` itself, sets `no_plan` when the rule resolves to direct, and writes no placeholder requirement-coverage table on that route. The capture request authorizes saving the spec; capture then offers the saved file for review. Honor a request to capture or review only: neither saving nor editor continuation authorizes work. A previously authorized implementation route may continue after the capture follow-up.
+- **Defect reproduction** (the defect route with a reproduction still to obtain): check once whether `.flow/features/` exists. When it does, read [references/defect-intake.md](references/defect-intake.md) before driving the reproduction; when it does not, reproduce as before.
 - **Work** runs `flow-next:flow-next-work <spec-id>`; with `no_plan` recorded the fork is pre-answered and never asks.
 - **QA** runs per `references/gate-selection.md`. Under `pipeline.qa=auto`, judge drivability from the acceptance criteria and the repo before dispatching; a skip is recorded, never silent.
 - **Make-pr** ends a run from intent unless the selected merge destination or current explicit scoped consent authorizes continuation.

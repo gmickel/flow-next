@@ -2,7 +2,7 @@
 
 This page is the shape a cold agent seeds and drives from. The map lives at `.flow/features/`. The index is `.flow/features/README.md`. One file per user-facing feature sits beside it. No other paths belong in this contract.
 
-Consumers (QA, drive) discover the map by existence check only. They select a feature deterministically by its `**Surface:**` identifier plus sub-feature IDs.
+Consumers (QA, drive, flow's bug intake) discover the map by existence check only. They select a feature deterministically by its `**Surface:**` identifier plus sub-feature IDs.
 
 The map records how a user gets there. Specs still say what to prove this time. Live captured evidence is still the only proof.
 
@@ -77,6 +77,15 @@ A reader that finds a mapped route no longer matching the live app files a drift
 - Memory disabled: record Expected/Observed in the stage's run notes instead.
 
 **Retirement.** A maintain pass or a work update that proves the route a note names (corrected or not) marks that note stale, so an open count means open drift: `flowctl memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>"`. The note list comes from `flowctl features status --json` (`open_drift`: id, title, path). A note whose file already has uncommitted changes (`git status --porcelain -- <path>` non-empty) is left open, so a later restore or staging step never touches edits this run did not make. Memory disabled: nothing is marked.
+
+## Resolved-feature record
+
+A reader that resolves a report or target to a mapped feature records the result so later stages on the same spec reuse it instead of re-deriving navigation. The record is `resolved_feature` in a task's done evidence, one of two values:
+
+- An object with exactly these keys: `surface` (the `**Surface:**` identifier), `sub_feature` (one sub-feature ID), `file` (the feature file's name under `.flow/features/`), `last_proven` (the file's `**Last proven:**` value, such as `2026-09-20 at 4f2c9ab`, or `null` when the file has none), and `stage` (the stage that resolved it, such as `flow`).
+- The string `"unmapped"`: the map exists and nothing in it matched.
+
+A worker whose spec carries a `resolved_feature: <value>` line passes the value to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. The newest record for a spec is on the last task in `flowctl spec export-cognitive-aid` order that carries `evidence.resolved_feature`.
 
 ---
 

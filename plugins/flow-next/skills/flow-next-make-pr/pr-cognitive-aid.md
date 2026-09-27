@@ -33,6 +33,8 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   Use `pass` for a known green gate, `fail` for failure, `unverified` for inconclusive or never-run steps with the gap in `value`.
   A passed gate without a stored receipt cites the merge commit or pull request that carried it (a `review_receipt` ref can be its URL).
   Omit `outcome` only for a recorded fact that is neither passed nor failed, such as a measurement; it renders as a plain item.
+- A task carrying `evidence.resolved_feature` (the last such task in export order) gets one outcome-less proof cell
+  labelled `Reproduced via`, valued `<surface> <sub_feature> (<file>)` or `unmapped`, citing that task.
 - QA receipts use `qa_outcome`, not the projected `verdict`: SHIP maps to pass,
   NEEDS_WORK to fail, BLOCKED/NA to unverified with their reason. Open findings go in `openItems`, advisory only.
   Verify head freshness against code, allowing only leading QA-receipt, lens and spec-close bookkeeping commits;

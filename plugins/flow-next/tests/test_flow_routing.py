@@ -1,8 +1,8 @@
 """Contract checks for /flow-next:flow and its shared routing reference.
 
-Behavior and contract only (G2): the skill, shim, six routing reference files
-and the two gated auto-only reference files exist and nothing else sits in
-references/; every routing reference opens with a decision record; every
+Behavior and contract only (G2): the skill, shim, six routing reference files,
+the two gated auto-only reference files and the gated stage-intake file exist
+and nothing else sits in references/; every routing reference opens with a decision record; every
 reference link from the always-loaded files resolves, every routing reference
 is reachable from them, and the two auto-only files are reachable from auto.md
 only; every consumer pointer names a reference file that exists; the retired
@@ -43,6 +43,10 @@ REFERENCE_NAMES = (
 # Gated references read only under `--auto` (moved from the pilot skill). They
 # carry no routing rule and no decision record; auto.md reaches them.
 AUTO_ONLY_REFERENCE_NAMES = ("backlog-mode.md", "qa-stage.md")
+
+# Gated stage-intake references the attended workflow reaches behind an
+# existence check. They carry no routing rule and no decision record.
+GATED_STAGE_REFERENCE_NAMES = ("defect-intake.md",)
 
 DECISION_RECORD_ITEMS = ("Source", "Trigger", "Purpose", "Evidence", "Disposition")
 
@@ -97,14 +101,14 @@ class FlowSurfaceExists(unittest.TestCase):
     def test_skill_workflow_shim_and_references_exist(self) -> None:
         for path in (FLOW_SKILL, FLOW_WORKFLOW, FLOW_AUTO, FLOW_SHIM):
             self.assertTrue(path.is_file(), f"missing {path.relative_to(REPO_ROOT)}")
-        for name in (*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES):
+        for name in (*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES, *GATED_STAGE_REFERENCE_NAMES):
             path = FLOW_REFERENCES / name
             self.assertTrue(path.is_file(), f"missing {path.relative_to(REPO_ROOT)}")
         on_disk = sorted(p.name for p in FLOW_REFERENCES.glob("*.md"))
         self.assertEqual(
             on_disk,
-            sorted((*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES)),
-            "references/ holds the six routing files plus the two auto-only files, nothing else",
+            sorted((*REFERENCE_NAMES, *AUTO_ONLY_REFERENCE_NAMES, *GATED_STAGE_REFERENCE_NAMES)),
+            "references/ holds the six routing files, the two auto-only files and the gated stage files, nothing else",
         )
 
     def test_shim_frontmatter(self) -> None:
@@ -166,8 +170,14 @@ class FlowReferenceReachability(unittest.TestCase):
                 )
         # The auto-only files are gated behind `--auto`: the attended prose
         # never names them, so an attended run never loads them.
-        unknown = mentioned - set(REFERENCE_NAMES)
+        unknown = mentioned - set(REFERENCE_NAMES) - set(GATED_STAGE_REFERENCE_NAMES)
         self.assertEqual(unknown, set(), f"always-loaded prose names unknown references: {sorted(unknown)}")
+
+    def test_gated_stage_references_are_linked_from_workflow_one_level_deep(self) -> None:
+        linked = set(LOCAL_REF_LINK_RE.findall(_read(FLOW_WORKFLOW)))
+        for name in GATED_STAGE_REFERENCE_NAMES:
+            with self.subTest(reference=name):
+                self.assertIn(f"references/{name}", linked)
 
     def test_auto_md_links_the_auto_only_references_one_level_deep(self) -> None:
         text = _read(FLOW_AUTO)

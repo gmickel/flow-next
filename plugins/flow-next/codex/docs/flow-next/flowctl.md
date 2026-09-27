@@ -1102,8 +1102,9 @@ flowctl done fn-1.2 --summary "short summary" --evidence '{"commits":["abc"],"te
 - `--summary-file` / `--summary` - done-summary markdown (file or inline text). One of the pair is required.
 - `--evidence-json` / `--evidence` - evidence JSON (file or inline string). With neither flag the CLI records empty commit, test, and PR lists; the work and review contracts, and the Ralph guard, require evidence.
 - `--range BASE..HEAD` derives `commits` and `base_commit`; unreachable commits fail with the offending SHA. Repeat `--test` for multiple commands. Interleaved task histories keep explicit evidence lists.
+- `--resolved-feature '<json>'|unmapped` - the feature-map resolved-feature record (fn-261): an object with exactly `surface`, `sub_feature`, `file`, `last_proven` (string or null) and `stage`, or `unmapped`. Stored as `evidence.resolved_feature`, rendered as a `- Resolved feature:` receipt line, and surfaced per task by `spec export-cognitive-aid`. Works with `--range`; the same key in evidence JSON is validated the same way, and any other shape fails before writing.
 - `--force` - skip the `in_progress` status check.
-- Evidence must carry at least one of `commits`, `tests`, `prs`. Keys other than those, `base_commit`, `files` and `files_touched` print a stderr warning and are not rendered.
+- Evidence must carry at least one of `commits`, `tests`, `prs`. Keys other than those, `base_commit`, `files`, `files_touched` and `resolved_feature` print a stderr warning and are not rendered.
 - When `planSync.enabled` is not `true`, `done` appends `stage: plan-sync - skipped(config: planSync.enabled != true)` to the summary unless it already carries a plan-sync stage line.
 
 Evidence JSON format:

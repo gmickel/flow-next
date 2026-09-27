@@ -182,7 +182,7 @@ if [ -d "$REPO_ROOT/.flow/features" ]; then
 fi
 ```
 
-When the directory exists: Read the index README. Select features whose `**Surface:**` identifier matches the surface this run targets, plus those features' sub-feature IDs (the index `Surfaces` grouping). Load the matching files' `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps. Selection and file shape: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md).
+When the directory exists: Read the index README. Select features whose `**Surface:**` identifier matches the surface this run targets, plus those features' sub-feature IDs (the index `Surfaces` grouping). Load the matching files' `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps. Selection and file shape: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md). When a `$PAYLOAD` task carries `evidence.resolved_feature` (the last such task in payload order), the defect's feature is already resolved: select that Surface and sub-feature first instead of re-deriving it (`"unmapped"` selects nothing).
 
 **A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
 
