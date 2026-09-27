@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Changed
 
-- **Bug fixes check for prior work, find the cause, and prove the fix on base and head.** When flow or work fixes a reported defect, it first looks for existing fixes: open pull requests and branches touching the area, recent commits and reverts, the memory bug track and tracker issues. An existing fix is verified against the reproduction and reported instead of getting a competing one, a fix someone else owns is handed back, and a reverted attempt counts as a ruled-out cause. The symptom must reproduce twice, and the cause is confirmed with runtime evidence before the fix is designed. When a known-good revision exists, a bisection names the change that introduced the defect. A cheap reproduction test is committed failing before the fix, and the same reproduction must fail on the base and pass on the head, on the live app when there is one. The findings, the cause, the introducing commit and the base and head results appear in the task record and the PR briefing, and anything not done says so.
+- **Bug fixes check for prior work, confirm the cause with runtime evidence, bisect when they can, and prove the fix on base and head.** An existing fix is verified instead of duplicated, and a fix someone else owns is handed back. The same reproduction must fail on the base and pass on the head, on the live app when there is one. The task record and the PR briefing carry the findings, including any step that was not done.
 
 ## [flow-next 6.2.0] - 2026-09-27
 

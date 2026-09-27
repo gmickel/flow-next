@@ -64,7 +64,7 @@ Run the same reproduction on the base (the revision before the fix: the failing-
 
 ## Record
 
-Add this block to the done summary. Every line is present; an element that did not happen reads `not done: <reason>` rather than being left out. make-pr builds the PR briefing's defect proof cells from it; the full record stays with the task.
+Add this block to the done summary. Every line is present; an element that did not happen reads `not done: <reason>` rather than being left out. make-pr summarizes it in the PR briefing; the full record stays with the task.
 
 ```text
 Defect route:

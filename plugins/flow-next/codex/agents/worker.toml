@@ -207,11 +207,10 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
 3. **Defect-pattern sweep (bug-shaped tasks):** when the task fixes a defect,
    grep for the defect's *pattern*, not just the reported instance — bounded to
    the surface the ACs cover. A sibling instance left behind is the recurrence
-   class: the same bug refiled from the next call site. When the task fixes a
-   reported defect, also read
-   [defect-route.md](../skills/flow-next-work/references/defect-route.md) now
-   and follow its four steps: the prior-fix check, diagnosis and bisection run
-   before any fix is written, and its record goes into the Phase 5 summary.
+   class: the same bug refiled from the next call site. For a reported defect,
+   read and follow
+   [defect-route.md](../skills/flow-next-work/references/defect-route.md)
+   before writing the fix.
 
 4. Read **Optional** files as needed during implementation.
 

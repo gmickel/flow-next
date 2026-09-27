@@ -35,10 +35,8 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   Omit `outcome` only for a recorded fact that is neither passed nor failed, such as a measurement; it renders as a plain item.
 - A task carrying `evidence.resolved_feature` (the last such task in export order) gets one outcome-less proof cell
   labelled `Reproduced via`, valued `<surface> <sub_feature> (<file>)` or `unmapped`, citing that task.
-- Tasks whose done summary carries a `Defect route:` block (`flow-next-work/references/defect-route.md`) share one set of proof cells
-  per briefing: `Prior fixes`, `Cause` (the confirmed mechanism and the introducing commit), `Base`, `Head` and `Live`, each citing those tasks.
-  With several such tasks, each cell summarizes them in its 160 characters; the full records stay in the tasks.
-  A line reading `not done` or `not run`, or a missing line, makes that cell `unverified`, valued `not done: <reason>`.
+- Summarize a task's `Defect route:` block (`flow-next-work/references/defect-route.md`) in the existing prose fields and proof cells:
+  prior-fix findings, confirmed cause, introducing commit, and base/head/live observations. Cite the task records; show missing evidence as `not done: <reason>`.
 - QA receipts use `qa_outcome`, not the projected `verdict`: SHIP maps to pass,
   NEEDS_WORK to fail, BLOCKED/NA to unverified with their reason. Open findings go in `openItems`, advisory only.
   Verify head freshness against code, allowing only leading QA-receipt, lens and spec-close bookkeeping commits;
