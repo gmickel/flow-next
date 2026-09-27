@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-261-feature-map-aware-bug-intake-in-flow",
   "spec_path": ".flow/tasks/fn-261-feature-map-aware-bug-intake-in-flow.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Feature-map-aware bug intake in /flow-next:flow",
   "updated_at": "2026-09-27T07:36:30.477333Z"
 }

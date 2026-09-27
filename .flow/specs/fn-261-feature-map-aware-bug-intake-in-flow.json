@@ -65,7 +65,7 @@
     "impl:fn-261-feature-map-aware-bug-intake-in-flow.1": 0
   },
   "spec_path": ".flow/specs/fn-261-feature-map-aware-bug-intake-in-flow.md",
-  "status": "open",
+  "status": "done",
   "title": "Feature-map-aware bug intake in /flow-next:flow",
   "tracker": {
     "baseHashFlow": null,
@@ -78,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T08:11:28.623700Z"
+  "updated_at": "2026-09-27T08:38:38.973041Z"
 }
