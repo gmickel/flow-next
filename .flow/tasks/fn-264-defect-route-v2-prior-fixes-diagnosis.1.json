@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-27T13:22:33.602980Z",
+  "depends_on": [],
+  "id": "fn-264-defect-route-v2-prior-fixes-diagnosis.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-264-defect-route-v2-prior-fixes-diagnosis",
+  "spec_path": ".flow/tasks/fn-264-defect-route-v2-prior-fixes-diagnosis.1.md",
+  "status": "todo",
+  "title": "Implement Defect route v2: prior fixes, diagnosis, bisect, base vs head",
+  "updated_at": "2026-09-27T13:22:33.602980Z"
+}

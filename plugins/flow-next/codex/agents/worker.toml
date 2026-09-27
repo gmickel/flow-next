@@ -207,7 +207,11 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
 3. **Defect-pattern sweep (bug-shaped tasks):** when the task fixes a defect,
    grep for the defect's *pattern*, not just the reported instance — bounded to
    the surface the ACs cover. A sibling instance left behind is the recurrence
-   class: the same bug refiled from the next call site.
+   class: the same bug refiled from the next call site. When the task fixes a
+   reported defect, also read
+   [defect-route.md](../skills/flow-next-work/references/defect-route.md) now
+   and follow its four steps: the prior-fix check, diagnosis and bisection run
+   before any fix is written, and its record goes into the Phase 5 summary.
 
 4. Read **Optional** files as needed during implementation.
 
@@ -305,9 +309,10 @@ Task: <TASK_ID>"
 Use conventional commits. Scope from task context.
 
 **Bug-shaped tasks:** a commit carrying the failing reproduction BEFORE the fix
-commit is allowed and preferred, never required — it pins the defect the fix
+commit is allowed and preferred — it pins the defect the fix
 claims to close, so the fix's evidence is a red-to-green transition rather than
-a green run that may never have been red.
+a green run that may never have been red. It is required on the defect route
+when the reproduction is a cheap test (defect-route.md step 4).
 
 Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`.
 

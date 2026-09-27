@@ -115,10 +115,17 @@ A small task can use the same direct route as a larger cohesive change. `/flow-n
 
 ```mermaid
 flowchart LR
-    R([Bug report]) --> Repro[reproduce as failing test] --> W[/work/] --> Rev[/impl-review/]
+    R([Bug report]) --> P[prior-fix check] --> D[reproduce twice, diagnose] --> B[bisect] --> F[fix, prove on base and head] --> Rev[/impl-review/]
 ```
 
-The sharpening tool for a defect is **reproduction, not conversation** - refine is usually the wrong instrument here. Reproduce the bug as a failing test and make that test the R-ID: the requirement *is* "this no longer happens, provably." Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+The sharpening tool for a defect is **reproduction, not conversation** - refine is usually the wrong instrument here. The failing reproduction is the R-ID: the requirement *is* "this no longer happens, provably." Work runs four steps, detailed in [defect-route.md](../skills/flow-next-work/references/defect-route.md):
+
+1. **Prior-fix check.** Before any fix is written, look for open PRs and branches touching the area, recent commits and reverts there, the memory bug track, and tracker issues. An existing or person-owned fix stops the route instead of getting a competing one; a reverted attempt becomes a ruled-out cause.
+2. **Reproduce, then diagnose.** The symptom reproduces twice, then candidate causes are ruled out one at a time with runtime evidence until one mechanism is confirmed. A symptom that does not reproduce is reported, never fixed blind.
+3. **Bisect** when a known-good revision exists, to name the change that introduced the defect. Skipped, with the reason, when there is none or the reproduction is too costly.
+4. **Prove on base and head.** A cheap reproduction test is committed failing before the fix. The same reproduction fails on the base and passes on the head, on the live app when there is one.
+
+The findings of each step go into the task's done summary and the PR briefing. Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
 
 ### Refactoring
 

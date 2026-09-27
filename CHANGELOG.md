@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Bug fixes check for prior work, find the cause, and prove the fix on base and head.** When flow or work fixes a reported defect, it first looks for existing fixes: open pull requests and branches touching the area, recent commits and reverts, the memory bug track and tracker issues. An existing fix is verified against the reproduction and reported instead of getting a competing one, a fix someone else owns is handed back, and a reverted attempt counts as a ruled-out cause. The symptom must reproduce twice, and the cause is confirmed with runtime evidence before the fix is designed. When a known-good revision exists, a bisection names the change that introduced the defect. A cheap reproduction test is committed failing before the fix, and the same reproduction must fail on the base and pass on the head, on the live app when there is one. The findings, the cause, the introducing commit and the base and head results appear in the task record and the PR briefing, and anything not done says so.
+
 ## [flow-next 6.2.0] - 2026-09-27
 
 Your feature map now keeps itself current, and bug reports that don't say where the problem is start from it. A spec that renames a button or moves a page updates the map in the same pull request, so the map no longer goes stale between manual refreshes. Hand flow an untitled screenshot or a vague "this thing in my list" and it goes straight to the matching feature instead of searching the app. On a fixture app it ended the long searches on the hardest report, an untitled screenshot, cutting its turns from 38 to about 12 (48 runs, same model), with every defect reproduced and cost unchanged.

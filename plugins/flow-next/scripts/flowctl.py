@@ -23746,7 +23746,7 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
  'capture_brief': ('Capture the structured brief.',
                    'Skip chart. Narrow or skip refine only after source-grounded synthesis establishes no '
                    'material gaps'),
- 'defect': ('Reproduce the defect, then implement and review the fix.',
+ 'defect': ('Check for prior fixes, reproduce and diagnose the defect, bisect when a known-good revision exists, then fix, prove on base and head, and review.',
             'Refine is the wrong instrument for a defect. Capture only when the diagnosis conversation '
             'itself carries decisions worth locking down'),
  'cleanup': ('Pin the current behavior, then implement and review the structural change.',
@@ -24004,7 +24004,7 @@ def judge_route_explain(result: dict, state: dict) -> list[str]:
     if decision.get("research_recommended"):
         next_step = "Read the unfamiliar dependency documentation first; then " + next_step
     if decision.get("defect_repro") == "provided":
-        next_step = "Run the supplied repro, then implement and review the fix."
+        next_step = "Check for prior fixes, run the supplied repro and diagnose, bisect when a known-good revision exists, then fix, prove on base and head, and review."
     return [
         f"Next: {next_step}",
         f"Route: {route}", f"Signal: {signal}",
