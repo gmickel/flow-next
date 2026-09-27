@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Asking flow to move one number toward a target now runs a measured improvement loop, not a single change.** Work proves your benchmark can tell better from worse before trusting it, then tries one idea at a time: an idea is kept, as its own commit, only when it beats the best so far by more than the noise, a second measurement agrees and your regression tests stay green; everything else is reverted. The run stops on the target and a minimum number of attempts, or on the budget you set, and a missed target is reported, never relaxed. The PR shows the baseline and final values, every attempt including the reverted ones, and the best idea not yet tried. On a fixture CLI, five attempts cut `--version` cold start from 124 ms to 8 ms, with three kept and two reverted. You write the metric, target and budget in a `## Hill-climb pre-registration` section of the spec.
+
 ## [flow-next 6.3.0] - 2026-09-27
 
 Bug fixes now come with their cause and their proof, and every stage that drives your running app starts from the feature map. Before writing a fix, flow checks whether someone already fixed or is fixing the bug, confirms the cause with runtime evidence, and bisects to the change that introduced it when a known-good revision exists. The fix is proven by the same reproduction failing on the base and passing on the head. Performance baselines, QA, bug-fix proofs and PR live checks read the map before driving. On one fixture app with one model, tasks that did not say where their target was took about 40% fewer turns and a third to half less wall time, with success no lower.

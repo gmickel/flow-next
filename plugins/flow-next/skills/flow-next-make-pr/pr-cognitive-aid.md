@@ -39,6 +39,9 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   labelled `Resolved feature`, valued `<surface> <sub_feature> (<file>)` or `unmapped`, citing that receipt or task.
 - Summarize a task's `Defect route:` block (`flow-next-work/references/defect-route.md`) in the existing prose fields and proof cells:
   prior-fix findings, confirmed cause, introducing commit, and base/head/live observations. Cite the task records; show missing evidence as `not done: <reason>`.
+- Summarize a task's `Hill climb:` block (`flow-next-work/references/hill-climb.md`) in the existing prose fields and proof cells:
+  metric and target, baseline to final with the percent change, attempt counts (kept, reverted, inconclusive), the kept commits in order,
+  the harness proof, the final gate, and the best untried idea. A value the record lacks renders `unverified` with the gap; an unmet target is `unverified`, never `pass`.
 - QA receipts use `qa_outcome`, not the projected `verdict`: SHIP maps to pass,
   NEEDS_WORK to fail, BLOCKED/NA to unverified with their reason. Open findings go in `openItems`, advisory only.
   Verify head freshness against code, allowing only leading QA-receipt, lens and spec-close bookkeeping commits;

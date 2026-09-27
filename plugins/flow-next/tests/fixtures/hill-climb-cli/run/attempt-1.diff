@@ -1,0 +1,26 @@
+diff --git a/mycli/__main__.py b/mycli/__main__.py
+index 9e515ff..20e4a38 100644
+--- a/mycli/__main__.py
++++ b/mycli/__main__.py
+@@ -4,7 +4,7 @@ from mycli import VERSION, plugins, tables
+ 
+ 
+ def main(argv):
+-    registry = plugins.validate(plugins.discover())
++    registry = plugins.discover()
+     if argv[:1] == ["--version"]:
+         print(f"mycli {VERSION}")
+         return 0
+diff --git a/mycli/plugins.py b/mycli/plugins.py
+index 257bafb..4327eda 100644
+--- a/mycli/plugins.py
++++ b/mycli/plugins.py
+@@ -29,8 +29,3 @@ def discover():
+                     found.setdefault(name[:-3], path)
+     return found
+ 
+-
+-def validate(found):
+-    """Re-scan the search path to confirm every discovered plugin still exists."""
+-    again = discover()
+-    return {name: path for name, path in found.items() if again.get(name) == path}

@@ -158,15 +158,16 @@ class FlowReferenceReachability(unittest.TestCase):
                         f"{path.name} links {rel} which does not exist",
                     )
 
-    def test_defect_route_reference_is_linked_from_its_readers(self) -> None:
-        # The defect row routes to it and the worker reads it; both links resolve.
+    def test_gated_work_references_are_linked_from_their_readers(self) -> None:
+        # Its matrix row routes to each gated reference and the worker reads it; every link resolves.
         readers = (FLOW_REFERENCES / "route-matrix.md", PLUGIN / "agents" / "worker.md")
-        for reader in readers:
-            links = re.findall(r"\]\(([^)#]*defect-route\.md)\)", _read(reader))
-            with self.subTest(reader=reader.name):
-                self.assertTrue(links, f"{reader.name} does not link defect-route.md")
-                for rel in links:
-                    self.assertTrue((reader.parent / rel).resolve().is_file(), f"{reader.name} links {rel}")
+        for name in ("defect-route.md", "hill-climb.md"):
+            for reader in readers:
+                links = re.findall(r"\]\(([^)#]*" + re.escape(name) + r")\)", _read(reader))
+                with self.subTest(reference=name, reader=reader.name):
+                    self.assertTrue(links, f"{reader.name} does not link {name}")
+                    for rel in links:
+                        self.assertTrue((reader.parent / rel).resolve().is_file(), f"{reader.name} links {rel}")
 
     def test_every_reference_is_reachable_from_always_loaded_prose(self) -> None:
         combined = _read(FLOW_SKILL) + "\n" + _read(FLOW_WORKFLOW)

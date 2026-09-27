@@ -1,0 +1,18 @@
+diff --git a/mycli/__main__.py b/mycli/__main__.py
+index 20e4a38..5b92746 100644
+--- a/mycli/__main__.py
++++ b/mycli/__main__.py
+@@ -4,12 +4,11 @@ from mycli import VERSION, plugins, tables
+ 
+ 
+ def main(argv):
+-    registry = plugins.discover()
+     if argv[:1] == ["--version"]:
+         print(f"mycli {VERSION}")
+         return 0
+     if argv[:1] == ["list"]:
+-        for name in sorted(registry):
++        for name in sorted(plugins.discover()):
+             print(name)
+         return 0
+     if argv[:1] == ["stats"]:

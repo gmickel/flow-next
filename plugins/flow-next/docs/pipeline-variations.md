@@ -139,6 +139,23 @@ The findings of each step go into the task's done summary and the PR briefing. E
 
 **Signal:** one metric against a target through many attempts. The target is the R-ID and each attempt's comparable measurement is the evidence; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row separates it from the one-off fix.
 
+```mermaid
+flowchart LR
+    P([Pre-registration]) --> H[prove, then freeze the harness] --> A[one change, one measurement] -->|kept: one commit| L[ledger row]
+    A -->|inconclusive or worse: revert| L
+    L -->|no stop rule met| A
+    L -->|stop| Rev[/impl-review/] --> PR[/make-pr/]
+```
+
+Work runs the loop inside its one task, as [hill-climb.md](../skills/flow-next-work/references/hill-climb.md) details:
+
+1. **Pre-registration.** The spec's `## Hill-climb pre-registration` section names the metric and its direction, the target, the attempt floor, the budget, the harness and regression-gate commands, the runs per measurement and the minimum detectable effect. A missing field stops the route before anything is measured (a question attended, `NEEDS_HUMAN` unattended). The human owns the target, the floor and the budget; the agent never relaxes them.
+2. **Prove, then freeze the harness.** It must rank a known-worse and a known-better change around the baseline with gaps larger than the baseline's spread, and reject a wrong output. Then its command and files are hashed; a later change forces a new baseline.
+3. **One change, one measurement.** Each attempt tests one hypothesis from a family a profile supports, measured against the current best with warm-ups discarded and runs interleaved. It is kept, as exactly one commit, only when its median beats the best by the minimum detectable effect, the ranges do not overlap, a replicate agrees and the regression gate is green. Anything else is reverted to a clean tree, and every attempt writes a ledger row.
+4. **Stop honestly.** The run stops when the target is met and the attempt floor is reached, the budget is spent, the supported families are exhausted, or the harness breaks. Three misses in a row change the family instead of stopping. An unmet target is reported unverified, never relaxed.
+
+Review runs once over the kept commits. The done summary carries the full ledger, and the PR briefing shows the baseline and final values, the attempt counts, the kept commits, the harness proof, the final gate and the best untried idea.
+
 ### Investigation
 
 **Signal:** a read-only question. The deliverable is a cited answer with no `.flow/` write and no PR; the [route matrix](../skills/flow-next-flow/references/route-matrix.md) row names the sources and when a question routes as a change instead.

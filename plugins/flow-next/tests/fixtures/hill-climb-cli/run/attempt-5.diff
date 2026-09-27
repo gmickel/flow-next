@@ -1,0 +1,27 @@
+diff --git a/mycli/__main__.py b/mycli/__main__.py
+index 5b92746..9a061ba 100644
+--- a/mycli/__main__.py
++++ b/mycli/__main__.py
+@@ -1,6 +1,6 @@
+ import sys
+ 
+-from mycli import VERSION, plugins, tables
++from mycli import VERSION
+ 
+ 
+ def main(argv):
+@@ -8,10 +8,14 @@ def main(argv):
+         print(f"mycli {VERSION}")
+         return 0
+     if argv[:1] == ["list"]:
++        from mycli import plugins
++
+         for name in sorted(plugins.discover()):
+             print(name)
+         return 0
+     if argv[:1] == ["stats"]:
++        from mycli import tables
++
+         print(f"primes: {len(tables.PRIMES)}")
+         return 0
+     print("usage: mycli --version | list | stats", file=sys.stderr)
