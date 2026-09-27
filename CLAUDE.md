@@ -38,10 +38,12 @@ For a Claude-family writer, the maintainer's preferred tiers are:
 
 ```text
 reviewer: gpt-6-astra at high
-implementer: gpt-6-astra at medium
-fast scout: haiku-4.5
-thinking scout: sonnet-5
+implementer: opus-5.5
+fast scout: opus-5.5
+thinking scout: opus-5.5
 ```
+
+Reviews focus on overengineering, slop and YAGNI.
 
 Verify availability through the active harness. If this file is read by an
 OpenAI-family writer, the reviewer preference is not independent-family review;

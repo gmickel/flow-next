@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Asking flow to move one number toward a target now runs a measured improvement loop, not a single change.** Work proves your benchmark can tell better from worse before trusting it, then tries one idea at a time: an idea is kept, as its own commit, only when it beats the best so far by more than the noise, a second measurement agrees and your regression tests stay green; everything else is reverted. The run stops on the target and a minimum number of attempts, or on the budget you set, and a missed target is reported, never relaxed. The PR shows the baseline and final values, every attempt including the reverted ones, and the best idea not yet tried. On a fixture CLI, five attempts cut `--version` cold start from 124 ms to 8 ms, with three kept, one reverted and one inconclusive. You write the metric, target and budget in a `## Hill-climb pre-registration` section of the spec.
+
 ### Changed
 
 - **Refine answers factual questions by running something instead of asking you.** Whether a parser accepts an input, how long a query takes, whether a layout fits at 320 px, whether an eval separates two variants: refine runs a throwaway experiment and records the question, what ran, what it observed, and the decision under a new `## Resolved via Experiment` section. An experiment that would touch live state, credentials or the network becomes a question, and so does a result too noisy to decide; you get the data with it. Product and preference calls still come to you.
