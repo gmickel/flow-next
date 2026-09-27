@@ -18,7 +18,7 @@ fn-263 made `resolved_feature` a record every live-app stage reads and writes (s
 Ordering carriers by the nominal stage order (flow -> work -> QA). Stages re-run; order is not chronology.
 
 ## Solution
-- Contract step 2 (`flow-next-features/references/feature-entry-contract.md`, "Live-app stages"): the QA receipt's record counts only while no code commit follows its `head_sha` (the same freshness notion make-pr uses); otherwise the last task record, then the spec line.
+- Contract step 2 (`flow-next-features/references/feature-entry-contract.md`, "Live-app stages"): the QA receipt's record first, then the last task record, then the spec line. A commit-freshness guard on the QA record was tried and removed as redundant: a change that moves a route also rewrites the feature file's `**Last proven:**` line (work's map update), and a record whose `last_proven` no longer matches is re-resolved.
 - worker.md Phase 5: record the value the task's live drive actually used; copy the spec line only when no earlier task carries a record.
 - Reuse skips selection, not the index; re-resolve when the file is gone, drops the sub-feature, or has a new Last proven line.
 

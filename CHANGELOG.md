@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Changed
 
-- **Every flow stage that drives your running app now starts from the feature map.** A performance baseline and its post-change measurement, the live proof of a bug fix on base and head, QA, and any live check a PR reports read the map's index and the one matching feature file before driving, even when the target names its page, because the file also warns about controls that misbehave. The first stage to match a feature records it with the spec; later stages reuse that record instead of matching again, and the PR briefing shows it (or `unmapped`). Questions, refactors, capture, plan and refine never read the map, a repo without a map pays one existence check, and bug intake keeps its existing rule.
+- **Every flow stage that drives your running app now starts from the feature map.** Performance baselines and post-change measurements, bug-fix proofs on base and head, QA, and live checks reported in PRs read the index and the one matching feature file, including its notes on controls that misbehave. Later stages reuse the matched feature, and the PR briefing shows it or `unmapped`. Bug intake keeps its existing rule.
 
 - **Bug fixes check for prior work, confirm the cause with runtime evidence, bisect when they can, and prove the fix on base and head.** An existing fix is verified instead of duplicated, and a fix someone else owns is handed back. The same reproduction must fail on the base and pass on the head, on the live app when there is one. The task record and the PR briefing carry the findings, including any step that was not done.
 

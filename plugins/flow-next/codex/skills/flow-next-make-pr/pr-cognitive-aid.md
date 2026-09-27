@@ -33,7 +33,7 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   Use `pass` for a known green gate, `fail` for failure, `unverified` for inconclusive or never-run steps with the gap in `value`.
   A passed gate without a stored receipt cites the merge commit or pull request that carried it (a `review_receipt` ref can be its URL).
   Omit `outcome` only for a recorded fact that is neither passed nor failed, such as a measurement; it renders as a plain item.
-- When the briefing reports a live check, the spec's newest resolved-feature record (a fresh QA receipt's `resolved_feature`,
+- When the briefing reports a live check, the spec's newest resolved-feature record (the QA receipt's `resolved_feature`,
   else the last task in export order carrying `evidence.resolved_feature`) gets one outcome-less proof cell
   labelled `Resolved feature`, valued `<surface> <sub_feature> (<file>)` or `unmapped`, citing that receipt or task.
 - Summarize a task's `Defect route:` block (`flow-next-work/references/defect-route.md`) in the existing prose fields and proof cells:
