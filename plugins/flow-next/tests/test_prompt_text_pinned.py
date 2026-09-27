@@ -190,7 +190,7 @@ TEMPLATE_HASHES = {
         # (deliberate bump). fn-257 R10: the Resolved-via-Research comment says
         # plan writes the section only when docs-scout or practice-scout ran
         # (deliberate bump).
-        "25ac517ee0081ddb498ab6cb01ddd1e4d28d2c6051179c00dd303b560efc4aec",
+        "48f038f23beafbc9299d75472441a52f4a77eca9049057af14374c4437176a05",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         # H1 dropped its spec-provenance tag in the shipped-prose tag sweep.
         "e95af5266a1a943423ca774b51a4d235fb205753b9615d12c051a78e4cc650e3",
