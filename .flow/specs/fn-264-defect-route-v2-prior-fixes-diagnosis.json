@@ -10,13 +10,75 @@
     "fn-261-feature-map-aware-bug-intake-in-flow"
   ],
   "id": "fn-264-defect-route-v2-prior-fixes-diagnosis",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-264-defect-route-v2-prior-fixes-diagnosis.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "61ca7af22c737fb22b4e2a65f0b337068cd73a0644a9abe6860c58354813da00",
+      "backend": "codex",
+      "base_sha": "9836513832e1f6ee31f57feb263ca81edf9ccd25",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-3a3bcfaaad10a2a26b0afd4870d24676",
+            "classification": "introduced",
+            "findingId": "finding-3a3bcfaaad10a2a26b0afd4870d24676",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e2863a94cf13b69a2a1da10e58a16925",
+            "classification": "introduced",
+            "findingId": "finding-e2863a94cf13b69a2a1da10e58a16925",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1195f57f6e2476493dc61417bb278011df28c48c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2141,
+      "output_sha256": "24fd0800bdd09fc9cf48cc13cbfb67e0c5622bd39238ad300bb78cff9c3e09b6",
+      "reservation_id": "df1fadb6cae64954968172615884fdc6",
+      "round_consumed": true,
+      "scope": "impl:fn-264-defect-route-v2-prior-fixes-diagnosis.1",
+      "superseded_by": null,
+      "task": "fn-264-defect-route-v2-prior-fixes-diagnosis.1",
+      "timestamp": "2026-09-27T13:42:38.819357Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-264-defect-route-v2-prior-fixes-diagnosis.1": 0
+  },
   "spec_path": ".flow/specs/fn-264-defect-route-v2-prior-fixes-diagnosis.md",
   "status": "open",
   "title": "Defect route v2: prior fixes, diagnosis, bisect, base vs head",
@@ -31,5 +93,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T21:07:03.526158Z"
+  "updated_at": "2026-09-27T13:42:38.821657Z"
 }
