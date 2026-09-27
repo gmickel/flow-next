@@ -134,7 +134,7 @@
     "impl:fn-264-defect-route-v2-prior-fixes-diagnosis.1": 0
   },
   "spec_path": ".flow/specs/fn-264-defect-route-v2-prior-fixes-diagnosis.md",
-  "status": "open",
+  "status": "done",
   "title": "Defect route v2: prior fixes, diagnosis, bisect, base vs head",
   "tracker": {
     "baseHashFlow": null,
@@ -147,5 +147,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T13:49:55.824092Z"
+  "updated_at": "2026-09-27T13:50:05.285944Z"
 }
