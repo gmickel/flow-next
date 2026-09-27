@@ -104,7 +104,8 @@ def _fake_codex_exec():
     calls: list[dict] = []
 
     def _runner(prompt, session_id=None, *, sandbox=None, spec=None,
-                repo_root=None, resolution_out=None, resume_only=False):
+                repo_root=None, resolution_out=None, resume_only=False,
+                resume_model=None):
         calls.append({"prompt": prompt, "session_id": session_id, "spec": spec})
         if resolution_out is not None:
             resolution_out["model"] = "gpt-5.5"

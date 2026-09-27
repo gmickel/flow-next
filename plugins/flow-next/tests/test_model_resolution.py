@@ -1321,7 +1321,7 @@ class TestRoleMapRemoved(unittest.TestCase):
                 self.assertEqual(r.model, CODEX_TOP)  # registry default
                 self.assertFalse(r.model_explicit)
                 m, e, src = flowctl.resolve_fast_judge_model("codex")
-                self.assertEqual((m, e, src), ("gpt-5.6-luna", "high", "baseline"))
+                self.assertEqual((m, e, src), ("gpt-6-luna", "high", "baseline"))
             finally:
                 os.chdir(prev)
 
@@ -1394,7 +1394,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
 
     def test_fast_judge_baseline_codex_and_copilot(self) -> None:
         m, e, src = flowctl.resolve_fast_judge_model("codex")
-        self.assertEqual((m, e, src), ("gpt-5.6-luna", "high", "baseline"))
+        self.assertEqual((m, e, src), ("gpt-6-luna", "high", "baseline"))
         m, e, src = flowctl.resolve_fast_judge_model("copilot")
         self.assertEqual((m, e, src), ("claude-haiku-4.5", "low", "baseline"))
 

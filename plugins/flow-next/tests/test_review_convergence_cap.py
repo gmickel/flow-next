@@ -3706,9 +3706,38 @@ class TestCodexResumeArgvParity(unittest.TestCase):
         self.assertNotIn("--sandbox", cmd)
         self.assertRegex(joined, r'model_reasoning_effort="[a-z]+"')
         self.assertIn("--skip-git-repo-check", cmd)
-        # a resumed session keeps its ORIGINAL model — re-pinning it is wrong
+        # no known original model: resume behaves as before (no pin, no guess)
         self.assertNotIn("--model", cmd)
         self.assertNotIn("-m", cmd)
+
+    def test_resume_repins_the_original_dispatch_model(self):
+        """#486: since codex-cli 0.154 a resumed session runs Codex's configured
+        model, so the resume re-pins the model the prior receipt records. The
+        codex floor records ``"default"`` (``--model`` omitted) and pins nothing."""
+        for recorded, expected in (("gpt-5.6-sol", "gpt-5.6-sol"), ("default", None)):
+            with self.subTest(recorded=recorded):
+                cmd = self._capture_resume_argv(resume_model=recorded)
+                got = cmd[cmd.index("--model") + 1] if "--model" in cmd else None
+                self.assertEqual(got, expected)
+
+    def test_session_pass_resume_carries_the_receipt_model(self):
+        """Validator / deep passes thread the prior receipt's model to the argv."""
+        seen = []
+
+        def fake_run(cmd, **rk):
+            seen.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with mock.patch.object(flowctl, "require_codex", return_value="/usr/local/bin/codex"), \
+                mock.patch.object(flowctl.subprocess, "run", side_effect=fake_run), \
+                mock.patch.dict(os.environ, {}, clear=False) as env:
+            env.pop("FLOW_REVIEW_EXECUTION_URL", None)
+            flowctl._dispatch_session_pass(
+                "codex", "p", session_id="sid-1", spec_arg=None, use_json=True,
+                fail_label="x", resume_model="gpt-5.6-sol",
+            )
+        cmd = next(c for c in seen if c[1:3] == ["exec", "resume"])
+        self.assertEqual(cmd[cmd.index("--model") + 1], "gpt-5.6-sol")
 
     def test_resume_failure_is_surfaced(self):
         calls = {"n": 0}

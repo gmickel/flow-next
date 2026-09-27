@@ -37,8 +37,8 @@ SRC_AGENTS="$PLUGIN_DIR/agents"
 # These baselines ARE the shipped mirror truth (fn-195.5 review P1): a regen
 # with no env must reproduce the committed mirror byte-for-byte. Bump them
 # deliberately (with a CHANGELOG line), never by exporting env at sync time.
-_SCOUT_INTELLIGENT_BASELINE="gpt-5.6-terra"
-_SCOUT_FAST_BASELINE="gpt-5.6-luna"
+_SCOUT_INTELLIGENT_BASELINE="gpt-6-sol"
+_SCOUT_FAST_BASELINE="gpt-6-luna"
 
 CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-$_SCOUT_INTELLIGENT_BASELINE}"
 CODEX_MODEL_FAST="${CODEX_MODEL_FAST:-$_SCOUT_FAST_BASELINE}"
@@ -63,10 +63,9 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 # Scouts that need full intelligence (reasoning/judgment, not just scanning).
-# repo/context/docs/github/practice were opus-on-Claude, downgraded to sonnet after a
-# verified A/B (fn-84 fleet review — sonnet held quality). Codex has only INTELLIGENT/FAST,
-# and FAST (gpt-5.4-mini) was NOT tested, so keep them INTELLIGENT (gpt-5.5) here = no Codex
-# regression; the Claude-side opus→sonnet cut is the verified saving.
+# Applies only to agents pinned `sonnet`: since fn-272 every bundled scout pins
+# `opus` on Claude and maps to INTELLIGENT here, so this list and the FAST tier
+# have no default consumer; they still route a user's own sonnet/haiku pins.
 INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout docs-scout github-scout practice-scout plan-sync flow-gap-analyst"
 # Agents that stay on opus in Claude Code (bug/gap detection = horsepower; failures invisible)
 OPUS_AGENTS="quality-auditor"

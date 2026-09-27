@@ -1,7 +1,7 @@
 ---
 name: why-scout
 description: Answer a why question about the code - the rationale behind a change - from git blame, the PRs behind the commits, the tracker thread, and the bug and decision memory tracks, each finding tiered direct, supported, inferred, or unknown.
-model: sonnet
+model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

@@ -4865,6 +4865,7 @@ def run_codex_exec(
     repo_root: Optional[Path] = None,
     resolution_out: Optional[dict] = None,
     resume_only: bool = False,
+    resume_model: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
 
@@ -4916,17 +4917,21 @@ def run_codex_exec(
     effective_effort = spec.effort or "high"
 
     if session_id:
-        # Resume argv must mirror the fresh dispatch's sandbox / effort /
-        # --skip-git-repo-check guarantees (but NOT --model or --json): a
-        # resumed reviewer must not silently gain write access or lose
-        # configured effort. Re-pinning --model is wrong — the session keeps
-        # the model from its original dispatch (see resolution_out["resumed"]).
+        # Resume argv must mirror the fresh dispatch's model / sandbox / effort /
+        # --skip-git-repo-check guarantees (but NOT --json): a resumed reviewer
+        # must not silently gain write access, lose configured effort, or switch
+        # model. Since codex-cli 0.154 a resumed session runs Codex's configured
+        # model, not the original dispatch's (#486), so ``resume_model`` - the
+        # model the prior receipt records as having run - is re-pinned. Unknown,
+        # or the floor's ``"default"`` (``--model`` was omitted), pins nothing.
         # `codex exec resume` has NO `--sandbox` flag (verified against codex
         # 0.146.1 `exec resume --help`) — passing one makes resume exit non-zero,
         # which silently degraded every re-review into a fresh blind session. The
         # sandbox therefore rides the config override, which resume DOES accept.
-        cmd = [
-            codex, "exec", "resume", session_id,
+        cmd = [codex, "exec", "resume", session_id]
+        if resume_model and resume_model != "default":
+            cmd += ["--model", resume_model]
+        cmd += [
             "-c", f'model_reasoning_effort="{effective_effort}"',
             "-c", f'sandbox_mode="{sandbox}"',
             # fn-187 R2: suppress the host repo's auto-loaded project doc
@@ -7885,6 +7890,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # parse-time gate — unknown explicit models warn-and-accept.
         "models": [
             "gpt-6-astra",  # GA 2026-09-05; confirmed served by the codex CLI on that date
+            "gpt-6-sol",  # served alongside astra (codex models cache, 2026-09-27); same-generation first step down
             "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
             "gpt-5.5",
             "gpt-5.4",
@@ -8026,7 +8032,7 @@ VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 
 FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
     # (model, default effort) - fn-113.1 interim defaults re-homed as baseline.
-    "codex": ("gpt-5.6-luna", "high"),
+    "codex": ("gpt-6-luna", "high"),
     "copilot": ("claude-haiku-4.5", "low"),
 }
 
@@ -8043,7 +8049,7 @@ def resolve_fast_judge_model(
     Source is ``explicit`` or ``baseline``.
     """
     base_model, base_effort = FAST_JUDGE_BASELINE.get(
-        backend, ("gpt-5.6-luna", "high")
+        backend, FAST_JUDGE_BASELINE["codex"]
     )
     explicit = (explicit_model or "").strip()
     effective_model = explicit or base_model
@@ -40858,6 +40864,7 @@ def _dispatch_session_pass(
     spec_arg: Optional[str],
     use_json: bool,
     fail_label: str,
+    resume_model: Optional[str] = None,
 ) -> str:
     """Spawn a session-continuing validate/deep-pass via registry run_exec.
 
@@ -40876,7 +40883,8 @@ def _dispatch_session_pass(
     # ``run_cursor_exec`` refuses explicitly rather than silently truncating.
     # Codex sandbox defaults to auto (matches prior validate/deep handlers).
     args = argparse.Namespace(sandbox="auto", json=use_json, managed_resume_only=True,
-                              managed_review_request_scope=uuid.uuid4().hex)
+                              managed_review_request_scope=uuid.uuid4().hex,
+                              resume_model=resume_model)
     _resolution: dict = {}
     output, _sid, exit_code, stderr = reg["run_exec"](
         prompt,
@@ -40916,12 +40924,14 @@ def _run_validator_pass(
     prior_session_id: Optional[str] = None
     prior_verdict: Optional[str] = None
     prior_mode: Optional[str] = None
+    prior_model: Optional[str] = None
     if receipt_file.exists():
         try:
             prior = json.loads(receipt_file.read_text(encoding="utf-8"))
             prior_session_id = prior.get("session_id")
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
+            prior_model = prior.get("model")
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -40988,6 +40998,7 @@ def _run_validator_pass(
         spec_arg=spec_arg,
         use_json=use_json,
         fail_label=f"{backend} validator pass failed",
+        resume_model=prior_model,
     )
 
     # Parse validator decisions.
@@ -41801,6 +41812,7 @@ def _run_deep_pass(
     prior_session_id: Optional[str] = None
     prior_verdict: Optional[str] = None
     prior_mode: Optional[str] = None
+    prior_model: Optional[str] = None
     prior_passes: list[str] = []
     if receipt_file.exists():
         try:
@@ -41808,6 +41820,7 @@ def _run_deep_pass(
             prior_session_id = prior.get("session_id")
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
+            prior_model = prior.get("model")
             if isinstance(prior.get("deep_passes"), list):
                 prior_passes = list(prior["deep_passes"])
         except (json.JSONDecodeError, OSError):
@@ -41845,6 +41858,7 @@ def _run_deep_pass(
         spec_arg=spec_arg,
         use_json=use_json,
         fail_label=f"{backend} deep-pass ({pass_name}) failed",
+        resume_model=prior_model,
     )
 
     # Parse deep-pass findings from output.
@@ -45216,6 +45230,7 @@ def _codex_run_exec(
         prompt, session_id=session_id, sandbox=sandbox, spec=spec,
         repo_root=repo_root, resolution_out=resolution_out,
         resume_only=resume_only,
+        resume_model=getattr(args, "resume_model", None),
     )
 
 
@@ -46128,6 +46143,7 @@ def _dispatch_backend_review(
     reviewed_base_sha: Optional[str] = None,
     reservation_id: Optional[str] = None,
     injected_prompt: Optional[str] = None,
+    resume_model: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run a backend and refund if dispatch itself terminates before a result.
 
@@ -46150,6 +46166,9 @@ def _dispatch_backend_review(
     import uuid
 
     args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
+    # The model the resumed session originally ran (prior receipt); consumed
+    # by ``_codex_run_exec``, ignored by every other adapter.
+    args.resume_model = resume_model
     two_phase = (
         injected_prompt is not None
         and session_id is not None
@@ -46447,6 +46466,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
+        resume_model=prior_receipt_model,
     )
 
     # The effort the dispatch ACTUALLY sent: the bind below swaps in the
@@ -46944,6 +46964,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
+        resume_model=prior_receipt_model,
     )
 
     # The effort the dispatch ACTUALLY sent: the bind below swaps in the
@@ -47281,6 +47302,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
+        resume_model=prior_receipt_model,
     )
 
     # The effort the dispatch ACTUALLY sent: the bind below swaps in the
@@ -58751,7 +58773,7 @@ def main() -> None:
         "--model",
         help=(
             "Fast model override (else the "
-            "baseline gpt-5.6-luna / claude-haiku-4.5)"
+            "baseline gpt-6-luna / claude-haiku-4.5)"
         ),
     )
     p_triage.add_argument(

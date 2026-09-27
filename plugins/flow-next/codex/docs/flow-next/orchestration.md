@@ -129,10 +129,10 @@ Bundled agents carry a model field grouped by task shape - the family alias in e
 
 | Agent group | Agents | Why |
 |------|--------|-----|
-| fast | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability) + memory-scout | mechanical scan-and-report |
-| judgment | planning scouts (repo/context/spec/docs/github/practice, …), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
-| heavy | quality-auditor | adversarial audit |
+| `opus` | every scout (prime's pillar scanners, memory-scout, the planning scouts), flow-gap-analyst, plan-sync, quality-auditor | the strongest current tier for scouting and audit, at a bounded price |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
+
+Scouts pin `opus` rather than `inherit` so a session on a pricier model (planning on Fable, say) does not run every scout fan-out on that model too. The `opus` alias follows the current Opus release. Opus scouts cost more than the Haiku and Sonnet pins they replaced; a routing block's `fast scout` / `thinking scout` lines move them to a cheaper model.
 
 The Codex mirror maps these groups to that host's own tiers at sync time (`scripts/sync-codex.sh` `map_model`); the sync-time environment overrides them. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin lets Codex-host work threads ride a cheaper tier. Details: [`platforms.md`](platforms.md).
 

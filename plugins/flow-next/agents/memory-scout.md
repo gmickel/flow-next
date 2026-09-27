@@ -1,7 +1,7 @@
 ---
 name: memory-scout
 description: Search .flow/memory/ for entries relevant to the current task or request.
-model: haiku
+model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

@@ -1,7 +1,7 @@
 ---
 name: security-scout
 description: Used by /flow-next:prime to scan for security configuration including GitHub settings, CODEOWNERS, and dependency updates. Do not invoke directly.
-model: haiku
+model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

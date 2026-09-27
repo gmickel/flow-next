@@ -1,7 +1,7 @@
 ---
 name: docs-gap-scout
 description: Identify documentation that may need updates based on the planned changes.
-model: sonnet
+model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

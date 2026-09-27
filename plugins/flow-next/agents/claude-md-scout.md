@@ -1,7 +1,7 @@
 ---
 name: claude-md-scout
 description: Used by /flow-next:prime to analyze CLAUDE.md and AGENTS.md quality and completeness. Do not invoke directly.
-model: sonnet
+model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

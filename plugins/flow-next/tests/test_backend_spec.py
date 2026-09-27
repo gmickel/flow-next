@@ -158,6 +158,10 @@ class TestRegistryShape(unittest.TestCase):
         # cannot serve it step down the run_codex_exec ladder.
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-6-astra")
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_effort"], "high")
+        # fn-272 R4: a withheld astra steps down within the same generation first.
+        self.assertEqual(
+            BACKEND_REGISTRY["codex"]["models"][:2], ["gpt-6-astra", "gpt-6-sol"]
+        )
 
     def test_copilot_defaults(self) -> None:
         # Ranking top (gpt-6-astra, rolled out to Copilot 2026-09-05); an

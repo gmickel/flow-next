@@ -2,7 +2,7 @@
 name: plan-sync
 description: Synchronizes downstream task specs after implementation. Spawned by flow-next-work once per resolved wave. Do not invoke directly.
 disallowedTools: Write, Task
-model: sonnet
+model: opus
 color: "#8B5CF6"
 ---
 
