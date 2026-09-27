@@ -332,6 +332,7 @@ class TestR23_SectionMergeContract(unittest.TestCase):
         "Conversation Evidence",
         "Resolved via Codebase",
         "Resolved via Project Docs",
+        "Resolved via Experiment",
         "Parked unknowns",
     )
 
@@ -539,6 +540,7 @@ class TestR23_FixtureMergeByteForByte(unittest.TestCase):
         "Conversation Evidence",
         "Resolved via Codebase",
         "Resolved via Project Docs",
+        "Resolved via Experiment",
         "Parked unknowns",
     }
 
