@@ -75,7 +75,7 @@
     "impl:fn-272-scout-model-pins-opus-on-claude-gpt-6.1": 0
   },
   "spec_path": ".flow/specs/fn-272-scout-model-pins-opus-on-claude-gpt-6.md",
-  "status": "open",
+  "status": "done",
   "title": "Scout model pins: Opus on Claude, gpt-6 on Codex",
   "tracker": {
     "baseHashFlow": null,
@@ -88,5 +88,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T23:25:05.702643Z"
+  "updated_at": "2026-09-27T23:27:34.949211Z"
 }

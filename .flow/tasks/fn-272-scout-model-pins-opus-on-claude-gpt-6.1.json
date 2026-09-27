@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-272-scout-model-pins-opus-on-claude-gpt-6",
   "spec_path": ".flow/tasks/fn-272-scout-model-pins-opus-on-claude-gpt-6.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Scout model pins: Opus on Claude, gpt-6 on Codex",
   "updated_at": "2026-09-27T23:12:49.220585Z"
 }
