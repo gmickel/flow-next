@@ -92,7 +92,7 @@ Stop only when one of these holds, and record which:
 
 Three non-kept attempts in a row are a plateau, not a stop. Change the hypothesis family, combine near misses into one new hypothesis, or re-profile, and write the pivot into the ledger.
 
-When the run stops with the target unmet, the task still completes honestly: the record reports the gap, the target's criterion stays unverified and is never marked satisfied, and under `flow --auto` the draft PR carries the gap. Before review, add the outcome to the task's description (`flowctl task set-description`): the stop rule, the gap, and that the target criterion is reported unverified. Review then judges the kept commits and the record; a finding that only restates the unmet target is answered from the record, never with attempts past the budget.
+When the run stops with the target unmet, the task still completes honestly: the record reports the gap, the target's criterion stays unverified and is never marked satisfied, and under `flow --auto` the draft PR carries the gap. Before review, add the outcome to the task's description (`flowctl task set-description`), which the reviewer reads with the task: the stop rule, the gap, and that the target's R-ID is `partial` by the pre-registered budget, not `not-addressed` (review's coverage gate forces NEEDS_WORK only on `not-addressed`). Review then judges the kept commits and the record, and a SHIP on them carries the task through done and make-pr with the target shown unverified. The budget is never extended to satisfy a review.
 
 ## 7. Verify, then record
 
