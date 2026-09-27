@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-265-hill-climb-route-the-measured",
   "impl_review_rounds": {
-    "fn-265-hill-climb-route-the-measured.1": 2
+    "fn-265-hill-climb-route-the-measured.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -145,9 +145,79 @@
       "task": "fn-265-hill-climb-route-the-measured.1",
       "timestamp": "2026-09-27T22:13:30.789696Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "97ac600c3ffbcb83ef01aea563159053155c877e5a792980917f8271802ee919",
+      "backend": "codex",
+      "base_sha": "32b733feffd0bb78a62017e3a4ad72b0cc8e1ae8",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-01fbef8c6e3c202fd1f237259687403a",
+            "classification": "introduced",
+            "findingId": "finding-01fbef8c6e3c202fd1f237259687403a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-edd2163627c1507891203dee742fc5f2",
+            "classification": "introduced",
+            "findingId": "finding-edd2163627c1507891203dee742fc5f2",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-7e01b3d74223bff2eb0226a1c4520d2f",
+            "classification": "introduced",
+            "findingId": "finding-7e01b3d74223bff2eb0226a1c4520d2f",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-fd7ce47391d9c3c121b62365b880d817",
+            "classification": "introduced",
+            "findingId": "finding-fd7ce47391d9c3c121b62365b880d817",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f8e4eb4caf719dda13e2aefdf1b9fa5c51002d72",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1284,
+      "output_sha256": "967f084d4461bf2378bd4f0c4542993df580c7076997c4faf88240551c938f64",
+      "reservation_id": "f3d5135e00ad4c938c62e3ea5b148d3f",
+      "round_consumed": true,
+      "scope": "impl:fn-265-hill-climb-route-the-measured.1",
+      "superseded_by": null,
+      "task": "fn-265-hill-climb-route-the-measured.1",
+      "timestamp": "2026-09-27T22:15:56.756868Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-265-hill-climb-route-the-measured.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -167,5 +237,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T22:13:30.792299Z"
+  "updated_at": "2026-09-27T22:15:56.759365Z"
 }
