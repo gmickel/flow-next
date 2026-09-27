@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-266-answer-questions-by-experiment-in",
   "spec_path": ".flow/tasks/fn-266-answer-questions-by-experiment-in.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Answer questions by experiment in refine and prototypes",
   "updated_at": "2026-09-27T22:31:04.039546Z"
 }

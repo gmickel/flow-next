@@ -63,7 +63,7 @@
     "impl:fn-266-answer-questions-by-experiment-in.1": 0
   },
   "spec_path": ".flow/specs/fn-266-answer-questions-by-experiment-in.md",
-  "status": "open",
+  "status": "done",
   "title": "Answer questions by experiment in refine and prototypes",
   "tracker": {
     "baseHashFlow": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T22:36:59.456203Z"
+  "updated_at": "2026-09-27T22:38:58.953086Z"
 }
