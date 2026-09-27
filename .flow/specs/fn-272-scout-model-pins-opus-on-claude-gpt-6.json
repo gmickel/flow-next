@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-272-scout-model-pins-opus-on-claude-gpt-6",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-27T23:25:05.702633Z",
   "created_at": "2026-09-27T22:07:07.730126Z",
   "default_impl": null,
   "default_review": null,
@@ -88,5 +88,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T23:21:59.023012Z"
+  "updated_at": "2026-09-27T23:25:05.702643Z"
 }
