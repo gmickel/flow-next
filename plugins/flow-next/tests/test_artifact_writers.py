@@ -61,9 +61,10 @@ class ArtifactWritersTest(unittest.TestCase):
             self.cli("qa", "receipt", data={**data, "resolved_feature": value})
             self.assertEqual(json.loads(path.read_text())["resolved_feature"], value)
         before = path.read_bytes()
-        error = self.cli("qa", "receipt", data={**data, "resolved_feature": {"surface": "web"}}, code=2)
-        self.assertTrue(any(e.startswith("resolved_feature:") for e in error["errors"]))
-        self.assertEqual(path.read_bytes(), before)
+        for bad in ({"surface": "web"}, None):
+            error = self.cli("qa", "receipt", data={**data, "resolved_feature": bad}, code=2)
+            self.assertTrue(any(e.startswith("resolved_feature:") for e in error["errors"]))
+            self.assertEqual(path.read_bytes(), before)
 
     def test_qa_carryover_and_invalid_payload_preserves_receipt(self):
         data = {"id": "fn-1-example", "qa_outcome": "NEEDS_WORK", "findings": [{"id": "bug-one", "severity": "P1", "confidence": 100, "classification": "introduced", "reason": 'quoted "snow" 雪', "file": "app.py:1"}], "rid_coverage": {"rids": [{"id": "R1", "coverage": "live"}]}}

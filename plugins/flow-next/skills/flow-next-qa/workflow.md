@@ -182,7 +182,7 @@ if [ -d "$REPO_ROOT/.flow/features" ]; then
 fi
 ```
 
-When the directory exists: follow the "Live-app stages" section of [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), reusing this spec's newest record (the prior receipt at `.flow/review-receipts/qa-$SPEC_ID.json`, then `$PAYLOAD` task evidence) or resolving the spec's target from the index to one feature file. Load that file's `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps, and keep the record for the §6.3 payload.
+When the directory exists: follow the "Live-app stages" section of [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), reusing this spec's newest record (the prior receipt at the path §6.3 writes, `QA_RECEIPT_OVERRIDE`, else `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-$SPEC_ID.json`; then `$PAYLOAD` task evidence) or resolving the spec's target from the index to one feature file. Load that file's `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps, and keep the record for the §6.3 payload.
 
 **A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) records `unmapped` and falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
 

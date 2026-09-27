@@ -12,13 +12,29 @@
     "fn-264-defect-route-v2-prior-fixes-diagnosis"
   ],
   "id": "fn-263-feature-map-across-flows-live-app-routes",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-263-feature-map-across-flows-live-app-routes.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_hash_epoch": {},
+  "review_pending_rounds": {
+    "impl:fn-263-feature-map-across-flows-live-app-routes.1": 1
+  },
+  "review_reservations": {
+    "17e987e6f3814425b1eb4b6da04eecb8": {
+      "artifact_sha256": "be6b170308e585623631cfdc1c9c794e0d0d4d6f4db4ab8e0fefacc7c20e35b5",
+      "counter_scope": "impl:fn-263-feature-map-across-flows-live-app-routes.1",
+      "epoch": 0,
+      "exclusive": true,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "spec_path": ".flow/specs/fn-263-feature-map-across-flows-live-app-routes.md",
   "status": "open",
   "title": "Feature map across flow's live-app routes",
@@ -33,5 +49,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T21:07:03.209736Z"
+  "updated_at": "2026-09-27T20:28:11.909981Z"
 }

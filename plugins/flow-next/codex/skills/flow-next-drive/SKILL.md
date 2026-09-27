@@ -31,13 +31,13 @@ How to decide:
 
 When unsure whether a desktop app exposes CDP, probe for B first (try to launch/attach with a debug port). If no port is reachable, fall to C.
 
-When `.flow/features/` exists, Read the feature file the caller names, else `.flow/features/README.md` and the one matching feature file, first; never the whole map. It pre-resolves the route, preconditions, and gotchas. Select by `**Surface:**` plus sub-feature IDs ([feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), "Live-app stages"). Live detection above remains the fallback when the map is absent or does not cover this target. A mapped route that no longer matches the live app gets a drift note per the contract's "Writers and drift notes" section, then live detection continues; never edit the map mid-run.
+When `.flow/features/` exists and the caller did not pass `unmapped`, Read `.flow/features/README.md` and the feature file the caller names, else the one matching feature file, first; never the whole map. They pre-resolve the route, preconditions, and gotchas. Select by `**Surface:**` plus sub-feature IDs ([feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), "Live-app stages"). Live detection above remains the fallback when the map is absent or does not cover this target. A mapped route that no longer matches the live app gets a drift note per the contract's "Writers and drift notes" section, then live detection continues; never edit the map mid-run.
 
 ### Done when
 
 - The target is classified A, B, or C **before any driving starts**, and the classification is stated. A pass that started acting before naming the surface has broken this.
 - A desktop app was probed for a CDP port before being routed to C.
-- When `.flow/features/` existed, the named or one matching feature file was read before driving; live detection was the fallback otherwise, and a stale mapped route was filed as a drift note.
+- When `.flow/features/` existed, the index and the named or one matching feature file were read before driving (none after a caller's `unmapped`); live detection was the fallback otherwise, and a stale mapped route was filed as a drift note.
 
 ## Step 2 — The universal flow (all surfaces)
 
