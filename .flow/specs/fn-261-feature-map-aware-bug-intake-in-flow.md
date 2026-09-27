@@ -68,6 +68,10 @@ This spec is one of a set captured together to strengthen `/flow-next:flow`: the
 
 Delivery order: 2 of 10 in this set (fn-262 → fn-261 → fn-264 → fn-263 → fn-265 → fn-266 → fn-267 → fn-268 → fn-269 → fn-270, which is the order `flow --auto` picks them once ready); needs fn-262. Hard dependencies are recorded on the spec, so `flowctl spec chain` refuses a spec whose dependency is not done. Route: direct, `/flow-next:work fn-261-feature-map-aware-bug-intake-in-flow --no-plan`.
 
+### Outcome and scope decision (2026-09-27)
+
+The R5 study (agent-evals `study/defect-intake-map-2026-09`) was INCONCLUSIVE against its pre-registered bar: 24/24 reproduced in both arms, flat cost and wall time, 9.2% fewer turns pooled (bar 10%, 2 of 6 tasks). The gain sat on reports that do not locate themselves (an untitled screenshot halved its turns); reports naming an obvious control paid a fixed few-turn reading cost. The maintainer accepted that evidence, noting the behaviour is hard to test and matches how pstack uses a feature map for outer-loop intake of reports that do not say where the problem is, and narrowed R1: the map is read when the report does not say where the problem is, or when a direct lookup of the place it names fails; a report that names a place the agent finds directly reproduces as before and writes no resolved-feature record. [user]
+
 ## Strategy Alignment
 
 Serves the approach line that `/flow-next:flow` is the one dial on the default path: it reads whatever the user has and routes it, and this makes the defect route cheaper when a map exists. Serves the **Self-improving through normal work** track: the feature map is a compounding surface, and this gives it a second everyday reader beside QA, so the navigation knowledge pays off on every bug report rather than only on QA runs.
