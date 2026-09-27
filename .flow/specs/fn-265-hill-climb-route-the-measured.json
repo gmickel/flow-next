@@ -224,7 +224,7 @@
     "impl:fn-265-hill-climb-route-the-measured.1": 0
   },
   "spec_path": ".flow/specs/fn-265-hill-climb-route-the-measured.md",
-  "status": "open",
+  "status": "done",
   "title": "Hill-climb route: the measured improvement loop",
   "tracker": {
     "baseHashFlow": null,
@@ -237,5 +237,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T22:18:37.623153Z"
+  "updated_at": "2026-09-27T22:22:16.842174Z"
 }

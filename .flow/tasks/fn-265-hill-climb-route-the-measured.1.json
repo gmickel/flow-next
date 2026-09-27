@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-265-hill-climb-route-the-measured",
   "spec_path": ".flow/tasks/fn-265-hill-climb-route-the-measured.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Hill-climb route: the measured improvement loop",
   "updated_at": "2026-09-27T22:08:26.525663Z"
 }
