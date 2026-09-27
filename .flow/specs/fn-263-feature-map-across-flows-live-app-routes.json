@@ -21,19 +21,84 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
-  "review_hash_epoch": {},
-  "review_pending_rounds": {
-    "impl:fn-263-feature-map-across-flows-live-app-routes.1": 1
-  },
-  "review_reservations": {
-    "17e987e6f3814425b1eb4b6da04eecb8": {
+  "review_attempts": [
+    {
       "artifact_sha256": "be6b170308e585623631cfdc1c9c794e0d0d4d6f4db4ab8e0fefacc7c20e35b5",
-      "counter_scope": "impl:fn-263-feature-map-across-flows-live-app-routes.1",
-      "epoch": 0,
-      "exclusive": true,
+      "backend": "codex",
+      "base_sha": "49a88ee437f28c786c113d46c00eb5298901827e",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
       "forced": false,
-      "review_type": "impl"
+      "hash_epoch": 0,
+      "head_sha": "de4a317a907543e96b6b0f5262c360a89b6b8b17",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "802c64dc449d7b656b02a09e1c8bb2fb8863f22922064b70941b68a7025aaa7b",
+      "reservation_id": "17e987e6f3814425b1eb4b6da04eecb8",
+      "round_consumed": false,
+      "scope": "impl:fn-263-feature-map-across-flows-live-app-routes.1",
+      "superseded_by": null,
+      "task": "fn-263-feature-map-across-flows-live-app-routes.1",
+      "timestamp": "2026-09-27T20:33:28.955574Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "42d97ea9148b09f10024719bc989f3be5f0abf6a1896796880c99e569d6d63d3",
+      "backend": "codex",
+      "base_sha": "49a88ee437f28c786c113d46c00eb5298901827e",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6122232b0f9e71f42cb83711bcef342f",
+            "classification": "introduced",
+            "findingId": "finding-6122232b0f9e71f42cb83711bcef342f",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "49c270aa664fa42ceb1199fd635419e9c20e02b4",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1205,
+      "output_sha256": "ce71c4a4ba52a05d72a68bcab83ffd491856accb7788cf7b6694fdc0d706bbba",
+      "reservation_id": "3b32df41b0df484ca56e0e5f4ebc6cca",
+      "round_consumed": true,
+      "scope": "impl:fn-263-feature-map-across-flows-live-app-routes.1",
+      "superseded_by": null,
+      "task": "fn-263-feature-map-across-flows-live-app-routes.1",
+      "timestamp": "2026-09-27T20:36:35.676337Z",
+      "verdict": "NEEDS_WORK"
     }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-263-feature-map-across-flows-live-app-routes.1": 0
   },
   "spec_path": ".flow/specs/fn-263-feature-map-across-flows-live-app-routes.md",
   "status": "open",
@@ -49,5 +114,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-27T20:28:11.909981Z"
+  "updated_at": "2026-09-27T20:36:35.678738Z"
 }

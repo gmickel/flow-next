@@ -85,7 +85,7 @@ A reader that resolves a report or target to a mapped feature records the result
 - An object with exactly these keys: `surface` (the `**Surface:**` identifier), `sub_feature` (one sub-feature ID), `file` (the feature file's name under `.flow/features/`), `last_proven` (the file's `**Last proven:**` value, such as `2026-09-20 at 4f2c9ab`, or `null` when the file has none), and `stage` (the stage that resolved it, such as `flow`).
 - The string `"unmapped"`: the map exists and nothing in it matched.
 
-A worker whose spec carries a `resolved_feature: <value>` line passes the value to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. QA carries the record as `resolved_feature` in its `flowctl qa receipt` payload, validated the same way.
+A worker passes the record its live drive used (or, without a drive, the spec's `resolved_feature: <value>` line when no earlier task carries a record) to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. QA carries the record as `resolved_feature` in its `flowctl qa receipt` payload, validated the same way.
 
 ## Live-app stages
 

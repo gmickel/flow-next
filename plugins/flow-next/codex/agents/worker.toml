@@ -497,7 +497,7 @@ uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
 On parallel-wave and host-deferred routes, write the evidence file to the resolved task-unique `HANDOVER_EVIDENCE` path. On the standard contiguous-history route, `done --range` below derives the commit list and base; pass each actual test command and `GATE_SKIPPED` line with repeatable `--test` instead of hand-assembling evidence.
-When the spec carries a `resolved_feature: <value>` line (an earlier flow stage resolved the target to a feature-map entry), or this task's live drive resolved a record itself, record that value verbatim: `done --resolved-feature '<value>'` on the standard route, the evidence JSON's `resolved_feature` key on the other two.
+Record the resolved-feature record this task's live drive used (reused or resolved), or, when the task did not drive the app, the spec's `resolved_feature: <value>` line only if no earlier task on the spec carries a record; record the value verbatim: `done --resolved-feature '<value>'` on the standard route, the evidence JSON's `resolved_feature` key on the other two.
 For those two routes, re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
 (`BASE_COMMIT`..HEAD, oldest first, so multi-commit fix-loop tasks are covered)
 in the SAME block, so no shell variable has to survive across tool calls.
