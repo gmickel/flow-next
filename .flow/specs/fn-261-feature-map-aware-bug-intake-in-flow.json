@@ -10,13 +10,60 @@
     "fn-262-feature-map-stays-current-and-is-always"
   ],
   "id": "fn-261-feature-map-aware-bug-intake-in-flow",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-261-feature-map-aware-bug-intake-in-flow.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d26442cfaa7bcf9426b55e009395810ac8dff800555bc25ab2bc6e24a762ab11",
+      "backend": "codex",
+      "base_sha": "e2a27d35b9d01b46572bf0b93700707e66f7c884",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "dace107a71065492a5657cbb6ebafb0c961bde48",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "57b6093d79fb437288965020871c1d3d",
+      "round_consumed": true,
+      "scope": "impl:fn-261-feature-map-aware-bug-intake-in-flow.1",
+      "superseded_by": null,
+      "task": "fn-261-feature-map-aware-bug-intake-in-flow.1",
+      "timestamp": "2026-09-27T08:08:38.170598Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-261-feature-map-aware-bug-intake-in-flow.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-261-feature-map-aware-bug-intake-in-flow.1": 0
+  },
   "spec_path": ".flow/specs/fn-261-feature-map-aware-bug-intake-in-flow.md",
   "status": "open",
   "title": "Feature-map-aware bug intake in /flow-next:flow",
@@ -31,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-26T21:07:02.558126Z"
+  "updated_at": "2026-09-27T08:08:38.172716Z"
 }
