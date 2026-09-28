@@ -10,13 +10,60 @@
     "fn-274-agent-first-sweep-defect-route-stops"
   ],
   "id": "fn-275-lighter-refine-ask-only-what-would",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-275-lighter-refine-ask-only-what-would.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "927e354689b35ee10c36bd18ff489a6b956d766a03a6b723a50f72d1b43a1a21",
+      "backend": "codex",
+      "base_sha": "274746872ff41693e51a27e17222fb29e4db5e8f",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5ce9d51d31fcf8d1f85cfb9cb3f7f0d579a9b923",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "d1014397f59a41c084d8199ca2502fec",
+      "round_consumed": true,
+      "scope": "impl:fn-275-lighter-refine-ask-only-what-would.1",
+      "superseded_by": null,
+      "task": "fn-275-lighter-refine-ask-only-what-would.1",
+      "timestamp": "2026-09-28T09:39:31.197777Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-275-lighter-refine-ask-only-what-would.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-275-lighter-refine-ask-only-what-would.1": 0
+  },
   "spec_path": ".flow/specs/fn-275-lighter-refine-ask-only-what-would.md",
   "status": "open",
   "title": "Lighter refine: ask only what would change the build",
@@ -31,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:51:22.400940Z"
+  "updated_at": "2026-09-28T09:39:31.199412Z"
 }

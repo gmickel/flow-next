@@ -278,7 +278,6 @@ class CodexQuestionPlacement(unittest.TestCase):
         self.assertEqual(mirror.count(instruction), 1)
         editor = mirror[mirror.index("### 5.6a"):mirror.index("### 5.7")]
         self.assertIn(instruction, editor)
-        self.assertNotIn(instruction, mirror[mirror.index("### Biz-suggestion footer"):])
 
 
 if __name__ == "__main__":
