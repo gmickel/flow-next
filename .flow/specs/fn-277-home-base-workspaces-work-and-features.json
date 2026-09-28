@@ -142,7 +142,7 @@
     "impl:fn-277-home-base-workspaces-work-and-features.1": 0
   },
   "spec_path": ".flow/specs/fn-277-home-base-workspaces-work-and-features.md",
-  "status": "open",
+  "status": "done",
   "title": "Home-base workspaces: work and features status read the sibling repos that hold the code",
   "tracker": {
     "baseHashFlow": null,
@@ -155,5 +155,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T13:50:20.143548Z"
+  "updated_at": "2026-09-28T13:50:57.730271Z"
 }
