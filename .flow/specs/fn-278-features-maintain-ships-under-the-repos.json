@@ -8,12 +8,66 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-278-features-maintain-ships-under-the-repos",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-278-features-maintain-ships-under-the-repos.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "83d592ee79c534764c2bf5bba2b01009bdc527cb982e149b1b9affb95dbedcbc",
+      "backend": "codex",
+      "base_sha": "70ac408f714c83bc38a13d099072edaf3e8bff92",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-0e3a50da1278c6b46944c2c369ac8b8f",
+            "classification": "introduced",
+            "findingId": "finding-0e3a50da1278c6b46944c2c369ac8b8f",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "73eb0be19146eb70f36a30285ec1f1f0900a6e97",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1154,
+      "output_sha256": "79777dd8695663886003515249831a7c8ca86a1d542b567edef2d700a9d9fa72",
+      "reservation_id": "9c9b3a5a93ae4d35b091d203e319aef2",
+      "round_consumed": true,
+      "scope": "impl:fn-278-features-maintain-ships-under-the-repos.1",
+      "superseded_by": null,
+      "task": "fn-278-features-maintain-ships-under-the-repos.1",
+      "timestamp": "2026-09-28T13:41:17.918549Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-278-features-maintain-ships-under-the-repos.1": 0
+  },
   "spec_path": ".flow/specs/fn-278-features-maintain-ships-under-the-repos.md",
   "status": "open",
   "title": "Features maintain ships under the repo's own naming rules and host, and keeps proven edits when shipping fails",
@@ -28,5 +82,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T13:33:35.780937Z"
+  "updated_at": "2026-09-28T13:41:17.928626Z"
 }
