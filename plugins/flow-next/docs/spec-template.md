@@ -190,7 +190,7 @@ Rules:
 
 - Plain markdown prose, not YAML - keeps specs human-editable.
 - **Renumber-forbidden** after the first review cycle. Deletions leave gaps (`R1, R3, R5` stays that way); new criteria take the next unused number.
-- **Append-only across passes.** A `--scope=technical` pass cannot rewrite or renumber R-IDs added by an earlier `--scope=business` pass; it appends new criteria with the next unused number.
+- **Append-only across sessions.** A later refine session cannot rewrite or renumber R-IDs an earlier session added; it appends new criteria with the next unused number.
 - Plan skill writes R-IDs on creation; plan-sync preserves them through drift updates.
 - Impl-review and spec-completion review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
 - Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
@@ -271,7 +271,7 @@ Then refine only the uncertainty instead of re-litigating settled requirements:
 (R3, R4, R9, R11); the [user] and [paraphrase] ones are settled, leave them alone
 ```
 
-Append-only R-ID numbering is what makes that targeting safe - a later pass cannot renumber or rewrite the criteria you already blessed, and it will not retag them either.
+Append-only R-ID numbering is what makes that targeting safe - a later session cannot renumber or rewrite the criteria you already blessed, and it will not retag them either.
 
 Scope: tags apply to a spec's `## Acceptance Criteria` bullets. Task acceptance is plain `- [ ]` checklist items and carries no tags, and an interview over a loose markdown file leaves that file's structure alone - tags start when `/flow-next:plan` promotes it to a spec.
 
