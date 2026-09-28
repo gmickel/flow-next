@@ -2360,17 +2360,18 @@ Lint and format commands are always-run and never receipted in v1. Remote CI gat
 Read-only facts about the feature map (`.flow/features/`), so flow, setup and prime share one recommendation for `/flow-next:features`. flowctl never validates the four-H2 shape (the skill does) and never edits the map.
 
 ```bash
-flowctl features status [--json]
+flowctl features status [--repo <path>]... [--json]
 ```
 
 - `map_exists`: `.flow/features/` is a directory.
 - `features[]`: one row per feature file (the index `README.md` excluded) with `file`, `state` (`proven`, `never-proven`, or `malformed`), `last_proven` (`{date, commit}` or `null`), `measured_from` (`commit`, or `date` when the recorded commit is not in this clone, such as a squashed branch head), `commits_since`, and `stale`. The line is `**Last proven:** <YYYY-MM-DD> at <short commit>` as the first non-blank line after `**Surface:**`; any other shape, position, or a second copy is `malformed` and reads as never proven.
 - `commits_since` counts commits on the default branch (`origin/HEAD`, then `main`/`master`, then `HEAD`; reported as `base`) after the proof that change at least one path outside `.flow/` which `gate classify` would not call SAFE. `stale` is true when that count reaches `features.staleAfterCommits` (default 50, reported as `threshold`), and for never-proven or malformed rows.
+- `--repo <path>` (repeatable) adds a sibling git repo that holds product code, for a home-base workspace whose `.flow/` repo holds only planning state. The path is relative to the `.flow/` repo root. Each proven row adds that repo's surface commits on its own default branch since the proof date (the proof commit belongs to the `.flow/` repo) and gains `commits_since_by_repo` (`{".": <n>, "<path>": <n>}`); the output gains `repos`. A path that is not the root of a git work tree other than the `.flow/` repo, or whose default branch does not resolve, exits `2` naming it. A repeated repo counts once. Without `--repo` the output is unchanged.
 - `open_drift`: active (not stale, not hardened) knowledge entries tagged `feature-map-drift`, as `{id, title, path}`; `null` when memory is disabled or uninitialised, so only the age condition applies.
 - `due`: a map exists and at least one open drift note or stale row exists; `reasons[]` names each.
 - `recommendation`: `seed` (no map), `maintain` (due), or `none`.
 
-Exit `0`. A repository without `.flow/` has no map and reads as `seed`, so prime can report on an uninitialised repository. The command never dispatches `/flow-next:features`; the skill stays user-invoked.
+Exit `0` (`2` for a bad `--repo`). A repository without `.flow/` has no map and reads as `seed`, so prime can report on an uninitialised repository. The command never dispatches `/flow-next:features`; the skill stays user-invoked.
 
 ### rp
 

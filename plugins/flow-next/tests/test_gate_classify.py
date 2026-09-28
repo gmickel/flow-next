@@ -156,6 +156,13 @@ class GateClassifyTestCase(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(data["tier"], "full")
 
+    def test_sibling_repo_without_flow_dir_classifies_its_own_diff(self) -> None:
+        # Home-base workspaces run classify inside each sibling code repo (#494).
+        self.assertFalse((self.tmpdir / ".flow").exists())
+        self._commit_paths("src/app.ts")
+        result, data = self._classify()
+        self.assertEqual((result.returncode, data["tier"]), (1, "full"))
+
     def test_empty_diff_is_full(self) -> None:
         result, data = self._classify(base=self.base)
         self.assertEqual(result.returncode, 1)

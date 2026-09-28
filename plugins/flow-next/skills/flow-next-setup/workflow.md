@@ -849,7 +849,7 @@ Optional next step — connect a tracker:
   Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
 
-**Feature-map recommendation (always, whatever `pipeline.qa` says).** Print one line after the tracker proposal, chosen by `"${PLUGIN_ROOT}/scripts/flowctl" features status --json` `.recommendation`. The map lets QA, drive and bug intake reuse how a user reaches each feature instead of rediscovering it. Setup never runs the seed itself: it launches and drives the live app. A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
+**Feature-map recommendation (always, whatever `pipeline.qa` says).** Print one line after the tracker proposal, chosen by `"${PLUGIN_ROOT}/scripts/flowctl" features status --json` `.recommendation` (in a home-base workspace, where sibling repos hold the product code, add `--repo <path>` for each one the project instructions name). The map lets QA, drive and bug intake reuse how a user reaches each feature instead of rediscovering it. Setup never runs the seed itself: it launches and drives the live app. A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
 
 - `seed` (no `.flow/features/`):
   ```

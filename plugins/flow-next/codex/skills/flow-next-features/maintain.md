@@ -77,6 +77,8 @@ Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay
 "$FLOWCTL" features status --json > "$RUN_DIR/features-status.json"
 ```
 
+In a home-base workspace, where sibling repos hold the product code, add `--repo <path>` for each one the project instructions name, so their commits age the map.
+
 Rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
 
 **Partial-seed retries.** The index's "identified, not yet proven" entries (a prior seed named them as failed routes) join this pass's live-pass queue as candidates - proving them is the retry the seed verdict promised. One that proves gains its feature file; one that fails again stays named in the index and in this run's outcome reason.

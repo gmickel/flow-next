@@ -51356,6 +51356,38 @@ def _features_surface_commits(repo_root: Path, base: str, since: list[str]) -> O
     return count
 
 
+def _features_sibling_repos(
+    paths: list[str], repo_root: Optional[Path], use_json: bool
+) -> list[tuple[str, Path, str]]:
+    """Resolve `--repo` paths to (name, git root, default base); fail loudly.
+
+    A wrong path must never read as zero commits: the path must be a work
+    tree's root (a subdirectory of the .flow/ repo would silently count that
+    repo twice). A repeated repo counts once.
+    """
+    anchor = repo_root or Path.cwd()
+    seen: set[Path] = set()
+    siblings: list[tuple[str, Path, str]] = []
+    for name in paths:
+        path = (anchor / name).resolve()
+        top = _features_git(path, "rev-parse", "--show-toplevel") if path.is_dir() else None
+        root = Path(top.strip()).resolve() if top else None
+        if root != path or root == (repo_root.resolve() if repo_root else None):
+            error_exit(f"--repo {name}: not a sibling git work tree root", code=2, use_json=use_json)
+        if root in seen:
+            continue
+        seen.add(root)
+        base = next(
+            (c for c in _default_branch_candidates(root)
+             if _features_git(root, "rev-parse", "--verify", "--quiet", f"{c}^{{commit}}")),
+            None,
+        )
+        if base is None:
+            error_exit(f"--repo {name}: no default branch resolves", code=2, use_json=use_json)
+        siblings.append((name, root, base))
+    return siblings
+
+
 def cmd_features_status(args: argparse.Namespace) -> None:
     """Report the feature map's seed/maintain facts; never judges or edits.
 
@@ -51383,6 +51415,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             if _features_git(repo_root, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"):
                 base = candidate
                 break
+    siblings = _features_sibling_repos(args.repo, repo_root, args.json)
 
     features: list[dict[str, Any]] = []
     reasons: list[str] = []
@@ -51413,6 +51446,19 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             if key not in counted:
                 counted[key] = _features_surface_commits(repo_root, base, since)
             row["commits_since"] = counted[key]
+            if siblings:
+                # The proof commit belongs to the .flow/ repo, so siblings
+                # always measure from the proof date.
+                by_repo: dict[str, Optional[int]] = {".": counted[key]}
+                sib_since = [f"--since={proven['date']}T00:00:00"]
+                for name, sib_root, sib_base in siblings:
+                    sib_key = (name, *sib_since)
+                    if sib_key not in counted:
+                        counted[sib_key] = _features_surface_commits(sib_root, sib_base, sib_since)
+                    by_repo[name] = counted[sib_key]
+                row["commits_since_by_repo"] = by_repo
+                counts = list(by_repo.values())
+                row["commits_since"] = None if None in counts else sum(counts)
             row["stale"] = row["commits_since"] is not None and row["commits_since"] >= threshold
         if state == "never-proven":
             reasons.append(f"{path.name}: never proven")
@@ -51437,6 +51483,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             "threshold": threshold,
             "base": base,
             "features": features,
+            **({"repos": [name for name, _root, _base in siblings]} if siblings else {}),
         })
         return
     if recommendation == "seed":
@@ -58241,6 +58288,14 @@ def main() -> None:
         help="Seed/maintain recommendation: open drift notes + last-proven age per feature file",
     )
     p_features_status.add_argument("--json", action="store_true", help="JSON output")
+    p_features_status.add_argument(
+        "--repo",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Sibling git repo holding product code (relative to the .flow/ repo root); "
+        "its surface commits since each proof date add to the count. Repeatable",
+    )
     p_features_status.set_defaults(func=cmd_features_status)
 
     # checkpoint

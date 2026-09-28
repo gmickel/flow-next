@@ -182,6 +182,53 @@ class FeaturesStatus(MemoryRepoTemplate, unittest.TestCase):
         self.assertEqual(result["recommendation"], "maintain")
         self.assertEqual(result["reasons"], ["checkout.md: never proven"])
 
+    def sibling(self, *dated_code_commits: str) -> Path:
+        """A sibling code repo (no .flow/) beside the home base, one code commit per date."""
+        sib = self.repo / "payments-api"
+        subprocess.run(["git", "init", "-q", "-b", "main", str(sib)], check=True)
+        for n, date in enumerate(dated_code_commits):
+            (sib / "app.ts").write_text(f"export const n = {n};\n", encoding="utf-8")
+            env = {**os.environ, "GIT_AUTHOR_DATE": f"{date}T12:00:00Z",
+                   "GIT_COMMITTER_DATE": f"{date}T12:00:00Z"}
+            for argv in (["add", "-A"], ["-c", "user.email=s@example.com", "-c", "user.name=s",
+                                          "commit", "-q", "-m", f"code {n}"]):
+                subprocess.run(["git", *argv], cwd=sib, check=True, env=env, capture_output=True)
+        (self.repo / ".git" / "info" / "exclude").write_text("payments-api/\n", encoding="utf-8")
+        return sib
+
+    def test_sibling_surface_commits_after_proof_date_age_the_map(self) -> None:
+        _flowctl(self.repo, "config", "set", "features.staleAfterCommits", "2", "--json")
+        self.sibling("2026-08-01", "2026-09-02", "2026-09-03")
+        head = self.git("rev-parse", "--short", "HEAD")
+        self.write_feature("checkout.md", "**Surface:** web\n**Last proven:** 2026-09-01 at " + head)
+        result = _flowctl(self.repo, "features", "status", "--repo", "payments-api",
+                          "--repo", "./payments-api", "--json")
+        row = result["features"][0]
+        # The August commit predates the proof; the repeated repo counts once.
+        self.assertEqual(row["commits_since_by_repo"], {".": 0, "payments-api": 2})
+        self.assertEqual((row["commits_since"], row["stale"]), (2, True))
+        self.assertEqual((result["repos"], result["recommendation"]), (["payments-api"], "maintain"))
+
+    def test_without_repo_output_has_no_sibling_fields(self) -> None:
+        self.sibling("2026-09-02")
+        head = self.git("rev-parse", "--short", "HEAD")
+        self.write_feature("checkout.md", "**Surface:** web\n**Last proven:** 2026-09-01 at " + head)
+        result = self.status()
+        self.assertNotIn("repos", result)
+        self.assertNotIn("commits_since_by_repo", result["features"][0])
+        self.assertEqual(result["features"][0]["commits_since"], 0)
+
+    def test_bad_repo_path_fails_loudly(self) -> None:
+        (self.repo / "not-a-repo").mkdir()
+        for path in ("missing", "not-a-repo", "."):
+            with self.subTest(path):
+                proc = subprocess.run(
+                    [*FLOWCTL_CMD, "features", "status", "--repo", path, "--json"],
+                    cwd=self.repo, capture_output=True, text=True,
+                )
+                self.assertEqual(proc.returncode, 2)
+                self.assertIn(path, json.loads(proc.stdout)["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

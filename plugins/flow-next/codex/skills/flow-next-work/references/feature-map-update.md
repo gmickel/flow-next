@@ -16,8 +16,9 @@ autonomy rules unchanged (attended, `mode:autonomous`, and Ralph runs alike).
 
 ## 1. Find the altered routes
 
-Compare the spec's diff (`$(cat .flow/tmp/spec_base)..HEAD`, plus the task
-done summaries, which name routes a task changed) with the map's feature files.
+Compare the spec's diff (`$(cat .flow/tmp/spec_base)..HEAD`, plus the diff of
+each repo listed in `.flow/tmp/spec_base_repos` from its recorded sha, plus the
+task done summaries, which name routes a task changed) with the map's feature files.
 A route is altered when a user now reaches or drives a mapped feature
 differently: a renamed control or label, a moved page or URL, a new entry point,
 a removed sub-feature, or a changed CLI invocation. Code changes that leave
