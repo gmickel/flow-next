@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-273-hill-climb-the-agent-sets-up-the",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-28T08:08:41.497956Z",
   "created_at": "2026-09-28T07:57:37.556413Z",
   "default_impl": null,
   "default_review": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:06:26.469410Z"
+  "updated_at": "2026-09-28T08:08:41.497963Z"
 }
