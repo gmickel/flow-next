@@ -65,7 +65,7 @@
     "impl:fn-276-refine-is-one-interview-scope-is-a.1": 0
   },
   "spec_path": ".flow/specs/fn-276-refine-is-one-interview-scope-is-a.md",
-  "status": "open",
+  "status": "done",
   "title": "Refine is one interview; scope is a filter",
   "tracker": {
     "baseHashFlow": null,
@@ -78,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T10:31:09.129805Z"
+  "updated_at": "2026-09-28T10:33:06.156118Z"
 }

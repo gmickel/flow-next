@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-276-refine-is-one-interview-scope-is-a",
   "spec_path": ".flow/tasks/fn-276-refine-is-one-interview-scope-is-a.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Refine is one interview; scope is a filter",
   "updated_at": "2026-09-28T10:13:04.341334Z"
 }
