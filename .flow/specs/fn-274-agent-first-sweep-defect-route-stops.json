@@ -8,13 +8,67 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-274-agent-first-sweep-defect-route-stops",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-274-agent-first-sweep-defect-route-stops.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "ea1eaa7eec3cbaef58bc6cc9585433adff0aa16e5ca4532fba8d3be460115f7c",
+      "backend": "codex",
+      "base_sha": "57a2a6702295a9a33def9837301630fc9bc8a8a7",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-9884244dcf074c818b5a03b1e9a13b26",
+            "classification": "introduced",
+            "findingId": "finding-9884244dcf074c818b5a03b1e9a13b26",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "50dc350949d8f813510f34f236b46333ec1fefe5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 978,
+      "output_sha256": "bcba2930ee85eb9af525152824c4aa63a4df5d8b517c314e77331f5f836b5b44",
+      "reservation_id": "ba45b0d933a740b18a4a0c40c5d8441b",
+      "round_consumed": true,
+      "scope": "impl:fn-274-agent-first-sweep-defect-route-stops.1",
+      "superseded_by": null,
+      "task": "fn-274-agent-first-sweep-defect-route-stops.1",
+      "timestamp": "2026-09-28T09:06:21.246293Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-274-agent-first-sweep-defect-route-stops.1": 0
+  },
   "spec_path": ".flow/specs/fn-274-agent-first-sweep-defect-route-stops.md",
   "status": "open",
   "title": "Agent-first sweep: defect route stops and feature-map plumbing",
@@ -29,5 +83,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:56:38.422345Z"
+  "updated_at": "2026-09-28T09:06:21.248665Z"
 }
