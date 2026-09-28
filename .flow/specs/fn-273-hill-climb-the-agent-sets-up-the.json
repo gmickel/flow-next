@@ -63,7 +63,7 @@
     "impl:fn-273-hill-climb-the-agent-sets-up-the.1": 0
   },
   "spec_path": ".flow/specs/fn-273-hill-climb-the-agent-sets-up-the.md",
-  "status": "open",
+  "status": "done",
   "title": "Hill climb: the agent sets up the experiment",
   "tracker": {
     "baseHashFlow": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:08:41.497963Z"
+  "updated_at": "2026-09-28T08:10:29.649168Z"
 }
