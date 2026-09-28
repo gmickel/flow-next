@@ -292,7 +292,7 @@ flowctl scope bank business|technical|both [--json]
 flowctl scope write-policy business|technical|both --current-sections-json <file|-> [--json]
 ```
 
-`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the interview skill asks before silently running that default.
+`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the refine skill asks before silently running that default.
 
 ### spec create
 
