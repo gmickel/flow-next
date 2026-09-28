@@ -1,7 +1,7 @@
 ---
 name: testing-scout
 description: Used by /flow-next:prime to analyze test framework setup, coverage configuration, and test commands. Do not invoke directly.
-model: opus
+model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

@@ -129,10 +129,11 @@ Bundled agents carry a model field grouped by task shape - the family alias in e
 
 | Agent group | Agents | Why |
 |------|--------|-----|
-| `opus` | every scout (prime's pillar scanners, memory-scout, the planning scouts), flow-gap-analyst, plan-sync, quality-auditor | the strongest current tier for scouting and audit, at a bounded price |
+| `sonnet` | every scout (prime's pillar scanners, memory-scout, the planning scouts), flow-gap-analyst, plan-sync | near-Opus quality for well-scoped scouting, faster and cheaper |
+| `opus` | quality-auditor | bug and gap detection, where a miss is invisible |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
-Scouts pin `opus` rather than `inherit` so a session on a pricier model (planning on Fable, say) does not run every scout fan-out on that model too. The `opus` alias follows the current Opus release. Opus scouts cost more than the Haiku and Sonnet pins they replaced; a routing block's `fast scout` / `thinking scout` lines move them to a cheaper model.
+Scouts pin `sonnet` rather than `inherit` so a session on a pricier model (planning on Fable, say) does not run every scout fan-out on that model too. The `sonnet` alias follows the current Sonnet release: Sonnet 5.5 scores close to Opus 5.5 on coding and knowledge-work benchmarks at lower cost and latency, so it replaced the interim Opus pin. The alias resolves to Sonnet 5.5 from Claude Code 2.1.284; an older Claude Code resolves it to Sonnet 5. A routing block's `fast scout` / `thinking scout` lines still move scouts to another model.
 
 The Codex mirror maps these groups to that host's own tiers at sync time (`scripts/sync-codex.sh` `map_model`); the sync-time environment overrides them. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin lets Codex-host work threads ride a cheaper tier. Details: [`platforms.md`](platforms.md).
 

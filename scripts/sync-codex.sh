@@ -62,11 +62,11 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-# Scouts that need full intelligence (reasoning/judgment, not just scanning).
-# Applies only to agents pinned `sonnet`: since fn-272 every bundled scout pins
-# `opus` on Claude and maps to INTELLIGENT here, so this list and the FAST tier
-# have no default consumer; they still route a user's own sonnet/haiku pins.
-INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout docs-scout github-scout practice-scout plan-sync flow-gap-analyst"
+# Agents pinned `sonnet` that map to the INTELLIGENT tier. Every bundled scout
+# pins `sonnet` on Claude (the current Sonnet is a frontier-class scout), and
+# the Codex mirror keeps them all on INTELLIGENT; the FAST tier still routes a
+# `sonnet`/`haiku` pin outside this list.
+INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout docs-scout github-scout practice-scout plan-sync flow-gap-analyst build-scout env-scout memory-scout observability-scout security-scout testing-scout tooling-scout why-scout workflow-scout"
 # Agents that stay on opus in Claude Code (bug/gap detection = horsepower; failures invisible)
 OPUS_AGENTS="quality-auditor"
 

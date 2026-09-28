@@ -1,7 +1,7 @@
 ---
 name: github-scout
 description: Search GitHub repos (public + private) for code patterns, implementations, and examples.
-model: opus
+model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true

@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Scouts run on Sonnet 5.5 instead of Opus.** 6.4.0 moved the bundled scouts, flow-gap-analyst and plan-sync from Haiku and Sonnet to Opus as a stopgap until a stronger Sonnet shipped. Sonnet 5.5 scores close to Opus 5.5 on agentic coding and knowledge-work benchmarks, runs more than 30% faster and costs less, so those agents now pin `sonnet`. Scout-heavy steps such as plan and prime get cheaper and faster. quality-auditor stays on Opus, and the worker and PR comment resolver still inherit the session model. The `sonnet` alias resolves to Sonnet 5.5 from Claude Code 2.1.284; older versions resolve it to Sonnet 5, so update Claude Code. The generated Codex agents are unchanged.
+
 ### Fixed
 
 - **A `/flow-next:features` maintain pass now ships on repos with naming rules or a non-GitHub host, and a failed ship no longer throws away the proven corrections.** The ship step used a fixed branch name and commit message and a bare `gh pr create`, so a repo whose hooks require a ticket key, or one hosted on Bitbucket, could not finish a pass. Any failure there also restored every proven map edit to HEAD. Now maintain reads the repo's branch and commit naming rules at entry and asks then for a value it cannot know, such as a ticket key, before any proof work. It opens the PR through make-pr's `FLOW_PR_CREATE_CMD` seam and stops after the push with `CHANGED` when no create command reaches the host. It also honours a request to only commit or to leave the edits uncommitted. A commit, push or PR-create failure after the proofs ends `BLOCKED` with the edits left in place and named. Thanks to @CWayman for the report (#495).
