@@ -65,7 +65,7 @@
     "impl:fn-275-lighter-refine-ask-only-what-would.1": 0
   },
   "spec_path": ".flow/specs/fn-275-lighter-refine-ask-only-what-would.md",
-  "status": "open",
+  "status": "done",
   "title": "Lighter refine: ask only what would change the build",
   "tracker": {
     "baseHashFlow": null,
@@ -78,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T09:44:18.991820Z"
+  "updated_at": "2026-09-28T09:46:00.734285Z"
 }

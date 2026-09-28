@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-275-lighter-refine-ask-only-what-would",
   "spec_path": ".flow/tasks/fn-275-lighter-refine-ask-only-what-would.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Lighter refine: ask only what would change the build",
   "updated_at": "2026-09-28T09:26:30.687050Z"
 }
