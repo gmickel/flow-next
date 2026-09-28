@@ -116,7 +116,7 @@
     "impl:fn-274-agent-first-sweep-defect-route-stops.1": 0
   },
   "spec_path": ".flow/specs/fn-274-agent-first-sweep-defect-route-stops.md",
-  "status": "open",
+  "status": "done",
   "title": "Agent-first sweep: defect route stops and feature-map plumbing",
   "tracker": {
     "baseHashFlow": null,
@@ -129,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T09:10:00.937645Z"
+  "updated_at": "2026-09-28T09:11:47.495644Z"
 }

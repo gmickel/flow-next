@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-274-agent-first-sweep-defect-route-stops",
   "spec_path": ".flow/tasks/fn-274-agent-first-sweep-defect-route-stops.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Agent-first sweep: defect route stops and feature-map plumbing",
   "updated_at": "2026-09-28T08:57:17.744488Z"
 }
