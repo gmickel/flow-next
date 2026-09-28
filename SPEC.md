@@ -4,6 +4,11 @@
 # is removed from auxiliary_sections, so specs captured here omit the evidence block
 # (capture still collects the quotes and checks every [user] tag against them).
 # Re-copy when the bundled template changes; tests/test_repo_spec_scaffold.py guards drift.
+# REPO RULE - AGENT FIRST (STRATEGY.md "Agent first", .flow/criteria.md G4): specify what the
+# agent decides and what it records afterwards, never a form it must fill before acting. No required
+# fields, fixed labels, enums, validator rules, new judge kinds or routing rows, template sections,
+# flowctl verbs or checks unless the spec names the unattended failure each prevents; a sentence of
+# guidance is the default. Before saving a spec, delete any such structure that fails this test.
 purpose: Canonical spec template — single source of truth for .flow/specs/<id>.md structure
 consumers:
   - flow-next-capture        # synthesizes a spec from conversation context
