@@ -8,13 +8,60 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-273-hill-climb-the-agent-sets-up-the",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-273-hill-climb-the-agent-sets-up-the.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "56ecf2493699f31a5de9427f86215642b0da6f4cfffa94a6642680409e31439e",
+      "backend": "codex",
+      "base_sha": "d22e95602c87ea34123cff5aa4018672ddf3ed48",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c8c45ad38953f4c4e6842ff6a9d8a8789b8bfc6c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "8f1b42261cb5425e9c7852798d14ebef",
+      "round_consumed": true,
+      "scope": "impl:fn-273-hill-climb-the-agent-sets-up-the.1",
+      "superseded_by": null,
+      "task": "fn-273-hill-climb-the-agent-sets-up-the.1",
+      "timestamp": "2026-09-28T08:06:26.467420Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-273-hill-climb-the-agent-sets-up-the.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-273-hill-climb-the-agent-sets-up-the.1": 0
+  },
   "spec_path": ".flow/specs/fn-273-hill-climb-the-agent-sets-up-the.md",
   "status": "open",
   "title": "Hill climb: the agent sets up the experiment",
@@ -29,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T07:57:42.031015Z"
+  "updated_at": "2026-09-28T08:06:26.469410Z"
 }
