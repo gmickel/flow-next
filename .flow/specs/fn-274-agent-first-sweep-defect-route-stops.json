@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-274-agent-first-sweep-defect-route-stops",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-28T09:10:00.937637Z",
   "created_at": "2026-09-28T08:22:33.582560Z",
   "default_impl": null,
   "default_review": null,
@@ -129,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T09:07:34.955674Z"
+  "updated_at": "2026-09-28T09:10:00.937645Z"
 }
