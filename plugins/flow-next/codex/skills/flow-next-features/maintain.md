@@ -243,8 +243,11 @@ At least one proven map or owned-harness correction, provenance refresh, or reti
 5. Commit (message per the entry gate's ship names; default `chore(features): maintain pass`), **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly through make-pr's create seam, which a non-GitHub host replaces with a command taking the same arguments and printing the PR URL:
 
 ```bash
-${FLOW_PR_CREATE_CMD:-gh pr create} --title "<commit message>" --body-file "$PR_BODY"
+PR_OUT="$(${FLOW_PR_CREATE_CMD:-gh pr create} --title "<commit message>" --body-file "$PR_BODY" --base "<default>" --head "<branch>")"
+printf '%s\n' "$PR_OUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n1
 ```
+
+A create call that exits 0 without printing a PR URL did not open a PR: treat it as a failed PR create.
 
 When no create command can reach this host (not GitHub, and `FLOW_PR_CREATE_CMD` unset), stop after the push: the outcome is `CHANGED` with a `reason` naming the pushed branch and saying the PR was not opened. When the user asked at invocation for less (commit only, or leave the edits uncommitted), stop there instead: `CHANGED`, with a `reason` naming the local branch, or the working-tree files to stage.
 
