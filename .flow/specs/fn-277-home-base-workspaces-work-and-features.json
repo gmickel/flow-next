@@ -16,19 +16,84 @@
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
-  "review_hash_epoch": {},
-  "review_pending_rounds": {
-    "impl:fn-277-home-base-workspaces-work-and-features.1": 1
-  },
-  "review_reservations": {
-    "548a0ad3004642118fec04161b87a1c0": {
+  "review_attempts": [
+    {
       "artifact_sha256": "8a788ec5ffaccd825a501e27cf220e7494ccc0f97f78d957f6c71b2d16e89f1a",
-      "counter_scope": "impl:fn-277-home-base-workspaces-work-and-features.1",
-      "epoch": 0,
-      "exclusive": true,
+      "backend": "codex",
+      "base_sha": "70ac408f714c83bc38a13d099072edaf3e8bff92",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
       "forced": false,
-      "review_type": "impl"
+      "hash_epoch": 0,
+      "head_sha": "4d7e917f48507e1a5b27d30bf207511da997de7b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "8212e4702e10a2fc37a7e29c1b6cd8d9e9b1d36faceb1e388194f70a47a2d290",
+      "reservation_id": "548a0ad3004642118fec04161b87a1c0",
+      "round_consumed": false,
+      "scope": "impl:fn-277-home-base-workspaces-work-and-features.1",
+      "superseded_by": null,
+      "task": "fn-277-home-base-workspaces-work-and-features.1",
+      "timestamp": "2026-09-28T13:44:31.269737Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "475092e50a44ff2f87183f8138e6cdc011206e03c1a4abc8fef0a46144bc942b",
+      "backend": "codex",
+      "base_sha": "70ac408f714c83bc38a13d099072edaf3e8bff92",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-773c043070305f45e35ba76950c970eb",
+            "classification": "introduced",
+            "findingId": "finding-773c043070305f45e35ba76950c970eb",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "103b649ff130af85942b243e25c5ba8acd0f42df",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1071,
+      "output_sha256": "37a541606d4b7e2911f0e994dde2e73829d351374fd9c2879e7365c5b94b661d",
+      "reservation_id": "a38921272f6e472fa425da923fef5618",
+      "round_consumed": true,
+      "scope": "impl:fn-277-home-base-workspaces-work-and-features.1",
+      "superseded_by": null,
+      "task": "fn-277-home-base-workspaces-work-and-features.1",
+      "timestamp": "2026-09-28T13:46:49.441539Z",
+      "verdict": "NEEDS_WORK"
     }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-277-home-base-workspaces-work-and-features.1": 0
   },
   "spec_path": ".flow/specs/fn-277-home-base-workspaces-work-and-features.md",
   "status": "open",
@@ -44,5 +109,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T13:38:57.599142Z"
+  "updated_at": "2026-09-28T13:46:49.443931Z"
 }

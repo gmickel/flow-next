@@ -51441,7 +51441,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             else:
                 # An unreachable commit (a squashed branch head) falls back to
                 # the proof date, so every clone measures the same age.
-                row["measured_from"], since = "date", [f"--since={proven['date']}T00:00:00Z"]
+                row["measured_from"], since = "date", [f"--since={proven['date']}T00:00:00"]
             key = tuple(since)
             if key not in counted:
                 counted[key] = _features_surface_commits(repo_root, base, since)
