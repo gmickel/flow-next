@@ -144,7 +144,7 @@ The findings of each step go into the task's done summary and the PR briefing. E
 
 ```mermaid
 flowchart LR
-    P([Pre-registration]) --> H[prove, then freeze the harness] --> A[one change, one measurement] -->|kept: one commit| L[ledger row]
+    P([set up the experiment]) --> H[prove, then freeze the harness] --> A[one change, one measurement] -->|kept: one commit| L[ledger row]
     A -->|inconclusive or worse: revert| L
     L -->|no stop rule met| A
     L -->|stop| Rev[/impl-review/] --> PR[/make-pr/]
@@ -152,10 +152,10 @@ flowchart LR
 
 Work runs the loop inside its one task, as [hill-climb.md](../../skills/flow-next-work/references/hill-climb.md) details:
 
-1. **Pre-registration.** The spec's `## Hill-climb pre-registration` section names the metric and its direction, the target, the attempt floor, the budget, the harness and regression-gate commands, the runs per measurement and the minimum detectable effect. A missing field stops the route before anything is measured (a question attended, `NEEDS_HUMAN` unattended). The human owns the target, the floor and the budget; the agent never relaxes them.
-2. **Prove, then freeze the harness.** It must rank a known-worse and a known-better change around the baseline with gaps larger than the baseline's spread, and reject a wrong output. Then its command and files are hashed; a later change forces a new baseline.
-3. **One change, one measurement.** Each attempt tests one hypothesis from a family a profile supports, measured against the current best with warm-ups discarded and runs interleaved. It is kept, as exactly one commit, only when its median beats the best by the minimum detectable effect, the ranges do not overlap, a replicate agrees and the regression gate is green. Anything else is reverted to a clean tree, and every attempt writes a ledger row.
-4. **Stop honestly.** The run stops when the target is met and the attempt floor is reached, the budget is spent, the supported families are exhausted, or the harness breaks. Three misses in a row change the family instead of stopping. An unmet target is reported unverified, never relaxed.
+1. **Set up the experiment.** The spec gives the target; the agent decides the measured case, the metric and its direction, the attempt floor, the budget, the runs per measurement and the smallest difference that counts, taking the user's values where given, and writes them at the top of the ledger before the first attempt. Only a missing target stops the route (a question attended, `NEEDS_HUMAN` unattended). The agent never invents, relaxes or reinterprets the target.
+2. **Prove, then freeze the harness.** The agent builds it; it must rank a known-worse and a known-better change around the baseline with gaps larger than the baseline's spread, and reject a wrong output. Then its command and files are hashed; a later change forces a new baseline.
+3. **One change, one measurement.** Each attempt tests one hypothesis from a family a profile supports, measured against the current best with warm-ups discarded and runs interleaved. It is kept, as exactly one commit, only when it beats the best by more than the noise and the regression gate is green; a simplification that holds the number may be kept too. Anything else is reverted to a clean tree, and every attempt writes a ledger row. Independent hypotheses may run in parallel worktrees, each measured against the current best.
+4. **Stop honestly.** The run stops when the target is met and the attempt floor is reached, the budget is spent, the remaining ideas are marginal, or the harness breaks. Three misses in a row change the approach instead of stopping. An unmet target is reported unverified and its R-ID recorded `deferred`, never relaxed.
 
 Review runs once over the kept commits. The done summary carries the full ledger, and the PR briefing shows the baseline and final values, the attempt counts, the kept commits, the harness proof, the final gate and the best untried idea.
 

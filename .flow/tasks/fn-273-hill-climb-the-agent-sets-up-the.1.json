@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-28T07:57:49.242593Z",
+  "depends_on": [],
+  "id": "fn-273-hill-climb-the-agent-sets-up-the.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-273-hill-climb-the-agent-sets-up-the",
+  "spec_path": ".flow/tasks/fn-273-hill-climb-the-agent-sets-up-the.1.md",
+  "status": "todo",
+  "title": "Implement Hill climb: the agent sets up the experiment",
+  "updated_at": "2026-09-28T07:58:44.726996Z"
+}

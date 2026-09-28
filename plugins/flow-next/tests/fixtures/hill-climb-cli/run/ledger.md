@@ -1,17 +1,17 @@
 # Hill-climb run: mycli --version cold start
 
-End-to-end run of the loop in `skills/flow-next-work/references/hill-climb.md` on this fixture (`../SPEC.md` holds the pre-registration). The run repository was a fresh `git init` of the fixture; each kept attempt's commit is saved here as `attempt-<n>.diff`, applied in order to the fixture.
+End-to-end run of the loop in `skills/flow-next-work/references/hill-climb.md` on this fixture (`../SPEC.md` states the goal and the target). The run repository was a fresh `git init` of the fixture; each kept attempt's commit is saved here as `attempt-<n>.diff`, applied in order to the fixture.
 
 Recorded 2026-09-28, Linux, CPython 3.12.14, one machine.
 
-## Pre-registration
+## Setup
 
-Metric `mycli --version` cold-start wall time (median, ms); direction lower; target below 40 ms; attempt floor 5; budget 10 attempts; 11 runs per measurement after 3 discarded warm-ups; minimum detectable effect 10 ms. Regression gate `python3 -m unittest discover -s tests`.
+Recorded before the first attempt. Target below 40 ms (from the spec). Case: `mycli --version`, the command the spec names. Metric: cold-start wall time, median ms; direction lower; attempt floor 5; budget 10 attempts; 11 runs per measurement after 3 discarded warm-ups; smallest difference that counts 10 ms. Harness: `python3 bench.py --runs 11 --warmup 3 <dir> [<dir>]` (interleaves the directories; exits 1 on a wrong output). Regression gate: `python3 -m unittest discover -s tests`.
 
 ## Harness proof and freeze
 
 - Regression gate on the unchanged tree: green (3 tests).
-- Baseline: median 124 ms, range 118-132 ms. Effective minimum detectable effect: 14 ms (the 14 ms range width beats the 10 ms floor). Gap to target: 84 ms, so the instrument can resolve the goal.
+- Baseline: median 124 ms, range 118-132 ms. Effective bar: 14 ms (the 14 ms range width beats the 10 ms smallest difference). Gap to target: 84 ms, so the instrument can resolve the goal.
 - Known worse (a 30 ms sleep in `main`): 154 ms (148-158) against the baseline's 122 ms in the same interleaved measurement.
 - Known better (plugin discovery stubbed out): 74 ms (71-77) against 122 ms.
 - Wrong output (`mycli 1.4` printed): rejected, `OUTPUT CHECK FAILED in .: rc=0 stdout='mycli 1.4\n'`, harness exit 1.

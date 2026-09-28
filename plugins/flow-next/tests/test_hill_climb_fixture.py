@@ -1,6 +1,5 @@
 """Hill-climb route (fn-265): the recorded fixture run stays consistent and replayable."""
 
-import re
 import shutil
 import subprocess
 import sys
@@ -11,8 +10,6 @@ from pathlib import Path
 PLUGIN = Path(__file__).resolve().parent.parent
 FIXTURE = PLUGIN / "tests" / "fixtures" / "hill-climb-cli"
 RUN = FIXTURE / "run"
-REFERENCE = PLUGIN / "skills" / "flow-next-work" / "references" / "hill-climb.md"
-LABEL_RE = re.compile(r"^- ([A-Z][A-Za-z ]+):", re.MULTILINE)
 
 
 def _ledger_rows():
@@ -23,12 +20,6 @@ def _ledger_rows():
 
 
 class HillClimbFixtureRun(unittest.TestCase):
-    def test_pre_registration_labels_match_the_reference(self):
-        reference_block = REFERENCE.read_text(encoding="utf-8").split("```text", 1)[1].split("```", 1)[0]
-        spec_section = (FIXTURE / "SPEC.md").read_text(encoding="utf-8").split("## Hill-climb pre-registration", 1)[1].split("\n## ", 1)[0]
-        self.assertEqual(LABEL_RE.findall(spec_section), LABEL_RE.findall(reference_block))
-        self.assertEqual(len(LABEL_RE.findall(reference_block)), 9)
-
     def test_ledger_has_one_row_per_attempt_and_one_diff_per_kept_row(self):
         rows = _ledger_rows()
         self.assertEqual([row[0] for row in rows], [str(n) for n in range(1, len(rows) + 1)])

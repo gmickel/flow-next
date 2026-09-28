@@ -148,7 +148,7 @@ Everything below in this phase, its Done-when included, binds only the bridged b
 
 **Compose the pointer prompt** — identities and rails only, never restated spec content (STRATEGY.md: the artifact is the contract):
 
-1. `TASK_ID`, the spec path and the task path from the anchor bundle, the spec's `## Resolved via Research` section when the spec has one (named as a section to read, not pasted), the path of [defect-route.md](../skills/flow-next-work/references/defect-route.md) when the task fixes a reported defect (named as a file to read before writing the fix), the path of [hill-climb.md](../skills/flow-next-work/references/hill-climb.md) when the spec carries a `## Hill-climb pre-registration` section or its goal is one metric moved against a target through repeated attempts (named as a file to read before the first change), and the project instruction file (`CLAUDE.md` / `AGENTS.md`).
+1. `TASK_ID`, the spec path and the task path from the anchor bundle, the spec's `## Resolved via Research` section when the spec has one (named as a section to read, not pasted), the path of [defect-route.md](../skills/flow-next-work/references/defect-route.md) when the task fixes a reported defect (named as a file to read before writing the fix), the path of [hill-climb.md](../skills/flow-next-work/references/hill-climb.md) when the spec's goal is one metric moved toward a target through repeated attempts (named as a file to read before the first change), and the project instruction file (`CLAUDE.md` / `AGENTS.md`).
 2. The usage guide's long-task brief **verbatim** (`<FLOWCTL> usage`, `## Orchestration & model steering`, the `Branch: <branch>, already checked out...` block) with the branch filled in. The brief carries the judicious-subagent license, so the child holds the same delegation license as an in-host worker; when your own dispatch prompt carried a `Judicious subagent use` paragraph, append it verbatim after the brief as well — the license passes through to the owner, it is never held on the owner's behalf. Its commit clause names the owner as the only committer and defers the commit convention to the owner's path, so it agrees with the brief's checkpoint convention rather than contradicting it.
 3. Nothing else. Your own `TIMEBOX` is never copied into the brief (a timebox teaches the child to return partial, #431); no worker-side parallel bridge calls, no per-child worktrees, no branch integration in this phase — parallelization is the child's.
 
@@ -212,9 +212,8 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
    [defect-route.md](../skills/flow-next-work/references/defect-route.md)
    before writing the fix.
 
-4. **Hill-climb specs:** when the spec carries a `## Hill-climb pre-registration`
-   section, or its goal is one metric moved against a target through repeated
-   attempts, read and follow
+4. **Hill-climb specs:** when the spec's goal is one metric moved toward a
+   target through repeated attempts, read and follow
    [hill-climb.md](../skills/flow-next-work/references/hill-climb.md) before the
    first change. Its measured loop replaces Phase 2's single change, and each
    kept attempt is its own Phase 3 commit.
