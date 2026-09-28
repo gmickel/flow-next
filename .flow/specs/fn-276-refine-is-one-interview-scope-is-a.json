@@ -10,13 +10,60 @@
     "fn-275-lighter-refine-ask-only-what-would"
   ],
   "id": "fn-276-refine-is-one-interview-scope-is-a",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-276-refine-is-one-interview-scope-is-a.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "5c1a3df8bc366a10dfcf57972d92c8574eb17b9ddc2cbb394bc012c4d835461c",
+      "backend": "codex",
+      "base_sha": "09529bc61afaf9a4732f3d5f0dafb72ecb854bc1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4bc10d2f0676113f61aa6c97dd5f9eb068f9ffd0",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "5240e0049189493aa3b0c0594682b951",
+      "round_consumed": true,
+      "scope": "impl:fn-276-refine-is-one-interview-scope-is-a.1",
+      "superseded_by": null,
+      "task": "fn-276-refine-is-one-interview-scope-is-a.1",
+      "timestamp": "2026-09-28T10:30:18.363334Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-276-refine-is-one-interview-scope-is-a.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-276-refine-is-one-interview-scope-is-a.1": 0
+  },
   "spec_path": ".flow/specs/fn-276-refine-is-one-interview-scope-is-a.md",
   "status": "open",
   "title": "Refine is one interview; scope is a filter",
@@ -31,5 +78,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:51:22.718170Z"
+  "updated_at": "2026-09-28T10:30:18.366466Z"
 }
