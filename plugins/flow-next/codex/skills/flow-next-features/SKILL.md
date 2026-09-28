@@ -116,8 +116,8 @@ FEATURES_VERDICT=<SEEDED|CLEAN|CHANGED|BLOCKED|REFUSED> features=<n> reason="<on
 |---------|------|
 | `SEEDED` | Seed landed at least one proven feature (partial seed names failures in `reason`) |
 | `CLEAN` | Maintain: no map/harness change, no branch, no PR |
-| `CHANGED` | Maintain: one PR of proven map/harness corrections only |
-| `BLOCKED` | Named blocker (orphaned port, concurrent isolation failure, source-reader collapse of the pass). Next run re-enters fresh. |
+| `CHANGED` | Maintain: one PR of proven map/harness corrections only, or the pushed or local branch when no create command reaches the host or the user asked for less |
+| `BLOCKED` | Named blocker (missing ship-name value, orphaned port, concurrent isolation failure, source-reader collapse of the pass, a failed ship step). Next run re-enters fresh; a failed ship step keeps the proven edits and names them. |
 | `REFUSED` | Autonomy marker, no drivable surface, no usable driver on this host, or broken checkout |
 
 Use `features=0` when nothing landed. `reason` is one line, quoted.

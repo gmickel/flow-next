@@ -29,11 +29,12 @@ RUN_DIR="$REPO_ROOT/.flow/tmp/features-$RUN_ID"
 mkdir -p "$RUN_DIR"
 ```
 
-**Entry gate (both checks, before any inspection):**
+**Entry gate (before any inspection):**
 
 1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`) AND zero untracked product files (`git status --porcelain --untracked-files -- . ':(exclude).flow/'` must be empty - `git diff` cannot see an untracked file, and an untracked route source would let the audit prove and map product code absent from the PR's base). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
 2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
 3. **Record the base revision.** Persist `git rev-parse origin/<default>` (e.g. to `$RUN_DIR/entry_base`) - Phase 6's staleness recheck compares revisions, never the working tree, so the run's own later edits can never masquerade as base movement.
+4. **Ship names.** Read the repo's branch and commit naming rules now (project instructions, contributing docs, commit hooks) and note in the run notes how Phase 6 will name the branch and commit. When those rules need a value you cannot know, such as a ticket key, ask for it now, before Phase 1; when nobody can answer (a host loop), end `BLOCKED` naming the missing value. A pass that proves routes and then cannot name its commit has wasted the proofs.
 
 `jq` and a working Python (`python3`, `python`, or `py -3`) must be on PATH. `$FLOWCTL` is required for `features status`, `memory list` on the `feature-map-drift` tag, `memory mark-stale` for drift-note retirement, and `memory add` for bug filing. Memory disabled or uninitialised: treat drift search and bug filing as empty, record that in the run notes, continue.
 
@@ -236,14 +237,16 @@ Every feature was covered (live exercise, `verified-unreachable` with the requir
 At least one proven map or owned-harness correction, provenance refresh, or retired drift note.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
-2. **Re-fetch and re-verify the base first**: fetch `origin/<default>` again and compare `git rev-parse origin/<default>` against the entry-recorded base revision (`$RUN_DIR/entry_base`) - a revision comparison only, never a working-tree diff: the run's own map and harness edits are dirty by design at this point, and the entry gate already proved the tree matched the base it recorded. A base that advanced during the source/live passes means the proofs no longer describe the code the PR will be reviewed against; end `BLOCKED` naming the moved base (re-run maintain from the updated checkout). Then create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>-<run-id>` (the preamble's `$RUN_ID` suffix keeps a second same-day pass collision-free locally and on the remote) from `origin/<default>` (both gates just proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
+2. **Re-fetch and re-verify the base first**: fetch `origin/<default>` again and compare `git rev-parse origin/<default>` against the entry-recorded base revision (`$RUN_DIR/entry_base`) - a revision comparison only, never a working-tree diff: the run's own map and harness edits are dirty by design at this point, and the entry gate already proved the tree matched the base it recorded. A base that advanced during the source/live passes means the proofs no longer describe the code the PR will be reviewed against; end `BLOCKED` naming the moved base (re-run maintain from the updated checkout). Then create a **fresh branch**, named per the entry gate's ship names (default when the repo states no rules: `chore/features-maintain-<YYYY-MM-DD>-<run-id>`; keep the preamble's `$RUN_ID` in any name so a second same-day pass stays collision-free locally and on the remote), from `origin/<default>` (both gates just proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. If the repo runs a formatter over markdown (pre-commit hook, `biome`, `oxfmt`, `prettier`), run it over the edited owned paths first — a pre-commit hook that rewrites the files mid-commit ships a diff nobody re-read, or forces a formatter-artifact follow-up commit. Re-read anything the formatter changed.
 4. Stage **only** `.flow/features/**`, the owned harness files that were re-driven, and the memory files of the drift notes Phase 5 retired. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
-5. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
+5. Commit (message per the entry gate's ship names; default `chore(features): maintain pass`), **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly through make-pr's create seam, which a non-GitHub host replaces with a command taking the same arguments and printing the PR URL:
 
 ```bash
-gh pr create --title "chore(features): maintain pass" --body-file "$PR_BODY"
+${FLOW_PR_CREATE_CMD:-gh pr create} --title "<commit message>" --body-file "$PR_BODY"
 ```
+
+When no create command can reach this host (not GitHub, and `FLOW_PR_CREATE_CMD` unset), stop after the push: the outcome is `CHANGED` with a `reason` naming the pushed branch and saying the PR was not opened. When the user asked at invocation for less (commit only, or leave the edits uncommitted), stop there instead: `CHANGED`, with a `reason` naming the local branch, or the working-tree files to stage.
 
 Write `$PR_BODY` to a file under `$RUN_DIR` (or a tempfile). Use a hand-written chore body with these four sections in order:
 
@@ -254,15 +257,15 @@ Write `$PR_BODY` to a file under `$RUN_DIR` (or a tempfile). Use a hand-written 
 
 `--body-file`, never a heredoc. Never invoke `/flow-next:make-pr` (it requires a spec behind the diff). **Never merge.** Never `gh pr merge`. Never `/flow-next:land`. The PR stays open for the human or land.
 
-If the push or `gh pr create` fails: do not claim `CHANGED`. End `BLOCKED` naming the branch and which step did not land.
+If the commit, push, or PR create fails: do not claim `CHANGED`. End `BLOCKED` naming the step that failed and where the proven edits are (the local branch, or the working tree). They stay there; this failure never restores them (see `BLOCKED`).
 
 `features=<n>` is the count of feature files remaining in the map after corrections.
 
 ### BLOCKED
 
-A named blocker stopped the pass: orphaned port, concurrent isolation failure, source-reader collapse, or a `gh pr create` failure after proven commits. Reason names what blocked.
+A named blocker stopped the pass: a missing ship-name value at entry, orphaned port, concurrent isolation failure, source-reader collapse, a moved base, or a commit, push, or PR-create failure after the proofs. Reason names what blocked.
 
-**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. Restore uncommitted map/harness edits and the drift notes this run retired to HEAD - the entry gate proved owned paths were clean at start, so everything dirty under them is this run's own work; pre-existing user edits were never admitted. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
+**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. A block before or during the proofs, or a moved base (those proofs describe the wrong code), restores uncommitted map/harness edits and the drift notes this run retired to HEAD - the entry gate proved owned paths were clean at start, so everything dirty under them is this run's own work; pre-existing user edits were never admitted. A commit, push, or PR-create failure after the proofs restores nothing: the proven edits stay on the local branch or in the working tree, and the `reason` names where and that the next run needs them committed, shipped, or stashed first. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
 
 `features=<n>` is the count of features fully covered before the block (`0` if none).
 
@@ -280,6 +283,6 @@ Maintain emits exactly `CLEAN`, `CHANGED`, or `BLOCKED`. Not `SEEDED`, not `REFU
 
 - Exactly one verdict. Last line is one `FEATURES_VERDICT=` line matching the grammar above.
 - `CLEAN`: no branch, no PR.
-- `CHANGED`: one open PR from a branch cut off the default base and pushed with upstream tracking; every shipped file was re-read; body has the four sections; notes, scratch, and evidence are not in the diff.
-- `BLOCKED`: reason names the blocker; no resume file; next run starts from the committed map.
+- `CHANGED`: one open PR from a branch cut off the default base, named per the repo's rules, and pushed with upstream tracking - or, when no create command reaches the host or the user asked for less, the `reason` names the pushed or local branch, or the working-tree files; every shipped file was re-read; body has the four sections; notes, scratch, and evidence are not in the diff.
+- `BLOCKED`: reason names the blocker; no resume file; next run starts from the committed map; a ship-step failure after the proofs left the proven edits in place and named them.
 - Every `blocked-for-this-pass` feature slug appears in the terminal `reason` when the outcome is `CHANGED` or `BLOCKED`.

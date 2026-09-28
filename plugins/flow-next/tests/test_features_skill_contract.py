@@ -28,6 +28,7 @@ PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 SKILL_DIR = PLUGIN / "skills" / "flow-next-features"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 SEED_MD = SKILL_DIR / "seed.md"
+MAINTAIN_MD = SKILL_DIR / "maintain.md"
 CONTRACT_MD = SKILL_DIR / "references" / "feature-entry-contract.md"
 DOCTOR_MD = SKILL_DIR / "references" / "doctor-and-proof.md"
 SHIM = PLUGIN / "commands" / "features.md"
@@ -192,6 +193,46 @@ class TerminalGrammar(unittest.TestCase):
         section = skill[heading : nxt if nxt != -1 else len(skill)]
         self.assertIn(VERDICT_GRAMMAR, section)
         self.assertIn("last line", section)
+
+
+class MaintainShipStep(unittest.TestCase):
+    """#495: ship names resolved at entry, the create seam, proven edits kept."""
+
+    def _span(self, text: str, start: str, end: str) -> str:
+        i = text.find(start)
+        self.assertNotEqual(i, -1, f"{start!r} missing")
+        j = text.find(end, i + len(start))
+        self.assertNotEqual(j, -1, f"{end!r} missing after {start!r}")
+        return text[i:j]
+
+    def test_ship_names_are_resolved_in_the_entry_gate(self) -> None:
+        # Structural relation: the ship-name step sits before Phase 1, so a
+        # missing ticket key stops the run before any proof work.
+        gate = self._span(_read(MAINTAIN_MD), "**Entry gate", "## Phase 1")
+        self.assertIn("**Ship names.**", gate)
+
+    @unittest.skipUnless(_BASH, "bash required to execute the create fence")
+    def test_pr_create_fence_honours_the_create_seam(self) -> None:
+        text = _read(MAINTAIN_MD)
+        fence = next(
+            (body for body in _bash_fences(text) if "--body-file" in body), None
+        )
+        self.assertIsNotNone(fence, "PR create fence not found in maintain.md")
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "args"
+            stub = Path(tmp) / "create"
+            stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{log}"\n', encoding="utf-8")
+            stub.chmod(0o755)
+            env = _clean_env(FLOW_PR_CREATE_CMD=str(stub), PR_BODY=str(Path(tmp) / "body.md"))
+            res = _run_bash(fence, env=env, cwd=tmp)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            args = log.read_text(encoding="utf-8").splitlines()
+        self.assertIn("--title", args)
+        self.assertIn("--body-file", args)
+
+    def test_failed_ship_step_keeps_proven_edits(self) -> None:
+        blocked = self._span(_read(MAINTAIN_MD), "### BLOCKED", "### Terminal line")
+        self.assertIn("restores nothing", blocked)
 
 
 class ShimFrontmatter(unittest.TestCase):

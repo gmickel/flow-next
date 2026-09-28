@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **A `/flow-next:features` maintain pass now ships on repos with naming rules or a non-GitHub host, and a failed ship no longer throws away the proven corrections.** The ship step used a fixed branch name and commit message and a bare `gh pr create`, so a repo whose hooks require a ticket key, or one hosted on Bitbucket, could not finish a pass. Any failure there also restored every proven map edit to HEAD. Now maintain reads the repo's branch and commit naming rules at entry and asks then for a value it cannot know, such as a ticket key, before any proof work. It opens the PR through make-pr's `FLOW_PR_CREATE_CMD` seam and stops after the push with `CHANGED` when no create command reaches the host. It also honours a request to only commit or to leave the edits uncommitted. A commit, push or PR-create failure after the proofs ends `BLOCKED` with the edits left in place and named. Thanks to @CWayman for the report (#495).
+
 ## [flow-next 6.5.0] - 2026-09-28
 
 Flow now does less before the agent starts and keeps every check after it. Refine asks only the questions whose answers would change what gets built, often none in a codebase whose patterns already answer them, and flow, capture and plan send you there only when such a decision is open. A preference you state stays guidance instead of turning into a hard requirement such as "must load in 20 ms". Refine is also one interview now: name an audience with `--scope=qa`, `--biz` or plain words like "run a business interview", or name none. A hill climb starts from the target you stated, with the agent choosing and recording how it measures. A bug fix no longer stops because other pull requests touch the same files, and live-app stages read the feature map directly. Current models settle most of what these steps used to pin down up front, so the time goes into building and verifying. Implementation review, QA and the evidence in the pull request work exactly as before.
