@@ -115,7 +115,7 @@
     "impl:fn-278-features-maintain-ships-under-the-repos.1": 0
   },
   "spec_path": ".flow/specs/fn-278-features-maintain-ships-under-the-repos.md",
-  "status": "open",
+  "status": "done",
   "title": "Features maintain ships under the repo's own naming rules and host, and keeps proven edits when shipping fails",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T13:42:43.561956Z"
+  "updated_at": "2026-09-28T13:51:01.311049Z"
 }

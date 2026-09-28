@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-278-features-maintain-ships-under-the-repos",
   "spec_path": ".flow/tasks/fn-278-features-maintain-ships-under-the-repos.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement maintain ship under repo naming rules and host",
   "updated_at": "2026-09-28T13:34:06.865880Z"
 }
