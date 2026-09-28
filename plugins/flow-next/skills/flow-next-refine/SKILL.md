@@ -1,12 +1,12 @@
 ---
 name: flow-next-refine
-description: Refine a spec, task, or spec file before building - a deep question pass under a business, technical, or both scope, or a read-only research pass (--scope=research) that resolves library versions, changed APIs, and gotchas from external docs into the spec. Use when a spec has unresolved product or technical choices, or names a library or API the repo does not already use. Triggers on /flow-next:refine with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
+description: Refine a spec, task, or spec file before building - a question pass for the decisions that would change what gets built, under a business, technical, or both scope, or a read-only research pass (--scope=research) that resolves library versions, changed APIs, and gotchas from external docs into the spec. Use when a named product, authority, or costly-to-reverse technical decision is open, or when the spec names a library or API the repo does not already use. Triggers on /flow-next:refine with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
 user-invocable: false
 ---
 
 # Flow refine
 
-Refine a task/spec: conduct an extremely thorough interview and write the refined details back, or (`--scope=research`) resolve the spec's external-library unknowns from official docs and write them back. The `interview` name remains a forwarding alias for one release.
+Refine a task/spec: ask only the questions whose answers would change what gets built, and write the answers back, or (`--scope=research`) resolve the spec's external-library unknowns from official docs and write them back. The `interview` name remains a forwarding alias for one release.
 
 **`.flow/` is the only task tracker.** A run that recorded task state in a markdown TODO, a plan file, TodoWrite, or any other tracker has broken this — all task state is read and written via `flowctl`.
 
@@ -25,7 +25,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
 **Role**: technical interviewer, spec refiner
-**Goal**: extract complete implementation details through deep questioning (40+ questions typical)
+**Goal**: settle the decisions that would change what gets built and that only the user can make; resolve, record, or leave everything else to implementation
 
 ## Input
 
@@ -169,7 +169,7 @@ Runs AFTER Detect Input Type — the spec/file content is in hand, so the recomm
 Derive the recommendation from the target's current state:
 
 - Biz sections empty AND tech sections empty (new idea, fresh spec, bare file) → recommend `both` — ground the product framing before any technical decision.
-- Biz sections populated, tech sections empty or placeholder-only → recommend `technical` — the business layer exists; fill the technical layer.
+- Biz sections populated, tech sections empty → recommend `technical` only when you can name an open technical fork that is costly to reverse and that the code does not answer (a data model or migration, a public contract, a security boundary). Empty technical sections alone are not that reason — implementation fills them. With no such fork, recommend `business` and say the spec may already be clear enough to build.
 - Tech sections populated, biz sections absent (1.0.2-shape solo spec) → recommend `technical` — refine in place.
 
 Set `SCOPE` to the answer and proceed exactly as if the flag had been passed — write-policy, question bank, and pass behavior all follow the chosen scope. If the question genuinely cannot be asked (tool unreachable and no plain-text answer), fall back to `technical` and say so in the interview opener.
@@ -184,7 +184,6 @@ Why this exists: a PM invoking `/flow-next:refine <spec-id>` bare used to get a 
 - DO NOT list questions in your response
 - ONLY ask questions via AskUserQuestion tool calls
 - Ask in rounds: each round carries the whole frontier (see Question Order below), split across AskUserQuestion calls of up to 4 questions each
-- Expect 40+ questions total for complex specs
 
 **Anti-pattern (WRONG)**:
 ```
@@ -193,6 +192,12 @@ Options: a) PostgreSQL b) SQLite c) MongoDB
 ```
 
 **Correct pattern**: Call AskUserQuestion tool with question and options.
+
+### The one test
+
+Ask a question only when all three hold: a wrong guess would build the wrong thing or ship behaviour the user would reject; the code, the docs, a quick experiment, or implementation itself cannot settle it; and it is the answerer's call. Everything else you resolve (Investigate Before Asking below), record, or leave to work. A topic on the bank's check-list is not a reason to ask.
+
+Stop as soon as no question that passes the test remains. Asking nothing is a good outcome: report "Nothing worth asking; the spec is clear enough to build." and skip the write-back unless investigation resolved something worth recording.
 
 ### Question Format: Lead with Recommendation
 
@@ -261,7 +266,7 @@ Concrete rules:
 
 1. **Each round asks the entire current frontier.** A question whose answer depends on another question still open in this round belongs to a *later* round, not this one — never ask a question alongside its own prerequisite.
 2. **Split the frontier across `AskUserQuestion` calls of up to 4 questions each**, grouped by topic (closest-related together), announced as one round ("Round N — part 1/2"). Never pad a call to reach 4; never hold a genuine frontier question back to a later round just to smooth pacing.
-   **A frontier slot is earned.** Every genuinely open decision joins the round — NFR probes (failure modes, concurrency/races, scale, portability, testing) ALWAYS qualify, however thin the spec. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
+   **A frontier slot is earned** by passing the one test. Failure modes, concurrency, scale, portability, and testing qualify only when they pass it; implementation, review, and QA surface the rest. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
    Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
 3. **Recompute the frontier after each round.** Answers reshape the tree — settled decisions unblock their dependents; adapt the next round to what you heard. Don't lock the whole tree before you start: deeper rounds are discovered from answers, not pre-scripted.
 4. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly at the next round's opener: "Skipping persistence questions — you said no DB."
@@ -305,10 +310,10 @@ BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
 ```
 
 - `SCOPE=technical` (default) → load [questions-technical.md](questions-technical.md).
-- `SCOPE=business` → load [questions-business.md](questions-business.md). Covers problem framing, target user/persona, success metrics, MVP boundary, business constraints, what-NOT-to-build, prioritization rationale, business risks, UX expectations.
+- `SCOPE=business` → load [questions-business.md](questions-business.md).
 - `SCOPE=both` → load `questions-business.md` for phase 1 then `questions-technical.md` for phase 2.
 
-Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, hoisted to [questions-shared.md](questions-shared.md) — single source of truth referenced by both banks. Read the shared file first so the classifier applies symmetrically across passes.
+Each bank is a short check-list of what to look for in the spec, not a list of questions to ask. Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, hoisted to [questions-shared.md](questions-shared.md) — single source of truth referenced by both banks. Read the shared file first so the classifier applies symmetrically across passes.
 
 ## Scope-aware pass behavior
 
@@ -329,16 +334,14 @@ Before writing anything back, build the current-sections-state JSON from the exi
 # Build CURRENT_SECTIONS by inspecting the existing spec markdown:
 #   decision_context_has_h3:    spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
 #   biz_pass_ran:               spec has populated `## Goal & Context` body OR a `### Motivation` H3
-#   tech_sections_have_content: per-tech-section {name: bool} for whether the body has content
-#                               beyond the placeholder `*Pending technical-scope interview pass.*`
 #
 # For a brand-new spec (no markdown yet), CURRENT_SECTIONS='{}' is fine.
-CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>, "tech_sections_have_content": {"Architecture & Data Models": <bool>, "API Contracts": <bool>, "Edge Cases & Constraints": <bool>}}'
+CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>}'
 
 WRITE_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
 ```
 
-**One policy call per pass** — when `SCOPE == both`, compute the biz policy first, run the biz pass, then **recompute** the current-sections state from the post-biz-pass result and compute a fresh technical policy for phase 2 (the two-call sequence is spelled out in [`references/pass-business.md`](references/pass-business.md)). A single pre-edit policy call for `both` cannot correctly decide tech-pass `Decision Context` shape (the biz pass may have promoted FLAT → substructured) or tech-pass placeholder replacement (biz pass may have written `*Pending technical-scope interview pass.*` under empty tech sections that the tech pass must now overwrite).
+**One policy call per pass** — when `SCOPE == both`, compute the biz policy first, run the biz pass, then **recompute** the current-sections state from the post-biz-pass result and compute a fresh technical policy for phase 2 (the two-call sequence is spelled out in [`references/pass-business.md`](references/pass-business.md)). A single pre-edit policy call for `both` cannot correctly decide the tech-pass `Decision Context` shape (the biz pass may have promoted FLAT → substructured).
 
 The policy JSON shape:
 
@@ -352,8 +355,7 @@ The policy JSON shape:
     "writable_h3": ["<H3 names writable when substructured>"],
     "preserved_h3": ["<H3 names preserved byte-for-byte>"],
     "promote_flat_to_implementation_tradeoffs": <bool>
-  },
-  "placeholder_write": ["<tech sections under biz pass that should get the placeholder line>"]
+  }
 }
 ```
 
@@ -374,6 +376,8 @@ When the user declines a feature or scope **as product judgment** — we could b
 ### Acceptance-criteria rule (applies to every pass)
 
 `## Acceptance Criteria` R-IDs are **append-only** across passes — never renumber, never replace; take the next unused number. Source-tag each criterion this pass appends (`[user]` = the human answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
+
+**Record an answer at the precision the user gave it.** A preference ("performance matters here") goes to `## Decision Context` as guidance, not an acceptance criterion. A number or measurable commitment becomes a criterion only when the user stated it; your recommended options never become thresholds. Neither pass asks for success metrics or latency budgets unless the spec is about them.
 
 ## Spec-count check (split proposal)
 
@@ -440,7 +444,7 @@ When a sentinel prints, STOP and Read the named section of [`references/post-wri
 ## Completion
 
 Show summary:
-- Number of questions asked
+- Number of questions asked — when it is zero, say "Nothing worth asking; the spec is clear enough to build."
 - Skipped questions (ONLY when ≥1): count + disposition from the write-back checkpoint (parked under `## Open Questions` / filled as `*(assumed — unconfirmed)*` / re-asked) — omit the line entirely when nothing was skipped
 - Key decisions captured
 - What was written (Flow ID updated / file rewritten)
@@ -460,8 +464,3 @@ Suggest next step based on input type:
 - Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
-
-## Notes
-
-- This process should feel thorough - user should feel they've thought through everything
-- Quality over speed - don't rush to finish

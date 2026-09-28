@@ -432,7 +432,7 @@ done
 # Each new pattern stays anchored to its surface's own text; a reworded
 # literal must move its anchor in the same change (the closer-roster guard
 # below fails the sync otherwise). Deliberate exclusion: prospect's
-# `**Next step:** /flow-next:refine` artifact template line documents what
+# `**Next step:** promote, then /flow-next:flow <spec-id>` artifact template line documents what
 # flowctl's write_prospect_artifact emits verbatim on every host — rewriting
 # the doc would mis-describe the artifact; presentation is governed by the
 # canonical files' host-command-form clause.
@@ -472,7 +472,6 @@ for nf in \
     -e 's|(routing to `/flow-next:work`)|(routing to `$flow-next-work`)|g' \
     -e 's|recommend `/flow-next:plan-review`|recommend `$flow-next-plan-review`|g' \
     -e 's|; /flow-next:refine <id> can still split later|; $flow-next-refine <id> can still split later|g' \
-    -e 's|/flow-next:refine --scope=business \$SPEC_ID|$flow-next-refine --scope=business $SPEC_ID|g' \
     -e 's|consider /flow-next:refine <id> after capture lands|consider $flow-next-refine <id> after capture lands|g' \
     -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
     -e 's|Reviewer feedback → /flow-next:resolve-pr|Reviewer feedback → $flow-next-resolve-pr|g' \
@@ -2418,7 +2417,6 @@ flow-next-capture/references/rewrite-mode.md	  /flow-next:plan <SPEC_ID>	  $flow
 flow-next-capture/references/rewrite-mode.md	  /flow-next:refine <SPEC_ID>	  $flow-next-refine <SPEC_ID>
 flow-next-capture/references/rewrite-mode.md	  /flow-next:visual <SPEC_ID>	  $flow-next-visual <SPEC_ID>
 flow-next-capture/references/split-proposal.md	; /flow-next:refine <id> can still split later	; $flow-next-refine <id> can still split later
-flow-next-capture/workflow.md	/flow-next:refine --scope=business $SPEC_ID	$flow-next-refine --scope=business $SPEC_ID
 flow-next-plan/references/next-steps-menu.md	`/flow-next:work fn-N-slug`	`$flow-next-work fn-N-slug`
 flow-next-plan/references/next-steps-menu.md	`/flow-next:refine fn-N-slug`	`$flow-next-refine fn-N-slug`
 flow-next-plan/references/next-steps-menu.md	`/flow-next:plan-review fn-N-slug`	`$flow-next-plan-review fn-N-slug`

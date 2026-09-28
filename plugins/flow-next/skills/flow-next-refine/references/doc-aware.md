@@ -71,7 +71,7 @@ Doc-aware flags (rows describe glossary / decisions / strategy gates):
 | Scope | Doc-aware default | Pass behavior |
 |-------|------------------|---------------|
 | `--scope=technical` (resolver fallback, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
-| `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte; writes placeholder `*Pending technical-scope interview pass.*` ONLY under EMPTY tech sections |
+| `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte |
 | `--scope=both` | autodetect cascade runs | runs biz pass first, then tech pass; same merge contract applies in each phase |
 
 R26 project-docs investigation is gated on `SCOPE=business` (and the biz-pass phase of `both`) — runs BEFORE drafting the first biz question, regardless of doc-aware autodetect state.

@@ -6,22 +6,21 @@ interactive (calls `AskUserQuestion`) and cannot be diff-tested against a
 fixture without a transcript harness, the invariant is enforced at the
 rule-engine level via deterministic unit tests on observable state.
 
-Five sub-invariants (R22 (a)-(e)) covered here:
+Four sub-invariants (R22 (a)-(c), (e)) covered here:
 
   (a) Zero-flag scope resolution returns `technical`.
   (b) `questions-technical.md` is the bank loaded when SCOPE=technical;
       `questions-business.md` is NOT loaded under default scope.
   (c) Section-write policy under SCOPE=technical with empty biz sections
-      writes ONLY tech-owned sections, writes NO placeholder, writes NO
+      writes ONLY tech-owned sections, writes NO
       H3 substructure under `## Decision Context` (stays FLAT).
-  (d) Capture's biz-routing layer, given a zero-biz-signal conversation,
-      adds NO content to business destinations and fires NO suggestion.
+  (d) Retired in fn-275 with capture's sparse-business refine suggestion.
   (e) `flowctl spec skeleton` produces byte-for-byte identical output to
       the bundled templates/spec.md with YAML frontmatter stripped
       (fn-220 moved the baseline off the 1.0.2 six-heading skeleton).
 
 Additionally: R23 section-merge contract — auxiliary sections preserved,
-R-IDs append-only, placeholder-only replacement.
+R-IDs append-only.
 """
 
 from __future__ import annotations
@@ -43,7 +42,6 @@ HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
 INTERVIEW_DIR = PLUGIN_DIR / "skills" / "flow-next-refine"
-CAPTURE_DIR = PLUGIN_DIR / "skills" / "flow-next-capture"
 
 
 def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -151,7 +149,7 @@ class TestR22B_TechnicalBankLoaded(unittest.TestCase):
 
 class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
     """R22 (c): section-write policy under SCOPE=technical with empty biz
-    sections writes ONLY tech-owned sections, writes NO placeholders, AND
+    sections writes ONLY tech-owned sections AND
     `## Decision Context` stays FLAT (no H3 introduction) unless the spec
     already has them or a biz pass has run."""
 
@@ -175,7 +173,6 @@ class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
             {
                 "decision_context_has_h3": False,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {},
             },
         )
         # Writable sections — only tech-owned + co-authored.
@@ -190,13 +187,6 @@ class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
         self.assertIn("Goal & Context", policy["preserved"])
         self.assertIn("Boundaries", policy["preserved"])
 
-    def test_zero_flag_tech_writes_no_placeholders(self) -> None:
-        """Tech pass NEVER writes the `*Pending technical-scope interview
-        pass.*` placeholder — only biz pass writes those under empty tech
-        sections (and the tech pass overwrites them)."""
-        policy = self._policy("technical", {})
-        self.assertEqual(policy["placeholder_write"], [])
-
     def test_zero_flag_tech_dc_stays_flat(self) -> None:
         """The CRITICAL R22 invariant: with no biz pass + no existing H3s,
         `## Decision Context` is FLAT — no `### Motivation` or
@@ -207,7 +197,6 @@ class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
             {
                 "decision_context_has_h3": False,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {},
             },
         )
         dc = policy["decision_context"]
@@ -215,37 +204,6 @@ class TestR22C_TechWritePolicyFlatDC(unittest.TestCase):
         self.assertEqual(dc["writable_h3"], [])
         self.assertEqual(dc["preserved_h3"], [])
         self.assertFalse(dc["promote_flat_to_implementation_tradeoffs"])
-
-
-class TestR22D_CaptureZeroSignalNoFire(unittest.TestCase):
-    """R22 (d): capture's biz-routing layer, given zero biz signals, fires
-    NO suggestion. Prose contract after fn-113.3 eviction of `scope suggest`:
-    workflow.md must state the no-fire-at-zero rule and branch so count 0
-    never appends the business-pass suggestion."""
-
-    def test_zero_signals_no_fire_documented(self) -> None:
-        """workflow.md documents BIZ_SIGNAL_CATEGORIES=0 → no-fire (R22)."""
-        body = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
-        # §2.6 worked example and/or Phase 6 footer both state the rule.
-        self.assertRegex(
-            body,
-            r"BIZ_SIGNAL_CATEGORIES\s*=\s*0.*no.fire",
-            "R22 (d): workflow.md must document no-fire at zero biz signals",
-        )
-
-    def test_zero_signals_branch_skips_suggestion(self) -> None:
-        """Phase 6 shell branch requires count >= 1, so zero never fires."""
-        body = (CAPTURE_DIR / "workflow.md").read_text(encoding="utf-8")
-        self.assertRegex(
-            body,
-            r'BIZ_SIGNAL_CATEGORIES"\s+-ge\s+1',
-            "R22 (d): Phase 6 must require BIZ_SIGNAL_CATEGORIES >= 1 to fire",
-        )
-        self.assertNotIn(
-            "scope suggest",
-            body,
-            "R22 (d): deleted flowctl scope suggest must not remain in capture",
-        )
 
 
 class TestR22E_SpecSkeletonByteForByte(unittest.TestCase):
@@ -297,10 +255,7 @@ class TestR23_SectionMergeContract(unittest.TestCase):
     3. Biz-pass FLAT-promotion correctly flags
        `promote_flat_to_implementation_tradeoffs=True` AND lists Motivation
        as the only writable H3, Implementation Tradeoffs as preserved.
-    4. Biz-pass placeholder list contains ONLY tech sections without
-       content — refine mode (tech has content) drops them from
-       placeholder_write byte-for-byte.
-    5. Auxiliary sections (Strategy Alignment / Strategy Conflicts /
+    4. Auxiliary sections (Strategy Alignment / Strategy Conflicts /
        Glossary Conflicts / Conversation Evidence / Resolved via Codebase /
        Resolved via Project Docs / Parked unknowns) are out-of-scope for
        write-policy —
@@ -373,7 +328,6 @@ class TestR23_SectionMergeContract(unittest.TestCase):
         for current in (
             {},
             {"decision_context_has_h3": True, "biz_pass_ran": True},
-            {"tech_sections_have_content": {"API Contracts": True}},
         ):
             for scope in ("technical", "business"):
                 policy = self._policy(scope, current)
@@ -394,7 +348,6 @@ class TestR23_SectionMergeContract(unittest.TestCase):
             {
                 "decision_context_has_h3": False,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {},
             },
         )
         dc = policy["decision_context"]
@@ -415,7 +368,6 @@ class TestR23_SectionMergeContract(unittest.TestCase):
             {
                 "decision_context_has_h3": True,
                 "biz_pass_ran": True,
-                "tech_sections_have_content": {},
             },
         )
         dc = policy["decision_context"]
@@ -427,68 +379,6 @@ class TestR23_SectionMergeContract(unittest.TestCase):
         # CRITICAL: promotion flag must be False — re-running biz pass
         # must NOT re-promote a body that's already at the right H3.
         self.assertFalse(dc["promote_flat_to_implementation_tradeoffs"])
-
-    def test_placeholder_write_only_empty_tech_sections(self) -> None:
-        """R23: placeholder-only replacement contract. Biz pass writes
-        `*Pending technical-scope interview pass.*` ONLY under empty
-        tech sections. Sections with content are left untouched
-        (refine mode)."""
-        policy = self._policy(
-            "business",
-            {
-                "decision_context_has_h3": False,
-                "biz_pass_ran": False,
-                "tech_sections_have_content": {
-                    "Architecture & Data Models": True,
-                    "API Contracts": False,
-                    "Edge Cases & Constraints": True,
-                },
-            },
-        )
-        # Only API Contracts (empty) gets the placeholder.
-        self.assertEqual(policy["placeholder_write"], ["API Contracts"])
-        # The two with content do NOT.
-        self.assertNotIn(
-            "Architecture & Data Models", policy["placeholder_write"]
-        )
-        self.assertNotIn(
-            "Edge Cases & Constraints", policy["placeholder_write"]
-        )
-
-    def test_placeholder_write_all_empty_when_blank_input(self) -> None:
-        """Conservative default: missing tech_sections_have_content key
-        defaults to ALL empty → biz pass would write placeholders under
-        all tech sections (visible read-back of intentional emptiness)."""
-        policy = self._policy("business", {})
-        self.assertEqual(
-            sorted(policy["placeholder_write"]),
-            [
-                "API Contracts",
-                "Architecture & Data Models",
-                "Edge Cases & Constraints",
-            ],
-        )
-
-    def test_tech_pass_never_writes_placeholders(self) -> None:
-        """R23 corollary: tech pass overwrites placeholders with real
-        content but never WRITES new placeholder lines. `placeholder_write`
-        on a tech-pass policy is always []."""
-        for current in (
-            {},
-            {
-                "tech_sections_have_content": {
-                    "Architecture & Data Models": False,
-                    "API Contracts": False,
-                }
-            },
-            {"biz_pass_ran": True, "decision_context_has_h3": True},
-        ):
-            policy = self._policy("technical", current)
-            self.assertEqual(
-                policy["placeholder_write"],
-                [],
-                f"tech pass placeholder_write must always be empty; current={current}",
-            )
 
     def test_tech_writable_preserves_biz_sections_byte_for_byte(self) -> None:
         """R23 byte-for-byte preservation: tech pass writable list must
@@ -583,14 +473,6 @@ class TestR23_FixtureMergeByteForByte(unittest.TestCase):
                 or "### Implementation Tradeoffs" in dc_body
             ),
             "biz_pass_ran": bool(fixture.get("Goal & Context", "").strip()),
-            "tech_sections_have_content": {
-                section: bool(
-                    fixture.get(section, "")
-                    .replace("*Pending technical-scope interview pass.*", "")
-                    .strip()
-                )
-                for section in self.TECH_SECTIONS
-            },
         }
 
     def test_tech_pass_preserves_biz_section_body_byte_for_byte(self) -> None:
@@ -678,9 +560,6 @@ class TestR23_FixtureMergeByteForByte(unittest.TestCase):
                 "promote_flat_to_implementation_tradeoffs"
             ]
         )
-        # And refine-mode: tech sections with content are NOT in
-        # placeholder_write (we don't overwrite them with placeholders).
-        self.assertEqual(policy["placeholder_write"], [])
 
     def test_r_ids_append_only_contract(self) -> None:
         """R23: R-IDs are append-only across passes. Verify that a fixture
@@ -694,8 +573,7 @@ class TestR23_FixtureMergeByteForByte(unittest.TestCase):
         #
         # What we CAN test deterministically: there is no field in the
         # policy payload that says "renumber" or "replace" or "reset".
-        # The shape is { writable, preserved, decision_context,
-        # placeholder_write } — nothing that could mistakenly authorize
+        # The shape is { writable, preserved, decision_context } — nothing that could mistakenly authorize
         # renumbering.
         for scope in ("business", "technical", "both"):
             policy = self._policy(scope, {})

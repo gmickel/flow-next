@@ -97,8 +97,8 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 | # | Handover | Flow-Next artefact path | Produced by | Verified by |
 |---|----------|-------------------------|-------------|-------------|
 | 0 | Pre-spec decision map + briefing (optional) | `.flow/charts/<chart-id>.md` + decision records; briefing `.flow/charts/<chart-id>-briefing*.md` | `/flow-next:chart` | Human read-back of Outcome/frontier/cost; capture read-back of ingested briefing |
-| 1 | Spec - business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may carry `*Pending technical-scope interview pass.*` placeholders) | `/flow-next:capture` (from conversation or chart briefing) or `/flow-next:refine --scope=business` | `/flow-next:plan-review` |
-| 2 | Spec - fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:refine --scope=technical` fills the technical sections | `/flow-next:refine --scope=technical` | `/flow-next:plan-review` |
+| 1 | Spec - business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may be empty) | `/flow-next:capture` (from conversation or chart briefing) or `/flow-next:refine --scope=business` | `/flow-next:plan-review` |
+| 2 | Spec - fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:refine --scope=technical` settles any open technical fork | `/flow-next:refine --scope=technical` | `/flow-next:plan-review` |
 | 3 | Implementation plan (spec → tasks) | `.flow/tasks/<spec-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
 | 4 | Working implementation (tasks → code) | task `done_summary` + evidence commits | `/flow-next:work` (worker subagent) | `/flow-next:impl-review` |
 | 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:spec-completion-review` |
@@ -169,9 +169,9 @@ Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `
 
 `/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). Capture writes the spec, then shows a compact summary (title, criteria count, source tally, recommended route) and offers the saved file in the editor, per the [read-back contract](read-back.md). The full body prints on request. The `[inferred]` count identifies assumptions the user can edit or reject. Saving alone does not mark the spec ready or authorize implementation.
 
-For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --scope=business` instead. The interview focuses on **business requirements** at this stage - problem framing, target user, success metrics, MVP boundary, what-NOT-to-build, business constraints. The codebase is read-only context, not the subject of questions.
+For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --scope=business` instead. The interview asks only the business decisions that would change what gets built and that the spec leaves unclear - who it is for, what done looks like, what is explicitly out, a constraint the domain implies. Asking nothing is a valid outcome. The codebase is read-only context, not the subject of questions.
 
-The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers - `--scope=business` writes the business sections (and leaves `*Pending technical-scope interview pass.*` placeholders under the technical sections so the read-back shows what is intentionally empty).
+The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers - `--scope=business` writes the business sections and leaves the technical sections as they were.
 
 Hand the spec off to the tech lead by linking it. (For *Spec-as-PR*, see [Team patterns](#team-patterns) below - open the spec file on a feature branch as a draft PR before any code lands.)
 
@@ -351,16 +351,15 @@ IDEA / ROUGH PROSE  (PO scribbles)
         │
         ▼
 /flow-next:refine --scope=business    ← business layer
-   (problem framing, target user, success metrics,
-    MVP boundary, business constraints, what-NOT-to-build;
-    reads STRATEGY.md / GLOSSARY.md / project docs
-    before drafting questions)
+   (asks only what would change the build:
+    who it is for, what done looks like, what is
+    out, a domain constraint; reads STRATEGY.md and
+    searches the project docs before asking)
         │
         ▼
 .flow/specs/<spec-id>.md                  ← business sections filled;
-   (technical sections carry                  technical sections carry
-    *Pending technical-scope interview          placeholders awaiting the
-    pass.* placeholders)                       technical pass
+                                              technical sections may be
+                                              empty
         │
         ▼
 /flow-next:plan-review                    ← cross-model review of the
@@ -381,8 +380,8 @@ HANDOVER #1 — spec biz-layer complete → tech lead
         │
         ▼
 .flow/specs/<spec-id>.md                  ← business sections preserved
-   (now fully populated)                       byte-for-byte; technical
-                                              sections filled; R-IDs
+   (now fully populated)                       byte-for-byte; open
+                                              technical forks settled; R-IDs
                                               appended, never renumbered
         │
         ▼

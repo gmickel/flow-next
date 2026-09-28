@@ -653,7 +653,7 @@ Classify a fork before asking the user. An answer observable by running somethin
 
 ## Refine
 
-The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release). A deep question pass over a spec, task, or spec file under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
+The `/flow-next:refine` skill (`flow-next-refine`, renamed from `interview` in the flow release). A question pass over a spec, task, or spec file, asking only what would change the build, under a `business`, `technical`, or `both` scope, or the read-first research pass under `--scope=research`.
 
 _Avoid_: interview skill, interview command
 

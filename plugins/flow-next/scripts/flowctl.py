@@ -21852,7 +21852,8 @@ def render_prospect_body(
     (R4): `### High leverage (1-3)`, `### Worth considering (4-7)`,
     `### If you have the time (8+)`. Each survivor gets a `#### <N>. <title>`
     block with `**Summary:**`, `**Leverage:**`, `**Size:**`, optional
-    body fields if present, and a hard-coded `**Next step:** /flow-next:refine`.
+    body fields if present, and a hard-coded `**Next step:**` line pointing at
+    `/flow-next:flow` once the survivor is promoted.
     """
     out: list[str] = []
     out.append("## Focus")
@@ -21904,7 +21905,7 @@ def render_prospect_body(
             persona = entry.get("persona")
             if persona:
                 out.append(f"**Persona:** {persona}")
-            out.append("**Next step:** /flow-next:refine")
+            out.append("**Next step:** promote, then /flow-next:flow <spec-id>")
             out.append("")
 
     out.append("## Rejected")
@@ -23750,8 +23751,8 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
            'Skip chart; do not manufacture a chart for clear work. Count specs per `spec-count.md` when the '
            'tripwire trips'),
  'capture_brief': ('Capture the structured brief.',
-                   'Skip chart. Narrow or skip refine only after source-grounded synthesis establishes no '
-                   'material gaps'),
+                   'Skip chart. Skip refine unless a named product or authority decision is open '
+                   '(`plan-vs-no-plan.md`)'),
  'defect': ('Check for prior fixes, reproduce and diagnose the defect, bisect when a known-good revision exists, then fix, prove on base and head, and review.',
             'Refine is the wrong instrument for a defect. Capture only when the diagnosis conversation '
             'itself carries decisions worth locking down'),
@@ -23771,7 +23772,8 @@ JUDGE_ROUTE_PRESENTATION = {'discovery': ('Establish direction, select an invest
  'tiny': ('Make the bounded change and run the repository review path.',
           'Skip chart and the full spec pipeline. The review and consent gates the change needs still run'),
  'refine': ('Refine the unresolved product or authority questions.',
-            'Reopen discovery as chart only when the answers show the effort itself is not yet specifiable'),
+            'Skip unless the open decision can be named (`plan-vs-no-plan.md`). Reopen discovery as chart '
+            'only when the answers show the effort itself is not yet specifiable'),
  'plan_review': ('Review the spec design independently.',
                  'Review the spec directly; task decomposition is not a prerequisite'),
  'work_no_plan_default': ('Work directly from the ready spec without task decomposition.',
@@ -26614,8 +26616,8 @@ def _render_epic_skeleton_from_prospect(
     follow-up) but
     pre-fills Overview, Leverage, Suggested size, and a `## Source` link
     that points back to the prospect artifact + idea position. Acceptance
-    is left as a placeholder pointing at `/flow-next:refine` /
-    `/flow-next:plan` for next-step refinement.
+    is left as a placeholder pointing at `/flow-next:flow`, which routes
+    the next step.
     """
     summary = (survivor.get("summary") or "").strip() or "_(summary missing — see prospect artifact)_"
     leverage = (survivor.get("leverage") or "").strip() or "_(leverage missing — see prospect artifact)_"
@@ -26657,7 +26659,7 @@ def _render_epic_skeleton_from_prospect(
         f"- Prospected: {date_text}\n"
         "\n"
         "## Acceptance\n"
-        "_(to be defined — run `/flow-next:refine <epic-id>` or `/flow-next:plan <epic-id>` next)_\n"
+        "_(to be defined — run `/flow-next:flow <epic-id>` next)_\n"
         "\n"
         "## Quick commands\n"
         "<!-- Required: at least one smoke command for the repo -->\n"
@@ -26935,7 +26937,7 @@ def cmd_prospect_promote(args: argparse.Namespace) -> None:
     else:
         print(
             f"Promoted idea #{idea_n} (\"{epic_title}\") to {epic_id}. "
-            f"Next: /flow-next:refine {epic_id}"
+            f"Next: /flow-next:flow {epic_id}"
         )
         if artifact_warning:
             print(f"  WARNING: {artifact_warning}", file=sys.stderr)
@@ -27848,7 +27850,7 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
 # `scope bank`           — prints question-bank path for a given scope
 # `scope write-policy`   — emits per-section write policy for a given scope
 # `spec skeleton`        — prints templates/spec.md (cascade; fn-220)
-# (fn-113: `scope suggest` deleted; R25 threshold lives in capture skill prose)
+# (fn-113: `scope suggest` deleted)
 
 # Valid scope values + the question-bank filename each maps to.
 _SCOPE_VALUES = ("business", "technical", "both", "research")
@@ -27864,9 +27866,7 @@ _RESEARCH_SECTION = "Resolved via Research"
 
 # Section-write policy per scope.
 # - `writable`  — sections this scope MAY write/refine.
-# - `preserved` — sections this scope MUST leave byte-for-byte unchanged
-#   (other than the `*Pending technical-scope interview pass.*` placeholder
-#   under tech-owned headers, which the tech pass may overwrite).
+# - `preserved` — sections this scope MUST leave byte-for-byte unchanged.
 # - `decision_context` — H3 handling per fn-44 Edge Cases.
 #
 # Canonical section names (the 7-section spec template):
@@ -27894,9 +27894,6 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
       - `biz_pass_ran` (bool) — whether a prior `--scope=business` pass
         has touched this spec (signaled by presence of populated biz
         sections OR the `### Motivation` H3).
-      - `tech_sections_have_content` (dict) — `{section_name: bool}` for
-        each tech-owned section (`Architecture & Data Models`, etc.).
-        Controls placeholder-vs-leave-alone behavior under a biz pass.
     All keys optional; defaults are conservative.
 
     Returns a JSON-shaped dict:
@@ -27909,13 +27906,11 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
           "writable_h3": [<H3 names this scope may write under DC, if substructured>],
           "preserved_h3": [<H3 names preserved byte-for-byte>],
           "promote_flat_to_implementation_tradeoffs": bool
-        },
-        "placeholder_write": [<tech sections under biz pass that should get the placeholder line>]
+        }
       }
     """
     has_h3 = bool(current_sections.get("decision_context_has_h3", False))
     biz_pass_ran = bool(current_sections.get("biz_pass_ran", False))
-    tech_content = current_sections.get("tech_sections_have_content", {}) or {}
 
     if scope == "research":
         # fn-238 R16: the research pass writes exactly one auxiliary section
@@ -27935,7 +27930,6 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
                 ),
                 "promote_flat_to_implementation_tradeoffs": False,
             },
-            "placeholder_write": [],
         }
 
     if scope == "technical":
@@ -27968,7 +27962,6 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
             "writable": writable,
             "preserved": preserved,
             "decision_context": dc,
-            "placeholder_write": [],
         }
 
     if scope == "business":
@@ -27994,17 +27987,11 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
                 "promote_flat_to_implementation_tradeoffs": True,
             }
         writable.append("Decision Context")
-        # Placeholder lines under empty tech sections (biz pass leaves them
-        # visible in read-back).
-        placeholder_write = [
-            name for name in _TECH_SECTIONS if not tech_content.get(name, False)
-        ]
         return {
             "scope": scope,
             "writable": writable,
             "preserved": preserved,
             "decision_context": dc,
-            "placeholder_write": placeholder_write,
         }
 
     # scope == "both" — biz pass first, then tech pass. Union of biz +
@@ -28038,7 +28025,6 @@ def _scope_write_policy(scope: str, current_sections: dict) -> dict:
         "writable": writable,
         "preserved": preserved,
         "decision_context": dc,
-        "placeholder_write": [],
     }
 
 
@@ -58344,7 +58330,7 @@ def main() -> None:
         help=(
             "Path to JSON file describing existing spec section state "
             "(or '-' for stdin). Keys: decision_context_has_h3, "
-            "biz_pass_ran, tech_sections_have_content."
+            "biz_pass_ran."
         ),
     )
     p_scope_wp.add_argument(

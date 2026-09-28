@@ -1,18 +1,12 @@
-"""Unit tests for /flow-next:capture biz-context routing + sparse-layer
-suggestion (fn-44.9 / fn-113.3, covers R24, R25).
+"""Unit tests for /flow-next:capture biz-context routing (fn-44.9, covers
+R24). The R25 sparse-layer refine suggestion was removed in fn-275.
 
 Capture's runtime routing is host-agent-driven (skill-vs-flowctl architectural
 rule from CLAUDE.md) — there is no `capture_route()` helper to drive. The
 tests cover the contract:
 
   - Skill content: the capture skill documents the 9-row signal-category
-    routing table with the exact destinations from R24, the `1 <= count < 3`
-    threshold rule, and the no-fire-at-zero rule (R22 invariant).
-
-  - R25 threshold (fn-113 eviction): the fire/no-fire rule lives in capture
-    skill prose, not `flowctl scope suggest` (subcommand deleted). A
-    prose-contract pin locks the constant threshold sentence so the rule
-    stays stated.
+    routing table with the exact destinations from R24.
 
 Pin shape (agent_docs/adding-skills.md, "Prose-contract tests — pin content +
 reachability"): every assertion below pins CONTENT at whichever capture file
@@ -23,7 +17,6 @@ sits in `workflow.md`; they care that an agent reading capture still meets it.
 
 from __future__ import annotations
 
-import re
 import unittest
 from pathlib import Path
 
@@ -34,15 +27,6 @@ CAPTURE_DIR = PLUGIN_DIR / "skills" / "flow-next-capture"
 
 # The always-loaded entry file every capture agent starts from.
 SPINE = "SKILL.md"
-
-# Byte-exact R25 threshold sentence pinned by fn-113.3. Keep in sync with
-# capture SKILL.md + the Phase 6 Biz-suggestion footer, wherever it lives.
-R25_THRESHOLD_SENTENCE = (
-    "The R25 business-pass suggestion fires when the captured conversation "
-    "names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), "
-    "agent-judged."
-)
-
 
 # Nine R24 signal categories with their canonical markdown destinations
 # (per the spec R24). Each entry: (row_number, category_substring,
@@ -253,127 +237,6 @@ class TestCaptureDocumentsRoutingTable(unittest.TestCase):
         self.assertIn("Motivation", dest_cell)
         # Must use `+` not `OR` for category 3.
         self.assertNotRegex(dest_cell.replace("OR", ""), r"\bOR\b")
-
-    def test_threshold_rule_documented(self) -> None:
-        """R25 threshold `1 <= count < 3` must be stated explicitly in a
-        capture file the agent reaches (routing prose, Phase 6 footer, or a
-        reference the spine routes to)."""
-        # Accept several equivalent ways to state the threshold.
-        threshold_patterns = [
-            r"1\s*<=?\s*N\s*<\s*3",
-            r"1\s*<=?\s*n\s*<\s*3",
-            r"1\s*<=?\s*count\s*<\s*3",
-            r"at least one .*\bfewer than three",
-            r"BIZ_SIGNAL_CATEGORIES\s*=\s*[12]",
-        ]
-        assert_reachable_content(
-            self,
-            lambda text: any(
-                re.search(p, text, re.IGNORECASE) for p in threshold_patterns
-            ),
-            "the `1 <= N < 3` R25 threshold",
-        )
-
-    def test_no_fire_at_zero_rule_documented(self) -> None:
-        """R22 invariant: BIZ_SIGNAL_CATEGORIES=0 → no-fire. Some reachable
-        capture file must state this (Phase 6 footer, routing prose, or a
-        routed reference)."""
-        zero_rules = [
-            r"BIZ_SIGNAL_CATEGORIES\s*=\s*0.*no.fire",
-            r"BIZ_SIGNAL_CATEGORIES=0.*no.fire",
-            r"zero biz signals.*silent",
-            r"never mentioned biz context.*zero new prompts",
-            r"no-fire \(exit 1\), keeping",
-            r"count\s*==\s*0.*no.fire",
-        ]
-        assert_reachable_content(
-            self,
-            lambda text: any(
-                re.search(p, text, re.IGNORECASE | re.DOTALL) for p in zero_rules
-            ),
-            "the no-fire-at-zero rule (R22 invariant)",
-        )
-
-    def test_suggestion_phrasing_matches_r25(self) -> None:
-        """R25 spec verbatim: the suggestion text contains
-        `business-requirements signals` + `/flow-next:refine --scope=business`.
-        Both phrases stay pinned; either may live in any reachable capture
-        file."""
-        for phrase in (
-            "business-requirements signals",
-            "/flow-next:refine --scope=business",
-        ):
-            with self.subTest(phrase=phrase):
-                assert_reachable_content(
-                    self,
-                    lambda text, phrase=phrase: phrase in text,
-                    f"the R25 suggestion phrase {phrase!r}",
-                )
-
-
-class TestR25ThresholdProseContract(unittest.TestCase):
-    """fn-113.3: R25 threshold lives in capture skill prose, not flowctl.
-
-    Pins the constant threshold sentence so the rule stays stated after the
-    `scope suggest` eviction. Scope resolve/bank/write-policy are untouched.
-    """
-
-    def test_threshold_sentence_is_stated_and_reachable(self) -> None:
-        """The byte-exact R25 threshold sentence survives somewhere on the
-        capture load path — and `SKILL.md` names that home, so the sentence
-        is reachable rather than merely present."""
-        home = assert_reachable_content(
-            self,
-            lambda text: R25_THRESHOLD_SENTENCE in text,
-            "the pinned R25 threshold sentence",
-        )
-        if home != SPINE:
-            self.assertIn(
-                home,
-                CORPUS[SPINE],
-                f"{SPINE} must route to {home}, the home of the pinned R25 "
-                f"threshold sentence",
-            )
-
-    def test_threshold_rule_reachable_from_skill_md(self) -> None:
-        """`SKILL.md` step 6 is the gating index: whatever file carries the
-        pinned sentence, the spine itself must still state the
-        `1 <= BIZ_SIGNAL_CATEGORIES < 3` fire rule so the branch is decided
-        before any deeper file is read."""
-        self.assertIn(
-            "the R25 business-pass suggestion fires at "
-            "`1 <= BIZ_SIGNAL_CATEGORIES < 3`",
-            CORPUS[SPINE],
-            "SKILL.md step 6 must carry the R25 threshold fire rule",
-        )
-
-    def test_capture_branches_on_agent_threshold_not_flowctl(self) -> None:
-        """Phase 6 must branch on BIZ_SIGNAL_CATEGORIES inline; no capture
-        file may call the deleted `flowctl scope suggest` subcommand.
-
-        The executed fence is a location-is-contract case (agent_docs
-        exception: an executed gate skeleton must sit in the file that runs
-        it) — but that file only has to be reachable, so the fence is
-        located dynamically and the negative sweeps the whole skill."""
-        for rel, text in CORPUS.items():
-            with self.subTest(file=rel):
-                self.assertNotIn(
-                    "scope suggest",
-                    text,
-                    f"capture must not call deleted `flowctl scope suggest` "
-                    f"({rel})",
-                )
-        # Agent-owned shell branch for the 1 <= n < 3 rule.
-        assert_reachable_content(
-            self,
-            lambda text: re.search(
-                r'BIZ_SIGNAL_CATEGORIES"\s+-ge\s+1\s*\]\s*&&\s*\[\s*'
-                r'"\$BIZ_SIGNAL_CATEGORIES"\s+-lt\s+3',
-                text,
-            )
-            is not None,
-            "the inline `1 <= BIZ_SIGNAL_CATEGORIES < 3` shell branch",
-        )
 
 
 if __name__ == "__main__":

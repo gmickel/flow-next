@@ -141,7 +141,6 @@ class ResearchScopePlumbing(unittest.TestCase):
         self.assertEqual(data["writable"], ["Resolved via Research"])
         self.assertEqual(set(data["preserved"]), set(CANONICAL))
         self.assertEqual(data["decision_context"]["writable_h3"], [])
-        self.assertEqual(data["placeholder_write"], [])
 
 
 class ResearchSkipIsSymmetric(unittest.TestCase):

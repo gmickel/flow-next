@@ -154,11 +154,11 @@ Execute the phases in [workflow.md](workflow.md) in order. Each phase's detail �
 
 0. **Pre-flight** — duplicate detection (spec-title overlap + `flowctl memory search`), compaction relevance check, idempotency (never a silent overwrite), plus the strategy / duplicate-branch / chart-briefing / rewrite gates.
 1. **Extract conversation evidence** — a verbatim `## Conversation Evidence` block FIRST (~30 lines of raw user quotes); spec sections refer to evidence by line, not from agent memory.
-2. **Source-tagged synthesis** — draft each section against the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline) — the resolved template decides which sections are written, capture adds none it leaves out — tagging **only acceptance criteria and prose capture newly authors**; route explicit biz-context signals (nine R24 categories) and compute `BIZ_SIGNAL_CATEGORIES` for Phase 6.
+2. **Source-tagged synthesis** — draft each section against the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline) — the resolved template decides which sections are written, capture adds none it leaves out — tagging **only acceptance criteria and prose capture newly authors**; route explicit biz-context signals (nine R24 categories).
 3. **Must-ask cases (R9)** — ambiguous title / untestable acceptance / scope-conflict; interactive asks one at a time, autofix exits 2.
 4. **Prepare the write** - Materialize the body once, verify source tags, resolve any split choice, and snapshot readiness before rewriting. Autofix retains its `--yes` write gate.
 5. **Write via flowctl, then review** - `spec create --plan-file <literal draft path>` → parse `id` (no heredoc re-authoring), then summary and editor offer. Separate glossary/readiness consents remain. R-IDs allocate from R1; §5.9b sets `no_plan` on `--no-plan`, or under `from:flow` when the route resolves to direct.
-6. **Suggested next step** - `Spec captured at .flow/specs/<id>.md.` plus the mandatory `Tracker sync:` slot and the `Recommended next:` line judged from the shared routing reference; the R25 business-pass suggestion fires at `1 <= BIZ_SIGNAL_CATEGORIES < 3`.
+6. **Suggested next step** - `Spec captured at .flow/specs/<id>.md.` plus the mandatory `Tracker sync:` slot and the `Recommended next:` line judged from the shared routing reference.
 
 ## Output rules
 

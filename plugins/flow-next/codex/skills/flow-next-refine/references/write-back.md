@@ -111,7 +111,7 @@ Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR
 ```markdown
 <canonical body from skeleton, with interview-answered prose under each
  writable section per the write-policy — biz pass fills biz-owned sections,
- tech pass fills tech-owned, placeholders under empty other-side sections;
+ tech pass fills tech-owned, empty other-side sections stay empty;
  every acceptance criterion carries its trailing source tag>
 
 ## Resolved via Codebase

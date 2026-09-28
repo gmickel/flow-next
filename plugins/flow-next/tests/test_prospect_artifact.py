@@ -397,7 +397,7 @@ class RenderProspectBody(unittest.TestCase):
         self.assertIn("**Summary:** Re-use scout JSON across runs", body)
         self.assertIn("**Leverage:** Small-diff lever because scout", body)
         self.assertIn("**Size:** S", body)
-        self.assertIn("**Next step:** /flow-next:refine", body)
+        self.assertIn("**Next step:** promote, then /flow-next:flow <spec-id>", body)
 
     def test_optional_body_fields_render_when_present(self) -> None:
         body = flowctl.render_prospect_body(

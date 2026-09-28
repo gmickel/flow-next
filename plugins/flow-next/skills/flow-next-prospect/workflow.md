@@ -734,10 +734,10 @@ Each survivor block:
 **Affected areas:** <comma-joined list>      # only when present
 **Risk notes:** <one line>                   # only when present
 **Persona:** <senior-maintainer | first-time-user | adversarial-reviewer>   # only when present
-**Next step:** /flow-next:refine
+**Next step:** promote, then /flow-next:flow <spec-id>
 ```
 
-`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It always points at `/flow-next:refine` because the user's first move on a survivor is almost always to refine it before promoting. Chart routing is a handoff-time judgment (Phase 6 + the chart boundary in SKILL.md), never a per-candidate artifact field.
+`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It points at `/flow-next:flow` on the promoted spec so the router decides the next stage (refine only when a named decision is open). Chart routing is a handoff-time judgment (Phase 6 + the chart boundary in SKILL.md), never a per-candidate artifact field.
 
 Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 

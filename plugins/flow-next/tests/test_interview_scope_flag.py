@@ -19,8 +19,7 @@ Coverage:
   - `flowctl scope write-policy <scope>` honors the per-pass merge contract
     from fn-44 spec Edge Cases:
       - biz pass writes biz-owned + Acceptance + Decision Context;
-        preserves tech sections byte-for-byte; writes placeholder lines
-        under EMPTY tech sections; promotes FLAT → SUBSTRUCTURED with
+        preserves tech sections byte-for-byte; promotes FLAT → SUBSTRUCTURED with
         `### Motivation` H3 (and FLAT body → `### Implementation Tradeoffs`).
       - tech pass writes tech-owned + Acceptance + Decision Context;
         preserves biz sections byte-for-byte; FLAT stays FLAT under
@@ -365,8 +364,6 @@ class TestScopeWritePolicyTechPass(unittest.TestCase):
         # Biz sections are preserved.
         for section in ("Goal & Context", "Boundaries"):
             self.assertIn(section, policy["preserved"], section)
-        # No placeholder writes by tech pass.
-        self.assertEqual(policy["placeholder_write"], [])
 
     def test_tech_pass_flat_dc_stays_flat(self) -> None:
         """R22 invariant: zero-biz-pass spec keeps `## Decision Context`
@@ -376,7 +373,6 @@ class TestScopeWritePolicyTechPass(unittest.TestCase):
             {
                 "decision_context_has_h3": False,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {},
             },
         )
         self.assertEqual(policy["decision_context"]["shape"], "flat")
@@ -394,7 +390,6 @@ class TestScopeWritePolicyTechPass(unittest.TestCase):
             {
                 "decision_context_has_h3": True,
                 "biz_pass_ran": True,
-                "tech_sections_have_content": {},
             },
         )
         self.assertEqual(policy["decision_context"]["shape"], "substructured")
@@ -408,8 +403,7 @@ class TestScopeWritePolicyTechPass(unittest.TestCase):
 
 class TestScopeWritePolicyBizPass(unittest.TestCase):
     """R6: biz pass writes biz-owned + Acceptance + Decision Context;
-    preserves tech sections byte-for-byte; writes placeholder lines under
-    EMPTY tech sections; promotes FLAT → SUBSTRUCTURED."""
+    preserves tech sections byte-for-byte; promotes FLAT → SUBSTRUCTURED."""
 
     def _policy(self, scope: str, current: dict) -> dict:
         proc = _run(
@@ -448,11 +442,6 @@ class TestScopeWritePolicyBizPass(unittest.TestCase):
             {
                 "decision_context_has_h3": False,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {
-                    "Architecture & Data Models": True,
-                    "API Contracts": True,
-                    "Edge Cases & Constraints": True,
-                },
             },
         )
         self.assertEqual(policy["decision_context"]["shape"], "substructured")
@@ -473,7 +462,6 @@ class TestScopeWritePolicyBizPass(unittest.TestCase):
             {
                 "decision_context_has_h3": True,
                 "biz_pass_ran": False,
-                "tech_sections_have_content": {},
             },
         )
         self.assertEqual(policy["decision_context"]["shape"], "substructured")
@@ -486,48 +474,11 @@ class TestScopeWritePolicyBizPass(unittest.TestCase):
             policy["decision_context"]["promote_flat_to_implementation_tradeoffs"]
         )
 
-    def test_biz_pass_writes_placeholder_under_empty_tech_sections(self) -> None:
-        """biz pass writes `*Pending technical-scope interview pass.*` under
-        empty tech sections so read-back makes intentional emptiness
-        visible."""
-        policy = self._policy(
-            "business",
-            {
-                "decision_context_has_h3": False,
-                "biz_pass_ran": False,
-                "tech_sections_have_content": {
-                    "Architecture & Data Models": False,
-                    "API Contracts": False,
-                    "Edge Cases & Constraints": False,
-                },
-            },
-        )
-        self.assertEqual(
-            sorted(policy["placeholder_write"]),
-            [
-                "API Contracts",
-                "Architecture & Data Models",
-                "Edge Cases & Constraints",
-            ],
-        )
-
-    def test_biz_pass_skips_placeholder_when_tech_has_content(self) -> None:
-        """Refine mode: tech sections with real content are left untouched
-        (no placeholder overwrite)."""
-        policy = self._policy(
-            "business",
-            {
-                "decision_context_has_h3": False,
-                "biz_pass_ran": False,
-                "tech_sections_have_content": {
-                    "Architecture & Data Models": True,
-                    "API Contracts": False,
-                    "Edge Cases & Constraints": True,
-                },
-            },
-        )
-        # Only sections without content get the placeholder.
-        self.assertEqual(policy["placeholder_write"], ["API Contracts"])
+    def test_no_scope_emits_a_placeholder_write(self) -> None:
+        """fn-275 R7: no pass writes the pending-technical placeholder; an
+        empty tech section stays empty."""
+        for scope in ("business", "technical", "both", "research"):
+            self.assertNotIn("placeholder_write", self._policy(scope, {}))
 
 
 class TestScopeWritePolicyBothPass(unittest.TestCase):
@@ -569,7 +520,6 @@ class TestScopeWritePolicyBothPass(unittest.TestCase):
         empty = {
             "decision_context_has_h3": False,
             "biz_pass_ran": False,
-            "tech_sections_have_content": {},
         }
         biz_policy = self._policy("business", empty)
         # Biz pass promotes FLAT → SUBSTRUCTURED, writes Motivation H3.
@@ -579,16 +529,10 @@ class TestScopeWritePolicyBothPass(unittest.TestCase):
         )
 
         # Phase 2: SKILL.md REBUILDS current-sections with biz_pass_ran=true
-        # (Motivation H3 now exists; placeholder lines under empty tech
-        # sections counted as "no content" for tech-pass overwrite).
+        # (Motivation H3 now exists).
         post_biz = {
             "decision_context_has_h3": True,
             "biz_pass_ran": True,
-            "tech_sections_have_content": {
-                "Architecture & Data Models": False,
-                "API Contracts": False,
-                "Edge Cases & Constraints": False,
-            },
         }
         tech_policy = self._policy("technical", post_biz)
         # Tech pass now sees SUBSTRUCTURED — writes only Implementation

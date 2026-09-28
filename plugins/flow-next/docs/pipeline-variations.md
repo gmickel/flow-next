@@ -8,7 +8,7 @@ For a ready, cohesive spec and a capable coding agent, start with `/flow-next:wo
 
 Choose refinement, decomposition, and verification separately:
 
-1. **Refine material choices.** Use capture to preserve intent and refine to resolve missing product decisions, authority, acceptance criteria, or material constraints. Implementation details the owner can investigate do not make a spec unready.
+1. **Refine material choices.** Use capture to preserve intent and refine only when an open decision can be named that would change what gets built and that only the human can make; the full rule is in [`plan-vs-no-plan.md`](../skills/flow-next-flow/references/plan-vs-no-plan.md). Implementation details the owner can investigate do not make a spec unready.
 2. **Plan coordination.** Direct execution is the default; plan needs a positive signal. The signals, and the things that never count as one, are stated once in [`plan-vs-no-plan.md`](../skills/flow-next-flow/references/plan-vs-no-plan.md). Whether one intent is one spec or several is the [spec-count rule](../skills/flow-next-flow/references/spec-count.md).
 3. **Verify the relevant risk.** An explicit `/flow-next:plan-review <id>` can review the spec's design before task files exist. Which review, QA, and completion gate applies, and from which config key or flag, is [`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md); the gates apply independently of the planning choice. Neither review nor QA guarantees every regression will be caught.
 
