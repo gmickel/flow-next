@@ -118,6 +118,14 @@ class WorkBranchRegression(unittest.TestCase):
         self.assertEqual((self.repo / ".flow/tmp/spec_base").read_text(encoding="utf-8").strip(),
                          self.git("rev-parse", "origin/trunk"))
 
+    def test_previous_runs_sibling_bases_are_cleared(self) -> None:
+        stale = self.repo / ".flow/tmp/spec_base_repos"
+        stale.parent.mkdir(parents=True)
+        stale.write_text("../payments-api deadbeef\n", encoding="utf-8")
+        run = self.branch()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertFalse(stale.exists())
+
     def test_existing_branch_is_reused(self) -> None:
         self.git("branch", "task")
         run = self.branch()

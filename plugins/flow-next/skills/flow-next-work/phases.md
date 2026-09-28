@@ -189,6 +189,7 @@ case "$BRANCH_MODE" in
 esac
 mkdir -p .flow/tmp || { echo "BLOCKED: cannot create .flow/tmp"; exit 2; }
 branch_git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base || exit 2
+rm -f .flow/tmp/spec_base_repos   # sibling bases are per run; recorded below
 ```
 
 Based on user's answer from setup questions (`BRANCH_MODE`):
@@ -197,7 +198,7 @@ Based on user's answer from setup questions (`BRANCH_MODE`):
 - **New branch**: the fence's `new` arm - from `origin/<parent_branch>` on a chained spec (carrying the spec's own tracked `.flow/specs/<id>.*` and `.flow/tasks/<id>.*` files from the pre-checkout commit when the start point lacks them or holds an older version, as one bookkeeping commit), else the resolved default base (refreshed from origin when remote). Existing task branches are checked out unchanged.
 - **Current branch**: proceed (user already confirmed); on a chained spec the fence's `current` arm requires the parent tip in the branch's ancestry and blocks naming the missing ancestry otherwise.
 
-The fence persists the SPEC-RUN BASE once (`git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base`); the base is the run's `BASE_BRANCH`, never a hard-coded `origin/main`. Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls and the auditor dispatch. When the spec changes code in git repos beside this one (a home-base workspace; the project instructions or the spec name them), record each repo's merge-base with its own base branch the same way, one `<repo path> <sha>` line per repo in `.flow/tmp/spec_base_repos`; a repo first touched later gets its line before its first edit. Publication is unchanged: the spec branch is pushed as today, and no PR exists until make-pr, which detects the chain from history (`flow-next-make-pr/workflow.md` Phase 0).
+The fence persists the SPEC-RUN BASE once (`git merge-base HEAD "$BASE_BRANCH" > .flow/tmp/spec_base`); the base is the run's `BASE_BRANCH`, never a hard-coded `origin/main`. Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls and the auditor dispatch. When the spec changes code in git repos beside this one (a home-base workspace; the project instructions or the spec name them), record each repo's merge-base with its own base branch the same way, one `<repo path> <sha>` line per repo in `.flow/tmp/spec_base_repos` (the fence clears it, so a previous run's repos never carry over; a resumed run records its repos again); a repo first touched later gets its line before its first edit. Publication is unchanged: the spec branch is pushed as today, and no PR exists until make-pr, which detects the chain from history (`flow-next-make-pr/workflow.md` Phase 0).
 
 Done when: `spec chain` reported `eligible: true`, the run is on the branch the choice named (under autonomy, exactly the spec's `branch_name`; on a chained spec created from `origin/<parent_branch>`), and `.flow/tmp/spec_base` holds the merge-base with the run's base.
 

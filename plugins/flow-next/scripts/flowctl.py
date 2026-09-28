@@ -51441,7 +51441,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             else:
                 # An unreachable commit (a squashed branch head) falls back to
                 # the proof date, so every clone measures the same age.
-                row["measured_from"], since = "date", [f"--since={proven['date']}T00:00:00"]
+                row["measured_from"], since = "date", [f"--since={proven['date']}T00:00:00Z"]
             key = tuple(since)
             if key not in counted:
                 counted[key] = _features_surface_commits(repo_root, base, since)
@@ -51450,7 +51450,7 @@ def cmd_features_status(args: argparse.Namespace) -> None:
                 # The proof commit belongs to the .flow/ repo, so siblings
                 # always measure from the proof date.
                 by_repo: dict[str, Optional[int]] = {".": counted[key]}
-                sib_since = [f"--since={proven['date']}T00:00:00"]
+                sib_since = [f"--since={proven['date']}T00:00:00Z"]
                 for name, sib_root, sib_base in siblings:
                     sib_key = (name, *sib_since)
                     if sib_key not in counted:

@@ -8,12 +8,28 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-277-home-base-workspaces-work-and-features",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-277-home-base-workspaces-work-and-features.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_hash_epoch": {},
+  "review_pending_rounds": {
+    "impl:fn-277-home-base-workspaces-work-and-features.1": 1
+  },
+  "review_reservations": {
+    "548a0ad3004642118fec04161b87a1c0": {
+      "artifact_sha256": "8a788ec5ffaccd825a501e27cf220e7494ccc0f97f78d957f6c71b2d16e89f1a",
+      "counter_scope": "impl:fn-277-home-base-workspaces-work-and-features.1",
+      "epoch": 0,
+      "exclusive": true,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "spec_path": ".flow/specs/fn-277-home-base-workspaces-work-and-features.md",
   "status": "open",
   "title": "Home-base workspaces: work and features status read the sibling repos that hold the code",
@@ -28,5 +44,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T13:33:35.392411Z"
+  "updated_at": "2026-09-28T13:38:57.599142Z"
 }
