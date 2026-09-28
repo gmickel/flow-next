@@ -1,6 +1,6 @@
 ---
 name: flow-next-refine
-description: Refine a spec, task, or spec file before building - a question pass for the decisions that would change what gets built, under a business, technical, or both scope, or a read-only research pass (--scope=research) that resolves library versions, changed APIs, and gotchas from external docs into the spec. Use when a named product, authority, or costly-to-reverse technical decision is open, or when the spec names a library or API the repo does not already use. Triggers on /flow-next:refine with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
+description: Refine a spec, task, or spec file before building - one question pass for the decisions that would change what gets built, optionally focused by a free-text --scope lens (business, technical, qa, ...), or a read-only research pass (--scope=research) that resolves library versions, changed APIs, and gotchas from external docs into the spec. Use when a named product, authority, or costly-to-reverse technical decision is open, or when the spec names a library or API the repo does not already use. Triggers on /flow-next:refine with Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2) or file paths.
 user-invocable: false
 ---
 
@@ -38,38 +38,18 @@ Examples:
 - `/flow-next:refine fn-1-add-oauth.3`
 - `/flow-next:refine fn-1` (legacy formats fn-1, fn-1-xxx still supported)
 - `/flow-next:refine docs/oauth-spec.md`
+- `/flow-next:refine fn-1-add-oauth --scope=qa` (the same interview, focused on what QA decides)
 - `/flow-next:refine fn-1-add-oauth --scope=research` (external-docs pass; no questions)
 
 If empty, ask: "What should I interview you about? Give me a Flow ID (e.g., fn-1-add-oauth) or file path (e.g., docs/spec.md)"
 
 ## Setup
 
-### Parse `--scope=business|technical|both|research`
+### Read the scope lens
 
-Token-safe parsing for `--scope` / `--biz` / `--tech` lives in `flowctl scope resolve` — never re-implement inline. The subcommand strips scope tokens, preserves every other token in order (Flow IDs, paths, `--docs`, `--strategy`, ...), and emits the resolved scope plus a `defaulted` flag. The resolver's fallback when no scope flag is passed is `technical` (1.0.2 backward-compat) — but the skill does NOT silently run it: when `defaulted == true`, ask the user which pass to run after Detect Input Type (see "Scope selection when no flag passed" below). `technical` applies only when that question cannot be asked.
+`--scope=<value>` is an optional free-text lens: `business`, `technical`, `qa`, `security`, or any other audience. `--biz` means `--scope=business` and `--tech` means `--scope=technical`. Take these tokens out of the arguments before input detection; several values combine into one lens. There is one interview whatever the lens: the lens focuses which open decisions you look for and ask about (a QA lens looks for what QA would decide: what counts as done, which failures matter, what must be testable), and you interpret it from its words. No lens means no filter. Never ask which scope to run.
 
-```bash
-# Run BEFORE the --docs / --strategy strip block. Conflict / invalid value
-# → non-zero exit; SKILL propagates.
-#
-# `--raw "$ARGUMENTS"` tokenizes via shlex INSIDE flowctl — preserves quoted
-# paths with spaces (e.g., `/flow-next:refine --biz "docs/my spec.md"`).
-# Unquoted `$ARGUMENTS` would word-split into broken tokens.
-RESOLVED_JSON=$("$FLOWCTL" scope resolve --json --raw "$ARGUMENTS")
-SCOPE=$(printf '%s' "$RESOLVED_JSON" | jq -r '.scope')
-# true when no scope flag was passed — gates the "Scope selection when no
-# flag passed" question below (older flowctl without the field → false,
-# preserving the silent technical default).
-SCOPE_DEFAULTED=$(printf '%s' "$RESOLVED_JSON" | jq -r '.defaulted // false')
-# `remaining_args` is a JSON array of strings. Re-join with single spaces
-# for downstream consumption; downstream code MUST re-tokenize via the
-# same safe path (shlex) if it might re-encounter quoted paths.
-ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
-```
-
-**Scope parsing, write policy, and bank selection come from `flowctl scope resolve` / `scope write-policy` / `scope bank`.** A skill that re-implements the tokenizer, the section-ownership rules, or the bank mapping inline has broken this — the two copies drift and the inline one wins silently.
-
-**`SCOPE == research` asks no questions.** Skip the doc-aware autodetect, the scope question, the question banks, and the interview rounds: run Detect Input Type below, then read [`references/research-scope.md`](references/research-scope.md) and follow it. A business, technical, or both invocation never reads it.
+**`--scope=research` is a different pass and asks no questions.** Skip the doc-aware autodetect and the interview: run Detect Input Type below, then read [`references/research-scope.md`](references/research-scope.md) and follow it. The interview never reads that file.
 
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
@@ -81,7 +61,7 @@ DOC_AWARE_FORCE=""        # controls glossary + decisions
 STRATEGY_AWARE_FORCE=""   # controls strategy independently
 ```
 
-**When the invocation carried ANY of `--docs` / `--no-docs` / `--strategy` / `--no-strategy`**, STOP and read [`references/doc-aware.md`](references/doc-aware.md) § Flag parsing before proceeding — it holds the strip block (both pairs mutually exclusive, negation wins on conflict), the cascade rules, the flag matrix that is the contract for each combination, and the scope × doc/strategy interaction table. A bare invocation skips it: no flag token is present, so `RAW_ARGS` is `$ARGUMENTS` unchanged (whitespace-normalized) and both force variables stay empty (autodetect).
+**When the invocation carried ANY of `--docs` / `--no-docs` / `--strategy` / `--no-strategy`**, STOP and read [`references/doc-aware.md`](references/doc-aware.md) § Flag parsing before proceeding — it holds the strip block (both pairs mutually exclusive, negation wins on conflict), the cascade rules, and the flag matrix that is the contract for each combination. A bare invocation skips it: no flag token is present, so `RAW_ARGS` is `$ARGUMENTS` unchanged (whitespace-normalized) and both force variables stay empty (autodetect).
 
 ### Doc-aware autodetect
 
@@ -154,27 +134,7 @@ When the sentinel prints, STOP and **read [`references/doc-aware.md`](references
    - Read file contents
    - If file doesn't exist, ask user to provide valid path
 
-Done when: the argument is classified as exactly one of the four patterns, every non-`.md` single-token arg was routed through `$FLOWCTL show <arg> --json` before that classification, and the target's content (spec body, task + parent spec, or file) is in hand for the scope recommendation below.
-
-## Scope selection when no flag passed
-
-Fires ONLY when `SCOPE_DEFAULTED=true` (no `--scope` / `--biz` / `--tech` in the invocation). An explicit scope flag always wins and skips this section entirely.
-
-Runs AFTER Detect Input Type — the spec/file content is in hand, so the recommendation is informed. Ask ONE `AskUserQuestion` (same blocking primitive as every interview question; the tool-unreachable fallback under "Question Format" applies):
-
-- **header**: `Interview scope`
-- **body**: `Which interview pass should run? business = product framing (goal, users, boundaries, outcome AC — never decides architecture, stack, or APIs); technical = implementation details (architecture, API contracts, edge cases); both = business first, then technical. Recommended: <X> — <one-sentence rationale from the target's current state>. Confidence: [judgment-call].`
-- **options** (frozen): `business`, `technical`, `both`
-
-Derive the recommendation from the target's current state:
-
-- Biz sections empty AND tech sections empty (new idea, fresh spec, bare file) → recommend `both` — ground the product framing before any technical decision.
-- Biz sections populated, tech sections empty → recommend `technical` only when you can name an open technical fork that is costly to reverse and that the code does not answer (a data model or migration, a public contract, a security boundary). Empty technical sections alone are not that reason — implementation fills them. With no such fork, recommend `business` and say the spec may already be clear enough to build.
-- Tech sections populated, biz sections absent (1.0.2-shape solo spec) → recommend `technical` — refine in place.
-
-Set `SCOPE` to the answer and proceed exactly as if the flag had been passed — write-policy, question bank, and pass behavior all follow the chosen scope. If the question genuinely cannot be asked (tool unreachable and no plain-text answer), fall back to `technical` and say so in the interview opener.
-
-Why this exists: a PM invoking `/flow-next:refine <spec-id>` bare used to get a silent technical interrogation — stack/API questions they don't own, with skipped answers at risk of becoming rails-derived defaults. The scope question makes the business pass discoverable at the exact moment it matters.
+Done when: the argument is classified as exactly one of the four patterns, every non-`.md` single-token arg was routed through `$FLOWCTL show <arg> --json` before that classification, and the target's content (spec body, task + parent spec, or file) is in hand for the interview.
 
 ## Interview Process
 
@@ -195,7 +155,9 @@ Options: a) PostgreSQL b) SQLite c) MongoDB
 
 ### The one test
 
-Ask a question only when all three hold: a wrong guess would build the wrong thing or ship behaviour the user would reject; the code, the docs, a quick experiment, or implementation itself cannot settle it; and it is the answerer's call. Everything else you resolve (Investigate Before Asking below), record, or leave to work. A topic on the bank's check-list is not a reason to ask.
+Ask a question only when all three hold: a wrong guess would build the wrong thing or ship behaviour the user would reject; the code, the docs, a quick experiment, or implementation itself cannot settle it; and it is the answerer's call. Everything else you resolve (Investigate Before Asking below), record, or leave to work. A topic on the check-list below is not a reason to ask.
+
+Check the spec for these, and ask about one only when the spec leaves it unclear and the question passes the test: who it is for; what done looks like; what is explicitly out; a constraint the domain implies (a regulation, a contract, a partner commitment); an irreversible data or contract change (a data model, a migration, a public contract); an external interface; a security boundary. A lens adds its audience's own open decisions to this list. Technical detail, performance and edge cases that implementation, review and QA will surface are left to them.
 
 Stop as soon as no question that passes the test remains. Asking nothing is a good outcome: report "Nothing worth asking; the spec is clear enough to build." and skip the write-back unless investigation resolved something worth recording.
 
@@ -210,11 +172,11 @@ Pattern:
 
 ### Plain-language question contract (field feedback, eval-validated)
 
-Applies to EVERY question, both scopes. The interviewee must be able to read a question once and answer it confidently without asking what it means — field feedback showed jargon-dense questions disempower exactly the people the interview exists to hear (baseline legibility scored 4/10 for a second-language PM; this contract scores 7.5+ at ~30% fewer tokens).
+Applies to EVERY question. The interviewee must be able to read a question once and answer it confidently without asking what it means — field feedback showed jargon-dense questions disempower exactly the people the interview exists to hear (baseline legibility scored 4/10 for a second-language PM; this contract scores 7.5+ at ~30% fewer tokens).
 
 - **Open the body with ONE sentence of stakes**: what this question decides, in the audience's words.
 - **Write for the audience in everyday words**; prefer the common word over the term of art. A term of art you genuinely need gets a plain-word gloss in ≤1 clause at first use (e.g. "counter-metrics — things we'd hate to make worse").
-- **No unexplained acronyms or tool/repo shorthand.** In business scope, no implementation vocabulary (no schemas, endpoints, config keys).
+- **No unexplained acronyms or tool/repo shorthand.** A product question, or any question under a non-technical lens, carries no implementation vocabulary (no schemas, endpoints, config keys).
 - **Every option description states its consequence in plain words**: "Choose this if…" / "This means…".
 - **Gloss referenced acceptance criteria.** When a question cites a spec R-ID, attach a short plain-words gist at first mention — "R3 (the audit line's required fields)" — never a bare "R3" the interviewee must open the spec to decode. Gist, not quote: pasting full criterion text bloats the question body.
 
@@ -249,7 +211,7 @@ Examples (one per tier):
 For every skipped question:
 
 1. Park it under `## Open Questions` with an owner hint and the agent's unconfirmed leaning: `**<question>** — skipped during interview; leaning <X>, unconfirmed. *(owner: engineering | product)*`
-2. A skipped user-judgment question STAYS user-judgment-required — never demote it to codebase-/docs-answerable to backfill an answer (see the Pre-Question Taxonomy in [questions-shared.md](questions-shared.md)).
+2. A skipped user-judgment question STAYS user-judgment-required — never demote it to codebase-/docs-answerable to backfill an answer (see Investigate Before Asking below).
 3. Keep a running skip count for the write-back checkpoint below and the Completion summary.
 
 **Write-back consent checkpoint** — when the skip count is ≥1, ask ONE `AskUserQuestion` BEFORE writing the spec back:
@@ -267,7 +229,7 @@ Concrete rules:
 1. **Each round asks the entire current frontier.** A question whose answer depends on another question still open in this round belongs to a *later* round, not this one — never ask a question alongside its own prerequisite.
 2. **Split the frontier across `AskUserQuestion` calls of up to 4 questions each**, grouped by topic (closest-related together), announced as one round ("Round N — part 1/2"). Never pad a call to reach 4; never hold a genuine frontier question back to a later round just to smooth pacing.
    **A frontier slot is earned** by passing the one test. Failure modes, concurrency, scale, portability, and testing qualify only when they pass it; implementation, review, and QA surface the rest. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
-   Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
+   Standalone checkpoint questions (the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
 3. **Recompute the frontier after each round.** Answers reshape the tree — settled decisions unblock their dependents; adapt the next round to what you heard. Don't lock the whole tree before you start: deeper rounds are discovered from answers, not pre-scripted.
 4. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly at the next round's opener: "Skipping persistence questions — you said no DB."
 5. **Cap branch depth at 4 rounds** down any one branch. Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
@@ -284,100 +246,43 @@ Done when: the frontier is empty — every decision the tree opened is answered,
 
 ### Investigate Before Asking
 
-Before every question, classify it via the [questions-shared.md](questions-shared.md) **Pre-Question Taxonomy** (hoisted out of the per-scope banks so both biz and tech reference the same classifier):
+Before drafting the first round, read `STRATEGY.md` (repo root) and search the other project docs for what the spec touches rather than reading them end to end: `README.md`, `CHANGELOG.md`, `GLOSSARY.md`, the decisions track (`$FLOWCTL memory list --track knowledge --category decisions --json`), the titles of open specs (`$FLOWCTL specs --json`), and a `docs/` directory when there is one. Then classify every question before asking it:
 
 - **Codebase-answerable** ("what exists / how it's wired / what conventions live here") → use Read / Grep / Glob to answer; log to spec's `## Resolved via Codebase` section with file:line evidence.
-- **Project-docs-answerable** (business pass, R26) → resolve from the project docs; log to spec's `## Resolved via Project Docs` section with `path:line` evidence. The read list and bounds live in [`references/pass-business.md`](references/pass-business.md).
+- **Project-docs-answerable** ("what does the strategy say / what have we already shipped / what did we decide about X") → resolve from the docs; log to spec's `## Resolved via Project Docs` section with `path:line` evidence.
 - **Glossary-lookup-answerable** (`DOC_AWARE=1` only) — terms with a canonical entry in the nearest-ancestor `GLOSSARY.md` → silently resolve from the entry; log to spec's `## Glossary Conflicts` section only when the user's wording diverges from canonical AND the term is load-bearing (behavior (a) in [`references/doc-aware.md`](references/doc-aware.md)).
 - **Experiment-answerable** — a fork that running something can settle (behaviour, timing, layout, output, performance, whether an eval separates two options) → run a throwaway experiment in `.flow/tmp/experiments/` instead of asking; log it to spec's `## Resolved via Experiment` section with the question, what was run, what was observed, and the decision it settled. The ask is the slow path: a question the user must relay back to the machine costs a round-trip the experiment answers in seconds. Safety predicate: an experiment runs automatically only when it is read-only or fully disposable (a scratch copy, a throwaway environment). One that needs live or shared state, credentials, the network, or a destructive command — a migration, a deployment, a write API — goes to the blocking question path. An inconclusive result (noise larger than the difference) is logged as inconclusive and the question goes to the user with the data attached. The experiment is evidence, never product code: discard it or fold its numbers into the spec.
 - **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `AskUserQuestion`.
 
-If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user.
+If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user. Asking the user something the project docs already answer is the same bug in the other direction. Don't ask obvious questions, group related ones (multi-select for non-exclusive options), and probe answers that contradict each other.
 
 **Divergent independent answers mean the question was underspecified.** When independent sources (scouts, docs, probes) return wildly divergent answers to the same question, do not average them and do not quietly pick a favorite — reframe the question more precisely and re-run it; divergence is a signal about the framing, not a vote to be tallied.
 
 **Async fact-scouts (optional, rounds mode):** while the user answers the current round you MAY dispatch ONE read-only fact-scout subagent to resolve codebase lookups that gate NEXT-round questions. Before dispatching one, read [`references/fact-scouts.md`](references/fact-scouts.md) — the brief contract, scout tier, digest discipline, and the never-block rule are binding. Not dispatching a scout needs no reading: investigate inline as usual.
 
-## Question banks
+## Where answers go
 
-Question banks are scope-resolved via `flowctl scope bank`:
+Each answer is written into the section it belongs in, whatever the lens: a target user goes to `## Goal & Context`, an out-of-scope call to `## Boundaries`, a contract to `## API Contracts`, a testable commitment to `## Acceptance Criteria`, a rationale to `## Decision Context`. The section structure lives in `plugins/flow-next/templates/spec.md` (never re-embed the section list inline; cross-link the template). A section the project added through its own repo-root `SPEC.md` is a section like any other: an answer that belongs there goes there.
 
-```bash
-# Resolves to questions-business.md (biz), questions-technical.md (tech), or
-# questions-technical.md (both — the technical bank is loaded for the tech
-# phase; biz phase loads questions-business.md when it runs).
-BANK_PATH=$("$FLOWCTL" scope bank "$SCOPE")
-```
+Every section no answer belongs in comes back byte-for-byte, and the read-back names every section this session changed, so a person refining their own layer sees any change outside it. Keep the layout the spec already has: when `## Decision Context` carries `### Motivation` / `### Implementation Tradeoffs` sub-headings (older refine runs and capture write them), put a rationale under the one it fits and never add or remove sub-headings to restructure the section.
 
-- `SCOPE=technical` (default) → load [questions-technical.md](questions-technical.md).
-- `SCOPE=business` → load [questions-business.md](questions-business.md).
-- `SCOPE=both` → load `questions-business.md` for phase 1 then `questions-technical.md` for phase 2.
+### Auxiliary sections
 
-Each bank is a short check-list of what to look for in the spec, not a list of questions to ask. Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, hoisted to [questions-shared.md](questions-shared.md) — single source of truth referenced by both banks. Read the shared file first so the classifier applies symmetrically across passes.
+The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` / `Resolved via Experiment` / `Resolved via Research` / `Parked unknowns` — come back byte-for-byte: refine never deletes or rewrites an entry an earlier session wrote. It only adds its own entries to `Resolved via Codebase`, `Resolved via Project Docs` and `Resolved via Experiment`, below any already there. `Resolved via Research` belongs to the research pass, the one writer allowed to replace it (under `--force`).
 
-## Scope-aware pass behavior
+`Parked unknowns` is the one auxiliary section refine may take FROM, and only in the one way described in [`references/write-back.md`](references/write-back.md) § Parked unknowns: a bullet this session resolved graduates into the canonical section that owns it and is deleted here. Every other bullet comes back byte-for-byte, and no bullet this session did not resolve is rewritten, reordered, or reworded.
 
-The interview runs in one of three scoped modes resolved by `flowctl scope resolve` (above). Each scope writes a different set of sections back to the spec and reads a different set as context. The structural canon for sections is `plugins/flow-next/templates/spec.md` (per R17 — never re-embed the section list inline; cross-link the template).
-
-**Pass routing — read ONLY the reference for the resolved scope:**
-
-- `SCOPE == business` → read [`references/pass-business.md`](references/pass-business.md).
-- `SCOPE == technical` (default) → read [`references/pass-technical.md`](references/pass-technical.md).
-- `SCOPE == both` → read [`references/pass-business.md`](references/pass-business.md) and run phase 1 (biz), then read [`references/pass-technical.md`](references/pass-technical.md) and run phase 2 (tech) in the same invocation. Each phase enforces its own merge contract.
-- `SCOPE == research` → [`references/research-scope.md`](references/research-scope.md) (read at the Setup routing line above; no question pass runs).
-
-### Compute the write policy
-
-Before writing anything back, build the current-sections-state JSON from the existing spec markdown (or an empty object for new specs) and call `scope write-policy`. It returns which sections the pass MAY write and which it MUST preserve byte-for-byte (per the Edge Cases merge contract), plus how to handle the `## Decision Context` substructure conditional. It enumerates **canonical sections only** - a section the project added via its own repo-root `SPEC.md` scaffold appears in neither list, and its absence is never permission to drop it; ownership comes from the section's own scope-owner marker (see the project-added-section rule in [`references/write-back.md`](references/write-back.md)).
-
-```bash
-# Build CURRENT_SECTIONS by inspecting the existing spec markdown:
-#   decision_context_has_h3:    spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
-#   biz_pass_ran:               spec has populated `## Goal & Context` body OR a `### Motivation` H3
-#
-# For a brand-new spec (no markdown yet), CURRENT_SECTIONS='{}' is fine.
-CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>}'
-
-WRITE_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy "$SCOPE" --current-sections-json -)
-```
-
-**One policy call per pass** — when `SCOPE == both`, compute the biz policy first, run the biz pass, then **recompute** the current-sections state from the post-biz-pass result and compute a fresh technical policy for phase 2 (the two-call sequence is spelled out in [`references/pass-business.md`](references/pass-business.md)). A single pre-edit policy call for `both` cannot correctly decide the tech-pass `Decision Context` shape (the biz pass may have promoted FLAT → substructured).
-
-The policy JSON shape:
-
-```json
-{
-  "scope": "business|technical|both",
-  "writable": ["<section names this scope may write>"],
-  "preserved": ["<sections this scope MUST preserve byte-for-byte>"],
-  "decision_context": {
-    "shape": "flat|substructured",
-    "writable_h3": ["<H3 names writable when substructured>"],
-    "preserved_h3": ["<H3 names preserved byte-for-byte>"],
-    "promote_flat_to_implementation_tradeoffs": <bool>
-  }
-}
-```
-
-Done when: one `scope write-policy` call has returned per pass (two for `both`, the second computed from the post-biz state), and every canonical section present in the target appears on exactly one of this pass's `writable` / `preserved` lists. A section on neither list is project-added — its owner is its own scope-owner marker, never the absence.
-
-### Auxiliary-sections rule (applies to every pass)
-
-The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` / `Resolved via Experiment` / `Resolved via Research` / `Parked unknowns` — are preserved byte-for-byte across passes and scope changes: no pass deletes or rewrites an auxiliary section another pass wrote. Each pass only ADDS its own: the biz pass adds `Resolved via Project Docs`; the tech pass adds `Resolved via Codebase`; either pass adds `Resolved via Experiment` when it ran one, appending its entries below any already there; the research pass adds `Resolved via Research` (and is the one pass allowed to replace it, under `--force`).
-
-`Parked unknowns` is the one auxiliary section a pass may take FROM, and only in the one way described in [`references/write-back.md`](references/write-back.md) § Parked unknowns: a bullet this pass resolved graduates into the canonical section that owns it and is deleted here. Every other bullet comes back byte-for-byte, and no pass rewrites, reorders, or rewords a bullet it did not resolve.
-
-### Declined-scope ledger (applies to every pass)
+### Declined-scope ledger
 
 When the user declines a feature or scope **as product judgment** — we could build this, we are choosing not to — record it in `.flow/memory/declined/<concept-slug>.md` on the FIRST such refusal: title, the decision in one line, short reasoning, then `## Prior requests` opened with today's date and the request that just came in. File already there → append the dated line to `## Prior requests` and leave the decision untouched. Agent-written prose, like the rest of `.flow/memory/` — no flowctl verb. The entry body follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
 
 **Never write one for scope declined because it already exists**, is already planned, or lives in another spec. That is an answer, not a refusal, and filing it teaches the next planner that shipped capability is rejected scope. A skipped question is not a decline either — skips go to `## Open Questions` per the skip contract.
 
-### Acceptance-criteria rule (applies to every pass)
+### Acceptance-criteria rule
 
-`## Acceptance Criteria` R-IDs are **append-only** across passes — never renumber, never replace; take the next unused number. Source-tag each criterion this pass appends (`[user]` = the human answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `references/write-back.md` § Source tags on acceptance criteria.
+`## Acceptance Criteria` R-IDs are **append-only** across sessions — never renumber, never replace; take the next unused number. Source-tag each criterion this session appends (`[user]` = the human answering in this session, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion an earlier session wrote — see `references/write-back.md` § Source tags on acceptance criteria.
 
-**Record an answer at the precision the user gave it.** A preference ("performance matters here") goes to `## Decision Context` as guidance, not an acceptance criterion. A number or measurable commitment becomes a criterion only when the user stated it; your recommended options never become thresholds. Neither pass asks for success metrics or latency budgets unless the spec is about them.
+**Record an answer at the precision the user gave it.** A preference ("performance matters here") goes to `## Decision Context` as guidance, not an acceptance criterion. A number or measurable commitment becomes a criterion only when the user stated it; your recommended options never become thresholds. Refine does not ask for success metrics or latency budgets unless the spec is about them.
 
 ## Spec-count check (split proposal)
 
@@ -450,11 +355,11 @@ Show summary:
 - What was written (Flow ID updated / file rewritten)
 - Tracker sync: when active and the `tracker.perEvent.interview` leaf opted in (the leaf keeps its name; refine reads it), whether the spec body was pushed/pulled/reconciled to the linked issue (else a silent no-op)
 - Readiness (ONLY when the mark-ready offer fired): marked ready vs kept draft — omit the line entirely otherwise (no readiness noise for non-adopters)
-- **Scope mode**: which pass(es) ran — biz / tech / both — and which spec sections were written vs preserved byte-for-byte (cite the write-policy result). For `--scope=business`: project-docs resolutions captured under `## Resolved via Project Docs` (R26). For either Q&A pass: experiment resolutions captured under `## Resolved via Experiment`, one line each with its decision. For `--scope=research`: the number of items written under `## Resolved via Research` with their sources, or the printed skip reason.
+- **Sections changed**: every section this session wrote, and that the rest came back byte-for-byte; the lens, when one was given. Project-docs and experiment resolutions captured under `## Resolved via Project Docs` / `## Resolved via Experiment`, one line each with its decision. For `--scope=research`: the number of items written under `## Resolved via Research` with their sources, or the printed skip reason.
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
 
-Done when: every line above is either printed or absent because its stated ONLY-when condition did not hold — the question count, the scope mode, and the written-vs-preserved section split are unconditional and always appear.
+Done when: every line above is either printed or absent because its stated ONLY-when condition did not hold — the question count and the sections-changed line are unconditional and always appear.
 
 Suggest next step based on input type:
 - New idea / spec without tasks → recommend `/flow-next:work fn-N --no-plan` for a ready cohesive spec. Use `/flow-next:plan fn-N` when dependencies, ownership, staged delivery, or execution constraints make decomposition useful; use `/flow-next:plan-review fn-N` for independent design review. Risk or multiple files alone do not require decomposition.

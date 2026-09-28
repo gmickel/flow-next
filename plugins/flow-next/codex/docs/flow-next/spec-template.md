@@ -29,7 +29,7 @@ The template is consumed by:
 | Consumer | Role |
 |----------|------|
 | `flow-next-capture` | synthesizes a spec from conversation context |
-| `flow-next-refine` | refines a spec via Q&A (`--scope=business|technical|both`) |
+| `flow-next-refine` | refines a spec via one Q&A interview (optional `--scope` lens) or external docs (`--scope=research`) |
 | `flow-next-plan` | breaks a spec into tasks |
 | `CLAUDE.md` | "Creating a spec" guide cross-links the template rather than embedding |
 
@@ -118,52 +118,33 @@ These four headings are parsed by `flowctl`. Renaming or deleting one does not e
 |---|---|---|
 | `## Acceptance Criteria` | R-ID extraction (`_export_scan_acceptance_criteria`) | R-IDs stop being found. Coverage tables in `make-pr` and the review skills come out empty, task `satisfies:` mapping breaks, and unaddressed-R-ID verdict gating stops firing. Legacy `## Acceptance criteria` and bare `## Acceptance` are tolerated; anything else is not. |
 | `## Boundaries` | exact-match regex on the heading | The "Not in this PR" section of a generated PR body loses its source. |
-| `## Goal & Context` | interview business-scope routing | `--scope=business` loses a write target; the business pass has nowhere canonical to put framing. |
-| `## Decision Context` | flat-vs-substructured detection | The `### Motivation` / `### Implementation Tradeoffs` promotion logic cannot tell which shape the spec is in. |
+| `## Goal & Context` | `flowctl brief` goal line and the PR cognitive aid's context excerpt | The brief loses its goal line and the PR briefing loses its context. |
+| `## Decision Context` | the PR cognitive aid's decision excerpt | The PR briefing loses the recorded decisions. |
 
 Keep R-ID bullets in the canonical form - `- **R1:** <criterion>` - with optional single-letter sibling suffixes (`R4a`, `R4b`). The parser matches `R<digits><optional letter>`; prose numbering like "Requirement 1" is not recognized.
 
-The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are technical-scope write targets. Removing them is survivable, but the technical interview pass will have fewer places to put what it learns.
+The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are parsed by nothing. Removing them is survivable, but refine and capture will have fewer places to put what they learn.
 
-### Custom sections and the refine passes: use the scope marker
+### Custom sections and refine
 
-`flowctl scope write-policy` enumerates the seven canonical sections only, so a section you added appears in neither its `writable` nor its `preserved` list. Ownership of a project-added section therefore comes from **the section's own scope-owner marker in the spec body**, and the interview passes apply a three-way rule:
-
-| Marker on your section | What a refine pass does |
-|---|---|
-| names the pass's own scope (`<!-- scope: business -->` under `--scope=business`) | **writes it** - fills and refines it like a canonical section of that scope |
-| names the other scope | preserves it byte-for-byte |
-| `<!-- scope: both -->` | writable under any pass |
-| absent or unparseable | preserves it byte-for-byte, and says so in the read-back |
-
-So the marker is the difference between a section that gets filled and a section that stays frozen. Add one if you want the interview to do the work; leave it off if the section is yours to hand-write.
-
-Two consequences worth knowing:
-
-- A marked section is **rewritable**. If you hand-write user stories and mark them `scope: business`, the next business pass will refine them. That is the point, but it means hand-authored content under a marker you own is not sacred - drop the marker to freeze it.
-- Scope-owner markers are ordinarily authoring guidance and may be stripped from a finished spec body. For project-added sections they must be **kept**, because they are the only ownership signal a later pass has. See [`../references/spec-template-discovery.md`](../../references/spec-template-discovery.md).
-
-`capture` and `plan` seed from the template directly and have no such caveat.
+A section you add is a section like any other. Refine writes an answer into the section it belongs in, canonical or custom, and names every section it changed in the read-back; sections no answer belongs in come back byte-for-byte. No marker is needed. Scope-owner comments (`<!-- scope: business -->`) in older specs are harmless and left as they are.
 
 ### Worked example: adding user stories
 
 ```markdown
 ## Goal & Context
-<!-- scope: business -->
 ...
 
 ## User Stories
-<!-- scope: business -->
 
 Numbered, one actor per story: "As a <actor>, I want <capability>, so that <benefit>."
 Cover the unhappy paths too, not only the demo path.
 
 ## Architecture & Data Models
-<!-- scope: technical -->
 ...
 ```
 
-Canonical headings untouched, one section added, scope marker set so the business pass owns it.
+Canonical headings untouched, one section added.
 
 ### Why the default stays lean
 
@@ -254,7 +235,7 @@ The rules mirror R-IDs where they apply:
 
 ### Source tags: what you said vs what the agent inferred
 
-`/flow-next:capture` **and** `/flow-next:refine` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
+`/flow-next:capture` **and** `/flow-next:refine` tag every acceptance criterion they write at source: `[user]` (the words of the human answering in that session), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
 
 ```markdown
 - **R1:** Root marketplace manifest exists and imports cleanly. [user]
@@ -263,7 +244,7 @@ The rules mirror R-IDs where they apply:
 
 Three rules matter when reading a tagged spec:
 
-- **A pass tags only the criteria it authors**, and never retags an existing bullet - provenance is frozen exactly like the R-ID number. So on a spec that went through a business pass then a technical pass, each criterion's tag reflects the pass that wrote it.
+- **A session tags only the criteria it authors**, and never retags an existing bullet - provenance is frozen exactly like the R-ID number. So on a spec a product owner refined and then a tech lead refined, each criterion's tag reflects the session that wrote it.
 - **Untagged means unknown provenance, never `[user]`.** Criteria written before this shipped, or by hand, carry no tag. Defaulting them to "a human said this" is wrong in the dangerous direction.
 - **The tags distinguish source evidence from assumptions**: capture exposes the tally in its saved-spec summary and editor follow-up. Refine retains pre-write ratification and refuses to recommend `approve and write` for `[inferred]` criteria no question covered, since an answered question has already done the verifying. Both use [`read-back.md`](read-back.md); saving a capture never upgrades its source tags.
 
@@ -364,7 +345,7 @@ All review receipts may carry these optional fields; existing consumers that rea
 
 ## See also
 
-- [`../templates/spec.md`](../../templates/spec.md) - the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
+- [`../templates/spec.md`](../../templates/spec.md) - the canonical scaffold (section list and per-section guidance).
 - [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) - definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
 - [`../skills/flow-next-refine/SKILL.md`](../../skills/flow-next-refine/SKILL.md) - 3-tier discovery cascade walker.
 - [`flowctl.md`](flowctl.md) - `flowctl spec create / set-plan / export-cognitive-aid` reference.

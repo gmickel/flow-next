@@ -277,23 +277,6 @@ fi
 
 Serialization locks live under `.flow/locks/` (auto-gitignored).
 
-### scope
-
-Scope helpers for `--scope=business|technical|both` (interview / capture). Token-safe parsing and write-policy live here so skills never re-implement them inline.
-
-```bash
-# Strip --scope / --biz / --tech from an arg list; emit resolved scope + remaining tokens
-flowctl scope resolve --json --raw "$ARGUMENTS"
-
-# Absolute path to the question-bank file for a scope
-flowctl scope bank business|technical|both [--json]
-
-# Per-section write policy given existing-section-state JSON (path or '-' for stdin)
-flowctl scope write-policy business|technical|both --current-sections-json <file|-> [--json]
-```
-
-`scope resolve` falls back to `technical` when no scope flag is passed (sets `defaulted: true`); the refine skill asks before silently running that default.
-
 ### spec create
 
 Create new spec. The new spec's markdown is the canonical scaffold `templates/spec.md`, resolved through the override cascade `SPEC.md` -> `spec.md` -> bundled (first match wins); `--plan-file` replaces it wholesale.
@@ -327,7 +310,7 @@ Overwrite spec markdown from file.
 flowctl spec set-plan fn-1 --file plan.md [--json]
 ```
 
-See [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) for the canonical section structure (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) and scope-owner annotations.
+See [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) for the canonical section structure (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) and per-section guidance.
 
 ### spec set-plan-review-status
 

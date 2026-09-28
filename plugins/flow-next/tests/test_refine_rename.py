@@ -3,9 +3,6 @@
 Behavior or contract only (G2):
   - the alias stub forwards and is non-triggering (frontmatter flag, Codex
     catalog flag off in the regenerated mirror);
-  - `flowctl scope` accepts `research`, has no bank for it, and its write
-    policy writes exactly the research section and preserves every canonical
-    section;
   - the research skip is decided from the section or plan's findings, in
     refine's reference AND plan's research step (symmetric), with the same
     scout set on both sides;
@@ -18,18 +15,12 @@ Run:
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
 import unittest
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
-from flowctl_test_support import FLOWCTL_CMD
 
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
-REPO_ROOT = PLUGIN.parent.parent
 SKILLS = PLUGIN / "skills"
 
 REFINE = SKILLS / "flow-next-refine"
@@ -46,15 +37,6 @@ CODEX_REFINE_YAML = PLUGIN / "codex" / "skills" / "flow-next-refine" / "agents" 
 
 SECTION = "## Resolved via Research"
 RESEARCH_SCOUTS = ("docs-scout", "practice-scout", "docs-gap-scout", "memory-scout")
-CANONICAL = (
-    "Goal & Context",
-    "Architecture & Data Models",
-    "API Contracts",
-    "Edge Cases & Constraints",
-    "Acceptance Criteria",
-    "Boundaries",
-    "Decision Context",
-)
 
 
 def _read(p: Path) -> str:
@@ -70,16 +52,6 @@ def _frontmatter(text: str) -> dict[str, str]:
             k, v = line.split(":", 1)
             out[k.strip()] = v.strip()
     return out
-
-
-def _flowctl(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [*FLOWCTL_CMD, *args],
-        cwd=str(REPO_ROOT),
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
 
 
 def _links(text: str) -> list[str]:
@@ -112,35 +84,6 @@ class AliasStubForwardsAndIsNonTriggering(unittest.TestCase):
         fm = _frontmatter(_read(REFINE / "SKILL.md"))
         self.assertEqual(fm["name"], "flow-next-refine")
         self.assertNotIn("disable-model-invocation", fm)
-        for bank in ("questions-business.md", "questions-technical.md", "questions-shared.md"):
-            self.assertTrue((REFINE / bank).is_file(), bank)
-
-
-class ResearchScopePlumbing(unittest.TestCase):
-    def test_scope_resolve_accepts_research_and_passes_force_through(self) -> None:
-        r = _flowctl("scope", "resolve", "--json", "--raw", "fn-1 --scope=research --force")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        data = json.loads(r.stdout)
-        self.assertEqual(data["scope"], "research")
-        self.assertEqual(data["remaining_args"], ["fn-1", "--force"])
-
-    def test_scope_bank_has_no_research_bank(self) -> None:
-        r = _flowctl("scope", "bank", "research", "--json")
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("no question bank", r.stdout + r.stderr)
-
-    def test_write_policy_writes_only_the_research_section(self) -> None:
-        r = subprocess.run(
-            [*FLOWCTL_CMD, "scope", "write-policy", "research",
-             "--current-sections-json", "-"],
-            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60,
-            input='{"decision_context_has_h3": true}',
-        )
-        self.assertEqual(r.returncode, 0, r.stderr)
-        data = json.loads(r.stdout)
-        self.assertEqual(data["writable"], ["Resolved via Research"])
-        self.assertEqual(set(data["preserved"]), set(CANONICAL))
-        self.assertEqual(data["decision_context"]["writable_h3"], [])
 
 
 class ResearchSkipIsSymmetric(unittest.TestCase):
@@ -156,7 +99,7 @@ class ResearchSkipIsSymmetric(unittest.TestCase):
     def test_refine_skill_routes_research_to_the_reference(self) -> None:
         skill = _read(REFINE / "SKILL.md")
         self.assertIn("references/research-scope.md", skill)
-        self.assertIn("--scope=business|technical|both|research", skill)
+        self.assertIn("--scope=research", skill)
         self.assertIn(SECTION.lstrip("# "), skill)
 
     def test_plan_skips_the_same_scouts_and_writes_the_same_section(self) -> None:

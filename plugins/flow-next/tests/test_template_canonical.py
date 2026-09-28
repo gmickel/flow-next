@@ -3,10 +3,7 @@ cross-linking (fn-44.9, covers R11 / R17 / R21).
 
 Asserts:
   - `plugins/flow-next/templates/spec.md` exists at canonical path.
-  - Frontmatter declares the 7 canonical sections + 7 auxiliary sections with
-    scope-owner annotations.
-  - The body uses `<!-- scope: business|technical|both -->` HTML-comment
-    owner markers under each canonical section heading.
+  - Frontmatter declares the 7 canonical sections + the auxiliary sections.
   - CLAUDE.md cross-links to the template path, does NOT inline-duplicate
     the canonical section list (R17).
   - The R21 drift guard awk pattern fires on a synthetic skill-markdown
@@ -71,8 +68,7 @@ class TestTemplateExistsAtCanonicalPath(unittest.TestCase):
 
 
 class TestTemplateStructure(unittest.TestCase):
-    """R11: template contains the 7 canonical sections in declared order
-    with scope-owner HTML-comment annotations."""
+    """R11: template contains the 7 canonical sections in declared order."""
 
     def setUp(self) -> None:
         self.body = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -101,32 +97,6 @@ class TestTemplateStructure(unittest.TestCase):
             f"canonical sections out of order: {positions}",
         )
 
-    def test_scope_owner_annotations_present(self) -> None:
-        """Each canonical section heading is immediately followed by a
-        `<!-- scope: <value> -->` HTML comment in the next 2 lines."""
-        for section in CANONICAL_SECTIONS:
-            idx = next(
-                (i for i, line in enumerate(self.lines) if line == section),
-                -1,
-            )
-            self.assertGreaterEqual(idx, 0, f"missing section {section}")
-            # Look at the next 2 lines for the scope owner marker.
-            window = "\n".join(self.lines[idx + 1 : idx + 3])
-            self.assertRegex(
-                window,
-                r"<!--\s*scope:\s*(business|technical|both)\b",
-                f"section {section!r} missing scope-owner annotation in next 2 lines",
-            )
-
-    def test_decision_context_documents_flat_and_substructured(self) -> None:
-        """The `## Decision Context` section documents both (A) FLAT and
-        (B) SUBSTRUCTURED shapes — required by the R22 backward-compat
-        invariant + the biz-pass H3 promotion contract."""
-        self.assertIn("FLAT", self.body)
-        self.assertIn("SUBSTRUCTURED", self.body)
-        self.assertIn("### Motivation", self.body)
-        self.assertIn("### Implementation Tradeoffs", self.body)
-
 
 class TestTemplateFrontmatter(unittest.TestCase):
     """R11: frontmatter explains purpose + consumers + canonical sections."""
@@ -142,21 +112,12 @@ class TestTemplateFrontmatter(unittest.TestCase):
             self.fail("template frontmatter unclosed")
         self.frontmatter = "\n".join(lines[1:end])
 
-    def test_lists_canonical_sections_with_scope_annotations(self) -> None:
-        # All 7 canonical sections appear in the frontmatter alongside their
-        # `# scope: ...` annotation.
+    def test_lists_canonical_sections(self) -> None:
         for section in [s.replace("## ", "") for s in CANONICAL_SECTIONS]:
             self.assertIn(
                 section,
                 self.frontmatter,
                 f"section {section!r} not enumerated in frontmatter",
-            )
-        # The annotation set must mention all three scope owners.
-        for scope in ("business", "technical", "both"):
-            self.assertIn(
-                f"scope: {scope}",
-                self.frontmatter,
-                f"frontmatter missing scope-owner annotation: {scope}",
             )
 
     def test_lists_auxiliary_sections(self) -> None:

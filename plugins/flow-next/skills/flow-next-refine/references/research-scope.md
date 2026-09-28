@@ -1,6 +1,6 @@
 # Refine — research scope (loaded when `SCOPE == research`)
 
-> Read at the Setup routing line in SKILL.md. A business, technical, or both pass never reads this file.
+> Read at the Setup routing line in SKILL.md. The interview never reads this file.
 
 **Decision record**
 
@@ -13,14 +13,14 @@
 ## Contract
 
 - **No questions.** The research pass asks nothing and runs no interview rounds. It reads the target, decides whether to run, dispatches the read-only scouts, and writes one section back through the shared read-back contract.
-- **Four scouts, plus one gated.** `docs-scout` (official docs, version anchored on the repo's manifest scan), `practice-scout` (current best practices and pitfalls), `docs-gap-scout` (the repo's own docs that must change), and `memory-scout` (the bug and knowledge entries that apply). `github-scout` joins only when `scouts.github` is on, as in plan. Not `repo-scout` (the technical pass's fact scouts and plan's decomposition already cover repo patterns), not `spec-scout`, not `flow-gap-analyst`.
+- **Four scouts, plus one gated.** `docs-scout` (official docs, version anchored on the repo's manifest scan), `practice-scout` (current best practices and pitfalls), `docs-gap-scout` (the repo's own docs that must change), and `memory-scout` (the bug and knowledge entries that apply). `github-scout` joins only when `scouts.github` is on, as in plan. Not `repo-scout` (the interview's fact scouts and plan's decomposition already cover repo patterns), not `spec-scout`, not `flow-gap-analyst`.
 - **The section is the artifact.** `## Resolved via Research` on the spec (or the task body for a task target): one sub-block per scout that ran, one bullet per finding, a source on every line. Plan writes the same section when its Step 1 ran docs-scout or practice-scout, so the two never produce two copies.
 - **Where research lands.** Research lands in the spec when a human should see it before ratifying and when it must survive the route choice (direct or planned); what only the implementer needs stays with the worker, in the task body or the worker's own investigation.
 - **Never by default.** Flow routes here only on the read-first signal from `route-matrix.md`; the manual user names the scope. `flow --auto` never runs it.
 
 ## Setup
 
-`flowctl scope resolve` returns `research` and passes every other token through in `remaining_args`. Strip the one research-only flag before input detection:
+SKILL.md has already taken `--scope=research` out of the arguments. Strip the one research-only flag before input detection:
 
 ```bash
 FORCE=0
@@ -68,6 +68,6 @@ One sub-block per scout that ran (omit a scout's block when it returned nothing,
 
 ## Write-back
 
-Compute the write policy with `scope write-policy research` (it lists every canonical section as preserved and only this section as writable), then follow `write-back.md`'s single-emission write pattern and the print-then-ask approval in [docs/read-back.md](../../../docs/read-back.md): summary first (target, bullet count per scout, sources, the skip or rerun line), then one ask with approve and write, open in editor, abort. The section is appended after the last auxiliary section for a spec (`flowctl spec set-plan --file`) or the task body (`flowctl task set-spec --file`); every other section comes back byte-for-byte. Under `--force` the old section is replaced in full; under a delta rerun, new bullets append below the existing ones in their scout's sub-block.
+The pass writes this one section and nothing else. Follow `write-back.md`'s single-emission write pattern and the print-then-ask approval in [docs/read-back.md](../../../docs/read-back.md): summary first (target, bullet count per scout, sources, the skip or rerun line), then one ask with approve and write, open in editor, abort. The section is appended after the last auxiliary section for a spec (`flowctl spec set-plan --file`) or the task body (`flowctl task set-spec --file`); every other section comes back byte-for-byte. Under `--force` the old section is replaced in full; under a delta rerun, new bullets append below the existing ones in their scout's sub-block.
 
 Done when: either nothing was written and the summary names the skip reason, or the target carries one `## Resolved via Research` section with one sub-block per scout that returned findings, a source on every bullet, every other section byte-identical to the copy read at Detect Input Type, and the summary reports the bullet count per scout.

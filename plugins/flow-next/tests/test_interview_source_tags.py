@@ -138,20 +138,10 @@ class InterviewSourceTagsTest(unittest.TestCase):
                     f"emission site {heading!r} carries no source-tag imperative",
                 )
 
-    def test_skill_md_routes_to_both_pass_references(self) -> None:
-        """R7: each pass states its own `[user]` identity in its own reference,
-        so SKILL.md must keep the routes to both (reachability)."""
-        for link in (
-            "[`references/pass-business.md`](references/pass-business.md)",
-            "[`references/pass-technical.md`](references/pass-technical.md)",
-        ):
-            with self.subTest(link=link):
-                self.assertIn(link, self.interview_skill)
-
     # --- R3: drift pin ------------------------------------------------------
 
     def test_user_rows_keep_their_decision_tokens(self) -> None:
-        """`[user]` is per-side: capture findability vs interview pass-identity.
+        """`[user]` is per-side: capture findability vs interview session-identity.
 
         Any rewording that preserves the decision passes.
         """
@@ -174,7 +164,7 @@ class InterviewSourceTagsTest(unittest.TestCase):
         self.assertIn(
             INTERVIEW_USER_TOKEN,
             interview_row,
-            "interview's [user] row lost its deliberate pass-identity "
+            "interview's [user] row lost its deliberate session-identity "
             "semantics (no evidence block anchors findability there)",
         )
 

@@ -1830,7 +1830,7 @@ DIET = {
     "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
-    "flow-next-refine": "Refine a spec or task before building: deep Q&A (business, technical, both) or a read-only research pass over external docs. Use to refine or interrogate requirements or read up on a new library.",
+    "flow-next-refine": "Refine a spec or task before building: one Q&A interview, optionally focused by a scope lens, or a read-only research pass over external docs. Use to refine requirements or read up on a new library.",
     "flow-next-capture": "Save the current conversation as a source-tagged flow-next spec, then offer review or editing. Use when asked to capture this as a spec.",
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.",

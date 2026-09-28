@@ -61,7 +61,7 @@ flowchart LR
     Chart -->|briefing package| Capture
     Idea --> Capture
     Capture --> Interview[/flow-next:refine/]
-    Interview -.scoped operation.-> InterviewScope{{"--scope=business · --scope=technical · --scope=both<br/>(default: --scope=technical)"}}
+    Interview -.optional lens.-> InterviewScope{{"--scope=any lens · --biz · --tech<br/>(default: no lens)"}}
     Capture -->|ready cohesive spec| DirectWork[/flow-next:work --no-plan/]
     DirectWork --> ImplReview
     Interview --> PlanReview[/flow-next:plan-review/]
@@ -86,7 +86,7 @@ flowchart LR
     Audit -.-> Memory[(.flow/memory/)]
 ```
 
-The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a stage of `flow --auto`. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. `/flow-next:flow` runs this map for you. Say what you have and it picks the smallest sufficient route, runs it, and stops at the next decision that is yours; `/flow-next:flow --explain` shows the route without running it. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:refine` is a **scoped operation** - one node in the lifecycle, but the same skill runs for the business layer (`--scope=business`) and the technical layer (`--scope=technical`) against the same `.flow/specs/<id>.md` file. Teams adopting the symmetric pattern traverse this node twice; solo devs running the default `--scope=technical` pass through once. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict reports an open P0/P1 confirmed against the running app. In an attended run those findings guide fixes; `flow --auto` can carry findings or an inability to verify into a draft PR. QA defaults off (`pipeline.qa` is `off | on | auto`; what each value does is in [`gate-selection.md`](../../skills/flow-next-flow/references/gate-selection.md)) and grants no merge approval. Flow stops at the draft PR by default. Add `--until=merge` to carry the selected spec through land's convergence and gated merge, or invoke `/flow-next:resolve-pr` and `/flow-next:land` directly. An attended rerun with an existing PR offers landing and asks once unless current scoped authorization already exists. See [the destination and consent rules](pipeline-variations.md#choose-where-flow-stops). Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. The diagram includes the direct route and optional coordination and verification stages. Plan runs only on a positive signal; the signals and the exclusions are in [`plan-vs-no-plan.md`](../../skills/flow-next-flow/references/plan-vs-no-plan.md). Review and QA do not guarantee every regression will be caught. See [`pipeline-variations.md`](pipeline-variations.md) for six worked examples and the risk-and-unknowns reasoning that selects between them.
+The map is not strictly linear. `/prospect` is optional. `/flow-next:chart` is an **optional pre-capture discovery route** for one oversized or unclear idea - never a mandatory stage and never a stage of `flow --auto`. Skip chart when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, evidence/consent/review contracts still apply later. `/flow-next:flow` runs this map for you. Say what you have and it picks the smallest sufficient route, runs it, and stops at the next decision that is yours; `/flow-next:flow --explain` shows the route without running it. `/capture` and `/interview` remain entry points depending on whether the spec emerged from conversation or a chart briefing (`/capture`) or needs structured discovery on an existing spec (`/interview`). `/flow-next:refine` is one interview, optionally focused by a free-text `--scope` lens. Teams that split a spec between a product owner and a tech lead run it once per person (`--biz`, then `--tech`) against the same `.flow/specs/<id>.md` file; solo devs run it once without a lens. The implementation review loop (`/work` ↔ `/impl-review`) iterates until SHIP. `/flow-next:qa` is an **optional live-app QA stage** between spec-completion review and make-pr - it only runs when there's a live deploy + a driver, and a NO verdict reports an open P0/P1 confirmed against the running app. In an attended run those findings guide fixes; `flow --auto` can carry findings or an inability to verify into a draft PR. QA defaults off (`pipeline.qa` is `off | on | auto`; what each value does is in [`gate-selection.md`](../../skills/flow-next-flow/references/gate-selection.md)) and grants no merge approval. Flow stops at the draft PR by default. Add `--until=merge` to carry the selected spec through land's convergence and gated merge, or invoke `/flow-next:resolve-pr` and `/flow-next:land` directly. An attended rerun with an existing PR offers landing and asks once unless current scoped authorization already exists. See [the destination and consent rules](pipeline-variations.md#choose-where-flow-stops). Maintenance (`/audit`) runs out-of-band against `.flow/memory/`. The diagram includes the direct route and optional coordination and verification stages. Plan runs only on a positive signal; the signals and the exclusions are in [`plan-vs-no-plan.md`](../../skills/flow-next-flow/references/plan-vs-no-plan.md). Review and QA do not guarantee every regression will be caught. See [`pipeline-variations.md`](pipeline-variations.md) for six worked examples and the risk-and-unknowns reasoning that selects between them.
 
 ---
 
@@ -97,8 +97,8 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 | # | Handover | Flow-Next artefact path | Produced by | Verified by |
 |---|----------|-------------------------|-------------|-------------|
 | 0 | Pre-spec decision map + briefing (optional) | `.flow/charts/<chart-id>.md` + decision records; briefing `.flow/charts/<chart-id>-briefing*.md` | `/flow-next:chart` | Human read-back of Outcome/frontier/cost; capture read-back of ingested briefing |
-| 1 | Spec - business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may be empty) | `/flow-next:capture` (from conversation or chart briefing) or `/flow-next:refine --scope=business` | `/flow-next:plan-review` |
-| 2 | Spec - fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:refine --scope=technical` settles any open technical fork | `/flow-next:refine --scope=technical` | `/flow-next:plan-review` |
+| 1 | Spec - business-layer complete (PO → tech lead) | `.flow/specs/<spec-id>.md` (business sections filled; technical sections may be empty) | `/flow-next:capture` (from conversation or chart briefing) or `/flow-next:refine --biz` | `/flow-next:plan-review` |
+| 2 | Spec - fully complete (tech lead → developer) | same `.flow/specs/<spec-id>.md` after `/flow-next:refine --tech` settles any open technical fork | `/flow-next:refine --tech` | `/flow-next:plan-review` |
 | 3 | Implementation plan (spec → tasks) | `.flow/tasks/<spec-id>.M.md` | `/flow-next:plan` | `/flow-next:plan-review` |
 | 4 | Working implementation (tasks → code) | task `done_summary` + evidence commits | `/flow-next:work` (worker subagent) | `/flow-next:impl-review` |
 | 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:spec-completion-review` |
@@ -139,12 +139,12 @@ Example journeys (research-led, prototype-led reversal with supersession, multi-
 
 | Role | Triggers | Reviews | Notes |
 |------|----------|---------|-------|
-| **Product Owner / PM** | `/flow-next:chart` (optional), `/flow-next:capture`, `/flow-next:refine --scope=business` | Chart Outcome/frontier/cost; `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO may chart an oversized unclear idea, or draft the spec from a `prospect`-promoted candidate / conversation / chart briefing via `capture`. |
-| **Tech lead / Senior eng** | `/flow-next:refine --scope=technical` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
+| **Product Owner / PM** | `/flow-next:chart` (optional), `/flow-next:capture`, `/flow-next:refine --biz` | Chart Outcome/frontier/cost; `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO may chart an oversized unclear idea, or draft the spec from a `prospect`-promoted candidate / conversation / chart briefing via `capture`. |
+| **Tech lead / Senior eng** | `/flow-next:refine --tech` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
 | **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first; uses Scope and requirement coverage to find the canonical changes, then checks Verification and Open items. |
 | **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete / Harden per entry. |
-| **Platform / DevOps, Quality** (extendable) | A focused `/flow-next:refine <id>` pass steered at their concerns; standing `SPEC.md` scaffold sections | Their R-IDs in the coverage table; `/flow-next:qa` verdicts (Quality) | Any role that gates delivery can add its layer to the same spec: copy the bundled template to a repo-root `SPEC.md` and add the role's standing sections (`## Platform & operations`, `## Quality gates`, …), then run a focused interview pass - "interview from the platform angle: deployment, IAM, cost, observability". R-IDs are append-only and source-tagged, so a platform pass adds criteria without disturbing the product layer, and coverage later shows which task satisfies each ops requirement. Pattern surfaced by field teams; the two built-in scopes are a floor, not a ceiling. See [spec-template.md](spec-template.md#customizing-the-scaffold-for-your-project). |
+| **Platform / DevOps, Quality** (extendable) | `/flow-next:refine <id> --scope=platform` (or `--scope=qa`, any free-text lens); standing `SPEC.md` scaffold sections | Their R-IDs in the coverage table; `/flow-next:qa` verdicts (Quality) | Any role that gates delivery can add its layer to the same spec: copy the bundled template to a repo-root `SPEC.md` and add the role's standing sections (`## Platform & operations`, `## Quality gates`, …), then run refine with the role's lens (`--scope=platform` focuses it on deployment, IAM, cost, observability). R-IDs are append-only and source-tagged, so a platform session adds criteria without disturbing the product layer, the read-back names every section it changed, and coverage later shows which task satisfies each ops requirement. Pattern surfaced by field teams; the lens is free text, so any role can use it. See [spec-template.md](spec-template.md#customizing-the-scaffold-for-your-project). |
 
 In a *one-pizza pod* (3-5 people), one human can carry several roles simultaneously - PO drafts and is also the reviewer. The role table above tells you *which command corresponds to which hat*, not how many humans you need.
 
@@ -169,17 +169,17 @@ Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `
 
 `/flow-next:capture` source-tags every acceptance criterion as `[user]` (verbatim from the user), `[paraphrase]` (rephrased), or `[inferred]` (the agent inferred it). Capture writes the spec, then shows a compact summary (title, criteria count, source tally, recommended route) and offers the saved file in the editor, per the [read-back contract](read-back.md). The full body prints on request. The `[inferred]` count identifies assumptions the user can edit or reject. Saving alone does not mark the spec ready or authorize implementation.
 
-For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --scope=business` instead. The interview asks only the business decisions that would change what gets built and that the spec leaves unclear - who it is for, what done looks like, what is explicitly out, a constraint the domain implies. Asking nothing is a valid outcome. The codebase is read-only context, not the subject of questions.
+For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --biz` instead. The business lens focuses the interview on the product decisions that would change what gets built and that the spec leaves unclear - who it is for, what done looks like, what is explicitly out, a constraint the domain implies. Asking nothing is a valid outcome. The codebase is read-only context, not the subject of questions.
 
-The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers - `--scope=business` writes the business sections and leaves the technical sections as they were.
+The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers: each answer lands in the section it belongs in, sections no answer belongs in come back byte-for-byte, and the read-back names every section the session changed.
 
 Hand the spec off to the tech lead by linking it. (For *Spec-as-PR*, see [Team patterns](#team-patterns) below - open the spec file on a feature branch as a draft PR before any code lands.)
 
 ### [3] Spec, fully complete: Handover #2
 
-The tech lead runs `/flow-next:refine <spec-id> --scope=technical`. This is the **same skill** as the business-layer interview, run on the **same spec file** - same tool, same structure, same review loop. The only thing that changes is the layer being completed. The technical pass reads the business sections first (when populated) and cites them as constraint context before asking any technical question. (See [Symmetric interview](#symmetric-interview).)
+The tech lead runs `/flow-next:refine <spec-id> --tech`. This is the **same interview** as the business layer, run on the **same spec file** - same tool, same structure, same review loop. Only the lens changes: it focuses the questions on the open technical decisions, with the business sections already in the spec as context. (See [Symmetric interview](#symmetric-interview).)
 
-`--scope=technical` is the default when no scope flag is passed - solo devs running the single-pass workflow keep their pre-1.1.0 behavior. Teams adopting the symmetric pattern opt in explicitly via `--scope=business` then `--scope=technical` (or `--scope=both` for a single combined pass).
+With no lens, refine asks whatever open decision would change the build, product or technical. Refine never asks which scope to run.
 
 Optional `--strategy --docs` flags activate doc-aware mode (orthogonal to scope): the interview pulls from `STRATEGY.md` (active tracks), `GLOSSARY.md` (canonical vocabulary), and `knowledge/decisions/` (load-bearing past choices). When the user's wording diverges from the canonical glossary term, the interview surfaces the conflict in a `## Glossary Conflicts` spec section rather than silently rewriting. Same shape for strategy: a `## Strategy Conflicts` section parallel to glossary, ≤1 strategy-conflict question per round.
 
@@ -342,15 +342,15 @@ This is what *frozen at handover* means in practice - the receiving party gets a
 
 ### Symmetric interview
 
-`/flow-next:refine` is run by both the PO (business layer, `--scope=business`) and the tech lead (technical layer, `--scope=technical`, optionally `--strategy --docs` for doc-aware mode). Same skill, same shape, same review loop, **same `.flow/specs/<spec-id>.md` file**. The only thing that changes is the layer being completed.
+`/flow-next:refine` is run by both the PO (`--biz`) and the tech lead (`--tech`, optionally `--strategy --docs` for doc-aware mode). Same interview, same shape, same review loop, **same `.flow/specs/<spec-id>.md` file**. The lens is the only difference, and it is free text: QA can run `--scope=qa`, platform `--scope=platform`.
 
-`--scope=technical` is the **default** when no scope flag is passed. Solo devs running the single-pass workflow keep their pre-1.1.0 behavior - zero new prompts, zero breaking change. Teams adopting the symmetric pattern opt in explicitly:
+No write policy separates the layers. Each answer lands in the section it belongs in, sections no answer belongs in come back byte-for-byte, and the read-back names every section the session changed, so each person sees any change outside their layer before approving it. Solo devs run refine once without a lens:
 
 ```
 IDEA / ROUGH PROSE  (PO scribbles)
         │
         ▼
-/flow-next:refine --scope=business    ← business layer
+/flow-next:refine --biz               ← business lens
    (asks only what would change the build:
     who it is for, what done looks like, what is
     out, a domain constraint; reads STRATEGY.md and
@@ -372,14 +372,13 @@ HANDOVER #1 — spec biz-layer complete → tech lead
     just at a different completion state)
         │
         ▼
-/flow-next:refine --scope=technical    ← technical layer
+/flow-next:refine --tech              ← technical lens
    (codebase + GLOSSARY.md + STRATEGY.md +
-    knowledge/decisions/; reads the spec's
-    business sections first and cites them
-    as constraint context)
+    knowledge/decisions/; the business
+    sections are context)
         │
         ▼
-.flow/specs/<spec-id>.md                  ← business sections preserved
+.flow/specs/<spec-id>.md                  ← untouched sections come back
    (now fully populated)                       byte-for-byte; open
                                               technical forks settled; R-IDs
                                               appended, never renumbered
@@ -393,7 +392,7 @@ HANDOVER #2 — spec fully complete → developer
    (same .flow/specs/<spec-id>.md file)
 ```
 
-For a single-invocation variant, `/flow-next:refine <spec-id> --scope=both` runs the business pass first, writes the business sections, then continues straight into the technical pass with the just-written business content as input. Short aliases: `--biz` ≡ `--scope=business`, `--tech` ≡ `--scope=technical`.
+`--biz` is short for `--scope=business` and `--tech` for `--scope=technical`. One person covering both layers runs refine once without a lens.
 
 **Supplementary design docs are separate artefacts, NOT the spec.** When a topic needs a longer-form treatment than the spec body can carry - an architecture deep-dive, an ADR, a `docs/design/<topic>.md` - write it as a separate file and cross-link from the spec. The spec at `.flow/specs/<spec-id>.md` remains the single source of truth for R-IDs and acceptance; supplementary docs are referenced from it but do not extend it. The "one spec, evolving through layers" rule governs only what lives **inside** `.flow/specs/<spec-id>.md` - supplementary design docs are explicitly out of scope.
 

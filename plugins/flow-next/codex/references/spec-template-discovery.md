@@ -1,6 +1,6 @@
 # Spec-template discovery — 3-tier cascade + walker
 
-Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional) — this reference owns only the resolution mechanics. Consumers: `flow-next-refine` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
+Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list and per-section guidance) — this reference owns only the resolution mechanics. Consumers: `flow-next-refine` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
 
 Resolve the template via the 3-tier discovery cascade — first match wins;
 do not read later tiers once a hit is found:
@@ -50,14 +50,6 @@ TEMPLATE=$(cat "$TEMPLATE_PATH")
 The template contains: frontmatter, the 7 canonical sections
 (Goal & Context, Architecture & Data Models, API Contracts,
 Edge Cases & Constraints, Acceptance Criteria, Boundaries,
-Decision Context) with scope-owner HTML-comment annotations. Frontmatter +
-HTML-comment scope-owner markers may be stripped from the final spec body —
-they're authoring guidance, not user-visible spec content.
-
-Exception: **keep the scope-owner marker on any section the project added** to
-its own tier-1/2 scaffold (a section outside the canonical 7). `flowctl scope
-write-policy` enumerates canonical sections only, so for a project-added
-section that marker is the sole ownership signal a later scope-aware pass has
-- stripping it silently downgrades the section to preserve-only, and it will
-never be filled. Canonical-section markers are safe to strip because the
-write-policy carries their ownership.
+Decision Context) with HTML-comment guidance. Frontmatter and the guidance
+comments may be stripped from the final spec body — they're authoring
+guidance, not user-visible spec content.

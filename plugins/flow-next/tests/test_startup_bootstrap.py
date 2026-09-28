@@ -205,13 +205,11 @@ class StartupBootstrapTest(unittest.TestCase):
             self.assertEqual(help_result.returncode, 0, help_result.stderr)
             self.assertTrue(help_result.stdout.startswith("usage: flowctl.py"))
 
-    def test_bootstrap_preserves_help_scope_rewrite_and_error_contracts(self) -> None:
+    def test_bootstrap_preserves_help_and_error_contracts(self) -> None:
         source = ROOT / "scripts" / "flowctl.py"
         cases = (
             ("--help",),
             ("task", "--help"),
-            ("scope", "resolve", "--json", "--raw", "--biz fn-1"),
-            ("scope", "resolve", "--biz", "--tech"),
             ("not-a-command",),
         )
         with tempfile.TemporaryDirectory() as tmp:

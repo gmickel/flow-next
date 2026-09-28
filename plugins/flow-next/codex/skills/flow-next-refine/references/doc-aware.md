@@ -2,13 +2,13 @@
 
 > Loaded when the doc-aware gate sentinel prints (`DOC_AWARE=1` or `STRATEGY_AWARE=1`, from the
 > `--docs`/`--strategy` flags or autodetect in SKILL.md Setup), or when the invocation carried any of
-> the four doc/strategy flags (§ Flag matrix). On the default technical-scope, no-docs, no-flag path
+> the four doc/strategy flags (§ Flag matrix). On the default no-docs, no-flag path
 > this file is never read.
 
 Contents:
 
 - [Flag parsing](#flag-parsing) — the strip block for `--docs` / `--no-docs` / `--strategy` / `--no-strategy` and the cascade rules.
-- [Flag matrix](#flag-matrix) — what each flag combination drives, plus the scope × doc/strategy interaction table.
+- [Flag matrix](#flag-matrix) — what each flag combination drives.
 - [Why counts, not file presence](#why-counts-not-file-presence) — rationale for the autodetect predicates.
 - [Doc-aware behaviors](#doc-aware-behaviors) — (a) phase-zero glossary scan, (b) fuzzy-term sharpening, (c) code-versus-assertion contradiction, (d) decision-record write, (e) code-versus-strategy contradiction.
 
@@ -66,15 +66,7 @@ Doc-aware flags (rows describe glossary / decisions / strategy gates):
 
 `--docs` / `--no-docs` cascade to strategy when no explicit `--strategy` / `--no-strategy` is passed (matrix rows 2 + 3). Explicit `--strategy` / `--no-strategy` always wins (matrix rows 4 + 5) and is the only way to drive a different value into strategy than into glossary + decisions. The matrix is the contract.
 
-**Scope x doc/strategy** — the `--scope` axis is orthogonal to the doc-aware matrix above. Each row of this table is a valid combination:
-
-| Scope | Doc-aware default | Pass behavior |
-|-------|------------------|---------------|
-| `--scope=technical` (resolver fallback, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
-| `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte |
-| `--scope=both` | autodetect cascade runs | runs biz pass first, then tech pass; same merge contract applies in each phase |
-
-R26 project-docs investigation is gated on `SCOPE=business` (and the biz-pass phase of `both`) — runs BEFORE drafting the first biz question, regardless of doc-aware autodetect state.
+The `--scope` lens is orthogonal to this matrix: any lens combines with any doc/strategy flag.
 
 ## Why counts, not file presence
 

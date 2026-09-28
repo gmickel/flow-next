@@ -13,4 +13,4 @@ Print exactly one line, then invoke the `flow-next-refine` skill with `$ARGUMENT
 Deprecated: /flow-next:interview is now /flow-next:refine (this alias is removed next release). Continuing with refine.
 ```
 
-Every scope and flag (`--scope=business|technical|both|research`, `--biz`, `--tech`, `--docs`, `--strategy`, `--force`) passes through verbatim. This file carries no logic of its own.
+Every scope and flag (`--scope=<lens>`, `--scope=research`, `--biz`, `--tech`, `--docs`, `--strategy`, `--force`) passes through verbatim. This file carries no logic of its own.

@@ -16,28 +16,18 @@ Spec prose written back here follows the artifact prose contract in [docs/prose.
 
 **Print-then-ask approval (R13; the shared read-back contract in [docs/read-back.md](../../../docs/read-back.md), read it here):** before handing the draft to flowctl, obtain write-back approval:
 
-1. **Print the compact summary first** as an ordinary assistant message, never the draft: title, criteria count, the existing → proposed **diff** for an existing spec (unified style; changed sections in full - the diff is what the user ratifies), the source-tag tally **when this pass wrote spec `## Acceptance Criteria` bullets** (the NEW IDEA and EXISTING SPEC branches): `Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L`, any compact warnings (e.g. open-questions count), the `Recommended next:` line, and the draft path. **Omit the tally entirely for a Flow Task or File Path target** - those branches carry no source tags by design, so a tally there would read as an all-zero "nothing classified" and mislead. The full draft stays in the file and prints only when the user asks for it.
+1. **Print the compact summary first** as an ordinary assistant message, never the draft: title, criteria count, the existing → proposed **diff** for an existing spec (unified style; changed sections in full - the diff is what the user ratifies), a `Changed:` line naming every section this session changed, the source-tag tally **when this session wrote spec `## Acceptance Criteria` bullets** (the NEW IDEA and EXISTING SPEC branches): `Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L`, any compact warnings (e.g. open-questions count), the `Recommended next:` line, and the draft path. **Omit the tally entirely for a Flow Task or File Path target** - those branches carry no source tags by design, so a tally there would read as an all-zero "nothing classified" and mislead. The full draft stays in the file and prints only when the user asks for it.
 2. **Then one short ask** via `AskUserQuestion`: one-line pointer (`Summary printed above; draft at <path>.`) + the recommendation + options `approve and write` / `open in editor` / `abort`; the built-in free-text answer is the edit request. Never embed multi-paragraph drafts/diffs/criteria lists in the ask body (they render as collapsed plain text).
 
 **Edit-cycle rule:** a free-text answer is applied via the Edit tool (deltas only); `open in editor` hands the draft file to the user's editor (`$VISUAL`, `$EDITOR`, or a host open command). After either round **Read the FULL draft file before asking again** (the write consumes what the user saw; the Read also satisfies Edit's read-before-edit for the next cycle), **print only the diff** as ordinary markdown - never reprint the full draft - and re-issue the short ask. Loop until `approve and write` or `abort`.
 
-Done when: exactly one input-type branch below has run; the body was Written once to its literal path, summarized, and approved; flowctl consumed that same literal path; and every section the write-policy listed as preserved is byte-identical to the copy read at Detect Input Type.
+Done when: exactly one input-type branch below has run; the body was Written once to its literal path, summarized, and approved; flowctl consumed that same literal path; and every section no answer belongs in is byte-identical to the copy read at Detect Input Type.
 
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
-**The `flowctl scope write-policy` result is the source of truth for which sections this scope writes and which it preserves** — it governs the whole write-back, together with the section-write rules from the scope-aware pass behavior (SKILL.md plus the pass reference read for the resolved scope). A section rewritten that this pass's `writable` list does not name has broken this. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
-
-**Project-added sections.** `write-policy` enumerates the canonical sections only, so a spec may contain sections this project added via its own repo-root `SPEC.md` scaffold (a risk register, user stories, a rollout runbook). Never treat a section's absence from the write-policy lists as permission to drop it. Decide ownership from the section's own scope-owner marker in the body, and default to caution:
-
-- marker names **your** scope (e.g. `<!-- scope: business -->` under a `--scope=business` pass) → **writable**: fill and refine it exactly as you would a canonical section of that scope.
-- marker names the **other** scope → **preserve byte-for-byte**, same as any other-scope canonical section.
-- **no marker, or a marker you cannot parse** → **preserve byte-for-byte**, and mention in the read-back that it was left untouched so the user can add a marker if they wanted it filled.
-
-`scope: both` on a project-added section is writable under any pass. A project-added section carrying an empty body is still preserved unless it is writable under this scope - an empty section you do not own is the user's placeholder, not litter.
-
 ### Source tags on acceptance criteria (same vocabulary as `/flow-next:capture`)
 
-Every acceptance criterion **this pass newly writes** carries a trailing source tag - the last `[...]` token on the bullet. The **tag name** is lowercase with no spaces (`user` / `paraphrase` / `inferred` / `strategy`). For `[strategy:<track>]` the part after the colon is the track's H3 heading **copied literally** - keep its casing AND its spaces, so a track named `### Cross-platform parity` becomes `[strategy:Cross-platform parity]`. Never slugify, lowercase, or strip spaces from a track name; the literal text is what links the criterion back to `STRATEGY.md`.
+Every acceptance criterion **this session newly writes** carries a trailing source tag - the last `[...]` token on the bullet. The **tag name** is lowercase with no spaces (`user` / `paraphrase` / `inferred` / `strategy`). For `[strategy:<track>]` the part after the colon is the track's H3 heading **copied literally** - keep its casing AND its spaces, so a track named `### Cross-platform parity` becomes `[strategy:Cross-platform parity]`. Never slugify, lowercase, or strip spaces from a track name; the literal text is what links the criterion back to `STRATEGY.md`.
 
 ```markdown
 - **R7:** Errors include the request id for trace correlation. [inferred]
@@ -46,14 +36,14 @@ Every acceptance criterion **this pass newly writes** carries a trailing source 
 
 | Tag | Meaning |
 |-----|---------|
-| `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning). "The user" is the human in THIS pass: the PO under `--scope=business`, the tech lead under `--scope=technical`. |
+| `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning). "The user" is the human answering in THIS session. |
 | `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced) |
 | `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim from `approach` or a `### <track-name>` H3 sub-block); track name lives literally in the tag |
 
 Hard rules:
 
-- **Tag only criteria this pass authors.** Never add, change, or remove a tag on a criterion an earlier pass wrote - provenance is frozen exactly like the R-ID number. Untagged legacy criteria stay untagged; absence means unknown provenance, never `[user]`.
+- **Tag only criteria this session authors.** Never add, change, or remove a tag on a criterion an earlier session wrote - provenance is frozen exactly like the R-ID number. Untagged legacy criteria stay untagged; absence means unknown provenance, never `[user]`.
 - **Never ask about tagging.** The tag records how a criterion got written down; it is not an extra interview question.
 - **Uniform tagging is a failure, not a safe default.** A criterion the interviewee answered is `[user]` or `[paraphrase]`; only genuine gap-fill is `[inferred]`. If everything you wrote came out `[inferred]`, the tally carries no signal - re-check which criteria came from actual answers.
 - **No self-blessing on unasked guesses** (refine write-back approval): if any criterion you wrote is `[inferred]` AND no interview question covered it, do NOT recommend `approve` in the ask above - state the count and let the user check those lines. Criteria settled by an answered question are verified by construction and do not trigger this.
@@ -63,7 +53,7 @@ Hard rules:
 
 Create spec with interview output. **This branch writes a spec and zero tasks** — task creation belongs to plan or work's direct route. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed. Fill the sections the answers belong in, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
 **Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot. Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
 
@@ -100,28 +90,27 @@ fi
 
 This block runs after the body below is Written: `--plan-file` creates the spec and its body in one call.
 
-Build the body: seed it from the canonical template FILE (`flowctl spec skeleton` renders the same file through the same cascade; the walker is used here because `TEMPLATE_PATH` is needed for the scope-owner markers). Resolve the template with the walker single-sourced in [`spec-template-discovery.md`](../../../references/spec-template-discovery.md) (cascade order, case-insensitive FS probe, both-exist warning, plugin-root fallback) to set `TEMPLATE_PATH` + `TEMPLATE`. Fill section bodies from interview answers under your scope's writable sections per the write-policy (frontmatter + scope-owner markers may be stripped from the final spec body — authoring guidance, not spec content), then append the auxiliary interview-audit sections (only those that fired).
+Build the body: seed it with `$FLOWCTL spec skeleton`, which renders the resolved template (the cascade in [`spec-template-discovery.md`](../../../references/spec-template-discovery.md)) with its frontmatter stripped. Fill each section an answer belongs in (the template's guidance comments may be stripped from the final body — authoring guidance, not spec content), then append the auxiliary interview-audit sections (only those that fired).
 
-**Source-tag every acceptance criterion written here** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). This branch mints the spec, so every criterion in it is one you authored this pass: an answered question yields `[user]` or `[paraphrase]`, agent gap-fill yields `[inferred]`.
+**Source-tag every acceptance criterion written here** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). This branch mints the spec, so every criterion in it is one you authored this session: an answered question yields `[user]` or `[paraphrase]`, agent gap-fill yields `[inferred]`.
 
 Compose the full body and Write it ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<title-slug>-<suffix>.md`; no spec id exists yet) via the **Write tool** — per the single-emission write pattern above. The body opens with `# <title>`:
 
 ```markdown
 <canonical body from skeleton, with interview-answered prose under each
- writable section per the write-policy — biz pass fills biz-owned sections,
- tech pass fills tech-owned, empty other-side sections stay empty;
+ section an answer belongs in; sections no answer reached stay empty;
  every acceptance criterion carries its trailing source tag>
 
 ## Resolved via Codebase
-(optional — written by the technical pass when codebase-investigation resolved items)
+(optional — written when codebase investigation resolved items)
 Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered. Lets reviewers spot-check assumptions later.
 
 ## Resolved via Project Docs
-(optional — written by the business pass per R26 when project-docs investigation resolved items)
-Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Symmetric to `## Resolved via Codebase` but biz-pass-only.
+(optional — written when project-docs investigation resolved items)
+Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence. Symmetric to `## Resolved via Codebase`.
 
 ## Resolved via Experiment
-(optional — written by either pass when an experiment-answerable question was settled by running something)
+(optional — written when an experiment-answerable question was settled by running something)
 One entry per question: the question, what was run, what was observed (the numbers or output), and the decision it settled — or "inconclusive", with the question moved to the user. The experiment itself stays in `.flow/tmp/experiments/` and never ships.
 
 ## Glossary Conflicts
@@ -133,7 +122,7 @@ Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical 
 Per-line: user-wording vs. canonical-strategy-wording (track name or approach), STRATEGY.md path, resolution chosen (align-with-strategy / flag-as-drift / this-is-different). Lets reviewers see where the spec aligns or pushes back on strategic intent. Read-only signal for plan-sync — the interview never edits STRATEGY.md.
 
 ## Parked unknowns
-(optional — only when the interview surfaced fog nothing in this pass could resolve)
+(optional — only when the interview surfaced fog nothing in this session could resolve)
 One bullet per genuinely-unknown item, each naming what would resolve it. Fog-or-ticket test: decidable now → decide it in the section that owns it; resolvable by scheduled work → it is a task, not fog; genuinely unknown → park it here. Omit the heading when the list is empty.
 
 ## Open Questions
@@ -155,19 +144,18 @@ $FLOWCTL tasks --spec <id> --json
 
 **If no tasks:** Update the spec and use the same next-step judgment above.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../../templates/spec.md). Read the existing spec, refine the sections the answers belong in (every other section byte-for-byte, per SKILL.md § Where answers go), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 
 **Reuse the spec body already fetched at Detect Input Type** (`$FLOWCTL cat <id>` ran there) — do NOT re-fetch here. Re-fetch only if the interview mutated the spec on disk since that read (e.g. an earlier partial write-back in this run).
 
-**Source-tag only the acceptance criteria this pass appends** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). Criteria already in the spec keep their bullet exactly as read: never add a tag to an untagged legacy criterion, never change or drop an existing one.
+**Source-tag only the acceptance criteria this session appends** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). Criteria already in the spec keep their bullet exactly as read: never add a tag to an untagged legacy criterion, never change or drop an existing one.
 
-Refine canonical sections under your scope's writable list (per write-policy) while preserving sections owned by the other scope byte-for-byte, apply the project-added-section ownership rule above, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** - per the single-emission write pattern above. The body:
+Refine the sections the answers belong in while every other section comes back byte-for-byte, append the auxiliary interview-audit sections (only those that fired), and Write the merged body ONCE to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md`) via the **Write tool** - per the single-emission write pattern above. The body:
 
 ```markdown
 <merged body: EVERY section present in the Detect-Input-Type read, in its
- original order, with this scope's writable sections refined from interview
- answers, other-scope sections preserved byte-for-byte per the write-policy,
- and project-added sections written or preserved per their scope-owner marker.
+ original order, with the sections the answers belong in refined and every
+ other section byte-for-byte.
  Acceptance criteria: newly appended R-IDs carry a trailing source tag;
  pre-existing bullets keep their tag, or stay untagged, byte-for-byte>
 
@@ -177,13 +165,13 @@ Refine canonical sections under your scope's writable list (per write-policy) wh
  Conflicts / Strategy Conflicts / Parked unknowns / Open Questions); emit
  only those that fired.
  One difference on this branch: `## Parked unknowns` is the pre-existing list
- minus every bullet this pass resolved, plus any new fog — omit the heading
+ minus every bullet this session resolved, plus any new fog — omit the heading
  when it empties out.>
 ```
 
-### Parked unknowns — the one auxiliary section a pass takes from
+### Parked unknowns — the one auxiliary section refine takes from
 
-Read `## Parked unknowns` before composing the merged body. For each bullet: **this pass resolved it** → move the answer into the canonical section that owns it (under this scope's writable list) and DELETE the bullet from `## Parked unknowns`; **still unknown** → carry the bullet back byte-for-byte. Never leave a parked bullet standing next to its own answer — that is the stale fog this section exists to prevent. New fog the interview surfaced is appended as a bullet naming what would resolve it. The section empties out to nothing → drop the heading with it.
+Read `## Parked unknowns` before composing the merged body. For each bullet: **this session resolved it** → move the answer into the canonical section that owns it and DELETE the bullet from `## Parked unknowns`; **still unknown** → carry the bullet back byte-for-byte. Never leave a parked bullet standing next to its own answer — that is the stale fog this section exists to prevent. New fog the interview surfaced is appended as a bullet naming what would resolve it. The section empties out to nothing → drop the heading with it.
 
 A parked item is not a skipped question: a skip is a question the user declined to answer and belongs in `## Open Questions` with its owner hint. Fog is a question nobody can answer yet.
 

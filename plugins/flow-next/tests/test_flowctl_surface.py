@@ -175,9 +175,6 @@ rp prompt-set
 rp select-add
 rp select-get
 rp setup-review
-scope bank
-scope resolve
-scope write-policy
 setup-status
 setup-block apply
 setup-block check
