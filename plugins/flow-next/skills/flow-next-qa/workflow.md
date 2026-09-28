@@ -182,9 +182,9 @@ if [ -d "$REPO_ROOT/.flow/features" ]; then
 fi
 ```
 
-When the directory exists, follow "Live-app stages" in [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md), using the prior QA receipt at the path §6.3 writes and task evidence from `$PAYLOAD`. Keep the resolved-feature record for the §6.3 payload.
+When the directory exists, follow "Live-app stages" in [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md).
 
-**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) records `unmapped` and falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
+**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) is `unmapped` and falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
 
 When it is absent: skip. Behavior is byte-identical to today; the only added cost is the existence check.
 
@@ -535,7 +535,7 @@ Show `$FLOWCTL qa receipt --skeleton` once. Write a JSON payload with the Write
 tool to `$QA_RECEIPT_INPUT`: `id`, `qa_outcome`, all Phase 5 `findings`
 (`id`, `severity`, `confidence`, `classification`, `reason`, `file`),
 `rid_coverage.rids`, the outcome's `blocked_reason` or `na_reason` when
-applicable, and `resolved_feature` when Phase 1.3 read the map. The verb derives verdict, timestamp, HEAD, branch, coverage counts,
+applicable. The verb derives verdict, timestamp, HEAD, branch, coverage counts,
 open P0/P1 and prior-finding carry-over; judgment stays in the payload.
 
 ```bash

@@ -78,23 +78,13 @@ A reader that finds a mapped route no longer matching the live app files a drift
 
 **Retirement.** A maintain pass or a work update that proves the route a note names (corrected or not) marks that note stale, so an open count means open drift: `flowctl memory mark-stale <entry-id> --reason "route re-proven <date> at <short commit>"`. The note list comes from `flowctl features status --json` (`open_drift`: id, title, path). A note whose file already has uncommitted changes (`git status --porcelain -- <path>` non-empty) is left open, so a later restore or staging step never touches edits this run did not make. Memory disabled: nothing is marked.
 
-## Resolved-feature record
-
-A reader that resolves a report or target to a mapped feature records the result so later stages on the same spec reuse it instead of re-deriving navigation. The record is `resolved_feature` in a task's done evidence, one of two values:
-
-- An object with exactly these keys: `surface` (the `**Surface:**` identifier), `sub_feature` (one sub-feature ID), `file` (the feature file's name under `.flow/features/`), `last_proven` (the file's `**Last proven:**` value, such as `2026-09-20 at 4f2c9ab`, or `null` when the file has none), and `stage` (the stage that resolved it, such as `flow`).
-- The string `"unmapped"`: the map exists and nothing in it matched.
-
-A worker passes the record its live drive used (or, without a drive, the spec's `resolved_feature: <value>` line when no earlier task carries a record) to `flowctl done --resolved-feature '<value>'` (or puts it under the evidence JSON's `resolved_feature` key); `done` rejects any other shape. QA carries the record as `resolved_feature` in its `flowctl qa receipt` payload, validated the same way.
-
 ## Live-app stages
 
 Every stage about to drive a running app reads the map this way: flow's measured-slowness baseline, work's post-change measurement, the defect route's live proof on base and head, QA, and any live check a PR reports. Stages with no running app (questions, refactors, capture, plan, refine) never read the map, and a stage that cannot start the app reads nothing for navigation. Flow's bug intake keeps its own gate ([defect-intake.md](../../flow-next-flow/references/defect-intake.md)).
 
 1. **Check existence.** No `.flow/features/`: drive as before.
-2. **Reuse this spec's current record.** A record is current while its file exists, its `## Sub-features` still lists the record's `sub_feature`, and its `**Last proven:**` value equals the record's `last_proven`; `unmapped` is always current. Take the first current record of: the spec's QA receipt `resolved_feature`, the last task in `flowctl spec export-cognitive-aid` order carrying `evidence.resolved_feature`, the spec's `resolved_feature:` line, skipping any that is not current (a route that moved rewrites its file's last-proven line, so an older record drops out and the newer one wins). Another spec's record is never read. An object record skips selection only: read the index (its baseline preconditions and driving conventions still apply) and the record's file. No current record: resolve (step 3). `unmapped` means live discovery, no retry.
-3. **Otherwise resolve.** Read the index, match the target to its Surfaces row, and read only that feature file, even when the target names its page: `Driving it` and `Gotchas` carry controls that misbehave and state the accessibility tree misreports. Several candidates: read them most specific first and use the one that reaches the target. None: `unmapped`, live discovery. Never read the whole map.
-4. **Drive and record.** Name the file and sub-feature, or `unmapped`, to `flow-next:flow-next-drive`; a stale route gets a drift note as above. A stage that resolved writes the record with `stage` naming itself: flow as the spec's `resolved_feature:` line (defect-intake.md step 3), a worker through `done --resolved-feature`, QA in its receipt payload.
+2. **Match the target.** Read the index, match the target to its Surfaces row, and read only that feature file, even when the target names its page: `Driving it` and `Gotchas` carry controls that misbehave and state the accessibility tree misreports. Several candidates: read them most specific first and use the one that reaches the target. None: `unmapped`, live discovery. Never read the whole map.
+3. **Drive.** Name the file and sub-feature, or `unmapped`, to `flow-next:flow-next-drive`; a stale route gets a drift note as above.
 
 ---
 

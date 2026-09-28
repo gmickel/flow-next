@@ -17,15 +17,15 @@ A source you cannot reach (no network, no `gh` auth, no tracker) is recorded as 
 
 - **An existing fix** (an open PR, a branch, or an unmerged commit that already changes the failing path): run the reproduction against it in a temporary worktree, record the result, and stop. Never write a competing fix.
 - **A person visibly owns an in-flight fix** (their open PR, an assigned issue with recent activity): stop and hand back.
-- **Several open PRs plausibly touch the area:** stop and list them all.
+- **Open PRs that touch the area without fixing the failing path:** record them under prior fixes and continue.
 - **A reverted or recorded-failed attempt:** its stated reason becomes a refuted hypothesis for step 2. Do not retry it unchanged.
 - **Nothing found:** continue.
 
 Every stop is the typed escalation `BLOCKED: DEPENDENCY_BLOCKED` naming the PRs, branches or commits and, for an existing fix, whether the reproduction passed against it. Attended, work surfaces it and the user decides; unattended (`flow --auto`, `mode:autonomous`), it becomes `NEEDS_HUMAN` under work's existing rule. Never ask from inside the route.
 
-## 2. Reproduce twice, then diagnose
+## 2. Reproduce reliably, then diagnose
 
-The symptom reproduces, then reproduces again, before diagnosis starts. When it is flaky, tighten the conditions or add instrumentation until it fires every time. A symptom that will not reproduce is reported as not reproduced, with what was tried, and no fix ships for it (`BLOCKED: SPEC_UNCLEAR`).
+Get a reproduction that fires reliably before diagnosis starts. When the symptom is flaky, tighten the conditions or add instrumentation until it does. A symptom that will not reproduce is reported as not reproduced, with what was tried, and no fix ships for it (`BLOCKED: SPEC_UNCLEAR`).
 
 Then diagnose before designing the fix:
 

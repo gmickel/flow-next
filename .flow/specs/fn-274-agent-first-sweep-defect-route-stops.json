@@ -10,6 +10,7 @@
   "id": "fn-274-agent-first-sweep-defect-route-stops",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-28T08:29:14.919439Z"
+  "updated_at": "2026-09-28T08:56:38.422345Z"
 }

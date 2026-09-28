@@ -26402,9 +26402,6 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
     for key in ("blocked_reason", "na_reason"):
         if key in data and not isinstance(data[key], str):
             errors.append(f"{key}: expected a string")
-    has_resolved = "resolved_feature" in data
-    if has_resolved and (problem := resolved_feature_error(data["resolved_feature"])):
-        errors.append(f"resolved_feature: {problem}")
     items = data.get("findings", [])
     current = {}
     if not isinstance(items, list):
@@ -26453,8 +26450,6 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
     reason_key = "blocked_reason" if outcome == "BLOCKED" else "na_reason" if outcome == "NA" else None
     if reason_key and data.get(reason_key):
         receipt[reason_key] = data[reason_key]
-    if has_resolved:
-        receipt["resolved_feature"] = data["resolved_feature"]
     with cross_process_lock(_review_receipt_lock_path(path)):
         prior = _load_prior_receipt_findings(path, review_type="qa_verdict", review_id=review_id, backend=mode)
         lines = []
@@ -35165,15 +35160,14 @@ def _export_removed_export_refs(
 
 def _export_task_evidence_block(
     evidence_runtime: dict[str, Any]
-) -> dict[str, Any]:
+) -> dict[str, list[str]]:
     """Build the export payload's per-task evidence block.
 
     Surfaces `commits` / `tests` / `files_touched` (existing) plus `files`
     (fn-86 R4) — each task's claimed files, recorded at `flowctl done` time,
     lifted verbatim so the render maps task → files → commits without
     re-deriving. Absent keys render as empty lists (additive; old payloads
-    unaffected). `resolved_feature` (fn-261), the task's feature-map
-    resolution record, appears only when one was recorded.
+    unaffected).
     """
     def _strlist(key: str) -> list[str]:
         raw = evidence_runtime.get(key)
@@ -35183,17 +35177,12 @@ def _export_task_evidence_block(
             return [raw] if raw else []
         return [str(x) for x in raw if x]
 
-    block: dict[str, Any] = {
+    return {
         "commits": _strlist("commits"),
         "tests": _strlist("tests"),
         "files_touched": _strlist("files_touched"),
         "files": _strlist("files"),
     }
-    # Only a valid record is surfaced; absent keeps old payload bytes unchanged.
-    resolved = evidence_runtime.get("resolved_feature")
-    if resolved is not None and resolved_feature_error(resolved) is None:
-        block["resolved_feature"] = resolved
-    return block
 
 
 _EXPORT_GLOSSARY_SKIP_DIRS: frozenset[str] = frozenset(
@@ -37993,31 +37982,6 @@ def cmd_start(args: argparse.Namespace) -> None:
         _note_spec_reopened(reopened, task_def["spec"], None)
 
 
-RESOLVED_FEATURE_KEYS = ("surface", "sub_feature", "file", "last_proven", "stage")
-
-
-def resolved_feature_error(value: Any) -> Optional[str]:
-    """Why `value` is not a resolved-feature record, or None when it is one.
-
-    The record (feature-entry-contract.md, "Resolved-feature record") is the
-    string "unmapped" or an object with exactly RESOLVED_FEATURE_KEYS:
-    non-empty strings, except `last_proven`, which may be null.
-    """
-    if value == "unmapped":
-        return None
-    if not isinstance(value, dict):
-        return 'must be "unmapped" or an object'
-    if set(value) != set(RESOLVED_FEATURE_KEYS):
-        return "object keys must be exactly: " + ", ".join(RESOLVED_FEATURE_KEYS)
-    for key in RESOLVED_FEATURE_KEYS:
-        field = value[key]
-        if key == "last_proven" and field is None:
-            continue
-        if not isinstance(field, str) or not field.strip():
-            return f"`{key}` must be a non-empty string" + (" or null" if key == "last_proven" else "")
-    return None
-
-
 def cmd_done(args: argparse.Namespace) -> None:
     """Complete a task with summary and evidence."""
     if not ensure_flow_exists():
@@ -38102,24 +38066,10 @@ def cmd_done(args: argparse.Namespace) -> None:
             "Evidence JSON must carry at least one of: commits, tests, prs",
             use_json=args.json,
         )
-    resolved_arg = getattr(args, "resolved_feature", None)
-    if resolved_arg is not None:
-        if resolved_arg.strip() == "unmapped":
-            evidence["resolved_feature"] = "unmapped"
-        else:
-            try:
-                evidence["resolved_feature"] = json.loads(resolved_arg)
-            except json.JSONDecodeError as e:
-                error_exit(f"--resolved-feature invalid JSON: {e}", use_json=args.json)
-    if "resolved_feature" in evidence:
-        problem = resolved_feature_error(evidence["resolved_feature"])
-        if problem:
-            error_exit(f"resolved_feature {problem}", use_json=args.json)
     # `files` / `files_touched` feed the PR cognitive-aid export.
     unknown_keys = sorted(
         evidence.keys()
-        - {"commits", "tests", "prs", "base_commit", "files", "files_touched",
-           "resolved_feature"}
+        - {"commits", "tests", "prs", "base_commit", "files", "files_touched"}
     )
     if unknown_keys:
         print(
@@ -38153,15 +38103,6 @@ def cmd_done(args: argparse.Namespace) -> None:
     evidence_md.append(f"- Commits: {', '.join(commits)}" if commits else "- Commits:")
     evidence_md.append(f"- Tests: {', '.join(tests)}" if tests else "- Tests:")
     evidence_md.append(f"- PRs: {', '.join(prs)}" if prs else "- PRs:")
-    resolved = evidence.get("resolved_feature")
-    if isinstance(resolved, dict):
-        evidence_md.append(
-            f"- Resolved feature: {resolved['surface']} {resolved['sub_feature']} "
-            f"({resolved['file']}; last proven {resolved['last_proven'] or 'never'}; "
-            f"resolved by {resolved['stage']})"
-        )
-    elif resolved == "unmapped":
-        evidence_md.append("- Resolved feature: unmapped")
     evidence_content = "\n".join(evidence_md)
 
     current_actor = get_actor()
@@ -58718,10 +58659,6 @@ def main() -> None:
     p_done.add_argument("--evidence", help="Evidence JSON (inline string)")
     p_done.add_argument("--range", help="Contiguous task commit range: <base>..<head>")
     p_done.add_argument("--test", action="append", help="Test command; repeatable")
-    p_done.add_argument(
-        "--resolved-feature",
-        help='Resolved-feature record: JSON object or "unmapped"',
-    )
     p_done.add_argument("--force", action="store_true", help="Skip status checks")
     p_done.add_argument("--json", action="store_true", help="JSON output")
     p_done.set_defaults(func=cmd_done)

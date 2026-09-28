@@ -1,6 +1,6 @@
 # Defect intake from the feature map (gated reference)
 
-> **Loaded only when** the route is a reported defect that still needs a reproduction, `.flow/features/` exists, and the report does not say where the problem is, or a direct lookup of the place it names failed (workflow.md Step 3). Without a map, or when the report names a place the agent finds directly, the reproduction runs exactly as before, this file is never read, and no resolved-feature record is written.
+> **Loaded only when** the route is a reported defect that still needs a reproduction, `.flow/features/` exists, and the report does not say where the problem is, or a direct lookup of the place it names failed (workflow.md Step 3). Without a map, or when the report names a place the agent finds directly, the reproduction runs exactly as before and this file is never read.
 >
 > Why the gate: reading this procedure, the map index and a feature file costs a few turns. Measured on a fixture app, that roughly halved the turns on reports that do not locate themselves (an untitled screenshot) and was pure overhead on reports that name an obvious control.
 
@@ -24,13 +24,3 @@ Select by the contract's `**Surface:**` identifier plus sub-feature ID ([feature
 Invoke `$flow-next-drive` naming the resolved feature file and sub-feature, so drive follows that file's `How to get to it (user POV)`, `Driving it` preconditions and commands, and `Gotchas` instead of rediscovering which feature the report is about or how to reach it.
 
 A mapped route that no longer matches the live app is stale: file the drift note exactly as the contract's "Writers and drift notes" section specifies (QA's §5.5 fence in `flow-next-qa/workflow.md` is the reference invocation), then reproduce by live discovery for this run. Never edit `.flow/features/` from flow. The resolution still names the feature; only its route was stale.
-
-## 3. Record the resolution
-
-Build the resolved-feature record defined in the contract's "Resolved-feature record" section, with `stage` set to `flow`, or `unmapped` when nothing matched. The spec the fix runs under carries it as one line in its reproduction evidence (`resolved_feature: unmapped` for no match):
-
-```text
-resolved_feature: {"surface": "web", "sub_feature": "notes.list", "file": "notes-list.md", "last_proven": "2026-09-20 at 4f2c9ab", "stage": "flow"}
-```
-
-When flow routes to capture, hand the line over with the reproduction; after the save, confirm `$FLOWCTL cat <spec-id>` shows it verbatim and add it to the reproduction evidence with Edit if it is missing. When flow writes the spec directly, write the line itself. Work's worker copies the value into its done evidence, and review, QA and make-pr read it from there, so no later stage re-derives navigation to the defect.
