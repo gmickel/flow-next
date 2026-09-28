@@ -76,7 +76,7 @@ fi
 PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"
 PR_URL=""
 for attempt in 1 2 3; do
-  if CREATE_OUT=$($PR_CREATE_CMD \
+  if CREATE_OUT=$(sh -c "$PR_CREATE_CMD \"\$@\"" flow-pr-create \
     --title "$PR_TITLE" \
     --body-file "$BODY_FILE" \
     $DRAFT_FLAG \

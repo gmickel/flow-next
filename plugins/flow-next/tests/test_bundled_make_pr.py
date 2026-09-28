@@ -45,8 +45,8 @@ esac''',
                         BODY_FILE=str(self.body), BASE_REF="origin/main", PR_TITLE="Title",
                         REPO_ROOT=str(self.root), PHASE0_CONTEXT="{}", SPEC_ID="fn-1")
 
-    def run_script(self, **env):
-        return subprocess.run(["bash", "-c", 'set -e; source "$SCRIPT"; printf "RESULT=%s\\n" "$PR_URL"'],
+    def run_script(self, shell=("bash",), **env):
+        return subprocess.run([*shell, "-c", 'set -e; source "$SCRIPT"; printf "RESULT=%s\\n" "$PR_URL"'],
                               cwd=self.root, env=dict(self.env, SCRIPT=str(SCRIPT), **env),
                               text=True, capture_output=True)
 
@@ -56,6 +56,13 @@ esac''',
         self.assertIn("RESULT=https://example.com/project/pull/9", result.stdout)
         self.assertIn("pr create --title Title --body-file", (self.root / "calls").read_text())
         self.assertEqual(self.body.read_text(), "Grounded body\n")
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh")
+    def test_create_splits_the_command_when_sourced_from_zsh(self):
+        # zsh does not word-split an unquoted $PR_CREATE_CMD ("gh pr create").
+        result = self.run_script(shell=("zsh", "-f"), UPDATE_MODE="0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("RESULT=https://example.com/project/pull/9", result.stdout)
 
     def test_update_never_runs_create(self):
         result = self.run_script(UPDATE_MODE="1")
