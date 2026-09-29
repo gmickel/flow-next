@@ -37,7 +37,7 @@ inherit the actual session model. Read `flowctl usage` before model steering.
 For a Claude-family writer, the maintainer's preferred tiers are:
 
 ```text
-reviewer: gpt-6-astra at high
+reviewer: gpt-6.1-sol at high
 implementer: opus-5.5
 fast scout: opus-5.5
 thinking scout: opus-5.5

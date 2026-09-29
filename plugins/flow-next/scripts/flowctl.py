@@ -7889,6 +7889,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # model-unavailable signature only. Ranking is a preference, never a
         # parse-time gate — unknown explicit models warn-and-accept.
         "models": [
+            "gpt-6.1-sol",  # served by codex CLI 0.159.0 (probed 2026-09-29); codex's models cache lists it first
             "gpt-6-astra",  # GA 2026-09-05; confirmed served by the codex CLI on that date
             "gpt-6-sol",  # served alongside astra (codex models cache, 2026-09-27); same-generation first step down
             "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
@@ -7902,7 +7903,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
+        "default_model": "gpt-6.1-sol",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
     },
     "copilot": {
@@ -7986,10 +7987,14 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # signature only (JSON ``is_error`` + 404 + selected-model text, or the
         # ``[claude-code:unrecognized_model]`` stderr tag - the CLI exits 0 on
         # a bad model, so exit codes are never the signal). Ids probed
-        # 2026-09-05 on Claude Code 2.1.260; the CLI has no ``--list-models``.
+        # 2026-09-05 on Claude Code 2.1.260; the 5.5 ids probed 2026-09-29 on
+        # 2.1.284 (older CLIs tag them unrecognized, so the ladder steps past).
+        # The CLI has no ``--list-models``.
         "models": [
             "claude-fable-5-1",
+            "claude-opus-5-5",
             "claude-opus-5",
+            "claude-sonnet-5-5",
             "claude-sonnet-5",
             "claude-haiku-4-5",
         ],

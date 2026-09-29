@@ -37,7 +37,7 @@ SRC_AGENTS="$PLUGIN_DIR/agents"
 # These baselines ARE the shipped mirror truth (fn-195.5 review P1): a regen
 # with no env must reproduce the committed mirror byte-for-byte. Bump them
 # deliberately (with a CHANGELOG line), never by exporting env at sync time.
-_SCOUT_INTELLIGENT_BASELINE="gpt-6-sol"
+_SCOUT_INTELLIGENT_BASELINE="gpt-6.1-sol"
 _SCOUT_FAST_BASELINE="gpt-6-luna"
 
 CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-$_SCOUT_INTELLIGENT_BASELINE}"
