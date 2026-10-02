@@ -4,6 +4,13 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- `make-pr` accepts a Bitbucket `.../pull-requests/<n>` URL from `FLOW_PR_CREATE_CMD`, as well as a GitHub `.../pull/<n>` URL.
+- Pilot pull-request listing uses `FLOW_PR_LIST_CMD` when it is set. A Bitbucket `origin` without that command is an empty list, so the probe does not fail by calling `gh`.
+
 ## [flow-next 7.0.0] - 2026-10-01
 
 **7.0.0, codename Roadrunner. Flow-Next is now blazing fast.**

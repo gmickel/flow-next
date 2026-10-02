@@ -43166,14 +43166,31 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     strikes = _pilot_strikes_read(path, use_json=True) if path else {}
     actor = get_actor()
     def list_prs(*selector: str, limit: int) -> Optional[list]:
+        # FLOW_PR_LIST_CMD lists pull requests when `gh` is the wrong host.
+        # A Bitbucket origin without that command is an empty list, not a failed probe.
         try:
-            probe = subprocess.run(
-                ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
-                 "number,url,state,headRefName,headRefOid,mergedAt"],
-                cwd=repo, capture_output=True, text=True, timeout=10, check=False)
-            listed = json.loads(probe.stdout) if probe.returncode == 0 else None
+            custom = (os.environ.get("FLOW_PR_LIST_CMD") or "").strip()
+            if not custom:
+                remote = subprocess.run(
+                    ["git", "remote", "get-url", "origin"], cwd=repo,
+                    capture_output=True, text=True, check=False)
+                if remote.returncode == 0 and "bitbucket.org" in (remote.stdout or "").lower():
+                    return []
+            if custom:
+                probe = subprocess.run(
+                    custom, cwd=repo, capture_output=True, text=True, timeout=30,
+                    check=False, shell=True)
+                listed = json.loads(probe.stdout) if probe.returncode == 0 else None
+            else:
+                probe = subprocess.run(
+                    ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
+                     "number,url,state,headRefName,headRefOid,mergedAt"],
+                    cwd=repo, capture_output=True, text=True, timeout=10, check=False)
+                listed = json.loads(probe.stdout) if probe.returncode == 0 else None
         except (OSError, ValueError, subprocess.TimeoutExpired):
             return None
+        if isinstance(listed, dict):
+            listed = [listed]
         valid = isinstance(listed, list) and len(listed) < limit and all(
             isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
             and isinstance(row.get("number"), int) and isinstance(row.get("url"), str)

@@ -796,7 +796,7 @@ PY_BRIEFING
   CF_FILE="$PLUGIN_ROOT/scripts/make-pr-create.sh"
   CF_TEXT="$(cat "$CF_FILE" 2>/dev/null || true)"
   assert_grep "T10" 'PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"' "$CF_TEXT" "make-pr-create.sh declares the FLOW_PR_CREATE_CMD seam with gh default"
-  assert_grep "T10" "grep -Eo 'https://[^[:space:]]+/pull/[0-9]+'" "$CF_TEXT" "PR_URL is extracted from combined output, not raw-assigned"
+  assert_grep "T10" "grep -Eo 'https://[^[:space:]]+/(pull|pull-requests)/[0-9]+'" "$CF_TEXT" "PR_URL is extracted from combined output, not raw-assigned"
 fi
 
 # =============================================================================

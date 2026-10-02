@@ -77,9 +77,9 @@ for attempt in 1 2 3; do
     $DRAFT_FLAG \
     --base "$BASE_BRANCH" \
     --head "$HEAD_BRANCH" 2>&1); then
-    PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n1 || true)
+    PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/(pull|pull-requests)/[0-9]+' | tail -n1 || true)
     if [[ -z "$PR_URL" ]]; then
-      echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> URL)." >&2
+      echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> or .../pull-requests/<n> URL)." >&2
       echo "$CREATE_OUT" >&2
       exit 1
     fi
