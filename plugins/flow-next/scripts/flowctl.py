@@ -23122,31 +23122,69 @@ def _memory_iter_entries(
     return entries
 
 
-def _memory_legacy_entry_count(path: Path) -> int:
-    """Count `---`-separated entries in a legacy flat file.
+# The header the pre-0.33 `flowctl memory add` appended above each lesson
+# ("## 2026-01-01 manual [pitfall]"); those files have no `---` separators.
+_MEMORY_LEGACY_SECTION_RE = re.compile(
+    r"^## \d{4}-\d{2}-\d{2} \S+ \[[^\]\n]+\][ \t]*$", re.MULTILINE
+)
+# The sentence `flowctl memory init` wrote under each banner. A piece holding
+# only a banner, this sentence and HTML comments is the file header, not a lesson.
+_MEMORY_LEGACY_TEMPLATE_LINES: frozenset[str] = frozenset(
+    {
+        "lessons learned from needs_work feedback. things models tend to miss.",
+        "project patterns discovered during work. not in claude.md but important.",
+        "architectural choices with rationale. why we chose x over y.",
+    }
+)
 
-    The pre-fn-30 format used `---` as an inter-entry delimiter. Empty
-    segments are ignored. Returns 0 if the file can't be read.
+
+def _memory_legacy_is_header_only(piece: str) -> bool:
+    text = re.sub(r"<!--.*?-->", "", piece, flags=re.DOTALL)
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.lower() in _MEMORY_LEGACY_TEMPLATE_LINES:
+            continue
+        if line.startswith("# ") and line[2:].strip().lower() in _MEMORY_LEGACY_BANNER_TITLES:
+            continue
+        return False
+    return True
+
+
+def _memory_legacy_split_text(text: str) -> list[str]:
+    """Split a legacy flat file into one segment per lesson.
+
+    Two historical formats: entries separated by `---` (pre-fn-30), and lessons
+    appended under `## <date> <source> [<type>]` headers. The file header that
+    `memory init` wrote is not a lesson, so a header-only file has none.
     """
-    if not path.exists():
-        return 0
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return 0
-    segments = [seg.strip() for seg in text.split("\n---\n")]
-    return sum(1 for seg in segments if seg)
+    segments: list[str] = []
+    for part in text.split("\n---\n"):
+        starts = [m.start() for m in _MEMORY_LEGACY_SECTION_RE.finditer(part)]
+        if starts:
+            bounds = list(zip(starts, starts[1:] + [len(part)], strict=True))
+            pieces = [part[: starts[0]]] + [part[a:b] for a, b in bounds]
+        else:
+            pieces = [part]
+        segments.extend(
+            piece.strip() for piece in pieces if not _memory_legacy_is_header_only(piece)
+        )
+    return segments
+
+
+def _memory_legacy_entry_count(path: Path) -> int:
+    """Count lessons in a legacy flat file (0 if it can't be read)."""
+    return len(_memory_legacy_entry_segments(path))
 
 
 def _memory_legacy_entry_segments(path: Path) -> list[str]:
-    """Return non-empty `---`-separated segments from a legacy flat file."""
+    """Return one segment per lesson from a legacy flat file."""
     if not path.exists():
         return []
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return []
-    return [seg.strip() for seg in text.split("\n---\n") if seg.strip()]
+    return _memory_legacy_split_text(text)
 
 
 def _memory_resolve_read_target(
@@ -24842,7 +24880,7 @@ def _memory_legacy_extract_title(segment: str) -> str:
 
     for raw in segment.splitlines():
         line = raw.strip()
-        if not line:
+        if not line or _MEMORY_LEGACY_SECTION_RE.match(line):
             continue
         # Real markdown heading: 1-6 `#` followed by whitespace.
         if re.match(r"^#{1,6}\s+", line):
@@ -24987,6 +25025,7 @@ def _memory_parse_legacy_entries(path: Path) -> list[dict[str, Any]]:
         if not title:
             continue
         body = _memory_legacy_strip_title_line(seg, title)
+        body = _MEMORY_LEGACY_SECTION_RE.sub("", body, count=1).strip()
         out.append(
             {
                 "title": title,

@@ -1185,6 +1185,44 @@ class TestMemoryListLegacy(MemoryRepoTemplate, unittest.TestCase):
             # Default label visible to humans.
             self.assertIn("knowledge/conventions", out)
 
+    def test_appended_section_files_list_one_entry_per_lesson(self) -> None:
+        """#509: files written by the pre-0.33 `memory add` (no `---`) list per lesson."""
+        header = {
+            "pitfalls.md": "# Pitfalls\n\nLessons learned from NEEDS_WORK feedback. Things models tend to miss.\n\n"
+                           "<!-- Entries added automatically by hooks or manually via `flowctl memory add` -->\n",
+            "conventions.md": "# Conventions\n\nProject patterns discovered during work. Not in CLAUDE.md but important.\n\n"
+                              "<!-- Entries added manually via `flowctl memory add` -->\n",
+            "decisions.md": "# Decisions\n\nArchitectural choices with rationale. Why we chose X over Y.\n\n"
+                            "<!-- Entries added manually via `flowctl memory add` -->\n",
+        }
+        lessons = {
+            "pitfalls.md": "\n## 2026-01-05 manual [pitfall]\nOAuth callback drops state on retry.\n"
+                           "\n## 2026-01-09 manual [pitfall]\nCache keys ignore the tenant id.\n",
+            "conventions.md": "\n## 2026-02-01 manual [convention]\nTests live next to the module.\n",
+            "decisions.md": "",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            mem = self.init_repo(tmp_path)
+            for name in header:
+                (mem / name).write_text(header[name] + lessons[name], encoding="utf-8")
+            rc, out, err = _run_raw(tmp_path, "memory", "list-legacy", "--json")
+            self.assertEqual(rc, 0, f"rc={rc} stderr={err}")
+            by_name = {f["filename"]: f for f in json.loads(out)["files"]}
+            self.assertEqual(by_name["decisions.md"]["entry_count"], 0)
+            self.assertEqual(by_name["conventions.md"]["entry_count"], 1)
+            pitfalls = by_name["pitfalls.md"]["entries"]
+            self.assertEqual(len(pitfalls), 2)
+            self.assertEqual(
+                [(e["title"], e["date"]) for e in pitfalls],
+                [("OAuth callback drops state on retry.", "2026-01-05"),
+                 ("Cache keys ignore the tenant id.", "2026-01-09")],
+            )
+            self.assertNotIn("## 2026", pitfalls[0]["body"])
+            self.assertNotIn("Cache keys", pitfalls[0]["body"])
+            second = _run(tmp_path, "memory", "read", "legacy/pitfalls#2")
+            self.assertIn("Cache keys", second["body"])
+
     def test_multiple_legacy_files_separate_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
