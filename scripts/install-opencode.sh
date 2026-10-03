@@ -339,7 +339,7 @@ if exists "$DEST/skills" && [ ! -d "$DEST/skills" ]; then
     die "refusing to replace non-directory: $DEST/skills"
 fi
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
-    [ -d "$skill_dir" ] || continue
+    [ -f "$skill_dir/SKILL.md" ] || continue   # a leftover folder is not a skill
     name="$(basename "$skill_dir")"
     preflight_target "$DEST/skills/$name" "skills/$name" "$OLD_MANIFEST"
 done
@@ -350,7 +350,7 @@ mkdir -p "$DEST"
 mkdir -p "$DEST/skills"
 SKILL_COUNT=0
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
-    [ -d "$skill_dir" ] || continue
+    [ -f "$skill_dir/SKILL.md" ] || continue   # a leftover folder is not a skill
     name="$(basename "$skill_dir")"
     copy_tree "$skill_dir" "$DEST/skills/$name"
     SKILL_COUNT=$((SKILL_COUNT + 1))
@@ -373,7 +373,7 @@ NEW_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/flow-next-opencode-mf.XXXXXX")"
         [ -d "$skill_dir" ] || continue
         name="$(basename "$skill_dir")"
         # Only list skill dirs that came from this snapshot (skip user skills).
-        if [ ! -d "$PLUGIN_DIR/skills/$name" ]; then
+        if [ ! -f "$PLUGIN_DIR/skills/$name/SKILL.md" ]; then
             continue
         fi
         list_tree_paths "$DEST/skills/$name" "skills/$name"

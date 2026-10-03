@@ -566,6 +566,40 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             self.assertEqual((prompts / "wrapper.md").read_text(), other)
             self.assertTrue((skills / "flow-next-flow" / "SKILL.md").is_file(), "a shipped skill was retired")
 
+    def test_leftover_source_folder_without_skill_md_is_not_a_skill(self) -> None:
+        """A removed skill's folder that git left behind (untracked files) must not install or block retirement."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            cruft = shutil.ignore_patterns("tests", "__pycache__", "*.pyc")
+            shutil.copytree(REPO_ROOT / "scripts", repo / "scripts", ignore=cruft)
+            shutil.copytree(REPO_ROOT / "plugins" / "flow-next", repo / "plugins" / "flow-next", ignore=cruft)
+            leftover = repo / "plugins" / "flow-next" / "codex" / "skills" / "flow-next-gone" / "__pycache__"
+            leftover.mkdir(parents=True)
+            (leftover / "helper.cpython-312.pyc").write_bytes(b"\x00")
+
+            home = root / "home"
+            skills = home / ".codex" / "skills"
+            (skills / "flow-next-gone").mkdir(parents=True)
+            (skills / "flow-next-gone" / "SKILL.md").write_text("---\nname: flow-next-gone\n---\n\nold\n")
+            # What an earlier installer left: the empty leftover copied over a real skill.
+            (skills / "flow-next-empty" / "__pycache__").mkdir(parents=True)
+
+            env = dict(os.environ, HOME=str(home))
+            env.pop("CODEX_HOME", None)
+            result = subprocess.run(
+                ["bash", str(repo / "scripts" / "install-codex.sh")],
+                cwd=str(repo), env=env, capture_output=True, text=True, timeout=300,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            retired = home / ".codex" / ".flow-next-retired" / "skills"
+            self.assertFalse((skills / "flow-next-gone").exists(), "leftover source folder kept a removed skill live")
+            self.assertTrue((retired / "flow-next-gone" / "SKILL.md").is_file(), "removed skill not recoverable")
+            self.assertFalse((skills / "flow-next-empty").exists(), "empty leftover install not retired")
+            self.assertTrue((retired / "flow-next-empty" / "__pycache__").is_dir(), "empty leftover not recoverable")
+            self.assertTrue((skills / "flow-next-flow" / "SKILL.md").is_file(), "a shipped skill was retired")
+
 
 if __name__ == "__main__":
     unittest.main()

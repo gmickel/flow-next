@@ -83,6 +83,13 @@ else
         -cf - .) | (cd "$DEST" && tar -xf -)
 fi
 
+# The snapshot mirrors the whole source, so a folder git left behind in skills/ (a
+# removed skill with untracked files) arrives too. Only a dir with a SKILL.md is a skill.
+for skill_dir in "$DEST"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    [ -f "$skill_dir/SKILL.md" ] || rm -rf "${skill_dir%/}"
+done
+
 # fn-139.5: the blanket copy needs no enumeration change, but the copy is still
 # VERIFIED against the flowctl_tracker manifest - integrity is checked where it
 # can actually run (the installer), and fails LOUDLY on mismatch.

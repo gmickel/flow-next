@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## [Unreleased]
+
+### Fixed
+
+- **Installers skip folders that aren't skills.** When a release removes a skill, `git pull` can leave its folder behind if untracked files such as `__pycache__` are still in it. The Codex, OpenCode and Cursor installers treated that folder as a skill. The Codex installer even copied the empty folder over the real installed skill, which also stopped its retire step from cleaning it up. Every installer now counts a folder as a skill only when it has a `SKILL.md`. Re-running the Codex installer moves any such empty leftover, or the old skill it hid, into `~/.codex/.flow-next-retired/` like any other retired skill.
+
 ## [flow-next 7.1.0] - 2026-10-03
 
 7.1 is the release where Flow-Next does what you asked and less of what you didn't. When you're at the keyboard it hands the change back and waits for you to say "open the PR". When you hand it the merge with `--until=merge`, it makes the small, reversible calls itself, writes each one down, and stops before merging if something is really yours to decide. Underneath, most skills now read only the instructions that apply to the run in front of it: a typical attended run reads about a quarter less text than in 7.0 (roughly 19,000 words down to 14,600), and larger features come back a little faster. The rest is a long list of fixes, most of them reported by people running Flow-Next on real work. Thank you.

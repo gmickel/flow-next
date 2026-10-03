@@ -92,6 +92,15 @@ foreach ($x in @("codex", "tests", "__pycache__")) {
     if (Test-Path $stale) { Remove-Item -Recurse -Force $stale }
 }
 
+# The snapshot mirrors the whole source, so a folder git left behind in skills\ (a
+# removed skill with untracked files) arrives too. Only a dir with a SKILL.md is a skill.
+$skillsDest = Join-Path $Dest "skills"
+if (Test-Path $skillsDest) {
+    Get-ChildItem -Path $skillsDest -Directory | Where-Object {
+        -not (Test-Path (Join-Path $_.FullName "SKILL.md"))
+    } | ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
+}
+
 # fn-139.5: verify the flowctl_tracker package post-copy - integrity is checked
 # where it can actually run (the installer) and fails LOUDLY on mismatch.
 $manifest = Join-Path $Dest "scripts\flowctl_tracker\MANIFEST.json"

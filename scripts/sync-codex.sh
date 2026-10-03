@@ -177,7 +177,9 @@ echo -e "${BLUE}Generating skills...${NC}"
 skill_count=0
 
 for skill_dir in "$SRC_SKILLS"/*/; do
-  [ -d "$skill_dir" ] || continue
+  # A skill is a dir with a SKILL.md; a folder git left behind (untracked files in a
+  # removed skill) is not one.
+  [ -f "$skill_dir/SKILL.md" ] || continue
   skill=$(basename "$skill_dir")
   cp -R "${skill_dir%/}" "$CODEX_DIR/skills/"
   skill_count=$((skill_count + 1))

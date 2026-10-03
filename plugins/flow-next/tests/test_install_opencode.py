@@ -278,6 +278,29 @@ class TestOpencodeInstaller(unittest.TestCase):
             timeout=300,
         )
 
+    def test_leftover_skill_folder_without_skill_md_is_not_installed(self) -> None:
+        """A removed skill's folder that git left behind (untracked files) is not a skill."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            cruft = shutil.ignore_patterns("tests", "codex", "__pycache__", "*.pyc")
+            shutil.copytree(REPO / "scripts", repo / "scripts", ignore=cruft)
+            shutil.copytree(REPO / "plugins" / "flow-next", repo / "plugins" / "flow-next", ignore=cruft)
+            leftover = repo / "plugins" / "flow-next" / "skills" / "flow-next-gone" / "__pycache__"
+            leftover.mkdir(parents=True)
+            (leftover / "helper.cpython-312.pyc").write_bytes(b"\x00")
+            dest = root / "opencode"
+            env = dict(os.environ, HOME=str(root / "home"))
+            env.pop("XDG_CONFIG_HOME", None)
+            result = subprocess.run(
+                ["bash", str(repo / "scripts" / "install-opencode.sh"), "--dest", str(dest)],
+                cwd=str(repo), env=env, capture_output=True, text=True, timeout=300,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((dest / "skills" / "flow-next-gone").exists())
+            self.assertTrue((dest / "skills" / "flow-next-flow" / "SKILL.md").is_file())
+            self.assertFalse(any(p.startswith("skills/flow-next-gone") for p in _manifest_paths(dest)))
+
     def test_writes_stay_inside_manifest_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
