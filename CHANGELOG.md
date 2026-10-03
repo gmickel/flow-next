@@ -9,6 +9,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 ### Fixed
 
 - **Installers skip folders that aren't skills.** When a release removes a skill, `git pull` can leave its folder behind if untracked files such as `__pycache__` are still in it. The Codex, OpenCode and Cursor installers treated that folder as a skill. The Codex installer even copied the empty folder over the real installed skill, which also stopped its retire step from cleaning it up. Every installer now counts a folder as a skill only when it has a `SKILL.md`. Re-running the Codex installer moves any such empty leftover, or the old skill it hid, into `~/.codex/.flow-next-retired/` like any other retired skill.
+- **The Codex installer retires the old `interview` and `pilot` prompts.** 7.0 removed both aliases, but the 7.1 retire step only recognised the usual generated prompt, and these two were alias stubs that point at a different skill. It now recognises that shape too and moves them into the retired folder. A prompt you wrote yourself is still left alone.
 
 ## [flow-next 7.1.0] - 2026-10-03
 

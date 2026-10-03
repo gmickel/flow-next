@@ -174,7 +174,8 @@ fi
 #     dir name (every generated skill is named exactly that), or that has no SKILL.md at
 #     all (an empty leftover an older installer copied over the real skill);
 #   - prompt: a prompt this release does not ship whose `name:` is its file stem and whose
-#     body is the generated redirect ("This command MUST invoke the skill `flow-next-...`").
+#     body is the generated redirect ("This command MUST invoke the skill `flow-next-...`")
+#     or a generated deprecated-alias stub (heading "# `/flow-next:<stem>` is ...").
 for stale_skill in "$CODEX_DIR/skills/"flow-next-*/; do
     [ -d "$stale_skill" ] || continue
     sname="$(basename "$stale_skill")"
@@ -191,8 +192,13 @@ for stale_prompt in "$CODEX_DIR/prompts/"*.md; do
     pname="$(basename "$stale_prompt")"
     [ -f "$PLUGIN_DIR/commands/$pname" ] && continue
     [ "$pname" = "epic-review.md" ] && continue
-    if [ "$(frontmatter_name "$stale_prompt")" = "${pname%.md}" ] \
-        && grep -qxF "# IMPORTANT: This command MUST invoke the skill \`flow-next-${pname%.md}\`" "$stale_prompt" 2>/dev/null; then
+    [ "$(frontmatter_name "$stale_prompt")" = "${pname%.md}" ] || continue
+    # The generated redirect, or a generated deprecated-alias stub (7.0 dropped the
+    # interview and pilot aliases): its heading names this command and its body
+    # redirects to a flow-next skill.
+    if grep -qxF "# IMPORTANT: This command MUST invoke the skill \`flow-next-${pname%.md}\`" "$stale_prompt" 2>/dev/null \
+        || { grep -qF "# \`/flow-next:${pname%.md}\` is " "$stale_prompt" 2>/dev/null \
+             && grep -qE '^This command MUST invoke the skill `flow-next-[a-z0-9-]+`' "$stale_prompt" 2>/dev/null; }; then
         retire_artifact "$stale_prompt" "prompts" "prompt $pname"
     fi
 done

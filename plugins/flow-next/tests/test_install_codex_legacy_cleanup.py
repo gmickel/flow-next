@@ -550,6 +550,21 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             other = ("---\nname: wrapper\n---\n\n"
                      "# IMPORTANT: This command MUST invoke the skill `flow-next-ralph-init`\n")
             (prompts / "wrapper.md").write_text(other)
+            # 7.0's generated deprecated-alias stubs redirect to another skill.
+            aliases = {
+                "interview": "---\nname: interview\ndescription: Deprecated alias for /flow-next:refine\n---\n\n"
+                             "# `/flow-next:interview` is renamed to `/flow-next:refine`\n\n"
+                             "This command MUST invoke the skill `flow-next-refine`. Print one line first.\n",
+                "pilot": "---\nname: pilot\ndescription: Deprecated alias for /flow-next:flow --auto --tick\n---\n\n"
+                         "# `/flow-next:pilot` is now `/flow-next:flow --auto --tick`\n\n"
+                         "This command MUST invoke the skill `flow-next-flow`. Print one line to stderr first.\n",
+            }
+            for stem, body in aliases.items():
+                (prompts / f"{stem}.md").write_text(body)
+            # A user prompt quoting another command's alias heading stays.
+            mine = ("---\nname: shortcut\n---\n\n# `/flow-next:pilot` is now `/flow-next:flow --auto --tick`\n\n"
+                    "This command MUST invoke the skill `flow-next-flow`.\n")
+            (prompts / "shortcut.md").write_text(mine)
 
             result = _run_installer(home)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -564,6 +579,10 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             self.assertEqual((prompts / "notes.md").read_text(), "---\nname: notes\n---\n\nmy notes\n")
             self.assertEqual((prompts / "my-review.md").read_text(), quoted)
             self.assertEqual((prompts / "wrapper.md").read_text(), other)
+            for stem, body in aliases.items():
+                self.assertFalse((prompts / f"{stem}.md").exists(), f"alias stub {stem}.md still live")
+                self.assertEqual((retired / "prompts" / f"{stem}.md").read_text(), body)
+            self.assertEqual((prompts / "shortcut.md").read_text(), mine)
             self.assertTrue((skills / "flow-next-flow" / "SKILL.md").is_file(), "a shipped skill was retired")
 
     def test_leftover_source_folder_without_skill_md_is_not_a_skill(self) -> None:
