@@ -2274,6 +2274,11 @@ class EffectiveReviewBackendPrecedence(unittest.TestCase):
             {"review": {"backend": "off"}}, {}))
         self.assertFalse(V._completion_review_configured({}, {}))
 
+    def test_removed_backend_reads_as_not_configured(self) -> None:
+        cfg = {"review": {"backend": "codex"}}
+        self.assertFalse(V._completion_review_configured(cfg, {"default_review": "rp"}))
+        self.assertFalse(V._completion_review_configured({"review": {"backend": "rp:x"}}, {}))
+
 
 class TerminalFoldConverges(unittest.TestCase):
     """PR #246 wave 17 P2: a repeated tracker-terminal fold is a noop - no

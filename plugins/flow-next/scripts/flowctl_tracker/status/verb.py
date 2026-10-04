@@ -35,8 +35,9 @@ from .providers import (apply_status, enrich_linear_parent, github_native_status
 
 def _backend_off(value: str) -> bool:
     """A backend spec is backend[:model[:effort]]; only the backend part
-    decides configured-ness."""
-    return value.split(":", 1)[0].strip().lower() in ("", "none", "off")
+    decides configured-ness. The removed ``rp``/``export`` values read as no
+    reviewer, as flowctl's review-backend resolves them."""
+    return value.split(":", 1)[0].strip().lower() in ("", "none", "off", "rp", "export")
 
 
 def _completion_review_configured(config: dict,

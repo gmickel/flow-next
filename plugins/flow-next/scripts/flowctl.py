@@ -5942,7 +5942,7 @@ def _load_prior_receipt_findings(
             )
         return next(iter(tips.values()))
     try:
-        receipt = json.loads(path.read_text(encoding="utf-8"))
+        receipt = _read_legacy_receipt_mode(json.loads(path.read_text(encoding="utf-8")))
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
         return None
     if not isinstance(receipt, dict):
@@ -6452,11 +6452,27 @@ def _preserve_review_receipt_generation(receipt_path: Path) -> Optional[Path]:
     return history_path
 
 
+def _read_legacy_receipt_mode(receipt: Any) -> Any:
+    """Read a pre-8.0.0 QA receipt's receipt-driven mode ``rp`` as ``receipt``.
+
+    QA findings lineage is scoped by mode, so without this an upgraded spec's
+    next QA receipt would not supersede the one already on disk.
+    """
+    if not (isinstance(receipt, dict) and receipt.get("type") == "qa_verdict"
+            and receipt.get("mode") == "rp"):
+        return receipt
+    receipt = {**receipt, "mode": "receipt"}
+    findings = receipt.get("findings")
+    if isinstance(findings, dict) and findings.get("backend") == "rp":
+        receipt["findings"] = {**findings, "backend": "receipt"}
+    return receipt
+
+
 def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
     """Load immutable ancestors plus the latest receipt, failing closed."""
     latest: Optional[dict]
     try:
-        latest = json.loads(receipt_path.read_text(encoding="utf-8"))
+        latest = _read_legacy_receipt_mode(json.loads(receipt_path.read_text(encoding="utf-8")))
     except FileNotFoundError:
         latest = None
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
@@ -6480,7 +6496,7 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
             return None
         for path in paths:
             try:
-                value = json.loads(path.read_text(encoding="utf-8"))
+                value = _read_legacy_receipt_mode(json.loads(path.read_text(encoding="utf-8")))
             except (json.JSONDecodeError, OSError, TypeError, ValueError):
                 return None
             if not isinstance(value, dict) or not validate_review_receipt_findings(value):
@@ -7399,10 +7415,21 @@ def _notify_removed_backend() -> None:
     if not _removed_backend_notice_shown:
         _removed_backend_notice_shown = True
         print(
-            f"notice: {REMOVED_BACKEND_NOTICE} Ignoring the stale value "
-            "(no reviewer configured from it).",
+            f"notice: {REMOVED_BACKEND_NOTICE} Treating review as not configured.",
             file=sys.stderr,
         )
+
+
+def _is_removed_backend_value(raw: Any) -> bool:
+    """True (after the notice) when a stored/env value names a removed backend.
+
+    Resolution stops at such a value: it reads as "no reviewer configured",
+    never as permission to fall through to a lower-precedence reviewer.
+    """
+    if not isinstance(raw, str) or raw.strip().split(":", 1)[0].strip() not in REMOVED_REVIEW_BACKENDS:
+        return False
+    _notify_removed_backend()
+    return True
 
 
 # --- triage fast-judge model defaults --------------------------------------
@@ -7696,8 +7723,7 @@ def parse_backend_spec_lenient(
         return None
     # A removed backend is announced even when ``warn`` is off: silently
     # dropping it would switch review off without saying why.
-    if str(raw).strip().split(":", 1)[0].strip() in REMOVED_REVIEW_BACKENDS:
-        _notify_removed_backend()
+    if _is_removed_backend_value(str(raw)):
         return None
     # fn-76: intercept the pre-grammar dash-composite (``backend:model-effort``)
     # BEFORE parse() warn-and-accepts it as a literal model. Only the two-part
@@ -7788,7 +7814,9 @@ def resolve_review_spec(
     the user just typed it).
 
     When ``return_source`` is True, returns ``(spec, source)`` where ``source``
-    is one of ``"task"`` / ``"epic"`` / ``"env"`` / ``"config"`` / ``"hint"`` —
+    is one of ``"task"`` / ``"epic"`` / ``"env"`` / ``"config"`` / ``"hint"`` /
+    ``"removed"`` (the first set value names a removed backend; the bare hint
+    is returned) —
     so a caller can coerce a config/env DEFAULT to its command backend while
     still honoring a deliberate per-task / per-epic cross-backend spec.
     """
@@ -7805,6 +7833,8 @@ def resolve_review_spec(
                     json.loads(task_path.read_text(encoding="utf-8"))
                 )
                 task_review = task_data.get("review")
+                if _is_removed_backend_value(task_review):
+                    return _ret(BackendSpec(backend_hint).resolve(), "removed")
                 if task_review:
                     parsed = parse_backend_spec_lenient(task_review, warn=True)
                     if parsed is not None:
@@ -7821,6 +7851,8 @@ def resolve_review_spec(
                                 )
                             )
                             epic_review = epic_data.get("default_review")
+                            if _is_removed_backend_value(epic_review):
+                                return _ret(BackendSpec(backend_hint).resolve(), "removed")
                             if epic_review:
                                 parsed = parse_backend_spec_lenient(
                                     epic_review, warn=True
@@ -7845,6 +7877,8 @@ def resolve_review_spec(
                     json.loads(epic_path.read_text(encoding="utf-8"))
                 )
                 epic_review = epic_data.get("default_review")
+                if _is_removed_backend_value(epic_review):
+                    return _ret(BackendSpec(backend_hint).resolve(), "removed")
                 if epic_review:
                     parsed = parse_backend_spec_lenient(epic_review, warn=True)
                     if parsed is not None:
@@ -7854,6 +7888,8 @@ def resolve_review_spec(
 
     # 3: FLOW_REVIEW_BACKEND env (spec-form or bare backend)
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    if _is_removed_backend_value(env_val):
+        return _ret(BackendSpec(backend_hint).resolve(), "removed")
     if env_val:
         parsed = parse_backend_spec_lenient(env_val, warn=True)
         if parsed is not None:
@@ -7862,6 +7898,8 @@ def resolve_review_spec(
     # 4: .flow/config.json review.backend
     if ensure_flow_exists():
         cfg_val = get_config("review.backend")
+        if _is_removed_backend_value(cfg_val):
+            return _ret(BackendSpec(backend_hint).resolve(), "removed")
         if cfg_val:
             parsed = parse_backend_spec_lenient(str(cfg_val), warn=True)
             if parsed is not None:
@@ -20126,6 +20164,7 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
     # Priority: per-task/epic ``review`` override > FLOW_REVIEW_BACKEND env > config > ASK
     spec: Optional[BackendSpec] = None
     source = "none"
+    removed = False
 
     # A per-task ``review:`` / per-spec ``default_review`` override wins over env/config
     # (matches the documented "per-task review overrides env"), so the review skills route
@@ -20153,11 +20192,15 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
             if rsource in ("task", "epic"):
                 spec = resolved
                 source = rsource
+            elif rsource == "removed":
+                removed = True
         except Exception:
             pass
 
     env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
-    if spec is None and env_val:
+    if spec is None and not removed and _is_removed_backend_value(env_val):
+        removed = True
+    if spec is None and not removed and env_val:
         # Lenient parse handles spec-form and legacy bare values; degrades on
         # bad input rather than silently falling to ASK (previous behavior
         # quietly dropped ``codex:gpt-5.2``).
@@ -20166,9 +20209,11 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
             spec = parsed.resolve()
             source = "env"
 
-    if spec is None and ensure_flow_exists():
+    if spec is None and not removed and ensure_flow_exists():
         cfg_val = get_config("review.backend")
-        if cfg_val:
+        if _is_removed_backend_value(cfg_val):
+            removed = True
+        elif cfg_val:
             parsed = parse_backend_spec_lenient(str(cfg_val), warn=False)
             if parsed is not None:
                 spec = parsed.resolve()
@@ -31718,7 +31763,11 @@ def _resume_completion_terminal(flow_dir: Path, spec_id: str, receipt_path: Opti
         try:
             if recovery.exists() and not matches(recovery):
                 recovery.unlink()
-            required = backend in ("codex", "copilot", "cursor", "claude", "host")
+            # Attempts recorded before 8.0.0 can carry the removed ``rp``
+            # backend; their receipt contract still holds on recovery.
+            required = backend in ("codex", "copilot", "cursor", "claude", "host") or (
+                backend == "rp" and verdict == "SHIP" and (bool(receipt_path) or recovery.exists())
+            )
             if recovery.exists():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write(destination, recovery.read_text(encoding="utf-8"))

@@ -65,7 +65,7 @@ Initialize and capture one preflight snapshot before routing or scouting (also u
 ```bash
 $FLOWCTL init --json
 PLAN_CFG="${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json"
-$FLOWCTL preflight --json > "$PLAN_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
+$FLOWCTL preflight --json > "$PLAN_CFG" || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
 ```
 
 Plan asks no setup question: flags win, depth takes its default, and review uses the configured

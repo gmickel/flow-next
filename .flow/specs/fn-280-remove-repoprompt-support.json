@@ -8,12 +8,98 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-280-remove-repoprompt-support",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-280-remove-repoprompt-support.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0dae5bba345a470c53d55041665e533c805ed90395e6bf425a7d6e4d75e9bc0a",
+      "backend": "codex",
+      "base_sha": "0e22f449e9d2f86960e357f80aa9c7144ba09a3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-044ab3a0430032ed7c4e16bbbac69d28",
+            "classification": "introduced",
+            "findingId": "finding-044ab3a0430032ed7c4e16bbbac69d28",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-70d7c0aa12bce212925d500b7ea06ff9",
+            "classification": "introduced",
+            "findingId": "finding-70d7c0aa12bce212925d500b7ea06ff9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ca890936ebcca29539be030871c8520d",
+            "classification": "introduced",
+            "findingId": "finding-ca890936ebcca29539be030871c8520d",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-43ca77075aafd03586a8a14e7d94a734",
+            "classification": "introduced",
+            "findingId": "finding-43ca77075aafd03586a8a14e7d94a734",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-bc715a7a35124deb254821a59f1d591c",
+            "classification": "introduced",
+            "findingId": "finding-bc715a7a35124deb254821a59f1d591c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e06ddc0156b172aa717aa1816e827f58c0204e07",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4211,
+      "output_sha256": "001023926aa5ea349e5ff272078b4415fdf8f5a7926d5682e21eb91c2fc32626",
+      "reservation_id": "12de813960c748989271f5ad53caab2b",
+      "round_consumed": true,
+      "scope": "impl:fn-280-remove-repoprompt-support.1",
+      "superseded_by": null,
+      "task": "fn-280-remove-repoprompt-support.1",
+      "timestamp": "2026-10-04T12:03:55.540489Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-280-remove-repoprompt-support.1": 0
+  },
   "spec_path": ".flow/specs/fn-280-remove-repoprompt-support.md",
   "status": "open",
   "title": "Remove RepoPrompt support",
@@ -28,5 +114,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-04T11:17:39.183466Z"
+  "updated_at": "2026-10-04T12:03:55.542917Z"
 }

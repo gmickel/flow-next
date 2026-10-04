@@ -1655,8 +1655,9 @@ class TestReviewBackendTaskAware(unittest.TestCase):
 
 class TestRemovedReviewBackendCli(unittest.TestCase):
     """8.0.0 removed RepoPrompt (rp, export). A stale stored or env value is
-    announced once and treated as unset; a typed value is rejected. Driven
-    through the real CLI entry so the stderr notice count is observable."""
+    announced once and resolves to no reviewer configured, never to a
+    lower-precedence reviewer; a typed value is rejected. Driven through the
+    real CLI entry so the stderr notice count is observable."""
 
     FLOWCTL_PY = Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py"
 
@@ -1678,10 +1679,11 @@ class TestRemovedReviewBackendCli(unittest.TestCase):
             ("config rp:model", "rp:some-model", None, None, None, None, "ASK"),
             ("env rp", None, "rp", None, None, None, "ASK"),
             ("env export", None, "export", None, None, None, "ASK"),
-            ("env rp, config codex", "codex", "rp", None, None, None, "codex"),
+            ("env rp, config codex", "codex", "rp", None, None, None, "ASK"),
             ("task rp", None, None, "rp", None, "fn-9-e.1", "ASK"),
-            ("task rp, config copilot", "copilot", None, "rp", None, "fn-9-e.1", "copilot"),
+            ("task rp, config copilot", "copilot", None, "rp", None, "fn-9-e.1", "ASK"),
             ("spec rp", None, None, None, "rp", "fn-9-e", "ASK"),
+            ("spec rp, env codex", None, "codex", None, "rp", "fn-9-e", "ASK"),
         )
         for label, config, env_backend, task_review, spec_review, review_id, want in rows:
             with self.subTest(case=label), _flow_fixture() as td:

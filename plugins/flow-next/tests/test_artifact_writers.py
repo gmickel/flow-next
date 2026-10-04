@@ -78,6 +78,20 @@ class ArtifactWritersTest(unittest.TestCase):
         self.cli("qa", "receipt", data=data)
         self.assertEqual(json.loads(path.read_text())["findings"]["items"][0]["status"], "fixed")
 
+    def test_qa_receipt_extends_a_legacy_rp_mode_receipt(self):
+        # A receipt-driven QA receipt written before 8.0.0 records mode "rp";
+        # the next one (mode "receipt") still supersedes it.
+        target = str(self.root / "qa-receipt.json")
+        data = {"id": "fn-1-example", "qa_outcome": "NEEDS_WORK", "mode": "rp", "findings": [{"id": "bug-one", "severity": "P1", "confidence": 100, "classification": "introduced", "reason": "broken", "file": "app.py:1"}], "rid_coverage": {"rids": []}}
+        self.cli("qa", "receipt", "--receipt", target, data=data)
+        legacy = json.loads(Path(target).read_text())
+        del data["mode"]
+        self.cli("qa", "receipt", "--receipt", target, data=data)
+        current = json.loads(Path(target).read_text())
+        self.assertEqual((legacy["mode"], current["mode"]), ("rp", "receipt"))
+        self.assertEqual(current["findings"]["round"], 2)
+        self.assertEqual(current["findings"]["supersedesReceiptId"], legacy["findings"]["sourceReceiptId"])
+        self.assertEqual(current["findings"]["items"][0]["status"], "not_fixed")
 
     def test_qa_receipt_without_findings_writes_needs_work_and_blocked(self):
         # 7.1.1 refused these with "QA findings could not be parsed; receipt unchanged".

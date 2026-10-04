@@ -122,7 +122,7 @@ note: .flow/config.json still carries removed key(s): models.roles, models.verif
 
 `artifacts.html.enabled` gets the same note: the HTML render lenses are removed. Use `/flow-next:visual` for a quick visual digest or ask for an HTML page in conversation. Old `.flow/artifacts/<spec-id>/spec.html` and `pr.html` files are yours; flowctl never touches them, and you can delete them.
 
-A `review.backend` of `rp` or `export` (also in `FLOW_REVIEW_BACKEND`, a spec's `default_review` or a task's `review`) gets a one-line `notice: RepoPrompt review (rp, export) was removed ...` and is treated as unset. Pick another backend with `flowctl config set review.backend codex` (or `host`, `claude`, `copilot`, `cursor`).
+A `review.backend` of `rp` or `export` (also in `FLOW_REVIEW_BACKEND`, a spec's `default_review` or a task's `review`) gets a one-line `notice: RepoPrompt review (rp, export) was removed ...` and review reads as not configured. Pick another backend with `flowctl config set review.backend codex` (or `host`, `claude`, `copilot`, `cursor`).
 
 **Routing not taking effect?** Routing is prose read by the agent, not config parsed by flowctl, so check in this order:
 
