@@ -901,6 +901,31 @@ Suggested fix: Apply one fix.
             with self.subTest(text=text):
                 self.assertIsNone(parse(text, "codex"))
 
+    def test_equals_labels_and_nitpick_severity_parse_on_every_backend(self) -> None:
+        # Previously covered only by the removed export fixtures (fn-280).
+        text = """
+Finding: stale approval may be displayed as current
+Severity = Nitpick
+Confidence = 50
+Classification = pre_existing
+File:Line = src/review.py:88
+Suggested fix = show the compared head SHA beside the approval
+
+<verdict>SHIP</verdict>
+"""
+        for backend in sorted(BACKENDS):
+            with self.subTest(backend=backend):
+                item = parse(text, backend)["items"][0]
+                self.assertEqual(item["severity"], "P3")
+                self.assertEqual(item["confidence"], 50)
+                self.assertEqual(item["classification"], "pre_existing")
+                self.assertEqual(item["anchor"]["path"], "src/review.py")
+                self.assertEqual(item["anchor"]["startLine"], 88)
+                self.assertEqual(
+                    item["suggestion"],
+                    "show the compared head SHA beside the approval",
+                )
+
     def test_equivalent_anchor_representations_accept_only_equal_values(self) -> None:
         equivalent = """
 Severity: Major
