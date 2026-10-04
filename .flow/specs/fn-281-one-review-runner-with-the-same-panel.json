@@ -6,9 +6,7 @@
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [
-    "fn-280-remove-repoprompt-support"
-  ],
+  "depends_on_epics": [],
   "id": "fn-281-one-review-runner-with-the-same-panel",
   "impl_review_rounds": {},
   "next_task": 1,
@@ -30,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-04T11:28:54.080967Z"
+  "updated_at": "2026-10-04T18:02:27.446560Z"
 }
