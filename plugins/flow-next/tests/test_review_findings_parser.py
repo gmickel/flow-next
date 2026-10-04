@@ -18,7 +18,7 @@ assert SPEC and SPEC.loader
 FLOWCTL = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FLOWCTL)
 
-BACKENDS = {"codex", "copilot", "cursor", "host", "rp", "export"}
+BACKENDS = {"codex", "copilot", "cursor", "host"}
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
 
@@ -222,7 +222,7 @@ Problem: The R1 behavior regressed.
                     self.assertEqual(new["lastSeenReceiptId"], "receipt-round-2")
 
     def test_aggregate_all_clear_sweeps_priors_on_every_backend(self) -> None:
-        """fn-168 R2, driven through the PRODUCTION parser on all 6 backends.
+        """fn-168 R2, driven through the PRODUCTION parser on every fixture backend.
 
         The `Prior findings: all fixed` line must (a) not be discarded as a
         record/canonical count mismatch — before this change it matched the broad
@@ -658,17 +658,17 @@ Problem: second severity but higher confidence
         self.assertEqual([item["ordinal"] for item in result["items"]], [2, 3, 1])
 
     def test_anchor_requires_explicit_side_and_both_shas(self) -> None:
-        text = self.fixture("rp", "catalog-sample")
-        self.assertNotIn("anchor", parse(text, "rp", anchor_side=None)["items"][0])
+        text = self.fixture("copilot", "catalog-sample")
+        self.assertNotIn("anchor", parse(text, "copilot", anchor_side=None)["items"][0])
         self.assertNotIn(
             "anchor",
-            parse(text, "rp", base_sha=None, anchor_side="head")["items"][0],
+            parse(text, "copilot", base_sha=None, anchor_side="head")["items"][0],
         )
-        anchored = parse(text, "rp", anchor_side="base")["items"][0]["anchor"]
+        anchored = parse(text, "copilot", anchor_side="base")["items"][0]["anchor"]
         self.assertEqual(anchored["side"], "base")
 
     def test_first_seen_id_pins_exact_sha256_byte_contract(self) -> None:
-        result = parse(self.fixture("rp", "catalog-sample"), "rp")
+        result = parse(self.fixture("copilot", "catalog-sample"), "copilot")
         item = result["items"][0]
         digest = FLOWCTL.hashlib.sha256(
             b"flow-next-finding-v1\0receipt-round-1\0" + str(item["ordinal"]).encode()
@@ -677,12 +677,12 @@ Problem: second severity but higher confidence
         self.assertEqual(item["firstSeenReceiptId"], "receipt-round-1")
 
     def test_unbound_anchor_omits_supplemental_metadata_before_validation(self) -> None:
-        text = self.fixture("rp", "catalog-sample").replace(
+        text = self.fixture("copilot", "catalog-sample").replace(
             "Problem:",
             "Original Path: ../unsafe.py\nBlob OID: not-a-git-object\nProblem:",
             1,
         )
-        result = parse(text, "rp", anchor_side=None)
+        result = parse(text, "copilot", anchor_side=None)
         self.assertIsNotNone(result)
         self.assertNotIn("anchor", result["items"][0])
 
@@ -696,10 +696,10 @@ Classification: introduced
 File:Line: src/review.py:12-10
 Problem: The range is inverted.
 """
-        unbound = parse(text, "rp", anchor_side=None)
+        unbound = parse(text, "copilot", anchor_side=None)
         self.assertIsNotNone(unbound)
         self.assertNotIn("anchor", unbound["items"][0])
-        self.assertIsNone(parse(text, "rp", anchor_side="head"))
+        self.assertIsNone(parse(text, "copilot", anchor_side="head"))
 
     def test_explicit_anchor_side_is_honored_and_conflicts_reject(self) -> None:
         text = """
@@ -710,10 +710,10 @@ File:Line: src/review.py:12
 Side: base
 Problem: The base-side deletion is unsafe.
 """
-        anchored = parse(text, "rp", anchor_side=None)["items"][0]["anchor"]
+        anchored = parse(text, "copilot", anchor_side=None)["items"][0]["anchor"]
         self.assertEqual(anchored["side"], "base")
-        self.assertIsNone(parse(text, "rp", anchor_side="head"))
-        self.assertIsNone(parse(text.replace("Side: base", "Side: nearby"), "rp"))
+        self.assertIsNone(parse(text, "copilot", anchor_side="head"))
+        self.assertIsNone(parse(text.replace("Side: base", "Side: nearby"), "copilot"))
 
     def test_rename_metadata_is_preserved_only_when_evidenced(self) -> None:
         text = """
@@ -725,7 +725,7 @@ Original Path: src/old.py
 Blob OID: abcdef0123456789
 Problem: Rename context must survive.
 """
-        anchor = parse(text, "rp")["items"][0]["anchor"]
+        anchor = parse(text, "copilot")["items"][0]["anchor"]
         self.assertEqual(anchor["originalPath"], "src/old.py")
         self.assertEqual(anchor["endLine"], 12)
         self.assertEqual(anchor["blobOid"], "abcdef0123456789")
@@ -820,7 +820,7 @@ Problem: The introduced finding remains blocking.
 Classification counts: 1 introduced, 1 pre_existing.
 <verdict>NEEDS_WORK</verdict>
 """
-        result = parse(text, "rp")
+        result = parse(text, "copilot")
         self.assertIsNotNone(result)
         self.assertEqual(len(result["items"]), 2)
         compact = result["items"][1]
@@ -843,7 +843,7 @@ Classification counts: 1 introduced, 1 pre_existing.
         for compact in cases:
             text = f"No findings.\n{compact}\n<verdict>SHIP</verdict>"
             with self.subTest(compact=compact):
-                self.assertIsNone(parse(text, "rp"))
+                self.assertIsNone(parse(text, "copilot"))
 
     def test_explicit_empty_with_unknown_inline_enum_fails_closed(self) -> None:
         cases = (
@@ -913,7 +913,7 @@ Original Path: src/old.py
 Original File: src/old.py
 Problem: Equivalent anchor aliases describe one location.
 """
-        anchor = parse(equivalent, "rp")["items"][0]["anchor"]
+        anchor = parse(equivalent, "copilot")["items"][0]["anchor"]
         self.assertEqual(anchor["path"], "src/new.py")
         self.assertEqual(anchor["startLine"], 10)
         self.assertEqual(anchor["endLine"], 12)
@@ -925,7 +925,7 @@ Problem: Equivalent anchor aliases describe one location.
         )
         for text in conflicts:
             with self.subTest(text=text):
-                self.assertIsNone(parse(text, "rp"))
+                self.assertIsNone(parse(text, "copilot"))
 
     def test_multiple_host_finding_tables_fail_closed(self) -> None:
         valid = self.fixture("host", "catalog-sample")

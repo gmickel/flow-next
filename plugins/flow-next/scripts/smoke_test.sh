@@ -1996,13 +1996,23 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 3: rp with model rejected
-rp_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "rp:claude-opus" --json 2>&1 || true)"
-if echo "$rp_out" | grep -q '"success": false' && echo "$rp_out" | grep -q "does not accept a model"; then
-  echo -e "${GREEN}✓${NC} set-backend rejects rp:model spec"
+# Test 3: a modelless backend with a model is rejected
+nomodel_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "none:claude-opus" --json 2>&1 || true)"
+if echo "$nomodel_out" | grep -q '"success": false' && echo "$nomodel_out" | grep -q "does not accept a model"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects none:model spec"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} set-backend didn't reject rp:model: $rp_out"
+  echo -e "${RED}✗${NC} set-backend didn't reject none:model: $nomodel_out"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 3b: the removed RepoPrompt backend is rejected with the removal notice
+removed_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "rp" --json 2>&1 || true)"
+if echo "$removed_out" | grep -q '"success": false' && echo "$removed_out" | grep -q "was removed in flow-next 8.0.0"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects removed rp backend"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend didn't reject removed rp backend: $removed_out"
   FAIL=$((FAIL + 1))
 fi
 

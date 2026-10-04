@@ -29,7 +29,7 @@ One fix pass, then one re-review:
    - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
 3. **Parse issues** from reviewer feedback (Critical → Major → Minor); fix those the Review section of [working-rules.md](../../../references/working-rules.md) says to fix and list the rest as follow-ups
 4. **Fix code** and run tests/lints
-5. **Commit fixes**, with one `Declined #<n>: <reason>` line in the message for each finding listed as a follow-up (mandatory before re-review; RP backend uses the snapshot-scoped staging in [../workflow-rp.md](../workflow-rp.md) § Fix Loop (RP) — never blanket-stage with `git add --all`). Then, only when step 4's green run included one of the repo's full-gate commands: read [fix-gate-receipt.md](../../../references/fix-gate-receipt.md) and mint its receipt.
+5. **Commit fixes**, with one `Declined #<n>: <reason>` line in the message for each finding listed as a follow-up (mandatory before re-review; never blanket-stage with `git add --all`). Then, only when step 4's green run included one of the repo's full-gate commands: read [fix-gate-receipt.md](../../../references/fix-gate-receipt.md) and mint its receipt.
 6. **Re-review** (always a SINGLE dispatch — the first-round fan-out never re-runs):
    - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context). When the receipt carries `draws[]` (a fan-out round preceded this), flowctl resumes the primary session with lean resume disabled for that one round: the FULL merged prior-finding container is injected with every merged ordinal — automatic, no flag.
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
@@ -38,8 +38,4 @@ One fix pass, then one re-review:
      re-review path — one FRESH read-only subagent (host sessions are never
      resumed) with the full merged prior-finding container injected into its
      prompt.
-   - **RP Classic**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
-   - **RepoPrompt CE**: `$FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file <literal re-review path>` (`T` is the canonical context binding, not visible-tab projection; NO `--tab`; same response-file rule)
 7. **Stop.** The re-review's verdict is terminal unless working-rules.md's review loop applies (an unattended run, or a request to review until SHIP): `SHIP` completes; `NEEDS_WORK` surfaces its surviving findings to the caller, never a second fix pass
-
-**RP re-reviews stay in the same chat.** `--new-chat` belongs to the first review only — a re-review carrying it drops the reviewer's context and has broken this.

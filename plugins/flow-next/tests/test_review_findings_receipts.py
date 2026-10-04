@@ -124,7 +124,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             "plan_review": "plan",
             "completion_review": "completion",
         }
-        for backend in ("codex", "copilot", "cursor", "export"):
+        for backend in ("codex", "copilot", "cursor"):
             for review_type, review_kind in type_to_kind.items():
                 with self.subTest(backend=backend, review_type=review_type):
                     receipt = self.repo / f"{backend}-{review_type}.json"
@@ -151,17 +151,17 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                     self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
 
     def test_shared_writer_attaches_classic_compact_pre_existing_finding(self) -> None:
-        receipt = self.repo / "rp-impl-review.json"
+        receipt = self.repo / "codex-impl-review.json"
         FLOWCTL._write_backend_review_receipt(
             str(receipt),
             review_type="impl_review",
             review_id="fn-136.3",
-            backend="rp",
+            backend="codex",
             verdict="SHIP",
             session_id="session",
             effective_model="model",
             effective_effort="high",
-            resolved_spec=FLOWCTL.BackendSpec("rp", "model", "high"),
+            resolved_spec=FLOWCTL.BackendSpec("codex", "model", "high"),
             review_text=(
                 "## Pre-existing issues (not blocking this verdict)\n\n"
                 "- [P2, confidence 75, introduced=false] "
@@ -180,6 +180,32 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
             "pre_existing",
         )
         self.assertTrue(FLOWCTL.validate_review_receipt_findings(data))
+
+    def test_legacy_rp_receipt_on_disk_still_reads(self) -> None:
+        """8.0 removed the rp backend; receipts it wrote must still load."""
+        findings = FLOWCTL.parse_review_findings(
+            _fixture("codex"),
+            source_receipt_id="legacy-rp-round-1",
+            review_kind="implementation",
+            backend="rp",
+            round_number=1,
+            base_sha=BASE_SHA,
+            head_sha=HEAD_SHA,
+            anchor_side="head",
+        )
+        self.assertIsNotNone(findings)
+        legacy = {
+            "type": "impl_review",
+            "id": "fn-136.3",
+            "mode": "rp",
+            "verdict": "NEEDS_WORK",
+            "findings": findings,
+        }
+        receipt = self.repo / "legacy-rp-impl-review.json"
+        receipt.write_text(json.dumps(legacy), encoding="utf-8")
+        generations = FLOWCTL.load_review_receipt_generations(receipt)
+        self.assertEqual(generations, [legacy])
+        self.assertTrue(FLOWCTL.validate_review_receipt_findings(legacy))
 
     def test_receipt_validation_rejects_noncontiguous_round_shapes(self) -> None:
         root = _container(receipt_id="root")
@@ -296,7 +322,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
         self.assertEqual(findings["headSha"], HEAD_SHA)
 
     def test_direct_writer_attach_uses_prior_before_atomic_replace(self) -> None:
-        for backend in ("rp", "host"):
+        for backend in ("host",):
             with self.subTest(backend=backend):
                 receipt = self.repo / f"{backend}.json"
                 recovery = self.repo / f"{backend}-recovery.json"
@@ -356,7 +382,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                 )
 
     def test_completion_direct_routes_serialize_concurrent_advancement(self) -> None:
-        for backend in ("rp", "host"):
+        for backend in ("host",):
             with self.subTest(backend=backend):
                 receipt = self.repo / f"{backend}-completion.json"
                 recovery = self.repo / f"{backend}-completion-recovery.json"
@@ -667,7 +693,7 @@ class ReviewFindingsReceiptIntegrationTest(unittest.TestCase):
                 )
                 self.assertFalse(
                     FLOWCTL.validate_review_receipt_findings(
-                        dict(valid, mode="rp")
+                        dict(valid, mode="copilot")
                     )
                 )
 

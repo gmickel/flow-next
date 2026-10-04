@@ -220,7 +220,7 @@ Implement flow-next task.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: /path/to/flowctl
-REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host|host-deferred
+REVIEW_MODE: none|codex|copilot|cursor|claude|host|host-deferred
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
@@ -469,7 +469,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 
 1. Invoke `flow-next:flow-next-spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
-   - Skill handles rp/codex/copilot/cursor/claude/host backend dispatch
+   - Skill handles codex/copilot/cursor/claude/host backend dispatch
    - Skill owns its fix and re-review loop (working-rules.md, Review) and writes the terminal
      `completion_review_status` through its backend-aware shared owner
 

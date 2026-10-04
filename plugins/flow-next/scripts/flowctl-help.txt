@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     judge               Optional typed System One judgments
     init                Initialize .flow/ directory
     setup-status        Read setup probes in one call
@@ -21,13 +21,13 @@ positional arguments:
     review-findings     Attach versioned structured findings to a direct-
                         writer receipt
     review-prompt       Render a shared review dispatch prompt
-    review-rounds       Deterministic review-round cap counter (rp workflows:
-                        increment before dispatch, reset on SHIP)
+    review-rounds       Deterministic review-round cap counter (host
+                        workflows: increment before dispatch, reset on SHIP)
     review-route        Decide the next impl-review shape for a scope (fanout
                         | fix-then-rereview | stop) and derive its receipt
                         path
-    review-artifact     Build the exact domain-separated artifact blob for an
-                        RP review fence
+    review-artifact     Build the exact domain-separated artifact blob for a
+                        host review fence
     memory              Memory commands
     qa                  QA artifact commands
     prospect            Prospect artifact commands
@@ -78,7 +78,6 @@ positional arguments:
                         (fn-102)
     features            Feature-map facts (fn-262)
     checkpoint          Checkpoint commands
-    rp                  RepoPrompt helpers
     codex               Codex CLI helpers
     copilot             GitHub Copilot CLI helpers
     cursor              Cursor (cursor-agent CLI) helpers

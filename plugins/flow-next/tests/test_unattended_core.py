@@ -103,7 +103,7 @@ class UnattendedCoreTests(unittest.TestCase):
         output_path, payload_path = self.root / "output.md", self.root / "payload.json"
         output_path.write_text(output, encoding="utf-8")
         payload_path.write_text(json.dumps(payload), encoding="utf-8")
-        args = argparse.Namespace(id=self.spec_id, kind="plan", task=None, review_type="plan", backend="rp",
+        args = argparse.Namespace(id=self.spec_id, kind="plan", task=None, review_type="plan", backend="host",
                                   output_file=str(output_path), exit_code=0, failure_class=None,
                                   receipt_target=str(self.root / "receipt.json"), receipt_payload_file=str(payload_path), json=True)
         with mock.patch.object(f, "record_review_attempt", return_value={}) as record, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

@@ -32,6 +32,8 @@ class ResumeTerminalTests(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+    # Default: a legacy rp attempt from a pre-8.0 sidecar - a backend with no
+    # receipt contract, so the terminal decision does not wait on a receipt.
     def run_state(self, outcome='verdict', verdict='SHIP', backend='rp', status='unknown', reviewed='', rounds=0, extra=None, receipt=None):
         attempt = {'scope': 'completion', 'outcome': outcome, 'verdict': verdict,
                    'backend': backend, 'timestamp': '2026-08-02T00:00:00Z', **(extra or {})}
@@ -82,7 +84,11 @@ class ResumeTerminalTests(unittest.TestCase):
         recovery.write_text(json.dumps(payload))
         self.assertEqual(self.run_state(backend='rp')['action'], 'ship')
         self.assertFalse(recovery.exists())
-        self.assertEqual(self.run_state(backend='rp', receipt=str(destination))['action'], 'retry')
+        # A receipt-contract backend still retries on a mismatched receipt.
+        self.assertEqual(self.run_state(backend='host', receipt=str(destination))['action'], 'retry')
+        # 8.0.0 removed rp: a legacy rp attempt no longer requires a receipt,
+        # even when a receipt path is named.
+        self.assertEqual(self.run_state(backend='rp', receipt=str(destination))['action'], 'ship')
 
     def test_status_write_failure_keeps_recovery(self):
         recovery = self.flow / 'tmp' / 'completion-review-receipt-recovery-fn-1.json'

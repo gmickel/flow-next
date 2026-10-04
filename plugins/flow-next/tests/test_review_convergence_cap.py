@@ -1076,13 +1076,13 @@ class TestCombinedFinalizeWrite(_CombinedFinalizeWriteBase):
         self.assertFalse(data["review_attempts"][-1]["round_consumed"])
 
     def test_summary_shape_unchanged_without_finalize(self):
-        """Callers that never opt in (rp review-rounds record) keep the old
+        """Callers that never opt in (host review-rounds record) keep the old
         summary shape - no status_written key, no status side effects."""
         self._reserve()
         result = flowctl.record_review_attempt(
             self.spec_id,
             "plan",
-            backend="rp",
+            backend="host",
             output="<verdict>SHIP</verdict>",
             verdict="SHIP",
             review_type="plan",
@@ -1213,11 +1213,11 @@ class TestCombinedFinalizeWrite(_CombinedFinalizeWriteBase):
 
 
 class TestReviewRoundsCLI(unittest.TestCase):
-    """fn-90 R5, rp surface: `flowctl review-rounds increment|reset`.
+    """fn-90 R5, host surface: `flowctl review-rounds increment|reset`.
 
-    The rp backend dispatches reviews from skill prose via `rp chat-send`, so
-    it has no flowctl review handler to wire the cap into — the workflows call
-    this thin CLI instead. Same helpers underneath, same counter, same
+    The host backend dispatches reviews from skill prose, so it has no flowctl
+    review handler to wire the cap into — the workflows call this thin CLI
+    instead. Same helpers underneath, same counter, same
     ESCALATE refusal + exit REVIEW_CAP_EXIT_CODE.
     """
 
@@ -1322,7 +1322,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "completion",
-            "--backend", "rp", "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["outcome"], "transport_failure")
@@ -1336,7 +1336,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         payload = json.loads(out)
         self.assertEqual(payload["verdict_attempts"], 0)
         self.assertEqual(payload["refunded_attempts"], 1)
-        self.assertEqual(payload["attempts"][0]["backend"], "rp")
+        self.assertEqual(payload["attempts"][0]["backend"], "host")
 
     def test_spec_show_omits_ledgers_that_dedicated_readers_return(self):
         """fn-258 R2 + #484: `show <spec> --json` drops review_attempts and the tracker's two
@@ -1349,7 +1349,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--backend", "rp", "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
         data = self._spec_json()
@@ -1387,7 +1387,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertEqual(json.loads(out)["tracker"]["identifier"], "WOR-7")
 
     def test_record_cli_row_is_the_head_sha_fallback_fixture(self):
-        """fn-183 (#312): the rp/host `review-rounds record` path has no
+        """fn-183 (#312): the host `review-rounds record` path has no
         pre-dispatch snapshot, so its row must mark head_sha as UNOBSERVED,
         carry no base_sha and no tool_calls, and still record output bytes."""
         self._run(
@@ -1398,7 +1398,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, _, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--backend", "rp", "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0)
         row = self._spec_json()["review_attempts"][-1]
@@ -1419,7 +1419,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["verdict"], "NEEDS_WORK")
@@ -1436,7 +1436,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
             code, out, _ = self._run(
                 "review-rounds", "record", self.spec_id,
                 "--kind", "plan", "--review-type", "plan",
-                "--output-file", str(output_path), "--json",
+                "--backend", "host", "--output-file", str(output_path), "--json",
             )
             self.assertEqual(code, 0)
             self.assertEqual(
@@ -1448,7 +1448,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)
         self.assertIn("TRANSPORT_UNHEALTHY", out)
@@ -1534,7 +1534,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, err = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0, err or out)
         self.assertEqual(json.loads(out)["verdict"], "SHIP")
@@ -1570,7 +1570,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, err = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 2)
         self.assertIn("No reserved", out + err)
@@ -1588,7 +1588,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, err = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0, err or out)
         self.assertEqual(len(self._spec_json()["review_attempts"]), 1)
@@ -1596,7 +1596,7 @@ class TestReviewRoundsCLI(unittest.TestCase):
         code, out, err = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 2)
         self.assertIn("No reserved", out + err)
@@ -1633,7 +1633,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
     def test_reservation_id_round_trips_and_stamps_metadata(self):
         reservation_id = self._reserve()
         result = flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>NEEDS_WORK</verdict>",
             verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
         )
         self.assertEqual(result["reservation_id"], reservation_id)
@@ -1648,7 +1648,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as exc:
                 flowctl.record_review_attempt(
-                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
                     verdict="SHIP", review_type="plan", reservation_id="missing",
                 )
         self.assertEqual(exc.exception.code, 2)
@@ -1658,7 +1658,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as exc:
                 flowctl.record_review_attempt(
-                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
                     verdict="SHIP", review_type="plan",
                 )
         self.assertEqual(exc.exception.code, 2)
@@ -1666,7 +1666,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
     def test_idless_one_pending_consumes_its_unique_reservation(self):
         reservation_id = self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan",
         )
         self.assertEqual(self._data()["review_attempts"][-1]["reservation_id"], reservation_id)
@@ -1678,7 +1678,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as exc:
                 flowctl.record_review_attempt(
-                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
                     verdict="SHIP", review_type="plan",
                 )
         self.assertEqual(exc.exception.code, 2)
@@ -1688,11 +1688,11 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         first, second = self._reserve(), self._reserve()
         for reservation_id in (second, first):
             flowctl.record_review_attempt(
-                self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+                self.spec_id, "plan", backend="host", output="<verdict>NEEDS_WORK</verdict>",
                 verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
             )
         replay = flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>NEEDS_WORK</verdict>",
             verdict="NEEDS_WORK", review_type="plan", reservation_id=first,
         )
         self.assertTrue(replay["replayed"])
@@ -1706,7 +1706,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(self._data()["review_hash_epoch"]["plan"], 2)
         reservation_id = self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=reservation_id,
             reset_rounds_on_ship=True,
         )
@@ -1722,7 +1722,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         free fresh budget."""
         ship_id, late_id = self._reserve(), self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=ship_id,
             status_target="plan", reset_rounds_on_ship=True,
         )
@@ -1737,7 +1737,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(data["review_pending_rounds"]["plan"], 1)
 
         summary = flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             review_type="plan", reservation_id=late_id,
             status_target="plan", reset_rounds_on_ship=True,
@@ -1774,7 +1774,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(self._data()["plan_review_rounds"], 2)
 
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=plan_id,
             status_target="plan", reset_rounds_on_ship=True,
         )
@@ -1789,7 +1789,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(data["review_hash_epoch"].get("plan#completion", 0), 0)
 
         summary = flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             review_type="completion", reservation_id=completion_id,
             status_target="completion", reset_rounds_on_ship=True,
@@ -1829,7 +1829,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
             "reservation_id": late_id, "response": response,
             "response_sha256": hashlib.sha256(response.encode()).hexdigest(),
             "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
-            "review_type": "plan", "task_id": None, "backend": "rp",
+            "review_type": "plan", "task_id": None, "backend": "host",
             "verdict": "NEEDS_HUMAN", "failure_class": None, "outcome": "verdict",
             "metadata": self._data()["review_reservations"][late_id],
             "receipt_target": None, "receipt_payload": None,
@@ -1840,7 +1840,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         }))
         # The concurrent SHIP supersedes the journaled reservation…
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=ship_id,
             status_target="plan", reset_rounds_on_ship=True,
         )
@@ -1878,7 +1878,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
             "reservation_id": reservation_id, "response": response,
             "response_sha256": hashlib.sha256(response.encode()).hexdigest(),
             "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
-            "review_type": review_type, "task_id": None, "backend": "rp",
+            "review_type": review_type, "task_id": None, "backend": "host",
             "verdict": verdict, "failure_class": None, "outcome": "verdict",
             "metadata": self._data()["review_reservations"][reservation_id],
             "receipt_target": None, "receipt_payload": None,
@@ -1989,7 +1989,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
                 artifact_sha256=str(index) * 64, return_reservation=True,
             )
             flowctl.record_review_attempt(
-                self.spec_id, "plan", backend="rp",
+                self.spec_id, "plan", backend="host",
                 output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
                 review_type="completion", reservation_id=completion_id,
                 status_target="completion", reset_rounds_on_ship=True,
@@ -1999,7 +1999,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         plan_id = self._reserve()
         self.assertEqual(self._data()["plan_review_rounds"], 3)
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=plan_id,
             status_target="plan", reset_rounds_on_ship=True,
         )
@@ -2020,7 +2020,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
             artifact_sha256="b" * 64, return_reservation=True,
         )
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             review_type="completion", reservation_id=completion_id,
             status_target="completion", reset_rounds_on_ship=True,
@@ -2072,7 +2072,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
 
         # A superseded reservation finalizes without charging a round.
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             review_type="plan", reservation_id=plan_id,
             status_target="plan", reset_rounds_on_ship=True,
@@ -2101,7 +2101,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
     def test_status_target_folds_status_write_into_finalize(self):
         reservation_id = self._reserve()
         result = flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>SHIP</verdict>", verdict="SHIP",
             review_type="plan", reservation_id=reservation_id,
             status_target="plan",
@@ -2128,7 +2128,7 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
             "reservation_id": reservation_id, "response": "<verdict>SHIP</verdict>",
             "response_sha256": hashlib.sha256(b"<verdict>SHIP</verdict>").hexdigest(),
             "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
-            "review_type": "plan", "task_id": None, "backend": "rp",
+            "review_type": "plan", "task_id": None, "backend": "host",
             "verdict": "SHIP", "failure_class": None, "outcome": "verdict",
             "metadata": self._data()["review_reservations"][reservation_id],
             "receipt_target": None, "receipt_payload": None,
@@ -2256,13 +2256,13 @@ class TestReplayAwareInProcessCallers(unittest.TestCase):
             "fn-1-demo", "plan", review_type="plan", return_reservation=True,
         )
         flowctl.record_review_attempt(
-            "fn-1-demo", "plan", backend="rp",
+            "fn-1-demo", "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             review_type="plan", reservation_id=reservation_id,
             receipt_target=str(root / "receipt.json"),
             receipt_payload={
                 "type": "plan_review", "id": "fn-1-demo",
-                "mode": "rp", "head": "a" * 40,
+                "mode": "host", "head": "a" * 40,
             },
         )
         result = flowctl.enforce_and_increment_review_cap("fn-1-demo", "plan")
@@ -2399,7 +2399,7 @@ class TestAttemptRowWorkVolumeAndProvenance(_CombinedFinalizeWriteBase):
     def test_output_bytes_recorded_on_refunded_transport_row(self) -> None:
         self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="",
+            self.spec_id, "plan", backend="host", output="",
             failure_class="empty_output",
         )
         row = self._row()
@@ -2409,7 +2409,7 @@ class TestAttemptRowWorkVolumeAndProvenance(_CombinedFinalizeWriteBase):
     def test_tool_calls_absent_unless_supplied(self) -> None:
         self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
         )
         self.assertNotIn("tool_calls", self._row())
@@ -2444,7 +2444,7 @@ class TestAttemptRowWorkVolumeAndProvenance(_CombinedFinalizeWriteBase):
         self._reserve()
         with mock.patch.object(flowctl, "_review_head_sha", return_value="b" * 40):
             flowctl.record_review_attempt(
-                self.spec_id, "plan", backend="rp",
+                self.spec_id, "plan", backend="host",
                 output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
             )
         fallback = self._row()
@@ -2462,7 +2462,7 @@ class TestAttemptRowWorkVolumeAndProvenance(_CombinedFinalizeWriteBase):
 
         self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
         )
         self.assertNotIn("base_sha", self._row())
@@ -2519,7 +2519,7 @@ class TestAttemptRowResolvedModel(_CombinedFinalizeWriteBase):
     def test_model_and_effort_absent_unless_dispatcher_resolved_them(self) -> None:
         self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
         )
         row = self._row()
@@ -2667,7 +2667,7 @@ class TestCodexToolCallCount(unittest.TestCase):
         copilot/cursor review whose plain text QUOTES codex event lines must
         not get a fabricated measurement. Only the codex backend is gated in."""
         stream_shaped = self._stream({"type": "command_execution", "command": "ls"})
-        for backend in ("copilot", "cursor", "rp", "host"):
+        for backend in ("copilot", "cursor", "host"):
             self.assertIsNone(flowctl.measured_tool_calls(backend, stream_shaped))
         self.assertEqual(flowctl.measured_tool_calls("codex", stream_shaped), 1)
         self.assertIsNone(flowctl.measured_tool_calls("codex", "plain text"))
@@ -2748,7 +2748,7 @@ class TestAttemptsReadSurface(unittest.TestCase):
     def test_written_row_reaches_the_cli_read_surface(self):
         """End to end: the writer's fields survive the CLI read, unprojected.
 
-        The `review-rounds record` path is the rp/host fixture - it measures
+        The `review-rounds record` path is the host fixture - it measures
         output bytes and marks head_sha as the finalize-time fallback, and
         genuinely knows neither tool_calls nor base_sha.
         """
@@ -2760,7 +2760,7 @@ class TestAttemptsReadSurface(unittest.TestCase):
         code, _, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--backend", "rp", "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0)
         row = self._attempts_json()["attempts"][-1]
@@ -2817,8 +2817,8 @@ class TestAttemptsReadSurface(unittest.TestCase):
         self.assertEqual(row["model"], "gpt-5.6-sol")
         self.assertEqual(row["effort"], "high")
 
-    def test_rp_recorded_row_claims_no_model(self):
-        """fn-193 (#338): `review-rounds record` is the rp/host path and takes
+    def test_host_recorded_row_claims_no_model(self):
+        """fn-193 (#338): `review-rounds record` is the host path and takes
         no --model flag, so a narrating agent cannot claim one - the row is
         honestly silent rather than recording "unknown"."""
         self._run(
@@ -2829,7 +2829,7 @@ class TestAttemptsReadSurface(unittest.TestCase):
         code, _, _ = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--backend", "rp", "--output-file", str(output_path), "--json",
+            "--backend", "host", "--output-file", str(output_path), "--json",
         )
         self.assertEqual(code, 0)
         row = self._attempts_json()["attempts"][-1]
@@ -2839,7 +2839,7 @@ class TestAttemptsReadSurface(unittest.TestCase):
         code, _, err = self._run(
             "review-rounds", "record", self.spec_id,
             "--kind", "plan", "--review-type", "plan",
-            "--backend", "rp", "--output-file", str(output_path),
+            "--backend", "host", "--output-file", str(output_path),
             "--model", "gpt-5.6-sol", "--json",
         )
         self.assertNotEqual(code, 0)
@@ -2891,7 +2891,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
     def _digest(
         self,
         *items: dict,
-        backend: str = "rp",
+        backend: str = "host",
         review_kind: str = "plan",
         truncated: bool = False,
     ) -> dict:
@@ -2928,7 +2928,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         for index, digest in enumerate(digests):
             row = {
                 "scope": "plan", "counter_kind": "plan", "kind": "plan",
-                "task": None, "backend": "rp", "outcome": "verdict",
+                "task": None, "backend": "host", "outcome": "verdict",
                 "round_consumed": True,
                 "hash_epoch": 0 if epochs is None else epochs[index],
                 "finalized": {"receipt": "complete", "digest": "complete", "status": "not_applicable"},
@@ -2955,7 +2955,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         assert reservation_id is not None
         target = self.root / "receipt.json"
         payload = {
-            "type": "plan_review", "id": self.spec_id, "mode": "rp",
+            "type": "plan_review", "id": self.spec_id, "mode": "host",
             "head": "a" * 40,
         }
         output = (
@@ -2965,7 +2965,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
             "- **Suggestion**: Add an assertion.\n<verdict>NEEDS_WORK</verdict>"
         )
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output=output,
+            self.spec_id, "plan", backend="host", output=output,
             verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
             receipt_target=str(target), receipt_payload=payload,
         )
@@ -2999,7 +2999,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         ]
         container = {
             "schemaVersion": 1, "sourceReceiptId": source, "reviewKind": "plan",
-            "backend": "rp", "round": 1, "headSha": "a" * 40, "items": items,
+            "backend": "host", "round": 1, "headSha": "a" * 40, "items": items,
         }
         digest = flowctl.build_review_findings_digest(container)
         assert digest is not None
@@ -3014,10 +3014,10 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         assert reservation_id is not None
         target = self.root / "receipt.json"
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="unstructured <verdict>NEEDS_WORK</verdict>",
+            self.spec_id, "plan", backend="host", output="unstructured <verdict>NEEDS_WORK</verdict>",
             verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
             receipt_target=str(target), receipt_payload={
-                "type": "plan_review", "id": self.spec_id, "mode": "rp", "head": "a" * 40,
+                "type": "plan_review", "id": self.spec_id, "mode": "host", "head": "a" * 40,
             },
         )
         with contextlib.redirect_stdout(io.StringIO()):
@@ -3051,10 +3051,10 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         assert transport_id is not None
         transport_target = self.root / "transport.json"
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="timeout",
+            self.spec_id, "plan", backend="host", output="timeout",
             failure_class="timeout", review_type="plan", reservation_id=transport_id,
             receipt_target=str(transport_target), receipt_payload={
-                "type": "plan_review", "id": self.spec_id, "mode": "rp", "head": "a" * 40,
+                "type": "plan_review", "id": self.spec_id, "mode": "host", "head": "a" * 40,
             },
         )
         before = self._data()
@@ -3079,7 +3079,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         assert conflict_id is not None
         conflict_target = self.root / "conflict.json"
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output=(
                 "## Issue\n- **Severity**: Major\n- **Confidence**: 100\n"
                 "- **Classification**: introduced\n- **Location**: Task acceptance\n"
@@ -3088,7 +3088,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
             ),
             verdict="NEEDS_WORK", review_type="plan", reservation_id=conflict_id,
             receipt_target=str(conflict_target), receipt_payload={
-                "type": "plan_review", "id": self.spec_id, "mode": "rp", "head": "a" * 40,
+                "type": "plan_review", "id": self.spec_id, "mode": "host", "head": "a" * 40,
             },
         )
         data = self._data()
@@ -3117,10 +3117,10 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         assert duplicate_id is not None
         duplicate_target = self.root / "duplicate.json"
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>NEEDS_WORK</verdict>",
             verdict="NEEDS_WORK", review_type="plan", reservation_id=duplicate_id,
             receipt_target=str(duplicate_target), receipt_payload={
-                "type": "plan_review", "id": self.spec_id, "mode": "rp", "head": "a" * 40,
+                "type": "plan_review", "id": self.spec_id, "mode": "host", "head": "a" * 40,
             },
         )
         with contextlib.redirect_stdout(io.StringIO()):
@@ -3186,7 +3186,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         self._write_attempts(
             self._digest(self._item("root", severity="P0", status="not_fixed")),
             self._digest(
-                self._item("root", severity="P1", status="not_fixed"), backend="host"
+                self._item("root", severity="P1", status="not_fixed"), backend="codex"
             ),
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
@@ -3339,7 +3339,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         flowctl.record_review_attempt(
             self.spec_id,
             "plan",
-            backend="rp",
+            backend="host",
             output=output,
             verdict=verdict,
             review_type="plan",
@@ -3348,7 +3348,7 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
             receipt_payload={
                 "type": "plan_review",
                 "id": self.spec_id,
-                "mode": "rp",
+                "mode": "host",
                 "head": "a" * 40,
             },
         )
@@ -3472,17 +3472,17 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
 
         root_id, second_id, third_id = "r1", "r2", "r3"
         root_item = item(root_id, 1)
-        root = {"schemaVersion": 1, "sourceReceiptId": root_id, "reviewKind": "plan", "backend": "rp", "round": 1, "headSha": "a" * 40, "items": [root_item]}
+        root = {"schemaVersion": 1, "sourceReceiptId": root_id, "reviewKind": "plan", "backend": "host", "round": 1, "headSha": "a" * 40, "items": [root_item]}
         second_item = item(second_id, 2, prior=root_item["id"])
-        second = {"schemaVersion": 1, "sourceReceiptId": second_id, "reviewKind": "plan", "backend": "rp", "round": 2, "headSha": "b" * 40, "supersedesReceiptId": root_id, "items": [{**root_item, "lastSeenReceiptId": second_id}, second_item]}
+        second = {"schemaVersion": 1, "sourceReceiptId": second_id, "reviewKind": "plan", "backend": "host", "round": 2, "headSha": "b" * 40, "supersedesReceiptId": root_id, "items": [{**root_item, "lastSeenReceiptId": second_id}, second_item]}
         third_item = item(third_id, 3, prior=second_item["id"])
-        third = {"schemaVersion": 1, "sourceReceiptId": third_id, "reviewKind": "plan", "backend": "rp", "round": 3, "headSha": "c" * 40, "supersedesReceiptId": second_id, "items": [{**root_item, "lastSeenReceiptId": third_id}, {**second_item, "lastSeenReceiptId": third_id}, third_item]}
+        third = {"schemaVersion": 1, "sourceReceiptId": third_id, "reviewKind": "plan", "backend": "host", "round": 3, "headSha": "c" * 40, "supersedesReceiptId": second_id, "items": [{**root_item, "lastSeenReceiptId": third_id}, {**second_item, "lastSeenReceiptId": third_id}, third_item]}
         path = self.root / "receipt.json"
-        path.write_text(json.dumps({"type": "plan_review", "id": self.spec_id, "mode": "rp", "findings": second}))
+        path.write_text(json.dumps({"type": "plan_review", "id": self.spec_id, "mode": "host", "findings": second}))
         history = path.parent / f"{path.name}.history"
         history.mkdir()
         history_path = history / f"{hashlib.sha256(root_id.encode()).hexdigest()}.json"
-        history_path.write_text(json.dumps({"type": "plan_review", "id": self.spec_id, "mode": "rp", "findings": root}))
+        history_path.write_text(json.dumps({"type": "plan_review", "id": self.spec_id, "mode": "host", "findings": root}))
         digest = flowctl.build_review_findings_digest(third, prior_receipt_path=path)
         assert digest is not None
         self.assertEqual(digest["items"][-1]["chainRoot"], root_item["id"])
@@ -4054,8 +4054,8 @@ class TestNoVerdictHonestClassification(unittest.TestCase):
             self._spec_data()["review_attempts"][-1]["failure_class"], "timeout"
         )
 
-    def test_rp_record_demotes_contradictory_timeout_claim(self):
-        """rp ladder parity: a caller-declared `timeout` on an exit-0 run that
+    def test_host_record_demotes_contradictory_timeout_claim(self):
+        """host ladder parity: a caller-declared `timeout` on an exit-0 run that
         returned prose is a misread of the reviewer's own words."""
         self._run(
             "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
@@ -4066,7 +4066,7 @@ class TestNoVerdictHonestClassification(unittest.TestCase):
         )
         code, _, _ = self._run(
             "review-rounds", "record", self.spec_id,
-            "--kind", "plan", "--review-type", "plan", "--backend", "rp",
+            "--kind", "plan", "--review-type", "plan", "--backend", "host",
             "--output-file", str(output_path), "--exit-code", "0",
             "--failure-class", "timeout", "--json",
         )
@@ -4110,7 +4110,7 @@ class TestNoVerdictHonestClassification(unittest.TestCase):
         self.assertNotIn(repair, message)
 
     def test_transport_streak_terminal_keeps_repair_advice(self):
-        """A genuinely broken transport keeps the original advice — on the rp
+        """A genuinely broken transport keeps the original advice — on the host
         terminal too, which shares the branching builder."""
         cap = flowctl.get_max_review_transport_failures()
         output_path = self.root / "empty.txt"
@@ -4123,7 +4123,7 @@ class TestNoVerdictHonestClassification(unittest.TestCase):
             )
             code, out, _ = self._run(
                 "review-rounds", "record", self.spec_id,
-                "--kind", "plan", "--review-type", "plan", "--backend", "rp",
+                "--kind", "plan", "--review-type", "plan", "--backend", "host",
                 "--output-file", str(output_path), "--json",
             )
         self.assertEqual(code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)

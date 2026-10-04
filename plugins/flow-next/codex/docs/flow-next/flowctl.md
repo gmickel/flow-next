@@ -28,7 +28,6 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [spec reset-review-rounds](#spec-reset-review-rounds)
   - [review-rounds increment / record / attempts / reset](#review-rounds-increment-record-attempts-reset)
   - [review-artifact](#review-artifact)
-  - [rp mode-probe](#rp-mode-probe)
   - [spec set-branch](#spec-set-branch)
   - [spec chain](#spec-chain)
   - [spec set-title](#spec-set-title)
@@ -87,7 +86,6 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [criteria](#criteria)
   - [triage-skip](#triage-skip)
   - [gate](#gate)
-  - [rp](#rp)
   - [Review commands](#review-commands)
   - [codex](#codex)
   - [copilot](#copilot)
@@ -108,7 +106,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
-checkpoint, rp, codex, copilot, cursor, claude,
+checkpoint, codex, copilot, cursor, claude,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
@@ -337,8 +335,8 @@ flowctl spec reset-review-rounds fn-1 [--impl] [--json]
 
 ### review-rounds increment / record / attempts / reset
 
-Prose-facing surface of the deterministic review-round cap for the **rp
-backend**, whose reviews run through `flowctl rp chat-send` rather than a
+Prose-facing surface of the deterministic review-round cap for the **host
+backend**, whose reviews run through a host-native reviewer rather than a
 `flowctl <backend> *-review` wrapper. `increment` reserves a round before every
 dispatch and returns a reservation id. Supply the exact final dispatched
 artifact with `--review-type` plus `--artifact-sha256` or `--artifact-file`:
@@ -348,7 +346,7 @@ nothing. Missing or unreadable artifact identity fails open with a warning.
 `--force` bypasses that guard and records a human-forced dispatch; it is a
 human-only recovery tool.
 
-`record` consumes the matching reservation only after journaling the intended
+`record` requires `--backend` (host workflows pass `--backend host`) and consumes the matching reservation only after journaling the intended
 receipt/status work. A terminal `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or
 `NEEDS_HUMAN` consumes it; no verdict refunds it and appends a durable attempt
 (backend, failure class, timestamp, findings digest) to the spec sidecar.
@@ -373,7 +371,7 @@ flowctl review-rounds increment fn-1 --kind plan|impl --review-type plan|impl|co
   [--artifact-sha256 <sha256>|--artifact-file /tmp/review-artifact] [--force] [--task fn-1.2] [--json]
 flowctl review-rounds record fn-1 --kind plan|impl --review-type plan|impl|completion \
   --output-file /tmp/review.md --reservation-id <id> [--receipt-target /tmp/receipt.json] \
-  [--task fn-1.2] [--backend rp] [--json]
+  --backend host [--task fn-1.2] [--json]
 flowctl review-rounds attempts fn-1 --kind plan|impl --review-type plan|impl|completion \
   [--task fn-1.2] [--json]
 flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
@@ -399,7 +397,7 @@ and counts survivors. Missing referenced draw items fail before publication.
 
 ### review-artifact
 
-Build the exact domain-separated artifact blob for an RP review fence. Plan
+Build the exact domain-separated artifact blob for a host review fence. Plan
 blobs contain the normalized spec and sorted task markdown; impl blobs contain
 the exact dispatched diff; completion blobs contain spec, tasks, diff, and any
 applicable global criteria. Pass the resulting file to `review-rounds increment
@@ -409,16 +407,6 @@ applicable global criteria. Pass the resulting file to `review-rounds increment
 flowctl review-artifact plan fn-1 --output /tmp/plan-artifact [--json]
 flowctl review-artifact impl fn-1 --diff-file /tmp/final.diff --output /tmp/impl-artifact [--json]
 flowctl review-artifact completion fn-1 --diff-file /tmp/final.diff --output /tmp/completion-artifact [--json]
-```
-
-### rp mode-probe
-
-Report whether RepoPrompt CE or Classic is available without creating or
-mutating a window or tab. RP workflows use this side-effect-free probe to place
-their single review-round reservation immediately before the actual dispatch.
-
-```bash
-flowctl rp mode-probe [--json]
 ```
 
 ### spec set-branch
@@ -1244,7 +1232,7 @@ flowctl config get [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, claude, host, or none
+flowctl config set review.backend codex [--json]  # codex, copilot, cursor, claude, host, or none
 
 # Disable a boolean config explicitly
 flowctl config set memory.enabled false [--json]
@@ -1269,7 +1257,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in; configs from older inits may carry `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. A stale `rp` or `export` value prints a notice and is ignored as unset; `config set` rejects it. |
 | `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (`flow --auto`) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
@@ -1320,9 +1308,7 @@ the reviewer reads them from your checkout. A failed `git` read aborts with the
 underlying git error *before* a review round is reserved, rather than dispatching a
 review with no evidence. The only remaining size guard is
 `CURSOR_ARGV_TRANSPORT_MAX`, a transport boundary for `cursor-agent`'s positional
-argv delivery: it refuses loudly and never truncates. Plan-review's `--review=export` is the
-documented exception - it produces an artifact for an LLM with no repository
-access, so there the payload is the only channel available.
+argv delivery: it refuses loudly and never truncates.
 
 
 ```bash
@@ -1335,7 +1321,7 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:<model>:high", "model": "<model>", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
+Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). `none` is an explicit opt-out. A stale `rp` or `export` value (env, task, spec or config) prints one notice on stderr and is treated as unset.
 
 | Backend form | Meaning |
 |--------------|---------|
@@ -1476,8 +1462,8 @@ flowctl memory add --track bug --category runtime-errors \
 
 # Add entry — knowledge track
 flowctl memory add --track knowledge --category conventions \
-  --title "Use flowctl rp wrappers (not the direct RepoPrompt CLI)" \
-  --module review --tags "rp,review" \
+  --title "Use flowctl review wrappers (not the reviewer CLI directly)" \
+  --module review --tags "review" \
   --applies-when "any review-backend dispatch" \
   --body-file body.md [--json]
 
@@ -2266,7 +2252,7 @@ flowctl criteria list [--json]
 # the file is absent or has no active criteria. An EXISTING file that is
 # unreadable or invalid fails closed: nonzero exit with the validation errors
 # on stderr and empty stdout (fix .flow/criteria.md, diagnose via
-# `flowctl criteria list`). Used by the rp/host completion-review workflows,
+# `flowctl criteria list`). Used by the host completion-review workflow,
 # which validate this before reserving a review round.
 flowctl criteria prompt-block
 ```
@@ -2372,57 +2358,6 @@ flowctl features status [--repo <path>]... [--json]
 
 Exit `0` (`2` for a bad `--repo`). A repository without `.flow/` has no map and reads as `seed`, so prime can report on an uninitialised repository. The command never dispatches `/flow-next:features`; the skill stays user-invoked.
 
-### rp
-
-RepoPrompt wrappers (preferred for reviews). RepoPrompt CE 1.1.0+ is primary; discontinued Classic remains the final compatibility fallback.
-
-**Primary entry point** (handles window selection + builder atomically):
-
-```bash
-# CE review: one direct Context Builder result; review text goes to the file
-flowctl rp setup-review --repo-root "$REPO_ROOT" \
-  --summary-file "$REVIEW_INSTRUCTIONS_FILE" \
-  --response-type review --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
-source "$SETUP_FILE"
-# Returns: RP_MODE=ce W=<window> T=<context> CHAT_ID=<chat>
-```
-
-`--summary` and `--summary-file` are mutually exclusive; the review workflows
-use the file form so the complete substantive contract and current spec/task
-context survive fresh shell calls. `setup-review` rejects blank instructions
-before any RepoPrompt call. On CE it
-invokes the named `context_builder` tool with `response_type=review` and treats
-that direct result as authoritative: `status=completed`, non-empty rewritten
-`prompt`, non-empty formatted `selection`, positive `file_count` and
-`total_tokens`, `context_id`, `review.chat_id`, and a non-empty
-`review.response` are all required. The response is written atomically to
-`--response-file`; no visible compose-tab projection, selection augmentation,
-or second initial chat is required or allowed. Any CE operational/schema
-failure stops - the wrapper never downgrades to Classic.
-
-CE follow-ups use the returned chat identity without tab state:
-
-```bash
-flowctl rp chat-send --window "$W" --context-id "$T" \
-  --chat-id "$CHAT_ID" --mode review \
-  --message-file /tmp/re-review.md
-```
-
-`T` is CE's canonical `context_id`; it binds the CLI call to the conversation's
-headless compose context without requiring visible-tab projection.
-
-Discontinued Classic is the isolated final fallback. It receives
-`RP_MODE=classic`, validates the published tab's prompt/selection, then uses the
-legacy post-setup commands below:
-
-```bash
-flowctl rp prompt-get --window "$W" --tab "$T"
-flowctl rp prompt-set --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
-flowctl rp select-add --window "$W" --tab "$T" path/to/file
-flowctl rp chat-send --window "$W" --tab "$T" --message-file /tmp/review-prompt.md
-flowctl rp prompt-export --window "$W" --tab "$T" --out /tmp/export.md
-```
-
 ### Review commands
 
 All twelve `flowctl {codex,copilot,cursor,claude} {impl,plan,completion}-review` commands share one pipeline, so flags and receipts behave the same across backends. Each review ends in a `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tag. Plan and completion reviews write `*_review_status` from the verdict; the standalone `spec set-*-review-status` commands still work.
@@ -2432,7 +2367,7 @@ All twelve `flowctl {codex,copilot,cursor,claude} {impl,plan,completion}-review`
 <a id="codex-impl-review"></a>
 <a id="deterministic-review-cap"></a>
 
-OpenAI Codex CLI wrappers - cross-platform alternative to RepoPrompt.
+OpenAI Codex CLI wrappers.
 
 **Requirements:**
 ```bash
@@ -2572,7 +2507,7 @@ one dispatch per round.
 **How it works:**
 
 1. **Gather context hints** - Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
-2. **Build review prompt** - Uses same Carmack-level criteria as RepoPrompt (7 criteria each for plan/impl)
+2. **Build review prompt** - Uses the shared Carmack-level criteria (7 criteria each for plan/impl)
 3. **Run codex** - Executes `codex exec` with the prompt (or `codex exec resume` for session continuity)
 4. **Parse verdict** - Extracts `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from output
 5. **Write receipt** - If `--receipt` provided, writes the receipt JSON
@@ -2584,7 +2519,7 @@ Symbols: authenticate(), UserSession, validate_token()
 References: src/middleware.py:45 (calls authenticate), tests/test_auth.py:12
 ```
 
-**Review criteria (identical to RepoPrompt):**
+**Review criteria (shared by every backend):**
 
 | Review | Criteria |
 |--------|----------|
@@ -2627,7 +2562,7 @@ Structured findings take precedence over prose, including suffixed IDs such as
 `R4a`. Omitted derived fields are filled in; a contradictory receipt payload
 exits 2 before changing state. Payload-only metadata passes through unchanged.
 
-**Deterministic review cap + convergence (all backends: codex/copilot/cursor/claude internally; rp via `flowctl review-rounds`):**
+**Deterministic review cap + convergence (all backends: codex/copilot/cursor/claude internally; host via `flowctl review-rounds`):**
 
 The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation - the loop-runaway root cause). It applies to every backend and every review kind. The review skills run one fix pass and one re-review by default and loop further only on `--until=merge` or when asked, so the cap is a safety net:
 
@@ -2654,7 +2589,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   other exit-4 terminal: receipt, attempt, and status persist before
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
-  (codex/copilot/cursor/claude inside their wrapper; rp via `review-rounds increment`).
+  (codex/copilot/cursor/claude inside their wrapper; host via `review-rounds increment`).
   At the resolved cap in delivered-verdict rounds it refuses before dispatch,
   prints `ESCALATE:`, and exits `4`. The message includes live verdict rounds and
   refunded transport attempts. The cap resolves **env `MAX_REVIEW_ITERATIONS` >
@@ -2685,7 +2620,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 
 **Receipt convergence-ratchet fields (back-compatible):**
 
-- The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (review the fix commits; verify each prior finding fixed, or withdraw it when the author's `Declined #<n>: <reason>` commit line holds up; only a NEW ≥ Major problem the fixes introduced may block; all prior fixed or withdrawn + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review. By default that re-review is the last round; later rounds happen only under `--until=merge` or on a request to review until SHIP. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) - full back-compat. The **rp backend needs no injected ratchet**: its re-reviews deliberately stay in the SAME RepoPrompt chat (no `--new-chat`), so the reviewer retains genuine conversational memory of its own prior findings - the fresh-blind churn the ratchet compensates for does not occur there; on rp only the cap applies.
+- The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (review the fix commits; verify each prior finding fixed, or withdraw it when the author's `Declined #<n>: <reason>` commit line holds up; only a NEW ≥ Major problem the fixes introduced may block; all prior fixed or withdrawn + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review. By default that re-review is the last round; later rounds happen only under `--until=merge` or on a request to review until SHIP. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) - full back-compat.
 - **Receipt default paths are spec/task-scoped.** Plan and completion reviews default to `<repo>/.flow/tmp/plan-review-receipt-<spec>.json` and `<repo>/.flow/tmp/completion-review-receipt-<spec>.json`; impl review defaults to `/tmp/impl-review-receipt-<repo-hash>-<scope>.json`, where the scope is the task id or a hash of the branch ref for a standalone review - concurrent reviews in different repos, specs, or tasks never share a receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
 - **Codex/copilot verdict extraction is honest.** The verdict parse isolates the **final agent message** from the stream (dropping `command_execution` / `aggregated_output` tool output) and takes the **last** `<verdict>` match - a verdict literal echoed in tool output or a quoted-grammar literal in the final message can no longer beat the reviewer's real verdict.
 
@@ -2876,7 +2811,7 @@ Human-readable output shows spec/task counts.
 
 ## Review receipts
 
-RepoPrompt review receipts are written by the review skills (not flowctl commands). Backend review receipts are written by `flowctl <backend> impl-review` / `completion-review` at `--receipt`, else `REVIEW_RECEIPT_PATH`, else the scoped default path.
+Host review receipts are written by `flowctl review-rounds record --receipt-target`. Backend review receipts are written by `flowctl <backend> impl-review` / `completion-review` at `--receipt`, else `REVIEW_RECEIPT_PATH`, else the scoped default path.
 
 ## JSON Output
 

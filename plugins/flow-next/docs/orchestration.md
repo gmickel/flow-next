@@ -141,7 +141,7 @@ The Codex install maps these groups to that host's own tiers when its agent file
 
 > **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix pass plus one re-review per review (`review.maxIterations` caps the rounds as a safety net); turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. Two cheaper standing settings exist: `none` switches the review gates off entirely (each review skill exits cleanly, and `flow --auto` skips its plan-review and completion-review gates), while `host` keeps every gate and runs the reviewer as a host-native fresh-context subagent with a cross-family `reviewer:` pin from [the routing block](#the-routing-block) - no second CLI. The trade is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
-The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline; genuine variance is hooks, not cloned commands.
+The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline; genuine variance is hooks, not cloned commands.
 
 Managed hosts can supply a local execution provider for those four packaged
 backends. Set `FLOW_REVIEW_EXECUTION_URL` to a literal loopback HTTP endpoint and
@@ -264,8 +264,8 @@ Act-On tier capped at 5 non-blocking plus a published remainder) and runs ONE
 consolidated fix pass; the merged round consumes ONE review round against the cap,
 not three. Re-review rounds after fixes are a single dispatch carrying the full
 merged prior-finding container - the harvest value is the first round, and
-re-review verifies fixes, which needs continuity, not breadth. `rp` keeps its
-single stateful chat, and `copilot` / `cursor` / `claude` keep single dispatch every round.
+re-review verifies fixes, which needs continuity, not breadth. `copilot` / `cursor` /
+`claude` keep single dispatch every round.
 The residual is real: roughly a third of validated findings eluded every draw in
 the studies. By default there is exactly one re-review, in the same reviewer session
 and scoped to the fix commits: the author's `Declined #<n>: <reason>` commit lines let

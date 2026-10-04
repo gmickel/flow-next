@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Removed
+
+- **Reviews run on codex, host, claude, copilot or cursor; RepoPrompt is gone.** The `rp` review backend, the `flowctl rp` commands, `/flow-next:export-context` and plan review's `--review=export` mode were deprecated in 7.1.0 and are removed, so there is no macOS-only reviewer left to set up. A project that still names `rp` or `export` (in `review.backend`, `FLOW_REVIEW_BACKEND`, a spec's or task's review setting, or `--review=`) gets a one-line notice saying so and continues as if that value were not set: pick another reviewer with `flowctl config set review.backend <name>`. Re-run the Codex, OpenCode or Cursor installer to drop the export-context skill from an existing install. QA receipts written for a pipeline now record mode `receipt` instead of `rp`; receipts already on disk still read.
+
 ## [flow-next 7.1.2] - 2026-10-04
 
 ### Fixed

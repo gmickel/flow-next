@@ -57,7 +57,7 @@
       "additionalProperties": false,
       "properties": {
         "backend": {
-          "description": "Default review backend (rp, codex, copilot, cursor, claude, host, none) or spec form backend[:model[:effort]], e.g. codex:<model>:high or claude:<model>:high. cursor folds effort into the model name (no :effort rung); rp, host, and none are bare-only. copilot accepts no none/minimal effort; claude takes the claude CLI's own low|medium|high|xhigh|max. If unset, review commands require --review or FLOW_REVIEW_BACKEND. Optional: flow-next runs fully without a standing backend. It costs an out-of-host review pass per round plus a second CLI to install and authenticate; set it when agent-written diffs merge without a human reading them line by line, or invoke /flow-next:impl-review manually instead. See docs/running-lean.md.",
+          "description": "Default review backend (codex, copilot, cursor, claude, host, none) or spec form backend[:model[:effort]], e.g. codex:<model>:high or claude:<model>:high. cursor folds effort into the model name (no :effort rung); host and none are bare-only. copilot accepts no none/minimal effort; claude takes the claude CLI's own low|medium|high|xhigh|max. If unset, review commands require --review or FLOW_REVIEW_BACKEND. Optional: flow-next runs fully without a standing backend. It costs an out-of-host review pass per round plus a second CLI to install and authenticate; set it when agent-written diffs merge without a human reading them line by line, or invoke /flow-next:impl-review manually instead. See docs/running-lean.md.",
           "anyOf": [
             {
               "type": "null"
@@ -69,13 +69,12 @@
                 "copilot",
                 "cursor",
                 "host",
-                "none",
-                "rp"
+                "none"
               ]
             },
             {
               "type": "string",
-              "pattern": "^(claude|codex|copilot|cursor|host|none|rp):{1,2}$"
+              "pattern": "^(claude|codex|copilot|cursor|host|none):{1,2}$"
             },
             {
               "type": "string",

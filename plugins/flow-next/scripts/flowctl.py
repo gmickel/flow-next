@@ -1980,625 +1980,6 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def require_rp_cli() -> str:
-    """Resolve the supported RepoPrompt CLI ladder, preferring CE."""
-    candidates = [
-        shutil.which("rpce-cli"),
-        str(Path.home() / "RepoPrompt" / "repoprompt_ce_cli"),
-        str(
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "RepoPrompt CE"
-            / "repoprompt_ce_cli"
-        ),
-        shutil.which("rp-cli"),
-    ]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        path = Path(candidate)
-        try:
-            if path.is_file() and os.access(path, os.X_OK):
-                return str(path)
-        except OSError:
-            continue
-    error_exit(
-        "RepoPrompt CE CLI not found. Install RepoPrompt CE with rpce-cli "
-        "(legacy rp-cli is accepted only as a Classic compatibility fallback).",
-        use_json=False,
-        code=2,
-    )
-
-
-def run_rp_cli(
-    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
-) -> subprocess.CompletedProcess:
-    """Run the selected RepoPrompt CLI with safe error handling and timeout.
-
-    Args:
-        args: Command arguments to pass to the selected RepoPrompt CLI
-        timeout: Max seconds to wait. Default from FLOW_RP_TIMEOUT env or 1200s (20min).
-    """
-    if timeout is None:
-        timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = rp_cli or require_rp_cli()
-    cmd = [rp] + args
-    try:
-        return subprocess.run(
-            cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
-        )
-    except subprocess.TimeoutExpired:
-        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
-    except subprocess.CalledProcessError as e:
-        msg = (e.stderr or e.stdout or str(e)).strip()
-        error_exit(f"RepoPrompt CLI failed: {msg}", use_json=False, code=2)
-
-
-def run_rp_cli_unchecked(
-    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
-) -> subprocess.CompletedProcess:
-    """Run the selected RepoPrompt CLI without collapsing command failures.
-
-    Used when a caller needs to inspect stderr/stdout before deciding whether a
-    failure is a capability mismatch or a real RepoPrompt error.
-    """
-    if timeout is None:
-        timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = rp_cli or require_rp_cli()
-    cmd = [rp] + args
-    try:
-        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
-    except subprocess.TimeoutExpired:
-        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
-
-
-def try_run_rp_cli(
-    args: list[str], timeout: Optional[int] = None, *, rp_cli: Optional[str] = None
-) -> Optional[subprocess.CompletedProcess]:
-    """Run optional Classic capability probes without masking real failures.
-
-    Only Classic's explicit missing-``bind_context`` response is optional. CE
-    operational/protocol failures and all other Classic failures are
-    authoritative and must not fall through to workspace creation.
-    """
-    if timeout is None:
-        timeout = int(os.environ.get("FLOW_RP_TIMEOUT", "1200"))
-    rp = rp_cli or require_rp_cli()
-    cmd = [rp] + args
-    try:
-        return subprocess.run(
-            cmd, capture_output=True, text=True, encoding="utf-8", check=True, timeout=timeout
-        )
-    except subprocess.TimeoutExpired:
-        error_exit(f"RepoPrompt CLI timed out after {timeout}s", use_json=False, code=3)
-    except subprocess.CalledProcessError as exc:
-        output = (exc.stderr or exc.stdout or str(exc)).strip()
-        if Path(rp).name == "rp-cli" and is_rp_tool_missing_error(
-            output, "bind_context"
-        ):
-            return None
-        error_exit(f"RepoPrompt CLI failed: {output}", use_json=False, code=2)
-
-
-def is_rp_tool_missing_error(output: str, tool_name: str) -> bool:
-    """Return true only for clear RepoPrompt missing-tool capability errors."""
-    patterns = [
-        rf"\bTool not found:\s*{re.escape(tool_name)}\b",
-        rf"\bUnknown tool:\s*{re.escape(tool_name)}\b",
-        rf"\bUnknown function:\s*{re.escape(tool_name)}\b",
-        rf"\bNo such tool:\s*{re.escape(tool_name)}\b",
-    ]
-    return any(re.search(pattern, output, re.I) for pattern in patterns)
-
-
-def normalize_repo_root(path: str) -> list[str]:
-    """Normalize repo root for window matching."""
-    root = os.path.realpath(path)
-    roots = [root]
-    if root.startswith("/private/tmp/"):
-        roots.append("/tmp/" + root[len("/private/tmp/") :])
-    elif root.startswith("/tmp/"):
-        roots.append("/private/tmp/" + root[len("/tmp/") :])
-    return list(dict.fromkeys(roots))
-
-
-def parse_windows(raw: str) -> list[dict[str, Any]]:
-    """Parse rp-cli windows JSON."""
-    try:
-        data = json.loads(raw)
-        if isinstance(data, list):
-            return data
-        if (
-            isinstance(data, dict)
-            and "windows" in data
-            and isinstance(data["windows"], list)
-        ):
-            return data["windows"]
-    except json.JSONDecodeError as e:
-        if "single-window mode" in raw:
-            return [{"windowID": 1, "rootFolderPaths": []}]
-        error_exit(f"windows JSON parse failed: {e}", use_json=False, code=2)
-    error_exit("windows JSON has unexpected shape", use_json=False, code=2)
-
-
-def extract_window_id(win: dict[str, Any]) -> Optional[int]:
-    for key in ("windowID", "windowId", "window_id", "id"):
-        if key in win:
-            try:
-                return int(win[key])
-            except Exception:
-                return None
-    return None
-
-
-def extract_root_paths(win: dict[str, Any]) -> list[str]:
-    """Collect legacy and CE tab repository roots in deterministic order."""
-    paths: list[str] = []
-
-    def add(value: Any, *, coerce: bool = False) -> None:
-        values = value if isinstance(value, list) else [value]
-        for item in values:
-            path = item if isinstance(item, str) else str(item) if coerce else None
-            if path is not None and path not in paths:
-                paths.append(path)
-
-    for key in ("rootFolderPaths", "rootFolders", "rootFolderPath"):
-        if key in win:
-            add(win[key], coerce=True)
-
-    tabs = win.get("tabs")
-    if isinstance(tabs, list):
-        for tab in tabs:
-            if not isinstance(tab, dict):
-                continue
-            for key in ("repo_paths", "repoPaths"):
-                if key in tab:
-                    add(tab[key])
-
-    return paths
-
-
-def parse_manage_workspaces(raw: str) -> list[dict[str, Any]]:
-    """Parse manage_workspaces list JSON, tolerating nested wrappers."""
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        error_exit(
-            f"manage_workspaces list JSON parse failed: {e}",
-            use_json=False,
-            code=2,
-        )
-
-    for _ in range(4):
-        if isinstance(data, list):
-            break
-        if isinstance(data, dict):
-            for key in ("workspaces", "result", "data"):
-                if key in data:
-                    data = data[key]
-                    break
-            else:
-                break
-        else:
-            break
-
-    if isinstance(data, list):
-        workspaces: list[dict[str, Any]] = []
-        for item in data:
-            if isinstance(item, dict):
-                workspaces.append(item)
-            elif isinstance(item, str):
-                workspaces.append({"name": item})
-        return workspaces
-
-    error_exit("manage_workspaces list JSON has unexpected shape", use_json=False, code=2)
-
-
-def extract_workspace_id(workspace: dict[str, Any]) -> Optional[str]:
-    for key in ("id", "workspace_id", "workspaceId", "uuid"):
-        val = workspace.get(key)
-        if val is not None:
-            return str(val)
-    return None
-
-
-def extract_workspace_name(workspace: dict[str, Any]) -> Optional[str]:
-    for key in ("name", "workspace", "title"):
-        val = workspace.get(key)
-        if val is not None:
-            return str(val)
-    return None
-
-
-def extract_workspace_paths(workspace: dict[str, Any]) -> list[str]:
-    for key in (
-        "repoPaths",
-        "repo_paths",
-        "rootFolderPaths",
-        "rootFolders",
-        "folderPaths",
-        "folder_paths",
-        "paths",
-    ):
-        if key in workspace:
-            val = workspace[key]
-            if isinstance(val, list):
-                return [str(v) for v in val]
-            if isinstance(val, str):
-                return [val]
-
-    for key in ("folder_path", "repoPath", "repo_path", "path"):
-        val = workspace.get(key)
-        if isinstance(val, str):
-            return [val]
-
-    return []
-
-
-def extract_workspace_window_ids(workspace: dict[str, Any]) -> list[int]:
-    for key in (
-        "showingInWindows",
-        "showing_in_windows",
-        "showingWindows",
-        "window_ids",
-        "windowIds",
-        "windows",
-    ):
-        if key not in workspace:
-            continue
-
-        val = workspace[key]
-        items = val if isinstance(val, list) else [val]
-        window_ids: list[int] = []
-
-        for item in items:
-            if isinstance(item, dict):
-                win_id = extract_window_id(item)
-                if win_id is not None:
-                    window_ids.append(win_id)
-                continue
-
-            try:
-                window_ids.append(int(item))
-            except Exception:
-                continue
-
-        return list(dict.fromkeys(window_ids))
-
-    return []
-
-
-def workspace_matches_roots(workspace: dict[str, Any], roots: list[str]) -> bool:
-    for path in extract_workspace_paths(workspace):
-        real_path = os.path.realpath(path)
-        if real_path in roots or path in roots:
-            return True
-    return False
-
-
-def find_workspace_for_repo(
-    workspaces: list[dict[str, Any]], roots: list[str], preferred_window: Optional[int] = None
-) -> Optional[dict[str, Any]]:
-    matches = [ws for ws in workspaces if workspace_matches_roots(ws, roots)]
-    if not matches:
-        return None
-
-    if preferred_window is not None:
-        for workspace in matches:
-            if preferred_window in extract_workspace_window_ids(workspace):
-                return workspace
-
-    visible = [ws for ws in matches if extract_workspace_window_ids(ws)]
-    if visible:
-        return sorted(
-            visible,
-            key=lambda ws: (
-                min(extract_workspace_window_ids(ws)),
-                extract_workspace_name(ws) or "",
-            ),
-        )[0]
-
-    return matches[0]
-
-
-def extract_response_window_id(data: Any) -> Optional[int]:
-    if isinstance(data, dict):
-        win_id = extract_window_id(data)
-        if win_id is not None:
-            return win_id
-        for key in ("result", "data", "binding"):
-            if key in data:
-                win_id = extract_response_window_id(data[key])
-                if win_id is not None:
-                    return win_id
-        return None
-
-    if isinstance(data, list):
-        for item in data:
-            win_id = extract_response_window_id(item)
-            if win_id is not None:
-                return win_id
-
-    return None
-
-
-def extract_builder_tab_from_payload(data: Any) -> Optional[str]:
-    if isinstance(data, dict):
-        for key in ("tab_id", "tab", "tabId", "context_id", "context", "contextId"):
-            val = data.get(key)
-            if isinstance(val, str) and val:
-                return val
-        for key in ("result", "review", "data"):
-            if key in data:
-                tab = extract_builder_tab_from_payload(data[key])
-                if tab:
-                    return tab
-        return None
-
-    if isinstance(data, list):
-        for item in data:
-            tab = extract_builder_tab_from_payload(item)
-            if tab:
-                return tab
-
-    return None
-
-
-def validate_rp_classic_builder_context(data: Any) -> None:
-    """Reject Classic builder tabs without a published prompt or selection."""
-    for _ in range(4):
-        if not isinstance(data, dict):
-            break
-        if "prompt" in data or "selection" in data:
-            break
-        for key in ("result", "data", "context"):
-            nested = data.get(key)
-            if isinstance(nested, dict):
-                data = nested
-                break
-        else:
-            break
-
-    if not isinstance(data, dict):
-        error_exit(
-            "Builder context JSON has unexpected shape", use_json=False, code=2
-        )
-
-    prompt = data.get("prompt")
-    selection = data.get("selection")
-    files = selection.get("files") if isinstance(selection, dict) else None
-    if not isinstance(prompt, str) or not prompt.strip():
-        error_exit(
-            "Builder returned an empty prompt; setup is unusable",
-            use_json=False,
-            code=2,
-        )
-    if not isinstance(files, list) or not files:
-        error_exit(
-            "Builder returned an empty selection; setup is unusable",
-            use_json=False,
-            code=2,
-        )
-
-
-def verify_rp_classic_builder_context(
-    window: int, tab: str, *, rp_cli: Optional[str] = None
-) -> None:
-    """Read Classic's published builder tab and require usable context."""
-    expression = 'workspace_context include=["prompt","selection"]'
-    result = run_rp_cli(
-        ["-w", str(window), "-t", tab, "--raw-json", "-e", expression],
-        rp_cli=rp_cli,
-    )
-    try:
-        data = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        error_exit(
-            f"Builder context JSON parse failed: {exc}", use_json=False, code=2
-        )
-    validate_rp_classic_builder_context(data)
-
-
-def validate_rp_ce_builder_review(data: Any) -> dict[str, Any]:
-    """Validate CE's authoritative direct ``context_builder`` review result.
-
-    RepoPrompt CE intentionally need not publish an explicitly targeted
-    Context Builder run into the visible compose tab.  The MCP tool result is
-    therefore the only success oracle on the CE path.
-    """
-    if not isinstance(data, dict):
-        error_exit(
-            "CE context_builder JSON has unexpected shape",
-            use_json=False,
-            code=2,
-        )
-
-    context_id = data.get("context_id")
-    status = data.get("status")
-    prompt = data.get("prompt")
-    selection = data.get("selection")
-    file_count = data.get("file_count")
-    total_tokens = data.get("total_tokens")
-    response_type = data.get("response_type")
-    review = data.get("review")
-
-    if not isinstance(context_id, str) or not context_id.strip():
-        error_exit(
-            "CE context_builder response missing context_id",
-            use_json=False,
-            code=2,
-        )
-    if status != "completed":
-        error_exit(
-            f"CE context_builder did not complete: {status!r}",
-            use_json=False,
-            code=2,
-        )
-    if not isinstance(prompt, str) or not prompt.strip():
-        error_exit(
-            "CE context_builder returned an empty prompt",
-            use_json=False,
-            code=2,
-        )
-    if not isinstance(selection, str) or not selection.strip():
-        error_exit(
-            "CE context_builder returned an empty formatted selection",
-            use_json=False,
-            code=2,
-        )
-    if (
-        isinstance(file_count, bool)
-        or not isinstance(file_count, int)
-        or file_count <= 0
-    ):
-        error_exit(
-            "CE context_builder returned non-positive file_count",
-            use_json=False,
-            code=2,
-        )
-    if (
-        isinstance(total_tokens, bool)
-        or not isinstance(total_tokens, int)
-        or total_tokens <= 0
-    ):
-        error_exit(
-            "CE context_builder returned non-positive total_tokens",
-            use_json=False,
-            code=2,
-        )
-    if response_type != "review":
-        error_exit(
-            "CE context_builder response_type is not review",
-            use_json=False,
-            code=2,
-        )
-    if not isinstance(review, dict):
-        error_exit(
-            "CE context_builder response missing review result",
-            use_json=False,
-            code=2,
-        )
-    chat_id = review.get("chat_id")
-    review_mode = review.get("mode")
-    review_response = review.get("response")
-    if not isinstance(chat_id, str) or not chat_id.strip():
-        error_exit(
-            "CE context_builder review missing chat_id",
-            use_json=False,
-            code=2,
-        )
-    if review_mode != "review":
-        error_exit(
-            "CE context_builder review mode is not review",
-            use_json=False,
-            code=2,
-        )
-    if not isinstance(review_response, str) or not review_response.strip():
-        error_exit(
-            "CE context_builder review returned an empty response",
-            use_json=False,
-            code=2,
-        )
-    return data
-
-
-def bind_context_window(
-    repo_root: str,
-    *,
-    create_if_missing: bool = False,
-    rp_cli: Optional[str] = None,
-) -> Optional[int]:
-    """Prefer RepoPrompt's bind_context repo-path matching when available."""
-    payload = {"op": "bind", "working_dirs": normalize_repo_root(repo_root)}
-    if create_if_missing:
-        payload["create_if_missing"] = True
-    result = try_run_rp_cli(
-        ["--raw-json", "-e", f"call bind_context {json.dumps(payload)}"],
-        rp_cli=rp_cli,
-    )
-    if result is None:
-        return None
-
-    try:
-        data = json.loads(result.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        error_exit(
-            f"bind_context JSON parse failed: {exc}", use_json=False, code=2
-        )
-
-    window_id = extract_response_window_id(data)
-    if window_id is None:
-        error_exit(
-            "bind_context response missing numeric window id",
-            use_json=False,
-            code=2,
-        )
-    return window_id
-
-
-def parse_builder_tab(output: str) -> str:
-    for pattern in (
-        r"Tab:\s*([A-Za-z0-9-]+)",
-        r"Context:\s*([A-Za-z0-9-]+)",
-        r"\bT=([A-Za-z0-9-]+)\b",
-        r'"tab_id"\s*:\s*"([^\"]+)"',
-        r'"tab"\s*:\s*"([^\"]+)"',
-        r'"context_id"\s*:\s*"([^\"]+)"',
-        r'"context"\s*:\s*"([^\"]+)"',
-    ):
-        match = re.search(pattern, output)
-        if match:
-            return match.group(1)
-
-    try:
-        data = json.loads(output)
-    except json.JSONDecodeError:
-        data = None
-
-    if data is not None:
-        tab = extract_builder_tab_from_payload(data)
-        if tab:
-            return tab
-
-    error_exit("builder output missing tab/context id", use_json=False, code=2)
-
-
-def parse_chat_id(output: str) -> Optional[str]:
-    match = re.search(r"(?:\*\*)?Chat(?:\*\*)?\s*:\s*`([^`]+)`", output)
-    if match:
-        return match.group(1)
-    match = re.search(r"\"chat_id\"\s*:\s*\"([^\"]+)\"", output)
-    if match:
-        return match.group(1)
-    return None
-
-
-def build_chat_payload(
-    message: str,
-    mode: str,
-    new_chat: bool = False,
-    chat_name: Optional[str] = None,
-    chat_id: Optional[str] = None,
-    selected_paths: Optional[list[str]] = None,
-    include_legacy_fields: bool = True,
-) -> str:
-    payload: dict[str, Any] = {
-        "message": message,
-        "mode": mode,
-    }
-    if new_chat:
-        payload["new_chat"] = True
-    if chat_id:
-        payload["chat_id"] = chat_id
-    if include_legacy_fields:
-        if chat_name:
-            payload["chat_name"] = chat_name
-        if selected_paths:
-            payload["selected_paths"] = selected_paths
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-
-
 def is_supported_schema(version: Any) -> bool:
     """Check schema version compatibility."""
     try:
@@ -3177,9 +2558,6 @@ def cmd_setup_status(args: argparse.Namespace) -> None:
         "codex": "codex", "copilot": "copilot", "cursor": "cursor-agent",
         "claude": "claude", "grok": "grok", "gh": "gh",
     }.items()}
-    tools["rp"] = bool(shutil.which("rpce-cli") or shutil.which("rp-cli") or any(
-        os.access(Path.home() / path, os.X_OK) for path in
-        ("RepoPrompt/repoprompt_ce_cli", "Library/Application Support/RepoPrompt CE/repoprompt_ce_cli")))
     spec_paths = [root / name for name in ("SPEC.md", "spec.md") if exists(root / name)]
     spec_files = []
     for path in spec_paths:
@@ -7837,7 +7215,6 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
 #
 # Spec grammar: ``backend[:model[:effort]]`` — colon-delimited, three parts max,
 # trailing parts optional. Examples:
-#   - ``rp``                              backend only (RP uses window/session, not per-call model)
 #   - ``codex``                           backend only, defaults from registry
 #   - ``codex:gpt-5.4``                   backend + model, default effort
 #   - ``codex:gpt-5.4:xhigh``             full spec
@@ -7845,8 +7222,8 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
 #
 # ``BACKEND_REGISTRY`` is a static dict (no plugin discovery). When the registry
 # has ``models`` or ``efforts`` set to ``None``, that backend rejects the
-# corresponding spec field (e.g. ``rp:opus`` is invalid — RP doesn't accept a
-# model). Every validation error lists the valid set sorted alphabetically so
+# corresponding spec field (e.g. ``host:opus`` is invalid — host doesn't accept
+# a model). Every validation error lists the valid set sorted alphabetically so
 # users get a deterministic, copy-pasteable hint.
 #
 # fn-112 review-driver hooks (run_exec / resolve_spec / check_probe / …)
@@ -7858,11 +7235,6 @@ def is_sandbox_failure(exit_code: int, stdout: str, stderr: str) -> bool:
 # enable web_search, so ``minimal`` is safe here — documented for the day we do.
 
 BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
-    "rp": {
-        # RepoPrompt picks model via window/session config, not per-call.
-        "models": None,
-        "efforts": None,
-    },
     "codex": {
         # fn-76: ``models`` is an ORDERED quality ranking (strongest first), NOT
         # a membership set. ``default_model`` MUST equal ``models[0]`` (asserted
@@ -8008,6 +7380,30 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
 # call-site that needs the valid set without touching registry internals.
 VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 
+# Backend values that no longer exist. A stored or env value naming one prints
+# REMOVED_BACKEND_NOTICE once per invocation and is treated as unset; a typed
+# value naming one is rejected with the same text.
+REMOVED_REVIEW_BACKENDS: tuple[str, ...] = ("rp", "export")
+REMOVED_BACKEND_NOTICE = (
+    "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; "
+    "review backends: "
+    + ", ".join(b for b in VALID_BACKENDS if b != "none")
+    + "."
+)
+_removed_backend_notice_shown = False
+
+
+def _notify_removed_backend() -> None:
+    """Print REMOVED_BACKEND_NOTICE to stderr, once per invocation."""
+    global _removed_backend_notice_shown
+    if not _removed_backend_notice_shown:
+        _removed_backend_notice_shown = True
+        print(
+            f"notice: {REMOVED_BACKEND_NOTICE} Ignoring the stale value "
+            "(no reviewer configured from it).",
+            file=sys.stderr,
+        )
+
 
 # --- triage fast-judge model defaults --------------------------------------
 #
@@ -8088,7 +7484,7 @@ class BackendSpec:
           - empty / whitespace-only → ``Empty backend spec``
           - more than 3 colon-separated parts → explicit ValueError
           - unknown backend → lists valid backends
-          - model on backend that doesn't accept one (rp/none/host) → ValueError
+          - model on backend that doesn't accept one (none/host) → ValueError
           - unknown model → lists valid models for that backend
           - effort on backend that doesn't accept one → ValueError
           - unknown effort → lists valid efforts for that backend
@@ -8109,6 +7505,8 @@ class BackendSpec:
         backend = parts[0].strip()
         if not backend:
             raise ValueError(f"Empty backend in spec: {raw!r}")
+        if backend in REMOVED_REVIEW_BACKENDS:
+            raise ValueError(REMOVED_BACKEND_NOTICE)
         if backend not in BACKEND_REGISTRY:
             valid = sorted(BACKEND_REGISTRY.keys())
             raise ValueError(
@@ -8186,10 +7584,10 @@ class BackendSpec:
           2. ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env var
           3. registry ``default_model`` / ``default_effort``
 
-        Backends with ``models is None`` (rp, none, host) always resolve
+        Backends with ``models is None`` (none, host) always resolve
         ``model`` to ``None`` - env vars are ignored for fields the backend
         doesn't accept. Same for ``effort``. This prevents a stray
-        ``FLOW_RP_MODEL`` from leaking into an RP spec.
+        ``FLOW_HOST_MODEL`` from leaking into a host spec.
         """
         reg = BACKEND_REGISTRY[self.backend]
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
@@ -8295,6 +7693,11 @@ def parse_backend_spec_lenient(
     just "unset").
     """
     if raw is None or not str(raw).strip():
+        return None
+    # A removed backend is announced even when ``warn`` is off: silently
+    # dropping it would switch review off without saying why.
+    if str(raw).strip().split(":", 1)[0].strip() in REMOVED_REVIEW_BACKENDS:
+        _notify_removed_backend()
         return None
     # fn-76: intercept the pre-grammar dash-composite (``backend:model-effort``)
     # BEFORE parse() warn-and-accepts it as a literal model. Only the two-part
@@ -9186,10 +8589,9 @@ def run_claude_exec(
 
 # --- Confidence calibration (fn-29.3) ---
 #
-# Shared rubric + suppression gate injected into review prompts so rp, codex,
-# and copilot all emit the same discrete confidence anchors. Keep synchronized
-# with the RP workflow.md files and quality-auditor.md — if you change the
-# wording, update those copies too.
+# Shared rubric + suppression gate injected into review prompts so every
+# review backend emits the same discrete confidence anchors. Keep synchronized
+# with quality-auditor.md — if you change the wording, update that copy too.
 
 CONFIDENCE_RUBRIC_BLOCK = """## Confidence (pick ONE anchor; no interpolation)
 - **100** — definitive from code alone (mechanical: off-by-one, wrong type, swapped args).
@@ -9204,7 +8606,7 @@ Suppression gate: drop findings below 75, EXCEPT P0 at 50+ (those survive). Emit
 #
 # Shared classification rubric injected alongside CONFIDENCE_RUBRIC_BLOCK. Only
 # `introduced` findings gate the verdict; `pre_existing` surface in a separate
-# non-blocking section. Keep synchronized with the RP workflow.md files.
+# non-blocking section.
 
 CLASSIFICATION_RUBRIC_BLOCK = """## Introduced vs pre-existing
 Classify each finding: **introduced** (this diff caused or newly exposed it) or **pre_existing** (already on base, untouched — a finding on an unchanged line is pre_existing by default; confirm with `git blame`/base-file read when cheap).
@@ -9237,8 +8639,8 @@ remain accepted as a logged fallback when this block is omitted."""
 # look at committed `.flow/*` JSONs/specs and naturally suggest "why are these
 # committed?" An autofix run could then apply that finding and destroy its
 # own state. This block is injected alongside the confidence + classification
-# rubrics so every review backend (rp, codex, copilot) honors the same hard list.
-# Keep synchronized with the three workflow.md files + quality-auditor.md.
+# rubrics so every review backend honors the same hard list.
+# Keep synchronized with quality-auditor.md.
 
 PROTECTED_ARTIFACTS_BLOCK = """## Protected artifacts
 NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped."""
@@ -9253,8 +8655,7 @@ NEVER recommend deleting / gitignoring / removing these committed pipeline paths
 # template pre-1.1.4) and `## Acceptance criteria` (older lowercase form)
 # variants for back-compat. Missing R-IDs flip the verdict to NEEDS_WORK
 # unless the spec marks the requirement deferred. The block is injected into
-# impl-review and epic-review (completion-review) prompts. Keep synchronized
-# with the RP workflow.md files.
+# impl-review and epic-review (completion-review) prompts.
 
 R_ID_COVERAGE_BLOCK = """## Requirements coverage (only if the spec has R-IDs like `- **R1:** ...`)
 If R-IDs are present, read the epic's `## Acceptance Criteria` (tolerate legacy `## Acceptance` / `## Acceptance criteria`) and emit:
@@ -9266,8 +8667,7 @@ Status ∈ met / partial / not-addressed / deferred. After the table emit `Unadd
 #
 # Always-on Fowler smell heuristics injected into IMPL reviews only (a spec plan
 # has no code smells). Validated (reveval) to lift smell detection 7->10/10 while
-# cutting tokens. Judgement calls, not hard violations. Keep synchronized with
-# the RP impl-review workflow.md heredoc's `## Code-smell baseline` section.
+# cutting tokens. Judgement calls, not hard violations.
 
 SMELL_BASELINE_BLOCK = """
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
@@ -11115,8 +10515,8 @@ def _record_review_attempt_locked(
     elif pending_count == 1 and len(scope_reservations) == 1:
         reservation_id, metadata = next(iter(scope_reservations.items()))
     elif pending_count == 1 and not scope_reservations:
-        # Pre-fn-159 count-only reservations.  This keeps the one serial RP
-        # fence working during the coordinated .1/.7 landing window.
+        # Pre-fn-159 count-only reservations.  This keeps the one serial
+        # prose fence working during the coordinated .1/.7 landing window.
         metadata = None
     else:
         if pending_count < 1:
@@ -11153,7 +10553,7 @@ def _record_review_attempt_locked(
     # share one code path (and one atomic transaction).
     # PR #290 bot r4: that fold is only correct when NO receipt is published
     # by the same finalization. When this call also journals a receipt target
-    # (the RP fences: record then `review-findings attach`), folding terminal
+    # (the host fences: record then `review-findings attach`), folding terminal
     # status here would publish it BEFORE the receipt exists — a failed attach
     # then leaves terminal status with no valid receipt, which the workflow's
     # Step 0.5 reads as "retry forever". So route it through the same deferred
@@ -11185,8 +10585,8 @@ def _record_review_attempt_locked(
     # container (fn-159 round 8: container construction ownership is SINGULAR;
     # attach only publishes what is journaled here, never re-derives).
     outcome = "verdict" if verdict else "transport_failure"
-    # One clock for the attempt row and the journaled receipt payload.  The RP
-    # and host fences assemble the receipt payload BEFORE calling record
+    # One clock for the attempt row and the journaled receipt payload.  The
+    # host fences assemble the receipt payload BEFORE calling record
     # (fn-159 round 8 ordering), so they cannot know this attempt's timestamp.
     # An explicitly EMPTY `attempt_timestamp` is their request to have it
     # stamped here; an absent key stays absent, and a supplied value wins.
@@ -11221,7 +10621,7 @@ def _record_review_attempt_locked(
         progress = {
             "receipt": "pending" if journal_publishes else "not_applicable",
             # In-process callers hand their already-built container/digest in
-            # before finalization. RP builds the same container here and the
+            # before finalization. Host builds the same container here and the
             # attach/replay fence backfills its digest under the sidecar lock.
             "digest": (
                 "complete" if findings_built
@@ -11344,7 +10744,7 @@ def _record_review_attempt_locked(
                         # In-process backends supply the EXTRACTED reviewer
                         # message: `output` is a transport envelope (codex
                         # returns a JSONL event stream) that the criteria
-                        # parser cannot read. RP/host fences pass nothing and
+                        # parser cannot read. Host fences pass nothing and
                         # keep `output`.
                         journal["criteria"] = bind_review_criteria(
                             parse_review_criteria(
@@ -11397,14 +10797,14 @@ def _record_review_attempt_locked(
             metadata.get("superseded_by") if reservation_superseded else None
         ),
         # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
-        # has it; finalize-time HEAD is only the fallback (rp/refund paths).
+        # has it; finalize-time HEAD is only the fallback (host/refund paths).
         "head_sha": reviewed_head_sha or _review_head_sha(),
         # fn-183 (#312) work volume: how much output the verdict actually cost.
         # Bytes only - the output itself is never retained (see output_sha256).
         "output_bytes": len((output or "").encode("utf-8", errors="replace")),
         # fn-183 (#312) provenance MARKER (not omission): True when a
         # pre-dispatch snapshot supplied head_sha, False when the finalize-time
-        # `git rev-parse HEAD` fallback did (the rp/host `review-rounds record`
+        # `git rev-parse HEAD` fallback did (the host `review-rounds record`
         # CLI path, and the dispatch-error refund paths). A row with NO
         # head_sha_observed key predates fn-183 and means unknown - which is
         # exactly why this is a marker and not an omission: omission would make
@@ -11435,7 +10835,7 @@ def _record_review_attempt_locked(
     # fn-193 (#338): the model that ACTUALLY ran, taken from the same
     # `_receipt_model_effort` values the receipt records (so a ladder downgrade
     # or a codex resume carry lands here honestly). Written only where the
-    # dispatcher resolved them - the rp/host `review-rounds record` path has no
+    # dispatcher resolved them - the host `review-rounds record` path has no
     # such fact and records no key, never "unknown"/"auto".
     # Ladder floors pass None here (the sites gate on resolution["floor"] -
     # #349 rounds 4-5): a floored "auto"/"default" is a selector placeholder,
@@ -20659,10 +20059,13 @@ def cmd_config_set(args: argparse.Namespace) -> None:
 
     # fn-123 R5 - reject invalid host backend specs at WRITE time. The read-time
     # lenient parser treats a bad host spec as unset (loud, but late); accepting
-    # `host:opus` here and failing later is a worse contract. Only host is
-    # write-validated - legacy lenience for other backends' stored values stays.
+    # `host:opus` here and failing later is a worse contract. Only host and the
+    # removed backends are write-validated - legacy lenience for other backends'
+    # stored values stays.
     if canonical_key == "review.backend" and isinstance(args.value, str):
         _rb_first = args.value.strip().split(":", 1)[0].strip()
+        if _rb_first in REMOVED_REVIEW_BACKENDS:
+            error_exit(REMOVED_BACKEND_NOTICE, use_json=args.json)
         if _rb_first == "host" and ":" in args.value.strip():
             error_exit(
                 f"Backend 'host' does not accept a model/effort (got {args.value!r}). "
@@ -20741,10 +20144,10 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
         try:
             if is_task_id(review_id):
                 canonical = resolve_task_arg(flow_dir, review_id) or review_id
-                resolved, rsource = resolve_review_spec("rp", canonical, return_source=True)
+                resolved, rsource = resolve_review_spec("none", canonical, return_source=True)
             elif is_spec_id(review_id):
                 canonical = expand_bare_spec_id(flow_dir, review_id) or review_id
-                resolved, rsource = resolve_review_spec("rp", None, spec_id=canonical, return_source=True)
+                resolved, rsource = resolve_review_spec("none", None, spec_id=canonical, return_source=True)
             else:
                 resolved, rsource = None, None
             if rsource in ("task", "epic"):
@@ -25981,7 +25384,7 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
         for i, row in enumerate(coverage.get("rids", [])):
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "no_live_scenario", "backend_cli"):
                 errors.append(f"rid_coverage.rids[{i}]: invalid id or coverage")
-    mode = data.get("mode") or ("rp" if args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") else "interactive")
+    mode = data.get("mode") or ("receipt" if args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") else "interactive")
     if not isinstance(mode, str):
         errors.append("mode: expected a string")
     _artifact_errors(errors, args)
@@ -27200,7 +26603,7 @@ def build_global_criteria_block() -> str:
 def cmd_criteria_prompt_block(args: argparse.Namespace) -> None:
     """Print the criteria injection block (empty output when absent/empty).
 
-    Used by the rp/host completion-review workflows to compose the same
+    Used by the host completion-review workflow to compose the same
     block the subprocess backends get from build_completion_review_prompt.
     An existing-but-invalid `.flow/criteria.md` exits nonzero with the
     validation errors on stderr (stdout stays empty so a careless append
@@ -31905,14 +31308,13 @@ def _resolve_review_rounds_args(args: argparse.Namespace) -> "tuple[str, Optiona
 
 
 def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
-    """Enforce + increment the deterministic review-round cap (fn-90 R5, rp surface).
+    """Enforce + increment the deterministic review-round cap (fn-90 R5, host surface).
 
-    The codex/copilot/cursor review handlers call
-    ``enforce_and_increment_review_cap`` internally at dispatch time. The rp
+    The codex/copilot/cursor/claude review handlers call
+    ``enforce_and_increment_review_cap`` internally at dispatch time. The host
     backend has no flowctl review handler — its reviews are dispatched from
-    skill prose via ``flowctl rp chat-send`` — so this command exposes the SAME
-    helper for the rp workflows to call before EVERY review dispatch (including
-    the first). Same counter, same refusal: at the cap it prints an
+    skill prose — so this command exposes the SAME helper for the host
+    workflows to call before EVERY review dispatch (including the first). Same counter, same refusal: at the cap it prints an
     ``ESCALATE:`` marker and exits ``REVIEW_CAP_EXIT_CODE`` (4) without
     incrementing further.
 
@@ -32009,7 +31411,7 @@ def cmd_review_rounds_reset(args: argparse.Namespace) -> None:
 
 
 def cmd_review_rounds_record(args: argparse.Namespace) -> None:
-    """Record an RP response and refund its reservation when no verdict exists."""
+    """Record a host review response and refund its reservation when no verdict exists."""
     spec_id, task_id = _resolve_review_rounds_args(args)
     try:
         output = Path(args.output_file).read_text(encoding="utf-8")
@@ -32316,9 +31718,7 @@ def _resume_completion_terminal(flow_dir: Path, spec_id: str, receipt_path: Opti
         try:
             if recovery.exists() and not matches(recovery):
                 recovery.unlink()
-            required = backend in ("codex", "copilot", "cursor", "claude", "host") or (
-                backend == "rp" and verdict == "SHIP" and (bool(receipt_path) or recovery.exists())
-            )
+            required = backend in ("codex", "copilot", "cursor", "claude", "host")
             if recovery.exists():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write(destination, recovery.read_text(encoding="utf-8"))
@@ -32355,7 +31755,7 @@ def cmd_review_rounds_resume_terminal(args: argparse.Namespace) -> None:
 
 
 def cmd_review_artifact_build(args: argparse.Namespace) -> None:
-    """Write the exact domain-separated blob consumed by an RP reserve fence."""
+    """Write the exact domain-separated blob consumed by a host reserve fence."""
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
@@ -37855,365 +37255,6 @@ def validate_epic(
                     errors.append(finding)
 
     return errors, warnings, len(tasks)
-
-
-def cmd_rp_prompt_get(args: argparse.Namespace) -> None:
-    cmd = ["-w", str(args.window), "-t", args.tab, "-e", "prompt get"]
-    res = run_rp_cli(cmd)
-    print(res.stdout, end="")
-
-
-def cmd_rp_prompt_set(args: argparse.Namespace) -> None:
-    message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
-    payload = json.dumps({"op": "set", "text": message})
-    cmd = [
-        "-w",
-        str(args.window),
-        "-t",
-        args.tab,
-        "-e",
-        f"call prompt {payload}",
-    ]
-    res = run_rp_cli(cmd)
-    print(res.stdout, end="")
-
-
-def cmd_rp_select_get(args: argparse.Namespace) -> None:
-    cmd = ["-w", str(args.window), "-t", args.tab, "-e", "select get"]
-    res = run_rp_cli(cmd)
-    print(res.stdout, end="")
-
-
-def cmd_rp_select_add(args: argparse.Namespace) -> None:
-    if not args.paths:
-        error_exit("select-add requires at least one path", use_json=False, code=2)
-    quoted = " ".join(shlex.quote(p) for p in args.paths)
-    cmd = ["-w", str(args.window), "-t", args.tab, "-e", f"select add {quoted}"]
-    res = run_rp_cli(cmd)
-    print(res.stdout, end="")
-
-
-def cmd_rp_chat_send(args: argparse.Namespace) -> None:
-    message = read_text_or_exit(Path(args.message_file), "Message file", use_json=False)
-    chat_id_arg = getattr(args, "chat_id", None)
-    tab_arg = getattr(args, "tab", None)
-    context_id_arg = getattr(args, "context_id", None)
-    if not tab_arg and not context_id_arg:
-        error_exit(
-            "chat-send requires Classic --tab or CE --context-id",
-            use_json=False,
-            code=2,
-        )
-    if context_id_arg and not chat_id_arg:
-        error_exit(
-            "chat-send --context-id requires --chat-id",
-            use_json=False,
-            code=2,
-        )
-    mode = getattr(args, "mode", "chat") or "chat"
-    oracle_payload = build_chat_payload(
-        message=message,
-        mode=mode,
-        new_chat=args.new_chat,
-        chat_id=chat_id_arg,
-        include_legacy_fields=False,
-    )
-    legacy_payload = build_chat_payload(
-        message=message,
-        mode=mode,
-        new_chat=args.new_chat,
-        chat_name=args.chat_name,
-        chat_id=chat_id_arg,
-        selected_paths=args.selected_paths,
-    )
-    oracle_cmd = (
-        ["--context-id", context_id_arg]
-        if context_id_arg
-        else ["-w", str(args.window)]
-    )
-    if tab_arg:
-        oracle_cmd.extend(("-t", tab_arg))
-    oracle_cmd.extend(("-e", f"call oracle_send {oracle_payload}"))
-    if context_id_arg:
-        res = run_rp_cli(oracle_cmd)
-        print(res.stdout, end="")
-        return
-    legacy_cmd = [
-        "-w",
-        str(args.window),
-        "-t",
-        tab_arg,
-        "-e",
-        f"call chat_send {legacy_payload}",
-    ]
-    res = run_rp_cli_unchecked(oracle_cmd)
-    if res.returncode != 0:
-        oracle_error = (res.stderr or res.stdout or "").strip()
-        if not is_rp_tool_missing_error(oracle_error, "oracle_send"):
-            error_exit(
-                f"RepoPrompt CLI failed: {oracle_error}", use_json=False, code=2
-            )
-        res = run_rp_cli(legacy_cmd)
-    output = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
-    chat_id = parse_chat_id(output)
-    if args.json:
-        print(json.dumps({"chat": chat_id}))
-    else:
-        print(res.stdout, end="")
-
-
-def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
-    cmd = [
-        "-w",
-        str(args.window),
-        "-t",
-        args.tab,
-        "-e",
-        f"prompt export {shlex.quote(args.out)}",
-    ]
-    res = run_rp_cli(cmd)
-    print(res.stdout, end="")
-
-
-def cmd_rp_mode_probe(args: argparse.Namespace) -> None:
-    """Report RP transport mode without selecting a window or opening a tab."""
-    rp_cli = require_rp_cli()
-    mode = "classic" if Path(rp_cli).name == "rp-cli" else "ce"
-    if args.json:
-        json_output({"mode": mode})
-    else:
-        print(f"RP_MODE={mode}")
-
-
-def cmd_rp_setup_review(args: argparse.Namespace) -> None:
-    """Atomic RP setup: resolve a window, then run Context Builder.
-
-    CE review mode consumes the authoritative direct tool result. Classic is
-    the isolated compatibility fallback and retains its published-tab flow.
-    """
-
-    repo_root = os.path.realpath(args.repo_root)
-    summary_file = getattr(args, "summary_file", None)
-    summary = (
-        read_text_or_exit(Path(summary_file), "Review summary", use_json=False)
-        if summary_file
-        else args.summary
-    )
-    response_type = getattr(args, "response_type", None)
-    response_file = getattr(args, "response_file", None)
-    if not isinstance(summary, str) or not summary.strip():
-        error_exit(
-            "setup-review requires a non-blank --summary",
-            use_json=False,
-            code=2,
-        )
-    rp_cli = require_rp_cli()
-    is_ce = Path(rp_cli).name != "rp-cli"
-    if is_ce and response_type == "review" and not args.json and not response_file:
-        error_exit(
-            "CE setup-review with --response-type review requires "
-            "--response-file unless --json is used",
-            use_json=False,
-            code=2,
-        )
-
-    # Step 1: pick-window
-    roots = normalize_repo_root(repo_root)
-    win_id = bind_context_window(
-        repo_root,
-        create_if_missing=bool(getattr(args, "create", False)),
-        rp_cli=rp_cli,
-    )
-    windows: list[dict[str, Any]] = []
-    if win_id is None:
-        result = run_rp_cli(["--raw-json", "-e", "windows"], rp_cli=rp_cli)
-        windows = parse_windows(result.stdout or "")
-
-    # Single window with no root paths - use it
-    if win_id is None and len(windows) == 1 and not extract_root_paths(windows[0]):
-        win_id = extract_window_id(windows[0])
-
-    # Otherwise match by root.
-    if win_id is None:
-        for win in windows:
-            wid = extract_window_id(win)
-            if wid is None:
-                continue
-            for path in extract_root_paths(win):
-                if path in roots:
-                    win_id = wid
-                    break
-            if win_id is not None:
-                break
-
-    # Fall back to workspace inventory when window root metadata is missing.
-    if win_id is None:
-        workspaces_res = run_rp_cli(
-            [
-                "--raw-json",
-                "-e",
-                f"call manage_workspaces {json.dumps({'action': 'list'})}",
-            ],
-            rp_cli=rp_cli,
-        )
-        workspace = find_workspace_for_repo(
-            parse_manage_workspaces(workspaces_res.stdout or ""),
-            roots,
-        )
-
-        if workspace:
-            window_ids = extract_workspace_window_ids(workspace)
-            if window_ids:
-                win_id = sorted(window_ids)[0]
-            elif getattr(args, "create", False):
-                workspace_ref = extract_workspace_id(workspace) or extract_workspace_name(workspace)
-                if workspace_ref is not None:
-                    switch_cmd = {
-                        "action": "switch",
-                        "workspace": workspace_ref,
-                        "open_in_new_window": True,
-                    }
-                    switch_res = run_rp_cli(
-                        [
-                            "--raw-json",
-                            "-e",
-                            f"call manage_workspaces {json.dumps(switch_cmd)}",
-                        ],
-                        rp_cli=rp_cli,
-                    )
-                    try:
-                        switch_data = json.loads(switch_res.stdout or "{}")
-                    except json.JSONDecodeError as e:
-                        error_exit(
-                            f"workspace switch JSON parse failed: {e}",
-                            use_json=False,
-                            code=2,
-                        )
-                    win_id = extract_response_window_id(switch_data)
-
-    if win_id is None:
-        if getattr(args, "create", False):
-            ws_name = os.path.basename(repo_root)
-            create_cmd = (
-                f"workspace create {shlex.quote(ws_name)} --new-window --folder-path {shlex.quote(repo_root)}"
-            )
-            create_res = run_rp_cli(
-                ["--raw-json", "-e", create_cmd], rp_cli=rp_cli
-            )
-            try:
-                data = json.loads(create_res.stdout or "{}")
-                win_id = extract_response_window_id(data)
-            except json.JSONDecodeError:
-                pass
-            if not win_id:
-                error_exit(
-                    f"Failed to create RP window: {create_res.stderr or create_res.stdout}",
-                    use_json=False,
-                    code=2,
-                )
-        else:
-            error_exit("No RepoPrompt window matches repo root", use_json=False, code=2)
-
-    # Step 2: builder. CE requires the named-tool instructions field. Classic
-    # retains its established positional command and published-tab contract.
-    if is_ce:
-        builder_payload: dict[str, Any] = {"instructions": summary}
-        if response_type:
-            builder_payload["response_type"] = response_type
-        builder_expr = f"call context_builder {json.dumps(builder_payload)}"
-    else:
-        builder_expr = f"builder {shlex.quote(summary)}"
-
-    builder_cmd = [
-        "-w",
-        str(win_id),
-        "--raw-json",
-        "-e",
-        builder_expr,
-    ]
-    builder_res = run_rp_cli(builder_cmd, rp_cli=rp_cli)
-    output = (builder_res.stdout or "") + (
-        "\n" + builder_res.stderr if builder_res.stderr else ""
-    )
-
-    # CE review is a single direct tool result. It may intentionally have no
-    # visible compose-tab projection, so never query workspace_context here.
-    if is_ce and response_type == "review":
-        try:
-            data = json.loads(builder_res.stdout or "{}")
-        except json.JSONDecodeError as exc:
-            error_exit(
-                f"CE context_builder review JSON parse failed: {exc}",
-                use_json=False,
-                code=2,
-            )
-        data = validate_rp_ce_builder_review(data)
-        tab = str(data["context_id"])
-        review = data["review"]
-        chat_id = str(review["chat_id"])
-        review_response = str(review["response"])
-        if response_file:
-            atomic_write(Path(response_file), review_response)
-
-        result = {
-            "mode": "ce",
-            "window": win_id,
-            "tab": tab,
-            "context_id": tab,
-            "chat_id": chat_id,
-            "review": review_response,
-            "repo_root": repo_root,
-            "status": data["status"],
-            "prompt": data["prompt"],
-            "selection": data["selection"],
-            "file_count": data["file_count"],
-            "total_tokens": data["total_tokens"],
-            "response_type": data["response_type"],
-            "follow_up_hint": data.get("follow_up_hint"),
-        }
-        if args.json:
-            print(json.dumps(result))
-        else:
-            print(
-                " ".join(
-                    (
-                        "RP_MODE=ce",
-                        f"W={win_id}",
-                        f"T={shlex.quote(tab)}",
-                        f"CHAT_ID={shlex.quote(chat_id)}",
-                    )
-                )
-            )
-    else:
-        # Classic compatibility: Context Builder publishes a tab which the
-        # caller augments before a separate chat dispatch.
-        tab = ""
-        try:
-            data = json.loads(builder_res.stdout or "{}")
-            tab = extract_builder_tab_from_payload(data) or ""
-        except json.JSONDecodeError:
-            pass
-        if not tab:
-            tab = parse_builder_tab(output)
-        if not tab:
-            error_exit("Builder did not return a tab/context id", use_json=False, code=2)
-
-        verify_rp_classic_builder_context(win_id, tab, rp_cli=rp_cli)
-
-        if args.json:
-            print(
-                json.dumps(
-                    {
-                        "mode": "classic" if not is_ce else "context",
-                        "window": win_id,
-                        "tab": tab,
-                        "repo_root": repo_root,
-                    }
-                )
-            )
-        else:
-            mode = "classic" if not is_ce else "context"
-            print(f"RP_MODE={mode} W={win_id} T={shlex.quote(tab)}")
 
 
 # --- Codex Commands ---
@@ -44622,7 +43663,7 @@ def _publish_review_receipt_from_journal(
     for a plan SHIP, reset the counter) with no receipt evidence and nothing
     for the replay gate to recover. The payload is now journaled
     pre-consumption and published FROM the journal — same idempotent,
-    identity-keyed decision table the RP attach fence uses.
+    identity-keyed decision table the host attach fence uses.
     """
     flow_dir = get_flow_dir()
     try:
@@ -49162,7 +48203,7 @@ def _resolve_codex_review_spec(
             error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
     resolved = resolve_review_spec("codex", task_id, spec_id=spec_id)
     # ``flowctl codex ...`` ALWAYS runs codex, so a resolved spec for a DIFFERENT backend — an
-    # env/config default (``review.backend=rp``) OR a stored per-task/epic ``review: cursor:...`` —
+    # env/config default (``review.backend=host``) OR a stored per-task/epic ``review: cursor:...`` —
     # can't be honored: it would pass a foreign model to codex and stamp a foreign ``spec`` under
     # ``mode:"codex"``. Coerce ANY non-codex spec to the codex default regardless of source.
     # Choosing the RIGHT backend is the skill's job (task-aware ``review-backend`` routes a
@@ -49395,7 +48436,7 @@ def cmd_claude_completion_review(args: argparse.Namespace) -> None:
 # --- Trivial-diff triage (fn-29.6) ---
 #
 # Fast pre-check before full impl-review: judges whether the diff is worth
-# a Carmack-level review. Saves rp/codex/copilot calls on lockfile-only /
+# a Carmack-level review. Saves backend review calls on lockfile-only /
 # release-chore / docs-only / generated-only commits. Conservative:
 # "when in doubt, REVIEW" — false SKIPs are strictly worse than false REVIEWs.
 #
@@ -55859,12 +54900,12 @@ def main() -> None:
     p_review_prompt.add_argument("--json", action="store_true")
     p_review_prompt.set_defaults(func=cmd_review_prompt)
 
-    # review-rounds (fn-90 R5, rp surface) — prose-driven rp workflows hit the
-    # same deterministic cap counter the codex/copilot/cursor handlers wire
-    # internally at dispatch time.
+    # review-rounds (fn-90 R5, host surface) — prose-driven host workflows hit
+    # the same deterministic cap counter the codex/copilot/cursor/claude
+    # handlers wire internally at dispatch time.
     p_review_rounds = subparsers.add_parser(
         "review-rounds",
-        help="Deterministic review-round cap counter (rp workflows: increment before dispatch, reset on SHIP)",
+        help="Deterministic review-round cap counter (host workflows: increment before dispatch, reset on SHIP)",
     )
     review_rounds_sub = p_review_rounds.add_subparsers(
         dest="review_rounds_cmd", required=True
@@ -55930,7 +54971,7 @@ def main() -> None:
 
     p_rr_record = review_rounds_sub.add_parser(
         "record",
-        help="Record an RP response; refund the reserved round when no verdict exists",
+        help="Record a host review response; refund the reserved round when no verdict exists",
     )
     p_rr_record.add_argument("id", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p_rr_record.add_argument(
@@ -55948,7 +54989,7 @@ def main() -> None:
     p_rr_record.add_argument(
         "--task", help="Task ID (required with --kind impl; counter is per-task)"
     )
-    p_rr_record.add_argument("--backend", default="rp", help="Review backend")
+    p_rr_record.add_argument("--backend", required=True, help="Review backend")
     p_rr_record.add_argument(
         "--output-file", required=True, help="File containing reviewer output"
     )
@@ -55988,7 +55029,7 @@ def main() -> None:
         help="Explicit no-verdict failure class",
     )
     # fn-193 (#338) / fn-195 R7: deliberately NO --model here. This is the
-    # rp/host path, where the only available "model" is a narrating agent's
+    # host path, where the only available "model" is a narrating agent's
     # claim - and a claim is not an observation. The row stays honestly silent
     # (absent = unknown); observed provenance rides the dispatcher paths that
     # actually resolved a model.
@@ -56068,7 +55109,7 @@ def main() -> None:
 
     p_review_artifact = subparsers.add_parser(
         "review-artifact",
-        help="Build the exact domain-separated artifact blob for an RP review fence",
+        help="Build the exact domain-separated artifact blob for a host review fence",
     )
     p_review_artifact.add_argument(
         "kind", choices=["plan", "impl", "completion"],
@@ -57796,107 +56837,6 @@ def main() -> None:
     )
     p_checkpoint_restore.add_argument("--json", action="store_true", help="JSON output")
     p_checkpoint_restore.set_defaults(func=cmd_checkpoint_restore)
-
-    # rp (RepoPrompt wrappers)
-    p_rp = subparsers.add_parser("rp", help="RepoPrompt helpers")
-    rp_sub = p_rp.add_subparsers(dest="rp_cmd", required=True)
-
-    p_rp_prompt_get = rp_sub.add_parser("prompt-get", help="Get current prompt")
-    p_rp_prompt_get.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_prompt_get.add_argument("--tab", required=True, help="Tab id or name")
-    p_rp_prompt_get.set_defaults(func=cmd_rp_prompt_get)
-
-    p_rp_prompt_set = rp_sub.add_parser("prompt-set", help="Set current prompt")
-    p_rp_prompt_set.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_prompt_set.add_argument("--tab", required=True, help="Tab id or name")
-    p_rp_prompt_set.add_argument("--message-file", required=True, help="Message file")
-    p_rp_prompt_set.set_defaults(func=cmd_rp_prompt_set)
-
-    p_rp_select_get = rp_sub.add_parser("select-get", help="Get selection")
-    p_rp_select_get.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_select_get.add_argument("--tab", required=True, help="Tab id or name")
-    p_rp_select_get.set_defaults(func=cmd_rp_select_get)
-
-    p_rp_select_add = rp_sub.add_parser("select-add", help="Add files to selection")
-    p_rp_select_add.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_select_add.add_argument("--tab", required=True, help="Tab id or name")
-    p_rp_select_add.add_argument("paths", nargs="+", help="Paths to add")
-    p_rp_select_add.set_defaults(func=cmd_rp_select_add)
-
-    p_rp_chat = rp_sub.add_parser("chat-send", help="Send chat via rp-cli")
-    p_rp_chat.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_chat.add_argument(
-        "--tab",
-        help="Tab id or name (Classic)",
-    )
-    p_rp_chat.add_argument(
-        "--context-id",
-        dest="context_id",
-        help="Canonical CE context returned by setup-review",
-    )
-    p_rp_chat.add_argument("--message-file", required=True, help="Message file")
-    p_rp_chat.add_argument("--new-chat", action="store_true", help="Start new chat")
-    p_rp_chat.add_argument("--chat-name", help="Chat name (with --new-chat)")
-    p_rp_chat.add_argument(
-        "--chat-id",
-        dest="chat_id",
-        help="Continue specific chat by ID (RP 1.6.0+)",
-    )
-    p_rp_chat.add_argument(
-        "--mode",
-        choices=["chat", "review", "plan", "edit"],
-        default="chat",
-        help="Chat mode (default: chat)",
-    )
-    p_rp_chat.add_argument(
-        "--selected-paths", nargs="*", help="Override selected paths"
-    )
-    p_rp_chat.add_argument(
-        "--json", action="store_true", help="JSON output (no review text)"
-    )
-    p_rp_chat.set_defaults(func=cmd_rp_chat_send)
-
-    p_rp_export = rp_sub.add_parser("prompt-export", help="Export prompt to file")
-    p_rp_export.add_argument("--window", type=int, required=True, help="Window id")
-    p_rp_export.add_argument("--tab", required=True, help="Tab id or name")
-    p_rp_export.add_argument("--out", required=True, help="Output file")
-    p_rp_export.set_defaults(func=cmd_rp_prompt_export)
-
-    p_rp_mode_probe = rp_sub.add_parser(
-        "mode-probe",
-        help="Report CE or Classic availability without mutating an RP window",
-    )
-    p_rp_mode_probe.add_argument("--json", action="store_true", help="JSON output")
-    p_rp_mode_probe.set_defaults(func=cmd_rp_mode_probe)
-
-    p_rp_setup = rp_sub.add_parser(
-        "setup-review", help="Atomic: resolve window + open builder tab"
-    )
-    p_rp_setup.add_argument("--repo-root", required=True, help="Repo root path")
-    setup_summary = p_rp_setup.add_mutually_exclusive_group(required=True)
-    setup_summary.add_argument("--summary", help="Builder summary/instructions")
-    setup_summary.add_argument(
-        "--summary-file",
-        help="Read complete builder instructions from this file",
-    )
-    p_rp_setup.add_argument(
-        "--response-type",
-        dest="response_type",
-        choices=["review"],
-        help="Use CE Context Builder review mode; Classic keeps its compatibility flow",
-    )
-    p_rp_setup.add_argument(
-        "--response-file",
-        dest="response_file",
-        help="Write the CE direct review response to this file",
-    )
-    p_rp_setup.add_argument(
-        "--create",
-        action="store_true",
-        help="Create new RP window if none matches (requires RP 1.5.68+)",
-    )
-    p_rp_setup.add_argument("--json", action="store_true", help="JSON output")
-    p_rp_setup.set_defaults(func=cmd_rp_setup_review)
 
     # codex (Codex CLI wrappers)
     p_codex = subparsers.add_parser("codex", help="Codex CLI helpers")

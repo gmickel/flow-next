@@ -69,10 +69,10 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "review": "Review subsystem settings.",
     "review.backend": (
-        "Default review backend (rp, codex, copilot, cursor, claude, host, "
+        "Default review backend (codex, copilot, cursor, claude, host, "
         "none) or spec form backend[:model[:effort]], e.g. codex:<model>:high "
         "or claude:<model>:high. cursor folds effort into the model "
-        "name (no :effort rung); rp, host, and none are bare-only. copilot "
+        "name (no :effort rung); host and none are bare-only. copilot "
         "accepts no none/minimal effort; claude takes the claude CLI's own "
         "low|medium|high|xhigh|max. If "
         "unset, review commands require --review or FLOW_REVIEW_BACKEND. "
@@ -420,7 +420,7 @@ def _review_backend_fragment() -> dict:
             {"type": "null"},
             {"enum": list(flowctl.VALID_BACKENDS)},
             # Degenerate-but-runtime-valid: a bare backend with ONE trailing
-            # colon (`rp:`) parses to the bare backend.
+            # colon (`host:`) parses to the bare backend.
             {
                 "type": "string",
                 "pattern": "^(" + "|".join(re.escape(b) for b in sorted(flowctl.VALID_BACKENDS)) + "):{1,2}$",

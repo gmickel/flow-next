@@ -1,6 +1,0 @@
-interface:
-  display_name: "Flow Export Context [internal]"
-  short_description: "Context bundle export used by reviews"
-  brand_color: "#9CA3AF"
-policy:
-  allow_implicit_invocation: false

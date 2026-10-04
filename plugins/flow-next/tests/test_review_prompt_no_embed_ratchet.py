@@ -4,7 +4,7 @@ fn-74 made this exact decision, validated it with an eval, deleted the embedding
 code, and wrote it in a CHANGELOG. fn-90 re-added the diff body; fn-159 re-added
 it with a fitter. Each had a good local reason, and nothing failed when they did.
 
-A CHANGELOG entry is not a constraint. This is: every non-`export` review prompt
+A CHANGELOG entry is not a constraint. This is: every flowctl review prompt
 must carry identities only. The failure message NAMES the offending tag so a
 future regression explains itself instead of just going red.
 
@@ -14,9 +14,8 @@ oversights:
 * `host` — no session by design ("every re-review is a fresh subagent"), so it
   always injects prior findings. It is not a flowctl prompt path at all; the
   host workflow owns its own dispatch.
-* `export` / the eval harnesses — no repository for the reviewer to read from, so
-  the payload is the only channel. `export` is a skill route through
-  `flow-next-export-context`; the harnesses embed via
+* the eval harnesses — no repository for the reviewer to read from, so the
+  payload is the only channel. The harnesses embed via
   `optimization/eval_prompt_payload.py`, never via flowctl.
 
 Run:
@@ -277,12 +276,12 @@ class TestNoEmbedRatchet(unittest.TestCase):
         self.assertIn("<prior_findings>", injected)
 
     def test_documented_exceptions_are_real_and_confined(self):
-        """host and export must be deliberate, not accidental gaps."""
+        """host and the eval harnesses must be deliberate, not accidental gaps."""
         flowctl._wire_backend_review_hooks()
         # host is a selection sentinel: it has no flowctl dispatch at all, which
         # is what makes "host always injects" structural rather than a branch.
         self.assertIsNone(flowctl.BACKEND_REGISTRY["host"].get("run_exec"))
-        # export never reaches a flowctl prompt builder; it is a skill route.
+        # Payload embedding lives only in the eval harnesses, never in flowctl.
         source = (Path(__file__).resolve().parents[1]
                   / "scripts" / "flowctl.py").read_text(encoding="utf-8")
         self.assertNotIn("embed_payload", source)

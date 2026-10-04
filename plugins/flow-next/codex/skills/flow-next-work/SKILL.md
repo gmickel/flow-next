@@ -72,12 +72,12 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--branch=worktree` or `--worktree` or "isolated worktree" or "worktree" → isolated worktree
 
 **Review mode**:
-- `--review=<codex|copilot|cursor|claude|host|rp|none>`, or the same backend named in words
+- `--review=<codex|copilot|cursor|claude|host|none>`, or the same backend named in words
   ("review with codex", "host review", "skip review"); `--no-review` = `none`
-- `--review=export` or "export review" or "external llm" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
+- `--review=rp` or `--review=export` → removed: say "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." once, never pass it as `REVIEW_MODE`, and continue as when no review backend is configured
 
 (All non-`none` review modes route through `$flow-next-impl-review`, which resolves the
-configured/overridden backend — codex, copilot, cursor, claude, rp, or host — itself.)
+configured/overridden backend — codex, copilot, cursor, claude, or host — itself.)
 
 **No-plan (direct spec execution)**:
 - `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated

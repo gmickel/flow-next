@@ -34,7 +34,8 @@ git diff --shortstat "$DIFF_BASE"...HEAD
 
 - `ASK`: stop; no backend is configured (`/flow-next:setup`, or pass `--review=<backend>`).
 - `none`: no review; say so.
-- `export`: refuse; manual export review lives in `/flow-next:plan-review --review=export`.
+- `rp` or `export`: removed; tell the user in one line "RepoPrompt review (rp, export) was removed
+  in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." and stop as for `ASK`.
 - Any other backend than `codex`, any of `--deep`, `--validate`, `--interactive`, `--no-triage`,
   `FLOW_VALIDATE_REVIEW=1` or `FLOW_REVIEW_DEEP=1` in the environment, or an instruction about
   the reviewers ("one reviewer", "three model families"): read [other-paths.md](other-paths.md)

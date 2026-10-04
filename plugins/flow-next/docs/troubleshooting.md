@@ -14,7 +14,6 @@ Common recovery patterns for stuck tasks, broken state, and review-backend confl
 - [flowctl says my config carries removed keys, or my routing block is ignored](#flowctl-says-my-config-carries-removed-keys-or-my-routing-block-is-ignored)
 - [Review reports a model downgrade / floor (resolution ladder)](#review-reports-a-model-downgrade-floor-resolution-ladder)
 - [Worker reports a merge conflict at wave join](#worker-reports-a-merge-conflict-at-wave-join)
-- [Custom RepoPrompt CLI instructions conflicting](#custom-repoprompt-cli-instructions-conflicting)
 - [Copilot review backend on Windows](#copilot-review-backend-on-windows)
 - [Windows: `python3` not found / Microsoft Store alias stub](#windows-python3-not-found-microsoft-store-alias-stub)
 - [`/flow-next:map`: clawpatch not found / version mismatch / Node 20](#flow-nextmap-clawpatch-not-found-version-mismatch-node-20)
@@ -120,6 +119,8 @@ note: .flow/config.json still carries removed key(s): models.roles, models.verif
 
 `artifacts.html.enabled` gets the same note: the HTML render lenses are removed. Use `/flow-next:visual` for a quick visual digest or ask for an HTML page in conversation. Old `.flow/artifacts/<spec-id>/spec.html` and `pr.html` files are yours; flowctl never touches them, and you can delete them.
 
+A `review.backend` of `rp` or `export` (also in `FLOW_REVIEW_BACKEND`, a spec's `default_review` or a task's `review`) gets a one-line `notice: RepoPrompt review (rp, export) was removed ...` and is treated as unset. Pick another backend with `flowctl config set review.backend codex` (or `host`, `claude`, `copilot`, `cursor`).
+
 **Routing not taking effect?** Routing is prose read by the agent, not config parsed by flowctl, so check in this order:
 
 - **The block is in the file the host actually reads** (`CLAUDE.md` on Claude Code / Droid / Grok, `AGENTS.md` on Codex / Cursor / Grok - see [`platforms.md`](platforms.md)), and its lines are **uncommented**. `/flow-next:setup` writes every line commented out on purpose; nothing routes until you uncomment one.
@@ -153,21 +154,6 @@ warning: codex model '<ranking top>' unavailable; downgraded to '<next in rankin
 **Why:** the wave is dispatched from each task's `**Touches:**` declaration, and dispatch assumes those file sets are disjoint. A conflict at join means two tasks in the wave actually wrote the same file - the declarations were wrong (or incomplete), not the merge.
 
 **What to do:** resolve the conflict, then re-run the affected task serially so it builds on the other task's committed result instead of racing it. Correct the `**Touches:**` lists on the tasks involved before the same pair is dispatched together again. Nothing was corrupted: each worker ran in an isolated workspace against a committed base, so the conflict is surfaced at the join rather than silently interleaved.
-
-## Custom RepoPrompt CLI instructions conflicting
-
-> **Caution**: If you have custom RepoPrompt CLI instructions in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's integration.
-
-Flow-Next's plan-review and impl-review skills include specific instructions for CE-first CLI discovery, window selection, builder workflow, and chat commands. Custom instructions can override these and cause unexpected behavior.
-
-**Symptoms:**
-- Reviews not using the correct RepoPrompt window
-- Builder not selecting expected files
-- Chat commands failing or behaving differently
-
-**Fix:** Remove or comment out custom RepoPrompt CLI instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides the complete CE-first workflow.
-
-> **Note:** RepoPrompt is macOS-only. When the CE-first ladder (`rpce-cli`, the two CE user links, then Classic `rp-cli`) finds no runnable candidate, `/flow-next:plan` and the review skills do not propose RepoPrompt. Explicit `--review=rp` is still accepted and errors at runtime if no supported RepoPrompt CLI is available.
 
 ## Copilot review backend on Windows
 

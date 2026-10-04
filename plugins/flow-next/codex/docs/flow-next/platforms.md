@@ -24,7 +24,6 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 - [Cursor](#cursor)
 - [OpenCode](#opencode)
 - [Windows: Python discovery](#windows-python-discovery)
-- [RepoPrompt review backend (macOS-only)](#repoprompt-review-backend-macos-only)
 - [Windows + Copilot review backend](#windows-copilot-review-backend)
 - [Claude Code CLI review backend](#claude-code-cli-review-backend)
 - [Optional skill requirements](#optional-skill-requirements)
@@ -156,7 +155,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 2. **Direct name**: Type `$flow-next-setup` in your prompt
 3. **Implicit**: Just describe the task - Codex matches the skill description automatically (for skills with `allow_implicit_invocation: true`)
 
-All user-facing skills ship `allow_implicit_invocation: true`, so prose like "plan this feature", "run fn-12 unattended to a PR", or "open a PR" resolves the matching skill from the model's skill catalog - Codex's naming rule then *requires* it to use that skill. Internal skills that only other skills dispatch (`drive`, `sync`, `export-context`, `worktree-kit`, `deps`) ship `false`: they stay out of the shared skill-catalog context budget (min of 8,000 chars and 2% of the context window, shared with every other skill on your machine) but remain fully invocable by name. One deliberate user-facing exception: `visual` also ships `false` - its trigger-rich description is exactly the text the catalog budget exists to keep out, so on Codex the digest is explicit-only (`$flow-next-visual` or the dropdown); its natural-language trigger phrases apply on the hosts that match on skill descriptions (Claude Code, Cursor, Droid, Grok). `prose` ships `true` with a dieted drafting-moment entry (the skill's point is ambient self-application while the agent drafts a reply - keeping it out would disable exactly that on Codex). The mirror's catalog descriptions are dieted to ≤200 chars each for the same reason - the full skill body loads on invocation either way.
+All user-facing skills ship `allow_implicit_invocation: true`, so prose like "plan this feature", "run fn-12 unattended to a PR", or "open a PR" resolves the matching skill from the model's skill catalog - Codex's naming rule then *requires* it to use that skill. Internal skills that only other skills dispatch (`drive`, `sync`, `worktree-kit`, `deps`) ship `false`: they stay out of the shared skill-catalog context budget (min of 8,000 chars and 2% of the context window, shared with every other skill on your machine) but remain fully invocable by name. One deliberate user-facing exception: `visual` also ships `false` - its trigger-rich description is exactly the text the catalog budget exists to keep out, so on Codex the digest is explicit-only (`$flow-next-visual` or the dropdown); its natural-language trigger phrases apply on the hosts that match on skill descriptions (Claude Code, Cursor, Droid, Grok). `prose` ships `true` with a dieted drafting-moment entry (the skill's point is ambient self-application while the agent drafts a reply - keeping it out would disable exactly that on Codex). The mirror's catalog descriptions are dieted to ≤200 chars each for the same reason - the full skill body loads on invocation either way.
 
 | Claude Code | Codex (dropdown) | Codex (direct) |
 |-------------|-------------------|----------------|
@@ -273,8 +272,8 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 - All flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
 - **Slash commands.** Drive with `/flow-next:<name>` - **not** Codex `$flow-next-` syntax. Type `/flow-next:` to discover the namespaced command surface. The separately indexed `/flow-next-…` skill names are an implementation surface, not the documented invocation contract.
 - **Multi-agent flows work - verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate. Grok **dispatches flow-next's custom `subagent_type`s** even when `grok inspect` does not list them in its agent UI.
-- **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves from the **plugin install** - the skill derives the plugin root from its own SKILL.md path (probe-verified in a repo with no `.flow/bin`).
-- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `claude` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot` / `claude`), not a native multi-family subagent. The host-native routing block lands in AGENTS.md and documents the same honesty.
+- **MCP servers** resolve (e.g. linear-server); `flowctl` resolves from the **plugin install** - the skill derives the plugin root from its own SKILL.md path (probe-verified in a repo with no `.flow/bin`).
+- **Review menu includes `host`.** Setup offers `host` alongside `codex` / `copilot` / `cursor` / `claude` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot` / `claude`), not a native multi-family subagent. The host-native routing block lands in AGENTS.md and documents the same honesty.
 
 ### Caveats / intentional limits
 
@@ -339,7 +338,7 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 - **AskUserQuestion** renders natively, including multi-question batches (auto "Other...", Skip honored).
 - **Multi-agent:** a full `/flow-next:plan` fans out scout subagents in parallel and drives `flowctl` end-to-end. A model named in the dispatch itself (this host's own identifiers) is honored; the host self-corrects near-miss ids.
 - **`readonly: true`** on read-only agents (scouts, reviewers) enforces write restriction on Cursor (`disallowedTools` is not consumed there).
-- **`review.backend host`:** fresh-context subagent review on the `reviewer` tier from the AGENTS.md routing block (or a model named in the dispatch itself), from a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` / `claude` CLI / `rp` backends remain selectable).
+- **`review.backend host`:** fresh-context subagent review on the `reviewer` tier from the AGENTS.md routing block (or a model named in the dispatch itself), from a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` / `claude` CLI backends remain selectable).
 - **`rules/flow-next.mdc`:** Cursor-native guidance rail (flowctl lifecycle + `flowctl usage` pull directives).
 - **AGENTS.md routing block** from setup: the four tier lines, commented out, for you to fill with the model ids this host actually serves - ask the harness for its list rather than copying one (see [`reach/cursor.md`](reach/cursor.md)).
 - **`flowctl`** resolves from the plugin install: Cursor exposes no plugin-root env var, but it injects the loading skill's absolute `SKILL.md` path, and the preamble derives the plugin root two levels above it (probe-verified in a repo with no `.flow/bin`, CLI and desktop app).
@@ -400,12 +399,6 @@ flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows i
 - **`py -3` preferred.** The [py launcher](https://docs.python.org/3/using/windows.html) (`C:\Windows\py.exe`, installed by python.org / [PEP 397](https://peps.python.org/pep-0397/)) is never a Store alias stub, so it's the most reliable Windows candidate.
 - **Alias-stub pitfall.** On Windows `python3` is, by default, the Microsoft Store **App Execution Alias** stub - on `PATH` but non-functional (prints *"Python was not found"*, exits **9009**). The probe skips it; a bare presence check does not. If an older install still hits it, see [`troubleshooting.md` → Windows `python3` / Store alias stub](troubleshooting.md#windows-python3-not-found-microsoft-store-alias-stub) for the two recovery paths (delete the legacy `.flow/bin/` copy so the plugin's own launcher is used, or disable the alias).
 
-## RepoPrompt review backend (macOS-only)
-
-> **Deprecated:** RepoPrompt support will be removed in flow-next 8.0.0. Existing `rp` setups keep working until then; to switch, run `flowctl config set review.backend codex` (or `host`, `claude`, `copilot`, `cursor`).
-
-The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
-
 ## Windows + Copilot review backend
 
 Works natively. flow-next picks the prompt-delivery path per host:
@@ -451,7 +444,7 @@ Removing the skill is trivial: `rm -rf .clawpatch/` removes both the index and t
 
 ## See also
 
-- [`troubleshooting.md`](troubleshooting.md) - review-backend conflicts (custom RepoPrompt CLI instructions).
+- [`troubleshooting.md`](troubleshooting.md) - common issues and recovery steps.
 - [`scripts/install-codex.sh`](https://github.com/gmickel/flow-next/blob/main/scripts/install-codex.sh) - the Codex install script.
 
 ## Optional Jev judgment

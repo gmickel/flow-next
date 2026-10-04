@@ -15,47 +15,38 @@ selected review backend:**
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
 - `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
-- `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
-Do not load the other backend files. `BACKEND=none` and explicit
-`--review=export` terminate from the common workflow without loading any backend
-file.
+Do not load the other backend files. `BACKEND=none` and an explicit
+`--review=rp` or `--review=export` terminate from the common workflow without
+loading any backend file.
 
 Conduct a John Carmack-level review of spec plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends** (branch on the common workflow's `RP_ELIGIBLE` probe):
-- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI
-  (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
-- When `RP_ELIGIBLE=0`: Codex CLI, GitHub Copilot CLI, Cursor CLI, Claude Code CLI, or
-  host-native — rp remains accepted explicitly but errors at runtime
+**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor),
+Claude Code CLI (claude), or host-native (`host`)
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
 ## Preamble — execute common routing exactly once
 
 Read and execute [workflow.md](workflow.md) Phase 0 once. It defines `$FLOWCTL`,
-probes RepoPrompt eligibility, parses an explicit `--review` mode before
-configured-backend resolution, resolves `SPEC_ID`, and handles `ASK`, `none`,
-and `export`. Never invoke `flowctl review-backend` a second time.
-
-When `RP_ELIGIBLE=0`, never steer the user toward rp. An explicit
-`--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` remains valid
-input and fails through the rp runtime check.
+parses an explicit `--review` mode before configured-backend resolution,
+resolves `SPEC_ID`, and handles `ASK`, `none`, `rp` and `export`. Never invoke
+`flowctl review-backend` a second time.
 
 ## Backend Selection
 
 Priority (first match wins):
 
-1. `--review=rp|codex|copilot|cursor|claude|host|export|none`
+1. `--review=codex|copilot|cursor|claude|host|none`
 2. Per-spec `default_review`
 3. `FLOW_REVIEW_BACKEND`
 4. `.flow/config.json` `review.backend`
 5. Error — no auto-detection
 
 Configured values accept `backend[:model[:effort]]`; `cursor` takes a model but
-no effort, `claude` takes `claude[:<model>[:<effort>]]`, and `host`, `rp`, and `none` are bare-only. `export` is a one-off
-mode, never a configured backend.
+no effort, `claude` takes `claude[:<model>[:<effort>]]`, and `host` and `none` are bare-only.
 
 ## Common Critical Rules
 
@@ -69,9 +60,6 @@ mode, never a configured backend.
   counter for a transport failure. Exit 5 / `TRANSPORT_UNHEALTHY` means stop
   automatic retries and repair the backend.
 - `none` skips only when selected explicitly or resolved from configuration.
-- `export` emits the existing external-review artifact and terminal output,
-  then returns; it never loads configured-backend guidance, writes a review
-  receipt/status, or enters the fix loop.
 - **Foreground rule:** run every `flowctl <backend> plan-review` call as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7) — never `run_in_background` + monitor/poll (a background completion does not reliably resume a subagent context). Host-backend subagent dispatches are also blocking.
 
 Backend-specific invocation, availability, model, session-continuity, receipt,
@@ -87,7 +75,7 @@ unattended run (working-rules.md's review loop applies); it is not a focus area.
 ## Workflow
 
 1. Execute [workflow.md](workflow.md) Phase 0.
-2. If it returns for `none` or `export`, stop. Do not read a backend file.
+2. If it returns for `none`, `rp` or `export`, stop. Do not read a backend file.
 3. Read exactly the selected `workflow-<backend>.md`.
 4. Execute one backend dispatch and carry its verdict directly into the shared
    Fix Loop below.
@@ -141,7 +129,7 @@ When the verdict is `NEEDS_WORK`:
    interfaces, retry/error semantics, or state values changed.
 4. Re-enter the SAME selected backend file's re-review step. Never load or mix
    another backend. Codex/Copilot/Cursor/Claude resume only through a same-mode receipt;
-   host uses a fresh read-only subagent; rp stays in the same chat.
+   host uses a fresh read-only subagent.
 5. Attended, stop after that one re-review: `SHIP` completes; `NEEDS_WORK` surfaces the
    surviving findings to the caller, never a second fix pass. In the review loop, repeat
    from step 1 as above.
@@ -164,5 +152,4 @@ Recovery after context compaction:
 $FLOWCTL checkpoint restore --spec <SPEC_ID> --json
 ```
 
-For rp, only the first review uses `--new-chat`; all re-reviews stay in the same
-chat. Every re-review follows the selected backend file's receipt/status rules.
+Every re-review follows the selected backend file's receipt/status rules.

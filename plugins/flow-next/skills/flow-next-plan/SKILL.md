@@ -57,7 +57,7 @@ A ready or captured spec is plan input. An unshaped, oversized idea with several
 
 **Research.** Always `repo-scout`; `--research=grep` is a no-op and any other value is ignored.
 
-**Review.** `--review=codex` ("review with codex", "codex review", "use codex"), `--review=rp` ("rp chat", "repoprompt review"), `--review=host` ("host review", "use host": the host-native fresh-context reviewer), `--review=export` ("export review", "external llm"), `--review=none` or `--no-review` ("no review", "skip review").
+**Review.** `--review=codex` ("review with codex", "codex review", "use codex"), `--review=host` ("host review", "use host": the host-native fresh-context reviewer), `--review=none` or `--no-review` ("no review", "skip review"). `--review=rp` and `--review=export` were removed: say "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." once and treat review as nothing configured (`ASK`, below).
 
 
 Initialize and capture one preflight snapshot before routing or scouting (also under autonomy), from the repository root (never this skill's directory, where flowctl finds no config). Every later config read uses this literal path:

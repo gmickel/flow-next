@@ -35,7 +35,7 @@ subagent prompt — it has the same repository you do.
 
 After composing the complete reviewer input, but immediately before spawning the
 host reviewer, build the plan artifact and reserve exactly one round. This fence
-is the host equivalent of the RP transport fence; never reserve earlier and
+is the host review's transport fence; never reserve earlier and
 never reserve again after a replay result.
 
 ```bash

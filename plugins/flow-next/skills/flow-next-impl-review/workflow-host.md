@@ -378,8 +378,7 @@ draw (three cap slots for one merged round would triple-charge the cap):**
 
 ```bash
 if [[ -z "$TASK_ID" ]]; then
-  # Standalone: no reservation, round or lease exists; attach directly, in the
-  # same form the rp standalone path uses.
+  # Standalone: no reservation, round or lease exists; attach directly.
   if [[ -n "$VERDICT" ]]; then
     "$FLOWCTL" review-findings attach --input "$RECEIPT_INPUT" \
       --receipt "$RECEIPT_PATH" --review-file "$REVIEW_OUTPUT_FILE" \

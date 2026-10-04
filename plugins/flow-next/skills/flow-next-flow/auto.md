@@ -336,7 +336,7 @@ Append `--review=$PILOT_REVIEW` to plan, plan-review, and work only when the use
 
 Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
-- `plan`: `flow-next:flow-next-plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> <REVIEW_ARG-if-nonempty>`
+- `plan`: `flow-next:flow-next-plan <spec-id> mode:autonomous --research=grep --depth=<level> <REVIEW_ARG-if-nonempty>`
 - `plan-review`: `flow-next:flow-next-plan-review <spec-id> mode:autonomous <REVIEW_ARG-if-nonempty>`
 - `work`: `flow-next:flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
 - `qa`: `flow-next:flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)

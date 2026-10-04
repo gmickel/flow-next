@@ -194,21 +194,21 @@ class ArgumentParseFence(unittest.TestCase):
         # arguments -> the values that differ from DEFAULTS
         cases = (
             (
-                "fn-12 --tick --backlog --explain --review=codex --research rp --depth=long",
+                "fn-12 --tick --backlog --explain --review=codex --research custom --depth=long",
                 {
                     "PILOT_SPEC": "fn-12",
                     "AUTO_TICK": "1",
                     "PILOT_BACKLOG_OVERRIDE": "1",
                     "PILOT_DRY_RUN": "1",
                     "PILOT_REVIEW": "codex",
-                    "PILOT_RESEARCH": "rp",
+                    "PILOT_RESEARCH": "custom",
                     "PILOT_DEPTH": "long",
                 },
             ),
             ("wor-17-x", {"PILOT_SPEC": "wor-17-x"}),
             ("fn-9 --dry-run", {"PILOT_SPEC": "fn-9", "PILOT_DRY_RUN": "1"}),
             ("--auto fn-4 --tick", {"PILOT_SPEC": "fn-4", "AUTO_TICK": "1"}),
-            ("--review codex --depth long --research=rp", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "rp"}),
+            ("--review codex --depth long --research=custom", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "custom"}),
             ("", {}),
         )
         for arguments, overrides in cases:

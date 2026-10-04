@@ -2,7 +2,7 @@
 
 A correct run coordinates a Carmack-level review of the current spec through exactly one resolved backend and carries that backend's verdict into the bounded fix loop.
 
-- [ ] The backend is resolved once and only the matching `workflow-<backend>.md` is read; `none` and `export` terminate from the common workflow without loading any backend file.
+- [ ] The backend is resolved once and only the matching `workflow-<backend>.md` is read; `none`, and a removed `rp` or `export` value (after its removal notice), terminate from the common workflow without loading any backend file.
 - [ ] The verdict comes from the backend's receipt or status, never from the coordinator. A transcript where the session declares SHIP on its own reading of the spec has broken this.
 - [ ] A backend or transport failure ends with `RETRY: no verdict (backend or transport failure)` and stops, with no fallback to a different backend. Re-framing a delivered `NEEDS_WORK` as a transport problem to reclaim a round has broken this.
 - [ ] `NEEDS_WORK` fixes follow the working rules' Review section: findings showing the spec is wrong are fixed and written to the current user-edited spec via `flowctl spec set-plan`, affected task specs are synced, the rest are listed as follow-ups, and the re-review re-enters the same backend. The loop never asks the user; round counting stays flowctl-owned, and `MAJOR_RETHINK` stops with `BLOCKED: DESIGN_CONFLICT`.

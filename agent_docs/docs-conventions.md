@@ -21,7 +21,7 @@ content.
 | [`reach/README.md`](../plugins/flow-next/docs/reach/README.md) and the per-harness pages | The worker and work phases resolve the implementer tier through reach; the capture, make-pr, and setup skills read `reach/codex.md` and `reach/cursor.md`; the Codex installer test checks the tree |
 | [`read-back.md`](../plugins/flow-next/docs/read-back.md) | Capture, plan, and refine read it before the first `.flow/` write |
 | [`pipeline-variations.md`](../plugins/flow-next/docs/pipeline-variations.md) | The flow skill's `route-matrix.md` and capture's rewrite mode cite it; the routing test scans it as a consumer of the shared routing reference |
-| [`skills.md`](../plugins/flow-next/docs/skills.md) | The resolve-pr skill and the route matrix cite the backend-split heuristic; the count test pins the 30 skills table |
+| [`skills.md`](../plugins/flow-next/docs/skills.md) | The resolve-pr skill and the route matrix cite the backend-split heuristic; the count test pins the 29 skills table |
 | [`tracker-sync.md`](../plugins/flow-next/docs/tracker-sync.md) | Capture, make-pr, and work read the retro-fire rule; `flowctl_tracker` code and the config schema cite the dependency-projection ordering rule |
 | [`memory-schema.md`](../plugins/flow-next/docs/memory-schema.md) | The qa skill maps bug categories through it |
 | [`pr-cognitive-aid.md`](../plugins/flow-next/docs/pr-cognitive-aid.md) | The consumer contract for the stored PR walkthrough and its rendered briefing |
