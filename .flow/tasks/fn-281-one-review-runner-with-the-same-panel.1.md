@@ -35,6 +35,8 @@ stage: implement - ran (model: session; delegated: 0)
 Tier: session (jev intelligent 0.84)
 
 stage: plan-sync - skipped(config: planSync.enabled != true)
+- Follow-ups (maintainer-requested, 2026-10-05): case 2 --auto rerun with the case repo's standing criteria dropped (harness default since bb1217c), 3 same-load pairs 7.1.2 vs c5b2b00c (rounds fn281-c2auto-{C,D,E}{a,b}-1005): hidden 3/3 vs 3/3; judge mean 17.7 vs 18.2; wall 1369/1124/1191 s vs 962/1269/1159 s (median 1191 vs 1159); cost $6.89/$6.76/$6.12 vs $5.66/$6.86/$5.95 (median $6.76 vs $5.95). No regression: the earlier case-2 --auto gap was the criteria (R6 judging G7). Copilot live check once quota returned: one-draw round SHIP in 32 s; three concurrent draws NEEDS_WORK x3 in 93 s total (draws 73/90/93 s), gpt-6-astra, 4 Copilot requests.
+
 ## Evidence
 - Commits: 6102845e03dc12e5ebe089da79e1951b32e03b44, c5b2b00c4ba0bd7515421ec890c19ca1f2de25b0, b1db520dce618652243ee855c4ae5a2a75d33fef, 9f6fe1da77b7b7be26ba243a428f131b1332126f, 9c6a80319dbe8b97bca0acf4b54c5ae0ad1710c2
 - Tests: python3 scripts/run_tests_parallel.py (full suite: 3938 tests, 0 failures), bash scripts/sync-codex.sh --check, python3 scripts/check_doc_anchors.py, uvx ruff@0.16.0 check .
