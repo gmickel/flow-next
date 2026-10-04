@@ -46,6 +46,7 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 - **R8:** Parity fixes: host review reads the routing block from the instruction file that holds it on each harness; no doc claims a panel rule the code does not apply; the fix loop's re-review list includes every backend. Errors: no error surface. [paraphrase]
 - **R9:** The 8.0.0 changelog states that `review.backend` stays, reversing 7.1.0's deprecation note, and downstream notes that announced its removal are corrected at release. Errors: no error surface. [paraphrase]
 - **R10:** Measured with the fn-271 harness against 7.1.2 on cases 2 and 4, attended and `--auto`, at least 3 draws each: no hidden check that passes on every 7.1.2 draw fails, and wall-clock, cost and judge score are no worse; R6 measured on a single-task case carrying a standing criterion. Errors: a regression blocks the change until explained or fixed. [paraphrase]
+- **R11:** A host review's attempt row carries the same provenance as a dispatcher round (#513, reported by @sn-furali): when the reservation was given the reviewed range, the attempt row records that `base_sha` and `head_sha` with `head_sha_observed: true`, and the round records the host reviewer's model; a caller that supplies no range keeps today's fallback, still marked `head_sha_observed: false`. Errors: no error surface beyond today's. [paraphrase]
 
 ## Boundaries
 
@@ -57,6 +58,7 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 
 ## Decision Context
 
+- **#513 (2026-10-04):** validated against 7.1.2; after fn-280 host review is the only `review-rounds record` caller, so the range is kept from the reservation and `record` gains only an optional model, not `--base`/`--head`. [paraphrase]
 - **Maintainer, 2026-10-04:** "each backend should work the same"; 8.0.0 keeps everything the same except RepoPrompt removal, the same review on every backend through one generic runner, and the cheap wins that are not dangerous. [paraphrase]
 - Agentic dispatch (fn-279) was parked because moving the CLI handling flowctl encodes (stdin hangs, resume flags, model pinning, trust prompts, Windows sandboxing) into prose risks being slower and less reliable across six harnesses, and it breaks a lot; the uniform panel does not need it. [paraphrase]
 - Of fn-279's cheap wins, standing criteria on the single-task route and the stall-check fix are low risk; the unattended author override for plan and completion review changes autonomy behaviour and is left out. [paraphrase]
