@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-281-one-review-runner-with-the-same-panel",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-04T22:13:59.900678Z",
   "created_at": "2026-10-04T11:28:53.412265Z",
   "default_impl": null,
   "default_review": null,
@@ -260,5 +260,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-04T22:12:50.574381Z"
+  "updated_at": "2026-10-04T22:13:59.900689Z"
 }
