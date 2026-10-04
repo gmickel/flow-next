@@ -28,7 +28,7 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 ## Edge Cases & Constraints
 
 - A host that cannot dispatch three reviewers in one message runs them back to back and says so. [paraphrase]
-- A reviewer CLI that rejects three simultaneous calls (subscription limits on copilot or cursor) runs its three reviewers back to back and says so; a quick concurrency probe of copilot and cursor comes before the build. [paraphrase]
+- CLI reviewers (codex, claude, copilot, cursor) always run a three-reviewer round concurrently; a call the CLI refuses (for example a subscription limit) fails and does not vote, and if every call fails the review reports the failure. Three back-to-back CLI reviews cannot finish inside one foreground tool call. [paraphrase]
 - Claude reviewers in a three-reviewer round must receive the diff the same way a single claude review does today; today's fan-out never passes it, which is likely why claude was left out. [paraphrase]
 - Host review reads the model-routing block from whichever instruction file holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere); today it always names AGENTS.md. [paraphrase]
 - Cross-family reviewing stays reachable and the family rule stays documented. [paraphrase]
@@ -36,7 +36,7 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 
 ## Acceptance Criteria
 
-- **R1:** The first round of an implementation review runs one or three reviewers by the same risk rule on every reviewer path (codex, claude, copilot, cursor, host), on every harness, and the re-review after fixes is one reviewer on every path. Errors: a reviewer that fails does not vote; all reviewers failing → the review reports the failure and records no verdict; a host or CLI that cannot run three at once runs them back to back and says so. [paraphrase]
+- **R1:** The first round of an implementation review runs one or three reviewers by the same risk rule on every reviewer path (codex, claude, copilot, cursor, host), on every harness, and the re-review after fixes is one reviewer on every path. Errors: a reviewer that fails does not vote; all reviewers failing → the review reports the failure and records no verdict; a host that cannot dispatch three reviewer subagents at once runs them back to back and says so; CLI reviewers always run concurrently, and a refused call fails and does not vote. [paraphrase]
 - **R2:** The CLI reviewer paths share one runner with no per-backend fan-out gating (no codex-only commands, registry flag, primary-must-be-codex check or hard-coded codex receipt mode), and the flowctl review code shrinks rather than grows. Errors: no error surface beyond today's backend errors. [paraphrase]
 - **R3:** Any harness can use any CLI reviewer through the runner (for example flow-next in Codex with the claude backend), and every reviewer in a three-reviewer round reviews the same diff, including claude. Errors: a reviewer CLI that is not installed → today's named error and the review fails closed, never a substitute reviewer. [paraphrase]
 - **R4:** For each reviewer path (codex, claude, copilot, cursor, host), one draw of a small bug produces a one-reviewer round and one draw of a larger change produces a three-reviewer round, and both reach a verdict. Errors: a path that picks the wrong panel size or cannot complete the round blocks the change. [paraphrase]
@@ -58,7 +58,8 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 
 ## Decision Context
 
-- **Concurrency probe (2026-10-04, before the build):** Cursor (cursor-agent 2026.09.18, gpt-5.6-sol-high, `--mode ask`) accepted three simultaneous headless calls, each as fast as a single call (~6 s). Copilot could not be probed: the plan's usage limit refused every call ("You've reached your additional usage limit for your plan"), so Copilot keeps the back-to-back fallback and its R4 draws wait on quota. [paraphrase]
+- **CLI reviewers run concurrently (maintainer, 2026-10-05):** the build showed three back-to-back Copilot reviews overrun the 600 s foreground call, so the back-to-back fallback covers only a host that cannot dispatch three subagents; a CLI call that is refused does not vote. Background dispatch with polling was rejected as new machinery. [paraphrase]
+- **Concurrency probe (2026-10-04, before the build):** Cursor (cursor-agent 2026.09.18, gpt-5.6-sol-high, `--mode ask`) accepted three simultaneous headless calls, each as fast as a single call (~6 s). Copilot could not be probed: the plan's usage limit refused every call ("You've reached your additional usage limit for your plan"), so its R4 draws wait on quota. [paraphrase]
 - **#513 (2026-10-04):** validated against 7.1.2; after fn-280 host review is the only `review-rounds record` caller, so the range is kept from the reservation and `record` gains only an optional model, not `--base`/`--head`. [paraphrase]
 - **Maintainer, 2026-10-04:** "each backend should work the same"; 8.0.0 keeps everything the same except RepoPrompt removal, the same review on every backend through one generic runner, and the cheap wins that are not dangerous. [paraphrase]
 - Agentic dispatch (fn-279) was parked because moving the CLI handling flowctl encodes (stdin hangs, resume flags, model pinning, trust prompts, Windows sandboxing) into prose risks being slower and less reliable across six harnesses, and it breaks a lot; the uniform panel does not need it. [paraphrase]
