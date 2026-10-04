@@ -84,8 +84,7 @@ ONE_REVIEWER=0   # 1 when the panel rule above calls for one reviewer
 ```
 
 A branch review (no task) passes the caller's focus areas with `--focus "<areas>"`. Triage
-passing means lockfile, docs, release or generated files only: the review is done. When the
-dispatch says its reviewers ran one after another, say so in your report.
+passing means lockfile, docs, release or generated files only: the review is done.
 
 ## 3. Merge and finalize
 

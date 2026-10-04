@@ -448,6 +448,33 @@ class TestReviewRoute(unittest.TestCase):
         code, r, _ = self._route(self.task_id)
         self.assertEqual(r["action"], "fanout")
 
+    def test_stalled_loop_stops_until_a_new_fix_is_committed(self) -> None:
+        """fn-281 R7: after three consecutive `not-fixed` rounds on the current
+        HEAD the route stops; a committed fix since the last round is reviewed."""
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root,
+                              capture_output=True, text=True, check=True).stdout.strip()
+        digest = {"backend": "codex", "reviewKind": "implementation", "digest_truncated": False,
+                  "items": [{"findingId": "f", "chainRoot": "root", "severity": "P1",
+                             "status": "not_fixed", "classification": "introduced",
+                             "firstSeenThisRound": False}]}
+        data = self._spec()
+        data["impl_review_rounds"] = {self.task_id: 3}
+        data["review_attempts"] = [
+            {"counter_kind": "impl", "kind": "impl", "task": self.task_id,
+             "verdict": "NEEDS_WORK", "outcome": "verdict", "round_consumed": True,
+             "hash_epoch": 0, "head_sha": head, "findings_digest": digest}
+            for _ in range(3)
+        ]
+        self._write_spec(data)
+        receipt = self._receipt(self.root / "r.json")
+        code, r, _ = self._route(self.task_id, "--receipt", str(receipt))
+        self.assertEqual((r["action"], r["reason"]), ("stop", "stalled"))
+        (self.root / "app.py").write_text("x = 2\n")
+        subprocess.run(["git", "commit", "-qam", "fix"], cwd=self.root, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        code, r, _ = self._route(self.task_id, "--receipt", str(receipt))
+        self.assertEqual(r["action"], "fix-then-rereview")
+
     def test_superseded_rows_are_ignored(self) -> None:
         data = self._spec()
         data["impl_review_rounds"] = {self.task_id: 1}

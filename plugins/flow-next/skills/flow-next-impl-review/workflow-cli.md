@@ -88,9 +88,7 @@ What the dispatch does (facts you rely on, not steps you take):
 - Task mode reserves exactly **ONE** review round for the whole fan-out
   (standalone reserves none; a per-invocation nonce serves as the `rid`).
 - The draws run concurrently, each under its own timeout — a hung draw
-  cannot hold the round to the wall-clock bound. A reviewer CLI that takes one
-  call at a time runs them one after another, and the dispatch says so on
-  stderr; pass that line on in your report.
+  cannot hold the round to the wall-clock bound.
 - Per-draw sidecars land at `.flow/review-fanout/<rid>/`: `<axis>.review.md`
   (the extracted reviewer message — what you merge), `<axis>.json` (metadata
   incl. verdict/session), `<axis>.out.txt` (raw), `meta.json`, `progress.log`.
@@ -333,8 +331,7 @@ Grammar and defaults: [references/backend-specs.md](references/backend-specs.md)
   ladder's floor no model or effort is sent and the receipt records `"effort": null`.
   On a Claude-family writer the review is same-family: the receipt records it and the run
   proceeds; prefer `codex` or `host` when family independence matters.
-- **copilot** — the Copilot CLI; session ids are client-minted (create-or-resume). It takes
-  one call at a time here, so a three-draw round runs its draws one after another.
+- **copilot** — the Copilot CLI; session ids are client-minted (create-or-resume).
 - **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
   effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
   rejected.

@@ -44126,9 +44126,6 @@ def _wire_backend_review_hooks() -> None:
         "cli_label": "copilot",
         "no_verdict_label": "Copilot",
         "needs_persona_override": False,
-        # Not probed for simultaneous calls (the plan's quota refused the
-        # probe), so a first round's reviewers run one after another.
-        "serial_draws": True,
     })
     BACKEND_REGISTRY["cursor"].update({
         # Spawn shape: positional argv + CURSOR_ARGV_TRANSPORT_MAX budget handling.
@@ -45775,12 +45772,7 @@ def _review_fanout_resolve_scope(args: argparse.Namespace):
     """Validate task/standalone scope; sidecars always require .flow/."""
     task_id = args.task
     standalone = task_id is None
-    if not ensure_flow_exists():
-        if standalone:
-            error_exit(
-                "fan-out sidecars live under .flow/; .flow/ does not exist",
-                use_json=args.json,
-            )
+    if not standalone and not ensure_flow_exists():
         error_exit(".flow/ does not exist", use_json=args.json)
     flow_dir = get_flow_dir()
     task_spec_path = None
@@ -45887,11 +45879,11 @@ def _review_fanout_sidecar_dir(flow_dir: Path, rid: str) -> Path:
     # contract as the lock path: a stray unignored sidecar is a mess, not a
     # correctness break, but raw reviewer output must not ride `git add -A`
     # in repos whose .flow/.gitignore predates the review-fanout/ pattern).
+    parent.mkdir(parents=True, exist_ok=True)
     try:
         _ensure_flow_gitignore(flow_dir)
     except (OSError, UnicodeDecodeError):
         pass
-    parent.mkdir(parents=True, exist_ok=True)
     sidecar = parent / rid
     try:
         sidecar.mkdir(mode=0o700, exist_ok=False)
@@ -46061,16 +46053,7 @@ def _review_fanout_run_draw(
 def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
     from concurrent.futures import ThreadPoolExecutor
 
-    serial = [
-        draw["spec"].backend for draw in draws
-        if BACKEND_REGISTRY[draw["spec"].backend].get("serial_draws")
-    ]
-    if serial and len(draws) > 1:
-        _review_fanout_append_progress(
-            sidecar_dir,
-            f"draws run one after another: {serial[0]} takes one call at a time",
-        )
-    with ThreadPoolExecutor(max_workers=1 if serial else len(draws)) as pool:
+    with ThreadPoolExecutor(max_workers=len(draws)) as pool:
         futs = [
             pool.submit(
                 _review_fanout_run_draw,
@@ -46656,6 +46639,16 @@ def _review_route_ledger(flow_dir: Path, task_id: str) -> dict:
         else:
             out["live_reservation"] = str(res_id)
     out["phase_lease"] = _review_phase_lease_live(spec_data, counter_scope)
+    # A recorded stall ends the loop until a new fix is committed: the last
+    # round reviewed the current HEAD.
+    epoch = _review_hash_epoch(spec_data, _review_epoch_scope(counter_scope, "impl"))
+    stalled = _review_stall_rule(spec_data, "impl", task_id, epoch, "impl")
+    heads = [
+        row.get("head_sha") for row in spec_data.get("review_attempts") or []
+        if isinstance(row, dict) and row.get("task") == task_id
+        and row.get("counter_kind") == "impl" and row.get("round_consumed") is True
+    ]
+    out["stalled"] = stalled if heads and heads[-1] == _review_head_sha() else None
     return out
 
 
@@ -46848,6 +46841,13 @@ def compute_review_route(
             "this scope's NEEDS_WORK was issued by a deep pass and its finding "
             "bodies are not in the receipt — not resumable from state. Re-run "
             "the review with --deep on the current head, or a human decides.",
+        )
+    if receipt_state == "open" and ledger.get("stalled"):
+        return _stop(
+            "stalled",
+            f"review loop stalled ({ledger['stalled']}): the reviewer marked the "
+            "same finding not-fixed in three consecutive rounds and no fix has "
+            "been committed since the last one — a human decides.",
         )
     if receipt_state == "open":
         result.update({
@@ -47320,7 +47320,7 @@ def _review_fanout_refund_stale_round(
         record_review_attempt(
             spec_id_from_task(meta["id"]),
             "impl",
-            backend="codex",
+            backend=args.review_backend,
             output=reason,
             failure_class=failure_class,
             task_id=meta["id"],

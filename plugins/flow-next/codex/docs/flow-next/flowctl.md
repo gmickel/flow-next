@@ -2421,7 +2421,7 @@ flowctl <backend> impl-review-fanout <task-id> [--base <branch>] [--draw AXIS[=B
 # per-draw backend specs are the cross-family round.
 # Cross-family constraint: the primary draw (correctness, or the first draw when
 # correctness is not drawn) must run on <backend> (exit 2 otherwise); the other
-# draws may name any CLI backend. copilot draws run one after another (stderr says so).
+# draws may name any CLI backend.
 # Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
 
 # Phase two - one deterministic finalizer, after the coordinator's merge
@@ -2459,7 +2459,9 @@ regardless of guards. Every input the decision used is echoed for audit
 `unjournaled_reservation`, `live_reservation`, `expired_reservation`,
 `phase_lease`). Additional stop reasons: `corrupt_receipt` (an unknown
 verdict, wrong type, or unparseable file on this scope's path is never
-rotated into a fresh fan-out), `phases_in_flight` (another coordinator holds
+rotated into a fresh fan-out), `stalled` (an open receipt whose last three
+rounds marked the same finding `not-fixed`, with no commit since the last one),
+`phases_in_flight` (another coordinator holds
 the optional-phase lease), `rotation_lost_race`, `claimed` (a live standalone
 claim by another coordinator's dispatch), and `claim_lost_race`. A journaled
 reservation counts as in flight only while its lease is live; an expired
@@ -2590,7 +2592,8 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   chain `not-fixed` in **three consecutive** rounds - the one signal grounded in a
   stated resolution rather than an inferred trend. The verdict and receipt persist
   first, and a reservation is never refused for it, so a fix committed after the
-  second `not-fixed` is always reviewed. It requires the same backend and review
+  second `not-fixed` is always reviewed; `review-route` then stops with reason
+  `stalled` until a new fix is committed. It requires the same backend and review
   kind across the three rounds, so a backend switch is bounded by the round cap alone. No trend or presence
   heuristic sits beside it: such heuristics escalate healthy converging loops,
   so the round cap is the sole aggregate bound, deliberately. Missing, malformed, legacy, truncated, or

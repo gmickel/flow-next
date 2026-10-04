@@ -2202,7 +2202,7 @@ class TestReviewFanout(unittest.TestCase):
     def test_every_cli_backend_runs_the_same_panel(self) -> None:
         """fn-281 R1-R3: one runner for every CLI backend - three axis draws on
         the backend's own reviewer, its receipt mode, the claude draws given
-        the reviewed diff by path, copilot's draws one after another."""
+        the reviewed diff by path."""
         for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 calls: list = []
@@ -2231,7 +2231,6 @@ class TestReviewFanout(unittest.TestCase):
                 ranges = {c["range"][2] for c in calls}
                 self.assertEqual(ranges, {f"{payload['rid']}-{axis}"
                                           for axis in flowctl.REVIEW_FANOUT_AXES})
-                self.assertEqual("one after another" in err, backend == "copilot")
                 code, out, err = self._run(
                     backend, "impl-review-fanout-finalize", "--rid",
                     payload["rid"], "--merged-file",
@@ -2242,6 +2241,47 @@ class TestReviewFanout(unittest.TestCase):
                 self.assertEqual(data["mode"], backend)
                 self.assertEqual(data["session_id"], "sess-correctness")
                 self.assertEqual(len(data["draws"]), 3)
+
+    def test_stale_round_refund_records_the_review_backend(self) -> None:
+        """A non-codex round whose head moved before finalize is refunded under
+        its own backend."""
+        receipt = self.root / "receipt.json"
+        code, out, err = self._run(
+            "cursor", "impl-review-fanout", self.task_id, "--base", "HEAD~1",
+            "--force", "--receipt", str(receipt), "--json",
+            fake=self._ship_exec([]), backend="cursor",
+        )
+        self.assertEqual(code, 0, err + out)
+        rid = self._payload(out)["rid"]
+        (self.root / "app.py").write_text("x = 3\n", encoding="utf-8")
+        self._git("commit", "-qam", "moved")
+        code, out, err = self._run(
+            "cursor", "impl-review-fanout-finalize", "--rid", rid, "--merged-file",
+            str(self._write_merged(_empty_merged_review())), "--json",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self._attempts()[-1]["backend"], "cursor")
+        self.assertEqual(self._attempts()[-1]["outcome"], "transport_failure")
+
+    def test_standalone_fanout_needs_no_flow_project(self) -> None:
+        """A branch review in a repo without .flow/ dispatches; the sidecars
+        create .flow/review-fanout/ themselves."""
+        repo = self.root / "plain"
+        repo.mkdir()
+        for argv in (["init", "-q", "-b", "main"], ["config", "user.email", "t@t.t"],
+                     ["config", "user.name", "t"]):
+            subprocess.run(["git", *argv], cwd=repo, check=True)
+        for text in ("a\n", "b\n"):
+            (repo / "a.txt").write_text(text, encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", text.strip()], cwd=repo, check=True)
+        os.chdir(repo)
+        code, out, err = self._run(
+            "claude", "impl-review-fanout", "--base", "HEAD~1", "--draw", "correctness",
+            "--json", fake=self._ship_exec([]), backend="claude",
+        )
+        self.assertEqual(code, 0, err + out)
+        self.assertTrue((repo / ".flow" / "review-fanout" / self._payload(out)["rid"]).is_dir())
 
     def test_primary_draw_runs_on_the_review_backend(self) -> None:
         """host review r1: the primary draw drives the merged receipt's
