@@ -7383,8 +7383,8 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
     "host": {
         # fn-123 R5: NON-EXECUTABLE selection sentinel. Review runs as a
         # host-native fresh-context subagent (skill-owned judgment). No model
-        # or effort on the backend string — pins live in the AGENTS.md
-        # model-routing section (caller routing instructions). No ``run_exec``
+        # or effort on the backend string — pins live in the model-routing
+        # block (caller routing instructions). No ``run_exec``
         # hook, no ``flowctl host`` subcommand, never a subprocess path.
         "models": None,
         "efforts": None,
@@ -7552,13 +7552,13 @@ class BackendSpec:
 
         if model is not None:
             if reg["models"] is None:
-                # fn-123 R5: host pins live in AGENTS.md model-routing, never in
+                # fn-123 R5: host pins live in the model-routing block, never in
                 # the backend string — reject host:<model> with a pointed hint.
                 if backend == "host":
                     raise ValueError(
                         f"Backend 'host' does not accept a model "
                         f"(got {model!r}). Name the model on the `reviewer` tier of the "
-                        f"AGENTS.md model-routing block, "
+                        f"model-routing block in CLAUDE.md or AGENTS.md, "
                         f"not the backend string. Use bare `host`."
                     )
                 raise ValueError(
@@ -7584,7 +7584,7 @@ class BackendSpec:
                     raise ValueError(
                         f"Backend 'host' does not accept an effort "
                         f"(got {effort!r}). Name the model on the `reviewer` tier of the "
-                        f"AGENTS.md model-routing block, "
+                        f"model-routing block in CLAUDE.md or AGENTS.md, "
                         f"not the backend string. Use bare `host`."
                     )
                 raise ValueError(
@@ -9404,6 +9404,7 @@ def build_review_prompt(
     spec_path: str = "",
     task_spec_paths: Sequence[str] = (),
     axis: Optional[str] = None,
+    standing_criteria: bool = False,
 ) -> str:
     """Build the XML-structured review prompt.
 
@@ -9441,9 +9442,26 @@ def build_review_prompt(
         review_scope=review_scope, diff_range=diff_range,
         spec_path=spec_path, task_spec_paths=task_spec_paths,
     ))
+    if standing_criteria:
+        parts.append(build_global_criteria_block().rstrip())
     parts.append(f"<review_instructions>\n{instruction}\n</review_instructions>")
 
     return "\n\n".join(parts)
+
+
+def _single_task_criteria(task_id: str, use_json: bool) -> bool:
+    """True when a spec's only task has standing criteria to judge.
+
+    A one-task spec skips completion review, the review that otherwise judges
+    `.flow/criteria.md`, so that task's implementation review judges them.
+    """
+    if len(list(iter_task_json_files(get_flow_dir(), spec_id_from_task(task_id)))) != 1:
+        return False
+    try:
+        return bool(build_global_criteria_block())
+    except ValueError as exc:
+        error_exit(str(exc), use_json=use_json, code=2)
+        raise AssertionError("error_exit must terminate") from None
 
 
 # fn-169: wall-clock ceiling for one backend review dispatch. Raised 600 -> 1800
@@ -10446,7 +10464,12 @@ def record_review_attempt(
         [Path(receipt_target)] if isinstance(receipt_target, str) and receipt_target else []
     )
     with _review_two_resource_lock(flow_dir, spec_id, receipt_targets):
-        return _record_review_attempt_locked(spec_id, review_kind, **kwargs)
+        summary = _record_review_attempt_locked(spec_id, review_kind, **kwargs)
+    if kwargs.get("verdict") == "NEEDS_WORK" and (marker := _review_recorded_stall(
+        spec_id, review_kind, kwargs.get("task_id"), kwargs.get("review_type"),
+    )):
+        summary["stall_marker"] = marker
+    return summary
 
 
 def _record_review_attempt_locked(
@@ -10586,6 +10609,9 @@ def _record_review_attempt_locked(
         finalize_status_kind = None
         deferred_status_target = None
         reset_rounds_on_ship = False
+    if not reviewed_head_sha and isinstance(metadata, dict) and metadata.get("head_sha"):
+        reviewed_head_sha = metadata["head_sha"]
+        reviewed_base_sha = reviewed_base_sha or metadata.get("base_sha")
     # fn-159 round 7/8: --status-target is the CLI spelling of the folded
     # status write; unify so the journaled operation and the sidecar write
     # share one code path (and one atomic transaction).
@@ -10841,9 +10867,10 @@ def _record_review_attempt_locked(
         # Bytes only - the output itself is never retained (see output_sha256).
         "output_bytes": len((output or "").encode("utf-8", errors="replace")),
         # fn-183 (#312) provenance MARKER (not omission): True when a
-        # pre-dispatch snapshot supplied head_sha, False when the finalize-time
-        # `git rev-parse HEAD` fallback did (the host `review-rounds record`
-        # CLI path, and the dispatch-error refund paths). A row with NO
+        # pre-dispatch snapshot or the reservation's range supplied head_sha,
+        # False when the finalize-time `git rev-parse HEAD` fallback did (a
+        # `review-rounds record` whose reservation got no range, and the
+        # dispatch-error refund paths). A row with NO
         # head_sha_observed key predates fn-183 and means unknown - which is
         # exactly why this is a marker and not an omission: omission would make
         # "fallback" and "old row" indistinguishable.
@@ -10872,9 +10899,9 @@ def _record_review_attempt_locked(
         row["base_sha"] = reviewed_base_sha
     # fn-193 (#338): the model that ACTUALLY ran, taken from the same
     # `_receipt_model_effort` values the receipt records (so a ladder downgrade
-    # or a codex resume carry lands here honestly). Written only where the
-    # dispatcher resolved them - the host `review-rounds record` path has no
-    # such fact and records no key, never "unknown"/"auto".
+    # or a codex resume carry lands here honestly), or the model a host review
+    # names with `review-rounds record --model` (#513). Without one the row
+    # records no key, never "unknown"/"auto".
     # Ladder floors pass None here (the sites gate on resolution["floor"] -
     # #349 rounds 4-5): a floored "auto"/"default" is a selector placeholder,
     # while an EXPLICIT cursor:auto pin really was sent and records honestly.
@@ -11060,6 +11087,7 @@ def enforce_and_increment_review_cap(
     forced: bool = False,
     return_reservation: bool = False,
     exclusive: bool = False,
+    reviewed_range: Optional[tuple] = None,
 ) -> Any:
     """Enforce the cumulative review-round cap and increment the counter.
 
@@ -11111,7 +11139,7 @@ def enforce_and_increment_review_cap(
                 artifact_sha256=artifact_sha256, review_type=review_type,
                 forced=forced, return_reservation=return_reservation,
                 locked_receipt_targets=locked,
-                exclusive=exclusive,
+                exclusive=exclusive, reviewed_range=reviewed_range,
             )
     raise AssertionError("rescan loop must return")
 
@@ -11198,13 +11226,19 @@ def handle_replayed_review_cap(
     return True
 
 
-def apply_needs_human_escalation(payload: dict, verdict: Optional[str]) -> bool:
-    """Fold the NEEDS_HUMAN terminal into an already-built JSON payload.
+def apply_needs_human_escalation(
+    payload: dict, verdict: Optional[str], attempt: Optional[dict] = None,
+) -> bool:
+    """Fold the NEEDS_HUMAN or stall terminal into an already-built JSON payload.
 
     The escalation is part of the SAME object the caller emits - one JSON
     document per invocation, matching the cap terminal's contract. Returns
     True when the payload was marked, so the caller can flip ``success``.
     """
+    stall = (attempt or {}).get("stall_marker")
+    if stall:
+        payload.update(error=stall, escalate=True, stalled=True)
+        return True
     if verdict != "NEEDS_HUMAN":
         return False
     payload["error"] = NEEDS_HUMAN_ESCALATION_MARKER
@@ -11294,22 +11328,23 @@ def apply_superseded_review_outcome(
     return True
 
 
-def _exit_needs_human_after_persistence(verdict: Optional[str], *, use_json: bool) -> None:
-    """Exit on the human-escalation terminal, after all writes are complete.
+def _exit_needs_human_after_persistence(
+    verdict: Optional[str], *, use_json: bool, attempt: Optional[dict] = None,
+) -> None:
+    """Exit on the human-escalation or stall terminal, after all writes.
 
     In ``--json`` mode the marker was already folded into the single result
     payload by ``apply_needs_human_escalation``; emitting here would produce a
     second JSON document on stdout, so this only sets the exit code.
     """
-    if verdict != "NEEDS_HUMAN":
+    marker = (attempt or {}).get("stall_marker")
+    if not marker and verdict == "NEEDS_HUMAN":
+        marker = NEEDS_HUMAN_ESCALATION_MARKER
+    if not marker:
         return
     if use_json:
         sys.exit(REVIEW_CAP_EXIT_CODE)
-    error_exit(
-        NEEDS_HUMAN_ESCALATION_MARKER,
-        use_json=False,
-        code=REVIEW_CAP_EXIT_CODE,
-    )
+    error_exit(marker, use_json=False, code=REVIEW_CAP_EXIT_CODE)
 
 
 def _latest_consumed_artifact_sha256(
@@ -11354,11 +11389,11 @@ def _review_stall_rule(
     epoch: int,
     review_type: Optional[str] = None,
 ) -> Optional[str]:
-    """Return a proven two-round stall rule, or ``None`` to fail inert.
+    """Return a proven three-round stall rule, or ``None`` to fail inert.
 
     This is intentionally a sidecar-only read.  A receipt can be missing,
     stale, or on a different machine; only the append-only consumed-attempt
-    ledger and its validated bounded digest are evidence at dispatch time.
+    ledger and its validated bounded digest are evidence.
 
     Rows are filtered to this dispatch's review TYPE: epochs are per type
     (PR #290 bot r9), so two co-tenant types on one counter can hold the same
@@ -11378,35 +11413,26 @@ def _review_stall_rule(
         and row.get("round_consumed") is True
         and row.get("hash_epoch") == epoch
     ]
-    if len(consumed) < 2:
+    if len(consumed) < 3:
         return None
-    previous, current = consumed[-2:]
-    previous_digest = previous.get("findings_digest")
-    current_digest = current.get("findings_digest")
-    if not (
-        _review_findings_digest_valid(previous_digest)
-        and _review_findings_digest_valid(current_digest)
-        and not previous_digest["digest_truncated"]
-        and not current_digest["digest_truncated"]
+    digests = [row.get("findings_digest") for row in consumed[-3:]]
+    if not all(
+        _review_findings_digest_valid(digest) and not digest["digest_truncated"]
+        for digest in digests
     ):
         return None
-
-    same_identity = (
-        previous_digest["backend"] == current_digest["backend"]
-        and previous_digest["reviewKind"] == current_digest["reviewKind"]
-    )
-    previous_items = previous_digest["items"]
-    current_items = current_digest["items"]
-    if same_identity:
+    if len({(digest["backend"], digest["reviewKind"]) for digest in digests}) == 1:
         # fn-168: the ONE surviving stall class, and it survived because it
         # reads a STATEMENT rather than a derived aggregate. ``not_fixed`` is
         # written only by an explicit parsed per-ordinal ratchet line, and
         # ``_review_finding_prior_items`` resets an unrepeated carried
         # ``not_fixed`` back to ``open`` (fn-168 R8) — so an intersection here
-        # means the reviewer said "still broken" about the same lineage in BOTH
-        # consecutive rounds. That reset is the parser-side half of this
+        # means the reviewer said "still broken" about the same lineage in
+        # THREE consecutive rounds. That reset is the parser-side half of this
         # guarantee: without it a single ``not-fixed`` line would persist
-        # through silent rounds and escalate a loop that said nothing.
+        # through silent rounds and escalate a loop that said nothing. Three,
+        # not two (fn-281): the rule runs after a round is recorded, so the
+        # fix committed after the second ``not-fixed`` is still reviewed.
         #
         # fn-168 DELETED its two siblings — an open-count/worst-severity trend
         # rule, and a "a freshly introduced blocker appeared in both rounds"
@@ -11418,36 +11444,46 @@ def _review_stall_rule(
         # round cap, deliberately. The named rationale, the accepted
         # consequences, and the fn-159 R2 supersession live in the fn-168
         # decision record under `.flow/memory/knowledge/decisions/`.
-        previous_not_fixed = {
-            item["chainRoot"]
-            for item in previous_items
-            if item["status"] == "not_fixed"
-        }
-        current_not_fixed = {
-            item["chainRoot"]
-            for item in current_items
-            if item["status"] == "not_fixed"
-        }
-        if previous_not_fixed & current_not_fixed:
+        not_fixed = [
+            {item["chainRoot"] for item in digest["items"] if item["status"] == "not_fixed"}
+            for digest in digests
+        ]
+        if set.intersection(*not_fixed):
             return "same-not-fixed-lineage"
     return None
 
 
-def _review_stall_marker(
-    rule: str,
-    *,
+def _review_recorded_stall(
+    spec_id: str,
     review_kind: str,
-    current: int,
-    cap: int,
-    scope: str,
-) -> str:
-    """Use the cap stanza shape for an earlier, evidence-backed terminal."""
+    task_id: Optional[str],
+    review_type: Optional[str],
+) -> Optional[str]:
+    """The stall escalation (cap stanza shape) for the round just recorded.
+
+    Read after the record (and, on the host path, after the attach that
+    stores the round's findings digest), never at reservation: a round
+    whose committed fix has not been reviewed yet is always dispatched.
+    """
+    try:
+        spec_data = normalize_epic(load_json(find_spec_json_path(get_flow_dir(), spec_id)))
+    except (OSError, ValueError):
+        return None
+    epoch = _review_hash_epoch(spec_data, _review_epoch_scope(
+        _review_counter_scope(review_kind, task_id), review_type,
+    ))
+    rule = _review_stall_rule(spec_data, review_kind, task_id, epoch, review_type)
+    if rule is None:
+        return None
+    scope = task_id if (review_kind == "impl" and task_id) else spec_id
     return (
-        f"ESCALATE: review loop stalled ({rule}) for {scope} "
-        f"after {current}/{cap} verdict rounds ({review_kind}-review). "
-        "This is NOT a retryable error — escalate to a human (or, under an "
-        "autonomous loop, surface NEEDS_HUMAN). No additional review round "
-        "was reserved."
+        f"ESCALATE: review loop stalled ({rule}) for {scope} after "
+        f"{_read_review_rounds(spec_data, review_kind, task_id)}/"
+        f"{get_max_review_iterations()} verdict rounds ({review_kind}-review): "
+        "the reviewer marked the same finding not-fixed in three consecutive "
+        "rounds. This is NOT a retryable error — escalate to a human (or, "
+        "under an autonomous loop, surface NEEDS_HUMAN); start no further "
+        "fix pass."
     )
 
 
@@ -11463,6 +11499,7 @@ def _enforce_and_increment_review_cap_locked(
     return_reservation: bool,
     locked_receipt_targets: Optional[set] = None,
     exclusive: bool = False,
+    reviewed_range: Optional[tuple] = None,
 ) -> Any:
     import uuid
 
@@ -11830,35 +11867,6 @@ def _enforce_and_increment_review_cap_locked(
                 code=2,
             )
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
-    stalled_rule = _review_stall_rule(
-        spec_data, review_kind, task_id, epoch, review_type
-    )
-    if stalled_rule is not None:
-        marker = _review_stall_marker(
-            stalled_rule,
-            review_kind=review_kind,
-            current=current,
-            cap=cap,
-            scope=scope,
-        )
-        if use_json:
-            json_output(
-                {
-                    "error": marker,
-                    "escalate": True,
-                    "stalled": True,
-                    "stall_rule": stalled_rule,
-                    "review_kind": review_kind,
-                    "spec": spec_id,
-                    "task": task_id,
-                    "rounds": current,
-                    "cap": cap,
-                },
-                success=False,
-            )
-        else:
-            print(marker, file=sys.stderr)
-        sys.exit(REVIEW_CAP_EXIT_CODE)
     if current >= cap:
         attempts = _review_attempt_summary(
             spec_data, review_kind, task_id
@@ -11908,6 +11916,10 @@ def _enforce_and_increment_review_cap_locked(
         "review_type": review_type or review_kind,
         "exclusive": bool(exclusive),
     }
+    if reviewed_range:
+        # #513: the attempt row records the range this round reviewed.
+        reservation = _review_reservations(spec_data)[reservation_id]
+        reservation["base_sha"], reservation["head_sha"] = reviewed_range
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
     return (new_val, reservation_id) if return_reservation else new_val
@@ -31400,6 +31412,9 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
         review_type=getattr(args, "review_type", None),
         forced=bool(getattr(args, "force", False)), return_reservation=True,
         exclusive=bool(getattr(args, "exclusive", False)),
+        reviewed_range=(
+            (_resolve_review_sha(base), _resolve_review_sha(head)) if base else None
+        ),
     )
     if isinstance(result, dict) and result.get("replayed"):
         # Typed recovery result (fn-159 rounds 7-8): delivered verdict(s)
@@ -31546,6 +31561,7 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
         review_type=args.review_type,
         use_json=args.json,
         reservation_id=getattr(args, "reservation_id", None),
+        reviewed_model=getattr(args, "model", None),
         receipt_target=receipt_target,
         receipt_payload=receipt_payload,
         status_target=getattr(args, "status_target", None),
@@ -31573,14 +31589,22 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
         ), emit=False)
         result["receipt"] = published["receipt"]
         result["published_from_journal"] = True
+        if verdict == "NEEDS_WORK":
+            # The attach just stored this round's findings digest.
+            result["stall_marker"] = _review_recorded_stall(
+                spec_id, args.kind, task_id, args.review_type,
+            )
     superseded = review_attempt_superseded(result)
     if superseded:
         # PR #290 bot r8: the fences read this record's JSON, so it must say
         # the verdict is evidence — not a live terminal to route on.
         result["superseded"] = True
         result["note"] = SUPERSEDED_REVIEW_NOTICE
+    stall = result.get("stall_marker")
+    if stall:
+        result.update(error=stall, escalate=True, stalled=True)
     if args.json:
-        json_output(result)
+        json_output(result, success=not stall)
     else:
         if superseded:
             print(
@@ -31598,6 +31622,10 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
                 f"{args.review_type}-review transport failure "
                 f"({failure_class}) recorded; round refunded"
             )
+        if stall:
+            print(stall, file=sys.stderr)
+    if stall:
+        sys.exit(REVIEW_CAP_EXIT_CODE)
 
 
 def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
@@ -31679,6 +31707,7 @@ def cmd_review_prompt(args: argparse.Namespace) -> None:
                     "impl", context_hints=gather_context_hints(base),
                     review_scope=scope, diff_range=f"{base_sha}..{head_sha}",
                     spec_path=task_path.relative_to(repo_root).as_posix(), axis=args.axis,
+                    standing_criteria=_single_task_criteria(task_id, args.json),
                 )
             else:
                 prompt = build_standalone_review_prompt(base, args.focus, scope, f"{base_sha}..{head_sha}", axis=args.axis)
@@ -44080,9 +44109,6 @@ def _wire_backend_review_hooks() -> None:
         # re-dispatch instead of declaring a verdict (#331). Delivery is
         # through stdin, so the preamble costs no argv budget.
         "needs_persona_override": True,
-        # fn-215 R15: fan-out is a registry gate on the impl pipeline, never
-        # inside _dispatch_backend_review (plan/completion share that helper).
-        "fanout_draws": True,
     })
     BACKEND_REGISTRY["copilot"].update({
         # Spawn shape: session marker under .flow/tmp/copilot-sessions/.
@@ -44100,6 +44126,9 @@ def _wire_backend_review_hooks() -> None:
         "cli_label": "copilot",
         "no_verdict_label": "Copilot",
         "needs_persona_override": False,
+        # Not probed for simultaneous calls (the plan's quota refused the
+        # probe), so a first round's reviewers run one after another.
+        "serial_draws": True,
     })
     BACKEND_REGISTRY["cursor"].update({
         # Spawn shape: positional argv + CURSOR_ARGV_TRANSPORT_MAX budget handling.
@@ -44138,8 +44167,6 @@ def _wire_backend_review_hooks() -> None:
         # ``claude -p`` loads the repo's CLAUDE.md - the same ambient-instruction
         # hazard cursor neutralises with the persona override.
         "needs_persona_override": True,
-        # No ``fanout_draws``: the first-round three-draw fan-out is codex-only
-        # (fn-215 R15).
     })
 
 
@@ -44449,6 +44476,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             # POSIX separators on every platform: git speaks forward slashes,
             # and <changed_files> is generated by git.
             spec_path=task_spec_path.relative_to(repo_root).as_posix(),
+            standing_criteria=_single_task_criteria(task_id, args.json),
         )
 
     prior_findings = _read_prior_findings(receipt_path)
@@ -44691,7 +44719,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
             json_output(json_payload)
             return
-        escalated = apply_needs_human_escalation(json_payload, verdict)
+        escalated = apply_needs_human_escalation(json_payload, verdict, attempt_summary)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
@@ -44704,7 +44732,9 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             )
             return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-    _exit_needs_human_after_persistence(verdict, use_json=args.json)
+    _exit_needs_human_after_persistence(
+        verdict, use_json=args.json, attempt=attempt_summary,
+    )
 
 def _current_review_rounds(
     spec_id: str,
@@ -44797,26 +44827,8 @@ def _finish_backend_exec(
                 attempt_out.update(summary)
         return verdict
 
-    sandbox_failure = (
-        reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr)
-    )
-    # fn-187 (#331): the timeout scan reads STDERR ONLY. Every backend's
-    # transport timeout surfaces there — the `subprocess.TimeoutExpired`
-    # handlers return ("", …, 2, "<cli> timed out (Ns)") — while the reviewer's
-    # own prose lands in `output`. Scanning both meant a healthy exit-0 review
-    # that merely mentioned the word "timeout" was journaled as a transport
-    # timeout instead of the honest `missing_verdict`.
-    stderr_text = (stderr or "").lower()
-    if sandbox_failure:
-        failure_class = "sandbox"
-    elif "timed out" in stderr_text or "timeout" in stderr_text:
-        failure_class = "timeout"
-    elif exit_code != 0:
-        failure_class = "nonzero_exit"
-    elif not (output or "").strip():
-        failure_class = "empty_output"
-    else:
-        failure_class = "missing_verdict"
+    failure_class = _classify_review_failure(reg, output, stderr, exit_code)
+    sandbox_failure = failure_class == "sandbox"
 
     attempt: dict = {}
     if spec_id and review_kind:
@@ -45201,7 +45213,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
             json_output(json_payload)
             return
-        escalated = apply_needs_human_escalation(json_payload, verdict)
+        escalated = apply_needs_human_escalation(json_payload, verdict, attempt_summary)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
@@ -45214,7 +45226,9 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             )
             return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-    _exit_needs_human_after_persistence(verdict, use_json=args.json)
+    _exit_needs_human_after_persistence(
+        verdict, use_json=args.json, attempt=attempt_summary,
+    )
 
 
 def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
@@ -45563,7 +45577,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
             json_output(json_payload)
             return
-        escalated = apply_needs_human_escalation(json_payload, verdict)
+        escalated = apply_needs_human_escalation(json_payload, verdict, attempt_summary)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
@@ -45576,21 +45590,15 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             )
             return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-    _exit_needs_human_after_persistence(verdict, use_json=args.json)
+    _exit_needs_human_after_persistence(
+        verdict, use_json=args.json, attempt=attempt_summary,
+    )
 
 
 
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     """Run implementation review via codex exec."""
     cmd_backend_review(args, backend="codex", kind="impl")
-
-
-# R15 backend gating lives in the argument parser: the fanout subcommands are
-# registered under `flowctl codex` ONLY, so a copilot/cursor invocation is an
-# argparse "invalid choice" error before any handler runs (pinned by
-# test_negative_gate). The registry's `fanout_draws` flag stays codex-only as
-# the machine-readable statement of the same rule (pinned there too); a
-# runtime re-check here was dead code — fn-215 host review r1.
 
 
 def _review_fanout_publish(path: Path, content: str) -> None:
@@ -45636,16 +45644,19 @@ def _review_fanout_append_progress(sidecar_dir: Path, line: str) -> None:
     print(line, file=sys.stderr)
 
 
-def _review_fanout_classify_failure(
+def _classify_review_failure(
     reg: dict, output: str, stderr: str, exit_code: int,
 ) -> str:
-    """Same classes as _finish_backend_exec; a verdict-bearing draw is never failed."""
-    sandbox_failure = (
-        bool(reg.get("has_sandbox"))
-        and is_sandbox_failure(exit_code, output, stderr)
-    )
+    """Failure class of a reviewer run that returned no verdict.
+
+    fn-187 (#331): the timeout scan reads STDERR ONLY. Every backend's
+    transport timeout surfaces there — the `subprocess.TimeoutExpired`
+    handlers return ("", …, 2, "<cli> timed out (Ns)") — while the reviewer's
+    own prose lands in `output`, so a healthy exit-0 review that merely
+    mentions the word "timeout" stays the honest `missing_verdict`.
+    """
     stderr_text = (stderr or "").lower()
-    if sandbox_failure:
+    if reg.get("has_sandbox") and is_sandbox_failure(exit_code, output, stderr):
         return "sandbox"
     if "timed out" in stderr_text or "timeout" in stderr_text:
         return "timeout"
@@ -45736,12 +45747,7 @@ def _review_fanout_first_round_guard(
     if not isinstance(data, dict):
         return
     session_id = data.get("session_id")
-    mode = data.get("mode")
-    has_session = (
-        isinstance(session_id, str)
-        and bool(session_id.strip())
-        and mode in (None, "codex")
-    )
+    has_session = isinstance(session_id, str) and bool(session_id.strip())
     receipt_verdict = data.get("verdict")
     if isinstance(receipt_verdict, str) and receipt_verdict not in (
         "NEEDS_WORK", "NEEDS_HUMAN",
@@ -45792,7 +45798,7 @@ def _review_fanout_resolve_scope(args: argparse.Namespace):
 
 def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str]):
     """Parse repeated --draw AXIS[=SPEC]; default is all three axes (R1/R5)."""
-    default_spec = BACKEND_REGISTRY["codex"]["resolve_spec"](args, task_id)
+    default_spec = BACKEND_REGISTRY[args.review_backend]["resolve_spec"](args, task_id)
     raw_draws = getattr(args, "draw", None) or []
     if not raw_draws:
         return [{"axis": axis, "spec": default_spec} for axis in REVIEW_FANOUT_AXES]
@@ -45834,13 +45840,9 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
                     use_json=args.json,
                     code=2,
                 )
-            backend = spec.backend
-            if backend not in ("codex", "copilot", "cursor") or not (
-                BACKEND_REGISTRY.get(backend) or {}
-            ).get("run_exec"):
+            if not (BACKEND_REGISTRY.get(spec.backend) or {}).get("run_exec"):
                 error_exit(
-                    f"draw {axis}: backend {backend!r} does not support "
-                    "fan-out dispatch",
+                    f"draw {axis}: backend {spec.backend!r} has no flowctl reviewer",
                     use_json=args.json,
                     code=2,
                 )
@@ -45907,6 +45909,7 @@ def _review_fanout_sidecar_dir(flow_dir: Path, rid: str) -> Path:
 def _review_fanout_build_prompts(
     draws, standalone, base_branch, focus, review_scope,
     reviewed_base_sha, reviewed_head_sha, repo_root, task_spec_path,
+    standing_criteria=False,
 ) -> dict:
     diff_range = f"{reviewed_base_sha}..{reviewed_head_sha}"
     context_hints = "" if standalone else gather_context_hints(base_branch)
@@ -45925,6 +45928,7 @@ def _review_fanout_build_prompts(
                 diff_range=diff_range,
                 spec_path=task_spec_path.relative_to(repo_root).as_posix(),
                 axis=axis,
+                standing_criteria=standing_criteria,
             )
         if BACKEND_REGISTRY[draw["spec"].backend].get("needs_persona_override"):
             prompt = build_review_persona_override() + prompt
@@ -45941,6 +45945,10 @@ def _review_fanout_run_draw(
     axis = draw["axis"]
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
+    if getattr(args, "claude_range", None):
+        # One diff file per draw: a claude reviewer may hold it open.
+        base_sha, head_sha, rid = args.claude_range
+        args.claude_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
     backend = spec.backend
     reg = BACKEND_REGISTRY[backend]
@@ -45992,7 +46000,7 @@ def _review_fanout_run_draw(
     elif failure_detail is not None:
         failure_class = "dispatch_exception"
     else:
-        failure_class = _review_fanout_classify_failure(reg, output, stderr, rc)
+        failure_class = _classify_review_failure(reg, output, stderr, rc)
     model, effort = _receipt_model_effort(spec, resolution_out)
     review_path = sidecar_dir / f"{axis}.review.md"
     output_path = sidecar_dir / f"{axis}.out.txt"
@@ -46053,7 +46061,16 @@ def _review_fanout_run_draw(
 def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=len(draws)) as pool:
+    serial = [
+        draw["spec"].backend for draw in draws
+        if BACKEND_REGISTRY[draw["spec"].backend].get("serial_draws")
+    ]
+    if serial and len(draws) > 1:
+        _review_fanout_append_progress(
+            sidecar_dir,
+            f"draws run one after another: {serial[0]} takes one call at a time",
+        )
+    with ThreadPoolExecutor(max_workers=1 if serial else len(draws)) as pool:
         futs = [
             pool.submit(
                 _review_fanout_run_draw,
@@ -46116,7 +46133,7 @@ def _review_fanout_refund_all_failed(
     attempt = record_review_attempt(
         spec_id_from_task(task_id),
         "impl",
-        backend="codex",
+        backend=args.review_backend,
         output=joined,
         failure_class=failure_class,
         task_id=task_id,
@@ -46129,7 +46146,7 @@ def _review_fanout_refund_all_failed(
     if attempt.get("transport_unhealthy"):
         error_exit(
             build_transport_unhealthy_message(
-                "codex",
+                args.review_backend,
                 "impl",
                 attempt["consecutive_transport_failures"],
                 attempt["transport_failure_cap"],
@@ -46146,20 +46163,14 @@ def _review_fanout_refund_all_failed(
     )
 
 
-def _review_fanout_next_cmd(rid) -> str:
-    return (
-        f"flowctl codex impl-review-fanout-finalize --rid {rid} "
-        "--merge-plan <merge-plan.json>"
-    )
-
-
 def _review_fanout_emit_dispatch(
     args, task_id, standalone, rid, reservation_id, sidecar, results, base_branch,
 ) -> None:
     review_id = task_id if task_id else "branch"
     next_line = (
-        "merge the surviving draws' findings, then run: "
-        + _review_fanout_next_cmd(rid)
+        "merge the surviving draws' findings, then run: flowctl "
+        f"{args.review_backend} impl-review-fanout-finalize --rid {rid} "
+        "--merge-plan <merge-plan.json>"
     )
     draws_out = [
         {
@@ -46376,6 +46387,7 @@ def _review_fanout_journal_age(
 def _review_fanout_journal_refund_intent(
     flow_dir: Path, spec_id: str, task_id: str, reservation_id: str,
     reviewed_head_sha: Optional[str], reviewed_base_sha: Optional[str],
+    backend: str,
 ) -> None:
     """Write-ahead refund intent for the dispatched-but-never-finalized case.
 
@@ -46415,7 +46427,7 @@ def _review_fanout_journal_refund_intent(
         "review_kind": "impl",
         "review_type": "impl",
         "task_id": task_id,
-        "backend": "codex",
+        "backend": backend,
         "verdict": None,
         "failure_class": "fanout_abandoned",
         "outcome": "transport_failure",
@@ -46983,8 +46995,8 @@ def cmd_review_route(args: argparse.Namespace) -> None:
     print(result["message"], file=sys.stderr if result["action"] == "stop" else sys.stdout)
 
 
-def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
-    """Phase-one fan-out dispatch (fn-215 R14).
+def cmd_impl_review_fanout(args: argparse.Namespace) -> None:
+    """Phase-one fan-out dispatch (fn-215 R14), on any CLI review backend.
 
     Pipeline: dispatch -> coordinator merge -> finalize -> optional
     deep/validate/walkthrough passes run ONCE against the finalized merged
@@ -47002,7 +47014,7 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
         claim_token = _review_route_claim_token(getattr(args, "receipt", None))
     args._claim_token = claim_token
     try:
-        _codex_impl_review_fanout(args)
+        _impl_review_fanout(args)
     except SystemExit as exc:
         if claim_token and exc.code not in (0, None):
             _review_route_release_claim(getattr(args, "receipt", None), claim_token)
@@ -47022,7 +47034,7 @@ def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
         )
 
 
-def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
+def _impl_review_fanout(args: argparse.Namespace) -> None:
     import secrets
 
     _wire_backend_review_hooks()
@@ -47045,15 +47057,13 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
     primary_spec = next(
         draw["spec"] for draw in draws if draw["axis"] == primary_axis
     )
-    if primary_spec.backend != "codex":
-        # fn-215 host review r1: finalize stamps the merged receipt's
-        # top-level backend/session/model from the primary draw and round 2+
-        # resumes the primary session via codex — a non-codex primary would
-        # record a codex receipt for a foreign session. Secondary draws may
-        # still be cross-backend.
+    if primary_spec.backend != args.review_backend:
+        # The merged receipt's session/model come from the primary draw and
+        # the re-review resumes that session through this backend's command.
         error_exit(
-            f"fan-out primary draw ({primary_axis}) must run on the codex "
-            "backend; cross-backend specs are allowed on secondary draws only",
+            f"fan-out primary draw ({primary_axis}) must run on "
+            f"{args.review_backend}, the backend running this review; other "
+            "backends are allowed on the other draws only",
             use_json=args.json,
             code=2,
         )
@@ -47075,6 +47085,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         draws, standalone, base_branch, getattr(args, "focus", None),
         review_scope, reviewed_base_sha, reviewed_head_sha, repo_root,
         task_spec_path,
+        not standalone and _single_task_criteria(task_id, args.json),
     )
     reservation_id: Optional[str] = None
     artifact_sha256 = (
@@ -47084,44 +47095,8 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         )
     )
     if not standalone:
-        # PR #392 r21 (P2): a reservation whose owner died between the cap
-        # commit and the refund-intent write has no journal and no attempt
-        # row — invisible to every replay path. Refuse to stack a second
-        # reservation on top of it; the repair is explicit and human.
-        counter_scope = _review_counter_scope("impl", task_id)
-        try:
-            stale_spec = json.loads(
-                find_spec_json_path(
-                    flow_dir, spec_id_from_task(task_id)
-                ).read_text(encoding="utf-8")
-            )
-        except (OSError, ValueError, TypeError):
-            stale_spec = None
-        if isinstance(stale_spec, dict):
-            for res_id, res in (
-                stale_spec.get("review_reservations") or {}
-            ).items():
-                if (
-                    isinstance(res, dict)
-                    and res.get("counter_scope") == counter_scope
-                    # PR #392 r27: a superseded reservation (concurrent SHIP
-                    # reset) is dead bookkeeping, not a live dispatch — the
-                    # in-lock exclusive check already skips it; this
-                    # fast-fail scan must agree or a crashed obsolete
-                    # dispatcher blocks the scope forever.
-                    and not res.get("superseded_by")
-                    and not _review_journal_path(flow_dir, str(res_id)).is_file()
-                ):
-                    error_exit(
-                        f"a reserved round for {task_id} has no journal "
-                        f"(reservation {res_id} — its dispatch died before "
-                        "journaling its intent). Repair explicitly via "
-                        f"flowctl spec reset-review-rounds "
-                        f"{spec_id_from_task(task_id)} --task {task_id} "
-                        "before dispatching a new fan-out.",
-                        use_json=args.json,
-                        code=2,
-                    )
+        # exclusive: a standing reservation on this scope (a live dispatch,
+        # or one whose owner died before journaling) refuses inside the lock.
         cap_result = enforce_and_increment_review_cap(
             spec_id_from_task(task_id), "impl", task_id=task_id,
             use_json=args.json, artifact_sha256=artifact_sha256,
@@ -47145,7 +47120,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         try:
             _review_fanout_journal_refund_intent(
                 flow_dir, spec_id_from_task(task_id), task_id, reservation_id,
-                reviewed_head_sha, reviewed_base_sha,
+                reviewed_head_sha, reviewed_base_sha, args.review_backend,
             )
         except Exception as exc:  # noqa: BLE001
             # PR #392 r12 (P2): an unjournaled reservation is invisible to
@@ -47156,7 +47131,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             record_review_attempt(
                 spec_id_from_task(task_id),
                 "impl",
-                backend="codex",
+                backend=args.review_backend,
                 output=f"refund-intent journal write failed: {exc}",
                 failure_class="journal_publish_failed",
                 task_id=task_id,
@@ -47184,7 +47159,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             attempt = record_review_attempt(
                 spec_id_from_task(task_id),
                 "impl",
-                backend="codex",
+                backend=args.review_backend,
                 output=str(exc),
                 failure_class="sidecar_collision",
                 task_id=task_id,
@@ -47200,7 +47175,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             if attempt.get("transport_unhealthy"):
                 error_exit(
                     build_transport_unhealthy_message(
-                        "codex",
+                        args.review_backend,
                         "impl",
                         attempt["consecutive_transport_failures"],
                         attempt["transport_failure_cap"],
@@ -47236,6 +47211,8 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
+    # Claude reviewers have no shell: each draw gets the reviewed diff by path.
+    args.claude_range = (reviewed_base_sha, reviewed_head_sha, rid)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:
         _review_fanout_write_meta(
@@ -47490,14 +47467,15 @@ def _review_fanout_receipt_draws(draws: list) -> list:
     ]
 
 
-def _review_fanout_primary_draw(meta: dict, draws: list) -> dict:
+def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
     """Row whose session/model stamp the merged receipt's top level.
 
     Prefer the primary-axis draw; when it FAILED (or carries no session), fall
-    back to the first surviving codex draw with a session (PR #392 r16) — a
-    partial fan-out that lost its primary must still hand round 2 and the
-    optional phases a resumable session rather than ``session_id: null``.
-    ``draws[]`` stays honest either way (the failed primary is recorded).
+    back to the first surviving draw on the review's backend with a session
+    (PR #392 r16) — a partial fan-out that lost its primary must still hand
+    round 2 and the optional phases a resumable session rather than
+    ``session_id: null``. ``draws[]`` stays honest either way (the failed
+    primary is recorded).
     """
     axis = meta.get("primary_axis")
     primary = next(
@@ -47518,7 +47496,7 @@ def _review_fanout_primary_draw(meta: dict, draws: list) -> dict:
             isinstance(row, dict)
             and not row.get("failed")
             and row.get("session_id")
-            and (row.get("backend") or "codex") == "codex"
+            and row.get("backend") == backend
         ):
             return row
     if isinstance(primary, dict):
@@ -47573,14 +47551,14 @@ def _review_fanout_write_receipt(
         receipt_path,
         review_type="impl_review",
         review_id=review_id,
-        backend="codex",
+        backend=args.review_backend,
         verdict=verdict,
         session_id=primary.get("session_id"),
         effective_model=primary.get("model"),
         effective_effort=primary.get("effort"),
         resolved_spec=resolved_spec,
         review_text=merged_text,
-        include_effort=True,
+        include_effort=BACKEND_REGISTRY[args.review_backend]["include_effort"],
         base_branch=args.base,
         focus=meta.get("focus"),
         suppressed_count=suppressed_count,
@@ -47713,14 +47691,14 @@ def _review_fanout_record_and_receipt(
     receipt_payload = _backend_review_receipt_payload(
         review_type="impl_review",
         review_id=review_id,
-        backend="codex",
+        backend=args.review_backend,
         verdict=verdict,
         session_id=primary.get("session_id"),
         effective_model=primary.get("model"),
         effective_effort=primary.get("effort"),
         resolved_spec=resolved_spec,
         review_text=merged_text,
-        include_effort=True,
+        include_effort=BACKEND_REGISTRY[args.review_backend]["include_effort"],
         base_branch=args.base,
         focus=meta.get("focus"),
         suppressed_count=suppressed_count,
@@ -47738,7 +47716,7 @@ def _review_fanout_record_and_receipt(
     summary = record_review_attempt(
         spec_id_from_task(task_id),
         "impl",
-        backend="codex",
+        backend=args.review_backend,
         output=merged_text,
         verdict=verdict,
         task_id=task_id,
@@ -47788,7 +47766,7 @@ def _review_fanout_emit_finalize(
             "id": review_id,
             "verdict": verdict,
             "session_id": primary.get("session_id"),
-            "mode": "codex",
+            "mode": args.review_backend,
             "model": primary.get("model"),
             "effort": primary.get("effort"),
             "spec": str(resolved_spec),
@@ -47814,7 +47792,7 @@ def _review_fanout_emit_finalize(
             print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
             json_output(json_payload)
             return
-        escalated = apply_needs_human_escalation(json_payload, verdict)
+        escalated = apply_needs_human_escalation(json_payload, verdict, attempt_summary)
         json_output(json_payload, success=not escalated)
     else:
         print(merged_text)
@@ -47827,7 +47805,9 @@ def _review_fanout_emit_finalize(
             )
             return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
-    _exit_needs_human_after_persistence(verdict, use_json=args.json)
+    _exit_needs_human_after_persistence(
+        verdict, use_json=args.json, attempt=attempt_summary,
+    )
 
 
 def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
@@ -47859,7 +47839,7 @@ def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
         unaddressed.update(parse_unaddressed_rids(text) or [])
         container = build_review_receipt_findings(
             text, review_type="impl_review", review_id=meta.get("id") or "branch",
-            backend="codex", head_sha=meta["reviewed_head_sha"],
+            backend=args.review_backend, head_sha=meta["reviewed_head_sha"],
             base_sha=meta.get("reviewed_base_sha"),
         )
         if container is None:
@@ -47913,22 +47893,27 @@ def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
     return "\n\n".join(parts) + "\n", len(survivors)
 
 
-def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
+def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     """Phase-two fan-out finalize (fn-215 R14).
 
     Pipeline: dispatch -> coordinator merge -> finalize -> optional
     deep/validate/walkthrough passes run ONCE against the MERGED container ->
     one fix pass.
     """
-    _codex_impl_review_fanout_finalize(args)
-
-
-def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
     rid = args.rid
     if not rid or not re.fullmatch(r"[0-9a-f]{32}", rid):
         error_exit("invalid --rid", use_json=args.json, code=2)
     meta = _review_fanout_load_meta(get_flow_dir(), rid, args)
+    # The backend the round was dispatched on (its primary draw's) owns the
+    # receipt, whichever backend's finalize command was typed.
+    args.review_backend = next(
+        (
+            row.get("backend") for row in meta.get("draws", [])
+            if row.get("axis") == meta.get("primary_axis") and row.get("backend")
+        ),
+        args.review_backend,
+    )
     if args.task is None and not meta.get("standalone"):
         args.task = meta.get("id")
     if args.base is None:
@@ -47998,7 +47983,7 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         merged_text,
         review_type="impl_review",
         review_id=review_id,
-        backend="codex",
+        backend=args.review_backend,
         receipt_path=receipt_path,
         reviewed_head_sha=meta.get("reviewed_head_sha"),
         reviewed_base_sha=meta.get("reviewed_base_sha"),
@@ -48090,9 +48075,9 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     classification_counts = parse_classification_counts(merged_text)
     unaddressed_rids = parse_unaddressed_rids(merged_text)
     receipt_draws = _review_fanout_receipt_draws(meta_draws)
-    primary = _review_fanout_primary_draw(meta, meta_draws)
+    primary = _review_fanout_primary_draw(meta, meta_draws, args.review_backend)
     resolved_spec = BackendSpec(
-        backend=primary.get("backend") or "codex",
+        backend=args.review_backend,
         model=primary.get("model"),
         effort=primary.get("effort"),
     )
@@ -48111,12 +48096,13 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         # Codex r54 + sol r13: the deep / validator passes resume the
         # primary session (the interactive walkthrough does not — it never
         # trips this gate). With no surviving resumable draw (the primary
-        # failed and only non-codex or session-less draws survived) a held
+        # failed and only other-backend or session-less draws survived) a held
         # finalize would consume the round and fence the scope for passes
         # that can never run. Refuse BEFORE the record.
         error_exit(
             "fan-out finalize: no resumable primary session (the primary "
-            "draw failed and no surviving draw carries a codex session), so "
+            "draw failed and no surviving draw carries a session on the "
+            "review's backend), so "
             "the deep / validator passes cannot run — re-run this finalize "
             "WITHOUT --phases-resume-session, keeping --hold-for-phases only "
             "when --interactive is enabled, and skip the deep / validator "
@@ -53835,15 +53821,14 @@ def _add_impl_review_parser(sub, backend: str):
     return p
 
 
-def _add_impl_review_fanout_parsers(codex_sub) -> None:
-    """Register the two-phase fan-out CLI under the codex parser (fn-215 R14/R15).
+def _add_impl_review_fanout_parsers(sub, backend: str) -> None:
+    """Register the two-phase first-round review for a backend (fn-215 R14).
 
     Pipeline: dispatch -> coordinator merge -> finalize -> optional
     deep/validate/walkthrough passes run ONCE against the MERGED container ->
     one fix pass.
-    Codex-only; copilot/cursor keep single dispatch.
     """
-    p = codex_sub.add_parser(
+    p = sub.add_parser(
         "impl-review-fanout",
         help=(
             "Phase one: reserve once, dispatch concurrent axis-lens draws, "
@@ -53874,7 +53859,7 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         help=(
             "Axis lens to dispatch (correctness|contracts|integration), "
             "optionally with a backend spec "
-            "(e.g. correctness=codex:gpt-5.2:medium). Repeat up to 3 times; "
+            "(e.g. contracts=cursor:gpt-5.5-high). Repeat up to 3 times; "
             "default is all three axes on the resolved spec."
         ),
     )
@@ -53889,17 +53874,12 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         ),
     )
     p.add_argument("--json", action="store_true", help="JSON output")
-    _add_sandbox_arg(p)
-    p.add_argument(
-        "--spec",
-        help=(
-            "Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
-            "Overrides task/epic/env/config resolution. Strict parse."
-        ),
-    )
-    p.set_defaults(func=cmd_codex_impl_review_fanout)
+    if backend == "codex":
+        _add_sandbox_arg(p)
+    p.add_argument("--spec", help=_backend_spec_help(backend))
+    p.set_defaults(func=cmd_impl_review_fanout, review_backend=backend)
 
-    p2 = codex_sub.add_parser(
+    p2 = sub.add_parser(
         "impl-review-fanout-finalize",
         help=(
             "Phase two: record the merged verdict, findings container, and "
@@ -53966,7 +53946,7 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         ),
     )
     p2.add_argument("--json", action="store_true", help="JSON output")
-    p2.set_defaults(func=cmd_codex_impl_review_fanout_finalize)
+    p2.set_defaults(func=cmd_impl_review_fanout_finalize, review_backend=backend)
 
 def _backend_spec_help(backend: str, *, for_pass: bool = False) -> str:
     """Help text for ``--spec`` on review / validate / deep-pass parsers."""
@@ -55077,11 +55057,9 @@ def main() -> None:
         ],
         help="Explicit no-verdict failure class",
     )
-    # fn-193 (#338) / fn-195 R7: deliberately NO --model here. This is the
-    # host path, where the only available "model" is a narrating agent's
-    # claim - and a claim is not an observation. The row stays honestly silent
-    # (absent = unknown); observed provenance rides the dispatcher paths that
-    # actually resolved a model.
+    p_rr_record.add_argument(
+        "--model", help="Model the reviewer ran on, recorded on the attempt row"
+    )
     p_rr_record.add_argument("--attach", action="store_true", help="Publish the journaled receipt in this call")
     p_rr_record.add_argument("--json", action="store_true", help="JSON output")
     p_rr_record.set_defaults(func=cmd_review_rounds_record)
@@ -56892,7 +56870,7 @@ def main() -> None:
     codex_sub = p_codex.add_subparsers(dest="codex_cmd", required=True)
 
     _add_impl_review_parser(codex_sub, "codex")
-    _add_impl_review_fanout_parsers(codex_sub)
+    _add_impl_review_fanout_parsers(codex_sub, "codex")
 
     _add_plan_review_parser(codex_sub, "codex")
     _add_completion_review_parser(codex_sub, "codex")
@@ -56905,6 +56883,7 @@ def main() -> None:
     copilot_sub = p_copilot.add_subparsers(dest="copilot_cmd", required=True)
 
     _add_impl_review_parser(copilot_sub, "copilot")
+    _add_impl_review_fanout_parsers(copilot_sub, "copilot")
 
     _add_plan_review_parser(copilot_sub, "copilot")
     _add_completion_review_parser(copilot_sub, "copilot")
@@ -56918,18 +56897,20 @@ def main() -> None:
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
 
     _add_impl_review_parser(cursor_sub, "cursor")
+    _add_impl_review_fanout_parsers(cursor_sub, "cursor")
 
     _add_plan_review_parser(cursor_sub, "cursor")
     _add_completion_review_parser(cursor_sub, "cursor")
     _add_validate_parser(cursor_sub, "cursor")
     _add_deep_pass_parser(cursor_sub, "cursor")
 
-    # claude (Claude Code CLI helpers - fn-221). Same five-subcommand surface
-    # as copilot/cursor; the fan-out subcommands stay codex-only (fn-215 R15).
+    # claude (Claude Code CLI helpers - fn-221). Same subcommand surface as
+    # copilot/cursor.
     p_claude = subparsers.add_parser("claude", help="Claude Code (claude CLI) helpers")
     claude_sub = p_claude.add_subparsers(dest="claude_cmd", required=True)
 
     _add_impl_review_parser(claude_sub, "claude")
+    _add_impl_review_fanout_parsers(claude_sub, "claude")
 
     _add_plan_review_parser(claude_sub, "claude")
     _add_completion_review_parser(claude_sub, "claude")

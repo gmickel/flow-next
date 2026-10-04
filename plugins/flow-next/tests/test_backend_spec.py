@@ -222,10 +222,10 @@ class TestParseInvalid(unittest.TestCase):
             ("export", "RepoPrompt review .* was removed in flow-next 8.0.0"),
             ("none:gpt-5.4", "does not accept a model"),
             ("none::high", "does not accept an effort"),
-            # host:<model> points at AGENTS.md model-routing; the model check
+            # host:<model> points at the model-routing block; the model check
             # fires first when an effort is also given.
-            ("host:opus", r"AGENTS\.md.*model-routing"),
-            ("host:opus:high", r"AGENTS\.md.*model-routing"),
+            ("host:opus", r"model-routing block in CLAUDE\.md or AGENTS\.md"),
+            ("host:opus:high", r"model-routing block in CLAUDE\.md or AGENTS\.md"),
         )
         for raw, pattern in rows:
             with self.subTest(spec=raw):
@@ -1576,9 +1576,11 @@ class NoEmbedRegression(unittest.TestCase):
     # integration) - an identity choosing WHICH review to run, not payload
     # content the reviewer could fetch itself.
     PINNED_BUILDER_SIGNATURES = {
+        # standing_criteria (fn-281): a flag, not a payload - the builder renders
+        # the same `.flow/criteria.md` instruction block completion review embeds.
         "build_review_prompt": {
             "review_type", "context_hints", "review_scope", "diff_range",
-            "spec_path", "task_spec_paths", "axis",
+            "spec_path", "task_spec_paths", "axis", "standing_criteria",
         },
         "build_standalone_review_prompt": {
             "base_branch", "focus", "review_scope", "diff_range", "axis",

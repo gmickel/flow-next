@@ -138,7 +138,7 @@ silently resolving it.
 
 ### Merged fan-out rounds
 
-On the codex and host backends the first review round of a large or cross-cutting
+On every backend the first review round of a large or cross-cutting
 diff, or one touching persisted or shared state, concurrency, security or data
 layout, fans out three axis draws that the coordinator merges into one finding set
 (a small diff in one area gets one reviewer). The
@@ -202,7 +202,7 @@ instead.
 `not-fixed` stated once and then not restated cannot look like a repeat.
 `fixed` and `withdrawn` are preserved - they are resolved terminals. This is what
 makes the surviving stall rule (`same-not-fixed-lineage`), which matters only when
-a run loops until SHIP, a statement about two consecutive rounds rather than an
+a run loops until SHIP, a statement about three consecutive rounds rather than an
 echo of one.
 
 Prose resolutions are invisible to the parser: a reviewer that answers the

@@ -79,8 +79,8 @@ model.** How *this* harness reaches that model - and what degrades when it
 cannot - is its reach page: [`docs/reach/README.md`](../../docs/flow-next/reach/README.md).
 A harness that reaches only one model family natively fails closed when the
 writer shares that family (interactive -> ask; autonomous -> stop with
-`NEEDS_HUMAN: host review needs a cross-family reviewer in the AGENTS.md
-routing block`); cross-family then comes through a bridge backend.
+`NEEDS_HUMAN: host review needs a cross-family reviewer in the model-routing
+block`); cross-family then comes through a bridge backend.
 
 Dispatch one fresh read-only reviewer. Immediately beforehand capture
 `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and retain that literal through
@@ -138,6 +138,7 @@ journaled payload (never re-derive it after `record`):
 ```bash
 RECORD_JSON="$("$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan \
   --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
+  --model "<actual reviewer slug>" \
   --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
   --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --attach --json)"
 RECORD_EXIT=$?

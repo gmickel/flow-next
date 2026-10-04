@@ -351,7 +351,7 @@ if [[ "$NEW_VERDICT" == "SHIP" ]]; then
   # All findings dropped — verdict upgraded. Done, no fix loop. This exit
   # never reaches the backend workflow's final release step, so release the
   # optional-phase lease here: OWNING_RID is restated as a LITERAL
-  # — the fan-out rid from the codex phase-one JSON, or the host reservation
+  # — the fan-out rid from the CLI phase-one JSON, or the host reservation
   # id. 0 phases means nothing was held.
   OWNING_RID="<owning rid>"
   if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then

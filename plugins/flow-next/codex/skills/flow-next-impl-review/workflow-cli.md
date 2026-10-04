@@ -1,11 +1,11 @@
-# Implementation Review Workflow — Codex Backend
+# Implementation Review Workflow — CLI Backends
 
-Use when `BACKEND="codex"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
+Use when `BACKEND` is `codex`, `claude`, `copilot` or `cursor`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`. Every CLI backend takes the same steps through the same flowctl commands; only the reviewer CLI behind them differs (see "Backend notes" below).
 
-## Critical Rules (codex backend)
+## Critical Rules (CLI backends)
 
-1. Use the `$FLOWCTL codex` review commands exclusively — never call `codex` directly
-2. **The FIRST review round of a scope is the two-phase fan-out**: `impl-review-fanout` (dispatch), your merge, `impl-review-fanout-finalize` (finalize). Re-review rounds after fixes are a single `impl-review` with `--receipt`
+1. Use the `$FLOWCTL $BACKEND` review commands exclusively — never call the reviewer CLI directly
+2. **The FIRST review round of a scope is the two-phase fan-out**: `impl-review-fanout` (dispatch), your merge, `impl-review-fanout-finalize` (finalize), sized by the panel rule in [SKILL.md](SKILL.md). Re-review rounds after fixes are a single `impl-review` with `--receipt`
 3. Pass `--receipt` throughout — the finalize writes the merged receipt; re-reviews resume from it
 4. Parse verdict from command output
 
@@ -28,10 +28,11 @@ git log ${DIFF_BASE}..HEAD --oneline
 
 ## Step 2: Fan-out dispatch (phase one — first round only)
 
-The first round fans out **three concurrent reviewer draws** — one per fixed
-axis lens (`correctness`, `contracts`, `integration`), each differing from the
-base prompt by exactly one added axis line, on the same resolved backend/model
-the single dispatch uses. The fan-out is TWO blocking foreground flowctl
+The first round dispatches one reviewer draw or three, by the panel rule in
+[SKILL.md](SKILL.md). Three draws run one per fixed axis lens (`correctness`,
+`contracts`, `integration`), each differing from the base prompt by exactly one
+added axis line, on the same resolved backend/model the single dispatch uses; one
+draw runs the correctness lens. The fan-out is TWO blocking foreground flowctl
 invocations with your merge between them; this is the first.
 
 ```bash
@@ -63,30 +64,33 @@ esac
 
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
-# Size the panel by risk: a small diff in one area (one module or feature, not spread across
-# subsystems) that touches no persisted or shared state, concurrency, security or data layout gets one draw (add `--draw correctness`); anything else
-# (those risks, or a large or cross-cutting diff) keeps the default three.
+# ONE_REVIEWER=1 when the panel rule in SKILL.md calls for one reviewer (adds
+# --draw correctness); otherwise the default three draws run.
 # DEFAULT topology only — when the user gave a steering instruction ("use 1
 # reviewer instead of 3", "three different model families"), read "Steering
 # draw topology" below and add the explicit --draw args BEFORE running this.
 # Standalone reviews also carry the caller's focus areas via --focus "<areas>".
+ONE_REVIEWER=0
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
+[ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
 # FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing);
 # STANDALONE only - it rides the draw prompts, the sidecar meta, and the
 # receipt for re-review. Task-scoped draws take their focus from the task
 # spec (flowctl refuses --focus with a task).
 [ -z "$TASK_ID" ] && [ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
-[ "$RESUMED" = "1" ] || $FLOWCTL codex impl-review-fanout "${args[@]}"
+[ "$RESUMED" = "1" ] || $FLOWCTL "$BACKEND" impl-review-fanout "${args[@]}"
 ```
 
 What the dispatch does (facts you rely on, not steps you take):
 
 - Task mode reserves exactly **ONE** review round for the whole fan-out
   (standalone reserves none; a per-invocation nonce serves as the `rid`).
-- The three draws run concurrently, each under its own timeout — a hung draw
-  cannot hold the round to the wall-clock bound.
+- The draws run concurrently, each under its own timeout — a hung draw
+  cannot hold the round to the wall-clock bound. A reviewer CLI that takes one
+  call at a time runs them one after another, and the dispatch says so on
+  stderr; pass that line on in your report.
 - Per-draw sidecars land at `.flow/review-fanout/<rid>/`: `<axis>.review.md`
   (the extracted reviewer message — what you merge), `<axis>.json` (metadata
   incl. verdict/session), `<axis>.out.txt` (raw), `meta.json`, `progress.log`.
@@ -109,20 +113,19 @@ reads prose. Worked phrasings:
 - "use 1 reviewer instead of 3" → a single draw: `--draw correctness`
 - "use three different model families for the review fan-out" → three explicit
   per-draw backend specs, e.g. `--draw correctness=codex:<model>:medium
-  --draw contracts=cursor:sonnet-4.5 --draw integration=copilot:gemini-2.5-pro`
+  --draw contracts=cursor:<model> --draw integration=claude:<model>:high`
   — three genuinely distinct families; cross-family is three explicit
-  dispatch specs, never a config key. Spec grammar per backend: codex takes
-  `BACKEND:MODEL:EFFORT`; cursor takes `BACKEND:MODEL` only (no effort
-  segment); model ids are illustrative — the backend CLI is the availability
-  authority
+  dispatch specs, never a config key. Spec grammar per backend lives in
+  [references/backend-specs.md](references/backend-specs.md); model ids are
+  illustrative — the backend CLI is the availability authority
 - Ambiguous phrasing → default three same-backend draws (say so and proceed)
 
 Enforced constraint (flowctl, not convention): the **primary draw
 (`correctness` — or, when `correctness` isn't drawn, the first draw) must run
-on `codex`** — the finalize stamps the merged receipt's top-level
-session/model from it and round 2+ resumes that session via codex, so a
-non-codex primary is refused with exit 2. Secondary draws may name `codex`,
-`copilot`, or `cursor` only; no other backend is dispatchable as a draw.
+on `$BACKEND`**, the backend whose command runs the fan-out — the finalize stamps
+the merged receipt's top-level session/model from it and round 2+ resumes that
+session through `$FLOWCTL $BACKEND impl-review`, so a primary on another backend
+is refused with exit 2. The other draws may name any CLI backend.
 
 ## Step 3: Coordinator merge (judgment — yours)
 
@@ -187,7 +190,7 @@ OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
 PHASES_RESUME_SESSION="<1 or 0 printed by Step 0>"
 [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && args+=(--hold-for-phases "$OPTIONAL_PHASES_COUNT")
 [ "$PHASES_RESUME_SESSION" = "1" ] && args+=(--phases-resume-session)
-FINALIZE_JSON="$($FLOWCTL codex impl-review-fanout-finalize "${args[@]}")"
+FINALIZE_JSON="$($FLOWCTL "$BACKEND" impl-review-fanout-finalize "${args[@]}")"
 FINALIZE_EXIT=$?
 # Print the rendered document and derived count with the verdict.
 printf '%s' "$FINALIZE_JSON" | jq -c '.' 2>/dev/null || printf '%s\n' "$FINALIZE_JSON"
@@ -196,8 +199,8 @@ exit "$FINALIZE_EXIT"
 ```
 
 If the finalize refuses with `no resumable primary session` (the primary
-draw failed and no surviving draw carries a codex session), the deep /
-validator passes cannot run this round: re-run it WITHOUT
+draw failed and no surviving draw carries a session on the review's backend),
+the deep / validator passes cannot run this round: re-run it WITHOUT
 `--phases-resume-session`, keeping `--hold-for-phases` only when
 `--interactive` is enabled (count 1), skip the deep / validator passes, and
 say so in the output. The interactive walkthrough still runs.
@@ -216,9 +219,9 @@ The finalizer is deterministic and atomic — only it records or refunds:
   1..N across the union), the merged receipt, and the ONE round consumption
   atomically. Receipt top-level `session_id`/`model` are the primary
   (correctness) draw's — or, when the primary FAILED (or returned no
-  session), the first surviving codex draw's, so round 2 and the optional
-  phases still get a resumable session; `draws[]` honestly records each
-  draw's axis, model, session_id, verdict, and failed flag either way (the
+  session), the first surviving draw's on the same backend, so round 2 and the
+  optional phases still get a resumable session; `draws[]` honestly records
+  each draw's axis, model, session_id, verdict, and failed flag either way (the
   failed primary included).
 - Re-invocable with the same merged file (quiet replay) — recoverable after a
   coordinator crash. A run that dies between dispatch and finalize leaves a
@@ -228,7 +231,7 @@ The finalizer is deterministic and atomic — only it records or refunds:
 ## Optional phases (gated by flags)
 
 When `--deep` / `--validate` / `--interactive` fired, run the gated phases from
-[optional-phases.md](optional-phases.md) — the dispatch matches the `codex`
+[optional-phases.md](optional-phases.md) — the dispatch matches the `$BACKEND`
 case in each phase — **AFTER `impl-review-fanout-finalize`, against the merged
 findings it recorded: still exactly ONCE per round, never per draw, and always
 before the fix pass.** The ordering is load-bearing, not stylistic: the
@@ -274,7 +277,7 @@ If `VERDICT=NEEDS_WORK`:
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # Bash state does NOT survive across prompt turns (the fix/test/commit steps ran
 # between) — re-derive the Step-1 values in THIS block rather than reading
-# stale variables; TASK_ID is a literal from the invocation context.
+# stale variables; TASK_ID and BACKEND are literals from the invocation context.
 ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
 TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
@@ -287,14 +290,13 @@ fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
-$FLOWCTL codex impl-review "${args[@]}"
+$FLOWCTL "$BACKEND" impl-review "${args[@]}"
 ```
 
-   When the receipt carries `draws[]`, flowctl resumes the primary session but
-   **disables lean resume for that one round**: the resumed session did not
-   author the other axes' findings, so the FULL merged prior-finding container
-   is injected into the dispatch prompt (every merged ordinal present).
-   Automatic — no flag.
+   When the receipt carries `draws[]`, flowctl resumes the primary session and
+   injects the FULL merged prior-finding container into the dispatch prompt
+   (every merged ordinal present): the resumed session did not author the
+   other axes' findings. Automatic — no flag.
 5. The re-review's verdict is terminal ([other-paths.md](other-paths.md) § Fix Loop) unless working-rules.md's review loop applies (an unattended run, or a request to review until SHIP): never start a second fix pass; surface surviving findings to the caller.
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`.**
@@ -303,19 +305,48 @@ $FLOWCTL codex impl-review "${args[@]}"
 
 The merged receipt is written by `impl-review-fanout-finalize` (and updated by
 `impl-review` on re-reviews) when `--receipt` is provided. Format: the existing
-top-level shape (`{"mode":"codex","task":"<id>","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`)
+top-level shape (`{"type":"impl_review","id":"<id>","mode":"<backend>","verdict":"<verdict>","session_id":"<id>","model":"<model>","spec":"<backend>:<model>[:<effort>]","timestamp":"..."}`, plus `effort` where the backend has one)
 plus the `draws[]` array recording the fan-out honestly. A re-review rewrite
 drops `draws[]` from the LIVE receipt (re-review rounds have no draws); the
 fan-out provenance persists in the receipt history and in the
 `.flow/review-fanout/<rid>/` sidecar's `meta.json` alongside the per-draw raw
 outputs, for audit.
 
+Session resume guard: a re-review resumes the session only when the receipt's
+`mode` is this backend; a cross-backend switch (another backend's receipt at the
+same path) starts a fresh session.
+
+## Backend notes
+
+Model and effort resolve, first match wins: `--spec <backend>:<model>[:<effort>]`, per-task
+`review` (`flowctl task set-backend`), the `FLOW_REVIEW_BACKEND` spec, the
+`FLOW_<BACKEND>_MODEL` / `FLOW_<BACKEND>_EFFORT` env vars (cursor: model only), then the
+registry defaults.
+Grammar and defaults: [references/backend-specs.md](references/backend-specs.md).
+
+- **codex** — `codex exec` under a read-only sandbox (Unix default). A sandbox-blocked
+  reviewer means something asked it to write: fix that, never widen `--sandbox`.
+- **claude** — headless `claude -p` with only `Read`, `Grep` and `Glob` (no shell, no write
+  tool, no MCP), the prompt on stdin. It cannot run `git diff`, so every primary dispatch
+  writes the reviewed range to `.flow/tmp/claude-review/` and names that path in the prompt;
+  each draw gets its own file. Effort `low|medium|high|xhigh|max`; at the resolution
+  ladder's floor no model or effort is sent and the receipt records `"effort": null`.
+  On a Claude-family writer the review is same-family: the receipt records it and the run
+  proceeds; prefer `codex` or `host` when family independence matters.
+- **copilot** — the Copilot CLI; session ids are client-minted (create-or-resume). It takes
+  one call at a time here, so a three-draw round runs its draws one after another.
+- **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
+  effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
+  rejected.
+
 ---
 
-## Anti-patterns (Codex backend)
+## Anti-patterns (CLI backends)
 
-- **Using `--last` flag** - Conflicts with parallel usage; use `--receipt` instead
-- **Direct codex calls** - Must use `flowctl codex` wrappers
+- **Direct reviewer CLI calls** - Must use the `flowctl <backend>` wrappers
+- **Inventing a `--model`/`--effort` CLI flag** - Use `--spec` or the backend's env vars
+- **Widening the reviewer's tools or sandbox** - Reviewers are read-only by contract
+- **Fabricating a first-call resume id** - The first call starts fresh; resume uses the session the receipt recorded
 - **Fanning out on round 2+** - First round only; the guard refuses a receipt with prior findings, and re-reviews resume the primary session
 - **Axis provenance on finding items** - It lives in your merge prose; the findings schema's allowlist is closed
 - **Retrying a failed draw** - Partial fan-out fails open; a failed draw never blocks, retries, or consumes extra rounds

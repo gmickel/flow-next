@@ -60,11 +60,12 @@ class UnattendedSkillFences(unittest.TestCase):
                 self.assertEqual(result.stdout, expected)
                 self.assertNotIn("--review=ASK", result.stdout)
 
-    def test_codex_step_triages_only_a_fanout_route(self):
+    def test_cli_step_triages_only_a_fanout_route(self):
         """impl-review SKILL.md step 2: route first, triage only on fanout."""
         code = fence("flow-next-impl-review/SKILL.md", "triage-skip")
         code = code.replace('REVIEW_ID="<literal or empty>"', 'REVIEW_ID="fn-1.1"')
         code = code.replace('DIFF_BASE="<literal>"', 'DIFF_BASE="abc123"')
+        code = code.replace('BACKEND="<literal>"', 'BACKEND="codex"')
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()

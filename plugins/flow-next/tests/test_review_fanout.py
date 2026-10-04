@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
-import inspect
 import io
 import json
 import os
@@ -1854,8 +1853,9 @@ class TestReviewFanout(unittest.TestCase):
             fake=self._ship_exec([]),
         )
         self.assertEqual(code, 2, err)
-        self.assertIn("has no journal", out + err)
+        self.assertIn("unjournaled reservation", out + err)
         self.assertIn("reset-review-rounds", out + err)
+        self.assertEqual(self._pending(), 1)
 
     def test_closed_receipt_permits_fresh_fanout(self) -> None:
         """PR #392 r13 (P2): a CLOSED receipt (SHIP) at --receipt is a
@@ -2199,66 +2199,54 @@ class TestReviewFanout(unittest.TestCase):
 
     # 11 ----------------------------------------------------------------
 
-    def test_negative_gate(self) -> None:
-        # The R15 gate IS the argument parser: the fanout subcommands are
-        # registered under `codex` only, so copilot/cursor invocations die as
-        # an argparse invalid-choice error before any handler runs (the old
-        # in-handler registry re-check was unreachable and has been removed —
-        # host review r1).
-        for backend in ("copilot", "cursor", "claude"):
+    def test_every_cli_backend_runs_the_same_panel(self) -> None:
+        """fn-281 R1-R3: one runner for every CLI backend - three axis draws on
+        the backend's own reviewer, its receipt mode, the claude draws given
+        the reviewed diff by path, copilot's draws one after another."""
+        for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
+                calls: list = []
+
+                def fake(prompt, *, session_id, repo_root, spec, resolution_out,
+                         args, resume_only=False, calls=calls):
+                    axis = _axis_of(prompt)
+                    resolution_out["model"] = f"{axis}-model"
+                    calls.append({"axis": axis, "backend": spec.backend,
+                                  "range": getattr(args, "claude_range", None)})
+                    return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
+
+                receipt = self.root / f"{backend}-receipt.json"
                 code, out, err = self._run(
-                    backend, "impl-review-fanout", "--base", "HEAD~1", "--json"
+                    backend, "impl-review-fanout", self.task_id, "--base",
+                    "HEAD~1", "--force", "--receipt", str(receipt), "--json",
+                    fake=fake, backend=backend,
                 )
-                self.assertEqual(code, 2)
-                self.assertIn("invalid choice", err)
-                self.assertIn("impl-review-fanout", err)
+                self.assertEqual(code, 0, err + out)
+                payload = self._payload(out)
+                self.assertIn(f"flowctl {backend} impl-review-fanout-finalize",
+                              payload["next"])
+                self.assertEqual({c["axis"] for c in calls},
+                                 set(flowctl.REVIEW_FANOUT_AXES))
+                self.assertEqual({c["backend"] for c in calls}, {backend})
+                ranges = {c["range"][2] for c in calls}
+                self.assertEqual(ranges, {f"{payload['rid']}-{axis}"
+                                          for axis in flowctl.REVIEW_FANOUT_AXES})
+                self.assertEqual("one after another" in err, backend == "copilot")
+                code, out, err = self._run(
+                    backend, "impl-review-fanout-finalize", "--rid",
+                    payload["rid"], "--merged-file",
+                    str(self._write_merged(_empty_merged_review())), "--json",
+                )
+                self.assertEqual(code, 0, err + out)
+                data = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertEqual(data["mode"], backend)
+                self.assertEqual(data["session_id"], "sess-correctness")
+                self.assertEqual(len(data["draws"]), 3)
 
-        flowctl._wire_backend_review_hooks()
-        self.assertTrue(flowctl.BACKEND_REGISTRY["codex"].get("fanout_draws"))
-        for name, reg in flowctl.BACKEND_REGISTRY.items():
-            if name == "codex":
-                continue
-            self.assertFalse(
-                bool(reg.get("fanout_draws")),
-                f"{name} must not enable fanout_draws",
-            )
-
-        calls: list = []
-
-        def fake(
-            prompt,
-            *,
-            session_id,
-            repo_root,
-            spec,
-            resolution_out,
-            args,
-            resume_only=False,
-        ):
-            calls.append(1)
-            return "<verdict>SHIP</verdict>", session_id or "copilot-sess", 0, ""
-
-        code, out, err = self._run(
-            "copilot",
-            "impl-review",
-            self.task_id,
-            "--base",
-            "HEAD~1",
-            "--json",
-            fake=fake,
-            backend="copilot",
-        )
-        self.assertEqual(code, 0, err + out)
-        self.assertEqual(len(calls), 1)
-
-        source = inspect.getsource(flowctl._dispatch_backend_review)
-        self.assertNotIn("fanout", source)
-
-    def test_non_codex_primary_rejected(self) -> None:
+    def test_primary_draw_runs_on_the_review_backend(self) -> None:
         """host review r1: the primary draw drives the merged receipt's
-        top-level backend/session/model and the round-2 codex resume, so a
-        cross-backend spec is allowed on secondary draws only."""
+        top-level backend/session/model and the round-2 resume, so another
+        backend's spec is allowed on the other draws only."""
         code, out, err = self._run(
             "codex",
             "impl-review-fanout",

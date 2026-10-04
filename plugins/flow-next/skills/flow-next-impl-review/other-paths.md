@@ -1,22 +1,19 @@
 
 # Implementation review: other backends, flags and steering
 
-Reached from [SKILL.md](SKILL.md) for any backend other than codex, for `--deep`, `--validate`,
+Reached from [SKILL.md](SKILL.md) for the host backend, for `--deep`, `--validate`,
 `--interactive`, `--no-triage`, `FLOW_VALIDATE_REVIEW=1` or `FLOW_REVIEW_DEEP=1`, and for an
 instruction about reviewer topology. `BACKEND`,
 `FLOWCTL`, `REVIEW_ID` and `DIFF_BASE` come from SKILL.md's setup; do not resolve the backend again.
 The backend's workflow file and the Fix Loop below own the verdict handling; of SKILL.md §4
-(the codex fast path) only its `OVERRIDDEN:` line ending an unattended loop applies here.
+(the CLI fast path) only its `OVERRIDDEN:` line ending an unattended loop applies here.
 
 **Workflow is backend-split. Read ONLY the file matching your active backend; [workflow-common.md](workflow-common.md) holds the philosophy and the trivial-diff triage. The opt-in `--deep`/`--validate`/`--interactive` phase detail (including the phase-ordering matrix) lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
-- `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
-- `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
-- `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
-- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
+- `BACKEND=codex`, `claude`, `copilot` or `cursor` → [workflow-cli.md](workflow-cli.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 
-Do not load the others — only the active backend's file is needed. Each backend file carries its own Critical Rules and anti-patterns.
+Do not load the other one. Each file carries its own Critical Rules and anti-patterns; both apply the panel rule in [SKILL.md](SKILL.md).
 
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
@@ -62,7 +59,7 @@ The per-backend "at a glance" descriptions, the `backend[:model[:effort]]` spec 
 
 ## Critical Rules
 
-**Per-backend rules** for `codex`, `copilot`, `cursor`, and `claude` live at the top of each `workflow-<backend>.md` — read the active backend's file (routing table above) and follow its Critical Rules section.
+**Rules** for `codex`, `copilot`, `cursor`, and `claude` live at the top of [workflow-cli.md](workflow-cli.md), with each backend's notes at its end.
 
 **For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -227,11 +224,11 @@ only when a triage result needs justifying or auditing.
 1. `$BACKEND` was already resolved by SKILL.md's setup — do NOT re-run it.
 2. Read **only** the file for that backend, per the routing table at the top of this file.
 
-**Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
+**Do not read the other workflow file.** Each is self-contained; loading both wastes context.
 
 ### Step 2: Execute the backend workflow
 
-Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps. Cross-backend gated phases (Deep-Pass, Validator, Interactive Walkthrough) live in [optional-phases.md](optional-phases.md) — the backend files reference them.
+Follow the phases in the workflow file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps. Cross-backend gated phases (Deep-Pass, Validator, Interactive Walkthrough) live in [optional-phases.md](optional-phases.md) — the backend files reference them.
 
 ## Fix Loop (INTERNAL)
 
@@ -244,10 +241,13 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 **MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
 SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
-is durably recorded and refunded. A first-round three-draw fan-out (codex/host)
+is durably recorded and refunded. A first round of three draws (any backend)
 sits behind exactly ONE reservation and counts as ONE round — the cap bounds
 rounds, not draws. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
-rounds it refuses with `ESCALATE:` + exit 4. More than
+rounds it refuses with `ESCALATE:` + exit 4. When the reviewer marks the same
+finding `not-fixed` in three consecutive rounds, the recording command ends
+with `ESCALATE: review loop stalled` + exit 4 after its verdict is recorded:
+stop there, no further fix pass. More than
 `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict failures stop
 separately with `TRANSPORT_UNHEALTHY` + exit 5: repair the backend, never reset
 the verdict counter. This loop is internal; callers invoke impl-review once.

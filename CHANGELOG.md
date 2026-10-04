@@ -6,6 +6,18 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Every reviewer gets the same panel.** Claude, Copilot and Cursor reviews now run the first round the way Codex and host reviews did: one reviewer for a small diff in one area that touches no persisted or shared state, concurrency, security or data layout, three reviewers (correctness, contracts, integration) for anything larger, merged into one fix pass and counted as one round. The re-review after fixes is one reviewer everywhere. It works from any harness, so flow-next in Codex with the `claude` reviewer takes the same steps as flow-next in Claude Code with `codex`. Each Claude reviewer in a three-reviewer round gets the reviewed diff by path, and Copilot's three reviewers run one after another, saying so, since Copilot has not been checked for simultaneous calls. Under the hood: `flowctl <backend> impl-review-fanout` and `impl-review-fanout-finalize` exist for all four CLI backends, the four per-backend implementation-review workflows became one, and receipts keep their format.
+- **A stuck review loop reviews your latest fix before it stops.** The stall check used to refuse the next round as soon as the reviewer marked the same finding `not-fixed` twice, so the fix you had just committed was never reviewed. It now ends the loop only when the reviewer marks the same finding `not-fixed` in three consecutive rounds, reported right after that round's verdict is recorded, and never refuses a round whose fix has not been reviewed yet.
+- **One-task specs get their standing criteria checked.** A spec with a single task skips completion review, the review that judges `.flow/criteria.md`, so those criteria were never checked on the default route. That task's implementation review now judges them, and a violated criterion is a finding like any other. Specs without a criteria file review exactly as before.
+- **`review.backend` stays.** 7.1.0 said the setting would leave in 8.0.0 in favour of the model-routing block. It stays: the reviewer is still chosen with `review.backend`, a spec's or task's review setting, or `--review=`, and nothing needs migrating.
+
+### Fixed
+
+- **Host reviews record what they reviewed.** A host review's attempt row now carries the reviewed `base_sha` and `head_sha` (marked observed) and the reviewer's model, like every other reviewer, so a check that counts which commits a review covered can count host reviews too. `flowctl review-rounds increment --base/--head` keeps the range on the reservation and `review-rounds record` takes an optional `--model`. Thanks @sn-furali (#513).
+- **Host review finds the model-routing block in CLAUDE.md as well as AGENTS.md**, whichever file holds it on the harness, instead of always naming AGENTS.md.
+
 ### Removed
 
 - **Reviews run on codex, host, claude, copilot or cursor; RepoPrompt is gone.** The `rp` review backend, the `flowctl rp` commands, `/flow-next:export-context` and plan review's `--review=export` mode were deprecated in 7.1.0 and are removed, so there is no macOS-only reviewer left to set up. A project that still names `rp` or `export` (in `review.backend`, `FLOW_REVIEW_BACKEND`, a spec's or task's review setting, or `--review=`) gets a one-line notice saying so and continues with no reviewer configured: pick another reviewer with `flowctl config set review.backend <name>`. Re-run the Codex, OpenCode or Cursor installer to drop the export-context skill from an existing install. QA receipts written for a pipeline now record mode `receipt` instead of `rp`; receipts already on disk still read.

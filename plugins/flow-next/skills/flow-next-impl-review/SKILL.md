@@ -36,26 +36,34 @@ git diff --shortstat "$DIFF_BASE"...HEAD
 - `none`: no review; say so.
 - `rp` or `export`: removed; tell the user in one line "RepoPrompt review (rp, export) was removed
   in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." and stop as for `ASK`.
-- Any other backend than `codex`, any of `--deep`, `--validate`, `--interactive`, `--no-triage`,
+- `host`, any of `--deep`, `--validate`, `--interactive`, `--no-triage`,
   `FLOW_VALIDATE_REVIEW=1` or `FLOW_REVIEW_DEEP=1` in the environment, or an instruction about
   the reviewers ("one reviewer", "three model families"): read [other-paths.md](other-paths.md)
   and follow it and the backend's workflow file to the end. That file owns the verdict, fix and
   re-review handling; of step 4, only the `OVERRIDDEN:` line ending an unattended loop applies,
-  never its fix pass or codex re-review.
+  never its fix pass or re-review.
+- `claude` when a Claude model wrote the change: say once that this review is same-family, then
+  continue.
 
 Shell state does not survive between Bash calls: each block below resolves `FLOWCTL` again and
-takes `REVIEW_ID` and `DIFF_BASE` as literals.
+takes `REVIEW_ID`, `DIFF_BASE` and `BACKEND` as literals.
 
-## 2. Codex review
+**The panel, on every backend.** The first round runs one reviewer for a small diff in one area
+(one module or feature, not spread across subsystems) that touches no persisted or shared state,
+concurrency, security or data layout, and three otherwise, one per lens: correctness, contracts,
+integration. The re-review after fixes runs one reviewer. You make the call; flowctl runs it.
 
-Run each review command as one blocking foreground Bash call with a 600-second timeout. Never
-run it in the background: its completion would not resume you.
+## 2. CLI review
+
+For `codex`, `claude`, `copilot` and `cursor`. Run each review command as one blocking foreground
+Bash call with a 600-second timeout. Never run it in the background: its completion would not
+resume you.
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-REVIEW_ID="<literal or empty>"; DIFF_BASE="<literal>"
+REVIEW_ID="<literal or empty>"; DIFF_BASE="<literal>"; BACKEND="<literal>"
 ROUTE="$("$FLOWCTL" review-route ${REVIEW_ID:+"$REVIEW_ID"} --rotate-stale --json)" || { printf '%s\n' "$ROUTE" >&2; exit 1; }
 ACTION="$(jq -r '.action' <<<"$ROUTE")"; TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
@@ -70,15 +78,14 @@ if OUT=$("$FLOWCTL" triage-skip --json "${TRIAGE[@]}" 2>/dev/null); then
 fi
 args=(); [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
-# The default is three reviewers. For a small diff in one area (one module or feature, not spread
-# across subsystems) that touches no persisted or shared state, concurrency, security or data layout, set ONE_REVIEWER=1 for a single reviewer.
-ONE_REVIEWER=0
+ONE_REVIEWER=0   # 1 when the panel rule above calls for one reviewer
 [ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
-"$FLOWCTL" codex impl-review-fanout "${args[@]}"
+"$FLOWCTL" "$BACKEND" impl-review-fanout "${args[@]}"
 ```
 
 A branch review (no task) passes the caller's focus areas with `--focus "<areas>"`. Triage
-passing means lockfile, docs, release or generated files only: the review is done.
+passing means lockfile, docs, release or generated files only: the review is done. When the
+dispatch says its reviewers ran one after another, say so in your report.
 
 ## 3. Merge and finalize
 
@@ -92,7 +99,8 @@ the change. Then, in the foreground:
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-"$FLOWCTL" codex impl-review-fanout-finalize --rid "<rid>" --merge-plan "<plan path>" --json
+BACKEND="<literal>"
+"$FLOWCTL" "$BACKEND" impl-review-fanout-finalize --rid "<rid>" --merge-plan "<plan path>" --json
 ```
 
 flowctl computes the verdict (the worst draw wins; failed draws do not vote) and writes the
@@ -111,8 +119,8 @@ flowctl refuses the round, and the retry is a full fresh review instead of the s
   instead, declining the call itself with `Declined #<n>: open item for the person`; when that loop
   ends, print `OPEN_ITEM: <the question>` after the verdict. The caller completes the task on it and
   the pull request opens as a draft.
-- `NEEDS_WORK`: on the codex path, read [references/codex-fix-pass.md](references/codex-fix-pass.md)
-  and run its one fix pass and re-review; other backends run their workflow file's fix loop.
+- `NEEDS_WORK`: on the path above, read [references/fix-pass.md](references/fix-pass.md) and run
+  its one fix pass and re-review; a path through other-paths.md runs its workflow file's fix loop.
 
 On any backend, when an unattended loop ends with the reviewer keeping only findings you declined
 under working-rules.md's rule, all below Major, print `OVERRIDDEN: <n> declined findings` with
@@ -120,5 +128,5 @@ each finding and both sides' reasons after `VERDICT=NEEDS_WORK`; the caller comp
 
 If a review command ends without a verdict (a transport error), retry it once. `ESCALATE:` (other
 than the `NEEDS_HUMAN` case above), `TRANSPORT_UNHEALTHY`, `NOT_RETRYABLE:` and other refusals end this review: report the message
-as printed and stop. Never widen the reviewer's sandbox, call `codex` directly, or reset review
-state to get past one.
+as printed and stop. Never widen the reviewer's sandbox, call the reviewer CLI directly, or reset
+review state to get past one.

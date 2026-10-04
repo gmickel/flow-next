@@ -1410,6 +1410,41 @@ class TestReviewRoundsCLI(unittest.TestCase):
             len(output_path.read_text(encoding="utf-8").encode("utf-8")),
         )
 
+    def test_record_keeps_the_reserved_range_and_model(self):
+        """#513: a host round reserved with --base/--head records that range
+        as observed even after HEAD moves, plus the reviewer model it names."""
+        git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        shas = []
+        for name in ("base", "reviewed", "later"):
+            (self.root / f"{name}.txt").write_text(name, encoding="utf-8")
+            subprocess.run([*git, "add", "-A"], cwd=self.root, check=True)
+            subprocess.run([*git, "commit", "-qm", name], cwd=self.root, check=True)
+            shas.append(subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root,
+                                       check=True, capture_output=True, text=True).stdout.strip())
+        base, reviewed, later = shas
+        task = f"{self.spec_id}.1"
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "impl",
+            "--task", task, "--review-type", "impl", "--base", base,
+            "--head", reviewed, "--json",
+        )
+        self.assertEqual(code, 0, err)
+        output_path = self.root / "review.txt"
+        output_path.write_text("<verdict>SHIP</verdict>", encoding="utf-8")
+        code, _, err = self._run(
+            "review-rounds", "record", self.spec_id, "--kind", "impl",
+            "--task", task, "--review-type", "impl", "--backend", "host",
+            "--output-file", str(output_path), "--reservation-id",
+            json.loads(out)["reservation_id"], "--model", "gpt-6-astra", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        row = self._spec_json()["review_attempts"][-1]
+        self.assertEqual((row["base_sha"], row["head_sha"]), (base, reviewed))
+        self.assertNotEqual(row["head_sha"], later)
+        self.assertIs(row["head_sha_observed"], True)
+        self.assertEqual(row["model"], "gpt-6-astra")
+
     def test_record_real_verdict_does_not_refund(self):
         self._run(
             "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
@@ -2817,10 +2852,9 @@ class TestAttemptsReadSurface(unittest.TestCase):
         self.assertEqual(row["model"], "gpt-5.6-sol")
         self.assertEqual(row["effort"], "high")
 
-    def test_host_recorded_row_claims_no_model(self):
-        """fn-193 (#338): `review-rounds record` is the host path and takes
-        no --model flag, so a narrating agent cannot claim one - the row is
-        honestly silent rather than recording "unknown"."""
+    def test_host_recorded_row_without_model_claims_none(self):
+        """fn-193 (#338): a `review-rounds record` that names no --model leaves
+        the row honestly silent rather than recording "unknown"."""
         self._run(
             "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
         )
@@ -2835,15 +2869,6 @@ class TestAttemptsReadSurface(unittest.TestCase):
         row = self._attempts_json()["attempts"][-1]
         self.assertNotIn("model", row)
         self.assertNotIn("effort", row)
-        # And the flag itself does not exist on that command.
-        code, _, err = self._run(
-            "review-rounds", "record", self.spec_id,
-            "--kind", "plan", "--review-type", "plan",
-            "--backend", "host", "--output-file", str(output_path),
-            "--model", "gpt-5.6-sol", "--json",
-        )
-        self.assertNotEqual(code, 0)
-        self.assertIn("--model", err)
 
     def test_mixed_legacy_and_new_ledger_reads_cleanly(self):
         self._seed(
@@ -2940,13 +2965,14 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         self._path().write_text(json.dumps(data))
 
     def _assert_stalls(self, rule: str):
-        before = self._data()
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            with self.assertRaises(SystemExit) as exc:
-                flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
-        self.assertEqual(exc.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
-        self.assertIn(f"ESCALATE: review loop stalled ({rule})", err.getvalue())
-        self.assertEqual(self._data(), before)  # no counter or pending mutation
+        marker = flowctl._review_recorded_stall(self.spec_id, "plan", None, "plan")
+        self.assertIn(f"ESCALATE: review loop stalled ({rule})", marker or "")
+        # fn-281 R7: the stall ends the loop after the round it was recorded
+        # on; a reservation is never refused for it (its fix is unreviewed).
+        rounds = self._data()["plan_review_rounds"]
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), rounds + 1
+        )
 
     def test_digest_persists_from_the_same_container_as_the_receipt(self):
         _, reservation_id = flowctl.enforce_and_increment_review_cap(
@@ -3135,8 +3161,21 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         self._write_attempts(
             self._digest(self._item("root", status="not_fixed")),
             self._digest(self._item("root", status="not_fixed")),
+            self._digest(self._item("root", status="not_fixed")),
         )
         self._assert_stalls("same-not-fixed-lineage")
+
+    def test_two_not_fixed_rounds_review_the_next_fix(self):
+        """fn-281 R7: two consecutive `not-fixed` rounds are not a stall; the
+        fix committed after the second is reviewed before any escalation."""
+        self._write_attempts(
+            self._digest(self._item("root", status="not_fixed")),
+            self._digest(self._item("root", status="not_fixed")),
+        )
+        self.assertIsNone(
+            flowctl._review_recorded_stall(self.spec_id, "plan", None, "plan")
+        )
+        self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
     def test_trend_and_presence_twice_shapes_no_longer_stall(self):
         """fn-168 R3: the two deleted classes leave no successor.
@@ -3301,11 +3340,12 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
     def test_same_not_fixed_lineage_fires_on_a_carried_re_affirmation(self):
         """The survivor still classifies genuine churn.
 
-        The same chain explicitly ``not-fixed`` in both rounds is the one signal
+        The same chain explicitly ``not-fixed`` in three rounds is the one signal
         left, and it reads a stated resolution rather than an inferred trend.
         """
         self._write_attempts(
             self._digest(self._item("root", status="not_fixed")),
+            self._digest(self._carried("root", severity="P1", status="not_fixed")),
             self._digest(self._carried("root", severity="P1", status="not_fixed")),
         )
         self._assert_stalls("same-not-fixed-lineage")
@@ -3395,14 +3435,50 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
     def test_e2e_repeated_not_fixed_still_escalates(self):
         """R4 case 2 — genuine churn still terminates early.
 
-        The reviewer states `not-fixed` for the same finding in two consecutive
+        The reviewer states `not-fixed` for the same finding in three consecutive
         rounds. That is a statement, not a trend, and it is the one signal left.
         """
         self._e2e_round(self._finding_block(1))
         self._e2e_round("Prior finding #1: not-fixed\n")
         self.assertEqual(self._last_digest()["items"][0]["status"], "not_fixed")
         self._e2e_round("Prior finding #1: not-fixed\n")
+        self.assertIsNone(
+            flowctl._review_recorded_stall(self.spec_id, "plan", None, "plan")
+        )
+        self._e2e_round("Prior finding #1: not-fixed\n")
         self._assert_stalls("same-not-fixed-lineage")
+
+    def test_e2e_stall_ends_the_recording_call(self):
+        """fn-281 R7: the third consecutive `not-fixed` round still records its
+        verdict and receipt, then the recording command escalates (exit 4)."""
+        self._e2e_round(self._finding_block(1))
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        output = self.root / "round4.md"
+        output.write_text("Prior finding #1: not-fixed\n<verdict>NEEDS_WORK</verdict>\n",
+                          encoding="utf-8")
+        payload = self.root / "payload.json"
+        payload.write_text(json.dumps({"type": "plan_review", "id": self.spec_id,
+                                       "mode": "host", "head": "a" * 40}), encoding="utf-8")
+        out, err = io.StringIO(), io.StringIO()
+        argv = ["flowctl", "review-rounds", "record", self.spec_id, "--kind", "plan",
+                "--review-type", "plan", "--backend", "host", "--output-file", str(output),
+                "--reservation-id", reservation_id, "--receipt-target",
+                str(self.root / "e2e-receipt.json"), "--receipt-payload-file", str(payload),
+                "--attach", "--json"]
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as exc:
+            flowctl.main()
+        self.assertEqual(exc.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
+        result = json.loads(out.getvalue())
+        self.assertIn("ESCALATE: review loop stalled (same-not-fixed-lineage)", result["error"])
+        self.assertEqual(result["verdict"], "NEEDS_WORK")
+        self.assertEqual(self._data()["review_attempts"][-1]["verdict"], "NEEDS_WORK")
+        receipt = json.loads((self.root / "e2e-receipt.json").read_text(encoding="utf-8"))
+        self.assertEqual(receipt["verdict"], "NEEDS_WORK")
 
     def test_e2e_zero_resolution_evidence_never_stalls_early(self):
         """R4 case 3 — a non-compliant reviewer is cap-bounded, not mis-judged.

@@ -371,13 +371,17 @@ flowctl review-rounds increment fn-1 --kind plan|impl --review-type plan|impl|co
   [--artifact-sha256 <sha256>|--artifact-file /tmp/review-artifact] [--force] [--task fn-1.2] [--json]
 flowctl review-rounds record fn-1 --kind plan|impl --review-type plan|impl|completion \
   --output-file /tmp/review.md --reservation-id <id> [--receipt-target /tmp/receipt.json] \
-  --backend host [--task fn-1.2] [--json]
+  --backend host [--model <reviewer-model>] [--task fn-1.2] [--json]
 flowctl review-rounds attempts fn-1 --kind plan|impl --review-type plan|impl|completion \
   [--task fn-1.2] [--json]
 flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
 ```
 
-`increment --base <sha> --head <sha>` computes the impl diff identity in-process.
+`increment --base <sha> --head <sha>` computes the impl diff identity in-process
+and keeps the range on the reservation: the attempt `record` writes carries that
+`base_sha` and `head_sha` with `head_sha_observed: true`, even after HEAD moves.
+`record --model` names the model the reviewer ran on for the attempt row; without
+it the row records no model.
 `record --attach` publishes the journaled receipt in the same call; the matching
 reservation is still required. `review-rounds resume-terminal <spec> --review-type
 completion --json` returns `{action, status, exit}` for completion re-entry and
@@ -1325,8 +1329,8 @@ Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhig
 
 | Backend form | Meaning |
 |--------------|---------|
-| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent on a cross-family model resolved via the reviewer tier of the AGENTS.md model-routing block - never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
-| `host:<model>` | **REJECTED.** Errors with a hint to name the model on the `reviewer` tier of the AGENTS.md model-routing block instead (a model never rides the `host` backend string). |
+| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent on a cross-family model resolved via the reviewer tier of the model-routing block (CLAUDE.md or AGENTS.md, whichever holds it) - never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
+| `host:<model>` | **REJECTED.** Errors with a hint to name the model on the `reviewer` tier of the model-routing block instead (a model never rides the `host` backend string). |
 
 #### Model resolution (strongest-available, never-fail)
 
@@ -2405,21 +2409,23 @@ With no provider URL, ordinary CLI execution remains the default. See the
 [execution contract](orchestration.md#review-backends-cross-model-review) for the request, response
 and failure rules.
 
-**First-round fan-out - two coordinator-visible invocations:**
+**First-round fan-out - two coordinator-visible invocations, the same on every CLI
+backend (`codex`, `copilot`, `cursor`, `claude`):**
 
 ```bash
 # Phase one - reserve ONE round, dispatch the axis draws concurrently, finalize nothing
-flowctl codex impl-review-fanout <task-id> [--base <branch>] [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
+flowctl <backend> impl-review-fanout <task-id> [--base <branch>] [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
 # Default draws: correctness, contracts, integration on the resolved backend spec.
 # Explicit --draw args override (1-3 draws): a single `--draw correctness` is the
-# one-reviewer economy round; three per-draw backend specs are the cross-family round.
+# one-reviewer round the review skill picks for a small, low-risk diff; three
+# per-draw backend specs are the cross-family round.
 # Cross-family constraint: the primary draw (correctness, or the first draw when
-# correctness is not drawn) must run on the codex backend (exit 2 otherwise);
-# secondary draws may name codex, copilot, or cursor.
+# correctness is not drawn) must run on <backend> (exit 2 otherwise); the other
+# draws may name any CLI backend. copilot draws run one after another (stderr says so).
 # Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
 
 # Phase two - one deterministic finalizer, after the coordinator's merge
-flowctl codex impl-review-fanout-finalize <task-id> [--base <branch>] --rid <rid> --merged-file <path> --needs-work-survivors <n> [--receipt <path>] [--json]
+flowctl <backend> impl-review-fanout-finalize <task-id> [--base <branch>] --rid <rid> (--merge-plan <path> | --merged-file <path> --needs-work-survivors <n>) [--receipt <path>] [--json]
 # --needs-work-survivors is the coordinator-counted actionable findings surviving
 # from the NEEDS_WORK draws after the evidence gate. REQUIRED when any draw
 # returned NEEDS_WORK (0 escalates the round to NEEDS_HUMAN - the wedge);
@@ -2470,7 +2476,7 @@ receipt lock - a replacement claim or a published receipt at the same path is
 never removed. A claim expires on the review liveness bound.
 
 Scope ownership through the optional phases: `impl-review-fanout-finalize
---hold-for-phases N` (codex; acquired BEFORE the record, while the
+--hold-for-phases N` (CLI backends; acquired BEFORE the record, while the
 reservation still stands) or `review-route <scope> --hold-phases N --rid
 <reservation-id>` (host) writes a lease that `review-route` and the
 reservation gate refuse across; `review-route <scope> --release-phases --rid
@@ -2488,8 +2494,8 @@ host judgment and happens BETWEEN the two invocations; the finalizer computes th
 verdict mechanically (worst-wins over the draws' tags), records the attempt, the
 findings container, the merged receipt (top-level fields = the primary draw's
 session/model - the correctness draw, or the first draw when correctness is not
-drawn; when the primary draw FAILED, the first surviving codex draw with a
-session stamps them instead, so round 2 and the optional phases still get a
+drawn; when the primary draw FAILED, the first surviving draw on the same backend
+with a session stamps them instead, so round 2 and the optional phases still get a
 resumable session - plus a `draws[]` array recording every draw, the failed
 primary included), and the single round consumption
 atomically. It is re-invocable with the same merged file, so a coordinator crash
@@ -2500,9 +2506,9 @@ any draw with a verdict is enough to proceed; only an all-draws-no-verdict round
 a transport failure, with one refund. Task mode reserves exactly one round;
 standalone reserves none (nonce rid). Re-review rounds after fixes are the plain
 `impl-review` invocation - when the prior receipt carries `draws[]`, lean resume is
-disabled for that round and the full merged container is injected. The fan-out is
-gated to the codex and host backends; `copilot`, `cursor`, and `claude` keep exactly
-one dispatch per round.
+disabled for that round and the full merged container is injected. Host review
+applies the same one-or-three rule through its own subagents and records through
+`review-rounds`.
 
 **How it works:**
 
@@ -2576,13 +2582,16 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   `spec reset-review-rounds`) advance the hash epoch - a post-reset re-review of
   an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
   the guard and stamps the attempt as forced.
-- **Early terminal:** before reserving, flowctl compares the last two
-  non-truncated structured-findings digests in the current epoch. It exits `4`
-  with `ESCALATE: review loop stalled (same-not-fixed-lineage)` when the
-  reviewer explicitly marked the same finding chain `not-fixed` in **both**
-  rounds - the one signal grounded in a stated resolution rather than an
-  inferred trend. It requires the same backend and review kind across both
-  rounds, so a backend switch is bounded by the round cap alone. No trend or presence
+- **Early terminal:** after a `NEEDS_WORK` round is recorded, flowctl compares the
+  last three non-truncated structured-findings digests in the current epoch. The
+  recording command (the review command, `impl-review-fanout-finalize`, or
+  `review-rounds record --attach`) exits `4` with `ESCALATE: review loop stalled
+  (same-not-fixed-lineage)` when the reviewer explicitly marked the same finding
+  chain `not-fixed` in **three consecutive** rounds - the one signal grounded in a
+  stated resolution rather than an inferred trend. The verdict and receipt persist
+  first, and a reservation is never refused for it, so a fix committed after the
+  second `not-fixed` is always reviewed. It requires the same backend and review
+  kind across the three rounds, so a backend switch is bounded by the round cap alone. No trend or presence
   heuristic sits beside it: such heuristics escalate healthy converging loops,
   so the round cap is the sole aggregate bound, deliberately. Missing, malformed, legacy, truncated, or
   insufficient findings are inert. A reviewer-emitted `NEEDS_HUMAN` is the
@@ -2601,11 +2610,11 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   and append an auditable attempt row to the spec sidecar. A delivered verdict
   is never refundable, even if the process also reports nonzero.
 - **Merged fan-out rounds count as one:** the cap bounds rounds, not draws. A
-  first-round fan-out sits behind exactly ONE reservation on both fan-out
-  backends - codex wraps the whole `impl-review-fanout` dispatch in one
-  reservation and `impl-review-fanout-finalize` records one consumption for the
-  merged round; host increments once before its three draw subagents and records
-  once after the merge, never three. A partial fan-out fails open from whichever
+  first-round fan-out sits behind exactly ONE reservation on every backend - a CLI
+  backend wraps the whole `impl-review-fanout` dispatch in one reservation and
+  `impl-review-fanout-finalize` records one consumption for the merged round; host
+  increments once before its draw subagents and records once after the merge,
+  never three. A partial fan-out fails open from whichever
   draws returned a verdict (one is enough, the receipt records how many draws
   failed); only an all-draws-no-verdict round is a transport failure, refunding
   the single reservation under the normal refund semantics.
@@ -2739,7 +2748,7 @@ Spec form: `claude[:model[:effort]]`; efforts are the CLI's own `low`, `medium`,
 
 **Errors.** `claude` missing from PATH → exit 2 `claude not found in PATH` before any spawn (install: [Claude Code setup](https://code.claude.com/docs/en/setup)). The CLI's `--output-format json` result is parsed strictly: a payload that is not the single `type: "result"` object, or an `is_error: true` envelope that is not the model-unavailable signature, is a transport failure with RETRY semantics - journaled as an attempt with no verdict, never a receipt. The model-unavailable signature is exact: (`is_error` true AND `api_error_status` 404 AND the result text names the selected model) OR the `[claude-code:unrecognized_model]` stderr tag; only that steps the ladder (max 2 steps, cached per CLI version), and the floor omits `--model` and `--effort`.
 
-**Fan-out.** No first-round three-draw fan-out: the fan-out subcommands stay registered under `flowctl codex` only, so `flowctl claude impl-review-fanout ...` is an argparse invalid choice. `claude` gets the fix loop and the round counter like `copilot` and `cursor`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot`; with the judge off (the default) claude reviews use the deterministic whitelist.
+**Fan-out.** The first round runs through `flowctl claude impl-review-fanout` / `impl-review-fanout-finalize` like every CLI backend; each draw gets its own diff file under `.flow/tmp/claude-review/`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot`; with the judge off (the default) claude reviews use the deterministic whitelist.
 
 ### review-deep-auto
 
