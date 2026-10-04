@@ -58,6 +58,7 @@ This is the second 8.0.0 spec; it builds after RepoPrompt is removed (fn-280), s
 
 ## Decision Context
 
+- **Concurrency probe (2026-10-04, before the build):** Cursor (cursor-agent 2026.09.18, gpt-5.6-sol-high, `--mode ask`) accepted three simultaneous headless calls, each as fast as a single call (~6 s). Copilot could not be probed: the plan's usage limit refused every call ("You've reached your additional usage limit for your plan"), so Copilot keeps the back-to-back fallback and its R4 draws wait on quota. [paraphrase]
 - **#513 (2026-10-04):** validated against 7.1.2; after fn-280 host review is the only `review-rounds record` caller, so the range is kept from the reservation and `record` gains only an optional model, not `--base`/`--head`. [paraphrase]
 - **Maintainer, 2026-10-04:** "each backend should work the same"; 8.0.0 keeps everything the same except RepoPrompt removal, the same review on every backend through one generic runner, and the cheap wins that are not dangerous. [paraphrase]
 - Agentic dispatch (fn-279) was parked because moving the CLI handling flowctl encodes (stdin hangs, resume flags, model pinning, trust prompts, Windows sandboxing) into prose risks being slower and less reliable across six harnesses, and it breaks a lot; the uniform panel does not need it. [paraphrase]
