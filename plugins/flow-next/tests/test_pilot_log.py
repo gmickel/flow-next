@@ -106,6 +106,23 @@ class TestPilotLogCounter(unittest.TestCase):
         counter.write_text("{broken", encoding="utf-8")
         self.assertEqual(self._append()["tick"], 5)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "needs POSIX FIFOs")
+    def test_recovery_skips_fifo_and_deeply_nested_rows(self) -> None:
+        for _ in range(3):
+            self._append()
+        next(self.run_dir.glob(".pilot-*.counter.json")).unlink()
+        prefix = next(self.run_dir.glob("pilot-*.json")).name.rsplit("-", 1)[0]
+        os.mkfifo(self.run_dir / f"{prefix}-fifo.json")
+        (self.run_dir / f"{prefix}-deep.json").write_text("[" * 100000, encoding="utf-8")
+        result: dict = {}
+        worker = __import__("threading").Thread(
+            target=lambda: result.update(self._append()), daemon=True
+        )
+        worker.start()
+        worker.join(timeout=20)
+        self.assertFalse(worker.is_alive(), "recovery blocked on a FIFO row")
+        self.assertEqual(result["tick"], 4)
+
     def test_crash_ahead_counter_without_witness_reconstructs(self) -> None:
         for _ in range(2):
             self._append()

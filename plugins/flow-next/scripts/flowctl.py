@@ -3409,7 +3409,7 @@ def get_changed_files(base_branch: str) -> list[str]:
     """Get files changed between base branch and HEAD (committed changes only)."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", f"{base_branch}...HEAD"],
+            ["git", "diff", "--name-only", "--no-renames", f"{base_branch}...HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=True,
@@ -23551,12 +23551,12 @@ def judge_tier_state(task_id: str) -> dict:
     task_id = resolve_task_arg(flow_dir, task_id, use_json=True)
     task = load_task_definition(task_id, use_json=True)
     body = (flow_dir / TASKS_DIR / f"{task_id}.md").read_text(encoding="utf-8")
-    acceptance = re.search(r"(?ms)^## Acceptance\s*\n(.*?)(?=^## |\Z)", body)
+    acceptance = get_task_section(body, "## Acceptance")
     spec_id = task.get("epic") or task.get("spec") or task_id.rsplit(".", 1)[0]
     spec_path = find_spec_md_path(flow_dir, spec_id)
     spec_body = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
     return {"task_title": task["title"], "task_body": body,
-            "acceptance": acceptance.group(1).strip() if acceptance else "",
+            "acceptance": acceptance,
             "touches_count": len(task_touches(body) or []),
             "has_quick_commands": bool(re.search(r"(?im)^#{2,4}\s+Quick\b", body + "\n" + spec_body)),
             "repo": str(get_repo_root())}
@@ -40373,8 +40373,10 @@ def _pilot_log_recover_next_tick(
     max_tick = 0
     for candidate in run_dir.glob(f"pilot-{id_slug}-*.json"):
         try:
+            if not stat.S_ISREG(candidate.lstat().st_mode):
+                continue  # a FIFO would block the read
             row = json.loads(candidate.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, RecursionError):
             continue
         if not isinstance(row, dict) or row.get("id") != raw_id:
             continue
@@ -49106,7 +49108,7 @@ def cmd_triage_skip(args: argparse.Namespace) -> None:
     # Gather changed file list.
     try:
         proc = subprocess.run(
-            ["git", "diff", "--name-only", f"{base}..HEAD"],
+            ["git", "diff", "--name-only", "--no-renames", f"{base}..HEAD"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=False,

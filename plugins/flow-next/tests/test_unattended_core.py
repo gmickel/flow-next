@@ -201,6 +201,30 @@ for index in range(8):
         self.assertEqual(raised.exception.code, 1)
         self.assertEqual(receipt.read_text(encoding="utf-8"), original)
 
+    def test_triage_rename_of_code_into_docs_takes_full_review(self):
+        # A real git rename: without --no-renames only the new .md path is
+        # listed, the diff reads docs-only and review would be skipped.
+        def git(*a):
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *a],
+                           cwd=self.root, check=True, capture_output=True)
+        git("init", "-q", "-b", "main")
+        (self.root / "src").mkdir()
+        (self.root / "src" / "app.py").write_text("def run():\n    return 1\n" * 20, encoding="utf-8")
+        git("add", "src/app.py")
+        git("commit", "-q", "-m", "base")
+        git("checkout", "-q", "-b", "work")
+        (self.root / "notes").mkdir()
+        git("mv", "src/app.py", "notes/app.md")
+        git("commit", "-q", "-m", "move")
+        args = argparse.Namespace(base="main", receipt=None, task="fn-1-demo.1", json=True,
+                                  no_llm=True, backend=None, model=None, effort=None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                f.cmd_triage_skip(args)
+        self.assertEqual(raised.exception.code, 1)
+        self.assertEqual(json.loads(out.getvalue())["verdict"], "REVIEW")
+
     def test_triage_busy_receipt_lock_takes_full_review(self):
         receipt = self.root / "review.json"
         args = argparse.Namespace(base="main", receipt=str(receipt), task="fn-1-demo.1", json=True,

@@ -20,8 +20,8 @@ fetch_threads_page() {
   fi
   # shellcheck disable=SC2086
   gh api graphql \
-    -F owner="$OWNER" \
-    -F repo="$REPO" \
+    -f owner="$OWNER" \
+    -f repo="$REPO" \
     -F pr="$PR_NUMBER" \
     $cursor_arg \
     -f query='
