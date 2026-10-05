@@ -125,9 +125,9 @@ if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
 if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
   echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2; exit 1; fi
 SPEC_ID=$(printf '%s' "$SPEC_JSON" | jq -r '.id')
-OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
+OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done" and .status != "retired") | .id] | join(", ")')
 TASK_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]?] | length')
-OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
+OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done" and .status != "retired")] | length')
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
   if [[ "$AUTONOMOUS" == "1" ]]; then
     echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2

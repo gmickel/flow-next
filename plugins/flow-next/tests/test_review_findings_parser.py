@@ -159,6 +159,37 @@ Suggestion: Add the missing invariant.
         self.assertNotIn("anchor", item)
         self.assertEqual(item["rIds"], ["R3"])
 
+    def test_location_with_trailing_note_keeps_its_anchor(self) -> None:
+        """A reviewer's note after the line or range must not void the round."""
+        template = """
+Severity: P1
+Confidence: 100
+Classification: introduced
+File:Line: {location}
+Problem: The store loses the write.
+Suggestion: Hold the lock.
+<verdict>NEEDS_WORK</verdict>
+"""
+        cases = (
+            ("store.py:18-25 (with the lock helper at :40)", ("store.py", 18, 25)),
+            ("`store.py:18` - the write path", ("store.py", 18, None)),
+            ("-", None),
+        )
+        backends = sorted(set(FLOWCTL.BACKEND_REGISTRY) - {"none"})
+        for backend in backends:
+            for location, expected in cases:
+                with self.subTest(backend=backend, location=location):
+                    result = parse(template.format(location=location), backend)
+                    self.assertIsNotNone(result)
+                    item = result["items"][0]
+                    if expected is None:
+                        self.assertNotIn("anchor", item)
+                        continue
+                    path, start, end = expected
+                    self.assertEqual(item["anchor"]["path"], path)
+                    self.assertEqual(item["anchor"]["startLine"], start)
+                    self.assertEqual(item["anchor"].get("endLine"), end)
+
     def test_requirements_coverage_does_not_leak_rids_into_last_finding(self) -> None:
         explicit = """
 Severity: Major

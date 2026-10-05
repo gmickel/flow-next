@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Close a spec that ends without being built.** A spec that another spec superseded, that became moot, or that shipped under other work can now close truthfully: `flowctl spec close <id> --retire superseded|moot|delivered-elsewhere [--by <spec-or-PR>]` records why it ended and what replaced it. Its never-run tasks read `retired` instead of `done`, completion review records `not_required` so every close and merge gate accepts it, `flowctl next` stops routing to it, and land and make-pr count a pull request that retires a task-less spec as carrying that spec. `show`, `specs` and `list` print the end state as `retired: <reason> by <refs>`. The won't-do close in the flow-next skill uses it. Thanks @sn-furali (#503).
+
 ### Changed
 
 - **Every reviewer gets the same panel.** Claude, Copilot and Cursor reviews now run the first round the way Codex and host reviews did: one reviewer for a small diff in one area that touches no persisted or shared state, concurrency, security or data layout, three reviewers (correctness, contracts, integration) for anything larger, merged into one fix pass and counted as one round. The re-review after fixes is one reviewer everywhere. It works from any harness, so flow-next in Codex with the `claude` reviewer takes the same steps as flow-next in Claude Code with `codex`. Each Claude reviewer in a three-reviewer round gets the reviewed diff by path. A branch review no longer needs a `.flow/` project on any backend. Under the hood: `flowctl <backend> impl-review-fanout` and `impl-review-fanout-finalize` exist for all four CLI backends, the four per-backend implementation-review workflows became one, and receipts keep their format.
@@ -17,6 +21,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 - **Host reviews record what they reviewed.** A host review's attempt row now carries the reviewed `base_sha` and `head_sha` (marked observed) and the reviewer's model, like every other reviewer, so a check that counts which commits a review covered can count host reviews too. `flowctl review-rounds increment --base/--head` keeps the range on the reservation and `review-rounds record` takes an optional `--model`. Thanks @sn-furali (#513).
 - **Host review finds the model-routing block in CLAUDE.md as well as AGENTS.md**, whichever file holds it on the harness, instead of always naming AGENTS.md.
+- **A reviewer's note after a location no longer voids the round.** A finding whose location carried text after the line or range, such as `store.py:18-25 (with ...)` or a backticked location followed by a note, failed the findings parser, and the review's merge plan then refused the whole round until the merged file was supplied by hand. The location now parses to its path and lines on every reviewer.
+- **`spec set-backend` and `task set-backend` errors name the flag.** An invalid value printed `<function field at 0x...>` where `--impl`, `--review` or `--sync` belonged.
 
 ### Removed
 

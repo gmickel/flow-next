@@ -24,7 +24,7 @@ the reconciliation.
 
 | Side | Vocabulary | Source |
 |---|---|---|
-| **flow** | spec: `open` · `done`; task: `todo` · `in_progress` · `blocked` · `done`; plus the spec's `completion_review_status` (`unknown` · `ship` · `not_required` · `needs_work` · `needs_human`; satisfying set `{ship, not_required}`) | `flowctl.py` `SPEC_STATUS` / `TASK_STATUS` / `COMPLETION_REVIEW_STATUSES` |
+| **flow** | spec: `open` · `done`; task: `todo` · `in_progress` · `blocked` · `done` · `retired`; plus the spec's `completion_review_status` (`unknown` · `ship` · `not_required` · `needs_work` · `needs_human`; satisfying set `{ship, not_required}`) | `flowctl.py` `SPEC_STATUS` / `TASK_STATUS` / `COMPLETION_REVIEW_STATUSES` |
 | **normalized** (the stable middle) | `backlog` · `planned` · `in-progress` · `in-review` · `done` · `verified` · `deferred` · `wontfix` | [adapter-interface.md](adapter-interface.md) |
 
 The **tracker side** maps its team-specific workflow-state names into the normalized

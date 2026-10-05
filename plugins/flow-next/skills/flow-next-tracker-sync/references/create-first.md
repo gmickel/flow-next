@@ -16,9 +16,9 @@ failure. **After minting the local spec, record the claim with
 form, so two promoters racing on the same candidate end with one recorded
 spec. On exit `10` with `subtype=spec_already_minted`, another promoter won:
 adopt `details.recordedSpecId` and retire the locally minted duplicate with
-`flowctl spec close <loser-id>` plus a one-line note naming the adopted
-winner - a closed duplicate is inert and auditable, and there is deliberately
-no spec-delete verb. Never re-put. On `subtype=record_missing`, the candidate
+`flowctl spec close <loser-id> --retire superseded --by <winner-id>` - a
+retired duplicate is inert and auditable, and there is deliberately no
+spec-delete verb. Never re-put. On `subtype=record_missing`, the candidate
 was already promoted and cleared (or never recorded here): locate the issue's
 attached spec via the tracker id and adopt it. **Under any autonomy marker**
 (`FLOW_AUTONOMOUS=1`, `mode:autonomous`) a CAS conflict resolves to `sync defer` like every other

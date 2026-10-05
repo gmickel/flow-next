@@ -633,10 +633,23 @@ class TestSetBackendValidation(unittest.TestCase):
                 payload = json.loads(out.getvalue())
                 self.assertFalse(payload["success"])
                 self.assertIn(message, payload["error"])
+                self.assertIn("Invalid spec for --review:", payload["error"])
                 raw = json.loads(
                     (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
                 )
                 self.assertIsNone(raw["review"])
+
+    def test_spec_set_backend_error_names_the_flag(self) -> None:
+        for flag in ("impl", "review", "sync"):
+            with self.subTest(flag=flag), _flow_fixture() as td:
+                _write_epic(td / ".flow", "fn-9-e")
+                values = {"impl": None, "review": None, "sync": None, flag: "bogus"}
+                out = io.StringIO()
+                with self.assertRaises(SystemExit), redirect_stdout(out):
+                    flowctl.cmd_spec_set_backend(_ns(id="fn-9-e", json=True, **values))
+                error = json.loads(out.getvalue())["error"]
+                self.assertIn(f"Invalid spec for --{flag}: Unknown backend: 'bogus'", error)
+                self.assertNotIn("<function", error)
 
     def test_task_set_backend_accepts_copilot_xhigh(self) -> None:
         with _flow_fixture() as td:

@@ -1259,6 +1259,19 @@ class TestReviewFanout(unittest.TestCase):
         self.assertIn("Bug from integration", result["review"])
         self.assertNotIn("Bug from correctness", result["review"])
 
+    def test_merge_plan_accepts_location_with_trailing_note(self) -> None:
+        def fake(prompt, **kwargs):
+            text = _merged_review(f"Bug from {_axis_of(prompt)}")
+            text = text.replace("- **Suggestion**", "- **File:Line**: store.py:18-25 (with the lock helper)\n- **Suggestion**")
+            return text, f"sess-{_axis_of(prompt)}", 0, ""
+        code, dispatch, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        plan = self.root / "merge.json"
+        plan.write_text(json.dumps({"keep": ["correctness:1"]}))
+        code, out, err = self._run("codex", "impl-review-fanout-finalize", "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("- **File:Line**: store.py:18-25", json.loads(out)["review"])
+
     def test_merge_plan_zero_needs_work_survivors_keeps_ship_remainder(self) -> None:
         def fake(prompt, **kwargs):
             axis = _axis_of(prompt)

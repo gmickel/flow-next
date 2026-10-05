@@ -7,6 +7,7 @@ module: plugins/flow-next/scripts/flowctl.py
 tags: [fn-168, fn-159, review-convergence, stall-detection, ratchet-prompt, findings-lineage, inference-vs-evidence]
 applies_when: "a review loop runs to the cap with no early escalation and someone proposes re-adding a finding-count / severity-trend / new-blocker-twice stall rule"
 decision_status: accepted
+last_updated: "2026-10-05"
 alternatives_considered: |
   - keep flat-trajectory, filter it to evidence-bearing opens (built, committed as 9417ba9b, then reverted): fixes one label, not the escalation
   - keep fresh-introduced-critical: fires on what every healthy thorough loop looks like
@@ -61,7 +62,9 @@ Both deleted rules were **round-local snapshots inferring convergence** from dat
 `same-not-fixed-lineage` reads a **statement**: `not_fixed` is written only by an explicit parsed per-ordinal resolution line. Two corrections were needed to make that literally true rather than nearly true:
 
 1. **fn-168.1** — the prompt advertised the hyphen (`not-fixed`) that `_FINDINGS_PRIOR_RE` rejected (it spelled `not[\s_]fixed`). A compliant reviewer would have forced a record/canonical count mismatch and had the whole round's findings container discarded, silently. Whatever the prompt advertises must parse; R6 is the standing guard.
-2. **fn-168.2 (R8)** — carry-forward propagated `status` verbatim, so a `not-fixed` stated once in round 2 and merely *omitted* in round 3 sat at `not_fixed` in **both** digests and escalated a round that had said nothing. A carried `not_fixed` now reverts to `open` before the round's own records apply (`fixed`/`withdrawn` preserved as resolved terminals), so an intersection means the reviewer said "still broken" in two consecutive rounds.
+2. **fn-168.2 (R8)** — carry-forward propagated `status` verbatim, so a `not-fixed` stated once in round 2 and merely *omitted* in round 3 sat at `not_fixed` in **both** digests and escalated a round that had said nothing. A carried `not_fixed` now reverts to `open` before the round's own records apply (`fixed`/`withdrawn` preserved as resolved terminals), so an intersection means the reviewer said "still broken" in each round of the window.
+
+**Current rule (fn-281 R7):** the window is three consecutive `not-fixed` rounds, not two. The check runs after a round is recorded, so the fix committed after the second `not-fixed` is reviewed before anything escalates, and a round whose committed fix has not yet been reviewed is never refused.
 
 ## Accepted consequences — these are the decision, not oversights
 

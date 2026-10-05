@@ -491,7 +491,20 @@ it with the task; finishing that follow-up does not close it automatically.
 
 ```bash
 flowctl spec close fn-1 [--json]
+flowctl spec close fn-1 --retire <superseded|moot|delivered-elsewhere> [--by <spec-or-PR>]... [--json]
 ```
+
+`--retire` closes a spec that ends without its own implementation. It records
+`retired: {"reason", "by"}` on the spec, settles every task that is not done as
+`retired` (runtime and tracked definition; never `done`), and records
+`completion_review_status: not_required` unless a satisfying value is already
+recorded. A retired spec is `done`, so `next` skips it; a retired task is not
+ready, cannot be started or blocked, and does not hold a later close open.
+`show`, `specs` and `list` print the end state as `retired: <reason> by <refs>`
+and carry `retired` in JSON. Reopening the spec by creating a task drops the
+record and re-arms completion review. An unknown reason is refused with the
+accepted list, `--by` without `--retire` is refused, and retiring a closed spec
+is refused.
 
 ### spec ready / spec unready
 
@@ -557,8 +570,8 @@ Format: `backend:model` where backend is a CLI name and model is backend-specifi
 below, without adding a host. It resolves the merge base of the ref and HEAD and
 reads local committed objects only; it never writes or fetches. Text prints one ID
 per line in set order; JSON returns `{"spec_ids": [...]}` in the same order.
-Candidates without a touched task file are filtered before per-spec object or
-branch-history reads, so a record-only close needs only the changed-path query.
+A record-only change costs one HEAD record read per changed spec file; only a
+retired spec passes it to the base and branch-history reads.
 
 ### spec export-cognitive-aid
 
@@ -570,8 +583,8 @@ flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 
 The closed set includes specs in the Flow specs or legacy epics directory that
 are `done` at HEAD, absent or not `done` at the merge base by JSON `id`, and whose
-task files the range touches (record or body), plus the host spec.
-Record-only closes are excluded. A sibling is also excluded when its recorded
+task files the range touches (record or body) or that carry a `retired` record
+at HEAD, plus the host spec. Other record-only closes are excluded. A sibling is also excluded when its recorded
 branch exists locally or under `origin` and its spec is already done at that
 branch's merge base with HEAD: the close belongs to HEAD's own branch history.
 Squash landings, deleted branches and missing `branch_name` remain eligible.
@@ -798,7 +811,7 @@ flowctl tasks --status todo [--json]      # Filter by status
 flowctl tasks --spec fn-1 --status done   # Combine filters
 ```
 
-Status options: `todo`, `in_progress`, `blocked`, `done`
+Status options: `todo`, `in_progress`, `blocked`, `done`, `retired`
 
 Output:
 ```json
@@ -1149,7 +1162,7 @@ A duplicate native `fn-N` ordinal whose full ids are distinct is a top-level **`
 Checks:
 - Spec/task markdown exists
 - Task specs have required headings
-- Task statuses are valid (`todo`, `in_progress`, `blocked`, `done`)
+- Task statuses are valid (`todo`, `in_progress`, `blocked`, `done`, `retired`)
 - Dependencies exist and are within same spec
 - No dependency cycles
 - Duplicate native `fn-N` ordinals (distinct full ids) appear in `root_warnings`; other repository-level failures appear in `root_errors`

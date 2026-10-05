@@ -20,11 +20,11 @@ Read every `.flow/specs/*.json` blob at full `headRefOid` from the PR's
 head repository using the recursive git trees API (`recursive=1`), never local state.
 Select every spec whose `branch_name` equals `headRefName`; several matches are valid.
 If none match, read the `baseRefName` tree from the base repository and select specs with
-`status: done` at head, absent or not done at base, and at least one
+`status: done` at head, absent or not done at base, and either a `retired` record at head or at least one
 `.flow/tasks/<spec-id>.*` entry whose tree SHA is absent from, or different in,
 the base tree; also select any spec not done at head whose task entries the PR changes that
 way, so the open-work stop below catches unfinished work built on another branch.
-A closed spec has `status: done` and at least one
+A closed spec has `status: done` and either a `retired` record or at least one
 `.flow/tasks/<spec-id>.*.json` blob in the same tree. If any selected spec is
 open, stop `BLOCKED`, reason `work not finished` naming every open selection;
 change nothing. An empty selected set is a pull request opened without a spec (make-pr's no-spec

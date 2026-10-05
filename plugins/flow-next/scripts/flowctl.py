@@ -277,7 +277,11 @@ STRATEGY_EMPTY_SENTINELS: frozenset[str] = frozenset(
     {STRATEGY_HUSK_SENTINEL, STRATEGY_DRAFT_PLACEHOLDER}
 )
 SPEC_STATUS = ["open", "done"]
-TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
+TASK_STATUS = ["todo", "in_progress", "blocked", "done", "retired"]
+# A task stops being work once it is done or its spec was retired before it ran.
+TASK_SETTLED_STATUSES = frozenset({"done", "retired"})
+# Why a spec closed without its own implementation (`spec close --retire`).
+SPEC_RETIRE_REASONS = ("superseded", "moot", "delivered-elsewhere")
 
 # fn-205 R2/R3/R7: completion-review status vocabulary. Canonical declaration
 # lives HERE, not imported from flowctl_tracker: flowctl.py treats the tracker
@@ -308,6 +312,16 @@ def completion_review_satisfied(status: object) -> bool:
     if not isinstance(status, str):
         return False
     return status in COMPLETION_REVIEW_SATISFYING
+
+
+def spec_status_label(spec: dict) -> str:
+    """A spec's end state for humans: a retired spec reads why it ended."""
+    retired = spec.get("retired")
+    if not isinstance(retired, dict):
+        return str(spec.get("status"))
+    by = f" by {', '.join(retired.get('by') or [])}" if retired.get("by") else ""
+    return f"retired: {retired.get('reason')}{by}"
+
 
 TASK_SPEC_HEADINGS = [
     "## Description",
@@ -4728,8 +4742,8 @@ _FINDINGS_PRIOR_RECORD_RE = re.compile(
     """
 )
 _FINDINGS_FILE_LINE_RE = re.compile(
-    r"^(?P<path>.+?):(?P<start>[1-9]\d*)"
-    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?$"
+    r"^`?(?P<path>[^`]+?):(?P<start>[1-9]\d*)"
+    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?`?(?:\s.*)?$"
 )
 _FINDINGS_HOST_TABLE_SEPARATOR_RE = re.compile(
     r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
@@ -30068,6 +30082,7 @@ def _reopen_spec_for_task_change(flow_dir: Path, spec_id: str) -> Optional[Path]
         if spec_data.get("status") != "done":
             return None
         spec_data["status"] = "open"
+        spec_data.pop("retired", None)
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_path, spec_data)
     return spec_path
@@ -30603,7 +30618,7 @@ def cmd_show(args: argparse.Namespace) -> None:
             print_status_source_advisory()
             print(f"Spec: {epic_data['id']}")
             print(f"Title: {epic_data['title']}")
-            print(f"Status: {epic_data['status']}")
+            print(f"Status: {spec_status_label(epic_data)}")
             print(f"Spec: {epic_data['spec_path']}")
             print(f"\nTasks ({len(tasks)}):")
             for t in tasks:
@@ -30686,6 +30701,7 @@ def cmd_specs(args: argparse.Namespace) -> None:
                 "no_plan": bool(spec_data.get("no_plan", False)),
                 "tasks": task_count,
                 "done": done_count,
+                **({"retired": spec_data["retired"]} if "retired" in spec_data else {}),
             }
         )
 
@@ -30713,7 +30729,7 @@ def cmd_specs(args: argparse.Namespace) -> None:
                 # see zero draft-noise (clig.dev restraint).
                 ready_badge = " [ready]" if e["ready"] else ""
                 print(
-                    f"  [{e['status']}]{ready_badge} {e['id']}: {e['title']} ({progress} tasks done)"
+                    f"  [{spec_status_label(e)}]{ready_badge} {e['id']}: {e['title']} ({progress} tasks done)"
                 )
 
 
@@ -30843,6 +30859,7 @@ def cmd_list(args: argparse.Namespace) -> None:
                     "no_plan": bool(e.get("no_plan", False)),
                     "tasks": len(task_list),
                     "done": done_count,
+                    **({"retired": e["retired"]} if "retired" in e else {}),
                 }
             )
         json_output(
@@ -30872,7 +30889,7 @@ def cmd_list(args: argparse.Namespace) -> None:
             progress = f"{done_count}/{len(task_list)}" if task_list else "0/0"
             # fn-58.1 (R2/R7): badge ONLY on ready specs (no draft-noise).
             ready_badge = " [ready]" if e.get("ready") else ""
-            print(f"[{e['status']}]{ready_badge} {e['id']}: {e['title']} ({progress} done)")
+            print(f"[{spec_status_label(e)}]{ready_badge} {e['id']}: {e['title']} ({progress} done)")
 
             for t in task_list:
                 deps = (
@@ -32492,7 +32509,7 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
 
         # Validate each non-empty spec up front — reject bad specs before we touch
         # disk. Empty string is a clear-signal and skips validation.
-        for _field_name, value in (
+        for flag, value in (
             ("--impl", args.impl),
             ("--review", args.review),
             ("--sync", args.sync),
@@ -32502,7 +32519,7 @@ def cmd_spec_set_backend(args: argparse.Namespace) -> None:
                     BackendSpec.parse(value)
                 except ValueError as e:
                     error_exit(
-                        f"Invalid spec for {field}: {e}", use_json=args.json
+                        f"Invalid spec for {flag}: {e}", use_json=args.json
                     )
 
         # Update fields (empty string means clear). Store raw strings as typed —
@@ -34187,7 +34204,8 @@ def spec_short_id(spec_id: str) -> str:
 def specs_closed_in_range(
     flow_dir: Path, base_commit: str, host_spec_id: Optional[str] = None,
 ) -> list[str]:
-    """Return newly closed specs whose task files the range touches, plus the host."""
+    """Return newly closed specs whose task files the range touches or that
+    were retired, plus the host."""
     repo_root = get_repo_root()
     closed = {host_spec_id} if host_spec_id else set()
     try:
@@ -34207,8 +34225,7 @@ def specs_closed_in_range(
                      if Path(path).parent.as_posix() == tasks_dir}
     paths = [path for path in changed_paths if path.endswith(".json")]
     spec_paths = [path for path in paths if Path(path).parent.as_posix() in spec_dirs
-                  and Path(path).stem != host_spec_id
-                  and touched_tasks]
+                  and Path(path).stem != host_spec_id]
     if not spec_paths:
         return list(closed)
 
@@ -34227,15 +34244,30 @@ def specs_closed_in_range(
             raise ValueError(f"Expected object in {revision}:{path}")
         return value
 
+    def retired_at_head(path: str) -> bool:
+        try:
+            return isinstance(record("HEAD", path).get("retired"), dict)
+        except ValueError:
+            return False
+
+    if not touched_tasks:
+        # Only a retirement makes a record-only close count; read HEAD alone,
+        # leniently, so any other record-only change costs that one read.
+        spec_paths = [path for path in spec_paths if retired_at_head(path)]
+        if not spec_paths:
+            return list(closed)
+
     # Include deleted paths: a rename must compare identities, not filenames.
     base_specs = [record(base_commit, path) for path in spec_paths]
     # Identity is the short id: a slug rename of a spec done at base is not a new close.
     already_done = {spec_short_id(item["id"]) for item in base_specs
                     if item.get("status") == "done" and isinstance(item.get("id"), str) and is_spec_id(item["id"])}
-    candidates = set()
+    candidates, retired = set(), set()
     for path in spec_paths:
         head = record("HEAD", path)
         sid = head.get("id")
+        if isinstance(head.get("retired"), dict):
+            retired.add(sid)
         if isinstance(sid, str) and is_spec_id(sid) and head.get("status") == "done" and spec_short_id(sid) not in already_done:
             def read_close(commit: str, short: str = spec_short_id(sid)) -> tuple[bool, str]:
                 # By identity, not by today's path: the record may have moved
@@ -34262,9 +34294,10 @@ def specs_closed_in_range(
             if not stacked_ref:
                 candidates.add(sid)
     # Work happened here when the range touches one of the spec's task files (record
-    # or body). A record-only close touches the spec file alone and stays out. The
-    # tracked task status is not consulted: it is persisted late and can read stale.
-    closed.update(candidates & touched_tasks)
+    # or body), or when the range retired the spec. Any other record-only close
+    # stays out. The tracked task status is not consulted: it is persisted late
+    # and can read stale.
+    closed.update(candidates & (touched_tasks | retired))
     return sorted(closed, key=lambda spec: (parse_any_id(spec)[2], spec))
 
 
@@ -34371,6 +34404,8 @@ def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json:
             "open_questions": open_questions,
         },
     }
+    if "retired" in spec_data:
+        spec_section["retired"] = spec_data["retired"]
 
     # --- Tasks ---
     tasks_dir = flow_dir / TASKS_DIR
@@ -34431,7 +34466,7 @@ def _export_spec_summary(flow_dir: Path, spec_data: dict[str, Any], *, use_json:
     # tasks_summary
     total = len(task_entries)
     done_count = sum(1 for t in task_entries if t["status"] == "done")
-    open_count = total - done_count
+    open_count = sum(1 for t in task_entries if t["status"] not in TASK_SETTLED_STATUSES)
     # fn-180.1 (#301): two distinct coverage questions, two distinct sets.
     #   covered_rids   -> evidenced: satisfied by a DONE task (merge gate).
     #   declared_rids  -> declared: claimed by ANY task, any status (plan gate).
@@ -34740,7 +34775,7 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
 
     # Validate each non-empty spec up front — reject bad specs before we touch
     # disk. Empty string is a clear-signal and skips validation.
-    for _field_name, value in (
+    for flag, value in (
         ("--impl", args.impl),
         ("--review", args.review),
         ("--sync", args.sync),
@@ -34750,7 +34785,7 @@ def cmd_task_set_backend(args: argparse.Namespace) -> None:
                 BackendSpec.parse(value)
             except ValueError as e:
                 error_exit(
-                    f"Invalid spec for {field}: {e}", use_json=args.json
+                    f"Invalid spec for {flag}: {e}", use_json=args.json
                 )
 
     # Update fields (empty string means clear). Store raw strings as typed.
@@ -36054,7 +36089,7 @@ def cmd_ready(args: argparse.Namespace) -> None:
             in_progress.append(task)
             continue
 
-        if task["status"] == "done":
+        if task["status"] in TASK_SETTLED_STATUSES:
             continue
 
         if task["status"] == "blocked":
@@ -36420,10 +36455,10 @@ def cmd_start(args: argparse.Namespace) -> None:
         status = runtime.get("status", "todo")
         existing_assignee = runtime.get("assignee")
 
-        # Cannot start done task
-        if status == "done":
+        # Cannot start a settled task
+        if status in TASK_SETTLED_STATUSES:
             error_exit(
-                f"Cannot start task {args.id}: status is 'done'.", use_json=args.json
+                f"Cannot start task {args.id}: status is '{status}'.", use_json=args.json
             )
 
         # Blocked requires --force
@@ -36752,9 +36787,10 @@ def cmd_block(args: argparse.Namespace) -> None:
     # fn-257 R18: the status check and both writes share the task lock.
     with store.lock_task(args.id):
         runtime = store.load_runtime(args.id)
-        if merge_task_runtime(task_def, runtime)["status"] == "done":
+        status = merge_task_runtime(task_def, runtime)["status"]
+        if status in TASK_SETTLED_STATUSES:
             error_exit(
-                f"Cannot block task {args.id}: status is 'done'.", use_json=args.json
+                f"Cannot block task {args.id}: status is '{status}'.", use_json=args.json
             )
 
         current_spec = read_text_or_exit(
@@ -36808,11 +36844,15 @@ def _sleep_secs(seconds: float) -> None:
 
 
 def cmd_spec_close(args: argparse.Namespace) -> None:
-    """Close a spec (all tasks must be done)."""
+    """Close a spec (all tasks must be done), or retire it with --retire."""
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+    retire = getattr(args, "retire", None)
+    by = getattr(args, "by", None) or []
+    if by and not retire:
+        error_exit("--by requires --retire", use_json=args.json)
 
     flow_dir = get_flow_dir()
     # fn-52.10: casefold → validate → expand (handles uppercase tracker handles).
@@ -36821,6 +36861,10 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 
     if not spec_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
+    if retire and load_json_or_exit(
+        spec_path, f"Spec {args.id}", use_json=args.json
+    ).get("status") == "done":
+        error_exit(f"Spec {args.id} is already closed", use_json=args.json)
 
     # Check all tasks are done (with merged runtime state)
     tasks_dir = flow_dir / TASKS_DIR
@@ -36838,14 +36882,34 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
         task_data = load_task_with_state(task_id, use_json=args.json)
         definition = load_task_definition(task_id, use_json=args.json)
         final_tasks.append((task_file, definition, task_data["status"]))
-        if task_data["status"] != "done":
+        if task_data["status"] not in TASK_SETTLED_STATUSES:
             incomplete.append(f"{task_data['id']} ({task_data['status']})")
 
-    if incomplete:
+    if incomplete and not retire:
         error_exit(
             f"Cannot close spec: incomplete tasks - {', '.join(incomplete)}",
             use_json=args.json,
         )
+
+    if retire:
+        # Settle never-run tasks as `retired`, never `done`: they were not
+        # implemented. The runtime write shares the task lock with start/done,
+        # so a task finished meanwhile keeps its `done`.
+        store = get_state_store()
+        for index, (task_file, definition, status) in enumerate(final_tasks):
+            if status in TASK_SETTLED_STATUSES:
+                continue
+            with store.lock_task(task_file.stem):
+                runtime = store.load_runtime(task_file.stem)
+                if runtime is not None and runtime.get("status") == "done":
+                    status = "done"
+                else:
+                    status = "retired"
+                    store.save_runtime(
+                        task_file.stem,
+                        {**(runtime or {}), "status": status, "updated_at": now_iso()},
+                    )
+            final_tasks[index] = (task_file, definition, status)
 
     with _review_sidecar_lock(flow_dir, args.id):
         spec_data = load_json_or_exit(spec_path, f"Spec {args.id}", use_json=args.json)
@@ -36860,16 +36924,25 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
                 modified_paths.append(task_file)
 
         spec_data["status"] = "done"
+        if retire:
+            spec_data["retired"] = {"reason": retire, "by": by}
+            # The retirement is the excusal: no completion review applies to
+            # work that was never built here. A recorded `ship` stays.
+            if not completion_review_satisfied(spec_data.get("completion_review_status")):
+                spec_data["completion_review_status"] = "not_required"
+                spec_data["completion_reviewed_at"] = now_iso()
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_path, spec_data)
 
+    message = f"Spec {args.id} {spec_status_label(spec_data) if retire else 'closed'}"
     if args.json:
-        json_output(
-            {"id": args.id, "status": "done", "message": f"Spec {args.id} closed",
-             "modified_paths": [str(path) for path in modified_paths]}
-        )
+        payload = {"id": args.id, "status": "done", "message": message,
+                   "modified_paths": [str(path) for path in modified_paths]}
+        if retire:
+            payload["retired"] = spec_data["retired"]
+        json_output(payload)
     else:
-        print(f"Spec {args.id} closed")
+        print(message)
 
     for path in modified_paths:
         print_tracked_write_advisory(path)
@@ -37300,7 +37373,7 @@ def validate_epic(
     # Check epic done status consistency
     if epic_data["status"] == "done":
         for task_id, task in tasks.items():
-            if task["status"] != "done":
+            if task["status"] not in TASK_SETTLED_STATUSES:
                 finding = f"Epic marked done but task {task_id} is {task['status']}"
                 # fn-192 R1/R2: task status is runtime-only and never travels
                 # with the repo, so on a fresh clone every done spec would
@@ -56281,6 +56354,17 @@ def main() -> None:
         p_close.add_argument(
             "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
         )
+        p_close.add_argument(
+            "--retire",
+            choices=SPEC_RETIRE_REASONS,
+            help=f"Close the {noun} without its own implementation; never-run tasks read retired",
+        )
+        p_close.add_argument(
+            "--by",
+            action="append",
+            metavar="SPEC_OR_PR",
+            help="What replaced or delivered it (repeatable; needs --retire)",
+        )
         p_close.add_argument("--json", action="store_true", help="JSON output")
         p_close.set_defaults(func=cmd_spec_close)
 
@@ -56609,7 +56693,7 @@ def main() -> None:
     p_tasks.add_argument("--spec", help="Filter by spec ID (e.g., fn-1, fn-1-add-auth)")
     p_tasks.add_argument(
         "--status",
-        choices=["todo", "in_progress", "blocked", "done"],
+        choices=TASK_STATUS,
         help="Filter by status",
     )
     p_tasks.add_argument("--json", action="store_true", help="JSON output")

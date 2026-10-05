@@ -219,6 +219,94 @@ class SpecCloseReopenTests(unittest.TestCase):
         self.call("spec_close", id=self.spec_id)
         self.assertEqual(self.status(), "done")
 
+    def retire(self, reason, by=None):
+        return self.call("spec_close", id=self.spec_id, retire=reason, by=by)
+
+    def stored(self):
+        return json.loads(self.spec_path.read_text(encoding="utf-8"))
+
+    def next_unit(self):
+        return self.call("next", specs_file=None, require_plan_review=False,
+                         require_completion_review=True)
+
+    def test_retire_records_why_and_settles_never_run_tasks(self):
+        built, never_run = self.create("Built"), self.create("Never run")
+        self.flow.save_task_runtime(built, {"status": "done"})
+        result = self.retire("superseded", ["fn-99-successor", "#42"])
+        retired = {"reason": "superseded", "by": ["fn-99-successor", "#42"]}
+        self.assertEqual(result["retired"], retired)
+        stored = self.stored()
+        self.assertEqual((stored["status"], stored["retired"]), ("done", retired))
+        self.assertEqual(stored["completion_review_status"], "not_required")
+        tasks = {t["id"]: t["status"] for t in self.call("show", id=self.spec_id)["tasks"]}
+        self.assertEqual(tasks, {built: "done", never_run: "retired"})
+        committed = self.repo / ".flow/tasks" / f"{never_run}.json"
+        self.assertEqual(json.loads(committed.read_text(encoding="utf-8"))["status"], "retired")
+        self.assertTrue(self.call("validate", spec=self.spec_id, epic=None, all=False)["valid"])
+        ready = self.call("ready", spec=self.spec_id, epic=None, all=False, admit=False,
+                          in_flight="", cap=3)
+        self.assertEqual((ready["ready"], ready["in_progress"], ready["blocked"]), ([], [], []))
+        self.assertEqual(self.next_unit()["status"], "none")
+        out = io.StringIO()
+        with redirect_stdout(out), self.assertRaises(SystemExit):
+            self.flow.cmd_start(argparse.Namespace(id=never_run, force=False, note=None, json=True))
+        self.assertIn("status is 'retired'", json.loads(out.getvalue())["error"])
+
+    def test_retire_task_less_spec_stops_next(self):
+        self.assertEqual(self.next_unit()["status"], "plan")
+        self.retire("moot")
+        self.assertEqual(self.next_unit()["status"], "none")
+
+    def test_retire_refusals(self):
+        def refused(**kwargs):
+            out = io.StringIO()
+            with redirect_stdout(out), self.assertRaises(SystemExit) as raised:
+                self.flow.cmd_spec_close(argparse.Namespace(json=True, id=self.spec_id, **kwargs))
+            self.assertNotEqual(raised.exception.code, 0)
+            return json.loads(out.getvalue())["error"]
+
+        self.assertIn("--by requires --retire", refused(retire=None, by=["fn-99-successor"]))
+        cli = subprocess.run(
+            [sys.executable, str(SCRIPTS / "flowctl.py"), "spec", "close", self.spec_id,
+             "--retire", "abandoned"], capture_output=True, text=True,
+        )
+        self.assertEqual(cli.returncode, 2)
+        for reason in ("superseded", "moot", "delivered-elsewhere"):
+            self.assertIn(reason, cli.stderr)
+        self.assertEqual(self.status(), "open")
+        self.closed()
+        self.assertIn("already closed", refused(retire="moot", by=None))
+        self.assertNotIn("retired", self.stored())
+
+    def test_reopening_a_retired_spec_drops_the_retirement(self):
+        self.retire("moot")
+        self.create("Revived")
+        stored = self.stored()
+        self.assertEqual(stored["status"], "open")
+        self.assertNotIn("retired", stored)
+        self.assertEqual(stored["completion_review_status"], "unknown")
+
+    def test_retired_spec_reads_retired_where_its_end_state_shows(self):
+        self.create("Never run")
+        self.git("add", ".flow")
+        self.git("commit", "-qm", "Planned spec")
+        self.retire("delivered-elsewhere", ["#7"])
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.flow.cmd_show(argparse.Namespace(id=self.spec_id, json=False))
+            self.flow.cmd_specs(argparse.Namespace(json=False))
+            self.flow.cmd_list(argparse.Namespace(json=False))
+        text = out.getvalue()
+        self.assertIn("Status: retired: delivered-elsewhere by #7", text)
+        self.assertEqual(text.count(f"[retired: delivered-elsewhere by #7] {self.spec_id}"), 2)
+        retired = {"reason": "delivered-elsewhere", "by": ["#7"]}
+        self.assertEqual(self.call("show", id=self.spec_id)["retired"], retired)
+        self.assertEqual(self.call("specs")["specs"][0]["retired"], retired)
+        self.assertEqual(self.call("list")["specs"][0]["retired"], retired)
+        exported = self.call("spec_export_cognitive_aid", id=self.spec_id, base="HEAD")
+        self.assertEqual(exported["spec"]["retired"], retired)
+        self.assertEqual(exported["tasks_summary"]["open"], 0)
+
     def test_r3_no_task_change_keeps_closed_spec_unchanged(self):
         self.closed()
         before = self.spec_path.read_bytes()
