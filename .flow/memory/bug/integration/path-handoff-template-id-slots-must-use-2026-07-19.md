@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: alias-filled template points delegate at nonexistent .flow/tasks/<alias>.md
 root_cause: flowctl id namespace resolves aliases; the filesystem path namespace does not
 resolution_type: fix
-related_to: [bug/integration/byte-for-byte-spec-contract-branch-2026-07-01, bug/integration/rp-builder-file-slices-cause-false-2026-06-10, bug/integration/spec-named-config-keys-must-be-checked-2026-07-15, bug/integration/summary-sinks-for-repeatable-mixed-2026-07-19]
+related_to: [bug/integration/byte-for-byte-spec-contract-branch-2026-07-01, bug/integration/spec-named-config-keys-must-be-checked-2026-07-15, bug/integration/summary-sinks-for-repeatable-mixed-2026-07-19]
 ---
 
 ## Problem

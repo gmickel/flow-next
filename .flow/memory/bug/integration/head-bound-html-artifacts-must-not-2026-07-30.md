@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: Committed PR lens advanced HEAD beyond the cognitive aid it presented as current
 root_cause: A head-bound derived artifact was committed to the same branch after selecting its input
 resolution_type: fix
-related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-fakes-must-enforce-lifecycle-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/rp-builder-file-slices-cause-false-2026-06-10, bug/integration/tracker-ownership-rewrites-require-2026-07-29]
+related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-fakes-must-enforce-lifecycle-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/tracker-ownership-rewrites-require-2026-07-29]
 ---
 
 ## Problem

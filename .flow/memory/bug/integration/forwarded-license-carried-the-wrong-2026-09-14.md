@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: Bridged child received single-commit-worker prose after a checkpoint brief; invocation implementer override unreachable from the worker; stage model read from self-report
 root_cause: Verbatim pass-through of prose written for another holder; tier resolution moved into a fresh-context agent without checking which precedence inputs it can observe
 resolution_type: fix
-related_to: [bug/build-errors/implementer-brief-widened-never-list-2026-09-14, bug/build-errors/delegating-cli-wrapper-inherits-2026-08-30]
+related_to: [bug/build-errors/delegating-cli-wrapper-inherits-2026-08-30]
 ---
 
 ## Problem
@@ -22,4 +22,4 @@ Treating "pass the license through verbatim" as sufficient. Prose written for on
 `plugins/flow-next/skills/flow-next-work/references/no-plan-route.md`: the license names "the owner" as the only committer and defers the commit convention to the owner's path. `plugins/flow-next/skills/flow-next-work/phases.md` 3c and the SECTION3C heredoc in `scripts/sync-codex.sh`: optional `IMPLEMENTER: <model> at <effort>` dispatch line, consumed first by worker Phase 1b. `plugins/flow-next/agents/worker.md` Phase 1b: `model:` comes from the bridge command line the worker issued; only `delegated:` comes from the digest.
 
 ## Prevention
-When prose is forwarded to a second holder, diff every clause that names an actor or a convention against the receiving context's contract (same discipline as G3's clause-by-clause never-list check). When a resolution step moves into a fresh-context agent, enumerate each precedence rung and confirm the agent can observe it; a rung it cannot see needs a dispatch field. A stage-line field needs a named producer that is evidence, never a self-report.
+When prose is forwarded to a second holder, diff every clause that names an actor or a convention against the receiving context's contract, clause by clause. When a resolution step moves into a fresh-context agent, enumerate each precedence rung and confirm the agent can observe it; a rung it cannot see needs a dispatch field. A stage-line field needs a named producer that is evidence, never a self-report.

@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: R1 named snake_case keys that never shipped; codex review recommended as cross-family on GPT-writer hosts
 root_cause: Spec authored without checking get_default_config(); cross-family framed host-relative instead of writer-relative
 resolution_type: fix
-related_to: [bug/integration/byte-for-byte-spec-contract-branch-2026-07-01, bug/integration/rp-builder-file-slices-cause-false-2026-06-10]
+related_to: [bug/integration/byte-for-byte-spec-contract-branch-2026-07-01]
 ---
 
 ## Problem

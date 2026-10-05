@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: "Review found stale route, Jira version, and GitHub relation claims after the primary ownership rewrite"
 root_cause: Only primary ownership sections were rewritten; adjacent discovery and provider-fidelity claims were not cross-checked against implementation
 resolution_type: fix
-related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-facade-guards-must-cover-retro-2026-07-29, bug/integration/caller-fakes-must-enforce-lifecycle-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/ceremony-validation-must-read-persisted-2026-06-28, bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/markerstruct-field-semantics-must-2026-06-27, bug/integration/rp-builder-file-slices-cause-false-2026-06-10, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
+related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-facade-guards-must-cover-retro-2026-07-29, bug/integration/caller-fakes-must-enforce-lifecycle-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/ceremony-validation-must-read-persisted-2026-06-28, bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/markerstruct-field-semantics-must-2026-06-27, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
 ---
 
 ## Problem

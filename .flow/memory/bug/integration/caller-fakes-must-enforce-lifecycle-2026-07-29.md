@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: End-to-end caller tests passed with incomplete facade argv and vacuous streams
 root_cause: The fake logged argv but did not enforce production input or output contracts
 resolution_type: fix
-related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-facade-guards-must-cover-retro-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/ceremony-validation-must-read-persisted-2026-06-28, bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/markerstruct-field-semantics-must-2026-06-27, bug/integration/rp-builder-file-slices-cause-false-2026-06-10, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
+related_to: [bug/integration/adding-a-tracker-to-tracker-sync-sweep-2026-06-28, bug/integration/caller-facade-guards-must-cover-retro-2026-07-29, bug/integration/caller-oracle-must-preserve-historical-2026-07-29, bug/integration/ceremony-validation-must-read-persisted-2026-06-28, bug/integration/gh-api-f-stringifies-numeric-body-2026-06-17, bug/integration/markerstruct-field-semantics-must-2026-06-27, bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
 ---
 
 ## Problem

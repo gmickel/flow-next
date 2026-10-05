@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: "Review NEEDS_WORK: ineligible steering still listed rp; eligible wording drifted"
 root_cause: Inline conditional annotation on a shared line instead of explicit eligible/ineligible variants
 resolution_type: fix
-related_to: [bug/integration/rp-builder-file-slices-cause-false-2026-06-10]
+related_to: []
 ---
 
 ## Problem
