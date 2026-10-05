@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-283-review-failures-name-their-cause-a",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-10-05T13:26:28.686214Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-283-review-failures-name-their-cause-a",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-283-review-failures-name-their-cause-a.md",
+  "status": "open",
+  "title": "Review failures name their cause, a rewritten spec loses its plan SHIP, land reports a queued merge",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-05T13:26:29.006359Z"
+}
