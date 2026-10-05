@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-283-review-failures-name-their-cause-a",
   "impl_review_rounds": {
-    "fn-283-review-failures-name-their-cause-a.1": 1
+    "fn-283-review-failures-name-their-cause-a.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -68,9 +68,63 @@
       "task": "fn-283-review-failures-name-their-cause-a.1",
       "timestamp": "2026-10-05T13:50:45.225061Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "3aaa7bfd4381be717c9aa9cdc46e51f0de2f5b2543a4e97cb0b28240e2d577be",
+      "backend": "codex",
+      "base_sha": "049ab77bd3d9a9e9bd16790ec2c0736ef0089b49",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "classification": "introduced",
+            "findingId": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-366017f9a3025b22371174d362df4f6d",
+            "classification": "introduced",
+            "findingId": "finding-366017f9a3025b22371174d362df4f6d",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "20f57eb2795fdf42a1f9df56a8056c3fe3474952",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1155,
+      "output_sha256": "fad07c935bcee701b33a14408f0e051f28b7b54a80096d0e58d89624cd6d610d",
+      "reservation_id": "590ebf50641149c390516de527d32492",
+      "round_consumed": true,
+      "scope": "impl:fn-283-review-failures-name-their-cause-a.1",
+      "superseded_by": null,
+      "task": "fn-283-review-failures-name-their-cause-a.1",
+      "timestamp": "2026-10-05T13:53:55.119240Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-283-review-failures-name-their-cause-a.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -90,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-05T13:50:45.227145Z"
+  "updated_at": "2026-10-05T13:53:55.121346Z"
 }
