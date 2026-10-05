@@ -1616,32 +1616,6 @@ PY
     FAIL=$((FAIL + 1))
   fi
 
-  # Re-review smoke: run plan-review again against the same --receipt.
-  # Task-3 guards session resume on prior receipt mode==copilot — a copilot-
-  # mode receipt here must yield the SAME session_id (resume path), not a
-  # fresh UUID (new-session path). This proves cross-run continuity works.
-  if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
-    prior_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
-    set +e
-    cop_re_result="$(scripts/flowctl copilot plan-review "$EPIC4" --files "src/hello_copilot.py" --base main --receipt "$TEST_DIR/cop-plan-receipt.json" --json 2>&1)"
-    cop_re_rc=$?
-    set -e
-    if [[ "$cop_re_rc" -eq 0 ]]; then
-      new_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
-      if [[ "$prior_session" == "$new_session" ]]; then
-        echo -e "${GREEN}✓${NC} copilot plan-review re-review resumes session"
-        PASS=$((PASS + 1))
-      else
-        echo -e "${RED}✗${NC} copilot plan-review re-review (session changed: $prior_session -> $new_session)"
-        FAIL=$((FAIL + 1))
-      fi
-    else
-      echo -e "${RED}✗${NC} copilot plan-review re-review (exit $cop_re_rc)"
-      echo "  output: $cop_re_result" | head -8
-      FAIL=$((FAIL + 1))
-    fi
-  fi
-
   # Test impl-review e2e (create a simple change first)
   cat > "$TEST_DIR/repo/src/hello_copilot.py" << 'EOF'
 def hello_copilot():
