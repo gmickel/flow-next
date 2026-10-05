@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.0.0] - 2026-10-05
+
+Every reviewer now gives your change the same review. A small change in one area gets one reviewer and anything larger gets three (correctness, contracts, integration), merged into one fix pass, whether the review runs on Codex, Claude, Copilot, Cursor or the host and whichever harness you run flow-next in. Switching reviewer no longer changes how closely a change is checked: before this release only Codex and host reviews sized the panel, and the other three always sent one reviewer.
+
+Reviews are also more honest about what they covered. A one-task spec now has the project's standing criteria checked by the review that already runs. A stuck review loop reviews your latest fix before it gives up. A reviewer that runs out of credits reports the provider's own message instead of looking like a broken setup, and a spec you refine after its plan review goes back through plan review before work picks it up. Specs that end without being built can close as retired, with the reason on record.
+
+**What changes when you upgrade.** RepoPrompt support is gone: the `rp` reviewer, the `flowctl rp` commands, `/flow-next:export-context` and plan review's export mode. A project that still names `rp` or `export` gets a one-line notice and continues with no reviewer until you pick one, for example `flowctl config set review.backend codex`. `review.backend` itself stays (7.1.0 said it would go; it doesn't). Scripts that call `flowctl review-rounds record` must pass `--backend`, which no longer defaults to `rp`. A plan review can now read `stale`, so anything that reads `plan_review_status` should treat it like `needs_work`. Re-run the Codex, OpenCode or Cursor installer to drop the removed skill.
+
 ### Added
 
 - **Close a spec that ends without being built.** A spec that another spec superseded, that became moot, or that shipped under other work can now close truthfully: `flowctl spec close <id> --retire superseded|moot|delivered-elsewhere [--by <spec-or-PR>]` records why it ended and what replaced it. Its never-run tasks read `retired` instead of `done`, completion review records `not_required` so every close and merge gate accepts it, `flowctl next` stops routing to it, and land and make-pr count a pull request that retires a task-less spec as carrying that spec. `show`, `specs` and `list` print the end state as `retired: <reason> by <refs>`. The won't-do close in the flow-next skill uses it. Thanks @sn-furali (#503).

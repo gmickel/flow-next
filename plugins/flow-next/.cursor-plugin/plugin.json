@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "7.1.2",
+  "version": "8.0.0",
   "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts.",
   "author": {
     "name": "Gordon Mickel",
