@@ -203,10 +203,11 @@ Each row also answers "was this verdict measured, and against what?":
   placeholder, not a resolved model - absent beats a placeholder), while an
   explicit `auto` pin records honestly. On a codex resume the model is the
   session's original but the effort is the one the resume argv pinned.
-  Written only on the in-process dispatch paths, which are the only place the
-  fact exists: the host `review-rounds record` CLI carries no `--model`
-  flag, by design - a narrating agent must not be able to claim a model. Effort
-  is absent for backends that do not take one.
+  The in-process dispatch paths write it from the resolution they sent. Host
+  review has no dispatch inside flowctl, so `review-rounds record --model`
+  (8.0, #513) records the model the host says its reviewer ran: on host rows
+  it is the host's report, not a fact flowctl observed, and a host that passes
+  nothing leaves it absent. Effort is absent for backends that do not take one.
 
 On every one of these fields, **absence means unknown - never zero**: rows
 written by older versions carry none of them and read back untouched.

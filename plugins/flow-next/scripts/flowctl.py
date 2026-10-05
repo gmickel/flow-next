@@ -31021,7 +31021,7 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
     # the preconditions behind a policy-excused `not_required`. Reset it via
     # the LOCKED helper (lock-free precheck outside, sidecar lock +
     # re-verify + write inside — the task-create shape), NEVER folded into
-    # the unlocked plan JSON stamp above: a concurrent reviewer publishing
+    # the plan JSON write above (its own sidecar-lock section): a concurrent reviewer publishing
     # `ship` between our read and the plan write must not be clobbered to
     # `unknown`. Only `not_required` is touched; real verdicts
     # (ship/needs_work/needs_human) are never reset here.
