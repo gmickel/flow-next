@@ -230,6 +230,17 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
 
+    def test_renamed_retired_spec_is_not_a_new_close(self):
+        record = json.loads((self.flow / "specs" / f"{self.spec(24, 'open')}.json").read_text(encoding="utf-8"))
+        record.update(status="done", retired={"reason": "moot", "by": []})
+        (self.flow / "specs" / "fn-24-spec.json").write_text(json.dumps(record), encoding="utf-8")
+        base = self.commit()
+        record["id"] = "fn-24-renamed"
+        (self.flow / "specs" / "fn-24-spec.json").rename(self.flow / "specs" / "fn-24-renamed.json")
+        (self.flow / "specs" / "fn-24-renamed.json").write_text(json.dumps(record), encoding="utf-8")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+
     def test_record_only_close_reads_only_the_head_record(self):
         sid = self.spec(17, "open")
         self.task(sid, "done")

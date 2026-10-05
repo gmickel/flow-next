@@ -80,6 +80,7 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 
 | # | flow condition | `prEvidence` | normalized | Rationale |
 |---|---|---|---|---|
+| 0 | spec `done` with a `retired` record (`flowctl spec close --retire`) | `merged` | `wontfix` (cancelled-family) | never built here, so never completed: the request is surfaced, never auto-applied |
 | 1 | spec `done`, no completion-review configured | `merged` | **`done`** | terminal, no review gate, **merge-confirmed** — a merge is a merge |
 | 2 | spec `done`, `completion_review_status` in the satisfying set (`ship` · `not_required`) | `merged` | **`verified`** (`ship`) / **`done`** (`not_required`) | requirement satisfied **and** PR merged — terminal. The verified-vs-done label selector stays `ship`-only: only a review that ran can claim `verified`; policy-excused `not_required` is terminal `done` |
 | 3 | spec `done`, `completion_review_status` outside the satisfying set (`unknown` · `needs_work` · `needs_human` · absent/unrecognized) | `merged` | `in-review` | PR merged but a configured completion review is neither shipped nor excused — stay in review until satisfied |

@@ -34250,12 +34250,10 @@ def specs_closed_in_range(
         except ValueError:
             return False
 
-    if not touched_tasks:
-        # Only a retirement makes a record-only close count; read HEAD alone,
-        # leniently, so any other record-only change costs that one read.
-        spec_paths = [path for path in spec_paths if retired_at_head(path)]
-        if not spec_paths:
-            return list(closed)
+    # Only a retirement makes a record-only close count; read HEAD alone,
+    # leniently, so any other record-only change costs that one read.
+    if not touched_tasks and not any(retired_at_head(path) for path in spec_paths):
+        return list(closed)
 
     # Include deleted paths: a rename must compare identities, not filenames.
     base_specs = [record(base_commit, path) for path in spec_paths]
@@ -36365,7 +36363,7 @@ def cmd_next(args: argparse.Namespace) -> None:
         if (
             args.require_completion_review
             and tasks
-            and all(t.get("status") == "done" for t in tasks.values())
+            and all(t.get("status") in TASK_SETTLED_STATUSES for t in tasks.values())
             and not completion_review_satisfied(
                 epic_data.get("completion_review_status")
             )

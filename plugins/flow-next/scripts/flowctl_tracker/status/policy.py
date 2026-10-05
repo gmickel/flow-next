@@ -273,6 +273,10 @@ def flow_to_normalized(spec_data: dict, pr_evidence: str,
     # Rows 1–3: merged
     if pr_evidence == "merged":
         if spec_status == "done":
+            if isinstance(spec_data.get("retired"), dict):
+                # A retired spec was never built: ask for the cancelled
+                # family, which `decide` surfaces and never auto-applies.
+                return "cancelled"
             if not completion_review_configured:
                 return "done"  # row 1
             if review in COMPLETION_REVIEW_SATISFYING:

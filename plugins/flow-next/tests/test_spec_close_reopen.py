@@ -279,12 +279,17 @@ class SpecCloseReopenTests(unittest.TestCase):
         self.assertNotIn("retired", self.stored())
 
     def test_reopening_a_retired_spec_drops_the_retirement(self):
+        self.create("Never run")
         self.retire("moot")
-        self.create("Revived")
+        task = self.create("Revived")
         stored = self.stored()
         self.assertEqual(stored["status"], "open")
         self.assertNotIn("retired", stored)
         self.assertEqual(stored["completion_review_status"], "unknown")
+        self.call("start", id=task, force=False, note=None)
+        self.call("done", id=task, force=False, summary="Revived",
+                  summary_file=None, evidence=None, evidence_json=None)
+        self.assertEqual(self.next_unit()["status"], "completion_review")
 
     def test_retired_spec_reads_retired_where_its_end_state_shows(self):
         self.create("Never run")
