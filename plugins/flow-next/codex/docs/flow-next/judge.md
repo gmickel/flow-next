@@ -160,6 +160,8 @@ For a live spec, code reads lifecycle facts in this order:
 1. An observed PR routes to the existing PR tail. The live probe preserves open,
    merged, closed, and failed observations; a failed probe never means no PR.
 2. Existing tasks all done routes to make-pr, after the applicable QA decision.
+   Otherwise a `stale` plan review (the spec changed after its SHIP) routes to
+   `plan_review`, whatever the task count.
 3. An intentional plan with tasks, or one implicit owner under `no_plan: true`,
    continues work on the recorded route, preserving resume admission.
 4. A ready spec with no tasks uses a recorded `no_plan: true` directly.

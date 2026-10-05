@@ -38,7 +38,7 @@ LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<url|-> reason="<one line>"
 ```
 
 Keep the vocabulary `NEEDS_HUMAN`, `BLOCKED`, `FIXING_CI`, `RESOLVING`,
-`AWAITING_REVIEW`, `MERGED`, `RELEASED`, `NO_WORK`; never emit `RELEASED`.
+`AWAITING_REVIEW`, `QUEUED`, `MERGED`, `RELEASED`, `NO_WORK`; never emit `RELEASED`.
 Use `prs=1` for the named, resolved PR, otherwise `prs=0 pr=-`.
 Report the observed head, relevant check or branch, and merge commit when known;
 escape quotes and newlines in the reason so the terminal line stays parseable.

@@ -774,6 +774,39 @@ class ExcusedReviewInvalidationTestCase(_TaskCreateFilesBase):
         self.assertEqual(self._read_status(), "ship")
         self.assertNotIn("completion_review_reset", result)
 
+    def test_set_plan_marks_only_a_changed_ship_plan_review_stale(self) -> None:
+        """#514: a SHIP that reviewed an older body reads stale; nothing else moves."""
+        md = self.flowctl.get_flow_dir() / "specs" / f"{self.spec_id}.md"
+        cases = [
+            ("ship", "edit", "stale"),
+            ("ship", "same", "ship"),  # line endings only: the artifact is unchanged
+            ("needs_work", "edit", "needs_work"),
+            ("unknown", "edit", "unknown"),
+            ("stale", "edit", "stale"),
+        ]
+        for status, change, expected in cases:
+            with self.subTest(status=status, change=change):
+                argv = ["flowctl", "spec", "set-plan-review-status", self.spec_id,
+                        "--status", status, "--json"]
+                with mock.patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()):
+                    self.flowctl.main()
+                body = md.read_text(encoding="utf-8")
+                content = (body + f"\n- R9: {status}\n" if change == "edit"
+                           else body.replace("\n", "\r\n") + "\n")
+                plan = self.tmpdir / f"plan-{status}-{change}.md"
+                plan.write_bytes(content.encode("utf-8"))  # no newline translation
+                result = self._call(
+                    func=self.flowctl.cmd_spec_set_plan, id=self.spec_id, file=plan
+                )
+                data = json.loads(self.flowctl.find_spec_json_path(
+                    self.flowctl.get_flow_dir(), self.spec_id
+                ).read_text(encoding="utf-8"))
+                self.assertEqual(data["plan_review_status"], expected)
+                self.assertEqual(
+                    result.get("plan_review_stale"),
+                    True if expected == "stale" and status == "ship" else None,
+                )
+
     def test_task_set_spec_file_resets_not_required_to_unknown(self) -> None:
         """Round-3 P1: set-spec --file rewrites satisfies/acceptance/
         description — the same review surface task create re-arms on."""

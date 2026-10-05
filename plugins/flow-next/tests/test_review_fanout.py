@@ -847,6 +847,30 @@ class TestReviewFanout(unittest.TestCase):
         metas = list((self.root / ".flow" / "review-fanout").glob("*/meta.json"))
         self.assertEqual(len(metas), 1)
 
+    def test_all_fail_records_the_cli_message(self) -> None:
+        # #515: a codex usage limit names itself only in the --json stream.
+        limit = "Your workspace is out of credits. Add credits to continue."
+        stream = "\n".join((
+            json.dumps({"type": "thread.started", "thread_id": "t1"}),
+            json.dumps({"type": "error", "message": limit}),
+            json.dumps({"type": "turn.failed", "error": {"message": limit}}),
+        ))
+
+        def fake(prompt, *, session_id, repo_root, spec, resolution_out, args,
+                 resume_only=False):
+            return stream, None, 1, ""
+
+        code, payload, err = self._dispatch(fake)
+        self.assertNotEqual(code, 0)
+        self.assertIn(f"CLI message: {limit}", (payload.get("error") or "") + err)
+        self.assertEqual(self._attempts()[-1].get("failure_message"), limit)
+        draws = list((self.root / ".flow" / "review-fanout").glob("*/correctness.json"))
+        self.assertEqual(len(draws), 1)
+        draw = json.loads(draws[0].read_text(encoding="utf-8"))
+        self.assertEqual(
+            (draw["failure_class"], draw["failure_message"]), ("nonzero_exit", limit)
+        )
+
     # 7 -----------------------------------------------------------------
 
     def test_draws_receipt_schema(self) -> None:

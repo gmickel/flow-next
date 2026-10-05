@@ -82,6 +82,7 @@ class MergeDestinationTest(unittest.TestCase):
                  ("AWAITING_REVIEW", "0", "OPEN", "", "1", "DEFERRED_TO_LAND", "0"),
                  ("RESOLVING", "1", "OPEN", "", "0", "ADVANCED", "1"),
                  ("FIXING_CI", "0", "OPEN", "", "0", "DEFERRED_TO_LAND", "1"),
+                 ("QUEUED", "0", "OPEN", "", "0", "DEFERRED_TO_LAND", "1"),
                  ("MERGED", "0", "MERGED", "abc", "0", "ADVANCED", "0"),
                  ("MERGED", "0", "MERGED", "", "0", "NEEDS_HUMAN", "0"),
                  ("AWAITING_REVIEW", "0", "MERGED", "abc", "0", "ADVANCED", "0"),

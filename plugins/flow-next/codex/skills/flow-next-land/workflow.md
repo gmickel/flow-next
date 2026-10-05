@@ -111,6 +111,9 @@ after a successful fresh read proves no open PR targets the branch. The
 explicit `--repo` keeps gh from switching or deleting a local branch.
 After either merge call, re-read the exact PR: only `MERGED` with a merge
 commit confirms success, including after a command error. Never store polling state.
+A PR left open because the merge call added it to a merge queue (the call says so) reports
+`QUEUED`, not a failure: run no post-merge step, and tell the person to run `/flow-next:land <PR>`
+again once it merges, which replays the tracker touchpoint as an already merged PR.
 A moved head refuses the merge: re-read the PR and gates, report `RESOLVING`,
 and do not retry with a substituted SHA. Other refusals report `BLOCKED`.
 

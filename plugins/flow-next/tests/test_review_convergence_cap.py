@@ -920,6 +920,52 @@ class TestDeterministicCap(unittest.TestCase):
                 flowctl._read_review_rounds(data, counter_kind, task_id), 1
             )
 
+    def test_no_verdict_records_and_prints_the_cli_message(self):
+        """#515: the CLI's own last error text rides the row and every failure line."""
+        reg = {"has_sandbox": False, "cli_label": "review-cli", "no_verdict_label": "Reviewer"}
+        limit = "Your workspace is out of credits. Add credits to continue."
+        codex_stream = "\n".join((
+            json.dumps({"type": "error", "message": "earlier"}),
+            json.dumps({"type": "turn.failed", "error": {"message": limit}}),
+            json.dumps({"type": "turn.completed"}),
+        ))
+        cases = [
+            ("codex", codex_stream, 1, limit),
+            ("copilot", "Thinking\nYou've reached your usage limit\n\n", 0,
+             "You've reached your usage limit"),
+            ("claude", "x" * 1000, 0, "x" * flowctl.REVIEW_FAILURE_MESSAGE_MAX_CHARS),
+            ("cursor", "", 7, None),
+        ]
+        for backend, output, exit_code, message in cases:
+            with self.subTest(backend=backend):
+                flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+                    flowctl._finish_backend_exec(
+                        backend=backend, reg=reg, args=mock.Mock(json=False),
+                        receipt_path=None, output=output, stderr="", exit_code=exit_code,
+                        spec_id=self.spec_id, review_kind="plan", review_type="plan",
+                    )
+                row = self._spec_data()["review_attempts"][-1]
+                self.assertEqual(row.get("failure_message"), message)
+                if message:
+                    self.assertIn(f"CLI message: {message}", err.getvalue())
+                else:
+                    self.assertNotIn("CLI message:", err.getvalue())
+
+        for _ in range(flowctl.get_max_review_transport_failures() + 1):
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
+                flowctl._finish_backend_exec(
+                    backend="codex", reg=reg, args=mock.Mock(json=False),
+                    receipt_path=None, output=codex_stream, stderr="", exit_code=1,
+                    spec_id=self.spec_id, review_kind="plan", review_type="plan",
+                )
+        self.assertEqual(ctx.exception.code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)
+        self.assertIn("TRANSPORT_UNHEALTHY", err.getvalue())
+        self.assertIn(f"CLI message: {limit}", err.getvalue())
+
     def test_nonzero_process_with_delivered_verdict_is_not_refunded(self):
         flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
         verdict = flowctl._finish_backend_exec(

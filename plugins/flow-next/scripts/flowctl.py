@@ -9696,6 +9696,7 @@ def build_transport_unhealthy_message(
     count: Any,
     cap: Any,
     failure_classes: Optional[list] = None,
+    failure_message: Optional[str] = None,
 ) -> str:
     """Terminal TRANSPORT_UNHEALTHY text, branched on what actually failed.
 
@@ -9704,7 +9705,8 @@ def build_transport_unhealthy_message(
     always because it inherited host or plugin instructions. Telling that
     operator to "repair the backend/environment" sends them to probe a healthy
     CLI. Transport classes (timeout / nonzero_exit / sandbox / dispatch_*)
-    keep the original advice.
+    keep the original advice. #515: the last attempt's CLI message is printed
+    as written, so a reader can tell an account limit from a broken backend.
     """
     classes = [c for c in (failure_classes or []) if c]
     head = (
@@ -9715,7 +9717,7 @@ def build_transport_unhealthy_message(
     tail = (
         "This is not review non-convergence and does not require "
         "review-rounds reset."
-    )
+    ) + _failure_message_suffix(failure_message)
     if classes and all(c == "missing_verdict" for c in classes):
         return (
             head
@@ -10497,6 +10499,7 @@ def _record_review_attempt_locked(
     output: str,
     verdict: Optional[str] = None,
     failure_class: Optional[str] = None,
+    failure_message: Optional[str] = None,
     task_id: Optional[str] = None,
     review_type: Optional[str] = None,
     use_json: bool = False,
@@ -10746,6 +10749,7 @@ def _record_review_attempt_locked(
             "backend": backend,
             "verdict": verdict,
             "failure_class": failure_class,
+            "failure_message": failure_message,
             "outcome": outcome,
             "reset_rounds_on_ship": bool(reset_rounds_on_ship),
             "superseded_by": (
@@ -10914,6 +10918,8 @@ def _record_review_attempt_locked(
         row["tool_calls"] = int(tool_calls)
     if reviewed_base_sha:
         row["base_sha"] = reviewed_base_sha
+    if refunded and failure_message:
+        row["failure_message"] = failure_message
     # fn-193 (#338): the model that ACTUALLY ran, taken from the same
     # `_receipt_model_effort` values the receipt records (so a ladder downgrade
     # or a codex resume carry lands here honestly), or the model a host review
@@ -11051,6 +11057,7 @@ def _record_review_attempt_locked(
             "outcome": outcome,
             "verdict": verdict,
             "failure_class": failure_class if refunded else None,
+            "failure_message": failure_message if refunded else None,
             "consecutive_transport_failures": consecutive,
             # fn-187 (#331): what the streak was MADE of, so the terminal can
             # name the real cause instead of blaming the transport.
@@ -11643,6 +11650,7 @@ def _enforce_and_increment_review_cap_locked(
                 output=str(journal.get("response") or ""),
                 verdict=journal.get("verdict") if isinstance(journal.get("verdict"), str) else None,
                 failure_class=(journal.get("failure_class") if isinstance(journal.get("failure_class"), str) else None),
+                failure_message=(journal.get("failure_message") if isinstance(journal.get("failure_message"), str) else None),
                 task_id=(journal.get("task_id") if isinstance(journal.get("task_id"), str) else task_id),
                 review_type=(journal.get("review_type") if isinstance(journal.get("review_type"), str) else None),
                 use_json=use_json,
@@ -23190,6 +23198,7 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
         state = {
             "spec_body": body, "status": spec["status"],
             "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
+            "plan_review_status": spec.get("plan_review_status"),
             "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
             "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
             "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}"
@@ -23238,6 +23247,10 @@ def judge_route_lifecycle(state: dict) -> dict:
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
+    if state.get("plan_review_status") == "stale":
+        # #514: the spec changed after its plan SHIP, so its tasks may predate
+        # the criteria; review the plan again before any work.
+        return decision("plan_review", "plan review stale")
     if total:
         if state.get("tasks_blocked", 0) == total - state["tasks_done"]:
             reasons = "; ".join(state.get("blocked_reasons", []))
@@ -30935,20 +30948,38 @@ def _apply_spec_plan_writes(
     content: str,
     spec_json_path: Path,
     spec_data: dict,
-) -> None:
+) -> bool:
     """Write plan markdown then stamp ``updated_at`` on the JSON. Raises; never error_exit.
 
     Shared raising core for ``cmd_spec_set_plan`` and one-shot ``cmd_spec_create``
     (fn-163.1). Two independent writes — not a rollback unit for the granular
     verb. One-shot create wraps this and removes all created paths on any raise.
     Mutates ``spec_data`` in place (sets ``updated_at``).
+
+    #514: a body change under a ``ship`` plan review marks that review
+    ``stale`` (the SHIP reviewed a body that no longer exists), decided under
+    the same sidecar lock every verdict writer holds, so a concurrent verdict
+    is never overwritten. Returns True when it did; any other status, and an
+    unchanged body, is left alone.
     """
     with _review_sidecar_lock(get_flow_dir(), spec_json_path.stem):
         current = load_json(spec_json_path)
+        try:
+            # The plan review artifact's own normalization, so a body this
+            # calls changed is one plan-review will not refuse as unchanged.
+            changed = _normalize_review_artifact_text(
+                spec_md_path.read_text(encoding="utf-8")
+            ) != _normalize_review_artifact_text(content)
+        except (OSError, UnicodeDecodeError):
+            changed = True
         atomic_write(spec_md_path, content)
+        stale = changed and current.get("plan_review_status") == "ship"
+        if stale:
+            current["plan_review_status"] = "stale"
         current["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, current)
         spec_data.update(current)
+    return stale
 
 
 def cmd_spec_set_plan(args: argparse.Namespace) -> None:
@@ -30979,7 +31010,7 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
     # Load before the helper's md write only for the clean error surface on
     # corrupt JSON; write order inside the helper remains md then json.
     spec_data = load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    _apply_spec_plan_writes(
+    plan_review_stale = _apply_spec_plan_writes(
         spec_md_path=spec_md_path,
         content=content,
         spec_json_path=spec_json_path,
@@ -31002,10 +31033,17 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
             "spec_path": str(spec_md_path),
             "message": f"Spec {args.id} markdown updated",
         }
+        if plan_review_stale:
+            payload["plan_review_stale"] = True
         _note_completion_review_reset(review_reset, args.id, payload, use_json=True)
         json_output(payload)
     else:
         print(f"Spec {args.id} markdown updated")
+        if plan_review_stale:
+            print(
+                f"Spec {args.id} plan review status set to stale "
+                "(was ship; spec body changed)"
+            )
         _note_completion_review_reset(review_reset, args.id, None, use_json=False)
 
 
@@ -42515,6 +42553,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         state = judge_route_state({
             "spec_body": find_spec_md_path(flow_dir, spec["id"]).read_text(encoding="utf-8"),
             "status": spec["status"], "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
+            "plan_review_status": spec.get("plan_review_status"),
             "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
             "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
             "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}" for t in tasks if t["status"] == "blocked"],
@@ -44902,6 +44941,7 @@ def _finish_backend_exec(
 
     failure_class = _classify_review_failure(reg, output, stderr, exit_code)
     sandbox_failure = failure_class == "sandbox"
+    failure_message = _review_failure_message(backend, output)
 
     attempt: dict = {}
     if spec_id and review_kind:
@@ -44911,6 +44951,7 @@ def _finish_backend_exec(
             backend=backend,
             output=output,
             failure_class=failure_class,
+            failure_message=failure_message,
             task_id=task_id,
             reviewed_head_sha=reviewed_head_sha,
             reviewed_base_sha=reviewed_base_sha,
@@ -44935,6 +44976,7 @@ def _finish_backend_exec(
                 count,
                 cap,
                 attempt.get("consecutive_failure_classes"),
+                failure_message,
             ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
@@ -44959,7 +45001,11 @@ def _finish_backend_exec(
     if exit_code != 0:
         _clear_stale_review_receipt(receipt_path)
         msg = (stderr or output or f"{reg['cli_label']} failed").strip()
-        error_exit(f"{reg['cli_label']} failed: {msg}", use_json=args.json, code=2)
+        error_exit(
+            f"{reg['cli_label']} failed: {msg}"
+            + _failure_message_suffix(failure_message),
+            use_json=args.json, code=2,
+        )
 
     _clear_stale_review_receipt(receipt_path)
     error_exit(
@@ -44967,7 +45013,8 @@ def _finish_backend_exec(
         f"in output. Expected <verdict>SHIP</verdict>, "
         f"<verdict>NEEDS_WORK</verdict>, <verdict>MAJOR_RETHINK</verdict>, or "
         f"<verdict>NEEDS_HUMAN</verdict>. The reserved review round was "
-        f"refunded and the transport attempt recorded.",
+        f"refunded and the transport attempt recorded."
+        + _failure_message_suffix(failure_message),
         use_json=args.json,
         code=2,
     )
@@ -45717,6 +45764,48 @@ def _review_fanout_append_progress(sidecar_dir: Path, line: str) -> None:
     print(line, file=sys.stderr)
 
 
+REVIEW_FAILURE_MESSAGE_MAX_CHARS = 300
+
+
+def _review_failure_message(backend: str, output: str) -> Optional[str]:
+    """The CLI's own last error text from a run that returned no verdict (#515).
+
+    Codex reports errors as `error` / `turn.failed` events in its
+    `exec --json` stream, so its message is the last such event's; the other
+    backends return text, whose last non-empty line is used. Recorded as
+    written and bounded, never classified: whoever reads it judges it.
+    """
+    message = None
+    for line in (output or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if backend != "codex":
+            message = line
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        text = event.get("message") if event.get("type") == "error" else (
+            event["error"].get("message")
+            if event.get("type") == "turn.failed" and isinstance(event.get("error"), dict)
+            else None
+        )
+        if isinstance(text, str) and text.strip():
+            message = text
+    if not message:
+        return None
+    return " ".join(message.split())[:REVIEW_FAILURE_MESSAGE_MAX_CHARS]
+
+
+def _failure_message_suffix(failure_message: Optional[str]) -> str:
+    """The sentence every no-verdict failure line ends with when the CLI said something."""
+    return f" CLI message: {failure_message}" if failure_message else ""
+
+
 def _classify_review_failure(
     reg: dict, output: str, stderr: str, exit_code: int,
 ) -> str:
@@ -46063,12 +46152,14 @@ def _review_fanout_run_draw(
         review_text = reg["extract_review"](output) or ""
         verdict = parse_codex_verdict(output)
     failed = verdict is None
+    failure_message = None
     if not failed:
         failure_class = None
     elif failure_detail is not None:
         failure_class = "dispatch_exception"
     else:
         failure_class = _classify_review_failure(reg, output, stderr, rc)
+        failure_message = _review_failure_message(backend, output)
     model, effort = _receipt_model_effort(spec, resolution_out)
     review_path = sidecar_dir / f"{axis}.review.md"
     output_path = sidecar_dir / f"{axis}.out.txt"
@@ -46088,6 +46179,7 @@ def _review_fanout_run_draw(
         "verdict": verdict,
         "failed": failed,
         "failure_class": failure_class,
+        "failure_message": failure_message,
         "exit_code": rc,
         "started_at": started_at,
         "finished_at": finished_at,
@@ -46179,8 +46271,12 @@ def _review_fanout_refund_all_failed(
         or results[0].get("failure_class")
         or "missing_verdict"
     )
+    failure_message = primary.get("failure_message") or next(
+        (row["failure_message"] for row in results if row.get("failure_message")), None,
+    )
     joined = "\n".join(
         f"{row['axis']}: {row.get('failure_class') or 'missing_verdict'}"
+        + _failure_message_suffix(row.get("failure_message"))
         for row in results
     )
     if standalone:
@@ -46195,6 +46291,7 @@ def _review_fanout_refund_all_failed(
         backend=args.review_backend,
         output=joined,
         failure_class=failure_class,
+        failure_message=failure_message,
         task_id=task_id,
         review_type="impl",
         use_json=args.json,
@@ -46210,6 +46307,7 @@ def _review_fanout_refund_all_failed(
                 attempt["consecutive_transport_failures"],
                 attempt["transport_failure_cap"],
                 attempt.get("consecutive_failure_classes"),
+                failure_message,
             ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
@@ -46238,6 +46336,7 @@ def _review_fanout_emit_dispatch(
             "verdict": row.get("verdict"),
             "failed": row.get("failed"),
             "failure_class": row.get("failure_class"),
+            "failure_message": row.get("failure_message"),
             "session_id": row.get("session_id"),
             "model": row.get("model"),
             "review_path": row.get("review_path"),
@@ -56252,7 +56351,7 @@ def main() -> None:
         p_set_review.add_argument(
             "--status",
             required=True,
-            choices=["ship", "needs_work", "needs_human", "unknown"],
+            choices=["ship", "needs_work", "needs_human", "unknown", "stale"],
             help="Plan review status",
         )
         p_set_review.add_argument(

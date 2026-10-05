@@ -125,7 +125,9 @@ On any backend, when an unattended loop ends with the reviewer keeping only find
 under working-rules.md's rule, all below Major, print `OVERRIDDEN: <n> declined findings` with
 each finding and both sides' reasons after `VERDICT=NEEDS_WORK`; the caller completes the task on it.
 
-If a review command ends without a verdict (a transport error), retry it once. `ESCALATE:` (other
+If a review command ends without a verdict (a transport error), retry it once, unless its
+`CLI message:` reports a usage, credit or spend limit: a retry fails the same way, so report that
+message and stop. `ESCALATE:` (other
 than the `NEEDS_HUMAN` case above), `TRANSPORT_UNHEALTHY`, `NOT_RETRYABLE:` and other refusals end this review: report the message
 as printed and stop. Never widen the reviewer's sandbox, call the reviewer CLI directly, or reset
 review state to get past one.

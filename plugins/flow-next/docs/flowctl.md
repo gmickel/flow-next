@@ -298,7 +298,12 @@ Pass `--branch` at create time to set `branch_name` in the same call; [`spec set
 
 ### spec set-plan
 
-Overwrite spec markdown from file.
+Overwrite spec markdown from file. When the write changes the body (compared
+the way the plan review artifact normalizes it) and the plan review reads
+`ship`, the status becomes `stale` under the review sidecar lock, reported as
+`plan_review_stale: true`: that SHIP reviewed a body that no longer exists, so
+work and flow run plan-review again first. Any other status, and an unchanged
+body, is left alone.
 
 ```bash
 flowctl spec set-plan fn-1 --file plan.md [--json]
@@ -311,7 +316,7 @@ See [`plugins/flow-next/templates/spec.md`](../templates/spec.md) for the canoni
 Set plan review status and timestamp.
 
 ```bash
-flowctl spec set-plan-review-status fn-1 --status ship|needs_work|needs_human|unknown [--json]
+flowctl spec set-plan-review-status fn-1 --status ship|needs_work|needs_human|unknown|stale [--json]
 ```
 
 ### spec set-completion-review-status
@@ -346,7 +351,8 @@ human-only recovery tool.
 `record` requires `--backend` (host workflows pass `--backend host`) and consumes the matching reservation only after journaling the intended
 receipt/status work. A terminal `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or
 `NEEDS_HUMAN` consumes it; no verdict refunds it and appends a durable attempt
-(backend, failure class, timestamp, findings digest) to the spec sidecar.
+(backend, failure class, timestamp, findings digest; on the CLI backends also
+`failure_message`, the CLI's last error text) to the spec sidecar.
 `NEEDS_HUMAN` persists its receipt and `needs_human` status before exiting 4
 with `ESCALATE: reviewer requested human review`. `attempts` reports
 verdict-bearing versus refunded attempts for one review scope; under `--json`
@@ -361,7 +367,10 @@ completion`; impl requires `--task`.
 More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict attempts
 exits `5` with `TRANSPORT_UNHEALTHY`, distinct from review non-convergence
 (`ESCALATE`, exit `4`). Repair the backend and retry; never manually reset the
-verdict counter for transport failures.
+verdict counter for transport failures. The failure line and the
+`TRANSPORT_UNHEALTHY` text end with `CLI message: <text>` when the CLI printed
+one; a usage, credit or spend limit there needs no repair, and the review skills
+stop on it instead of retrying.
 
 ```bash
 flowctl review-rounds increment fn-1 --kind plan|impl --review-type plan|impl|completion \
@@ -2882,7 +2891,7 @@ The caller owns enumeration and cadence. For each open pull request:
    (Codex: `$flow-next-land <PR>`). A candidate list grants no merge authority.
    Land re-reads the head and all gates; a head move requires fresh selection.
 4. Handle its last `LAND_VERDICT` line. Wait at the driver's cadence for pending
-   CI or review, then invoke the same named PR again. A chain runs lowest open
+   CI, review or a `QUEUED` merge, then invoke the same named PR again. A chain runs lowest open
    layer first, one layer per invocation. Refresh the candidate list between
    passes. Never substitute a new PR for one that disappeared or closed unmerged.
 

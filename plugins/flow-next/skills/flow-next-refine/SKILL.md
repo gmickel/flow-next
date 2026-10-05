@@ -209,7 +209,7 @@ The question count and the sections-changed line always appear.
 Next step by input:
 
 - Spec without tasks → print the `Recommended next:` line from [plan-vs-no-plan.md](../flow-next-flow/references/plan-vs-no-plan.md) (direct by default; plan only on its positive signals); use `/flow-next:plan-review fn-N` for an independent design review.
-- Spec with tasks → `/flow-next:work fn-N` (or more refine on specific tasks).
+- Spec with tasks → `/flow-next:plan-review fn-N` when this session changed the spec body (its tasks predate the change), otherwise `/flow-next:work fn-N` (or more refine on specific tasks).
 - Task → `/flow-next:work fn-N.M`.
 - File → `/flow-next:capture` to turn the refined document into a spec.
 - Any of these → offer a compact digest of the result: `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option, never run for them).

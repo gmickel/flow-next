@@ -188,6 +188,12 @@ Each row also answers "was this verdict measured, and against what?":
 - `base_sha` - beside `head_sha` wherever the review snapshot ran, so the
   judged diff can be located and re-rendered; absent, never guessed,
   elsewhere.
+- `failure_message` - on a no-verdict row from a CLI reviewer, the CLI's own
+  last error text, whitespace-collapsed and cut at 300 characters: the last
+  `error` or `turn.failed` event message for codex, the last non-empty output
+  line for the other backends. It is the one piece of output text a row keeps,
+  printed as `CLI message:` in the failure line and the `TRANSPORT_UNHEALTHY`
+  text so a usage limit reads as one. Absent when the CLI printed nothing.
 
 - `model` / `effort` - the model that ACTUALLY ran and the
   effort that was actually SENT, taken from the same resolution the receipt

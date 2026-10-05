@@ -54,7 +54,8 @@ no effort, `claude` takes `claude[:<model>[:<effort>]]`, and `host` and `none` a
 - Stick to one backend for the full review/fix cycle.
 - If `REVIEW_RECEIPT_PATH` is set, every review verdict writes a receipt.
 - Any backend/transport failure outputs `RETRY: no verdict (backend or transport failure)` and stops;
-  never silently fall back to a different backend. Autonomous callers
+  never silently fall back to a different backend. When its `CLI message:` reports a usage, credit
+  or spend limit, report that message and stop instead of `RETRY:`; a retry fails the same way. Autonomous callers
   receive the same retry terminal and decide whether to re-enter. A no-verdict
   dispatch is refunded and recorded by flowctl; never manually reset the review
   counter for a transport failure. Exit 5 / `TRANSPORT_UNHEALTHY` means stop

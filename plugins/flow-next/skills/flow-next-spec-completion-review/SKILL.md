@@ -52,7 +52,9 @@ model family and fail closed when no cross-family pin is available.
 
 **For all backends:**
 - If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (codex writes automatically via `--receipt`)
-- Any failure → output `RETRY: no verdict (backend or transport failure)` and stop. No-verdict
+- Any failure → output `RETRY: no verdict (backend or transport failure)` and stop; when its
+  `CLI message:` reports a usage, credit or spend limit, report that message instead of `RETRY:`,
+  since a retry fails the same way. No-verdict
   transport failures are recorded and their reserved round refunded; never
   manually reset the review counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops
   automatic retries until the backend is repaired.
