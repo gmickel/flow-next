@@ -1471,7 +1471,7 @@ def get_default_config() -> dict:
         # match — `[ "$value" = "backlog" ]` — so ONLY the literal "backlog"
         # activates full-backlog autonomy; "ready" / null / a coerced bool
         # `true` / a typo all leave it at the conservative "ready"-queue-only
-        # behavior (memory docs-activation-command-for-string-enum). Default
+        # behavior (a string-enum knob never treats a coerced bool as on). Default
         # "ready" keeps pilot's existing consent boundary byte-for-byte
         # unchanged (it selects only from the already-ready queue).
         #
@@ -3550,6 +3550,9 @@ def find_references(
             [
                 "git",
                 "grep",
+                # A forced-color config would wrap file:line in SGR escapes
+                # and the parse below would drop every hint.
+                "--color=never",
                 "-n",
                 "-w",
                 symbol,
@@ -5321,7 +5324,7 @@ def _review_finding_prior_items(
         #
         # Reverting to ``open`` (unverified) makes the surviving rule's premise
         # literally true: an intersection means the reviewer stated "still
-        # broken" about the same lineage in two consecutive rounds. A match below
+        # broken" about the same lineage in three consecutive rounds. A match below
         # re-writes the status when this round DID speak.
         #
         # ``fixed`` and ``withdrawn`` are preserved — they are resolved
@@ -9551,7 +9554,7 @@ def get_max_review_iterations() -> int:
     severity/count trend and from "a new blocker appeared twice"; both were
     DELETED in fn-168 after escalating three healthy converging loops and zero
     stuck ones. What remains is the reviewer explicitly marking the same finding
-    chain `not-fixed` in two consecutive rounds, plus this cap as the aggregate
+    chain `not-fixed` in three consecutive rounds, plus this cap as the aggregate
     bound. The answer was better evidence, not better inference — see
     `.flow/memory/knowledge/decisions/review-stall-detection-reads-resolution-2026-08-05.md`.
     """
@@ -41256,7 +41259,7 @@ def _dep_relation_key(from_tracker_id: str, to_tracker_id: str) -> str:
 
     Hashes the directed (from → to) tracker-id pair so the stored token never
     inlines a raw issue key (trackers auto-linkify keys even inside HTML
-    comments — bug: trackers-auto-linkify-issue-key). The directed pair is the
+    comments). The directed pair is the
     edge identity: same edge → same key (idempotent set), so dedup is a pure
     key lookup. 16 hex chars is ample collision margin for a per-spec ledger.
     """

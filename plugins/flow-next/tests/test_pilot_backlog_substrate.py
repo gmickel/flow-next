@@ -134,8 +134,7 @@ class PilotAutonomyConfigTestCase(_FlowctlTmpRepo):
         self.assertEqual(self._config_get("pilot.autonomy")["value"], "backlog")
 
     def test_bool_true_does_not_activate(self) -> None:
-        # A coerced bool `true` must NOT read as the activating "backlog"
-        # (memory docs-activation-command-for-string-enum).
+        # A coerced bool `true` must NOT read as the activating "backlog".
         self._config_set("pilot.autonomy", "true")
         value = self._config_get("pilot.autonomy")["value"]
         self.assertNotEqual(value, "backlog")

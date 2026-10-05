@@ -1476,9 +1476,8 @@ def is_negative_context(line):
     skipped. Injecting R2 here either contradicts the surrounding prose
     or pollutes deterministic/autonomous branches."""
     # Auto-fix-loop hard mandates.
-    if 'Never use' in line and 'plain-text numbered prompt' in line:
-        return True
-    if 'do NOT use' in line and 'plain-text numbered prompt' in line:
+    if re.search(r'\b(?:never|do not) use\b', line, re.IGNORECASE) \
+            and 'plain-text numbered prompt' in line:
         return True
     # Hard-error / no-user prose ("questions hard-error ...", "no user to
     # ask ..."). These lines DESCRIBE an autonomous branch that refuses

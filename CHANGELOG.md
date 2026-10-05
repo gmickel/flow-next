@@ -23,6 +23,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 - **Host review finds the model-routing block in CLAUDE.md as well as AGENTS.md**, whichever file holds it on the harness, instead of always naming AGENTS.md.
 - **A reviewer's note after a location no longer voids the round.** A finding whose location carried text after the line or range, such as `store.py:18-25 (with ...)` or a backticked location followed by a note, failed the findings parser, and the review's merge plan then refused the whole round until the merged file was supplied by hand. The location now parses to its path and lines on every reviewer.
 - **`spec set-backend` and `task set-backend` errors name the flag.** An invalid value printed `<function field at 0x...>` where `--impl`, `--review` or `--sync` belonged.
+- **Smaller fixes.** On Codex, the unattended `flow --auto` driver and the plan, implementation and spec completion review fix loops no longer carry an instruction to stop and ask the user. resolve-pr posts a reply that starts with `@` or is just a number or `true` as the text written, instead of reading a file or failing. Implementation review's context hints survive a git config that forces colored `grep` output. Capture's autofix write gate takes only an exact `--yes` (and `--override-strategy` only exactly), so a lookalike such as `--yesterday` no longer authorizes a write. The Codex plugin manifest counts 29 skills, not 30.
 
 ### Removed
 

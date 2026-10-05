@@ -9,7 +9,7 @@ if [ -z "$REPLY_TEXT" ]; then
   exit 1
 fi
 
-gh api graphql -F threadId="$THREAD_ID" -F body="$REPLY_TEXT" -f query='
+gh api graphql -F threadId="$THREAD_ID" -f body="$REPLY_TEXT" -f query='
 mutation($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { id url }

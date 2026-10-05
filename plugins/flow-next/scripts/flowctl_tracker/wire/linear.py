@@ -67,7 +67,7 @@ def parent_read(config: dict, locator: dict, execute: Execute, *,
                 "query($id: String!) { issue(id: $id) { id identifier title "
                 "description url updatedAt "
                 "state { id name type } "
-                "labels { nodes { id name } } "
+                "labels(first: 50) { nodes { id name } } "
                 "assignee { id name } } }",
                 {"id": locator["display"]}, idempotent=True)
     if isinstance(data, TrackerError):
@@ -537,7 +537,7 @@ def label(config: dict, locator: dict, execute: Execute, *,
                 "mutation($id: String!, $input: IssueUpdateInput!) { "
                 "issueUpdate(id: $id, input: $input) { success "
                 "issue { id identifier title description url "
-                "labels { nodes { id name } } } } }",
+                "labels(first: 50) { nodes { id name } } } } }",
                 {"id": locator["durable"],
                  "input": {"labelIds": sorted(current_set)}})
     if isinstance(data, TrackerError):
