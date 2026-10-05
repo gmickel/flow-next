@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-282-800-closing-fixes-reviewer-locations",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-05T00:27:01.218138Z",
   "created_at": "2026-10-04T23:54:45.324020Z",
   "default_impl": null,
   "default_review": null,
@@ -160,5 +160,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-05T00:18:59.067060Z"
+  "updated_at": "2026-10-05T00:27:01.218145Z"
 }
