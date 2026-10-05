@@ -170,7 +170,7 @@ The spec sidecar carries two views of review state. `review_attempts[]` is the
 authoritative ledger - one row per finalized reservation, with backend,
 outcome, verdict, output hash, and (best-effort) the `head_sha` the review
 observed (the pre-dispatch snapshot on the in-process backend paths;
-finalize-time HEAD is the fallback where no snapshot exists, e.g. rp). `plan_review_status` / `completion_review_status` (plus their
+finalize-time HEAD is the fallback where no snapshot exists, e.g. host). `plan_review_status` / `completion_review_status` (plus their
 `*_reviewed_at` stamps) are a denormalized read model derived from that
 ledger; when the two ever diverge, the ledger wins. One member is deliberately ledger-less: the policy-skip `not_required` (work's 3g gate, written through the compare-and-set setter) records that policy excused the completion review - no attempt row exists because no review ran, and `ship` stays the only status that claims one. Gates consume the satisfying set `{ship, not_required}`; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 
@@ -183,7 +183,7 @@ Each row also answers "was this verdict measured, and against what?":
 - `tool_calls` - present only where the backend's event stream let the
   dispatcher genuinely count them (codex `exec --json`); a recorded `0` means
   the reviewer touched nothing, which is the signal, not an error. Plain-text
-  paths (resumed sessions, rp/host) carry no key at all.
+  paths (resumed sessions, host) carry no key at all.
 - `head_sha_observed` - `true` when a pre-dispatch snapshot supplied
   `head_sha`, `false` when the finalize-time `git rev-parse HEAD` fallback did
   (always the case on the `review-rounds record` CLI path). A marker, not an
@@ -191,6 +191,13 @@ Each row also answers "was this verdict measured, and against what?":
 - `base_sha` - beside `head_sha` wherever the review snapshot ran, so the
   judged diff can be located and re-rendered; absent, never guessed,
   elsewhere.
+- `failure_message` - on a no-verdict row from a CLI reviewer, the CLI's own
+  last error text, whitespace-collapsed and cut at 300 characters: the last
+  `error` or `turn.failed` event message for codex, the last non-empty output
+  line for the other backends, and the last stderr line when the output names
+  nothing (the claude adapter moves an error result there). It is the one piece of output text a row keeps,
+  printed as `CLI message:` in the failure line and the `TRANSPORT_UNHEALTHY`
+  text so a usage limit reads as one. Absent when the CLI printed nothing.
 
 - `model` / `effort` - the model that ACTUALLY ran and the
   effort that was actually SENT, taken from the same resolution the receipt
@@ -199,10 +206,11 @@ Each row also answers "was this verdict measured, and against what?":
   placeholder, not a resolved model - absent beats a placeholder), while an
   explicit `auto` pin records honestly. On a codex resume the model is the
   session's original but the effort is the one the resume argv pinned.
-  Written only on the in-process dispatch paths, which are the only place the
-  fact exists: the rp/host `review-rounds record` CLI carries no `--model`
-  flag, by design - a narrating agent must not be able to claim a model. Effort
-  is absent for backends that do not take one.
+  The in-process dispatch paths write it from the resolution they sent. Host
+  review has no dispatch inside flowctl, so `review-rounds record --model`
+  (8.0, #513) records the model the host says its reviewer ran: on host rows
+  it is the host's report, not a fact flowctl observed, and a host that passes
+  nothing leaves it absent. Effort is absent for backends that do not take one.
 
 On every one of these fields, **absence means unknown - never zero**: rows
 written by older versions carry none of them and read back untouched.
@@ -224,7 +232,7 @@ Write-ordering differs by path, on purpose:
   skill restores from the recovery payload instead of dispatching another
   round. The SHIP cap reset is folded into the attempt write; the status
   write stays separate, with the ledger authoritative on divergence.
-- **Host/rp paths** (`flowctl review-rounds record`,
+- **Host paths** (`flowctl review-rounds record`,
   `set-plan-review-status`, `set-completion-review-status`) are separate CLI
   invocations by design - the host agent sequences them - and the same
   authority rule applies: the ledger row is the record of what happened; the

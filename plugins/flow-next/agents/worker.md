@@ -13,7 +13,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, cursor, claude, host (parallel-wave only), or host-deferred (host review runs at the conductor level after you return; see Phase 0)
+- `REVIEW_MODE` - none, codex, copilot, cursor, claude, host (parallel-wave only), or host-deferred (host review runs at the conductor level after you return; see Phase 0)
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
 - `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths on every route. If omitted in a direct manual run, choose `.flow/tmp/<TASK_ID>-summary.md` and `.flow/tmp/<TASK_ID>-evidence.json`, create the directory, and report both paths. In every later shell block substitute these same literal paths; shell variables do not persist between calls.
@@ -232,7 +232,7 @@ Done when: the task's work is committed with a conventional-commit subject namin
 
 **The risk rule in working-rules.md (Review) decides whether this change is reviewed.** A change it does not select skips to Phase 5 and records `stage: impl-review - skipped(policy: risk - <reason>)`.
 
-**Otherwise, under any other non-`none` value (`rp`, `codex`, `copilot`, `cursor`, `claude`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
+**Otherwise, under any other non-`none` value (`codex`, `copilot`, `cursor`, `claude`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
 
 **Attended, on the conductor's inline path** (a person is in the session): the handoff message comes first, then this review runs; `flowctl done` waits for its verdict.
 

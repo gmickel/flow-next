@@ -411,6 +411,19 @@ class ChainCliTestCase(unittest.TestCase):
         self.assertEqual((out["eligible"], out["parent"], out["parent_branch_on_remote"], out["reason"]),
                          (False, None, None, f"dependency {parent} in progress"))
 
+    def test_retired_parent_with_never_run_tasks_is_no_dependency(self) -> None:
+        parent = self.spec("parent", tasks=2)
+        # Off the base branch, so the retirement is local and not yet landed.
+        subprocess.run(["git", "checkout", "-q", "-b", "retire-work"], cwd=self.repo, check=True)
+        res = self.flowctl("spec", "close", parent, "--retire", "superseded", "--by", "fn-999")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        child = self.spec("child", deps=[parent])
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "retire parent")
+        rc, out = self.chain(child)
+        self.assertEqual(rc, 0)
+        self.assertEqual((out["eligible"], out["parent"], out["reason"]), (True, None, "no open dependency"))
+
     def test_two_open_parents_refuse_naming_both(self) -> None:
         a = self.spec("a", done=True)
         b = self.spec("b", done=True)

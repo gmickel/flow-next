@@ -197,21 +197,17 @@ def _assert_fixed_read_only_argv(tc: unittest.TestCase, argv: list[str]) -> None
 
 
 class ClaudeSurface(unittest.TestCase):
-    """The five subcommands exist; the codex-only fan-out is an invalid choice."""
+    """The review subcommands exist, the first-round fan-out included."""
 
-    def test_five_subcommands_have_help(self):
-        for sub in ("impl-review", "plan-review", "completion-review",
-                    "validate", "deep-pass"):
+    def test_subcommands_have_help(self):
+        for sub, flag in (("impl-review", "--spec"), ("impl-review-fanout", "--spec"),
+                          ("impl-review-fanout-finalize", "--rid"), ("plan-review", "--spec"),
+                          ("completion-review", "--spec"), ("validate", "--spec"),
+                          ("deep-pass", "--spec")):
             with self.subTest(sub=sub):
                 code, out, _err = _run_cli("claude", sub, "--help")
                 self.assertEqual(code, 0)
-                self.assertIn("--spec", out)
-
-    def test_fanout_is_an_argparse_invalid_choice(self):
-        code, _out, err = _run_cli("claude", "impl-review-fanout", "--base", "HEAD~1")
-        self.assertEqual(code, 2)
-        self.assertIn("invalid choice", err)
-        self.assertIn("impl-review-fanout", err)
+                self.assertIn(flag, out)
 
 
 class ClaudeImplReview(unittest.TestCase):

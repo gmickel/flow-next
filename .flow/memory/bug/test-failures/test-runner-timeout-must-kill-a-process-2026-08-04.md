@@ -9,7 +9,7 @@ problem_type: test-failure
 symptoms: "One hung/leaky test file stalls the whole suite forever, or leaves an orphan holding the shard's stdout; timeout diagnostics come back empty"
 root_cause: "subprocess.run(timeout=) kills only the direct child then drains unbounded, and a kill keyed to a live parent (taskkill /T, proc.kill) cannot reach descendants of an already-exited shard"
 resolution_type: fix
-related_to: [bug/test-failures/windows-83-path-test-failures-were-2026-08-04]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

@@ -141,9 +141,9 @@ class TestHostLenientResolution(unittest.TestCase):
     def test_lenient_other_backends_still_degrade(self) -> None:
         import io, contextlib
         with contextlib.redirect_stderr(io.StringIO()):
-            spec = flowctl.parse_backend_spec_lenient("rp:not-a-model", warn=True)
+            spec = flowctl.parse_backend_spec_lenient("none:not-a-model", warn=True)
         self.assertIsNotNone(spec, "legacy lenience for non-host backends must not change")
-        self.assertEqual(spec.backend, "rp")
+        self.assertEqual(spec.backend, "none")
 
 
 class TestHostReviewWorkflowRouting(unittest.TestCase):
@@ -186,64 +186,58 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                     self.assertEqual(run.returncode, code, run.stderr)
                     self.assertIn(marker, run.stdout + run.stderr)
 
-    def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
-        rp = _read("flow-next-spec-completion-review/workflow-rp.md")
-        # fn-159.7 review r1: recording moved into the Phase 4 finalize fence
-        # so the receipt inputs are assembled BEFORE record.
-        block = _bash_fence_after(rp, "This is the single recorder fence")
-        block = block.replace("<spec-id>", "fn-1").replace("<suffix>", "test")
-        self.assertIn('RECORD_EXIT=$?', block)
-        self.assertLess(block.index('RECORD_EXIT=$?'), block.index('echo "VERDICT='))
+    def test_recorder_failure_stops_the_host_finalize_fence(self) -> None:
+        """A failed `review-rounds record` exits before any verdict handling."""
+        for rel, env_extra in (
+            ("flow-next-plan-review/workflow-host.md", {"SPEC_ID": "fn-1"}),
+            ("flow-next-impl-review/workflow-host.md", {"TASK_ID": "fn-1.1"}),
+            ("flow-next-spec-completion-review/workflow-host.md", {"SPEC_ID": "fn-1"}),
+        ):
+            with self.subTest(workflow=rel), tempfile.TemporaryDirectory() as temp_dir:
+                block = _bash_fence_containing(_read(rel), "RECORD_EXIT=$?").replace(
+                    "<count printed by Step 0>", "0"
+                )
+                self.assertLess(
+                    block.index("RECORD_EXIT=$?"),
+                    block.rindex('"$VERDICT" == "NEEDS_HUMAN"'),
+                )
+                temp = Path(temp_dir)
+                flowctl_stub = temp / "flowctl-stub"
+                flowctl_stub.write_text(
+                    "#!/usr/bin/env bash\n"
+                    "if [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
+                    "  printf '%s\\n' 'recorder failed'\n"
+                    "  exit 5\n"
+                    "else\n"
+                    "  exit 9\n"
+                    "fi\n",
+                    encoding="utf-8",
+                )
+                flowctl_stub.chmod(0o755)
+                env = os.environ.copy()
+                env.update(
+                    {
+                        "FLOWCTL": flowctl_stub.as_posix(),
+                        # A swallowed failure would reach the escalation (exit 4).
+                        "VERDICT": "NEEDS_HUMAN",
+                        "TMPDIR": temp.as_posix(),
+                        **env_extra,
+                    }
+                )
+                result = subprocess.run(
+                    [_bash_executable(), "-c", block + "\necho AFTER_RECORD"],
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode, 5, result.stdout + result.stderr
+                )
+                self.assertIn("recorder failed", result.stdout)
+                self.assertNotIn("ESCALATE", result.stderr)
+                self.assertNotIn("AFTER_RECORD", result.stdout)
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp = Path(temp_dir)
-            (temp / "flow-completion-review-snapshot-fn-1-test.env").write_text(
-                "REVIEW_HEAD_SHA=deadbeef\nREVIEW_BASE_SHA=deadbeef\n",
-                encoding="utf-8",
-            )
-            (temp / "flow-completion-review-dispatch-result-fn-1-test.env").write_text(
-                "RP_EXIT=0\nVERDICT=SHIP\n", encoding="utf-8",
-            )
-            (temp / "flow-completion-review-reservation-fn-1-test.json").write_text(
-                '{"reservation_id":"reservation-test"}', encoding="utf-8",
-            )
-            (temp / "flow-completion-review-response-fn-1-test.md").write_text(
-                "<verdict>SHIP</verdict>\n", encoding="utf-8",
-            )
-            flowctl_stub = temp / "flowctl-stub"
-            flowctl_stub.write_text(
-                "#!/usr/bin/env bash\n"
-                "if [[ \"$1 $2\" == \"rp chat-send\" ]]; then\n"
-                "  printf '%s\\n' '<verdict>SHIP</verdict>'\n"
-                "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
-                "  printf '%s\\n' 'recorder failed'\n"
-                "  exit 5\n"
-                "else\n"
-                "  exit 9\n"
-                "fi\n",
-                encoding="utf-8",
-            )
-            flowctl_stub.chmod(0o755)
-            env = os.environ.copy()
-            env.update(
-                {
-                    "FLOWCTL": flowctl_stub.as_posix(),
-                    "SPEC_ID": "fn-1",
-                    "TMPDIR": temp.as_posix(),
-                }
-            )
-            result = subprocess.run(
-                [_bash_executable(), "-c", block],
-                env=env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(
-                result.returncode, 5, result.stdout + result.stderr
-            )
-            self.assertIn("recorder failed", result.stdout)
-            self.assertNotIn("VERDICT=", result.stdout)
 
 class TestHostStandaloneImplReview(unittest.TestCase):
     """fn-257 R2: a standalone host impl-review reserves nothing and attaches directly."""

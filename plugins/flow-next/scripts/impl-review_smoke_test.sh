@@ -4,7 +4,7 @@
 #
 # Covers the 7 cases enumerated in the task spec.
 # Lighter duty than smoke_test.sh: only the flag layer + receipt shape.
-# Backend-LLM paths are mocked (no codex/copilot/rp invoked).
+# Backend-LLM paths are mocked (no codex/copilot invoked).
 #
 # Run from any directory other than the plugin repo root.
 

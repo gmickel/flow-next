@@ -51,23 +51,18 @@ if [[ "$RAW_ARGS" == *"--from-compacted-ok"* ]]; then
   RAW_ARGS="${RAW_ARGS//--from-compacted-ok/}"
 fi
 
-if [[ "$RAW_ARGS" == *"--yes"* ]]; then   # autofix write gate
-  COMMIT_YES=1
-  RAW_ARGS="${RAW_ARGS//--yes/}"
-fi
-
-if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
-  OVERRIDE_STRATEGY=1
-  RAW_ARGS="${RAW_ARGS//--override-strategy/}"
-fi
-
-# --no-plan and from:flow set durable state (§5.9b), so they are EXACT-token
-# matches: lookalikes ("--no-planning", "from:flowchart") stay in the remainder.
+# --yes (autofix write gate), --override-strategy, --no-plan and from:flow
+# authorize durable writes, so they are EXACT-token matches: lookalikes
+# ("--yesterday", "--no-planning", "from:flowchart") stay in the remainder.
 NO_PLAN_OPT=0
 FROM_FLOW=0
 CLEANED_ARGS=""
 for TOK in $RAW_ARGS; do
-  if [ "$TOK" = "--no-plan" ]; then
+  if [ "$TOK" = "--yes" ]; then
+    COMMIT_YES=1
+  elif [ "$TOK" = "--override-strategy" ]; then
+    OVERRIDE_STRATEGY=1
+  elif [ "$TOK" = "--no-plan" ]; then
     NO_PLAN_OPT=1
   elif [ "$TOK" = "from:flow" ]; then
     FROM_FLOW=1

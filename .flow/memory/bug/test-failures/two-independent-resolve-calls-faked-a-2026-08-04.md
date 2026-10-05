@@ -9,7 +9,8 @@ problem_type: test-failure
 symptoms: "~50% windows-latest flake: legitimate .flow/create-first write refused with INVALID_INPUT '<leaf> escapes <base>'"
 root_cause: "Non-strict Path.resolve() bails out early under concurrent writers, so base and leaf resolved independently could return two spellings (8.3 vs expanded) of the same directory"
 resolution_type: fix
-related_to: [bug/test-failures/test-runner-timeout-must-kill-a-process-2026-08-04, bug/test-failures/windows-83-path-test-failures-were-2026-08-04]
+last_audited: "2026-10-05"
+related_to: [bug/test-failures/test-runner-timeout-must-kill-a-process-2026-08-04]
 ---
 
 ## Problem

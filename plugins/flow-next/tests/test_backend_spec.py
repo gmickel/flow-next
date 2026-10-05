@@ -61,13 +61,14 @@ BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 class TestRegistryShape(unittest.TestCase):
     """Registry contents are the contract downstream code depends on."""
 
-    def test_exactly_seven_backends(self) -> None:
+    def test_exactly_six_backends(self) -> None:
         # cursor added in fn-74 (model-yes / effort-no shape).
         # host added in fn-123 (non-executable selection sentinel; no model/effort).
         # claude added in fn-221 (model-yes / effort-yes, the CLI's own set).
+        # rp (RepoPrompt) removed in 8.0.0.
         self.assertEqual(
             sorted(BACKEND_REGISTRY.keys()),
-            ["claude", "codex", "copilot", "cursor", "host", "none", "rp"],
+            ["claude", "codex", "copilot", "cursor", "host", "none"],
         )
 
     def test_claude_effort_set(self) -> None:
@@ -81,10 +82,6 @@ class TestRegistryShape(unittest.TestCase):
     def test_cursor_effort_is_none(self) -> None:
         # Cursor folds reasoning effort into the model name → no effort axis.
         self.assertIsNone(BACKEND_REGISTRY["cursor"]["efforts"])
-
-    def test_rp_rejects_model_and_effort(self) -> None:
-        self.assertIsNone(BACKEND_REGISTRY["rp"]["models"])
-        self.assertIsNone(BACKEND_REGISTRY["rp"]["efforts"])
 
     def test_none_rejects_model_and_effort(self) -> None:
         self.assertIsNone(BACKEND_REGISTRY["none"]["models"])
@@ -142,7 +139,6 @@ class TestParseValid(unittest.TestCase):
     def test_valid_specs_parse(self) -> None:
         rows = (
             ("codex", ("codex", None, None)),
-            ("rp", ("rp", None, None)),
             ("none", ("none", None, None)),
             # bare host parses OK; model/effort pins live in AGENTS.md.
             ("host", ("host", None, None)),
@@ -219,14 +215,17 @@ class TestParseInvalid(unittest.TestCase):
             # Cursor has no effort axis, including the codex-style lookalike.
             ("cursor:gpt-5.5-high:high", "does not accept an effort"),
             ("cursor:gpt-5.2:xhigh", "does not accept an effort"),
-            ("rp:opus", "does not accept a model"),
-            ("rp::high", "does not accept an effort"),
+            # Removed in 8.0.0: rejected with the removal notice, never as an
+            # unknown backend.
+            ("rp", "RepoPrompt review .* was removed in flow-next 8.0.0"),
+            ("rp:opus", "RepoPrompt review .* was removed in flow-next 8.0.0"),
+            ("export", "RepoPrompt review .* was removed in flow-next 8.0.0"),
             ("none:gpt-5.4", "does not accept a model"),
             ("none::high", "does not accept an effort"),
-            # host:<model> points at AGENTS.md model-routing; the model check
+            # host:<model> points at the model-routing block; the model check
             # fires first when an effort is also given.
-            ("host:opus", r"AGENTS\.md.*model-routing"),
-            ("host:opus:high", r"AGENTS\.md.*model-routing"),
+            ("host:opus", r"model-routing block in CLAUDE\.md or AGENTS\.md"),
+            ("host:opus:high", r"model-routing block in CLAUDE\.md or AGENTS\.md"),
         )
         for raw, pattern in rows:
             with self.subTest(spec=raw):
@@ -235,7 +234,7 @@ class TestParseInvalid(unittest.TestCase):
 
     def test_error_messages_list_the_valid_choices(self) -> None:
         rows = (
-            ("foo", ("rp", "codex", "copilot", "none"), ()),
+            ("foo", ("codex", "copilot", "host", "none"), ("'rp'",)),
             ("codex:gpt-5.4:bogus", ("'high'", "'xhigh'"), ()),
             (
                 "claude:claude-opus-5:ultra",
@@ -265,7 +264,7 @@ class TestResolve(unittest.TestCase):
         for key in list(os.environ.keys()):
             if key.startswith((
                 "FLOW_CODEX_", "FLOW_COPILOT_", "FLOW_CURSOR_",
-                "FLOW_RP_", "FLOW_NONE_",
+                "FLOW_HOST_", "FLOW_NONE_",
             )):
                 os.environ.pop(key, None)
         # Hermetic vs repo config: resolve() reads the enclosing repo's
@@ -337,12 +336,12 @@ class TestResolve(unittest.TestCase):
         r = BackendSpec.parse("codex:gpt-5.4:xhigh").resolve()
         self.assertEqual(r, BackendSpec("codex", "gpt-5.4", "xhigh"))
 
-    def test_rp_resolve_returns_no_model_no_effort(self) -> None:
-        # rp has no model/effort concept — resolve must not leak env values in.
-        os.environ["FLOW_RP_MODEL"] = "bogus"
-        os.environ["FLOW_RP_EFFORT"] = "bogus"
-        r = BackendSpec.parse("rp").resolve()
-        self.assertEqual(r, BackendSpec("rp", None, None))
+    def test_host_resolve_returns_no_model_no_effort(self) -> None:
+        # host has no model/effort concept — resolve must not leak env values in.
+        os.environ["FLOW_HOST_MODEL"] = "bogus"
+        os.environ["FLOW_HOST_EFFORT"] = "bogus"
+        r = BackendSpec.parse("host").resolve()
+        self.assertEqual(r, BackendSpec("host", None, None))
 
     def test_none_resolve_returns_no_model_no_effort(self) -> None:
         os.environ["FLOW_NONE_MODEL"] = "bogus"
@@ -375,7 +374,7 @@ class TestStrRoundTrip(unittest.TestCase):
 
     def test_bare_backend_no_trailing_colons(self) -> None:
         self.assertEqual(str(BackendSpec("codex")), "codex")
-        self.assertEqual(str(BackendSpec("rp")), "rp")
+        self.assertEqual(str(BackendSpec("host")), "host")
         self.assertEqual(str(BackendSpec("none")), "none")
 
     def test_model_only(self) -> None:
@@ -392,7 +391,7 @@ class TestStrRoundTrip(unittest.TestCase):
     def test_parse_str_roundtrip_valid_specs(self) -> None:
         for raw in (
             "codex",
-            "rp",
+            "host",
             "none",
             "copilot",
             "codex:gpt-5.4",
@@ -610,24 +609,47 @@ class TestSetBackendValidation(unittest.TestCase):
             self.assertEqual(raw["review"], "codex:gpt-99")
             self.assertIn("not in flow-next's codex ranking", err.getvalue())
 
-    def test_task_set_backend_rejects_rp_with_model(self) -> None:
-        with _flow_fixture() as td:
-            _write_epic(td / ".flow", "fn-9-e")
-            _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
-            out = io.StringIO()
-            with self.assertRaises(SystemExit), redirect_stdout(out):
-                flowctl.cmd_task_set_backend(
-                    _ns(
-                        id="fn-9-e.1",
-                        impl=None,
-                        review="rp:claude-opus",
-                        sync=None,
-                        json=True,
+    def test_task_set_backend_rejects_modelless_and_removed_specs(self) -> None:
+        rows = (
+            ("none:claude-opus", "does not accept a model"),
+            ("rp", "was removed in flow-next 8.0.0"),
+            ("rp:claude-opus", "was removed in flow-next 8.0.0"),
+        )
+        for review, message in rows:
+            with self.subTest(review=review), _flow_fixture() as td:
+                _write_epic(td / ".flow", "fn-9-e")
+                _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
+                out = io.StringIO()
+                with self.assertRaises(SystemExit), redirect_stdout(out):
+                    flowctl.cmd_task_set_backend(
+                        _ns(
+                            id="fn-9-e.1",
+                            impl=None,
+                            review=review,
+                            sync=None,
+                            json=True,
+                        )
                     )
+                payload = json.loads(out.getvalue())
+                self.assertFalse(payload["success"])
+                self.assertIn(message, payload["error"])
+                self.assertIn("Invalid spec for --review:", payload["error"])
+                raw = json.loads(
+                    (td / ".flow" / "tasks" / "fn-9-e.1.json").read_text()
                 )
-            payload = json.loads(out.getvalue())
-            self.assertFalse(payload["success"])
-            self.assertIn("does not accept a model", payload["error"])
+                self.assertIsNone(raw["review"])
+
+    def test_spec_set_backend_error_names_the_flag(self) -> None:
+        for flag in ("impl", "review", "sync"):
+            with self.subTest(flag=flag), _flow_fixture() as td:
+                _write_epic(td / ".flow", "fn-9-e")
+                values = {"impl": None, "review": None, "sync": None, flag: "bogus"}
+                out = io.StringIO()
+                with self.assertRaises(SystemExit), redirect_stdout(out):
+                    flowctl.cmd_spec_set_backend(_ns(id="fn-9-e", json=True, **values))
+                error = json.loads(out.getvalue())["error"]
+                self.assertIn(f"Invalid spec for --{flag}: Unknown backend: 'bogus'", error)
+                self.assertNotIn("<function", error)
 
     def test_task_set_backend_accepts_copilot_xhigh(self) -> None:
         with _flow_fixture() as td:
@@ -990,12 +1012,12 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(spec.backend, "codex")
 
     def test_codex_helper_coerces_config_default(self) -> None:
-        # Finding B: explicit `flowctl codex` with config default=rp (a modelless
+        # Finding B: explicit `flowctl codex` with config default=host (a modelless
         # non-codex backend) coerces to the codex default — never stamps a
         # foreign/null model on the receipt.
         with _flow_fixture() as td:
             (td / ".flow" / "config.json").write_text(
-                json.dumps({"review": {"backend": "rp"}})
+                json.dumps({"review": {"backend": "host"}})
             )
             _write_epic(td / ".flow", "fn-9-e")
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
@@ -1032,7 +1054,7 @@ class TestResolveReviewSpec(unittest.TestCase):
         # copilot's own ranking top, so the receipt is accurate.
         with _flow_fixture() as td:
             (td / ".flow" / "config.json").write_text(
-                json.dumps({"review": {"backend": "rp"}})
+                json.dumps({"review": {"backend": "host"}})
             )
             _write_epic(td / ".flow", "fn-9-e")
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
@@ -1413,12 +1435,12 @@ class TestReviewBackendCmd(unittest.TestCase):
             self.assertEqual(payload["effort"], "high")
             self.assertEqual(payload["source"], "env")
 
-    def test_env_bare_rp_has_no_model_or_effort(self) -> None:
-        os.environ["FLOW_REVIEW_BACKEND"] = "rp"
+    def test_env_bare_host_has_no_model_or_effort(self) -> None:
+        os.environ["FLOW_REVIEW_BACKEND"] = "host"
         with _flow_fixture():
             payload = self._run_json()
-            self.assertEqual(payload["backend"], "rp")
-            self.assertEqual(payload["spec"], "rp")
+            self.assertEqual(payload["backend"], "host")
+            self.assertEqual(payload["spec"], "host")
             self.assertIsNone(payload["model"])
             self.assertIsNone(payload["effort"])
 
@@ -1567,9 +1589,11 @@ class NoEmbedRegression(unittest.TestCase):
     # integration) - an identity choosing WHICH review to run, not payload
     # content the reviewer could fetch itself.
     PINNED_BUILDER_SIGNATURES = {
+        # standing_criteria (fn-281): a flag, not a payload - the builder renders
+        # the same `.flow/criteria.md` instruction block completion review embeds.
         "build_review_prompt": {
             "review_type", "context_hints", "review_scope", "diff_range",
-            "spec_path", "task_spec_paths", "axis",
+            "spec_path", "task_spec_paths", "axis", "standing_criteria",
         },
         "build_standalone_review_prompt": {
             "base_branch", "focus", "review_scope", "diff_range", "axis",
@@ -1642,6 +1666,65 @@ class TestReviewBackendTaskAware(unittest.TestCase):
             _write_task(td / ".flow", "fn-9-cool-slug.1", "fn-9-cool-slug",
                         review="cursor:gpt-5.3-codex")
             self.assertEqual(self._rb("fn-9.1"), "cursor")   # bare task handle canonicalized
+
+
+class TestRemovedReviewBackendCli(unittest.TestCase):
+    """8.0.0 removed RepoPrompt (rp, export). A stale stored or env value is
+    announced once and resolves to no reviewer configured, never to a
+    lower-precedence reviewer; a typed value is rejected. Driven through the
+    real CLI entry so the stderr notice count is observable."""
+
+    FLOWCTL_PY = Path(__file__).resolve().parent.parent / "scripts" / "flowctl.py"
+
+    def _cli(self, cwd: Path, *argv: str, env_backend: str | None = None):
+        import subprocess
+
+        env = {k: v for k, v in os.environ.items() if not k.startswith("FLOW_")}
+        if env_backend is not None:
+            env["FLOW_REVIEW_BACKEND"] = env_backend
+        return subprocess.run(
+            [sys.executable, str(self.FLOWCTL_PY), *argv],
+            cwd=cwd, env=env, capture_output=True, text=True, timeout=60,
+        )
+
+    def test_stale_removed_backend_is_noticed_once_and_unset(self) -> None:
+        rows = (
+            # (label, config backend, env, task review, spec default_review, id, expected)
+            ("config rp", "rp", None, None, None, None, "ASK"),
+            ("config rp:model", "rp:some-model", None, None, None, None, "ASK"),
+            ("env rp", None, "rp", None, None, None, "ASK"),
+            ("env export", None, "export", None, None, None, "ASK"),
+            ("env rp, config codex", "codex", "rp", None, None, None, "ASK"),
+            ("task rp", None, None, "rp", None, "fn-9-e.1", "ASK"),
+            ("task rp, config copilot", "copilot", None, "rp", None, "fn-9-e.1", "ASK"),
+            ("spec rp", None, None, None, "rp", "fn-9-e", "ASK"),
+            ("spec rp, env codex", None, "codex", None, "rp", "fn-9-e", "ASK"),
+        )
+        for label, config, env_backend, task_review, spec_review, review_id, want in rows:
+            with self.subTest(case=label), _flow_fixture() as td:
+                if config is not None:
+                    (td / ".flow" / "config.json").write_text(
+                        json.dumps({"review": {"backend": config}}))
+                _write_epic(td / ".flow", "fn-9-e", default_review=spec_review)
+                _write_task(td / ".flow", "fn-9-e.1", "fn-9-e", review=task_review)
+                argv = ["review-backend"] + ([review_id] if review_id else [])
+                proc = self._cli(td, *argv, env_backend=env_backend)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertEqual(proc.stdout.strip(), want)
+                self.assertEqual(
+                    proc.stderr.count(flowctl.REMOVED_BACKEND_NOTICE), 1, proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+
+    def test_config_set_removed_backend_is_rejected(self) -> None:
+        for value in ("rp", "rp:some-model", "export"):
+            with self.subTest(value=value), _flow_fixture() as td:
+                proc = self._cli(td, "config", "set", "review.backend", value)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn(
+                    flowctl.REMOVED_BACKEND_NOTICE, proc.stdout + proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+                stored = json.loads((td / ".flow" / "config.json").read_text())
+                self.assertNotIn("review", stored)
 
 
 # --- fn-112 review-driver hooks + generic cmd_backend_review ---

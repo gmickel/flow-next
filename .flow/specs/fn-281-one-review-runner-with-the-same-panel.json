@@ -1,0 +1,264 @@
+{
+  "branch_name": "fn-281-one-review-runner-with-the-same-panel",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-04T22:13:59.900678Z",
+  "created_at": "2026-10-04T11:28:53.412265Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-281-one-review-runner-with-the-same-panel",
+  "impl_review_rounds": {
+    "fn-281-one-review-runner-with-the-same-panel.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "f3323b9e41168877f8e234fbe7d52c80a7556ba2774c0cf2efc56d4a2bc9fb57",
+      "backend": "codex",
+      "base_sha": "8239705c50fe6e9a8131faefb435db248bd59933",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "classification": "introduced",
+            "findingId": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "classification": "introduced",
+            "findingId": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "classification": "introduced",
+            "findingId": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-02af783c5a83e285491e136849ea396a",
+            "classification": "introduced",
+            "findingId": "finding-02af783c5a83e285491e136849ea396a",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6102845e03dc12e5ebe089da79e1951b32e03b44",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4040,
+      "output_sha256": "29bcdedeba70278db1a85a8e19705ac6b3c23b708b492b35100754025fc69568",
+      "reservation_id": "28e5bb7208c14d1696e1bacb3a435da0",
+      "round_consumed": true,
+      "scope": "impl:fn-281-one-review-runner-with-the-same-panel.1",
+      "superseded_by": null,
+      "task": "fn-281-one-review-runner-with-the-same-panel.1",
+      "timestamp": "2026-10-04T19:48:28.473807Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "85ec44798ba3cdcf3e06626f31119dea135afa420c20f2220747375d16920747",
+      "backend": "codex",
+      "base_sha": "8239705c50fe6e9a8131faefb435db248bd59933",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "classification": "introduced",
+            "findingId": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "classification": "introduced",
+            "findingId": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3e9feca8241a4bd91928e87fab86e586",
+            "classification": "introduced",
+            "findingId": "finding-3e9feca8241a4bd91928e87fab86e586",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "classification": "introduced",
+            "findingId": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-02af783c5a83e285491e136849ea396a",
+            "classification": "introduced",
+            "findingId": "finding-02af783c5a83e285491e136849ea396a",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c5b2b00c4ba0bd7515421ec890c19ca1f2de25b0",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2549,
+      "output_sha256": "cd887afdf685b5b3a0a24c73c3396461e3f4eb065aec5b9233cc7ad8583513c8",
+      "reservation_id": "a65b22f653c34a49861c0307e73563d2",
+      "round_consumed": true,
+      "scope": "impl:fn-281-one-review-runner-with-the-same-panel.1",
+      "superseded_by": null,
+      "task": "fn-281-one-review-runner-with-the-same-panel.1",
+      "timestamp": "2026-10-04T19:51:09.162761Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "4cc262e328750722fa1eb994a7a5edf4cb9689da7c1336ffe9d8928e9d4581bc",
+      "backend": "codex",
+      "base_sha": "8239705c50fe6e9a8131faefb435db248bd59933",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "classification": "introduced",
+            "findingId": "finding-99e306a30543e9f7e852d2e1521b5ca1",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "classification": "introduced",
+            "findingId": "finding-36a8468a28dcba0e9baee6cf8d24a6ab",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3e9feca8241a4bd91928e87fab86e586",
+            "classification": "introduced",
+            "findingId": "finding-3e9feca8241a4bd91928e87fab86e586",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "classification": "introduced",
+            "findingId": "finding-5b9711ac086809c59e9dac636029ef9a",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-02af783c5a83e285491e136849ea396a",
+            "classification": "introduced",
+            "findingId": "finding-02af783c5a83e285491e136849ea396a",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9f6fe1da77b7b7be26ba243a428f131b1332126f",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1484,
+      "output_sha256": "f424e7a92c4b1bb1190b720d6abbfd180da6b51baf095e24bc046cc066635a73",
+      "reservation_id": "a9a209c8ebc84fd191c5713edf1ffbd8",
+      "round_consumed": true,
+      "scope": "impl:fn-281-one-review-runner-with-the-same-panel.1",
+      "superseded_by": null,
+      "task": "fn-281-one-review-runner-with-the-same-panel.1",
+      "timestamp": "2026-10-04T22:12:50.571610Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-281-one-review-runner-with-the-same-panel.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-281-one-review-runner-with-the-same-panel.1": 0
+  },
+  "spec_path": ".flow/specs/fn-281-one-review-runner-with-the-same-panel.md",
+  "status": "open",
+  "title": "One review runner with the same panel on every backend",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-04T22:13:59.900689Z"
+}

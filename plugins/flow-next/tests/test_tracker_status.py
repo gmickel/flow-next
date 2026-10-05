@@ -216,6 +216,14 @@ class FlowToNormalized(unittest.TestCase):
                 self.assertEqual(
                     flow_to_normalized(spec, "merged", True), expected)
 
+    def test_merged_retired_spec_surfaces_a_cancel_never_completes(self) -> None:
+        spec = {"status": "done", "completion_review_status": "not_required",
+                "retired": {"reason": "moot", "by": []}}
+        requested = flow_to_normalized(spec, "merged", True)
+        self.assertEqual(requested, "cancelled")
+        decision = decide(requested, None, "done", "todo", "merged")
+        self.assertEqual((decision.kind, decision.reason), ("defer", "cancelled-family"))
+
     def test_not_required_never_terminal_without_merged(self) -> None:
         # fn-205 R2: policy-excused review does not weaken the merge gate.
         spec = {"status": "done", "completion_review_status": "not_required"}
@@ -2273,6 +2281,11 @@ class EffectiveReviewBackendPrecedence(unittest.TestCase):
         self.assertFalse(V._completion_review_configured(
             {"review": {"backend": "off"}}, {}))
         self.assertFalse(V._completion_review_configured({}, {}))
+
+    def test_removed_backend_reads_as_not_configured(self) -> None:
+        cfg = {"review": {"backend": "codex"}}
+        self.assertFalse(V._completion_review_configured(cfg, {"default_review": "rp"}))
+        self.assertFalse(V._completion_review_configured({"review": {"backend": "rp:x"}}, {}))
 
 
 class TerminalFoldConverges(unittest.TestCase):

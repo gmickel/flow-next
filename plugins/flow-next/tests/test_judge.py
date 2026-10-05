@@ -303,3 +303,26 @@ class JudgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JudgeTierStateTests(unittest.TestCase):
+    def test_fenced_heading_inside_acceptance_is_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            def run(*a):
+                res = subprocess.run([*FLOWCTL_CMD, *a, "--json"], cwd=tmp, capture_output=True, text=True,
+                                     encoding="utf-8", env={**os.environ, "HOME": tmp})
+                self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+                return json.loads(res.stdout)
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+            run("init")
+            spec_id = run("spec", "create", "--title", "Fenced acceptance")["id"]
+            acceptance = "- [ ] Output keeps the block:\n\n```md\n## Not a heading\n```\n\n- [ ] Tail criterion"
+            task_id = run("task", "create", "--spec", spec_id, "--title", "Keep fences",
+                          "--acceptance", acceptance)["id"]
+            previous = os.getcwd()
+            os.chdir(tmp)
+            try:
+                state = f.judge_tier_state(task_id)
+            finally:
+                os.chdir(previous)
+            self.assertIn("Tail criterion", state["acceptance"])

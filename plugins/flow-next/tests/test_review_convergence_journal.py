@@ -27,7 +27,6 @@ import importlib.util
 import io
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -56,30 +55,6 @@ def _load_flowctl() -> Any:
 
 
 flowctl = _load_flowctl()
-
-REPO = Path(__file__).resolve().parents[3]
-SKILLS = REPO / "plugins" / "flow-next" / "skills"
-
-
-def _bash_fence_after(text: str, marker: str) -> str:
-    marker_at = text.index(marker)
-    fence_at = text.index("```bash\n", marker_at) + len("```bash\n")
-    return text[fence_at:text.index("\n```", fence_at)]
-
-
-def _bash_executable() -> str:
-    """Return the POSIX shell CI uses, avoiding the Windows WSL launcher."""
-    if os.name == "nt":
-        git = shutil.which("git")
-        if git:
-            git_bash = Path(git).resolve().parent.parent / "bin" / "bash.exe"
-            if git_bash.is_file():
-                return str(git_bash)
-    bash = shutil.which("bash")
-    if bash:
-        return bash
-    raise RuntimeError("bash executable not found")
-
 
 # ------------------------- R4: convergence ratchet -------------------------
 
@@ -167,7 +142,7 @@ class _JournalReplayBase(unittest.TestCase):
         return {
             "type": "plan_review",
             "id": self.spec_id,
-            "mode": "rp",
+            "mode": "host",
             "head": "a" * 40,
         }
 
@@ -181,7 +156,7 @@ class _JournalReplayBase(unittest.TestCase):
         return flowctl.record_review_attempt(
             self.spec_id,
             "plan",
-            backend="rp",
+            backend="host",
             output=f"<verdict>{verdict}</verdict>",
             verdict=verdict,
             review_type="plan",
@@ -197,7 +172,7 @@ class _JournalReplayBase(unittest.TestCase):
         return flowctl.record_review_attempt(
             self.spec_id,
             "plan",
-            backend="rp",
+            backend="host",
             output=(
                 "## Issue\n"
                 "- **Severity**: Major\n"
@@ -513,7 +488,7 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         data["review_attempts"].append({
             "timestamp": "9999-01-01T00:00:00Z",
             "scope": "plan", "counter_kind": "plan", "task": None,
-            "kind": "plan", "backend": "rp", "outcome": "verdict",
+            "kind": "plan", "backend": "host", "outcome": "verdict",
             "verdict": "NEEDS_WORK", "reservation_id": newer_id,
             "finalized": {
                 "receipt": "complete", "digest": "not_applicable",
@@ -650,10 +625,10 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         target = self.root / "receipt.json"
         payload = {
             "type": "completion_review", "id": self.spec_id,
-            "mode": "rp", "head": "a" * 40,
+            "mode": "host", "head": "a" * 40,
         }
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output=(
                 "## Global criteria\n"
                 "G1: met - contract regenerated\n"
@@ -795,7 +770,7 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
     def test_status_surface_reservation_id_requires_exactly_one_attempt(self):
         reservation_id = self._reserve()
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>SHIP</verdict>", verdict="SHIP",
             review_type="plan", reservation_id=reservation_id,
         )
@@ -842,7 +817,8 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         target = self.root / "receipt.json"
         record = self._fresh_process(
             "review-rounds", "record", self.spec_id, "--kind", "plan",
-            "--review-type", "plan", "--output-file", str(response),
+            "--review-type", "plan", "--backend", "host",
+            "--output-file", str(response),
             "--reservation-id", reservation_id,
             "--receipt-target", str(target),
             "--receipt-payload-file", str(payload_file), "--json",
@@ -883,7 +859,8 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         response.write_text("<verdict>SHIP</verdict>")
         code, _, _ = self._run_cli(
             "review-rounds", "record", self.spec_id, "--kind", "plan",
-            "--review-type", "plan", "--output-file", str(response), "--json",
+            "--review-type", "plan", "--backend", "host",
+            "--output-file", str(response), "--json",
         )
         self.assertEqual(code, 0)
         data = self._data()
@@ -1078,11 +1055,8 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         self.assertEqual(round_number, 3)
         self.assertIsNotNone(reservation_id)
 
-    def test_ce_setup_failure_refunds_only_its_reservation(self):
-        self._assert_transport_refund_is_reservation_scoped("ce")
-
-    def test_classic_setup_failure_refunds_only_its_reservation(self):
-        self._assert_transport_refund_is_reservation_scoped("classic")
+    def test_setup_failure_refunds_only_its_reservation(self):
+        self._assert_transport_refund_is_reservation_scoped("host")
 
     def _assert_transport_refund_is_reservation_scoped(self, mode: str) -> None:
         _, first = flowctl.enforce_and_increment_review_cap(
@@ -1092,24 +1066,13 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
             self.spec_id, "plan", review_type="plan", return_reservation=True
         )
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output=f"{mode} setup failed", failure_class="nonzero_exit",
             review_type="plan", reservation_id=first,
         )
         data = self._data()
         self.assertIn(second, data["review_reservations"])
         self.assertEqual(data["plan_review_rounds"], 1)
-
-    def test_mode_probe_only_checks_cli_availability(self):
-        for executable, expected in (("/tmp/rp-cli", "classic"), ("/tmp/rp", "ce")):
-            with self.subTest(executable=executable):
-                out = io.StringIO()
-                with mock.patch.object(flowctl, "require_rp_cli", return_value=executable), \
-                     mock.patch.object(flowctl, "bind_context_window") as bind, \
-                     contextlib.redirect_stdout(out):
-                    flowctl.cmd_rp_mode_probe(mock.Mock(json=True))
-                self.assertEqual(json.loads(out.getvalue())["mode"], expected)
-                bind.assert_not_called()
 
     def test_host_finalize_uses_the_reserved_id(self):
         artifact = flowctl._review_artifact_sha256(
@@ -1384,22 +1347,22 @@ class TestNeedsHumanTerminal(_JournalReplayBase):
                 )
         self.assertEqual(ctx.exception.code, 4)
 
-    def test_rp_nonzero_delivery_persists_before_exit(self):
+    def test_host_nonzero_delivery_persists_before_exit(self):
         _, reservation_id = flowctl.enforce_and_increment_review_cap(
             self.spec_id, "plan", review_type="plan", return_reservation=True
         )
         assert reservation_id is not None
-        response = self.root / "rp-response.md"
+        response = self.root / "host-response.md"
         response.write_text("<verdict>NEEDS_HUMAN</verdict>")
-        receipt = self.root / "rp-receipt.json"
-        payload = self.root / "rp-payload.json"
+        receipt = self.root / "host-receipt.json"
+        payload = self.root / "host-payload.json"
         payload.write_text(json.dumps({
-            "type": "plan_review", "id": self.spec_id, "mode": "rp",
+            "type": "plan_review", "id": self.spec_id, "mode": "host",
             "verdict": "NEEDS_HUMAN",
         }))
         code, _, err = self._run_cli(
             "review-rounds", "record", self.spec_id, "--kind", "plan",
-            "--review-type", "plan", "--backend", "rp", "--output-file",
+            "--review-type", "plan", "--backend", "host", "--output-file",
             str(response), "--reservation-id", reservation_id, "--receipt-target",
             str(receipt), "--receipt-payload-file", str(payload), "--status-target",
             "plan", "--exit-code", "7", "--json",
@@ -1423,14 +1386,14 @@ class TestNeedsHumanTerminal(_JournalReplayBase):
         flowctl.record_review_attempt(
             self.spec_id,
             "plan",
-            backend="rp",
+            backend="host",
             output="<verdict>NEEDS_HUMAN</verdict>",
             verdict="NEEDS_HUMAN",
             review_type="plan",
             reservation_id=reservation_id,
             receipt_target=str(receipt),
             receipt_payload={
-                "type": "plan_review", "id": self.spec_id, "mode": "rp",
+                "type": "plan_review", "id": self.spec_id, "mode": "host",
                 "verdict": "NEEDS_HUMAN",
             },
             status_target="plan",
@@ -1581,7 +1544,7 @@ class TestSupersededVerdictNeverSurfacesAsTerminal(_NeedsHumanHandlerBase):
                 return_reservation=True,
             )
             flowctl.record_review_attempt(
-                self.spec_id, review_kind, backend="rp",
+                self.spec_id, review_kind, backend="host",
                 output="<verdict>SHIP</verdict>", verdict="SHIP",
                 task_id=task_id,
                 review_type=ship_review_type,
@@ -1704,14 +1667,14 @@ class TestSupersededVerdictNeverSurfacesAsTerminal(_NeedsHumanHandlerBase):
             self.spec_id, "plan", review_type="plan", return_reservation=True,
         )
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            self.spec_id, "plan", backend="host", output="<verdict>SHIP</verdict>",
             verdict="SHIP", review_type="plan", reservation_id=ship_id,
             status_target="plan", reset_rounds_on_ship=True,
         )
         response = self.root / "late-response.txt"
         response.write_text("<verdict>NEEDS_WORK</verdict>", encoding="utf-8")
         args = argparse.Namespace(
-            id=self.spec_id, kind="plan", review_type="plan", backend="rp",
+            id=self.spec_id, kind="plan", review_type="plan", backend="host",
             output_file=str(response), task=None, json=True, force=False,
             reservation_id=reservation_id, exit_code=0, failure_class=None,
             receipt_target=None, receipt_payload_file=None, status_target="plan",
@@ -1784,7 +1747,7 @@ class TestOverlappingReviewProcesses(_JournalReplayBase):
             [
                 *FLOWCTL_CMD, "review-rounds", "record",
                 self.spec_id, "--kind", "plan", "--review-type", "plan",
-                "--output-file", str(response),
+                "--backend", "host", "--output-file", str(response),
                 "--reservation-id", reservation_id, "--json",
             ],
             cwd=self.root, env=env,
@@ -1860,125 +1823,6 @@ class TestOverlappingReviewProcesses(_JournalReplayBase):
         self.assertGreater(elapsed, 0.8)
         row = self._data()["review_attempts"][-1]
         self.assertEqual(row["reservation_id"], reservation_id)
-
-
-class TestRpRecorderFailureFences(unittest.TestCase):
-    """A recorder failure cannot be hidden by later verdict/control commands."""
-
-    def _stub(self, temp: Path) -> Path:
-        path = temp / "flowctl-stub"
-        path.write_text(
-            "#!/usr/bin/env bash\n"
-            "if [[ \"$1 $2\" == \"rp chat-send\" ]]; then\n"
-            "  printf '%s\\n' '<verdict>SHIP</verdict>'\n"
-            "elif [[ \"$1\" == \"review-artifact\" ]]; then\n"
-            "  printf '%s\\n' '{\"artifact_sha256\":\"a\"}'\n"
-            "elif [[ \"$1 $2 $3\" == \"review-rounds increment fn-1\" ]]; then\n"
-            "  printf '%s\\n' '{\"reservation_id\":\"reservation-test\",\"round\":1,\"cap\":8}'\n"
-            "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
-            "  printf '%s\\n' 'recorder failed'\n"
-            "  exit 5\n"
-            "else\n"
-            "  exit 9\n"
-            "fi\n",
-            encoding="utf-8",
-        )
-        path.chmod(0o755)
-        return path
-
-    def _run_fence(
-        self, relative: str, marker: str, *, task_id: str = ""
-    ) -> subprocess.CompletedProcess[str]:
-        text = (SKILLS / relative).read_text(encoding="utf-8")
-        block = _bash_fence_after(text, marker)
-        block = (
-            block.replace("<spec-id>", "fn-1")
-            .replace("<task-id-or-branch-slug>", "fn-1-1")
-            .replace("<suffix>", "test")
-        )
-        self.assertIn("RECORD_EXIT=$?", block)
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp = Path(temp_dir)
-            (temp / "flow-plan-review-setup-fn-1-test.env").write_text(
-                "RP_MODE=classic W=1 T=classic-tab\n",
-                encoding="utf-8",
-            )
-            (temp / "flow-impl-review-setup-fn-1-1-test.env").write_text(
-                "RP_MODE=classic W=1 T=classic-tab\n",
-                encoding="utf-8",
-            )
-            # fn-159.7 review r1: the fences bind their snapshot anchors before
-            # hashing and read the dispatch result from disk, so the fixture
-            # must supply both (an empty base..head range is legal here).
-            head = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=REPO, capture_output=True, text=True, check=True,
-            ).stdout.strip()
-            (temp / "flow-plan-review-snapshot-fn-1-test.env").write_text(
-                f"REVIEW_HEAD_SHA={head}\n", encoding="utf-8",
-            )
-            (temp / "flow-impl-review-snapshot-fn-1-1-test.env").write_text(
-                f"REVIEW_HEAD_SHA={head}\nREVIEW_BASE_SHA={head}\n",
-                encoding="utf-8",
-            )
-            (temp / "flow-impl-review-dispatch-result-fn-1-1-test.env").write_text(
-                "RP_EXIT=0\nVERDICT=SHIP\n", encoding="utf-8",
-            )
-            (temp / "flow-impl-review-reservation-fn-1-1-test.json").write_text(
-                '{"reservation_id":"reservation-test"}', encoding="utf-8",
-            )
-            (temp / "flow-impl-review-response-fn-1-1-test.md").write_text(
-                "<verdict>SHIP</verdict>\n", encoding="utf-8",
-            )
-            env = os.environ.copy()
-            env.update(
-                {
-                    "FLOWCTL": self._stub(temp).as_posix(),
-                    "SPEC_ID": "fn-1",
-                    "TASK_ID": task_id,
-                    "BRANCH": "test-branch",
-                    "TMPDIR": temp.as_posix(),
-                }
-            )
-            return subprocess.run(
-                [_bash_executable(), "-c", block],
-                env=env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-    def test_plan_rp_recorder_failure_stops_the_dispatch_fence(self):
-        result = self._run_fence(
-            "flow-next-plan-review/workflow-rp.md",
-            "Otherwise run one blocking",
-        )
-        self.assertEqual(
-            result.returncode, 5, result.stdout + result.stderr
-        )
-        self.assertIn("recorder failed", result.stdout)
-
-    def test_impl_rp_recorder_failure_precedes_verdict_echo(self):
-        result = self._run_fence(
-            "flow-next-impl-review/workflow-rp.md",
-            "This is the single recorder fence",
-            task_id="fn-1.1",
-        )
-        self.assertEqual(
-            result.returncode, 5, result.stdout + result.stderr
-        )
-        self.assertIn("recorder failed", result.stdout)
-        self.assertNotIn("VERDICT=", result.stdout)
-
-    def test_impl_standalone_review_keeps_no_recorder_path(self):
-        result = self._run_fence(
-            "flow-next-impl-review/workflow-rp.md",
-            "This is the single recorder fence",
-        )
-        self.assertEqual(
-            result.returncode, 0, result.stdout + result.stderr
-        )
-        self.assertIn("VERDICT=SHIP", result.stdout)
 
 
 class TestExecutableFenceChain(unittest.TestCase):
@@ -2080,7 +1924,7 @@ class TestExecutableFenceChain(unittest.TestCase):
         response.write_text("<verdict>NEEDS_WORK</verdict>\n")
         recorded = self._flowctl(
             "review-rounds", "record", self.SPEC_ID, "--kind", "impl",
-            "--task", self.TASK_ID, "--review-type", "impl", "--backend", "rp",
+            "--task", self.TASK_ID, "--review-type", "impl", "--backend", "host",
             "--output-file", str(response),
             "--reservation-id", reservation_id, "--json",
         )
@@ -2625,7 +2469,7 @@ class TestStatusTargetDefersToPublication(_JournalReplayBase):
         )
         argv = [
             "review-rounds", "record", self.spec_id, "--kind", "plan",
-            "--review-type", "plan", "--backend", "rp",
+            "--review-type", "plan", "--backend", "host",
             "--output-file", str(response),
             "--reservation-id", reservation_id,
             "--status-target", "plan", "--exit-code", "0", "--json",
@@ -2641,7 +2485,7 @@ class TestStatusTargetDefersToPublication(_JournalReplayBase):
 
     def test_status_is_journaled_pending_not_folded(self):
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         result = self._record_cli(reservation_id, receipt)
 
         self.assertIsNone(result["status_written"])
@@ -2658,7 +2502,7 @@ class TestStatusTargetDefersToPublication(_JournalReplayBase):
 
     def test_attach_publishes_receipt_and_lands_status(self):
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         self._record_cli(reservation_id, receipt)
 
         code, _, err = self._run_cli(
@@ -2677,7 +2521,7 @@ class TestStatusTargetDefersToPublication(_JournalReplayBase):
 
     def test_failed_attach_leaves_no_terminal_status_and_replay_lands_it(self):
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         self._record_cli(reservation_id, receipt)
 
         with mock.patch.object(
@@ -2886,7 +2730,7 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
         )
         code, out, err = self._run_cli(
             "review-rounds", "record", self.spec_id, "--kind", "plan",
-            "--review-type", "plan", "--backend", "rp",
+            "--review-type", "plan", "--backend", "host",
             "--output-file", str(response),
             "--reservation-id", reservation_id,
             "--status-target", "plan", "--exit-code", "0", "--json",
@@ -2904,7 +2748,7 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
         data["review_attempts"].append({
             "timestamp": "9999-01-01T00:00:00Z",
             "scope": "plan", "counter_kind": "plan", "task": None,
-            "kind": "plan", "backend": "rp", "outcome": "verdict",
+            "kind": "plan", "backend": "host", "outcome": "verdict",
             "verdict": "SHIP", "reservation_id": newer_id,
             "finalized": {
                 "receipt": "complete", "digest": "not_applicable",
@@ -2922,7 +2766,7 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
 
     def test_older_journal_replay_leaves_newer_status_alone(self):
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         self._record_cli(reservation_id, receipt)
         # Deferred, as bot r4 requires: nothing terminal yet.
         self.assertEqual(self._data()["plan_review_status"], "unknown")
@@ -2964,7 +2808,7 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
         replay, with a newer round publishing over the stable receipt path
         before this journal's status leg ever ran."""
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         self._record_cli(reservation_id, receipt)
         journal_path = self._journal_path(reservation_id)
         journal = json.loads(journal_path.read_text())
@@ -2987,7 +2831,7 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
         """The floor stays: with no proven-newer receipt, the delivered
         verdict's status must still be written."""
         reservation_id = self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
         self._record_cli(reservation_id, receipt)
         result = flowctl.enforce_and_increment_review_cap(
             self.spec_id, "plan", return_reservation=True
@@ -3011,12 +2855,12 @@ class TestSupersededJournalFinalizesAndCleansUp(_JournalReplayBase):
 
     def test_superseded_journal_completes_and_gate_reopens(self):
         ship_id, late_id = self._reserve(), self._reserve()
-        receipt = self.root / "rp-receipt.json"
+        receipt = self.root / "host-receipt.json"
 
         # The winner finalizes SHIP: counter -> 0, epoch advances, the
         # outstanding reservation is superseded beneath it.
         flowctl.record_review_attempt(
-            self.spec_id, "plan", backend="rp",
+            self.spec_id, "plan", backend="host",
             output="<verdict>SHIP</verdict>", verdict="SHIP",
             review_type="plan", reservation_id=ship_id,
             status_target="plan", reset_rounds_on_ship=True,

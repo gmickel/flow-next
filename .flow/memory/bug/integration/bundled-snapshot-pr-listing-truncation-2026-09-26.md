@@ -9,7 +9,7 @@ problem_type: integration
 symptoms: "flow --auto hop fails closed on 1000+ PR repos, or a deferred-then-reselected candidate routes to make-pr despite a merged/closed PR"
 root_cause: one repo-wide PR listing replaced per-branch probes; non-selected rows kept open-only history without a completeness flag
 resolution_type: fix
-related_to: [bug/integration/backend-special-case-in-a-shared-helper-2026-09-05, bug/integration/drop-receipt-to-break-codex-2026-05-09, bug/integration/headless-review-backend-error-envelope-2026-09-05, bug/integration/set-tracker-id-rejected-github-n-2026-06-03]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

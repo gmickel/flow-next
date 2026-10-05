@@ -80,9 +80,10 @@ objects), and echo those `GATE_SKIPPED` lines verbatim in the worker summary:
 BASE_COMMIT=$(cat .flow/tmp/base_commit)
 COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
 EVIDENCE_FILE="<resolved task-unique HANDOVER_EVIDENCE path>"
-cat > "$EVIDENCE_FILE" << EOF
-{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": []}
-EOF
+# One quoted argument per test command or GATE_SKIPPED line; jq escapes them.
+jq -n --argjson commits "$COMMITS_JSON" --arg base "$BASE_COMMIT" \
+  '{commits: $commits, base_commit: $base, tests: $ARGS.positional, prs: []}' \
+  --args '<actual test command>' '<GATE_SKIPPED line>' > "$EVIDENCE_FILE"
 ```
 
 Then write the summary file exactly as worker.md Phase 5 describes, and return before its `flowctl done` command.

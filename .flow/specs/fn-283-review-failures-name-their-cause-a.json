@@ -1,0 +1,148 @@
+{
+  "branch_name": "fn-283-review-failures-name-their-cause-a",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-05T13:59:12.567196Z",
+  "created_at": "2026-10-05T13:26:28.686214Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-283-review-failures-name-their-cause-a",
+  "impl_review_rounds": {
+    "fn-283-review-failures-name-their-cause-a.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "afa6204d654ce2b65a0c6e4cb06280ccf9810fc87fef85bea519af31d5d6e759",
+      "backend": "codex",
+      "base_sha": "049ab77bd3d9a9e9bd16790ec2c0736ef0089b49",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "classification": "introduced",
+            "findingId": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-366017f9a3025b22371174d362df4f6d",
+            "classification": "introduced",
+            "findingId": "finding-366017f9a3025b22371174d362df4f6d",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "03ae8e173400768d09a5f65be2fcacca3fce8640",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2180,
+      "output_sha256": "63099ce572b715d078119cc1bc70d9a0d68c6f50ccfa92caa2d0d150b1f8108c",
+      "reservation_id": "6f8db42c39774415b90daae040ecb236",
+      "round_consumed": true,
+      "scope": "impl:fn-283-review-failures-name-their-cause-a.1",
+      "superseded_by": null,
+      "task": "fn-283-review-failures-name-their-cause-a.1",
+      "timestamp": "2026-10-05T13:50:45.225061Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "3aaa7bfd4381be717c9aa9cdc46e51f0de2f5b2543a4e97cb0b28240e2d577be",
+      "backend": "codex",
+      "base_sha": "049ab77bd3d9a9e9bd16790ec2c0736ef0089b49",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "classification": "introduced",
+            "findingId": "finding-1db11eb0bd05c570bbed1e9ad72122d9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-366017f9a3025b22371174d362df4f6d",
+            "classification": "introduced",
+            "findingId": "finding-366017f9a3025b22371174d362df4f6d",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "20f57eb2795fdf42a1f9df56a8056c3fe3474952",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1155,
+      "output_sha256": "fad07c935bcee701b33a14408f0e051f28b7b54a80096d0e58d89624cd6d610d",
+      "reservation_id": "590ebf50641149c390516de527d32492",
+      "round_consumed": true,
+      "scope": "impl:fn-283-review-failures-name-their-cause-a.1",
+      "superseded_by": null,
+      "task": "fn-283-review-failures-name-their-cause-a.1",
+      "timestamp": "2026-10-05T13:53:55.119240Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-283-review-failures-name-their-cause-a.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-283-review-failures-name-their-cause-a.1": 0
+  },
+  "spec_path": ".flow/specs/fn-283-review-failures-name-their-cause-a.md",
+  "status": "open",
+  "title": "Review failures name their cause, a rewritten spec loses its plan SHIP, land reports a queued merge",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-05T13:59:12.567205Z"
+}

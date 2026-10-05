@@ -150,8 +150,12 @@ $FLOWCTL spec create --title "Spec title" --json
 ### Close a spec as won't-do
 
 ```bash
-$FLOWCTL spec close fn-1-add-oauth --json
+$FLOWCTL spec close fn-1-add-oauth --retire superseded --by fn-2-sso --json
 ```
+
+Pick the reason that is true: `superseded` (another spec replaced it), `delivered-elsewhere` (it shipped
+under another spec or pull request) or `moot` (it is no longer needed, including a decision not to build
+it). Name each successor with `--by`. Its never-run tasks read `retired`, not `done`.
 
 Before closing any spec: read [references/declined.md](references/declined.md); it decides whether the
 close earns a `.flow/memory/declined/` file.

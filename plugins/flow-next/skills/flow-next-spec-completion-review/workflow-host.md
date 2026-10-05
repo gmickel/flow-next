@@ -2,7 +2,7 @@
 
 Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and `SPEC_ID`.
 
-`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
+`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere).
 
 ## Critical rules
 
@@ -21,13 +21,13 @@ subagent prompt — it has the same repository you do.
 
 ## Step 1: Resolve cross-family pin
 
-1. Read the AGENTS.md model-routing section (caller routing instructions) for the review role / cross-family pairing.
+1. Read the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere) for the review role / cross-family pairing.
 2. Identify the family that wrote the implementation.
 3. Pick a reviewer slug from a **different** family.
 
 **If no cross-family pin is available:**
 - **Interactive:** ask the user explicitly (blocking question) which reviewer model/family to use — do not silently self-review
-- **Autonomous** (`mode:autonomous` / `FLOW_AUTONOMOUS=1`): stop with `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing` — never same-family self-review
+- **Autonomous** (`mode:autonomous` / `FLOW_AUTONOMOUS=1`): stop with `NEEDS_HUMAN: host review needs a cross-family model pin in the model-routing block` — never same-family self-review
 
 ## Step 2: Dispatch read-only reviewer subagent
 
@@ -202,6 +202,7 @@ and publish that payload by reservation id (never re-derive it):
 ```bash
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --review-type completion --backend host --output-file "$RESPONSE_FILE" \
+  --model "<actual reviewer slug>" \
   --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
   --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --attach --json)"
 RECORD_EXIT=$?
@@ -263,6 +264,6 @@ no terminal status with no receipt behind it.
 - **Self-reviewing** — coordinator never grades its own completion claim
 - **Silent same-family self-review** when no cross-family pin is available
 - **Reusing a prior subagent context** for re-review (always fresh)
-- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the AGENTS.md routing block
+- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the model-routing block
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts

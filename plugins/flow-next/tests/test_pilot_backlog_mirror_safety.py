@@ -2,8 +2,7 @@
 (`flow --auto`, formerly pilot; originally fn-68.5, R12; verifies R6/R7).
 
 fn-68.5 was its OWN task because regenerating the Codex mirror exposes latent
-canonical issues — memory ``mirror-regen-exposes-latent-canonical`` (fn-60 took
-FOUR NEEDS_WORK rounds from one mirror regen). The mirror is the **rewrite** of
+canonical issues (fn-60 took FOUR NEEDS_WORK rounds from one mirror regen). The mirror is the **rewrite** of
 the Claude-native canonical; this test locks the load-bearing invariants of that
 rewrite so a later edit to ``sync-codex.sh`` or the canonical flow/tracker-sync
 skills can't silently regress them.
@@ -44,6 +43,7 @@ Run:
 from __future__ import annotations
 
 import pathlib
+import re
 import unittest
 
 
@@ -180,6 +180,20 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                         text,
                         f"{fname}: Claude-native {tok!r} leaked into the mirror",
                     )
+
+    def test_mirror_driver_carries_no_injected_ask_block(self) -> None:
+        """sync-codex.sh injects its plain-text ask block at a prose ask site.
+        No file a `--auto` run loads may carry it: a negated ask mention (the
+        Forbidden list) mis-read as an ask site told unattended Codex runs to
+        stop and wait for the user. The marker is read from the generator so
+        the check follows the real transform."""
+        script = (REPO_ROOT / "scripts" / "sync-codex.sh").read_text(encoding="utf-8")
+        match = re.search(r"INSTRUCTION = \(\s*'(\*\*[^*]+\*\*)", script)
+        self.assertIsNotNone(match, "sync-codex.sh must define the R2 INSTRUCTION")
+        marker = match.group(1)
+        for rel in AUTO_ROUTED_FILES:
+            with self.subTest(file=rel):
+                self.assertNotIn(marker, _read(MIRROR / rel))
 
     def test_mirror_is_present_for_every_canonical_pilot_file(self) -> None:
         """Structural parity: every file a `--auto` run can load, plus the

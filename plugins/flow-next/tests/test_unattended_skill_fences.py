@@ -50,7 +50,7 @@ class UnattendedSkillFences(unittest.TestCase):
         code = fence("flow-next-flow/auto.md", 'REVIEW_ARG=""')
         stub = 'flowctl() { [ "$1" = review-backend ] && [ "$2" = wor-17-x ] || return 2; printf "%s" "$BACKEND"; }\n'
         for explicit, backend, expected in (("", "ASK", "0|"), ("", "codex", "1|"),
-                                             ("rp", "ASK", "1|--review=rp")):
+                                             ("copilot", "ASK", "1|--review=copilot")):
             with self.subTest(explicit=explicit, backend=backend):
                 result = self.shell(stub + code + '\nprintf "%s|%s" "$REVIEW_CONFIGURED" "$REVIEW_ARG"',
                                     FLOWCTL="flowctl", SELECTED_SPEC="wor-17-x", PILOT_REVIEW=explicit, BACKEND=backend,
@@ -60,11 +60,12 @@ class UnattendedSkillFences(unittest.TestCase):
                 self.assertEqual(result.stdout, expected)
                 self.assertNotIn("--review=ASK", result.stdout)
 
-    def test_codex_step_triages_only_a_fanout_route(self):
+    def test_cli_step_triages_only_a_fanout_route(self):
         """impl-review SKILL.md step 2: route first, triage only on fanout."""
         code = fence("flow-next-impl-review/SKILL.md", "triage-skip")
         code = code.replace('REVIEW_ID="<literal or empty>"', 'REVIEW_ID="fn-1.1"')
         code = code.replace('DIFF_BASE="<literal>"', 'DIFF_BASE="abc123"')
+        code = code.replace('BACKEND="<literal>"', 'BACKEND="codex"')
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()
@@ -146,36 +147,6 @@ class UnattendedSkillFences(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, allowed, result.stdout + result.stderr)
                 if not allowed:
                     self.assertIn("PILOT_VERDICT=NEEDS_HUMAN", result.stdout)
-
-    def test_standalone_rp_tally_runs_with_posix_awk_and_suffix_ids(self):
-        text = (SKILLS / "flow-next-impl-review/workflow-rp.md").read_text(encoding="utf-8")
-        start = text.index('  EXTRA_FIELDS=""', text.index("## Phase 4:"))
-        code = text[start:text.index('  RECEIPT_INPUT=', start)]
-        awk = shutil.which("mawk") or shutil.which("original-awk") or shutil.which("awk")
-        if not awk:
-            self.skipTest("portable awk unavailable")
-        with tempfile.TemporaryDirectory() as tmp:
-            directory = Path(tmp)
-            # Route every awk in the real fence through the selected implementation.
-            (directory / "awk").symlink_to(awk)
-            response = directory / "response.md"
-            response.write_text("Suppressed findings: 3 at anchor 50, 7 at anchor 25.\n"
-                                "Classification counts: 2 introduced, 4 pre_existing.\n"
-                                "Unaddressed R-IDs: [PR12, R4a, R9, R4ab, R4a]\n", encoding="utf-8")
-            for task in ("", "fn-1.1"):
-                with self.subTest(task=task):
-                    result = self.shell(code + '\nprintf \'{"mode":"rp"%s}\' "$EXTRA_FIELDS"',
-                                        RESPONSE_FILE=str(response), TASK_ID=task, VERDICT="NEEDS_WORK",
-                                        PATH=str(directory) + os.pathsep + os.environ["PATH"])
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    data = json.loads(result.stdout)
-                    if task:
-                        self.assertEqual(data, {"mode": "rp"})
-                    else:
-                        self.assertEqual(data["suppressed_count"], {"50": 3, "25": 7})
-                        self.assertEqual(data["unaddressed"], ["R4a", "R9"])
-                        self.assertEqual(data["introduced_count"], 2)
-                        self.assertEqual(data["pre_existing_count"], 4)
 
 
 if __name__ == "__main__":

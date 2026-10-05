@@ -1,9 +1,13 @@
 ---
+title: "Split the PR at the SECOND adjacent-surface finding, not the fifth"
+date: "2026-08-21"
 track: knowledge
 category: workflow
 module: review
 tags: [resolve-pr, land, scope, review-rounds, pr-hygiene]
+applies_when: Review findings on a PR start landing in a surface adjacent to the PR's feature rather than in the feature itself.
 status: active
+last_audited: "2026-10-05"
 ---
 
 # Split the PR at the SECOND adjacent-surface finding, not the fifth

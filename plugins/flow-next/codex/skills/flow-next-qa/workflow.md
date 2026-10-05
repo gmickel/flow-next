@@ -288,8 +288,8 @@ Write the JSON payload with the Write tool to `$QA_RECEIPT_INPUT` (shape:
 `$FLOWCTL qa receipt --skeleton`): `id`, `qa_outcome`, every Phase 5 finding under `findings`,
 `rid_coverage.rids` (`[{id, coverage}]`, coverage one of `live`, `subtracted`,
 `no_live_scenario`, `backend_cli`), and `blocked_reason` or `na_reason` for those outcomes only.
-Set `mode` to `rp` when the caller passed `--receipt` or set `REVIEW_RECEIPT_PATH`, otherwise
-`interactive`; left out, it becomes `rp`, because the call below always passes `--receipt`.
+Set `mode` to `receipt` when the caller passed `--receipt` or set `REVIEW_RECEIPT_PATH`, otherwise
+`interactive`; left out, it becomes `receipt`, because the call below always passes `--receipt`.
 
 ```bash
 RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"

@@ -76,7 +76,7 @@ class ParseStatusTest(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 FLOWCTL._review_fanout_emit_dispatch(
-                    argparse.Namespace(json=True), None, True, "rid", "reservation",
+                    argparse.Namespace(json=True, review_backend="codex"), None, True, "rid", "reservation",
                     Path(temp), [row], "main")
             payload = json.loads(out.getvalue())
             self.assertEqual(payload["draws"][0]["parse_status"], row["parse_status"])

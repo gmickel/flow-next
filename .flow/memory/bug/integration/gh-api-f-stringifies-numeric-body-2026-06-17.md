@@ -3,13 +3,14 @@ title: gh api -f stringifies numeric body fields (issue_id) → GitHub 422; use 
 date: "2026-06-17"
 track: bug
 category: integration
-module: plugins/flow-next/scripts/flowctl_tracker/
-tags: [fn-64, tracker-sync, github, gh-api, rest, "422", issue-dependencies]
+module: "plugins/flow-next/scripts/make-pr-create.sh, plugins/flow-next/skills/flow-next-resolve-pr/scripts"
+tags: [fn-64, tracker-sync, github, gh-api, rest, graphql, "422", issue-dependencies, resolve-pr, make-pr]
 problem_type: integration
 symptoms: GitHub POST blocked_by returns 422 — issue_id sent as a JSON string instead of a number
 root_cause: gh api -f/--raw-field always emits strings; the dependencies API requires numeric issue_id
 resolution_type: fix
-related_to: [bug/integration/set-tracker-id-rejected-github-n-2026-06-03, bug/integration/trackers-auto-linkify-issue-key-2026-06-03]
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
 ---
 
 ## Problem
@@ -19,7 +20,7 @@ GitHub's native issue-dependency POST (`/repos/{o}/{r}/issues/{n}/dependencies/b
 Use `gh api -F "issue_id=$BLOCKER_ID"` (`--field`, type-aware: a bare integer is emitted as a JSON number). Equivalent: `jq -n --argjson issue_id "$id" '{issue_id:$issue_id}' | gh api ... --input -`. Originally fixed in `plugins/flow-next/skills/flow-next-tracker-sync/references/github.md` setIssueRelation native snippet, with an explicit `-F`-not-`-f` warning so the host agent never stringifies the id.
 
 ## Prevention
-Whenever a `gh api` POST/PATCH body field must be a JSON number/boolean/null (an id, a count, a flag), use `-F/--field` (type-aware) — reserve `-f/--raw-field` for genuinely string values. A stringified numeric id is the classic 422 here.
+Pick the flag by value type. `-F/--field` is type-aware: integers, `true`, `false` and `null` become JSON literals, and a value starting with `@` is read from a file. Use it for ids, counts and flags. Use `-f/--raw-field` for free-form strings such as a comment or reply body, where `-F` would turn "123" into a number or read "@name" as a file. A request body built in code goes through `--input -` instead.
 
-## Update 2026-08-01
-`references/github.md` is now a stub — the `setIssueRelation` snippet this entry originally cited moved into Python: GitHub relations are handled by `flowctl_tracker` via the `sub_issues` proxy. Module pointer updated above accordingly. The generic `gh api -F` vs `-f` lesson stands wherever the codebase still shells out to `gh api` for a numeric body field.
+## Update 2026-10-05
+The tracker snippet this entry cited moved into Python: `flowctl_tracker` sends request bodies with `--input -`. The remaining `gh api` callers are `plugins/flow-next/scripts/make-pr-create.sh` (stack links, `-F "pull_requests[]=..."`) and the resolve-pr scripts under `skills/flow-next-resolve-pr/scripts/` (GraphQL variables: `-F` for ids and numbers, `-f` for the query and the reply body).

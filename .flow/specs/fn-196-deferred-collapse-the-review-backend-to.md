@@ -59,3 +59,7 @@ Related work: the spec that removes packaged implementation delegation for the s
 
 - The real size of the collapse. Nothing credible can be said until the R1 scout pass runs; the 25-function count is a surface measure, not a duplication measure.
 - Whether the two-mode primary/legacy path for one backend should be collapsed or retired outright — a separate question that may be cheaper than the collapse itself.
+
+## Superseded
+
+Superseded by fn-281 (one review runner with the same panel on every backend), built on the 8.0 branch; closed 2026-10-05 by the maintainer.

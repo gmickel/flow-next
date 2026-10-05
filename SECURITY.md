@@ -21,4 +21,4 @@ Include reproduction steps and the affected version (`flowctl --version` or the 
 ## Scope notes
 
 - Prompt-injection hardening of skills (e.g. review gates, autonomy refusals) is in scope — flow-next's autonomous loops are designed to be gated and receipted, and bypasses are bugs.
-- Vulnerabilities in host platforms (Claude Code, Codex, Droid, Cursor, Grok) or optional third-party tools (`clawpatch`, `lavish-axi`, RepoPrompt) belong upstream — but if flow-next's integration makes them worse, report here too.
+- Vulnerabilities in host platforms (Claude Code, Codex, Droid, Cursor, Grok) or optional third-party tools (`clawpatch`, `lavish-axi`) belong upstream — but if flow-next's integration makes them worse, report here too.

@@ -9,7 +9,7 @@ problem_type: data
 symptoms: set-merge-base partial update pins one half of the 3-way merge base to a stale sync point
 root_cause: "per-flag setter updated each merge-base half independently, breaking the paired-snapshot invariant"
 resolution_type: fix
-related_to: [bug/data/migrationrollback-cli-10-review-cycle-2026-05-08]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

@@ -246,6 +246,40 @@ The lifecycle skills value-check `flowctl sync active` and the specific `perEven
 
 These are the only two unconditional touchpoints; everything else stays `perEvent`-gated.
 
+### Merged outside land
+
+Land moves the issue to `Done` right after its own merge. A pull request merged any other way (the GitHub web UI, `gh pr merge`, auto-merge, a merge queue) leaves the issue at `In Review`, because nothing ran the post-merge step. When land's own merge call only queues the pull request, land reports `QUEUED` and skips the step too. Two ways to finish it:
+
+- **Once, by hand.** Run `/flow-next:land <pr>` after the merge. On a merged pull request land only replays the tracker step.
+- **Every time, from CI.** `flowctl spec closed-in-range` lists the specs a range of commits closed, and `flowctl tracker status <spec> --to done --event land.merged` runs the same merge-evidence check and status policy land uses. Run them on pushes to the default branch, since every merge path above ends in one:
+
+```yaml
+# .github/workflows/tracker-done.yml
+name: Tracker Done after merge
+on:
+  push:
+    branches: [main]
+jobs:
+  tracker-done:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # closed-in-range reads the pushed range
+      # The tracker commands import the bundled flowctl_tracker package,
+      # so fetch the scripts directory, not flowctl.py alone.
+      - run: git clone --depth 1 https://github.com/gmickel/flow-next /tmp/flow-next
+      - run: |
+          F="python3 /tmp/flow-next/plugins/flow-next/scripts/flowctl.py"
+          for id in $($F spec closed-in-range --base "${{ github.event.before }}" --json | jq -r '.spec_ids[]'); do
+            $F tracker status "$id" --to done --event land.merged || echo "::warning::$id did not move"
+          done
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}   # or the Jira token; GitHub Issues use GH_TOKEN
+          GH_TOKEN: ${{ github.token }}                   # merge evidence comes from gh
+```
+
+A second run reads each issue and changes nothing, and a spec with no linked issue is refused without creating one. Merge evidence is looked up by the spec's branch name (`gh pr list --head <branch_name>`), so a pull request from a branch with another name (one carrying several specs, say) finds none and its issues stay `In Review` until the by-hand replay. The job needs the tracker's API key as a CI secret; a host MCP connector serves only an agent session. `tracker status` writes sync metadata into the spec's JSON, which is harmless in a throwaway CI checkout and is why land does the same step in memory.
+
 ### MISSING after retro-fire: recovery
 
 A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line means the touchpoint did not fire and the one bounded retro-fire could not recover it. The primary work is unaffected: tracker sync is best-effort and never blocks, so the task is done or the PR is open. To recover by hand:
@@ -327,7 +361,7 @@ When `tracker.readyState` is configured (the optional ceremony question above), 
 - **Stale-config degradation.** A configured state name / label that no longer resolves on the tracker (renamed/deleted) ⇒ **warn + `noop` receipt + flag untouched + the sync continues** - one bad knob never aborts the run, and a stale `readyState` must not silently un-ready every linked spec.
 - **Orthogonal to status.** The projection never feeds the who-wins ladder above, never advances `lastSyncedAt` by itself, and never blocks - body/status/comments reconcile exactly as before. `readyState: null` (the default) skips it entirely: no calls, no receipts, no flag writes.
 - **Opting back out.** `flowctl config set tracker.readyState null` clears the knob (the literal `null` token is stored as JSON null) - the projection goes dormant and local `spec ready`/`unready` is authoritative again.
-- **Unattended-driver interplay.** [`/flow-next:flow --auto`](../../skills/flow-next-flow/SKILL.md) selects ready specs and, after two healthy no-advance ticks, runs a local `spec unready` (don't-thrash) and records a strike. On a `readyState`-configured repo that local write is **advisory until the board reflects it** - the next pull projects the issue's state back and re-readies the spec. **A projection-set ready never clears a strike**: the board echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec every tick forever. So a struck spec on an armed-`readyState` repo reads ready on the board while pilot keeps skipping it as still-struck. **The recovery is the verb, not the board:** `flowctl pilot strikes clear <spec-id>` (see [`flowctl.md`](flowctl.md#pilot-strikes) and [`troubleshooting.md`](troubleshooting.md)). Moving the issue out of the ready state is still worth doing - it stops pointless re-selection noise and keeps the board honest about what is waiting on a human - but it is not what clears the strike. The board remains the single control plane for **readiness**; strikes are pilot state, not readiness state.
+- **Unattended-driver interplay.** [`/flow-next:flow --auto`](../../skills/flow-next-flow/SKILL.md) selects ready specs and, after two healthy no-advance ticks, runs a local `spec unready` (don't-thrash) and records a strike. On a `readyState`-configured repo that local write is **advisory until the board reflects it** - the next pull projects the issue's state back and re-readies the spec. **A projection-set ready never clears a strike**: the board echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec every tick forever. So a struck spec on an armed-`readyState` repo reads ready on the board while `flow --auto` keeps skipping it as still-struck. **The recovery is the verb, not the board:** `flowctl pilot strikes clear <spec-id>` (see [`flowctl.md`](flowctl.md#pilot-strikes) and [`troubleshooting.md`](troubleshooting.md)). Moving the issue out of the ready state is still worth doing - it stops pointless re-selection noise and keeps the board honest about what is waiting on a human - but it is not what clears the strike. The board remains the single control plane for **readiness**; strikes are pilot state, not readiness state.
 
 ## Dependency projection: `depends_on_epics` → tracker issue relations
 

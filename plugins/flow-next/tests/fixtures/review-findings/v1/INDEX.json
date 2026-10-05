@@ -53,9 +53,7 @@
           "codex",
           "copilot",
           "cursor",
-          "host",
-          "rp",
-          "export"
+          "host"
         ]
       }
     ],
@@ -215,77 +213,6 @@
           "source_locator": "FIXED in review",
           "fixture_refs": [
             "host/catalog-sample.md"
-          ]
-        }
-      ]
-    },
-    "rp": {
-      "variants": [
-        {
-          "label": "- Severity: Critical",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "rp/no-anchor.md",
-            "rp/catalog-sample.md"
-          ]
-        },
-        {
-          "label": "File:Line prompt label",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "rp/catalog-sample.md"
-          ]
-        },
-        {
-          "label": "Classification counts tally",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "rp/no-anchor.md",
-            "rp/ratchet-only.md"
-          ]
-        }
-      ]
-    },
-    "export": {
-      "variants": [
-        {
-          "label": "Severity = Nitpick",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "export/no-anchor.md",
-            "export/catalog-sample.md"
-          ]
-        },
-        {
-          "label": "Prior finding #N",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "export/ratchet-only.md"
-          ]
-        },
-        {
-          "label": "manually pasted prose",
-          "status": "synthetic_boundary",
-          "source_refs": [
-            "fn136-fixture-design-contract"
-          ],
-          "fixture_refs": [
-            "export/unparseable.md"
           ]
         }
       ]
@@ -503,112 +430,6 @@
             "classification": "introduced",
             "status": "fixed",
             "anchor": null
-          }
-        ]
-      },
-      "ratchet-aggregate": {
-        "structured": true,
-        "new_item_count": 0,
-        "ordered_prior_statuses": [
-          "fixed",
-          "fixed"
-        ]
-      }
-    },
-    "rp": {
-      "no-findings-ship": {
-        "structured": true,
-        "verdict": "SHIP",
-        "items": []
-      },
-      "ratchet-only": {
-        "structured": true,
-        "new_item_count": 0,
-        "ordered_prior_statuses": [
-          "fixed",
-          "not_fixed"
-        ]
-      },
-      "no-anchor": {
-        "structured": true,
-        "items": [
-          {
-            "severity": "P0",
-            "confidence": 100,
-            "classification": "introduced",
-            "status": "open",
-            "anchor": null
-          }
-        ]
-      },
-      "unparseable": {
-        "structured": false
-      },
-      "catalog-sample": {
-        "structured": true,
-        "items": [
-          {
-            "severity": "P0",
-            "confidence": 100,
-            "classification": "introduced",
-            "status": "open",
-            "anchor": {
-              "path": "src/review.py",
-              "startLine": 77
-            }
-          }
-        ]
-      },
-      "ratchet-aggregate": {
-        "structured": true,
-        "new_item_count": 0,
-        "ordered_prior_statuses": [
-          "fixed",
-          "fixed"
-        ]
-      }
-    },
-    "export": {
-      "no-findings-ship": {
-        "structured": true,
-        "verdict": "SHIP",
-        "items": []
-      },
-      "ratchet-only": {
-        "structured": true,
-        "new_item_count": 0,
-        "ordered_prior_statuses": [
-          "fixed",
-          "not_fixed"
-        ]
-      },
-      "no-anchor": {
-        "structured": true,
-        "items": [
-          {
-            "severity": "P3",
-            "confidence": 50,
-            "classification": "pre_existing",
-            "status": "open",
-            "anchor": null
-          }
-        ]
-      },
-      "unparseable": {
-        "structured": false
-      },
-      "catalog-sample": {
-        "structured": true,
-        "items": [
-          {
-            "severity": "P3",
-            "confidence": 50,
-            "classification": "pre_existing",
-            "status": "open",
-            "anchor": {
-              "path": "src/review.py",
-              "startLine": 88
-            }
           }
         ]
       },

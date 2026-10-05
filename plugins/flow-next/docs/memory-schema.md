@@ -66,12 +66,12 @@ resolution_type: config-fix
 
 ```yaml
 ---
-title: Prefer flowctl rp wrappers over the direct RepoPrompt CLI
+title: Prefer flowctl review wrappers over calling the reviewer CLI directly
 date: 2026-04-24
 track: knowledge
 category: conventions
 module: scripts/review
-tags: [rp, review]
+tags: [review, wrappers]
 applies_when: writing review shims
 ---
 ```
@@ -143,9 +143,9 @@ flowctl memory add \
 flowctl memory add \
   --track knowledge \
   --category conventions \
-  --title "Prefer flowctl rp wrappers" \
+  --title "Prefer flowctl review wrappers" \
   --module scripts/review \
-  --tags "rp,review"
+  --tags "review,wrappers"
 ```
 
 `--type pitfall|convention|decision` (the old API) still works but emits a deprecation warning.
@@ -167,9 +167,9 @@ flowctl memory search "sqlite locked"              # default: --status active
 flowctl memory search "sqlite locked" --status stale     # only stale entries
 flowctl memory search "sqlite locked" --status hardened  # only hardened entries
 flowctl memory search "sqlite locked" --status all       # active + stale + hardened
-flowctl memory search "rp wrappers" \
+flowctl memory search "review wrappers" \
   --module scripts/review \
-  --tags "rp,review" \
+  --tags "review,wrappers" \
   --limit 5
 
 flowctl memory read bug/runtime-errors/sqlite-locked-2026-04-24   # full id

@@ -183,16 +183,6 @@ for pass in $(printf '%s\n' $SELECTED_PASSES); do
         --receipt "$RECEIPT_PATH" \
         --json
       ;;
-    rp)
-      # RP: same-chat session continuity is automatic. Render the
-      # pass-specific prompt from deep-passes.md (inject primary
-      # findings block), send via `rp chat-send` (NO --new-chat). Classic uses
-      # --tab "$T"; CE uses --context-id "$T" --chat-id "$CHAT_ID" --mode review,
-      # parse findings with the same header regex flowctl uses,
-      # merge into receipt manually (or via a shared helper).
-      # See deep-passes.md for template markers.
-      :
-      ;;
     host)
       # No flowctl subprocess for host. Dispatch each selected
       # pass as ANOTHER fresh read-only host-native reviewer subagent with
@@ -327,23 +317,6 @@ case "$BACKEND" in
       --receipt "$RECEIPT_PATH" \
       --json 2>&1)"
     ;;
-  rp)
-    # RP: same-chat session continuity is automatic. Build a validator prompt
-    # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
-    # Classic uses --tab "$T"; CE uses --context-id "$T" plus chat identity.
-    # Parse the response lines with the same regex flowctl uses:
-    #   `<id>: validated: <true|false> -- <reason>`
-    # Then recompute dropped/kept counts and merge into the receipt by hand
-    # (or via a shared helper). See validate-pass.md for the template.
-    cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
-    if [[ "$RP_MODE" == "ce" ]]; then
-      VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file /tmp/validator.md)"
-    else
-      VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
-    fi
-    # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
-    # and update receipt's validator block accordingly.
-    ;;
   host)
     # No flowctl subprocess for host. Dispatch the validator as a
     # fresh read-only host-native subagent with the SAME cross-family pin as
@@ -378,7 +351,7 @@ if [[ "$NEW_VERDICT" == "SHIP" ]]; then
   # All findings dropped — verdict upgraded. Done, no fix loop. This exit
   # never reaches the backend workflow's final release step, so release the
   # optional-phase lease here: OWNING_RID is restated as a LITERAL
-  # — the fan-out rid from the codex phase-one JSON, or the host reservation
+  # — the fan-out rid from the CLI phase-one JSON, or the host reservation
   # id. 0 phases means nothing was held.
   OWNING_RID="<owning rid>"
   if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then

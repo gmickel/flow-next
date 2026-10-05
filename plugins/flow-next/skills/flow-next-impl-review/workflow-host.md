@@ -2,7 +2,7 @@
 
 Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
-`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the AGENTS.md model-routing section.
+`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere).
 
 ## Critical rules
 
@@ -34,30 +34,31 @@ subagent prompt — it has the same repository you do.
 
 ## Step 1: Resolve cross-family pin
 
-1. Read the AGENTS.md model-routing section (caller routing instructions) for the review role / cross-family pairing.
+1. Read the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere) for the review role / cross-family pairing.
 2. Identify the family that wrote the diff (session model / implementer family).
 3. Pick a reviewer slug from a **different** family (uncorrelated blind spots).
 
 **If no cross-family pin is available:**
 - **Interactive:** ask the user explicitly (blocking question) which reviewer model/family to use — do not silently self-review
-- **Autonomous** (`mode:autonomous` / `FLOW_AUTONOMOUS=1`): stop with `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing` — never same-family self-review
+- **Autonomous** (`mode:autonomous` / `FLOW_AUTONOMOUS=1`): stop with `NEEDS_HUMAN: host review needs a cross-family model pin in the model-routing block` — never same-family self-review
 
 ## Step 2: Dispatch read-only reviewer subagents
 
 The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
-**First round of a scope = three-draw fan-out.** The first review round
-dispatches **three** fresh read-only reviewer subagents — one per fixed axis
-lens — and you merge their findings into one consolidated set for one fix pass.
-Re-review rounds after fixes dispatch exactly **one** fresh subagent carrying
-the full merged prior-finding container. Both shapes sit behind the SAME
-reservation fence below: **ONE `review-rounds increment` before the dispatch,
-one record/attach after the merge — never three cap slots per merged round.**
-A merged fan-out round counts 1:1 against the deterministic round cap.
+**First round of a scope = the panel rule in [SKILL.md](SKILL.md).** The first
+review round dispatches **one** fresh read-only reviewer subagent (the correctness
+lens) or **three** — one per fixed axis lens — whose findings you merge into one
+consolidated set for one fix pass. Re-review rounds after fixes dispatch exactly
+**one** fresh subagent carrying the full merged prior-finding container. Every
+shape sits behind the SAME reservation fence below: **ONE `review-rounds
+increment` before the dispatch, one record/attach after the merge — never three
+cap slots per merged round.** A merged round counts 1:1 against the deterministic
+round cap.
 
 **Resume gate — run this BEFORE choosing between the two shapes.** A fresh
 coordinator resuming this scope mid-fix-loop (context lost between a
-`NEEDS_WORK` verdict and its fix pass) must not re-enter the three-draw shape:
+`NEEDS_WORK` verdict and its fix pass) must not re-enter the first-round shape:
 
 ```bash
 # ROUTE: ONE deterministic verb owns canonicalization, the
@@ -84,7 +85,7 @@ case "$ACTION" in
 esac
 ```
 
-With `RESUMED=1`, skip the "First round: three axis draws" section entirely —
+With `RESUMED=1`, skip the "First round: the axis draws" section entirely —
 but do NOT dispatch yet: first run the fix pass against the receipt's merged
 container (Step 5 NEEDS_WORK handling: parse, fix, test, commit; verify
 instead when the fixes are already committed), THEN dispatch under "Round 2+:
@@ -95,8 +96,8 @@ can replace unresolved findings with a stochastic verdict.
 ### Convergence reservation and recovery fence
 
 After the exact reviewer input is composed and immediately before each ROUND's
-dispatch — the whole three-draw fan-out on round 1, the single fresh subagent
-on round 2+ — bind the reviewed range, build the artifact blob, and reserve one
+dispatch — every draw of round 1, the single fresh subagent on round 2+ —
+bind the reviewed range, build the artifact blob, and reserve one
 task-scoped round (one reservation per round, never per draw). The full diff is materialized **for the artifact hash only** —
 it is the identity that must move when the code moves. It does not go into the
 subagent prompt: give the subagent `$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA`, the
@@ -172,12 +173,14 @@ re-review subagent), construct the receipt input and target in Step 3.
 Only then record the captured reservation and attach its journaled payload;
 receipt findings must never be constructed after `record`.
 
-### First round: three axis draws in ONE message
+### First round: the axis draws in ONE message
 
-Dispatch three **fresh** read-only reviewer subagents with the resolved pin,
-**all named in ONE message** — mirror the quality-auditor dispatch shape
-(flow-next-work Phase 4): the same read-only agent dispatched three times, each
-prompt differing from the base reviewer input by exactly one added axis line:
+For one reviewer, dispatch one fresh read-only subagent with the correctness
+draw below. For three, dispatch three **fresh** read-only reviewer subagents
+with the resolved pin, **all named in ONE message** — mirror the quality-auditor
+dispatch shape (flow-next-work Phase 4): the same read-only agent dispatched
+three times, each prompt differing from the base reviewer input by exactly one
+added axis line:
 
 - correctness draw: "Axis focus for this draw: correctness-and-logic of the changed code — logic errors, spec mismatches, and edge cases in the changed paths."
 - contracts draw: "Axis focus for this draw: contracts-and-consistency — do the docs, tests, comments, and stated promises agree with what the code actually does?"
@@ -237,10 +240,11 @@ host-dependent. The dispatch prompt additionally states working-tree conduct: th
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
-Render each dispatch file with the same builder used by the codex backend:
+Render each dispatch file with the same builder the CLI backends use:
 
 ```bash
-for AXIS in correctness contracts integration; do
+AXES=(correctness contracts integration)   # AXES=(correctness) for a one-reviewer round
+for AXIS in "${AXES[@]}"; do
   "$FLOWCTL" review-prompt impl "${TASK_ID:-branch}" --axis "$AXIS" \
     --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --receipt "$RECEIPT_PATH" \
     --out "${TMPDIR:-/tmp}/flow-review-${TASK_ID:-branch}-${AXIS}.md" --json || exit $?
@@ -325,7 +329,7 @@ record fence below refunds the one reservation; nothing is attached).
 When `--deep` / `--validate` / `--interactive` fired, run those optional
 phases AFTER Step 3's record/attach, against the merged container it stamped —
 still exactly ONCE per round, never per draw, and always before the fix pass
-(Step 4's host-native rules apply). Same ordering as the codex fan-out: the
+(Step 4's host-native rules apply). Same ordering as the CLI fan-out: the
 gated phases consume a finalized merged round, and their surviving findings
 feed the fix pass, never a rewrite of the already-recorded merged document.
 
@@ -362,7 +366,7 @@ Write a receipt compatible with existing consumers:
 draw, honestly recording each draw's axis, model, `session_id` (always null on
 host), verdict, and failed flag, including the draws that returned nothing
 (`"failed": true`, `"verdict": null`). `review` carries the MERGED document.
-This is the host path's equivalent of the codex fan-out receipt: the same
+This is the host path's equivalent of the CLI fan-out receipt: the same
 top-level shape plus the same honesty about what actually ran. Re-review
 receipts (single fresh subagent) carry no `draws[]`.
 
@@ -378,8 +382,7 @@ draw (three cap slots for one merged round would triple-charge the cap):**
 
 ```bash
 if [[ -z "$TASK_ID" ]]; then
-  # Standalone: no reservation, round or lease exists; attach directly, in the
-  # same form the rp standalone path uses.
+  # Standalone: no reservation, round or lease exists; attach directly.
   if [[ -n "$VERDICT" ]]; then
     "$FLOWCTL" review-findings attach --input "$RECEIPT_INPUT" \
       --receipt "$RECEIPT_PATH" --review-file "$REVIEW_OUTPUT_FILE" \
@@ -403,6 +406,7 @@ if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
 fi
 RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
   --task "$TASK_ID" --review-type impl --backend host \
+  --model "<actual reviewer slug>" \
   --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
   --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --attach --json)"
 RECORD_EXIT=$?
@@ -468,7 +472,7 @@ run.
 - **Self-reviewing** — coordinator never grades its own diff
 - **Silent same-family self-review** when no cross-family pin is available
 - **Reusing a prior subagent context** for re-review (always fresh)
-- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the AGENTS.md routing block
+- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the model-routing block
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts
 - **Three cap slots for one merged round** — one increment before the draws, one record/attach after the merge

@@ -21,7 +21,8 @@ apply this gate before proceeding in either `SINGLE_TASK_MODE` or `SPEC_MODE`. I
 `no_plan: true` with exactly one task in total marked `implicit_owner: true`.
 Stop if `plan_review_status` is `needs_work` or `needs_human`, or the current user
 message or carried invocation host context explicitly requests spec/design review
-before work. Report `NEEDS_HUMAN` and instruct the user to run
+before work. A `stale` plan review (the spec body changed after its SHIP) stops work
+the same way for a spec with any number of tasks. Report `NEEDS_HUMAN` and instruct the user to run
 `/flow-next:plan-review` for this spec separately, resolve its findings, then
 re-invoke work. Stop before route writes, task minting, claims or dispatch,
 including when no review backend is available. Work's `--review` selects

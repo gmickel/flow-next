@@ -9,7 +9,7 @@ artifact, explicitly reset, or deliberately use `--force`.
 
 ## Philosophy
 
-The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, Cursor, and Claude use context hints from flowctl (codex/copilot/cursor/claude backends).
+The reviewer model only sees selected files. Codex, Copilot, Cursor, and Claude use context hints from flowctl (codex/copilot/cursor/claude backends).
 
 ---
 
@@ -25,16 +25,6 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
-# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
-if command -v rpce-cli >/dev/null 2>&1 \
-  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
-  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
-  || command -v rp-cli >/dev/null 2>&1; then
-  RP_ELIGIBLE=1
-else
-  RP_ELIGIBLE=0
-fi
 
 # Priority: --review flag > per-task/spec `review` override > env > config (flag parsed in SKILL.md).
 # FIRST resolve the review-target id from $ARGUMENTS — the `fn-N.M` task / `fn-N` spec being
@@ -55,19 +45,11 @@ BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  if [ "$RP_ELIGIBLE" = 1 ]; then
-    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|claude|host|none"
-  else
-    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
-  fi
+  echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
   exit 1
 fi
 
-if [ "$RP_ELIGIBLE" = 1 ]; then
-  echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|claude|host|none)"
-else
-  echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|claude|host|none)"
-fi
+echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|claude|host|none)"
 ```
 
 **Spec-form env var (optional):** `FLOW_REVIEW_BACKEND` accepts bare or full spec:

@@ -230,7 +230,18 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [other])
 
-    def test_record_only_close_reads_no_objects(self):
+    def test_renamed_retired_spec_is_not_a_new_close(self):
+        record = json.loads((self.flow / "specs" / f"{self.spec(24, 'open')}.json").read_text(encoding="utf-8"))
+        record.update(status="done", retired={"reason": "moot", "by": []})
+        (self.flow / "specs" / "fn-24-spec.json").write_text(json.dumps(record), encoding="utf-8")
+        base = self.commit()
+        record["id"] = "fn-24-renamed"
+        (self.flow / "specs" / "fn-24-spec.json").rename(self.flow / "specs" / "fn-24-renamed.json")
+        (self.flow / "specs" / "fn-24-renamed.json").write_text(json.dumps(record), encoding="utf-8")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
+
+    def test_record_only_close_reads_only_the_head_record(self):
         sid = self.spec(17, "open")
         self.task(sid, "done")
         base = self.commit()
@@ -238,7 +249,17 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
             self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
-        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff"])
+        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff", "ls-tree", "show"])
+
+    def test_retired_record_only_close_counts(self):
+        sid = self.spec(23, "open")
+        base = self.commit()
+        record = self.flow / "specs" / f"{sid}.json"
+        retired = json.loads(record.read_text(encoding="utf-8"))
+        retired.update(status="done", retired={"reason": "moot", "by": []})
+        record.write_text(json.dumps(retired), encoding="utf-8")
+        self.commit()
+        self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [sid])
 
     def test_task_minted_in_range_counts_even_when_its_tracked_status_is_stale(self):
         # A hand-recorded close can leave the tracked task record at its minted
@@ -279,15 +300,15 @@ class ClosedRangeTests(unittest.TestCase):
         self.commit()
         self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
 
-    def test_record_only_malformed_spec_skips_object_reads(self):
+    def test_record_only_malformed_spec_stops_after_the_head_read(self):
         sid = self.spec(17, "open")
         base = self.commit()
         (self.flow / "specs" / f"{sid}.json").write_text("[]", encoding="utf-8")
         self.commit()
-        # Record-only malformed records now return [] instead of raising; keep the cheap skip.
+        # A malformed record-only change returns [] instead of raising, after the HEAD read.
         with mock.patch.object(flowctl, "_export_run_git", wraps=flowctl._export_run_git) as git:
             self.assertEqual(flowctl.specs_closed_in_range(self.flow, base), [])
-        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff"])
+        self.assertEqual([call.args[0][0] for call in git.call_args_list], ["diff", "ls-tree", "show"])
 
     def test_non_object_spec_is_value_error(self):
         sid = self.spec(17, "open")

@@ -9,6 +9,7 @@ problem_type: integration
 symptoms: A launcher moved to Markdown skipped platform coverage
 root_cause: Git name-only rename output omitted the deleted source path
 resolution_type: fix
+last_audited: "2026-10-05"
 ---
 
 ## Problem

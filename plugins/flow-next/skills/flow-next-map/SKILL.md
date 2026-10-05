@@ -37,7 +37,7 @@ Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 
 **Passthrough boundary.** The slash-command host delivers `$ARGUMENTS` as a single string; the skill word-splits on whitespace. Passthrough is therefore **token-level (whitespace-separated), not full shell-verbatim** — tokens containing literal spaces or shell metacharacters that require shell quoting will not survive. Globs (`*`, `?`) are protected from expansion (`set -f` before the parse) so they reach clawpatch untouched. Users needing complex quoting should run `clawpatch map` directly.
 
-**flow-next's review backend config (rp / codex / copilot / none) stays out of clawpatch.** clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal — a run that sets `CLAWPATCH_PROVIDER` from the flow-next backend has broken this. The script echo reports the backend as informational only.
+**flow-next's review backend config (codex / copilot / cursor / claude / host / none) stays out of clawpatch.** clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal — a run that sets `CLAWPATCH_PROVIDER` from the flow-next backend has broken this. The script echo reports the backend as informational only.
 
 ## Version pin
 

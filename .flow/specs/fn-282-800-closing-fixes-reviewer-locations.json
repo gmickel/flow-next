@@ -1,0 +1,164 @@
+{
+  "branch_name": "fn-282-800-closing-fixes-reviewer-locations",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-05T00:27:01.218138Z",
+  "created_at": "2026-10-04T23:54:45.324020Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-282-800-closing-fixes-reviewer-locations",
+  "impl_review_rounds": {
+    "fn-282-800-closing-fixes-reviewer-locations.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "524962007e4bb546d3a7ae3c60573485e1908925268b2dec634699b6e3bffaba",
+      "backend": "codex",
+      "base_sha": "d86868537c083fdfd1944cb60b147a2e51461242",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-c0f4e71a4376a06b138280fcf6b73ee0",
+            "classification": "introduced",
+            "findingId": "finding-c0f4e71a4376a06b138280fcf6b73ee0",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ffdfb32a686bf35dc9b8bd51ec14f19c",
+            "classification": "introduced",
+            "findingId": "finding-ffdfb32a686bf35dc9b8bd51ec14f19c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-507f22d39f06d1b5f4c2bef3ac79dd4a",
+            "classification": "introduced",
+            "findingId": "finding-507f22d39f06d1b5f4c2bef3ac79dd4a",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "550bd0ef22c56d0cda68f3e63bab1bd759c76be0",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2772,
+      "output_sha256": "926891b1217929c659be30a8655468a71b358c695eec75678d2f5d7d72d27b26",
+      "reservation_id": "e6400cb59c0b4b82ae95743159de7fc4",
+      "round_consumed": true,
+      "scope": "impl:fn-282-800-closing-fixes-reviewer-locations.1",
+      "superseded_by": null,
+      "task": "fn-282-800-closing-fixes-reviewer-locations.1",
+      "timestamp": "2026-10-05T00:16:39.288975Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "80920f083d14834ec302b8c254bbc99e0938770638be8c75303ed2ef7a11c05b",
+      "backend": "codex",
+      "base_sha": "d86868537c083fdfd1944cb60b147a2e51461242",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-c0f4e71a4376a06b138280fcf6b73ee0",
+            "classification": "introduced",
+            "findingId": "finding-c0f4e71a4376a06b138280fcf6b73ee0",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-ffdfb32a686bf35dc9b8bd51ec14f19c",
+            "classification": "introduced",
+            "findingId": "finding-ffdfb32a686bf35dc9b8bd51ec14f19c",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-507f22d39f06d1b5f4c2bef3ac79dd4a",
+            "classification": "introduced",
+            "findingId": "finding-507f22d39f06d1b5f4c2bef3ac79dd4a",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3ed8f4a4f43f462082fbef4eea8d0b427122f0fb",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1292,
+      "output_sha256": "7c6e656c574681473aa61f089c780165a3fd2d27eacae3afd096e05c38e4ffc6",
+      "reservation_id": "a3917f8fb6e3436a8b0ef1e83fa4c43b",
+      "round_consumed": true,
+      "scope": "impl:fn-282-800-closing-fixes-reviewer-locations.1",
+      "superseded_by": null,
+      "task": "fn-282-800-closing-fixes-reviewer-locations.1",
+      "timestamp": "2026-10-05T00:18:59.064736Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-282-800-closing-fixes-reviewer-locations.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-282-800-closing-fixes-reviewer-locations.1": 0
+  },
+  "spec_path": ".flow/specs/fn-282-800-closing-fixes-reviewer-locations.md",
+  "status": "open",
+  "title": "8.0.0 closing fixes: reviewer locations, set-backend errors, retiring a spec, criteria and stall docs",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-05T00:27:01.218145Z"
+}

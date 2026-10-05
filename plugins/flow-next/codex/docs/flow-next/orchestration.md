@@ -144,7 +144,7 @@ The Codex install maps these groups to that host's own tiers when its agent file
 
 > **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix pass plus one re-review per review (`review.maxIterations` caps the rounds as a safety net); turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. Two cheaper standing settings exist: `none` switches the review gates off entirely (each review skill exits cleanly, and `flow --auto` skips its plan-review and completion-review gates), while `host` keeps every gate and runs the reviewer as a host-native fresh-context subagent with a cross-family `reviewer:` pin from [the routing block](#the-routing-block) - no second CLI. The trade is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
-The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline; genuine variance is hooks, not cloned commands.
+The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline; genuine variance is hooks, not cloned commands.
 
 Managed hosts can supply a local execution provider for those four packaged
 backends. Set `FLOW_REVIEW_EXECUTION_URL` to a literal loopback HTTP endpoint and
@@ -248,13 +248,15 @@ unnecessary costs bytes; not injecting after a silent resume failure costs a bli
 review, so injection is the default everywhere it is not provably unnecessary.
 
 **The first review round fans out three axis draws when the diff warrants it.** On
-the `codex` and `host` backends, a large or cross-cutting diff, or one touching
-persisted or shared state, concurrency, security or data layout, gets three draws in
-its first round; a small diff in one area gets one reviewer. The three are draws of the
-same reviewer - same resolved backend/model, same base prompt, each differing by
-exactly one added axis line - dispatched concurrently where the host offers
-one-message parallel dispatch, back-to-back with the degradation disclosed in the
-review record otherwise: correctness-and-logic of the changed code,
+every backend, a large or cross-cutting diff, or one touching persisted or shared
+state, concurrency, security or data layout, gets three draws in its first round; a
+small diff in one area gets one reviewer. The CLI backends (`codex`, `copilot`,
+`cursor`, `claude`) run that rule through one flowctl runner, whichever harness
+flow-next runs in; `host` applies it through the harness's own subagents. The three
+are draws of the same reviewer - same resolved backend/model, same base prompt, each
+differing by exactly one added axis line - dispatched concurrently, or back-to-back with
+the degradation disclosed on a host without one-message parallel dispatch:
+correctness-and-logic of the changed code,
 contracts-and-consistency (do docs, tests, and stated promises agree with what the
 code does), and integration-with-unchanged-code. The studies behind this measured
 single-pass review recall as stochastic sampling - roughly 45% of validated
@@ -267,8 +269,7 @@ Act-On tier capped at 5 non-blocking plus a published remainder) and runs ONE
 consolidated fix pass; the merged round consumes ONE review round against the cap,
 not three. Re-review rounds after fixes are a single dispatch carrying the full
 merged prior-finding container - the harvest value is the first round, and
-re-review verifies fixes, which needs continuity, not breadth. `rp` keeps its
-single stateful chat, and `copilot` / `cursor` / `claude` keep single dispatch every round.
+re-review verifies fixes, which needs continuity, not breadth.
 The residual is real: roughly a third of validated findings eluded every draw in
 the studies. By default there is exactly one re-review, in the same reviewer session
 and scoped to the fix commits: the author's `Declined #<n>: <reason>` commit lines let
@@ -287,7 +288,7 @@ costs rounds and invites hardening scope; one scoped re-review keeps an attended
 - **codex** - `codex exec` auto-loads the host repo's project doc (`AGENTS.md`); in a repo whose `AGENTS.md` routes all work through the flow-next skills, the reviewer adopts that role and re-dispatches the review at itself instead of performing it (route A - suppressed at the argv level with `-c project_doc_max_bytes=0` on both the fresh and resume dispatch). With the flow-next codex plugin installed, the reviewer can also read the plugin's own coordinator skills ("never self-declares a verdict") and obediently withhold the verdict tag (route B - no CLI knob exists).
 - **claude** - `claude -p` loads the repo's `CLAUDE.md` (and the user's own) into every run, the same channel as cursor's auto-attach; the child has no shell, so the route-A self-dispatch cannot happen, but the role adoption can.
 
-On all three backends flow-next prepends an explicit **persona-override preamble** on every review path: it declares that any ambient rubric/persona/instruction from the environment - built-in persona, auto-attached `AGENTS.md`/`CLAUDE.md`, skill catalogs, MCP blocks - is *superseded*, and the ONLY rubric + verdict contract is the flow-next one that follows. Repo-specific review invariants belong in `.flow/criteria.md` (standing G-IDs), which rides the review prompts themselves and reaches every reviewer regardless of backend - `AGENTS.md` is host-agent operating instructions, not a review-criteria channel, and a reviewer that inherits it returns no verdict at all rather than a stricter one. Documented, not configurable; it rides automatically on `review.backend cursor:*`, `codex`, and `claude`. A review that still completes with no verdict is journaled as `missing_verdict` (not a transport failure class), and a streak of those terminates with instruction-contamination guidance instead of "repair the backend". The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend - see [`flowctl.md`](flowctl.md#codex-impl-review).
+On all three backends flow-next prepends an explicit **persona-override preamble** on every review path: it declares that any ambient rubric/persona/instruction from the environment - built-in persona, auto-attached `AGENTS.md`/`CLAUDE.md`, skill catalogs, MCP blocks - is *superseded*, and the ONLY rubric + verdict contract is the flow-next one that follows. Repo-specific review invariants belong in `.flow/criteria.md` (standing G-IDs), which rides the review prompts themselves and reaches every reviewer regardless of backend - `AGENTS.md` is host-agent operating instructions, not a review-criteria channel, and a reviewer that inherits it returns no verdict at all rather than a stricter one. Documented, not configurable; it rides automatically on `review.backend cursor:*`, `codex`, and `claude`. A review that still completes with no verdict is journaled as `missing_verdict` (not a transport failure class), and a streak of those terminates with instruction-contamination guidance instead of "repair the backend". The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in three consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend - see [`flowctl.md`](flowctl.md#codex-impl-review).
 
 #### Steering the fan-out: worked recipes
 
@@ -306,10 +307,10 @@ config key. Three phrasings cover the dial:
   fan-out`. The three draws route to explicitly named per-draw backends/models,
   one per family, so blind spots decorrelate across families as well as axes -
   the strongest shape for a high-stakes merge. One structural constraint on the
-  codex backend: the primary draw - correctness, or the first draw when
-  correctness is not drawn - stays on codex (round 2+ resumes its session, and
-  the merged receipt's top-level fields come from it); secondary draws may name
-  `codex`, `copilot`, or `cursor`. On the host backend the per-draw model pins
+  CLI backends: the primary draw - correctness, or the first draw when
+  correctness is not drawn - stays on the review's own backend (round 2+ resumes
+  its session, and the merged receipt's top-level fields come from it); the other
+  draws may name any CLI backend. On the host backend the per-draw model pins
   are unconstrained.
 
 All three resolve through the existing routing precedence - an explicit
@@ -387,8 +388,8 @@ Direct execution through `/flow-next:work <id> --no-plan` is the default for a r
 | **Flow under `--auto`, the unattended driver** | One ready spec's state (the ready flag authorizes building, scoped landing authority is separate; tasks, plan-review status, done tasks, the recorded direct route and owner, explicit review requests, an open PR) | The same routing files (`route-matrix`, `plan-vs-no-plan`, `gate-selection`) classify `plan`, `plan-review`, `work`, `qa`, `make-pr`, or defer to land; an explicit merge destination continues through the land stage; hop after hop to a terminal, or one hop under `--tick` | `PILOT_VERDICT=<verdict> spec=<id> stage=<stage> reason="..."` as the last line, one evidence block and one `stage:` line per hop | [`flow-next-flow/auto.md`](../../skills/flow-next-flow/auto.md) |
 | **Capture's next step** | The spec it just wrote: readiness, named open decisions, parked unknowns, design risk | `/flow-next:refine`, `/flow-next:plan-review`, `/flow-next:plan`, or `/flow-next:work <id> --no-plan`, derived from the same routing files flow reads | `Recommended next: /flow-next:<stage> <id> - <reason>` on every run | [`flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-close) |
 | **Work's Phase 3 route** | Whether the run was given a task id, `planSync.enabled`, the open task count, the dependency closure | Rolling frontier (default) or the wave loop; a zero-task spec forks to plan-first or work-directly | `Scheduling: rolling` or `Scheduling: wave (<reason>)` before the first claim | [`flow-next-work/phases.md`](../../skills/flow-next-work/phases.md#phase-3-implement) and [`references/no-plan-route.md`](../../skills/flow-next-work/references/no-plan-route.md) |
-| **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../../skills/flow-next-impl-review/SKILL.md#2-codex-review), [`flowctl triage-skip`](flowctl.md#triage-skip) |
-| **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round three-draw fan-out, fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
+| **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../../skills/flow-next-impl-review/SKILL.md#2-cli-review), [`flowctl triage-skip`](flowctl.md#triage-skip) |
+| **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round fan-out (one draw or three), fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
 
 Plan's next-steps menu derives its recommendation from the same files as capture's closer, so explanation, closer, and execution agree. Attended and unattended flow read the same routing references.
 

@@ -9,7 +9,9 @@ problem_type: runtime-error
 symptoms: "Merged subtree read returned null for a real {} default; empty --description-file wrote TBD instead of empty section"
 root_cause: _walk_config_value empty-dict-means-default quirk reused on snapshot path; truthiness check on optional description string
 resolution_type: fix
-related_to: [bug/runtime-errors/flowctl-on-disk-per-key-counter-count-2026-06-27, bug/runtime-errors/forced-color-git-grep-output-defeats-2026-07-19, bug/runtime-errors/glob-walk-file-loads-need-lstat-screen-2026-07-19]
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
+related_to: [bug/runtime-errors/forced-color-git-grep-output-defeats-2026-07-19, bug/runtime-errors/glob-walk-file-loads-need-lstat-screen-2026-07-19]
 ---
 
 ## Problem
@@ -19,7 +21,7 @@ Snapshot-based merged config reads (fn-110.1 `config get` subtree support) route
 Reusing `_walk_config_value` directly for the snapshot merged path (inherits the quirk), and `description.rstrip() if description else "TBD"` (truthiness collapses empty-string into omitted).
 
 ## Solution
-flowctl.py: snapshot merged reads use a sentinel-aware probe (`_tree_probe` + `_CONFIG_RAW_SENTINEL` -> None only when the key is truly absent), documented as a deliberate divergence from the snapshot-less `get_config` quirk (plugins/flow-next/scripts/flowctl.py:1613-1631). Create-time description uses `description is not None` so only an omitted flag falls back to TBD (flowctl.py:6570-6576). Regression tests: empty-map subtree + snapshot sentinel-awareness (test_config_snapshot.py), empty-file + heading-only description (test_task_create_files.py).
+flowctl.py: snapshot merged reads use a sentinel-aware probe (`_tree_probe` + `_CONFIG_RAW_SENTINEL` -> None only when the key is truly absent). That is a deliberate divergence: `get_config` still goes through `_walk_config_value` and returns the default for a stored `{}`. Create-time description uses `description is not None`, so only an omitted flag falls back to TBD. Regression tests: empty-map subtree + snapshot sentinel-awareness (test_config_snapshot.py), empty-file + heading-only description (test_task_create_files.py).
 
 ## Prevention
 When adding a fast path that mirrors an existing read/write, test the degenerate values explicitly: empty dict, empty string, heading-only content. Truthiness checks on optional string params are a smell - use `is not None` when "" is a meaningful value. Empty-value equivalence tests between old and new paths catch quirk leakage.

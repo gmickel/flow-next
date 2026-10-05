@@ -481,7 +481,8 @@ for nf in \
     -e 's|Body inspection → /flow-next:make-pr|Body inspection → $flow-next-make-pr|g' \
     -e 's|re-run /flow-next:make-pr (skill detects the existing branch and re-tries)|re-run $flow-next-make-pr (skill detects the existing branch and re-tries)|g' \
     -e 's|Use `/flow-next:plan fn-N`|Use `$flow-next-plan fn-N`|g' \
-    -e 's|→ `/flow-next:work fn-N` (or more refine|→ `$flow-next-work fn-N` (or more refine|g' \
+    -e 's|→ `/flow-next:plan-review fn-N` when this session changed|→ `$flow-next-plan-review fn-N` when this session changed|g' \
+    -e 's|otherwise `/flow-next:work fn-N` (or more refine|otherwise `$flow-next-work fn-N` (or more refine|g' \
     -e 's|→ `/flow-next:work fn-N.M`|→ `$flow-next-work fn-N.M`|g' \
     -e 's|→ `/flow-next:capture` to turn the refined document|→ `$flow-next-capture` to turn the refined document|g' \
     -e 's|`/flow-next:visual fn-N` for a spec input|`$flow-next-visual fn-N` for a spec input|g' \
@@ -604,7 +605,7 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host|host-deferred
+REVIEW_MODE: none|codex|copilot|cursor|claude|host|host-deferred
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
@@ -801,60 +802,6 @@ if [ -f "$prime_wf" ]; then
     "$prime_wf"
   rm -f "${prime_wf}.bak"
 fi
-
-# --- BEHAVIORAL: RP warnings for review skills ---
-RP_WARNING='
----
-
-## CRITICAL: RepoPrompt Commands Are SLOW - DO NOT RETRY
-
-**READ THIS BEFORE RUNNING ANY COMMANDS:**
-
-1. **`setup-review` takes 5-15 MINUTES** - It runs the RepoPrompt context builder which indexes files. This is NORMAL. Do NOT assume it is stuck.
-
-2. **`chat-send` takes 2-10 MINUTES** - It waits for the LLM to generate a full review. This is NORMAL. Do NOT assume it is stuck.
-
-3. **Run commands directly and WAIT** - Do NOT use background jobs. Just run the command and wait:
-   ```bash
-   # Run setup-review - takes 5-15 minutes, just wait
-   $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
-   # You will see file paths printed as it indexes - this is progress, not errors
-   ```
-
-4. **Output is progress, not errors** - The context builder prints file paths as it indexes. Seeing many lines of output is NORMAL. Do not interpret this as an error loop.
-
-5. **NEVER retry these commands** - If you run them again, you will create duplicate reviews and waste time. Run ONCE and WAIT.
-
-6. **Exit code 0 = success** - When the command finishes, check the exit code. If it is 0, it worked.
-
-**If a command has been running for less than 15 minutes, WAIT. Do not retry. Do not output <promise>RETRY</promise>.**
-
----
-'
-
-for skill in flow-next-impl-review flow-next-plan-review flow-next-spec-completion-review; do
-  # Prefer the backend-split workflow-rp.md (fn-48.3+) — the RP warning only
-  # applies to the RP path. If the skill hasn't been split yet, fall back to
-  # the monolithic workflow.md so unaffected skills keep the warning at the
-  # top of their file.
-  if [ -f "$CODEX_DIR/skills/$skill/workflow-rp.md" ]; then
-    wf="$CODEX_DIR/skills/$skill/workflow-rp.md"
-  else
-    wf="$CODEX_DIR/skills/$skill/workflow.md"
-  fi
-  if [ -f "$wf" ]; then
-    { head -1 "$wf"; echo "$RP_WARNING"; tail -n +2 "$wf"; } > "${wf}.tmp"
-    mv "${wf}.tmp" "$wf"
-  fi
-  sk="$CODEX_DIR/skills/$skill/SKILL.md"
-  if [ -f "$sk" ]; then
-    sed -i.bak \
-      -e 's|setup-review|setup-review (5-15 min, DO NOT RETRY)|g' \
-      -e 's|chat-send|chat-send (2-10 min, DO NOT RETRY)|g' \
-      "$sk"
-    rm -f "${sk}.bak"
-  fi
-done
 
 # --- NAMING: claude-md-scout → agents-md-scout ---
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
@@ -1530,9 +1477,8 @@ def is_negative_context(line):
     skipped. Injecting R2 here either contradicts the surrounding prose
     or pollutes deterministic/autonomous branches."""
     # Auto-fix-loop hard mandates.
-    if 'Never use' in line and 'plain-text numbered prompt' in line:
-        return True
-    if 'do NOT use' in line and 'plain-text numbered prompt' in line:
+    if re.search(r'\b(?:never|do not) use\b', line, re.IGNORECASE) \
+            and 'plain-text numbered prompt' in line:
         return True
     # Hard-error / no-user prose ("questions hard-error ...", "no user to
     # ask ..."). These lines DESCRIBE an autonomous branch that refuses
@@ -1761,8 +1707,8 @@ generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derive
 generate_openai_yaml "flow-next-land" "Flow Land" "Resolve and merge one named, authorized PR; terminal LAND_VERDICT line" "#3B82F6" true
 
 # Review skills (red, implicit)
-generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review via RepoPrompt"  "#EF4444" true
-generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review via RepoPrompt"  "#EF4444" true
+generate_openai_yaml "flow-next-impl-review" "Flow Implementation Review" "Carmack-level code review"                 "#EF4444" true
+generate_openai_yaml "flow-next-plan-review" "Flow Plan Review"           "Carmack-level plan review"                 "#EF4444" true
 generate_openai_yaml "flow-next-spec-completion-review" "Flow Spec Completion Review" "Verify spec implementation matches the spec" "#EF4444" true
 generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resolve PR review feedback via GraphQL"    "#EF4444" true "Resolve PR "
 
@@ -1792,7 +1738,6 @@ generate_openai_yaml "flow-next-prose" "Flow Prose" "Use while drafting a substa
 # invocable by the skills that dispatch them (paths in prose) and via $name.
 generate_openai_yaml "flow-next-drive"          "Flow Drive [internal]"          "Browser/app driver used by Flow QA"                 "#9CA3AF" false
 generate_openai_yaml "flow-next-sync"           "Flow Plan-Sync [internal]"      "Downstream task-spec sync used by Flow Work"        "#9CA3AF" false
-generate_openai_yaml "flow-next-export-context" "Flow Export Context [internal]" "Context bundle export used by reviews"              "#9CA3AF" false
 generate_openai_yaml "flow-next-worktree-kit"   "Flow Worktree Kit [internal]"   "Worktree helper used by Flow Work"                  "#9CA3AF" false
 generate_openai_yaml "flow-next-deps"           "Flow Deps [internal]"           "Dependency-graph helper used by planning skills"    "#9CA3AF" false
 
@@ -1897,7 +1842,6 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-visual"
   "flow-next-drive"
   "flow-next-sync"
-  "flow-next-export-context"
   "flow-next-worktree-kit"
   "flow-next-deps"
   "flow-next-prose"
@@ -2404,7 +2348,8 @@ flow-next-work/phases.md	Next: /flow-next:make-pr <spec-id>	Next: $flow-next-mak
 flow-next-make-pr/create-and-finalize.md	Reviewer feedback → /flow-next:resolve-pr	Reviewer feedback → $flow-next-resolve-pr
 flow-next-make-pr/create-and-finalize.md	Body inspection → /flow-next:make-pr	Body inspection → $flow-next-make-pr
 flow-next-make-pr/create-and-finalize.md	re-run /flow-next:make-pr (skill detects	re-run $flow-next-make-pr (skill detects
-flow-next-refine/SKILL.md	→ `/flow-next:work fn-N` (or more refine	→ `$flow-next-work fn-N` (or more refine
+flow-next-refine/SKILL.md	→ `/flow-next:plan-review fn-N` when this session changed	→ `$flow-next-plan-review fn-N` when this session changed
+flow-next-refine/SKILL.md	otherwise `/flow-next:work fn-N` (or more refine	otherwise `$flow-next-work fn-N` (or more refine
 flow-next-refine/SKILL.md	→ `/flow-next:work fn-N.M`	→ `$flow-next-work fn-N.M`
 flow-next-refine/SKILL.md	→ `/flow-next:capture` to turn the refined document	→ `$flow-next-capture` to turn the refined document
 flow-next-refine/SKILL.md	`/flow-next:visual fn-N` for a spec input	`$flow-next-visual fn-N` for a spec input

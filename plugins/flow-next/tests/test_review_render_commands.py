@@ -18,7 +18,7 @@ class TestReviewRenderCommands(_JournalReplayBase):
         target = self.root / 'receipt.json'
         code, out, err = self._run_cli(
             'review-rounds', 'record', self.spec_id, '--kind', 'plan',
-            '--review-type', 'plan', '--reservation-id', rid,
+            '--review-type', 'plan', '--backend', 'host', '--reservation-id', rid,
             '--output-file', str(output), '--receipt-target', str(target),
             '--receipt-payload-file', str(payload), '--attach', '--json',
         )

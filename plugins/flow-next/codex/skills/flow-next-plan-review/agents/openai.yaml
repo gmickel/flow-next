@@ -1,6 +1,6 @@
 interface:
   display_name: "Flow Plan Review"
-  short_description: "Carmack-level plan review via RepoPrompt"
+  short_description: "Carmack-level plan review"
   brand_color: "#EF4444"
 policy:
   allow_implicit_invocation: true

@@ -4,12 +4,14 @@ date: "2026-07-24"
 track: bug
 category: data
 module: plugins/flow-next/scripts/flowctl.py
-tags: [memory, yaml, frontmatter, round-trip]
+tags: [memory, yaml, frontmatter, round-trip, validation]
 problem_type: data
 symptoms: "entry reads back as {} after a write; body blank lines change on a status-only mutation"
 root_cause: control chars emitted unquoted in YAML scalars; write_memory_entry normalized the body on every write
 resolution_type: fix
-related_to: [bug/data/fence-preserving-writer-needs-fence-2026-07-02, bug/data/migrationrollback-cli-10-review-cycle-2026-05-08, bug/data/paired-snapshot-setter-must-write-both-2026-06-03]
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
+related_to: [bug/data/fence-preserving-writer-needs-fence-2026-07-02, bug/data/paired-snapshot-setter-must-write-both-2026-06-03]
 ---
 
 ## Problem
@@ -46,3 +48,4 @@ with a hostile value (embedded newline, tab, leading/trailing spaces) through
 the real argparse path AND through both parsers - not just the happy string.
 For frontmatter-only mutations, assert on the raw post-frontmatter segment, not
 on the parsed body: a parsed-body comparison passes while the file changes.
+When loosening a validator in front of this writer, admit only values `_format_yaml_value` round-trips (scalars and flat lists): a relaxed `allow_unknown` once let a `mark-*` stamp rewrite a mapping-valued custom field as a quoted dict string. Test a round trip of each value shape, not just the key shape (`test_memory_schema.test_allow_unknown_rejects_values_the_writer_cannot_round_trip`).

@@ -9,6 +9,7 @@ problem_type: runtime-error
 symptoms: invalid UTF-8 task body aborts the whole flowctl anchor bundle
 root_cause: glossary match text evaluated as an argument before _anchor_capture's try
 resolution_type: fix
+last_audited: "2026-10-05"
 ---
 
 ## Problem

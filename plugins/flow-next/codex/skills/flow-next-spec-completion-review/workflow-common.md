@@ -23,16 +23,6 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
-if command -v rpce-cli >/dev/null 2>&1 \
-  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
-  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
-  || command -v rp-cli >/dev/null 2>&1; then
-  RP_ELIGIBLE=1
-else
-  RP_ELIGIBLE=0
-fi
-
 # Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
 # Resolve the spec id from $ARGUMENTS FIRST so a per-spec `default_review` override routes to the
 # right backend before branching. Substitute it literally: a Bash-prompt turn leaves $1 empty,
@@ -46,11 +36,7 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  if [ "$RP_ELIGIBLE" = 1 ]; then
-    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|claude|host|none"
-  else
-    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
-  fi
+  echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
   exit 1
 fi
 
@@ -68,7 +54,6 @@ echo "Review backend: $BACKEND"
 | `cursor` | [workflow-cursor.md](workflow-cursor.md) |
 | `claude` | [workflow-claude.md](workflow-claude.md) |
 | `host` | [workflow-host.md](workflow-host.md) |
-| `rp` | [workflow-rp.md](workflow-rp.md) |
 
 Only the file for the active backend should enter context. Do not read the other backend files.
 
@@ -78,13 +63,11 @@ Only the file for the active backend should enter context. Do not read the other
 
 ## Fix Loop (INTERNAL)
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 **The fix loop never pauses for user confirmation**; never use plain-text numbered prompt in it. Which findings it fixes, and which it lists as follow-ups, follows the Review section of [working-rules.md](../../references/working-rules.md).
 
-**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, claude, host):**
-The codex/copilot/cursor/claude handlers reserve a round before dispatch; the selected
-rp/host workflows call the same `review-rounds` reserve/record surface.
+**MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, host):**
+The codex/copilot/cursor/claude handlers reserve a round before dispatch; the host
+workflow calls the same `review-rounds` reserve/record surface.
 Verdict-bearing attempts consume the reservation; no-verdict transport failures
 are recorded and refunded.
 
@@ -93,7 +76,7 @@ When a delivered `NEEDS_WORK` consumes round
 
 - codex/copilot/cursor/claude already self-wrote `needs_work` while handling that
   verdict; do not duplicate it.
-- host/rp: [references/terminal-status.md § Capped round](references/terminal-status.md#capped-round).
+- host: [references/terminal-status.md § Capped round](references/terminal-status.md#capped-round).
 
 The exit-4 cap refusal and transport-failure semantics are stated in SKILL.md
 directly under the Step 0.5 checkpoint, and so is the unchanged-artifact terminal.
@@ -110,27 +93,24 @@ If the verdict is NEEDS_WORK, fix and re-review (working-rules.md, Review):
 
 1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)
 2. **Fix code** and run the focused tests for it
-3. **Commit fixes**, with one `Declined #<n>: <reason>` line in the message for each finding listed as a follow-up (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`). Then, only when step 2's green run included one of the repo's full-gate commands: read [fix-gate-receipt.md](../../references/fix-gate-receipt.md) and mint its receipt.
+3. **Commit fixes**, with one `Declined #<n>: <reason>` line in the message for each finding listed as a follow-up (mandatory before re-review; never blanket-stage with `git add --all`). Then, only when step 2's green run included one of the repo's full-gate commands: read [fix-gate-receipt.md](../../references/fix-gate-receipt.md) and mint its receipt.
 4. **Re-review**:
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
    - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
      re-review path.
-   - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
 5. **Stop.** Attended, the re-review's verdict is terminal: `SHIP` completes; `NEEDS_WORK`
    hands the surviving findings to the caller, never a second fix pass. When working-rules.md's
    review loop applies (an unattended run, or a request to review until SHIP), repeat steps 1-4
-   until SHIP or an `ESCALATE:`. On host/rp, run the terminal status step below on the final
+   until SHIP or an `ESCALATE:`. On host, run the terminal status step below on the final
    verdict. The iteration cap stays as the backstop (`ESCALATE:`, exit 4).
-
-**RP re-reviews stay in the same chat.** `--new-chat` belongs to the first review only — a re-review carrying it drops the reviewer's context and has broken this.
 
 ## Record the terminal verdict exactly once
 
-`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude. **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for rp and for repairing a missed write:
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude. **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for repairing a missed write:
 
-`host` or `rp`: read [references/terminal-status.md](references/terminal-status.md) and run it on the
+`host`: read [references/terminal-status.md](references/terminal-status.md) and run it on the
 final verdict.
 
 ## Anti-patterns (all backends)

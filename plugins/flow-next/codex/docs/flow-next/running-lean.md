@@ -86,7 +86,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 `review.backend` - **unset by default**; reviews run in-host. Details: [`orchestration.md`](orchestration.md#review-backends-cross-model-review).
 
 - **Automates away:** getting a verdict from a model family that did not write the diff, so the reviewer's blind spots are uncorrelated with the writer's.
-- **Costs:** an out-of-host review pass per review round - roughly three passes on the first round of each scope, where the codex and host backends fan out three concurrent axis draws and merge them into one fix pass (one round against the cap, not three) - a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
+- **Costs:** an out-of-host review pass per review round - roughly three passes on the first round of a large or risky scope, where every backend fans out three concurrent axis draws and merges them into one fix pass (one round against the cap, not three) - a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
 - **Earns its keep when:** the diff was written by an agent and will be merged without a human reading it line by line. That is the autonomous profile by definition; in the human-driven profile you are the cross-model reviewer.
 - **Lean invocation:** `/flow-next:impl-review` or `/flow-next:plan-review` on the changes that warrant it, or a per-task `review:` pin, leaving the standing backend unset.
 
@@ -108,11 +108,11 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 
 #### Turning the dial: draw topology
 
-On the codex and host backends the first review round of a scope fans out three concurrent axis draws (correctness / contracts / integration) and merges them into one fix pass - a structural trade of parallel review passes for serial fix-and-re-review rounds. The dial is a per-invocation prose instruction, never a flag or config key, and the whole layer is optional to begin with:
+On every backend the first review round of a large or risky scope fans out three concurrent axis draws (correctness / contracts / integration) and merges them into one fix pass - a structural trade of parallel review passes for serial fix-and-re-review rounds. The dial is a per-invocation prose instruction, never a flag or config key, and the whole layer is optional to begin with:
 
 - **The default** - three axis draws, one merged fix pass, for a large or cross-cutting diff or one touching persisted or shared state, concurrency, security or data layout; a small diff in one area already gets one reviewer. The right shape when agent-written diffs get merged without a human reading them line by line.
 - **Single-reviewer economy** - `/flow-next:work fn-12 - use 1 reviewer instead of 3` collapses the round to one draw: the lean setting for small, clean diffs, where a three-draw harvest costs extra review passes for findings one draw would surface anyway.
-- **Cross-family upgrade** - `use three different model families for the review fan-out` routes each draw to a different family, decorrelating blind spots across families as well as axes: the strongest setting for a high-stakes merge. On the codex backend the primary draw (correctness, or the first draw when correctness is not drawn) stays on codex; secondary draws may name codex, copilot, or cursor. On the host backend the per-draw model pins are unconstrained.
+- **Cross-family upgrade** - `use three different model families for the review fan-out` routes each draw to a different family, decorrelating blind spots across families as well as axes: the strongest setting for a high-stakes merge. On a CLI backend the primary draw (correctness, or the first draw when correctness is not drawn) stays on the review's own backend; the other draws may name any CLI backend. On the host backend the per-draw model pins are unconstrained.
 
 The worked recipes and the evidence behind the default live in [`orchestration.md`](orchestration.md#steering-the-fan-out-worked-recipes).
 

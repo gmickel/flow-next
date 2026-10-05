@@ -211,10 +211,13 @@ Read current `.flow/meta.json`, add/update these fields (preserve all others):
 
 Use the Step 2 response, without repeating shell probes or config calls:
 
-- `tools` supplies the `HAVE_RP`, `HAVE_CODEX`, `HAVE_COPILOT`, `HAVE_CURSOR`,
+- `tools` supplies the `HAVE_CODEX`, `HAVE_COPILOT`, `HAVE_CURSOR`,
   `HAVE_CLAUDE`, and `HAVE_GROK` availability flags.
 - `config` supplies raw `CURRENT_BACKEND`, `CURRENT_SPEC_IDS`, and
-  `CURRENT_QA`. Only null means unset; false is an answer.
+  `CURRENT_QA`. Only null means unset; false is an answer. A `CURRENT_BACKEND`
+  of `rp` (or `rp:...`) names a removed backend: tell the user in one line
+  "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review
+  backends: claude, codex, copilot, cursor, host." and treat it as unset.
 - `criteria_exists` supplies `CRITERIA_EXISTS`; symlinks count as existing.
 - `tracker_active` supplies `TRACKER_CONFIGURED` from the canonical predicate.
 
@@ -247,7 +250,7 @@ If ANY config values are already set, print a notice before asking questions:
 
 ```
 Current configuration:
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, or claude:<model>:<effort>>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, or claude:<model>:<effort>>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
 - Live QA: <off|on|auto> (change with: flowctl config set pipeline.qa <off|on|auto>)
 ```
@@ -374,7 +377,6 @@ case "$review_answer" in
   "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
   "Cursor"*|"cursor"*) REVIEW_BACKEND="cursor" ;;
   "Claude"*|"claude"*) REVIEW_BACKEND="claude" ;;
-  "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
   *) REVIEW_BACKEND="none" ;;
 esac
 
@@ -499,7 +501,7 @@ Grok host notes:
 - flowctl resolves from the plugin install via the skill's own absolute path (Grok exposes no plugin-root env vars) — nothing is copied into the repo
 - Docs: /flow-next: slash snippet (CLAUDE.md default lifecycle target; Grok also reads AGENTS.md)
 - Routing block: AGENTS.md (where host review reads the `reviewer` tier)
-- Review: host offered (single-native-family fail-closed for Grok writers) + rp/codex/copilot/cursor/claude/none
+- Review: host offered (single-native-family fail-closed for Grok writers) + codex/copilot/cursor/claude/none
 - No .codex/agents copy
 - Detection: GROK_AGENT=1 (not ~/.grok or PATH)
 ```
@@ -530,7 +532,7 @@ Configuration (use flowctl config set to change):
 - GitHub scout: <enabled|disabled>
 - Spec ids: <flow|tracker|unset>   # only meaningful when a tracker is configured; tracker is the team default
 - Live QA: <off|on|auto>
-- Review backend: <host|codex|rp|copilot|cursor|claude|none>
+- Review backend: <host|codex|copilot|cursor|claude|none>
 
 Documentation updated:
 - <files updated or "none">

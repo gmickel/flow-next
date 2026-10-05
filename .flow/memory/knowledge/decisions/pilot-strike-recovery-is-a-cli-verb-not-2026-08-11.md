@@ -3,19 +3,21 @@ title: "Pilot strike recovery is a CLI verb, not board-native transition detecti
 date: "2026-08-11"
 track: knowledge
 category: decisions
-module: plugins/flow-next/skills/flow-next-pilot
-tags: [pilot, strikes, tracker-sync, readyState, fn-184]
+module: plugins/flow-next/skills/flow-next-flow/references/backlog-mode.md
+tags: [pilot, flow-auto, backlog-mode, strikes, tracker-sync, readyState, fn-184]
 applies_when: "Someone proposes clearing pilot strikes from board state / tracker transitions, or an armed-readyState operator asks for board-only strike recovery."
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
 related_to: [knowledge/decisions/tracker-sync-is-projection-not-2026-06-01]
 ---
 
 ## Decision
 
-Pilot strike recovery under an armed `tracker.readyState` is a deterministic CLI verb (`flowctl pilot strikes clear <spec-id>`), NOT board-native transition detection. Decided in fn-184 (#325), 2026-08-11.
+Strike recovery for the unattended driver (then pilot, now `flow --auto` backlog mode) under an armed `tracker.readyState` is a deterministic CLI verb (`flowctl pilot strikes clear <spec-id>`), NOT board-native transition detection. Decided in fn-184 (#325), 2026-08-11.
 
 ## The deferred alternative
 
-An observed-transition bit in the strikes ledger: each pilot tick already sees current board state, so a tick observing the struck issue OUT of the ready lane could record `leftReadySinceStrike=true`, and a later projection-set ready would then count as a human re-bless. Board-native (preserves "board is the single control plane" ergonomics for armed repos), no new verb.
+An observed-transition bit in the strikes ledger: each `flow --auto` backlog tick already sees current board state, so a tick observing the struck issue OUT of the ready lane could record `leftReadySinceStrike=true`, and a later projection-set ready would then count as a human re-bless. Board-native (preserves "board is the single control plane" ergonomics for armed repos), no new verb.
 
 ## Why deferred
 

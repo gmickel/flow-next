@@ -75,6 +75,19 @@ class FindReferencesCp1252(unittest.TestCase):
             f"expected a legacy.c hit, got {refs!r}",
         )
 
+    def test_find_references_survives_forced_color_grep(self):
+        # `color.grep=always` colors output even when piped; the file:line
+        # parse must still see plain paths and line numbers.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            _init_repo_with_cp1252_file(root)
+            subprocess.run(
+                ["git", "config", "color.grep", "always"], cwd=root, check=True
+            )
+            with _chdir(root):
+                refs = flowctl.find_references("widget", [])
+        self.assertIn(("legacy.c", 1), refs)
+
 
 class StdioReconfigureUtf8(unittest.TestCase):
     def test_helper_forces_utf8_on_reconfigurable_streams(self):

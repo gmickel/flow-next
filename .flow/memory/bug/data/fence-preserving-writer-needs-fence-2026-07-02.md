@@ -9,7 +9,9 @@ problem_type: data
 symptoms: "Valid fenced '## ' content broke next set-acceptance (stale remnant, false duplicate) and validate"
 root_cause: Normalization preserved fenced H2 lines but all downstream H2 scans of the file were fence-blind
 resolution_type: fix
-related_to: [bug/data/migrationrollback-cli-10-review-cycle-2026-05-08, bug/data/paired-snapshot-setter-must-write-both-2026-06-03]
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
+related_to: [bug/data/paired-snapshot-setter-must-write-both-2026-06-03]
 ---
 
 ## Problem
@@ -19,7 +21,7 @@ fn-79 added `normalize_section_content` which deliberately PRESERVES `## ` lines
 Fixing only the write-side normalization (round 1) — the invariant "fenced H2 is content, not a boundary" must hold at EVERY scan of the file, not just at the point that decides to preserve it.
 
 ## Solution
-One shared fence tracker `_iter_fence_aware(lines)` (flowctl.py ~5147) yielding `(line, in_fence)`; every H2 scan of task `.md` content consumes it: `normalize_section_content`, `patch_task_section` (duplicate check + splice loop), `get_task_section`, `validate_task_spec_headings`, and `cmd_task_set_spec`'s missing-heading scaffold check. Regression tests in `tests/test_normalize_section_content.py` cover persisted fenced H2 idempotence, fenced byte-exact canonical heading (no duplicate error), fence-aware read, and validate parity.
+One shared fence tracker `_iter_fence_aware(lines)` (flowctl.py) yielding `(line, in_fence)`; every H2 scan of task `.md` content consumes it: `normalize_section_content`, `patch_task_section` (duplicate check + splice loop), `get_task_section`, `validate_task_spec_headings`, and `cmd_task_set_spec`'s missing-heading scaffold check. Regression tests in `tests/test_normalize_section_content.py` cover persisted fenced H2 idempotence, fenced byte-exact canonical heading (no duplicate error), fence-aware read, and validate parity.
 
 ## Prevention
-When a writer starts intentionally persisting a shape (here: fenced `## ` lines inside sections), grep for every OTHER consumer that parses the same file for that token (`startswith("## ")`, `^## ` regexes) and give them the same awareness in the same change — write/read/validate parity is one invariant, not three features.
+When a writer starts intentionally persisting a shape (here: fenced `## ` lines inside sections), grep for every OTHER consumer that parses the same file for that token (`startswith("## ")`, `^## ` regexes) and give them the same awareness in the same change — write/read/validate parity is one invariant, not three features. A reader added later can reintroduce the class: the 2026-10 audit found `judge_tier_state` reading a task's Acceptance section with a fence-blind `^## ` regex.

@@ -1,16 +1,16 @@
-# Host and rp terminal status (gated reference)
+# Host terminal status (gated reference)
 
-> Read from workflow-common.md only when `BACKEND` is `host` or `rp`.
+> Read from workflow-common.md only when `BACKEND` is `host`.
 
 ## Capped round
 
-- host/rp continue to SKILL.md's Step 0.5 checkpoint immediately; it confirms
+- host continues to SKILL.md's Step 0.5 checkpoint immediately; it confirms
   the recorded `needs_work` (repairing a write that did not land), then emits
   `ESCALATE:` and exits 4. Do not attempt another reserve/dispatch first.
 
 ## Record the terminal verdict
 
-For host/rp, `review-rounds record --status-target completion` is the one
+For host, `review-rounds record --status-target completion` is the one
 status owner (with a journaled receipt, the status lands when `attach`
 publishes it). Execute the SKILL.md Step 0.5 checkpoint again now: it repairs
 a write that did not land and emits the terminal only after persistence
@@ -18,7 +18,7 @@ succeeds. Codex/copilot/cursor/claude handlers already self-write status; their 
 invocation also runs Step 0.5 first, so a handler-side write failure recovers
 without another reviewer dispatch.
 
-For host and rp, status persists once on every delivered terminal path and
+For host, status persists once on every delivered terminal path and
 Step 0.5 emits the matching terminal — SHIP → `ship` (exit 0),
 capped-NEEDS_WORK → `needs_work` (exit 4), and
 NEEDS_HUMAN → `needs_human` (exit 4, `ESCALATE: reviewer requested human

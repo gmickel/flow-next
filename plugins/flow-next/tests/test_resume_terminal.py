@@ -32,6 +32,7 @@ class ResumeTerminalTests(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+    # Default: a legacy rp attempt from a pre-8.0 sidecar.
     def run_state(self, outcome='verdict', verdict='SHIP', backend='rp', status='unknown', reviewed='', rounds=0, extra=None, receipt=None):
         attempt = {'scope': 'completion', 'outcome': outcome, 'verdict': verdict,
                    'backend': backend, 'timestamp': '2026-08-02T00:00:00Z', **(extra or {})}

@@ -329,6 +329,53 @@ class TestGlobalCriteriaPromptInjection(unittest.TestCase):
         self.assertIn("<verdict>NEEDS_WORK</verdict>", prompt)
 
 
+class TestSingleTaskImplReviewCriteria(unittest.TestCase):
+    """fn-281 R6: a spec's only task gets the standing criteria in its
+    implementation review, since that spec skips completion review."""
+
+    def _render(self, task_count: int, criteria: "str | None") -> subprocess.CompletedProcess:
+        root = Path(self._tmp.name) / f"repo-{task_count}-{criteria is not None}"
+        (root / ".flow" / "specs").mkdir(parents=True)
+        (root / ".flow" / "tasks").mkdir()
+        _git(root, "init", "-q")
+        (root / ".flow" / "specs" / "fn-1-x.json").write_text(json.dumps({"id": "fn-1-x"}))
+        for n in range(1, task_count + 1):
+            tasks = root / ".flow" / "tasks"
+            (tasks / f"fn-1-x.{n}.json").write_text(json.dumps({"id": f"fn-1-x.{n}", "epic": "fn-1-x"}))
+            (tasks / f"fn-1-x.{n}.md").write_text(f"# Task {n}\n")
+        if criteria is not None:
+            (root / ".flow" / "criteria.md").write_text(criteria, encoding="utf-8")
+        (root / "a.txt").write_text("a")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-qm", "base")
+        (root / "a.txt").write_text("b")
+        _git(root, "commit", "-qam", "change")
+        return subprocess.run(
+            [*FLOWCTL_CMD, "review-prompt", "impl", "fn-1-x.1", "--base", "HEAD~1",
+             "--out", str(root / "prompt.md")],
+            cwd=root, capture_output=True, text=True,
+        )
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_criteria_reach_only_a_single_task_review(self) -> None:
+        criterion = "- **G1:** Every route change regenerates the contract.\n"
+        for tasks, criteria, included in ((1, criterion, True), (2, criterion, False), (1, None, False)):
+            with self.subTest(tasks=tasks, criteria=criteria is not None):
+                run = self._render(tasks, criteria)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                prompt = Path(run.stdout.strip()).read_text(encoding="utf-8")
+                self.assertEqual(flowctl.GLOBAL_CRITERIA_HEADING in prompt, included)
+                self.assertEqual("Every route change regenerates" in prompt, included)
+
+    def test_invalid_criteria_fail_the_single_task_review(self) -> None:
+        run = self._render(1, "- **G1:**\n")
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("criteria.md", run.stdout + run.stderr)
+
+
 _SAMPLE_COMPLETION_REVIEW = """## Requirements Extracted
 
 1. Route changes regenerate the contract

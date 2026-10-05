@@ -8,8 +8,7 @@
 
 This is a STRING-ENUM knob (`off|on|auto`), NOT a bool — pilot's gate read
 is the strict literal-`on` check, so pilot's activating value is exactly
-`"on"`; bool `true` is NOT recognized (memory
-docs-activation-command-for-string-enum). fn-238 added `"auto"`: flowctl
+`"on"`; bool `true` is NOT recognized. fn-238 added `"auto"`: flowctl
 stores it like any other value and never interprets it (the attended
 conductor reads it; pilot treats it as off). The default `"off"` keeps
 pilot's stage set + behavior byte-for-byte unchanged.

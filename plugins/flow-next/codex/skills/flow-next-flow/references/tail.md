@@ -67,7 +67,7 @@ if [ "${LAND_OBSERVED:-0}" = 1 ]; then
     PILOT_LAND_VERDICT=ADVANCED
   elif [ "${LAND_PR_STATE:-}" = OPEN ] && [ "${LAND_AUTHORIZED:-0}" = 1 ]; then
     case "$LAND_RESULT" in
-      FIXING_CI|RESOLVING|AWAITING_REVIEW)
+      FIXING_CI|RESOLVING|AWAITING_REVIEW|QUEUED)
         if [ "${LAND_PROGRESS:-0}" = 1 ]; then
           PILOT_LAND_VERDICT=ADVANCED
         else

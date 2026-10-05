@@ -23,4 +23,4 @@ Select by the contract's `**Surface:**` identifier plus sub-feature ID ([feature
 
 Invoke `flow-next:flow-next-drive` naming the resolved feature file and sub-feature, so drive follows that file's `How to get to it (user POV)`, `Driving it` preconditions and commands, and `Gotchas` instead of rediscovering which feature the report is about or how to reach it.
 
-A mapped route that no longer matches the live app is stale: file the drift note exactly as the contract's "Writers and drift notes" section specifies (QA's §5.5 fence in `flow-next-qa/workflow.md` is the reference invocation), then reproduce by live discovery for this run. Never edit `.flow/features/` from flow. The resolution still names the feature; only its route was stale.
+A mapped route that no longer matches the live app is stale: file the drift note exactly as the contract's "Writers and drift notes" section specifies (QA's fence in `flow-next-qa/references/drift-notes.md` is the reference invocation), then reproduce by live discovery for this run. Never edit `.flow/features/` from flow. The resolution still names the feature; only its route was stale.

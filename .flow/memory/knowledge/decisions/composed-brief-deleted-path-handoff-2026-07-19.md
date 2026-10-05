@@ -7,10 +7,10 @@ module: plugins/flow-next/skills/flow-next-work/references/codex-delegation.md
 tags: [fn-103, codex-delegation, path-handoff, eval, delegation, bitter-lesson]
 applies_when: "considering re-adding per-task composed content to the delegate:codex prompt, or any per-task brief composition for delegated implementation"
 decision_status: accepted
-alternatives_considered: |
-  - composed brief (8-section per-task composition): eval-tied on quality; 5-17 min + ~10x tokens per task
-  - path-handoff (chosen): fixed 3-slot template; the task file IS the brief
-  - mechanical bundle (inline task+spec bytes): keeps prompt cost; goes stale vs the file
+alternatives_considered: ["composed brief (8-section per-task composition): eval-tied on quality; 5-17 min + ~10x tokens per task", "path-handoff (chosen): fixed 3-slot template; the task file IS the brief", "mechanical bundle (inline task+spec bytes): keeps prompt cost; goes stale vs the file"]
+status: stale
+last_audited: "2026-10-05"
+audit_notes: "Codex delegation removed in flow-98; the no-embed dispatch contract lives in worker-bridge.md and agent_docs/project.md (audited-by: /flow-next:audit)"
 related_to: [knowledge/decisions/plan-sync-skip-gate-not-viable-2026-07-03]
 ---
 

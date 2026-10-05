@@ -461,7 +461,11 @@ class FixtureValidation(unittest.TestCase):
 
     def test_invalid_backend_grammar(self) -> None:
         self._invalid({"review": {"backend": "copilot:m:none"}})
+        self._invalid({"review": {"backend": "none:some-model"}})
+        # RepoPrompt was removed in 8.0.0; the schema no longer accepts it.
+        self._invalid({"review": {"backend": "rp"}})
         self._invalid({"review": {"backend": "rp:some-model"}})
+        self._invalid({"review": {"backend": "export"}})
         self._invalid({"review": {"backend": "bogus"}})
 
     def test_invalid_unknown_keys(self) -> None:

@@ -1616,32 +1616,6 @@ PY
     FAIL=$((FAIL + 1))
   fi
 
-  # Re-review smoke: run plan-review again against the same --receipt.
-  # Task-3 guards session resume on prior receipt mode==copilot — a copilot-
-  # mode receipt here must yield the SAME session_id (resume path), not a
-  # fresh UUID (new-session path). This proves cross-run continuity works.
-  if [[ -f "$TEST_DIR/cop-plan-receipt.json" ]]; then
-    prior_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
-    set +e
-    cop_re_result="$(scripts/flowctl copilot plan-review "$EPIC4" --files "src/hello_copilot.py" --base main --receipt "$TEST_DIR/cop-plan-receipt.json" --json 2>&1)"
-    cop_re_rc=$?
-    set -e
-    if [[ "$cop_re_rc" -eq 0 ]]; then
-      new_session="$("${FLOW_PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$TEST_DIR/cop-plan-receipt.json")"
-      if [[ "$prior_session" == "$new_session" ]]; then
-        echo -e "${GREEN}✓${NC} copilot plan-review re-review resumes session"
-        PASS=$((PASS + 1))
-      else
-        echo -e "${RED}✗${NC} copilot plan-review re-review (session changed: $prior_session -> $new_session)"
-        FAIL=$((FAIL + 1))
-      fi
-    else
-      echo -e "${RED}✗${NC} copilot plan-review re-review (exit $cop_re_rc)"
-      echo "  output: $cop_re_result" | head -8
-      FAIL=$((FAIL + 1))
-    fi
-  fi
-
   # Test impl-review e2e (create a simple change first)
   cat > "$TEST_DIR/repo/src/hello_copilot.py" << 'EOF'
 def hello_copilot():
@@ -1996,13 +1970,23 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 3: rp with model rejected
-rp_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "rp:claude-opus" --json 2>&1 || true)"
-if echo "$rp_out" | grep -q '"success": false' && echo "$rp_out" | grep -q "does not accept a model"; then
-  echo -e "${GREEN}✓${NC} set-backend rejects rp:model spec"
+# Test 3: a modelless backend with a model is rejected
+nomodel_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "none:claude-opus" --json 2>&1 || true)"
+if echo "$nomodel_out" | grep -q '"success": false' && echo "$nomodel_out" | grep -q "does not accept a model"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects none:model spec"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} set-backend didn't reject rp:model: $rp_out"
+  echo -e "${RED}✗${NC} set-backend didn't reject none:model: $nomodel_out"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 3b: the removed RepoPrompt backend is rejected with the removal notice
+removed_out="$(scripts/flowctl task set-backend "$BSPEC_TASK" --review "rp" --json 2>&1 || true)"
+if echo "$removed_out" | grep -q '"success": false' && echo "$removed_out" | grep -q "was removed in flow-next 8.0.0"; then
+  echo -e "${GREEN}✓${NC} set-backend rejects removed rp backend"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}✗${NC} set-backend didn't reject removed rp backend: $removed_out"
   FAIL=$((FAIL + 1))
 fi
 

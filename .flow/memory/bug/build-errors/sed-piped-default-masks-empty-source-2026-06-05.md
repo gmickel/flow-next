@@ -9,9 +9,10 @@ problem_type: build-error
 symptoms: DEFAULT_BRANCH/BASE_REF ends up empty when origin/HEAD unset; export-cognitive-aid --base then fails
 root_cause: cmd | sed ... || echo default — sed exits 0 on empty input so the || default is unreachable; and literal branch==spec-id match misses flow branches
 resolution_type: fix
-last_audited: "2026-07-25"
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
 audit_notes: "marked fresh (audited-by: /flow-next:audit)"
-related_to: [bug/build-errors/abort-option-copy-must-reflect-pre-2026-05-18, bug/build-errors/fn-44-review-cycle-lessons-2026-05-21, bug/build-errors/scout-fallback-prose-drifted-from-specs-2026-05-26, bug/build-errors/skill-bash-set-arguments-cant-honor-2026-05-26]
+related_to: [bug/build-errors/fn-44-review-cycle-lessons-2026-05-21]
 ---
 
 ## Problem
@@ -21,9 +22,9 @@ A skill's base-ref detection used `git symbolic-ref --short refs/remotes/origin/
 Trusting a `cmd | sed ... || fallback` idiom for defaulting: the exit code reflects the LAST pipeline stage (`sed`), not whether the source command produced output. The `||` only fires on `sed` failure, not on empty input.
 
 ## Solution
-Reuse the make-pr proven patterns (flow-next-make-pr/workflow.md §0.2-§0.3):
-- Base: a `for candidate in origin/main main origin/master master` loop gated on `git rev-parse --verify --quiet`, hard-erroring when none resolve, then `merge-base` for a stable diff base (`workflow.md` §1.2).
-- Branch-match: scan `.flow/specs/*.json` + `.flow/epics/*.json` `branch_name` via jq instead of literal `branch == spec-id` equality (`workflow.md` §1.1).
+Use the make-pr cascade, which now lives in `plugins/flow-next/scripts/make-pr-preflight.sh`:
+- Base: a `for candidate in origin/main main origin/master master` loop gated on `git rev-parse --verify --quiet`, falling back to `origin/HEAD` only through a captured value checked with `[[ -z ... ]]`, and stopping when nothing resolves; then `merge-base` for a stable diff base (qa `workflow.md` §1.2).
+- Branch-match: match the current branch against each spec's stored `branch_name` instead of literal `branch == spec-id` equality (qa `references/spec-from-branch.md`, reached from §1.1).
 
 ## Prevention
-When defaulting from a command's output, branch on the captured value (`[[ -z "$X" ]]`), never on a `cmd | sed | tr ... || echo default` exit code — the trailing filter masks the source's success/failure. For base-ref / branch→spec resolution in any new flow-next skill, copy the make-pr cascade rather than re-deriving a one-liner.
+When defaulting from a command's output, branch on the captured value (`[[ -z "$X" ]]`), never on a `cmd | sed | tr ... || echo default` exit code — the trailing filter masks the source's success/failure. For base-ref / branch→spec resolution in any new flow-next skill, copy the cascade in `make-pr-preflight.sh` rather than re-deriving a one-liner.

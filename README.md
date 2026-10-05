@@ -143,7 +143,7 @@ The full documentation is at [flow-next.dev](https://flow-next.dev). This reposi
 - [Going autonomous](https://flow-next.dev/autonomy/going-autonomous/): `flow --auto`, `--until=merge`, the Decisions list and when a run stops.
 - [For teams](https://flow-next.dev/guides/for-teams/): the spec as the handover between product, engineering and the agent, plus the tracker bridge to Linear, GitHub, GitLab and Jira.
 - [Model routing](https://flow-next.dev/guides/model-routing/): send each job to the model or harness that fits it, from one block in your instruction file.
-- [Review backends](https://flow-next.dev/reference/review-backends/): RepoPrompt, Codex, Copilot, Cursor, Claude and host review, and why the reviewer must come from another family.
+- [Review backends](https://flow-next.dev/reference/review-backends/): Codex, Copilot, Cursor, Claude and host review, and why the reviewer must come from another family.
 - [Configuration](https://flow-next.dev/flowctl/configuration/): every `.flow/config.json` key, generated from the schema.
 - [Skills](https://flow-next.dev/skills/): every skill and how to call it, and the [CLI reference](https://flow-next.dev/flowctl/cli-reference/) for `flowctl`.
 - [Changelog](https://flow-next.dev/releases/changelog/): release highlights. [`CHANGELOG.md`](CHANGELOG.md) here is the full record.

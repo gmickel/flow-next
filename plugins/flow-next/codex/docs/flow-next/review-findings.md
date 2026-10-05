@@ -38,7 +38,7 @@ is negligible within the end-to-end workflow.
     "schemaVersion": 1,
     "sourceReceiptId": "review-…",
     "reviewKind": "implementation",
-    "backend": "rp",
+    "backend": "host",
     "round": 2,
     "baseSha": "optional-reviewed-base",
     "headSha": "reviewed-head",
@@ -138,7 +138,7 @@ silently resolving it.
 
 ### Merged fan-out rounds
 
-On the codex and host backends the first review round of a large or cross-cutting
+On every backend the first review round of a large or cross-cutting
 diff, or one touching persisted or shared state, concurrency, security or data
 layout, fans out three axis draws that the coordinator merges into one finding set
 (a small diff in one area gets one reviewer). The
@@ -202,7 +202,7 @@ instead.
 `not-fixed` stated once and then not restated cannot look like a repeat.
 `fixed` and `withdrawn` are preserved - they are resolved terminals. This is what
 makes the surviving stall rule (`same-not-fixed-lineage`), which matters only when
-a run loops until SHIP, a statement about two consecutive rounds rather than an
+a run loops until SHIP, a statement about three consecutive rounds rather than an
 echo of one.
 
 Prose resolutions are invisible to the parser: a reviewer that answers the
@@ -378,7 +378,7 @@ Three places carry it, all optional and all additive:
 | Surface | Field | Written when |
 |---|---|---|
 | Review receipt | `model` (with `effort`) | The dispatcher resolved the model it ran |
-| Review attempt row (`review_attempts[]`) | `model`, `effort` | The same dispatch resolved them; the rp/host path records neither, because a narrating agent's claim is not an observation |
+| Review attempt row (`review_attempts[]`) | `model`, `effort` | The same dispatch resolved them; the host path records neither, because a narrating agent's claim is not an observation |
 | Stage-outcome line | trailing `(model: <what ran>)` | The harness exposed what ran that stage. Emitted by the two stage-line grammar sites (the work skill's final summary, a `flow --auto` hop's evidence echo) when the orchestrator knows what executed; omitted otherwise, and a corpus written before those emitters simply tallies `unknown` |
 
 One rule governs all three: **an absent value means unknown, never the
