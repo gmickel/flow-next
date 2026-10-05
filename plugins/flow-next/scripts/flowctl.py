@@ -44941,7 +44941,7 @@ def _finish_backend_exec(
 
     failure_class = _classify_review_failure(reg, output, stderr, exit_code)
     sandbox_failure = failure_class == "sandbox"
-    failure_message = _review_failure_message(backend, output)
+    failure_message = _review_failure_message(backend, output, stderr)
 
     attempt: dict = {}
     if spec_id and review_kind:
@@ -44995,7 +44995,7 @@ def _finish_backend_exec(
             "blocks reads too (auto already resolves there). No verdict was "
             "delivered, so no review round was consumed; a delivered verdict "
             "is never a transport failure."
-        )
+        ) + _failure_message_suffix(failure_message)
         error_exit(msg, use_json=args.json, code=3)
 
     if exit_code != 0:
@@ -45767,13 +45767,15 @@ def _review_fanout_append_progress(sidecar_dir: Path, line: str) -> None:
 REVIEW_FAILURE_MESSAGE_MAX_CHARS = 300
 
 
-def _review_failure_message(backend: str, output: str) -> Optional[str]:
+def _review_failure_message(backend: str, output: str, stderr: str) -> Optional[str]:
     """The CLI's own last error text from a run that returned no verdict (#515).
 
     Codex reports errors as `error` / `turn.failed` events in its
     `exec --json` stream, so its message is the last such event's; the other
-    backends return text, whose last non-empty line is used. Recorded as
-    written and bounded, never classified: whoever reads it judges it.
+    backends return text, whose last non-empty line is used. When the output
+    names nothing, the last stderr line is used: the claude adapter moves an
+    error result there. Recorded as written and bounded, never classified:
+    whoever reads it judges it.
     """
     message = None
     for line in (output or "").splitlines():
@@ -45796,6 +45798,10 @@ def _review_failure_message(backend: str, output: str) -> Optional[str]:
         )
         if isinstance(text, str) and text.strip():
             message = text
+    if not message:
+        message = next(
+            (line for line in reversed((stderr or "").splitlines()) if line.strip()), None,
+        )
     if not message:
         return None
     return " ".join(message.split())[:REVIEW_FAILURE_MESSAGE_MAX_CHARS]
@@ -46159,7 +46165,7 @@ def _review_fanout_run_draw(
         failure_class = "dispatch_exception"
     else:
         failure_class = _classify_review_failure(reg, output, stderr, rc)
-        failure_message = _review_failure_message(backend, output)
+        failure_message = _review_failure_message(backend, output, stderr)
     model, effort = _receipt_model_effort(spec, resolution_out)
     review_path = sidecar_dir / f"{axis}.review.md"
     output_path = sidecar_dir / f"{axis}.out.txt"

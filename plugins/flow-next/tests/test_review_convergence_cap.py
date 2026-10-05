@@ -929,21 +929,26 @@ class TestDeterministicCap(unittest.TestCase):
             json.dumps({"type": "turn.failed", "error": {"message": limit}}),
             json.dumps({"type": "turn.completed"}),
         ))
+        spend = "Your account has reached its spend limit."
         cases = [
-            ("codex", codex_stream, 1, limit),
-            ("copilot", "Thinking\nYou've reached your usage limit\n\n", 0,
-             "You've reached your usage limit"),
-            ("claude", "x" * 1000, 0, "x" * flowctl.REVIEW_FAILURE_MESSAGE_MAX_CHARS),
-            ("cursor", "", 7, None),
+            ("codex", codex_stream, "", 1, limit, reg),
+            ("copilot", "Thinking\nYou've reached your usage limit\n\n", "", 0,
+             "You've reached your usage limit", reg),
+            ("claude", "x" * 1000, "", 0, "x" * flowctl.REVIEW_FAILURE_MESSAGE_MAX_CHARS, reg),
+            # The claude adapter moves an error result to stderr and empties output.
+            ("claude", "", f"warning\n{spend}\n", 1, spend, reg),
+            ("codex", codex_stream, "Filesystem read is blocked by policy", 1, limit,
+             {**reg, "has_sandbox": True}),
+            ("cursor", "", "", 7, None, reg),
         ]
-        for backend, output, exit_code, message in cases:
-            with self.subTest(backend=backend):
+        for backend, output, stderr, exit_code, message, case_reg in cases:
+            with self.subTest(backend=backend, stderr=stderr):
                 flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
                 err = io.StringIO()
                 with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
                     flowctl._finish_backend_exec(
-                        backend=backend, reg=reg, args=mock.Mock(json=False),
-                        receipt_path=None, output=output, stderr="", exit_code=exit_code,
+                        backend=backend, reg=case_reg, args=mock.Mock(json=False),
+                        receipt_path=None, output=output, stderr=stderr, exit_code=exit_code,
                         spec_id=self.spec_id, review_kind="plan", review_type="plan",
                     )
                 row = self._spec_data()["review_attempts"][-1]
