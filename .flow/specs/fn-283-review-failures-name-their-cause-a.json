@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-283-review-failures-name-their-cause-a",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-05T13:59:12.567196Z",
   "created_at": "2026-10-05T13:26:28.686214Z",
   "default_impl": null,
   "default_review": null,
@@ -144,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-05T13:53:55.121346Z"
+  "updated_at": "2026-10-05T13:59:12.567205Z"
 }
