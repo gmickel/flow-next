@@ -534,7 +534,8 @@ If all writes succeed, Recommended is empty. If no writes succeed (read-only inv
 GIT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
 GIT_DIRTY=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | grep -v "^??" | wc -l | tr -d ' ')
 GIT_DEFAULT=$(git -C "$REPO_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
-  | sed 's|^origin/||' || echo "main")
+  | sed 's|^origin/||')
+[ -n "$GIT_DEFAULT" ] || GIT_DEFAULT="main"
 ```
 
 Skip Phase 5 commit logic if no files were modified (all Keep, all writes failed).

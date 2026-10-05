@@ -83,8 +83,6 @@ unattended run (working-rules.md's review loop applies); it is not a focus area.
 
 ## Fix Loop (INTERNAL)
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
 **The fix loop never pauses for user confirmation**; never use plain-text numbered prompt in it. Which findings it fixes, and which it lists as follow-ups, follows the Review section of [working-rules.md](../../references/working-rules.md).
 
 `MAJOR_RETHINK` is not a fix-loop input. Surface the reviewer's rationale and
