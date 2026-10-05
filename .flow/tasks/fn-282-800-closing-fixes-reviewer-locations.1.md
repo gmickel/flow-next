@@ -23,6 +23,8 @@ Tier: session (jev intelligent 0.69)
 stage: impl-review - ran (codex, 3 reviewers: NEEDS_WORK with 3 findings fixed in 3ed8f4a4, re-review SHIP)
 
 stage: plan-sync - skipped(config: planSync.enabled != true)
+- Post-audit regression check (maintainer-requested, 2026-10-05): one same-load pair on case 4 (gno-233, attended, criteria dropped), 7.1.2 vs fbfe0dcc (rounds fn282-c4-{a,b}-1005). Hidden checks pass on both; judge 19.5 vs 18.5. 7.1.2 took a direct route (no capture) and shipped a defect the person caught (setting change did not re-chunk indexed data): first handoff 197 s, wall 1003 s, $3.78. 8.0 asked the re-chunk question, captured and ran work like all six earlier case-4 draws: first handoff 582 s, wall 1991 s, $9.03, then a full-suite ask and a scope question. 8.0's first handoff and wall sit inside the earlier fn-281/7.1.2 ranges (476-696 s; 976-2890 s); cost is $1.38 above the earlier fn-281 draws, from the post-handback full-suite run. No regression attributable to the change.
+
 ## Evidence
 - Commits: 550bd0ef22c56d0cda68f3e63bab1bd759c76be0, 3ed8f4a4f43f462082fbef4eea8d0b427122f0fb
 - Tests: python3 scripts/run_tests_parallel.py (214 files, 3949 tests, 0 failures), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh --check, python3 scripts/check_doc_anchors.py, python3.14 flowctl.py --help == flowctl-help.txt (HELP_SHA256 unchanged), smoke_test.sh from scratch dir: 131 pass, 1 fail (copilot plan-review re-review, live-verdict dependent, unrelated)
