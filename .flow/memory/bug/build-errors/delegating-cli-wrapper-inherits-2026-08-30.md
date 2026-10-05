@@ -9,6 +9,7 @@ problem_type: build-error
 symptoms: "upsert rejected cross-category matches, collapsed over-80 titles, raced on create, multi-line output"
 root_cause: wrapper delegated to cmd_memory_add without re-checking the delegate's guards/normalization/prints/atomicity against its own contract
 resolution_type: fix
+last_audited: "2026-10-05"
 ---
 
 ## Problem

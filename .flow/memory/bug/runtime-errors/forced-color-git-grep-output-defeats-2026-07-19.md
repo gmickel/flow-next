@@ -9,7 +9,7 @@ problem_type: runtime-error
 symptoms: Batched export git grep silently dropped removed-symbol refs when color.grep=always
 root_cause: SGR escape's trailing 'm' is a word char; word-boundary lookbehind failed on colored match text
 resolution_type: fix
-related_to: [bug/runtime-errors/flowctl-on-disk-per-key-counter-count-2026-06-27]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

@@ -6,6 +6,8 @@ category: decisions
 module: plugins/flow-next/docs/platforms.md
 tags: [droid, factory-ai, cross-platform, fn-48, interop, plugin-root, hooks, Execute]
 applies_when: Factory Droid platform status — 2026-05
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
 ---
 
 ## Problem
@@ -45,8 +47,8 @@ Web-verified against Factory's primary docs (`docs.factory.ai/cli/configuration/
 - For Droid specifically: Factory's interop layer is opinionated about which side translates — Claude-first plugins are Droid-compatible automatically; Droid-first plugins (using `SessionStart`, `SessionEnd`, etc.) are not portable back. Author for the shared subset.
 - When surface evidence (missing files, stale commits) suggests dead code, distinguish between "the platform doesn't exist anymore" and "the platform handles this for us now". Different remediation.
 
-## Audit note 2026-08-01
-The R4b verdict's "KEEP the `Bash|Execute` hook matcher in `hooks/hooks.json`" is stale: default hooks no longer ship at all (fn-114, guarded by `tests/test_no_default_hooks.py`), so there is no `plugins/flow-next/hooks/hooks.json` to keep the matcher in. The `Bash|Execute` pattern itself survives in two other places: `docs/platforms.md` (documented) and the project settings that `/flow-next:ralph-init` generates per-repo. The entry's own standing rule (re-verify before reuse, don't assume old findings still hold) is what caught this — it stands as-is.
+## Audit note 2026-10-05
+The R4b verdict's "KEEP the `Bash|Execute` hook matcher in `hooks/hooks.json`" is history. The plugin ships no hooks (fn-114, guarded by `tests/test_no_default_hooks.py`), and `/flow-next:ralph-init`, which generated per-repo settings carrying the matcher, has been removed, so no shipped file carries it. `Bash|Execute` survives as guidance for anyone writing a hook for both hosts: `docs/platforms.md` and `agent_docs/adding-skills.md` (Host details). The entry's own standing rule (re-verify before reuse; don't assume old findings still hold) is what caught this.
 
 ## References
 

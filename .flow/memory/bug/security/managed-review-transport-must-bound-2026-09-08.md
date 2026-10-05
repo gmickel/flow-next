@@ -9,7 +9,7 @@ problem_type: security
 symptoms: Provider error text leaked scoped tokens and incomplete or trickled HTTP responses bypassed transport contracts
 root_cause: Valid error envelopes escaped sanitization and sized reads plus socket timeouts were mistaken for complete bounded HTTP exchange
 resolution_type: fix
-related_to: [bug/security/rollback-path-sanitizer-must-not-2026-06-05]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

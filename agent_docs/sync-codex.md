@@ -52,10 +52,26 @@ The script's validation block (search for `# ─── Validation ───` in 
 | R21 spec-template duplication | Skill markdown enumerates the canonical 7-section sequence (drift hazard) | Build fails |
 | `openai.yaml` coverage | `REQUIRED_OPENAI_YAML_SKILLS` missing the required file | Build fails |
 | Docs-mirror link closure | A `codex/docs/flow-next/**` link neither resolves on disk nor is an absolute URL | Build fails |
+| Primary-home escape | A mirrored skill, agent, reference or template names `$HOME/.codex` or `~/.codex` outside the `${CODEX_HOME:-$HOME/.codex}` form and the narrow narrative allowlist (`is_narrative_primary_home_ref`) | Build fails |
 
 Each guard prints `file:line` hits where available so the fix is mechanical: clean canonical first, then re-run sync.
 
 **The guards police the transform, not the prose.** They check tool names, dispatch phrasing, and structural drift - nothing in the script reads what a mirrored page *says*. Where mirrored content carries a user-facing contract of its own, the pin lives in the test suite instead: `tests/test_model_routing_scaffold.py` asserts the mirrored routing block keeps its markers and the four tier names, ships no model identifier, and that the retired pin-ceremony references are actually gone from the mirror (an incomplete regen leaves them loadable). A canonical-only assertion would stay green while every Codex install shipped the deleted ceremony.
+
+## Codex home paths
+
+The mirror reaches the Codex install through `${CODEX_HOME:-$HOME/.codex}`, so an alternate Codex home works. When adding or changing a path rewrite:
+
+- Rewrite both spellings, `$HOME/.codex` and `~/.codex`, and emit `$HOME`: `~` does not expand inside quotes.
+- Classify by actionability, not by whether the text sits in a fence. A prose instruction ("add to `~/.codex/config.toml`") gets the runtime form too; only a purely descriptive mention stays literal, and each one needs an allowlist entry in `is_narrative_primary_home_ref`.
+- Quote every generated expansion, and prove it with an install into a `CODEX_HOME` whose path contains a space.
+- A test that redirects `HOME` also removes an inherited `CODEX_HOME`, or it installs into the developer's real Codex home.
+
+To prove the sync is idempotent, hash a sorted file listing; `find ... -exec shasum {} +` is order-sensitive and can change between identical runs:
+
+```bash
+find plugins/flow-next/codex -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum | shasum
+```
 
 ## Plain-text transform
 

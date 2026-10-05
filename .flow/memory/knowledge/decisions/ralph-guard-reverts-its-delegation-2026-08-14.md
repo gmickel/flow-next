@@ -7,7 +7,10 @@ module: plugins/flow-next/scripts/hooks/ralph-guard.py
 tags: [flow-98, ralph-guard, codex-delegation, safety, deprecation]
 applies_when: "Editing ralph-guard.py, or wondering why prose-routed bridges have no hook-level git guard"
 decision_status: accepted
-alternatives_considered: ['Widen the guard to recognize prose-routed bridge invocations (rejected: Ralph is deprecated and bridge command shapes are agent-authored, so an allowlist would be a race against the next spelling)']
+alternatives_considered: ["Widen the guard to recognize prose-routed bridge invocations (rejected: Ralph is deprecated and bridge command shapes are agent-authored, so an allowlist would be a race against the next spelling)"]
+status: stale
+last_audited: "2026-10-05"
+audit_notes: "Ralph and ralph-guard removed; nothing left to guard (audited-by: /flow-next:audit)"
 related_to: [knowledge/decisions/composed-brief-deleted-path-handoff-2026-07-19]
 ---
 

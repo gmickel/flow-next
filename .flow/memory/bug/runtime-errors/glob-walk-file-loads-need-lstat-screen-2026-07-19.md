@@ -9,7 +9,7 @@ problem_type: runtime-error
 symptoms: FIFO candidate hangs gate check; nested JSON aborts walk; slow git status honors stale receipt
 root_cause: open() before file-type screen; RecursionError outside except tuple; TTL verdict cached pre-status
 resolution_type: fix
-related_to: [bug/runtime-errors/flowctl-on-disk-per-key-counter-count-2026-06-27]
+last_audited: "2026-10-05"
 ---
 
 ## Problem

@@ -8,9 +8,9 @@ symptoms: worker backgrounded review; silent codex death; no resume; task stalle
 root_cause: context decay + adjacent legit background pattern + harness habit; rule is prose far from the fence
 resolution_type: workaround
 status: hardened
-hardened_into: plugins/flow-next/agents/worker.md#foreground-rule -- fence-embedded FOREGROUND RULE inside the review command block
-last_audited: "2026-07-31"
-audit_notes: "hardened into plugins/flow-next/agents/worker.md#foreground-rule -- fence-embedded FOREGROUND RULE inside the review command block (audited-by: memory-audit-2026-08-01)"
+hardened_into: plugins/flow-next/skills/flow-next-impl-review/workflow-cli.md#FOREGROUND RULE -- fence-embedded '# FOREGROUND RULE' comment inside each review command fence (also impl-review workflow-common.md and the plan-review workflow-<backend>.md files)
+last_audited: "2026-10-05"
+audit_notes: "hardened into plugins/flow-next/skills/flow-next-impl-review/workflow-cli.md#FOREGROUND RULE -- fence-embedded '# FOREGROUND RULE' comment inside each review command fence (also impl-review workflow-common.md and the plan-review workflow-<backend>.md files) (audited-by: /flow-next:audit)"
 ---
 
 ## Symptom

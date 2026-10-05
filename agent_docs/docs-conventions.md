@@ -56,5 +56,11 @@ Codex mirror generation, formerly `docs/sync-codex.md`, is maintainer-only and l
 - **No flow-next history.** No spec or task ids, PR numbers, dated dogfood runs, or facts about
   this repository in shipped pages; those belong in the CHANGELOG, commit messages, or
   `agent_docs/` (for example [field-cases.md](field-cases.md)).
+- **Tracker claims.** A change to tracker ownership or behaviour sweeps every adjacent claim,
+  not only the primary section: recovery, discovery, dependency direction, idempotency,
+  provenance and body-merge prose. Check each provider-fidelity bullet against
+  `flowctl_tracker/relate/providers.py` and its contract tests. Grep slash-list enumerations
+  (`Linear/GitHub/GitLab`) and per-provider clauses (`on GitHub`, `flat tracker`, `threaded`);
+  the slash-list grep misses the second kind.
 - **No mirrored pages.** A page that explains the product to a human belongs on flow-next.dev. A
   file lands in `docs/` only when something at runtime reads it, and it leaves when nothing does.

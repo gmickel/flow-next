@@ -9,6 +9,7 @@ problem_type: runtime-error
 symptoms: Malformed structured review evidence plus explicit-empty SHIP emitted an empty findings container
 root_cause: "Canonical parsing was reused as presence detection, collapsing invalid records into absence"
 resolution_type: fix
+last_audited: "2026-10-05"
 ---
 
 ## Problem

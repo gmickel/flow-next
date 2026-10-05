@@ -4,12 +4,14 @@ date: "2026-08-01"
 track: bug
 category: data
 module: plugins/flow-next/scripts/flowctl.py
-tags: [fingerprint, idempotence, upgrade-compat, golden-fixture, chart]
+tags: [fingerprint, idempotence, upgrade-compat, golden-fixture, chart, changelog]
 problem_type: data
 symptoms: Post-upgrade identical retry fails chart_not_open on a chart the pre-fix binary reopened and re-briefed
 root_cause: "Conditional-omission compat rule covered records with the key absent, not records written while it was present but unhashed"
 resolution_type: fix
-related_to: [bug/data/fence-preserving-writer-needs-fence-2026-07-02, bug/data/migrationrollback-cli-10-review-cycle-2026-05-08, bug/data/paired-snapshot-setter-must-write-both-2026-06-03, bug/data/yaml-frontmatter-writer-unescaped-2026-07-24]
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
+related_to: [bug/data/fence-preserving-writer-needs-fence-2026-07-02, bug/data/paired-snapshot-setter-must-write-both-2026-06-03, bug/data/yaml-frontmatter-writer-unescaped-2026-07-24]
 ---
 
 ## Problem
@@ -56,3 +58,4 @@ every ordinary match.
 - **Prove the fixture bites.** Patch the naive variant (here: hash the key unconditionally)
   into a scratch copy and confirm the fixture test fails. A compat fixture that cannot fail
   is decoration.
+- **Docs for the fix inherit the hash's precision.** Before writing the changelog entry, list the hash's inputs (`_briefing_fingerprint`) and state which had to be unchanged for the defect to fire. Claim "byte-unchanged" only for the envelope classes that keep their shape; an additive key always changes at least one.

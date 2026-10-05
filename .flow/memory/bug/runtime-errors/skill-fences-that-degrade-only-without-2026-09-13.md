@@ -3,12 +3,14 @@ title: "Skill fences that degrade only without set -e: masked failures in make-p
 date: "2026-09-13"
 track: bug
 category: runtime-errors
-module: plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md
+module: plugins/flow-next/scripts/make-pr-create.sh
 tags: [set-e, bash-fence, fixtures, make-pr, chain, stack]
 problem_type: runtime-error
 symptoms: stack-link POST failure aborted the fence before its one-line degrade; fixtures without set -e stayed green
 root_cause: VAR=$(cmd); rc=$? under set -e exits before rc is read; runner omitted the preamble's shell options
 resolution_type: fix
+last_updated: "2026-10-05"
+last_audited: "2026-10-05"
 ---
 
 ## Problem
@@ -18,7 +20,7 @@ The make-pr stack-link fence captured a failing `gh api` POST as `LINK_OUT=$(gh 
 Testing the fences in a bash runner without the production shell options. Behaviourally the fence looked correct; only the `set -e` interaction broke it.
 
 ## Solution
-`plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md` §4.6c: every fallible call inside the stack-link fence sits in a conditional (`if LINK_OUT=$(gh api ...); then LINK_RC=0; fi`, `OWNER_REPO=$(...) || { ...; }`). `workflow.md` §0.3/§0.6b: the chain-base fetch must succeed before `CHAIN_REWRITE=1`, and `REMOTE_LS=$(git ls-remote ...) || exit 2` is checked before parsing. `plugins/flow-next/tests/test_chain_consumer_fixtures.py` `ConsumerWorld.run_rc` prepends `set -e` so fences run under the production shell options.
+The make-pr fences now live in scripts the skill sources. In `plugins/flow-next/scripts/make-pr-create.sh` (`# fence:stack-link`), every fallible call sits in a conditional (`if LINK_OUT=$(gh api ...); then LINK_RC=0; fi`, `OWNER_REPO=$(...) || { ...; }`). In `plugins/flow-next/scripts/make-pr-preflight.sh`, which runs under `set -e`, the chain-base fetch must succeed before `CHAIN_REWRITE=1`, and `REMOTE_LS=$(git ls-remote ...)` exits 2 on failure before it is parsed (`# fence:chain-rewrite`). `plugins/flow-next/tests/chain_fixture_support.py` `fence()` slices make-pr fences from those scripts, and `test_chain_consumer_fixtures.py` `ConsumerWorld.run_rc` prepends `set -e` so fences run under the production shell options.
 
 ## Prevention
-Any fixture runner that slices bash fences out of skill prose must prepend the same shell options the skill's preamble sets (`set -e` for make-pr). In a `set -e` fence, never write `VAR=$(cmd); rc=$?` for a call that is allowed to fail; use `if VAR=$(cmd); then` or `VAR=$(cmd) || handler`. Treat `|| true` before a state-changing step (rebase, push) and `cmd | cut` on a remote read as findings: a masked failure becomes a wrong branch tip or a skipped lease.
+Any fixture runner that slices bash fences out of skill prose or sourced scripts must prepend the same shell options the skill's preamble sets (`set -e` for make-pr). In a `set -e` fence, never write `VAR=$(cmd); rc=$?` for a call that is allowed to fail; use `if VAR=$(cmd); then` or `VAR=$(cmd) || handler`. Treat `|| true` before a state-changing step (rebase, push) and `cmd | cut` on a remote read as findings: a masked failure becomes a wrong branch tip or a skipped lease.

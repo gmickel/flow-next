@@ -121,6 +121,34 @@ skill prose are not added.
   file's absolute path. Rung 3 is a silent backstop for an old `.flow/bin` copy; nothing is
   designed around it. Never rely on bare `flowctl` in skill prose. `sync-codex.sh` rewrites rung
   1 for the mirror and fails the sync when a mirrored preamble loses a rung.
+- **Each fence is its own tool call.** Shell variables do not survive between fences, so a fence
+  assigns or re-declares every variable and path it reads. A fence that re-declares one path but
+  borrows another from an earlier fence is the usual slip. A fence cannot pause for the user: it
+  exits with a marker (`NEED_INPUT: ...`) and is re-run with the answer set. A fallback replaces a
+  failed capture rather than appending to its partial output (`if ! VAR=$(cmd); then VAR='{}';
+  fi`, not `VAR=$(cmd || echo '{}')`). A rule that holds at every exit, such as dry-run cleanup,
+  is stated once in the verdict contract, not repeated at each exit.
+- **Executable fences are portable bash.** Agents run them as written on macOS and Linux. Use
+  POSIX classes (`[[:space:]]`, not `\s`, which BSD `grep -E` does not support), tolerate the
+  legal whitespace variants of what a check looks for, and run an embedded check against hostile
+  input before shipping it. A copy-paste block must agree with the prose rule it implements;
+  agents copy the block. `grep -c` prints `0` and exits 1 when nothing matches, so
+  `|| echo 0` yields a two-line value: write `N=$(grep -c ... || true); N=${N:-0}`. The same
+  holds for any command that prints its result and then exits non-zero.
+- **Parsing `$ARGUMENTS`.** The host passes arguments as one string, and word-splitting cannot
+  recover the user's quoting, so document token-level passthrough (whitespace-separated, no
+  embedded spaces), never "verbatim". Wrap the split in `set -f` / `set +f` so globs reach the
+  wrapped CLI unexpanded. A `case` arm that consumes a value checks
+  `[[ $# -lt 2 || "$2" == "--" ]]` first and exits 2 with a message, instead of dying under
+  `set -e`. A flag that gates a durable write (spec state, a file, config) matches an exact
+  standalone token, never a substring; test lookalikes such as `--flag-suffix` and
+  `--flag=value`. `plugins/flow-next/scripts/map.sh` is the pattern.
+- **Worker references reach both paths.** A reference the worker must read is named on both
+  implementation paths: the standard phases and the bridge path in
+  [worker-bridge.md](../plugins/flow-next/skills/flow-next-work/references/worker-bridge.md) (its
+  pointer list and its On-return check). A bridged child skips the standard phases and sees only
+  that list. PR briefing proof cells a route adds are shared per briefing, not one set per task:
+  `proof[]` holds at most 16 cells.
 
 ## Cross-platform patterns
 

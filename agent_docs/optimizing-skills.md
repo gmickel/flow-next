@@ -10,6 +10,11 @@ before running an evaluation of flow-next behaviour.
   pre-register the endpoint and decision rule, hold model, harness and effort constant, change
   one thing, use one scoring standard, screen then replicate, and keep negative and inconclusive
   results.
+- Run every draw that can carry a wall-clock verdict sequentially on an otherwise idle machine,
+  and record host load per draw. Arms launched together throttle each other unevenly, and naming
+  that as a limitation does not remove it from the verdict. A frozen protocol states every
+  threshold as a number (no "~3x", "with margin" or "borderline") and bounds every rerun path
+  with an attempt count and a terminal outcome such as INCONCLUSIVE.
 - A study of how skills behave in Claude Code drives the real terminal UI. The Agent SDK and
   `claude -p` run a shorter system prompt and fewer tools, so their results do not describe
   Claude Code as people use it.

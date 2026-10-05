@@ -50,29 +50,29 @@ this paragraph names the fleet so nobody assumes one suite is the whole gate.
 
 ## Codex plain-text prompt smoke
 
-Manual verification that `sync-codex.sh` Stage 3 (fn-45) emits a plain-text numbered-prompt instruction in the Codex mirror — and that the mirror never calls `request_user_input` (Plan-mode-only per openai/codex#10384/#11536/#12694).
+Manual check that `sync-codex.sh` Stage 3 turns each canonical `AskUserQuestion` into a plain-text numbered prompt in the Codex mirror, and that the mirror never calls `request_user_input` (Plan mode only; openai/codex#10384, #11536, #12694).
 
-Run after any canonical edit that touches an `AskUserQuestion` invocation. Both surfaces — Codex Desktop Default mode AND Codex CLI — must be exercised; behavior is uniform but each path has its own consent-rendering surface.
+Run after any canonical edit that touches an `AskUserQuestion` invocation. Exercise both Codex Desktop in Default mode and the Codex CLI: the behaviour is the same, but each renders prompts on its own surface.
 
-**Setup once:** install the local marketplace flow-next via Codex (`/plugin marketplace add ./`; `/plugin install flow-next@flow-next`). In a scratch repo seed `.flow/epics/` to trigger the migration consent prompt:
+The probe is setup's Step 4a `SPEC.md` offer, which asks on any repository with no `SPEC.md` or `spec.md` at its root. **Setup once:** install the local marketplace flow-next in Codex (`/plugin marketplace add ./`, then `/plugin install flow-next@flow-next`). Give each surface its own fresh scratch repository: setup saves the answer in `.flow/meta.json` and does not ask again.
 
 ```bash
-mkdir -p /tmp/fn-codex-smoke/.flow/epics && cd /tmp/fn-codex-smoke
-git init -q
+for d in desktop cli; do mkdir -p "/tmp/fn-codex-smoke-$d" && git -C "/tmp/fn-codex-smoke-$d" init -q; done
 ```
 
 **Codex Desktop (Default mode):**
-1. Open `/tmp/fn-codex-smoke` in Codex Desktop. Confirm mode shows "Default" (not "Plan").
+1. Open `/tmp/fn-codex-smoke-desktop` in Codex Desktop. Confirm the mode shows "Default" (not "Plan").
 2. Run `/flow-next:setup`.
-3. At the migration consent prompt confirm:
-   - Question + 5 numbered options render as plain text in the chat stream (no structured-prompt UI card).
-   - The 4 canonical migration options appear first: `1. Migrate now`, `2. Defer`, `3. Suppress permanently`, `4. abort — exit, leave state as-is for review` (per fn-45.2; `abort` is the destructive-action escape hatch).
-   - Option `5. Other — type your own answer` appears as the final option (added by the sync-codex.sh fn-45.1 transform; simulates `AskUserQuestion`'s freeform-input affordance).
-   - The agent stops and waits for the user reply — does not auto-pick or proceed.
+3. At Step 4a confirm:
+   - The question and 4 numbered options render as plain text in the chat stream (no structured-prompt UI card).
+   - The 3 canonical options come first: `1. Copy template`, `2. Skip`, `3. abort`.
+   - `4. Other — type your own answer` is the final option (added by the transform; it stands in for `AskUserQuestion`'s free-text input).
+   - The agent stops and waits for the reply; it does not pick an option or proceed.
    - No `request_user_input is unavailable in code mode` error surfaces.
+4. Answer `2` (`Skip`, which writes no `SPEC.md`) and let setup finish.
 
 **Codex CLI:**
-1. `cd /tmp/fn-codex-smoke && codex` (Default mode is the CLI default).
+1. `cd /tmp/fn-codex-smoke-cli && codex` (Default mode is the CLI default).
 2. Run `/flow-next:setup`.
 3. Confirm the same five invariants as Desktop Default mode.
 

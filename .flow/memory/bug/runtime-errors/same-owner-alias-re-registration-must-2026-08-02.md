@@ -9,7 +9,8 @@ problem_type: runtime-error
 symptoms: Genuine initial-map alias collision surfaced as invalid_graph/self_edge instead of validation/alias_collision
 root_cause: "Same-owner idempotent branch returned early, leaving a provisional weak claim displaceable by another decision's strong claim"
 resolution_type: fix
-related_to: [bug/runtime-errors/empty-value-semantics-leak-null-in-2026-07-20, bug/runtime-errors/flowctl-on-disk-per-key-counter-count-2026-06-27, bug/runtime-errors/forced-color-git-grep-output-defeats-2026-07-19, bug/runtime-errors/glob-walk-file-loads-need-lstat-screen-2026-07-19, bug/runtime-errors/structured-review-parsers-must-2026-07-30]
+last_audited: "2026-10-05"
+related_to: [bug/runtime-errors/empty-value-semantics-leak-null-in-2026-07-20, bug/runtime-errors/forced-color-git-grep-output-defeats-2026-07-19, bug/runtime-errors/glob-walk-file-loads-need-lstat-screen-2026-07-19, bug/runtime-errors/structured-review-parsers-must-2026-07-30]
 ---
 
 ## Problem

@@ -9,7 +9,7 @@ problem_type: build-error
 symptoms: Sibling task carried FAIL-verdict banner + contradictory gate-wiring body; worker could wire the failed gate
 root_cause: Banner-only marking leaves the original Approach/Acceptance executable below the note
 resolution_type: fix
-last_audited: "2026-07-25"
+last_audited: "2026-10-05"
 audit_notes: "marked fresh (audited-by: /flow-next:audit)"
 ---
 

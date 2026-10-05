@@ -1,18 +1,15 @@
 ---
-title: "Review stall detection reads resolution; the trend heuristics are deleted (fn-168)"
+title: Review stall detection reads resolution; the trend heuristics are deleted (fn-168)
 date: "2026-08-05"
 track: knowledge
 category: decisions
 module: plugins/flow-next/scripts/flowctl.py
 tags: [fn-168, fn-159, review-convergence, stall-detection, ratchet-prompt, findings-lineage, inference-vs-evidence]
-applies_when: "a review loop runs to the cap with no early escalation and someone proposes re-adding a finding-count / severity-trend / new-blocker-twice stall rule"
+applies_when: a review loop runs to the cap with no early escalation and someone proposes re-adding a finding-count / severity-trend / new-blocker-twice stall rule
 decision_status: accepted
+alternatives_considered: ["keep flat-trajectory, filter it to evidence-bearing opens (built, committed as 9417ba9b, then reverted): fixes one label, not the escalation", "keep fresh-introduced-critical: fires on what every healthy thorough loop looks like", "add a per-round-verification field to the digest: rejected, no new digest fields", "lower the round cap instead of any early rule: partly adopted — the cap IS the aggregate bound now"]
 last_updated: "2026-10-05"
-alternatives_considered: |
-  - keep flat-trajectory, filter it to evidence-bearing opens (built, committed as 9417ba9b, then reverted): fixes one label, not the escalation
-  - keep fresh-introduced-critical: fires on what every healthy thorough loop looks like
-  - add a per-round-verification field to the digest: rejected, no new digest fields
-  - lower the round cap instead of any early rule: partly adopted — the cap IS the aggregate bound now
+last_audited: "2026-10-05"
 ---
 
 ## The decision
@@ -71,7 +68,7 @@ Both deleted rules were **round-local snapshots inferring convergence** from dat
 - **(a) fn-159's cost claw-back for non-repeating loops is reverted.** fn-159 built these rules to "claw back the doubled worst case of the 4→8 raise". Honest framing: a bounded insurance premium — worst case single-digit-millions of tokens on a genuinely pathological loop (observed: one codex plan-review = 0.9–1.8M input tokens) — paid to stop taxing healthy loops, which field data says are overwhelmingly the common case. If the premium bites: **lower the cap, never re-add inference.** fn-168.5 added `review.maxIterations` precisely so that instruction is reachable (it was env-only and unpersisted before).
 - **(b) Non-repeating churn loses early detection entirely** and is cap-bounded by design. This is the regression vector. Stated so nobody re-adds a trend rule.
 - **(c) Backend switches lose all early detection.** `same-not-fixed-lineage` is gated on `same_identity` (backend + reviewKind); the trend rule was the aggregate fallback that stayed live across switches. Switches are cap-only now.
-- **(d) The host backend is cap-only in practice.** Host reviews never pass through the ratchet builder, so they produce no lineage evidence unless the host reviewer follows the grammar stated in the three `workflow-host.md` files, and nothing enforces that. The open question about host-reviewer compliance rose from "nice to have" to "the only backend with no stall coverage."
+- **(d) The host backend gets the same grammar now.** Host reviews were cap-only in practice when they bypassed the ratchet builder. They now render their prompt through `flowctl review-prompt`, which prepends the same re-review preamble (`build_rereview_preamble`) as the CLI backends, so the host reviewer is given the prior-finding grammar instead of relying on prose in the `workflow-host.md` files. As with every backend, nothing forces the reviewer to comply.
 - **(e) A `not_fixed` status no longer survives an unrepeated round** (R8), so the rendered prior-findings block shows such an item as `open` and loses the "you called this unfixed last round" nuance. Accepted: that is prompt copy, not evidence, and the alternative was a new per-round-verification digest field.
 
 ## Supersession

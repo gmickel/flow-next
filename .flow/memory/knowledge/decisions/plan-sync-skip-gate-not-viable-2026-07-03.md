@@ -6,6 +6,9 @@ category: decisions
 module: plugins/flow-next/skills/flow-next-work/phases.md
 tags: [plan-sync, work-loop, gate, eval, fn-83, drift, determinism, shelved]
 applies_when: considering any deterministic/cheap probe to skip the plan-sync agent after a work task
+status: stale
+last_audited: "2026-10-05"
+audit_notes: "plan-sync is now opt-in and runs per wave, so a per-task skip gate is moot (audited-by: /flow-next:audit)"
 ---
 
 ## Problem

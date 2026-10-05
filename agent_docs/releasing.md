@@ -9,6 +9,11 @@ affects plugin behavior becomes eligible for the next release; it does not
 trigger a bump during implementation. Stage user-facing changes under
 `## Unreleased` until that release is requested.
 
+Before adding a changelog entry, find the section boundaries with
+`grep -n '^## ' CHANGELOG.md | head -3` and edit only between `## Unreleased`
+and the next `## [` heading. Never anchor the edit on a `### ` subsection: the
+first `### Changed` in the file can belong to a released version.
+
 - **Include in the next release** when skill / phase / agent / command files change:
   - `plugins/<plugin>/skills/**/*.md`
   - `plugins/<plugin>/agents/**/*.md`
@@ -26,7 +31,7 @@ trigger a bump during implementation. Stage user-facing changes under
 - `.claude-plugin/marketplace.json` — plugin version inside the `plugins[]` array AND `metadata.version`
 - `.agents/plugins/marketplace.json` — plugin version inside the `plugins[]` array (Codex marketplace, no `metadata` block)
 
-It re-runs `scripts/sync-codex.sh` (so release step 2 below is a belt-and-braces re-check, not a required extra run). Version badges no longer exist in either README (removed in the fn-151 front-door rework); bump.sh rewrites none. It does **not** touch the prose skill/command/subagent counts inside manifest `description`/`longDescription` strings — when a release adds or removes a skill/command/agent, sweep those counts manually (see memory `skill-adding-version-bump-leaves-stale`).
+It re-runs `scripts/sync-codex.sh` (so release step 2 below is a belt-and-braces re-check, not a required extra run). Version badges no longer exist in either README (removed in the fn-151 front-door rework); bump.sh rewrites none. It does **not** touch the prose skill/command/subagent counts inside manifest `description`/`longDescription` strings — when a release adds or removes a skill/command/agent, sweep those counts manually. Derive the true counts with `ls -d plugins/flow-next/skills/*/ | wc -l`, `ls plugins/flow-next/commands/*.md | wc -l` and `ls plugins/flow-next/agents/*.md | wc -l`, then find every stated count with `grep -rnE '[0-9]+ (skills|commands|subagents)' .claude-plugin/ .agents/ plugins/flow-next/.claude-plugin/ plugins/flow-next/.codex-plugin/ plugins/flow-next/.cursor-plugin/ README.md plugins/flow-next/README.md`.
 
 ## Marketplace rules
 

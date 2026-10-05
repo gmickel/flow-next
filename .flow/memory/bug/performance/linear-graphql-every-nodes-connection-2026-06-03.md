@@ -9,6 +9,7 @@ problem_type: build-error
 symptoms: "Unbounded GraphQL connection (workflowStates, teams) contradicts the file's own 'first: on every connection' rate-limit rule"
 root_cause: "Lookup-shaped connections (workflowStates/teams-by-key) read as scalar so the first: bound was omitted, though they are Relay connections"
 resolution_type: fix
+last_audited: "2026-10-05"
 ---
 
 ## Problem

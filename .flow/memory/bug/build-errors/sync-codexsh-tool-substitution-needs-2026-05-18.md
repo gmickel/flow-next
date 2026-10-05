@@ -12,7 +12,7 @@ resolution_type: fix
 status: hardened
 hardened_into: scripts/sync-codex.sh#Explore-dispatch transform (fn-100 R12) should have rewritten these -- hard-fail guard family for unrewritten Claude-only phrases; CLAUDE.md checklist mandates sync x2 on every canonical edit
 last_updated: "2026-07-18"
-last_audited: "2026-07-25"
+last_audited: "2026-10-05"
 audit_notes: "hardened into scripts/sync-codex.sh#Explore-dispatch transform (fn-100 R12) should have rewritten these -- hard-fail guard family for unrewritten Claude-only phrases; CLAUDE.md checklist mandates sync x2 on every canonical edit (audited-by: /flow-next:audit)"
 ---
 

@@ -53,6 +53,13 @@ fitters and truncators are not a remedy. Genuine transport limits stay explicit.
   people's repositories, with no flow-next history or repo facts.
 - Read [setup.md](setup.md) before changing setup, snippets, artifact resolution,
   or their transforms. Setup-block rejects symlink targets deliberately.
+- Removing a backend, mode, or enum value deletes its dispatch paths only.
+  Persisted records that can carry the value (attempt rows, receipts, findings
+  containers, tracker predicates) keep reading it. A removed config value stops
+  precedence and asks, rather than falling through to a lower-precedence value.
+  Renaming a stored scope key needs a test that reads an old record and writes
+  the next one. Recheck any caller that sends stderr to `/dev/null` when the
+  CLI starts reporting there.
 - Avoid feature flags and compatibility scaffolding without a demonstrated
   requirement. Do not add commands, agents, or skills unless requested.
 - Preserve user-authored specs and recorded decisions. A settled design choice
@@ -84,6 +91,21 @@ markdown also run the functional smokes. Main uses the pushed before/after
 range, PRs use the merge-base range, and missing or empty ranges run full checks.
 The Windows interpreter stub runs for launcher, installer and runtime changes,
 plus the weekly backstop. Superseded PR runs cancel; main runs do not.
+
+The Windows legs catch what the POSIX legs cannot. A test fixture that feeds a
+`--file`-style argument is written with `encoding="utf-8"`: production reads
+are strict UTF-8, and a bare `write_text()` writes cp1252 there. A test that
+checks a `flowctl ... --json` subprocess reports stdout as well as stderr,
+because `--json` errors go to stdout. Guard `os.geteuid()`
+(`getattr(os, "geteuid", lambda: -1)()`), including in decorators, which run
+at import. A PATH shim cannot intercept a list-form `subprocess` spawn on
+Windows (`CreateProcess` appends only `.exe`), so skip spawn-counting tests on
+`nt` with the reason stated, or count in-process with `mock.patch`.
+
+A fake that stands in for a CLI or facade rejects every request the real
+parser rejects and returns the real success envelope, so the caller's handling
+of that envelope is exercised (pattern:
+`plugins/flow-next/tests/fixtures/tracker_callers/fake_flowctl.py`).
 
 Release tags require the latest successful main push CI for the exact checked-out
 revision, including its successful `CI` aggregate. Diagnostic dispatches do not
@@ -141,6 +163,12 @@ for requested review-feedback resolution. Only the opt-in land skill has a
 standing skill-level merge license, bounded by its gates; otherwise merging
 needs the user's explicit instruction. A requested direct commit/push does not
 require opening a PR.
+
+A required-checks ruleset on the default branch keeps a repository-admin
+bypass, so maintainer bookkeeping commits (Flow spec and state changes) can
+land directly while pull requests still run CI. Check it with
+`gh api repos/<owner>/<repo>/rulesets/<id> --jq '.bypass_actors'`; an empty
+list blocks the admin too.
 
 Version bumps are batched. Implementation goes under `## Unreleased` when a
 user-facing changelog entry is warranted; never run `scripts/bump.sh` or touch

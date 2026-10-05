@@ -1,9 +1,13 @@
 ---
+title: "PR-bot review loops on state-machine code do not converge - cut on reachability, not on a clean round"
+date: "2026-08-04"
 track: knowledge
 category: workflow
 module: review-subsystem
 tags: [bot-review, land, convergence, triage, severity-inflation]
+applies_when: "A PR review bot keeps raising fresh true findings round after round on state-machine or guard code, and someone proposes looping until it goes quiet."
 status: active
+last_audited: "2026-10-05"
 ---
 
 # PR-bot review loops on state-machine code do not converge - cut on reachability, not on a clean round
