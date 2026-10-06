@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -167,13 +168,19 @@ class SpecRefIndexTest(unittest.TestCase):
 
     def test_unrelated_history_counts_as_live_without_conflict(self) -> None:
         _write_spec(self.repo, "fn-1-login", BODY)
-        _commit(self.repo, "spec on main")
+        _write_spec(self.repo, "fn-3-gone", BODY)
+        _commit(self.repo, "specs on main")
+        _git(self.repo, "rm", "-q", ".flow/specs/fn-3-gone.md", ".flow/specs/fn-3-gone.json")
+        _commit(self.repo, "drop fn-3 on main")
         _git(self.repo, "switch", "-q", "--orphan", "island")
         _write_spec(self.repo, "fn-1-login", "# Other\n")
-        _commit(self.repo, "orphan copy")
+        _write_spec(self.repo, "fn-3-gone", "# Other\n")
+        _commit(self.repo, "orphan copies")
         _git(self.repo, "switch", "-q", "main")
-        row = _row(_index(self.repo), "fn-1-login")
-        self.assertEqual([(c["ref"], c["conflict"]) for c in row["live"]], [("refs/heads/island", False)])
+        index = _index(self.repo)
+        for spec_id in ("fn-1-login", "fn-3-gone"):  # deletion history never outranks the missing merge-base
+            row = _row(index, spec_id)
+            self.assertEqual([(c["ref"], c["conflict"]) for c in row["live"]], [("refs/heads/island", False)])
 
     def test_pushed_spec_needs_fetch_and_prune_drops_deleted_branch(self) -> None:
         origin = self.tmp / "origin.git"
@@ -203,14 +210,16 @@ class SpecRefIndexCliTest(unittest.TestCase):
         _init(self.repo)
         _write_spec(self.repo, "fn-1-login", BODY)
         _commit(self.repo, "spec on main")
-        _git(self.repo, "switch", "-q", "-c", "feat/other")
-        _write_spec(self.repo, "fn-2-other", BODY)
-        _commit(self.repo, "branch spec")
+        for branch, spec_id in (("feat/other", "fn-2-other"), ("feat/alpha", "fn-2-alpha")):
+            _git(self.repo, "switch", "-q", "-c", branch, "main")
+            _write_spec(self.repo, spec_id, BODY)  # two ids share fn-2
+            _commit(self.repo, "branch spec")
         _git(self.repo, "switch", "-q", "main")
 
-    def _run(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    def _run(self, *args: str, cwd: Path | None = None, seed: str | None = None) -> subprocess.CompletedProcess:
+        env = {**os.environ, "PYTHONHASHSEED": seed} if seed else None
         return subprocess.run(
-            [*FLOWCTL_CMD, *args], cwd=cwd or self.repo, capture_output=True, text=True, encoding="utf-8"
+            [*FLOWCTL_CMD, *args], cwd=cwd or self.repo, capture_output=True, text=True, encoding="utf-8", env=env
         )
 
     def test_plain_specs_lists_only_the_checkout(self) -> None:
@@ -228,10 +237,10 @@ class SpecRefIndexCliTest(unittest.TestCase):
             return refs, objects, files
 
         before = snapshot()
-        first = self._run("specs", "--refs", "--json")
-        second = self._run("specs", "--refs", "--json")
+        first = self._run("specs", "--refs", "--json", seed="1")
+        second = self._run("specs", "--refs", "--json", seed="2")
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-        self.assertEqual(json.loads(first.stdout)["summary"]["branch_only"], ["fn-2-other"])
+        self.assertEqual(json.loads(first.stdout)["summary"]["branch_only"], ["fn-2-alpha", "fn-2-other"])
         self.assertEqual(first.stdout, second.stdout)
         self.assertEqual(snapshot(), before)
 
@@ -241,7 +250,20 @@ class SpecRefIndexCliTest(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertFalse(payload["fetched"])
         self.assertTrue(payload["fetch_error"])
-        self.assertEqual(payload["summary"]["branch_only"], ["fn-2-other"])
+        self.assertEqual(payload["summary"]["branch_only"], ["fn-2-alpha", "fn-2-other"])
+
+    def test_specs_only_on_a_branch_need_no_checked_out_flow_dir(self) -> None:
+        bare = Path(self.repo.parent) / "bare-main"
+        _init(bare)
+        (bare / "README").write_text("x\n", encoding="utf-8")
+        _commit(bare, "no .flow on main")
+        _git(bare, "switch", "-q", "-c", "feat/first")
+        _write_spec(bare, "fn-1-first", BODY)
+        _commit(bare, "first spec")
+        _git(bare, "switch", "-q", "main")
+        result = self._run("specs", "--refs", "--json", cwd=bare)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["summary"]["branch_only"], ["fn-1-first"])
 
     def test_no_base_ref_fails_naming_candidates(self) -> None:
         _git(self.repo, "branch", "-q", "-m", "main", "trunk")

@@ -30797,7 +30797,9 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
             mb_md = mb_tree.get(spec_id, {}).get("md")
             if mb and mb_md == tip_md:
                 continue  # untouched since the fork: an older copy
-            if base_md is None:
+            if not mb:
+                copy[2] = "live"  # unrelated or shallow history: no merge test possible
+            elif base_md is None:
                 if spec_id not in deleted_on_base:
                     gone = _spec_ref_git(
                         repo_root, "log", "-1", "--format=%H", "--diff-filter=D", base_sha,
@@ -30806,8 +30808,6 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
                     deleted_on_base[spec_id] = bool(gone.stdout.strip())
                 if not deleted_on_base[spec_id]:
                     copy[2] = "live"  # added on the branch
-            elif not mb:
-                copy[2] = "live"  # unrelated or shallow history: no merge test possible
             elif mb_md is None:
                 copy[2], copy[3] = "live", True  # added on both sides with different bodies
             else:
@@ -30837,7 +30837,7 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
     meta_blobs = _spec_ref_blobs(repo_root, {oid for oid in meta_oids.values() if oid})
 
     specs = []
-    for spec_id in sorted(spec_ids, key=id_sort_key):
+    for spec_id in sorted(spec_ids, key=lambda i: (id_sort_key(i), i)):
         try:
             meta = json.loads(meta_blobs.get(meta_oids[spec_id], b"").decode("utf-8"))
             if not isinstance(meta, dict):
@@ -30914,13 +30914,13 @@ def cmd_specs_refs(args: argparse.Namespace) -> None:
 
 def cmd_specs(args: argparse.Namespace) -> None:
     """List all specs."""
+    if getattr(args, "refs", False):
+        cmd_specs_refs(args)  # specs may exist only on other branches
+        return
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
-    if getattr(args, "refs", False):
-        cmd_specs_refs(args)
-        return
     if getattr(args, "fetch", False):
         error_exit("--fetch requires --refs", use_json=args.json)
 
