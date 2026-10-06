@@ -13,7 +13,7 @@ Teams that keep specs on feature branches can now see each other's in-flight spe
 ### Added
 
 - **See specs on every branch.** `flowctl specs --refs` lists each spec on the base branch, your local branches and remote-tracking branches. A branch's copy counts as live when merging that branch would change the spec, and as stale when it carries nothing new (an older copy, a squash-merged copy, or a spec deleted on main), so old branches do not drown out real work. A live copy whose merge would conflict is flagged with the date of the branch's last commit. It works offline on the refs you already have; `--fetch` prune-fetches origin first and still answers from local refs when the fetch fails. Plain `flowctl specs` is unchanged. Docs: [For teams](https://flow-next.dev/guides/for-teams/#specs-across-branches) and the [CLI reference](https://flow-next.dev/flowctl/cli-reference/#specs-across-branches).
-- **Plans see overlapping work on other branches.** Plan's spec scout includes specs with unmerged changes on other branches and names the branch in each finding. It records a dependency only when both specs are in your checkout and reports anything else as an overlap. With an older flowctl the scout keeps its checkout-only behaviour.
+- **Plans see overlapping work on other branches.** Plan's spec scout includes specs with unmerged changes on other branches and names the branch in each finding. It records a dependency only on a spec that is in your checkout, and reports a spec that exists only on another branch as an overlap. With an older flowctl the scout keeps its checkout-only behaviour.
 
 ### Changed
 
