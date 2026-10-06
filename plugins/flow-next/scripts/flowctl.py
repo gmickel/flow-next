@@ -30676,10 +30676,16 @@ class SpecRefIndexError(Exception):
     """`specs --refs` cannot build an index (not a git repo, no base ref)."""
 
 
-def _spec_ref_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+def _spec_ref_env() -> dict:
+    # A partial clone would otherwise fetch missing objects on read (R5).
+    # Git before 2.45 ignores the variable; no version floor is added.
+    return {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
+
+
+def _spec_ref_git(repo_root: Path, *args: str, lazy_fetch: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-C", str(repo_root), "-c", "color.ui=never", *args],
-        capture_output=True, text=True, encoding="utf-8",
+        capture_output=True, text=True, encoding="utf-8", env=None if lazy_fetch else _spec_ref_env(),
     )
 
 
@@ -30705,7 +30711,7 @@ def _spec_ref_blobs(repo_root: Path, oids: set) -> dict:
         return {}
     result = subprocess.run(
         ["git", "-C", str(repo_root), "cat-file", "--batch"],
-        input=("\n".join(sorted(oids)) + "\n").encode(), capture_output=True,
+        input=("\n".join(sorted(oids)) + "\n").encode(), capture_output=True, env=_spec_ref_env(),
     )
     data, blobs, pos = result.stdout, {}, 0
     while pos < len(data):
@@ -30731,7 +30737,7 @@ def _spec_ref_merge(tmp: Path, ours: bytes, base: bytes, theirs: bytes) -> tuple
         path = tmp / name
         path.write_bytes(content)
         paths.append(str(path))
-    result = subprocess.run(["git", "merge-file", "-p", *paths], capture_output=True)
+    result = subprocess.run(["git", "merge-file", "-p", *paths], capture_output=True, env=_spec_ref_env())
     return result.stdout, (result.returncode if result.returncode <= 127 else -1)
 
 
@@ -30747,7 +30753,7 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
 
     fetched, fetch_error = False, None
     if fetch:
-        fetch_result = _spec_ref_git(repo_root, "fetch", "--prune", "--quiet", "origin")
+        fetch_result = _spec_ref_git(repo_root, "fetch", "--prune", "--quiet", "origin", lazy_fetch=True)
         fetched = fetch_result.returncode == 0
         if not fetched:
             fetch_error = (fetch_result.stderr or "").strip() or f"git fetch exit {fetch_result.returncode}"
@@ -30817,10 +30823,11 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
         contents = _spec_ref_blobs(repo_root, {oid for p in pending for oid in p[1:]})
         with tempfile.TemporaryDirectory() as tmp_name:
             for copy, base_md, mb_md, tip_md in pending:
-                ours = contents.get(base_md, b"")
-                merged, conflicts = _spec_ref_merge(
-                    Path(tmp_name), ours, contents.get(mb_md, b""), contents.get(tip_md, b"")
-                )
+                if not all(oid in contents for oid in (base_md, mb_md, tip_md)):
+                    copy[2] = "live"  # a blob is unavailable (partial clone): no merge test possible
+                    continue
+                ours = contents[base_md]
+                merged, conflicts = _spec_ref_merge(Path(tmp_name), ours, contents[mb_md], contents[tip_md])
                 if conflicts < 0 or merged != ours:
                     copy[2], copy[3] = "live", conflicts > 0
 
@@ -30831,9 +30838,9 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
         spec_copies = copies.get(spec_id, [])
         if spec_id in base_tree:
             meta_oids[spec_id] = base_tree[spec_id].get("json")
-        else:
-            ordered = sorted(spec_copies, key=lambda c: (c[2] != "live", c[0][0]))
-            meta_oids[spec_id] = trees[ordered[0][1]][spec_id].get("json") if ordered else None
+        else:  # first live ref in sorted order; stale-only copies give no metadata
+            live_copies = sorted((c for c in spec_copies if c[2] == "live"), key=lambda c: c[0][0])
+            meta_oids[spec_id] = trees[live_copies[0][1]][spec_id].get("json") if live_copies else None
     meta_blobs = _spec_ref_blobs(repo_root, {oid for oid in meta_oids.values() if oid})
 
     specs = []

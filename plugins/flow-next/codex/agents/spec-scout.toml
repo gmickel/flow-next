@@ -34,7 +34,7 @@ The projection keeps open specs only (id, title, status); done specs never reach
 <FLOWCTL> specs --refs --json | jq -c '[.specs[] | select(.live != []) | {id, title, on_base, live}]'
 ```
 
-Each entry is in-flight work on the branches in `live[].ref`, whatever its status. Read a copy with `git show <ref>:.flow/specs/<id>.md` and judge it like an open spec, naming the ref. An older flowctl rejects `--refs` (exit 2, `unrecognized arguments: --refs`); then continue with step 1's list alone.
+Each entry is in-flight work on the branches in `live[].ref`, whatever its status. Read a copy with `git show '<ref>:.flow/specs/<id>.md'`, the whole revision as one single-quoted argument because a pushed ref name can hold shell syntax such as `$(...)`; skip any ref containing a `'`. Judge it like an open spec, naming the ref. An older flowctl rejects `--refs` (exit 2, `unrecognized arguments: --refs`); then continue with step 1's list alone.
 
 ### 2. For each open spec, read it
 
@@ -124,7 +124,7 @@ No dependencies or overlaps detected with open specs.
   isn't advertised in the title. Do not decide a relationship from the title alone.
 - Only report clear relationships, not maybes
 - Skip done specs entirely (a live copy from step 1b is not done); skip `SPEC_ID` (the spec being planned) entirely
-- Report a Dependency or Reverse Dependency only when both specs exist in the checkout (`<FLOWCTL> show <id>` succeeds): the planner records it as an edge, which needs both endpoints there. Any other cross-branch relationship goes under Overlaps with its ref; a `conflict` copy stays an overlap, with its tip date
+- Report a Dependency or Reverse Dependency only on a spec that exists in the checkout (`<FLOWCTL> show <id>` succeeds): the planner records it as an edge once the new spec exists. Any other cross-branch relationship goes under Overlaps with its ref; a `conflict` copy stays an overlap, with its tip date
 - Return structured output for the planner to auto-set deps — for a **Reverse Dependency**, the
   planner records `<that-spec> depends-on <new-spec>` (see plan Step 5, spec dependencies), so name the spec id precisely.
 """

@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -157,6 +158,7 @@ class SpecRefIndexTest(unittest.TestCase):
         index = _index(self.repo)
         self.assertEqual(index["summary"]["branch_only"], [])
         self.assertEqual(_row(index, "fn-2-export")["stale_refs"], ["refs/heads/feat/export"])
+        self.assertEqual((_row(index, "fn-2-export")["title"], _row(index, "fn-2-export")["status"]), (None, None))
 
     def test_task_shaped_stem_and_malformed_sidecar(self) -> None:
         _write_spec(self.repo, "fn-1-login", BODY, sidecar="{not json")
@@ -181,6 +183,34 @@ class SpecRefIndexTest(unittest.TestCase):
         for spec_id in ("fn-1-login", "fn-3-gone"):  # deletion history never outranks the missing merge-base
             row = _row(index, spec_id)
             self.assertEqual([(c["ref"], c["conflict"]) for c in row["live"]], [("refs/heads/island", False)])
+
+    @unittest.skipIf(
+        tuple(map(int, re.findall(r"\d+", _git(Path.cwd(), "--version"))[:2])) < (2, 45),
+        "GIT_NO_LAZY_FETCH needs git 2.45+",
+    )
+    def test_partial_clone_reads_no_promised_blobs(self) -> None:
+        _write_spec(self.repo, "fn-1-login", BODY)
+        _commit(self.repo, "spec on main")
+        _git(self.repo, "switch", "-q", "-c", "feat/merged")
+        (self.repo / ".flow/specs/fn-1-login.md").write_text(BODY.replace("line one", "line one merged"), encoding="utf-8")
+        _commit(self.repo, "merged edit")
+        _git(self.repo, "switch", "-q", "main")
+        _git(self.repo, "merge", "-q", "--squash", "feat/merged")
+        _commit(self.repo, "squash")
+        path = self.repo / ".flow/specs/fn-1-login.md"
+        path.write_text(path.read_text(encoding="utf-8").replace("line three", "line three base"), encoding="utf-8")
+        _commit(self.repo, "base edit")
+        _git(self.repo, "config", "uploadpack.allowFilter", "true")
+        clone = self.tmp / "partial"
+        subprocess.run(
+            ["git", "clone", "-q", "--filter=blob:none", self.repo.as_uri(), str(clone)], capture_output=True, check=True
+        )
+        before = _git(clone, "count-objects", "-v")
+        row = _row(_index(clone), "fn-1-login")
+        # The merge-base and tip blobs were never fetched: no lazy fetch, and the
+        # copy counts as live without conflict instead of merging against b"".
+        self.assertEqual(_git(clone, "count-objects", "-v"), before)
+        self.assertEqual([(c["ref"], c["conflict"]) for c in row["live"]], [("refs/remotes/origin/feat/merged", False)])
 
     def test_pushed_spec_needs_fetch_and_prune_drops_deleted_branch(self) -> None:
         origin = self.tmp / "origin.git"
