@@ -363,7 +363,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-284-cross-branch-spec-index-and-team.md",
-  "status": "open",
+  "status": "done",
   "title": "Cross-branch spec index and team branching docs",
   "tracker": {
     "baseHashFlow": null,
@@ -376,5 +376,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-06T14:37:22.296467Z"
+  "updated_at": "2026-10-06T14:54:25.977216Z"
 }
