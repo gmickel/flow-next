@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-10-06T14:18:31.944538Z",
+  "depends_on": [],
+  "id": "fn-284-cross-branch-spec-index-and-team.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-284-cross-branch-spec-index-and-team",
+  "spec_path": ".flow/tasks/fn-284-cross-branch-spec-index-and-team.1.md",
+  "status": "todo",
+  "title": "Implement Cross-branch spec index and team branching docs",
+  "updated_at": "2026-10-06T14:18:31.944538Z"
+}
