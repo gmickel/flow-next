@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Setup explains plan-sync.** The setup summary now says that plan-sync is off by default, that a config written by an older init may still have it on, and what turning it on costs: work runs waves instead of the rolling scheduler. It also says that a single-task or no-plan spec never has later tasks for plan-sync to update, and gives the command that turns it off.
+
 ## [flow-next 8.0.0] - 2026-10-05
 
 Every reviewer now gives your change the same review. A small change in one area gets one reviewer and anything larger gets three (correctness, contracts, integration), merged into one fix pass, whether the review runs on Codex, Claude, Copilot, Cursor or the host and whichever harness you run flow-next in. Switching reviewer no longer changes how closely a change is checked: before this release only Codex and host reviews sized the panel, and the other three always sent one reviewer.
