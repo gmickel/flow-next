@@ -115,6 +115,7 @@ Works out of the box for parallel branches. No setup required.
 - **Soft claims**: Tasks have `assignee` field to prevent duplicate work
 - **Actor resolution**: `FLOW_ACTOR` env → git email → git name → `$USER` → "unknown"
 - **Local validation**: `flowctl validate --all` catches issues before commit
+- **Specs on other branches**: `flowctl specs --refs` lists specs with unmerged changes on local and pushed branches; a teammate's spec appears once they push and you fetch (`--fetch`)
 
 **Worktree sharing.** Runtime claim state lives in the git common dir (`.git/flow-state`), which every worktree of a repo shares. Two agents driving `flowctl` in sibling worktrees therefore read and write each other's task claims unless each sets `FLOW_STATE_DIR` (rung 1, the documented per-process override). An orchestrator-set state dir must live **outside** the repo tree - in-tree dirs can be destroyed by test-hygiene cleanup.
 
@@ -805,6 +806,12 @@ Output:
 ```
 
 Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`. Ready specs carry a badge - `[open] [ready] fn-1: …` - shown **only** when the flag is set (no draft-noise for non-adopters).
+
+```bash
+flowctl specs --refs [--fetch] [--json]
+```
+
+Indexes specs across the base ref (`origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`), local branches and remote-tracking refs. Read-only and offline; `--fetch` prune-fetches `origin` first, and a failed fetch still indexes local refs (`fetched: false`, `fetch_error`). A branch's copy is **live** when merging the branch into base would change the spec body (`conflict: true` when that merge conflicts) and **stale** otherwise: an older copy, a merged copy, or a spec deleted on base. `summary` lists `branch_only`, `ahead_of_base`, `concurrent_edits`, `would_conflict` and `local_branches_upstream_gone`; each `specs[]` row carries `id`, `title`, `status`, `on_base`, `live[]` (`ref`, `tip_date`, `conflict`), `stale_refs` and `tracker`. An older flowctl rejects the flag with exit 2 and `unrecognized arguments: --refs`.
 
 ### tasks
 

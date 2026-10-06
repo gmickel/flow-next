@@ -30672,12 +30672,264 @@ def cmd_show(args: argparse.Namespace) -> None:
         )
 
 
+class SpecRefIndexError(Exception):
+    """`specs --refs` cannot build an index (not a git repo, no base ref)."""
+
+
+def _spec_ref_env() -> dict:
+    # A partial clone would otherwise fetch missing objects on read (R5).
+    # Git before 2.45 ignores the variable; no version floor is added.
+    return {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
+
+
+def _spec_ref_git(repo_root: Path, *args: str, lazy_fetch: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(repo_root), "-c", "color.ui=never", *args],
+        capture_output=True, text=True, encoding="utf-8", env=None if lazy_fetch else _spec_ref_env(),
+    )
+
+
+def _spec_ref_tree(repo_root: Path, commit: str, cache: dict) -> dict:
+    """{spec_id: {"md": oid, "json": oid}} under .flow/specs at commit (cached)."""
+    if commit not in cache:
+        found: dict = {}
+        listing = _spec_ref_git(repo_root, "ls-tree", commit, f"{FLOW_DIR}/{SPECS_DIR}/")
+        for line in listing.stdout.splitlines() if listing.returncode == 0 else []:
+            meta, _, path = line.partition("\t")
+            parts = meta.split()
+            stem, _, ext = path.rsplit("/", 1)[-1].rpartition(".")
+            # A task-shaped stem (fn-1-x.1) is not a spec id.
+            if len(parts) == 3 and parts[1] == "blob" and ext in ("md", "json") and is_spec_id(stem):
+                found.setdefault(stem, {})[ext] = parts[2]
+        cache[commit] = found
+    return cache[commit]
+
+
+def _spec_ref_blobs(repo_root: Path, oids: set) -> dict:
+    """Read blobs in one `cat-file --batch` process: {oid: bytes}."""
+    if not oids:
+        return {}
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "cat-file", "--batch"],
+        input=("\n".join(sorted(oids)) + "\n").encode(), capture_output=True, env=_spec_ref_env(),
+    )
+    data, blobs, pos = result.stdout, {}, 0
+    while pos < len(data):
+        newline = data.index(b"\n", pos)
+        header = data[pos:newline].split()
+        if len(header) != 3:  # "<oid> missing"
+            pos = newline + 1
+            continue
+        size = int(header[2])
+        blobs[header[0].decode()] = data[newline + 1:newline + 1 + size]
+        pos = newline + 1 + size + 1
+    return blobs
+
+
+def _spec_ref_merge(tmp: Path, ours: bytes, base: bytes, theirs: bytes) -> tuple[bytes, int]:
+    """Three-way merge of blob contents with plain `git merge-file -p`.
+
+    Returns (merged, conflicts); conflicts < 0 means git could not merge.
+    Runs on temporary files outside the repository, so it writes no objects.
+    """
+    paths = []
+    for name, content in (("ours", ours), ("base", base), ("theirs", theirs)):
+        path = tmp / name
+        path.write_bytes(content)
+        paths.append(str(path))
+    result = subprocess.run(["git", "merge-file", "-p", *paths], capture_output=True, env=_spec_ref_env())
+    return result.stdout, (result.returncode if result.returncode <= 127 else -1)
+
+
+def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
+    """Index every spec across base, local branches and remote-tracking refs.
+
+    Read-only git plumbing. A ref's copy whose body differs from base is live
+    when merging the ref into base would change the body (squash-merge safe),
+    otherwise stale. Raises SpecRefIndexError without a repo or a base ref.
+    """
+    if _spec_ref_git(repo_root, "rev-parse", "--git-dir").returncode != 0:
+        raise SpecRefIndexError(f"not a git repository: {repo_root}")
+
+    fetched, fetch_error = False, None
+    if fetch:
+        fetch_result = _spec_ref_git(repo_root, "fetch", "--prune", "--quiet", "origin", lazy_fetch=True)
+        fetched = fetch_result.returncode == 0
+        if not fetched:
+            fetch_error = (fetch_result.stderr or "").strip() or f"git fetch exit {fetch_result.returncode}"
+
+    candidates = _default_branch_candidates(repo_root)
+    base_ref = base_sha = None
+    for candidate in candidates:
+        sha = _spec_ref_git(repo_root, "rev-parse", "--verify", "-q", f"{candidate}^{{commit}}")
+        if sha.returncode == 0:
+            full = _spec_ref_git(repo_root, "rev-parse", "--symbolic-full-name", candidate)
+            base_ref, base_sha = (full.stdout.strip() or candidate), sha.stdout.strip()
+            break
+    if base_sha is None:
+        raise SpecRefIndexError(f"no base ref found (tried {', '.join(candidates)})")
+
+    refs = []
+    fmt = "%(refname)%00%(objectname)%00%(symref)%00%(upstream:track)%00%(committerdate:short)"
+    listing = _spec_ref_git(repo_root, "for-each-ref", f"--format={fmt}", "refs/heads", "refs/remotes")
+    for line in listing.stdout.splitlines():
+        name, sha, symref, track, date = line.split("\x00")
+        if not symref:
+            refs.append({"ref": name, "sha": sha, "gone": track == "[gone]", "date": date})
+    refs.sort(key=lambda r: r["ref"])
+
+    trees: dict = {}
+    base_tree = _spec_ref_tree(repo_root, base_sha, trees)
+    tips: dict = {}
+    for r in refs:
+        if r["sha"] != base_sha:
+            tips.setdefault(r["sha"], []).append(r["ref"])
+
+    # Classify each tip's differing copies; three-way merges are batched below.
+    copies: dict = {}  # spec_id -> list of [ref names, tip sha, kind, conflict]
+    pending = []       # (copy, base oid, merge-base oid, tip oid)
+    deleted_on_base: dict = {}
+    for sha, ref_names in tips.items():
+        tip_tree = _spec_ref_tree(repo_root, sha, trees)
+        merge_base = _spec_ref_git(repo_root, "merge-base", base_sha, sha)
+        mb = merge_base.stdout.strip() if merge_base.returncode == 0 else ""
+        mb_tree = _spec_ref_tree(repo_root, mb, trees) if mb else {}
+        for spec_id, blobs in tip_tree.items():
+            tip_md, base_md = blobs.get("md"), base_tree.get(spec_id, {}).get("md")
+            if tip_md is None or tip_md == base_md:
+                continue
+            copy = [ref_names, sha, "stale", False]
+            copies.setdefault(spec_id, []).append(copy)
+            mb_md = mb_tree.get(spec_id, {}).get("md")
+            if mb and mb_md == tip_md:
+                continue  # untouched since the fork: an older copy
+            if not mb:
+                copy[2] = "live"  # unrelated or shallow history: no merge test possible
+            elif base_md is None:
+                if spec_id not in deleted_on_base:
+                    gone = _spec_ref_git(
+                        repo_root, "log", "-1", "--format=%H", "--diff-filter=D", base_sha,
+                        "--", f"{FLOW_DIR}/{SPECS_DIR}/{spec_id}.md",
+                    )
+                    deleted_on_base[spec_id] = bool(gone.stdout.strip())
+                if not deleted_on_base[spec_id]:
+                    copy[2] = "live"  # added on the branch
+            elif mb_md is None:
+                copy[2], copy[3] = "live", True  # added on both sides with different bodies
+            else:
+                pending.append((copy, base_md, mb_md, tip_md))
+
+    if pending:
+        contents = _spec_ref_blobs(repo_root, {oid for p in pending for oid in p[1:]})
+        with tempfile.TemporaryDirectory() as tmp_name:
+            for copy, base_md, mb_md, tip_md in pending:
+                if not all(oid in contents for oid in (base_md, mb_md, tip_md)):
+                    copy[2] = "live"  # a blob is unavailable (partial clone): no merge test possible
+                    continue
+                ours = contents[base_md]
+                merged, conflicts = _spec_ref_merge(Path(tmp_name), ours, contents[mb_md], contents[tip_md])
+                if conflicts < 0 or merged != ours:
+                    copy[2], copy[3] = "live", conflicts > 0
+
+    ref_date = {r["ref"]: r["date"] for r in refs}
+    spec_ids = set(base_tree) | set(copies)
+    meta_oids: dict = {}
+    for spec_id in spec_ids:
+        spec_copies = copies.get(spec_id, [])
+        if spec_id in base_tree:
+            meta_oids[spec_id] = base_tree[spec_id].get("json")
+        else:  # first live ref in sorted order; stale-only copies give no metadata
+            live_copies = sorted((c for c in spec_copies if c[2] == "live"), key=lambda c: c[0][0])
+            meta_oids[spec_id] = trees[live_copies[0][1]][spec_id].get("json") if live_copies else None
+    meta_blobs = _spec_ref_blobs(repo_root, {oid for oid in meta_oids.values() if oid})
+
+    specs = []
+    for spec_id in sorted(spec_ids, key=lambda i: (id_sort_key(i), i)):
+        try:
+            meta = json.loads(meta_blobs.get(meta_oids[spec_id], b"").decode("utf-8"))
+            if not isinstance(meta, dict):
+                meta = {}
+        except (UnicodeDecodeError, ValueError):
+            meta = {}
+        live, stale = [], []
+        for ref_names, _sha, kind, conflict in copies.get(spec_id, []):
+            for name in ref_names:
+                if kind == "live":
+                    live.append({"ref": name, "tip_date": ref_date[name], "conflict": conflict})
+                else:
+                    stale.append(name)
+        tracker = meta.get("tracker")
+        specs.append({
+            "id": spec_id,
+            "title": meta.get("title"),
+            "status": meta.get("status"),
+            "on_base": spec_id in base_tree,
+            "live": sorted(live, key=lambda c: c["ref"]),
+            "stale_refs": sorted(stale),
+            "tracker": tracker.get("url") if isinstance(tracker, dict) else None,
+        })
+
+    def live_versions(spec_id: str) -> int:
+        return len({trees[c[1]][spec_id]["md"] for c in copies.get(spec_id, []) if c[2] == "live"})
+
+    return {
+        "base": base_ref,
+        "fetched": fetched,
+        "fetch_error": fetch_error,
+        "refs_scanned": len(refs),
+        "summary": {
+            "branch_only": [s["id"] for s in specs if not s["on_base"] and s["live"]],
+            "ahead_of_base": [s["id"] for s in specs if s["on_base"] and s["live"]],
+            "concurrent_edits": [s["id"] for s in specs if live_versions(s["id"]) > 1],
+            "would_conflict": [s["id"] for s in specs if any(c["conflict"] for c in s["live"])],
+            "local_branches_upstream_gone": [r["ref"] for r in refs if r["gone"]],
+        },
+        "specs": specs,
+    }
+
+
+def cmd_specs_refs(args: argparse.Namespace) -> None:
+    """`specs --refs`: the cross-branch spec index."""
+    try:
+        index = build_spec_ref_index(get_repo_root(), fetch=args.fetch)
+    except SpecRefIndexError as exc:
+        error_exit(str(exc), use_json=args.json)
+    if args.json:
+        json_output(index)
+        return
+    summary = index["summary"]
+    if index["fetch_error"]:
+        print(f"Fetch failed (indexed local refs): {index['fetch_error']}")
+    print(
+        f"Base: {index['base']}  refs: {index['refs_scanned']}  specs: {len(index['specs'])}  "
+        f"branch-only: {len(summary['branch_only'])}  ahead: {len(summary['ahead_of_base'])}  "
+        f"concurrent: {len(summary['concurrent_edits'])}  would-conflict: {len(summary['would_conflict'])}  "
+        f"local branches with upstream gone: {len(summary['local_branches_upstream_gone'])}"
+    )
+    multi = set(summary["concurrent_edits"])
+    for spec in index["specs"]:
+        if not spec["live"]:
+            continue
+        tag = "ahead" if spec["on_base"] else "branch-only"
+        if spec["id"] in multi:
+            tag += ", multiple versions"
+        refs_text = ", ".join(
+            f"{c['ref']} ({c['tip_date']}{', conflict' if c['conflict'] else ''})" for c in spec["live"]
+        )
+        print(f"  [{tag}] {spec['id']}: {refs_text}")
+
+
 def cmd_specs(args: argparse.Namespace) -> None:
     """List all specs."""
+    if getattr(args, "refs", False):
+        cmd_specs_refs(args)  # specs may exist only on other branches
+        return
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+    if getattr(args, "fetch", False):
+        error_exit("--fetch requires --refs", use_json=args.json)
 
     flow_dir = get_flow_dir()
     spec_data_list = []
@@ -56795,6 +57047,11 @@ def main() -> None:
 
     p_specs = subparsers.add_parser("specs", help="List all specs")
     p_specs.add_argument("--json", action="store_true", help="JSON output")
+    p_specs.add_argument(
+        "--refs", action="store_true",
+        help="Index specs across local branches and remote-tracking refs (read-only, no network)",
+    )
+    p_specs.add_argument("--fetch", action="store_true", help="With --refs: prune-fetch origin first")
     p_specs.set_defaults(func=cmd_specs)
 
     p_tasks = subparsers.add_parser("tasks", help="List tasks")

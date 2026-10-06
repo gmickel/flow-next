@@ -6,6 +6,15 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.1.0] - 2026-10-06
+
+Teams that keep specs on feature branches can now see each other's in-flight specs. One command lists every spec across your local branches and the branches your teammates pushed, says which copies carry unmerged changes, and flags the ones whose merge would conflict, in about a second on a repository with 130 branches and 270 specs. Plan's spec scout reads it, so a new plan finds overlapping work on other branches as well as what is checked out. The teams guide now answers the branching question directly: three supported shapes, and the habits (push, fetch, delete merged branches) that keep the picture accurate.
+
+### Added
+
+- **See specs on every branch.** `flowctl specs --refs` lists each spec on the base branch, your local branches and remote-tracking branches. A branch's copy counts as live when merging that branch would change the spec, and as stale when it carries nothing new (an older copy, a squash-merged copy, or a spec deleted on main), so old branches do not drown out real work. A live copy whose merge would conflict is flagged with the date of the branch's last commit. It works offline on the refs you already have; `--fetch` prune-fetches origin first and still answers from local refs when the fetch fails. Plain `flowctl specs` is unchanged. Docs: [For teams](https://flow-next.dev/guides/for-teams/#specs-across-branches) and the [CLI reference](https://flow-next.dev/flowctl/cli-reference/#specs-across-branches).
+- **Plans see overlapping work on other branches.** Plan's spec scout includes specs with unmerged changes on other branches and names the branch in each finding. It records a dependency only when both specs are in your checkout and reports anything else as an overlap. With an older flowctl the scout keeps its checkout-only behaviour.
+
 ### Changed
 
 - **Setup explains plan-sync.** The setup summary now says that plan-sync is off by default, that a config written by an older init may still have it on, and what turning it on costs: work runs waves instead of the rolling scheduler. It also says that a single-task or no-plan spec never has later tasks for plan-sync to update, and gives the command that turns it off.
