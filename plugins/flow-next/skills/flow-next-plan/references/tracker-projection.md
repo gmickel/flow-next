@@ -9,8 +9,8 @@ wrapper prepares only the legal mode `0600` inputs, then makes one lifecycle
 call, chosen as tracker-sync's
 [steps.md section 4](../../flow-next-tracker-sync/steps.md#4-body-preparation)
 says: for pull or reconcile, `--prepare` first; a reconcile classified
-`flow-only` is a push with no body inputs (`--op push --event plan`), and every
-other case is:
+`flow-only` with no genuine comments is a push with no body inputs
+(`--op push --event plan`), and every other case is:
 
 ```bash
 "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event plan <legal file flags>

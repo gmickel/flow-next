@@ -245,7 +245,8 @@ if [ "$(jq -r '.probes.tracker.value.active // false' "${TMPDIR:-/tmp}/flow-plan
   echo "TRACKER ACTIVE (op=$OP): read and follow references/tracker-projection.md"
   # Load and follow references/tracker-projection.md with <OP> and <spec-id>.
   # Its inline wrapper makes one lifecycle facade call, chosen as that file says
-  # (a reconcile classified flow-only becomes a push with no body inputs):
+  # (a reconcile classified flow-only with no genuine comments becomes a push
+  # with no body inputs):
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event plan <legal file flags>
 fi
 ```

@@ -22,7 +22,8 @@ if [ "$OP" != "off" ]; then
   # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
   # operation-specific 0600 input files, then makes one lifecycle call, chosen
   # as its steps.md section 4 says: for pull or reconcile, --prepare first; a
-  # reconcile classified flow-only is a push with no body inputs,
+  # reconcile classified flow-only with no genuine comments is a push with no
+  # body inputs,
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event interview
   # and every other case is
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event interview <legal file flags>

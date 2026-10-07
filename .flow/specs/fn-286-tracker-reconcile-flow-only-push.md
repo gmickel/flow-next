@@ -6,7 +6,7 @@ GitHub issue #519 (reported by @TechupBusiness). With `tracker.perEvent.intervie
 
 ## Acceptance Criteria
 
-- **R1:** Refine's, capture's and plan's tracker steps direct the reconcile path through tracker-sync `steps.md` §4: prepare first, call `--op push` without body inputs on a `flow-only` classification, and reconcile with the authored files otherwise. No error surface beyond the facade's existing results.
+- **R1:** Refine's, capture's and plan's tracker steps direct the reconcile path through tracker-sync `steps.md` §4: prepare first, call `--op push` without body inputs on a `flow-only` classification with no genuine comments, and reconcile with the authored files otherwise. No error surface beyond the facade's existing results.
 
 ## Boundaries
 
