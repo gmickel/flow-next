@@ -5,8 +5,12 @@ active and that `tracker.perEvent.plan` selected an operation.
 
 Planning projects the spec to the tracker issue. Invoke the inline
 `flow-next-tracker-sync` wrapper with the resolved `<OP>` and `<spec-id>`. The
-wrapper prepares only the legal mode `0600` inputs, then makes exactly one
-lifecycle call:
+wrapper prepares only the legal mode `0600` inputs, then makes one lifecycle
+call, chosen as tracker-sync's
+[steps.md section 4](../../flow-next-tracker-sync/steps.md#4-body-preparation)
+says: for pull or reconcile, `--prepare` first; a reconcile classified
+`flow-only` is a push with no body inputs (`--op push --event plan`), and every
+other case is:
 
 ```bash
 "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event plan <legal file flags>

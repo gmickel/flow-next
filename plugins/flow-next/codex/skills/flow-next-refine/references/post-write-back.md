@@ -20,7 +20,11 @@ case "$LEAF" in
 esac
 if [ "$OP" != "off" ]; then
   # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
-  # operation-specific 0600 input files, then makes exactly one lifecycle call:
+  # operation-specific 0600 input files, then makes one lifecycle call, chosen
+  # as its steps.md section 4 says: for pull or reconcile, --prepare first; a
+  # reconcile classified flow-only is a push with no body inputs,
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event interview
+  # and every other case is
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event interview <legal file flags>
   # For OP=comment, write the comment yourself: a compact summary of the refined
   # spec and the decisions settled in this session. The 0600 --body-file's first

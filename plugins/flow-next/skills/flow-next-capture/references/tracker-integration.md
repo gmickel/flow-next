@@ -68,7 +68,11 @@ esac
 if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
    && [ "$OP" != "off" ]; then
   # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
-  # operation-specific 0600 input files, then makes exactly one lifecycle call:
+  # operation-specific 0600 input files, then makes one lifecycle call, chosen
+  # as its steps.md section 4 says: for pull or reconcile, --prepare first; a
+  # reconcile classified flow-only is a push with no body inputs,
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op push --event capture
+  # and every other case is
   #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event capture <legal file flags>
   # For OP=comment, Capture synthesizes the comment content by name: a compact
   # created/updated-spec summary plus the captured context. The 0600
