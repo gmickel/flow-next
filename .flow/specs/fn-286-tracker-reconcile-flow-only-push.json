@@ -114,7 +114,7 @@
     "impl:fn-286-tracker-reconcile-flow-only-push.1": 0
   },
   "spec_path": ".flow/specs/fn-286-tracker-reconcile-flow-only-push.md",
-  "status": "open",
+  "status": "done",
   "title": "Tracker reconcile flow-only push",
   "tracker": {
     "baseHashFlow": null,
@@ -127,5 +127,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-07T09:56:34.874704Z"
+  "updated_at": "2026-10-07T16:24:24.608553Z"
 }
