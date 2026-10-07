@@ -6,6 +6,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Run the first-round review panel one reviewer at a time.** Opt-in
+  `review.fanoutExecution=sequential` finishes each axis and its sidecars before
+  launching the next in supplied order. Concurrent scheduling remains the default,
+  and the panel still consumes one round with the same finalizer and receipts.
+
 ### Changed
 
 - **Review fallbacks and the Copilot triage judge reach Claude Haiku 5.5.** The opt-in Copilot triage judge (`FLOW_TRIAGE_LLM=1` with `--backend copilot`) now defaults to `claude-haiku-5.5` instead of `claude-haiku-4.5`. Haiku 5.5 is Anthropic's fastest model and costs less than Haiku 4.5. When a stronger model is unavailable, the `claude` review backend now tries `claude-haiku-5-5` before `claude-haiku-4-5`. The Copilot review ranking also gains `claude-opus-5.5`, `claude-sonnet-5.5`, `claude-sonnet-5` and `claude-haiku-5.5`, so a Copilot review can step down to a current Claude model before an older one. A model you name explicitly still wins. A CLI that does not serve an id rejects it, and the ladder steps past it to the next model.

@@ -249,6 +249,30 @@ class TestReviewRoute(unittest.TestCase):
         self.assertEqual(r["expired_reservation"], rid)
         self.assertIn("replayed and refunded", r["message"])
 
+    def test_claim_liveness_uses_legacy_or_sequential_panel_bound(self) -> None:
+        claim = {
+            "type": "impl_review", "id": "branch",
+            "claim": {"timestamp": "2026-01-01T00:00:00Z", "token": "t"},
+        }
+        config = self.root / ".flow" / "config.json"
+        with mock.patch.object(flowctl, "get_review_exec_timeout", return_value=1800):
+            config.write_text(
+                json.dumps({"review": {"fanoutExecution": "concurrent"}}), encoding="utf-8",
+            )
+            with mock.patch.object(flowctl, "_iso_age_seconds", return_value=2699):
+                self.assertTrue(flowctl._review_route_claim_live(claim))
+            with mock.patch.object(flowctl, "_iso_age_seconds", return_value=2700):
+                self.assertFalse(flowctl._review_route_claim_live(claim))
+
+            config.write_text(
+                json.dumps({"review": {"fanoutExecution": "sequential"}}), encoding="utf-8",
+            )
+            with mock.patch.object(flowctl, "_iso_age_seconds", return_value=6299):
+                self.assertTrue(flowctl._review_route_claim_live(claim))
+            with mock.patch.object(flowctl, "_iso_age_seconds", return_value=6300):
+                self.assertFalse(flowctl._review_route_claim_live(claim))
+        self.assertNotIn("ttl_seconds", claim["claim"])
+
     def test_standalone_claim_is_atomic(self) -> None:
         """Codex r45: the first standalone dispatch claims the scope
         atomically; a second coordinator on the same absent receipt stops."""

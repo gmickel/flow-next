@@ -95,6 +95,13 @@ class FlowConfigSchema(unittest.TestCase):
             "run scripts/gen_flow_config_schema.py",
         )
 
+    def test_fanout_execution_has_strict_enum_and_default(self) -> None:
+        schema = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+        review = schema["properties"]["review"]["properties"]
+        self.assertEqual(review["fanoutExecution"]["type"], "string")
+        self.assertEqual(review["fanoutExecution"]["enum"], list(flowctl.REVIEW_FANOUT_EXECUTION_VALUES))
+        self.assertEqual(review["fanoutExecution"]["default"], "concurrent")
+
     def test_determinism(self) -> None:
         self.assertEqual(
             gen_flow_config_schema.render(),
