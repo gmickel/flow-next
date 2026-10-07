@@ -6,6 +6,15 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.1.1] - 2026-10-07
+
+Two tracker sync fixes: a Linear issue marked as a duplicate no longer breaks status sync, and a spec-only change from refine, capture or plan now reaches the linked issue when the event is set to `reconcile`.
+
+### Fixed
+
+- **Linear issues marked as duplicates sync again.** Linear moves a duplicated issue into its own system-managed Duplicate status, which flow-next could not map, so every status check on that issue failed with `unmapped-state`. It now reads as cancelled. flow-next still never moves an issue into Duplicate itself. Thanks @sn-furali (#522).
+- **A spec-only change reaches the issue under `reconcile`.** With `tracker.perEvent.interview`, `capture` or `plan` set to `reconcile`, a change made only in the spec reported success while the issue kept its old body. Refine, capture and plan now push that change when the issue has no new comments, as the tracker-sync skill already describes, and reconcile otherwise. Thanks @TechupBusiness (#519).
+
 ## [flow-next 8.1.0] - 2026-10-06
 
 Teams that keep specs on feature branches can now see each other's in-flight specs. One command lists every spec across your local branches and the branches your teammates pushed, says which copies carry unmerged changes, and flags the ones whose merge would conflict, in about a second on a repository with 130 branches and 270 specs. Plan's spec scout reads it, so a new plan finds overlapping work on other branches as well as what is checked out. The teams guide now answers the branching question directly: three supported shapes, and the habits (push, fetch, delete merged branches) that keep the picture accurate.
