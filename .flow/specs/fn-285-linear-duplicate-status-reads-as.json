@@ -14,7 +14,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-285-linear-duplicate-status-reads-as.md",
-  "status": "open",
+  "status": "done",
   "title": "Linear Duplicate status reads as cancelled",
   "tracker": {
     "baseHashFlow": null,
@@ -27,5 +27,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-07T09:46:12.524397Z"
+  "updated_at": "2026-10-07T16:23:34.989698Z"
 }

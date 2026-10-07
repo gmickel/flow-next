@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-285-linear-duplicate-status-reads-as",
   "spec_path": ".flow/tasks/fn-285-linear-duplicate-status-reads-as.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Linear Duplicate status reads as cancelled",
   "updated_at": "2026-10-07T09:43:54.952791Z"
 }
