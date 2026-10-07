@@ -224,7 +224,7 @@ def _norm_linear(parent: dict, dest: dict) -> Union[str, TrackerError]:
         return "in_progress"
     if stype == "completed":
         return "done"
-    if stype == "canceled":
+    if stype in {"canceled", "duplicate"}:  # Duplicate: Linear's system status for a marked duplicate
         return "cancelled"
     return TrackerError(
         ErrorClass.CONFLICT,
