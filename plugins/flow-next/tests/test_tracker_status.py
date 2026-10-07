@@ -1991,6 +1991,16 @@ class AliasedStateIdReads(unittest.TestCase):
                 "linear", parent, self._linear_dest(ids))
             self.assertEqual(out, "done", msg=repr(ids))
 
+    def test_linear_duplicate_state_reads_cancelled(self) -> None:
+        # #522: marking an issue a duplicate moves it into Linear's
+        # system-managed Duplicate status (type "duplicate"); the measured raw
+        # read shape, with no stateIds entry for that state.
+        parent = {"state": {"id": "s-dup", "name": "Duplicate",
+                            "type": "duplicate"}}
+        out = tracker_norm_from_parent(
+            "linear", parent, self._linear_dest({"cancelled": "s-cancel"}))
+        self.assertEqual(out, "cancelled")
+
     def test_jira_alias_reads_earliest_slot_both_orders(self) -> None:
         parent = {"fields": {"status": {
             "id": "71", "name": "Working",
