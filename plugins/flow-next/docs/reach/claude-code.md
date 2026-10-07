@@ -22,7 +22,7 @@ A tier naming a model this harness cannot reach falls back to the session model,
 
 This harness serves Fable 5.1 (`claude-fable-5-1`) as the session model, and this build also exposes `fable` as an agent-definition alias. That is one observation on one machine on one date, not a roster - ask the harness for its own list before pinning an id.
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` from here too, stepping the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only) - but from this harness it is **same-family**: the receipt records `mode: "claude"` and the model, and the review skills say so once. For the reviewer tier's independent verdict prefer `codex`, or `host` with a cross-family `reviewer:` pin.
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` from here too, stepping the ranking `claude-fable-5-1` → `claude-opus-5-5` → `claude-opus-5` → `claude-sonnet-5-5` → `claude-sonnet-5` → `claude-haiku-5-5` → `claude-haiku-4-5` (ids probed 2026-09-05 to 2026-10-07 on Claude Code 2.1.260 to 2.1.293; an older CLI steps past the ids it does not recognize; the CLI lists no models, so the ladder steps that static ranking only) - but from this harness it is **same-family**: the receipt records `mode: "claude"` and the model, and the review skills say so once. For the reviewer tier's independent verdict prefer `codex`, or `host` with a cross-family `reviewer:` pin.
 
 ## Driving unattended
 

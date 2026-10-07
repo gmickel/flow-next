@@ -22,7 +22,7 @@ Every tier runs on the session model, and the degradation is stated once. That i
 
 ## Models observed (2026-09-05)
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) needs only the shell-out mechanism plus the `claude` CLI installed and authenticated: it steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only) and records the model in the receipt. Whether the verdict is cross-family depends on the family of whatever is executing this page.
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) needs only the shell-out mechanism plus the `claude` CLI installed and authenticated: it steps the ranking `claude-fable-5-1` → `claude-opus-5-5` → `claude-opus-5` → `claude-sonnet-5-5` → `claude-sonnet-5` → `claude-haiku-5-5` → `claude-haiku-4-5` (ids probed 2026-09-05 to 2026-10-07 on Claude Code 2.1.260 to 2.1.293; an older CLI steps past the ids it does not recognize; the CLI lists no models, so the ladder steps that static ranking only) and records the model in the receipt. Whether the verdict is cross-family depends on the family of whatever is executing this page.
 
 ## Driving unattended
 

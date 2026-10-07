@@ -43,7 +43,7 @@ No pinned agent for the tier's model → the subagent inherits the session model
 
 ## Models observed (2026-09-05)
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the CLI route for a Claude-family verdict from here - it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), cross-family when the session model is another family. It is its own backend, never a subprocess inside a `host` review.
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the CLI route for a Claude-family verdict from here - it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5-5` → `claude-opus-5` → `claude-sonnet-5-5` → `claude-sonnet-5` → `claude-haiku-5-5` → `claude-haiku-4-5` (ids probed 2026-09-05 to 2026-10-07 on Claude Code 2.1.260 to 2.1.293; an older CLI steps past the ids it does not recognize; the CLI lists no models, so the ladder steps that static ranking only), cross-family when the session model is another family. It is its own backend, never a subprocess inside a `host` review.
 
 ## Driving unattended
 

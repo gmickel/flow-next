@@ -20,7 +20,7 @@ A tier this harness cannot honor runs on the session model and says so once. If 
 
 ## Models observed (2026-09-05)
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only). Droid runs the canonical Claude-first plugin, so check the session model's family before treating that verdict as independent: cross-family when the writer is another family, same-family otherwise (the receipt records the model either way).
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5-5` → `claude-opus-5` → `claude-sonnet-5-5` → `claude-sonnet-5` → `claude-haiku-5-5` → `claude-haiku-4-5` (ids probed 2026-09-05 to 2026-10-07 on Claude Code 2.1.260 to 2.1.293; an older CLI steps past the ids it does not recognize; the CLI lists no models, so the ladder steps that static ranking only). Droid runs the canonical Claude-first plugin, so check the session model's family before treating that verdict as independent: cross-family when the writer is another family, same-family otherwise (the receipt records the model either way).
 
 ## Driving unattended
 
