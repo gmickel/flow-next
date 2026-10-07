@@ -1,0 +1,131 @@
+{
+  "branch_name": "fn-286-tracker-reconcile-flow-only-push",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-07T09:56:34.874697Z",
+  "created_at": "2026-10-07T09:49:35.863636Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-286-tracker-reconcile-flow-only-push",
+  "impl_review_rounds": {
+    "fn-286-tracker-reconcile-flow-only-push.1": 0
+  },
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "323e509b94fad31957d05c2a0d5d38987cd83b222330c289e2459f9bef5cfe08",
+      "backend": "codex",
+      "base_sha": "a12b8fc0c13faceca1736741be18380993d71f96",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bbda64e5fcb4351a9e72821f0d8b1828",
+            "classification": "introduced",
+            "findingId": "finding-bbda64e5fcb4351a9e72821f0d8b1828",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3e4f80671c1e606ff03b8cbccece4927a9fbe140",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1202,
+      "output_sha256": "709f62ce44279a52fa42d2cc1ac6890088d04ff53f8a9838e6ef481c184f683c",
+      "reservation_id": "95b42b49c3fc4c73ae0414d0ac0d757d",
+      "round_consumed": true,
+      "scope": "impl:fn-286-tracker-reconcile-flow-only-push.1",
+      "superseded_by": null,
+      "task": "fn-286-tracker-reconcile-flow-only-push.1",
+      "timestamp": "2026-10-07T09:53:55.325876Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fc7f69cb1419ae7b7c78302c48a7aec3da3cbca4192ad91bb267acb57d51482e",
+      "backend": "codex",
+      "base_sha": "a12b8fc0c13faceca1736741be18380993d71f96",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bbda64e5fcb4351a9e72821f0d8b1828",
+            "classification": "introduced",
+            "findingId": "finding-bbda64e5fcb4351a9e72821f0d8b1828",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "64324c7b786ed6e4e357c180913281adb8b438c1",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 887,
+      "output_sha256": "445825361d163706a1879e963868c4d82ab02ade1e179dbcc56e1c17dfe99e08",
+      "reservation_id": "e32c62f0dd544720b96cebcadaadf758",
+      "round_consumed": true,
+      "scope": "impl:fn-286-tracker-reconcile-flow-only-push.1",
+      "superseded_by": null,
+      "task": "fn-286-tracker-reconcile-flow-only-push.1",
+      "timestamp": "2026-10-07T09:56:14.911685Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-286-tracker-reconcile-flow-only-push.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-286-tracker-reconcile-flow-only-push.1": 0
+  },
+  "spec_path": ".flow/specs/fn-286-tracker-reconcile-flow-only-push.md",
+  "status": "done",
+  "title": "Tracker reconcile flow-only push",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-07T16:24:24.608553Z"
+}
