@@ -1380,7 +1380,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
         m, e, src = flowctl.resolve_fast_judge_model("codex")
         self.assertEqual((m, e, src), ("gpt-6-luna", "high", "baseline"))
         m, e, src = flowctl.resolve_fast_judge_model("copilot")
-        self.assertEqual((m, e, src), ("claude-haiku-4.5", "low", "baseline"))
+        self.assertEqual((m, e, src), ("claude-haiku-5.5", "low", "baseline"))
 
     def test_fast_judge_explicit_beats_baseline(self) -> None:
         m, e, src = flowctl.resolve_fast_judge_model(

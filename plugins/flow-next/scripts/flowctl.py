@@ -7314,13 +7314,17 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-5.5",
             "gpt-5.4",
             "claude-fable-5.1",  # rolled out to Copilot 2026-09-05; Claude-family, so --effort is dropped
+            "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
+            "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
+            "claude-sonnet-5",
             "claude-opus-4.8",
             "claude-opus-4.7",
             "claude-opus-4.6",
             "claude-opus-4.5",
             "claude-sonnet-4.5",
             "claude-sonnet-4",
+            "claude-haiku-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-haiku-4.5",
             "gpt-5.4-mini",
             "gpt-5.3-codex",
@@ -7376,7 +7380,8 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``[claude-code:unrecognized_model]`` stderr tag - the CLI exits 0 on
         # a bad model, so exit codes are never the signal). Ids probed
         # 2026-09-05 on Claude Code 2.1.260; the 5.5 ids probed 2026-09-29 on
-        # 2.1.284 (older CLIs tag them unrecognized, so the ladder steps past).
+        # 2.1.284 (older CLIs tag them unrecognized, so the ladder steps past);
+        # claude-haiku-5-5 probed 2026-10-07 on 2.1.293.
         # The CLI has no ``--list-models``.
         "models": [
             "claude-fable-5-1",
@@ -7384,6 +7389,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "claude-opus-5",
             "claude-sonnet-5-5",
             "claude-sonnet-5",
+            "claude-haiku-5-5",
             "claude-haiku-4-5",
         ],
         # The CLI's own ``--effort`` set (2.1.260).
@@ -7461,7 +7467,7 @@ def _is_removed_backend_value(raw: Any) -> bool:
 FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
     # (model, default effort) - fn-113.1 interim defaults re-homed as baseline.
     "codex": ("gpt-6-luna", "high"),
-    "copilot": ("claude-haiku-4.5", "low"),
+    "copilot": ("claude-haiku-5.5", "low"),
 }
 
 
@@ -57203,7 +57209,7 @@ def main() -> None:
         "--model",
         help=(
             "Fast model override (else the "
-            "baseline gpt-6-luna / claude-haiku-4.5)"
+            "baseline gpt-6-luna / claude-haiku-5.5)"
         ),
     )
     p_triage.add_argument(
