@@ -167,6 +167,13 @@ Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `
 
 For specs that emerge from a longer back-and-forth, run `/flow-next:refine <spec-id> --biz` instead. The business lens focuses the interview on the product decisions that would change what gets built and that the spec leaves unclear - who it is for, what done looks like, what is explicitly out, a constraint the domain implies. Asking nothing is a valid outcome. The codebase is read-only context, not the subject of questions.
 
+**For business analysts and product owners.** You own the business layer; engineering adds the technical layer after you.
+
+1. Start from what you have. Describe the change to `/flow-next:flow`, or paste your requirements document (or point flow at its file) and flow captures it as a spec. To work through the document before it becomes a spec, run `/flow-next:refine <path> --biz` on the file, then `/flow-next:capture`.
+2. Ask for the business interview: `/flow-next:flow <spec-id> --biz`, or say "I'm the product owner, interview me on <spec-id>". Flow runs refine with the business lens, which leaves data, contracts, interfaces and security to engineering.
+3. Answer "not my call" to anything that belongs to engineering. It is recorded as an open question for them.
+4. Send the spec link to the tech lead, who runs `/flow-next:refine <spec-id> --tech`.
+
 The handover is a *state* of the spec, not a second spec. The same `.flow/specs/<spec-id>.md` file evolves through layers: each answer lands in the section it belongs in, sections no answer belongs in come back byte-for-byte, and the read-back names every section the session changed.
 
 Hand the spec off to the tech lead by linking it. (For *Spec-as-PR*, see [Team patterns](#team-patterns) below - open the spec file on a feature branch as a draft PR before any code lands.)

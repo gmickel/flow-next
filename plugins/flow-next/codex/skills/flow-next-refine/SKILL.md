@@ -39,7 +39,7 @@ Empty: ask "What should I refine? Give me a Flow ID (e.g. fn-1-add-oauth) or a f
 
 ## Setup
 
-**Scope lens.** `--scope=<value>` is an optional free-text lens: `business`, `technical`, `qa`, `security`, or any other audience; `--biz` means `--scope=business` and `--tech` means `--scope=technical`. Take these tokens out of the arguments before detecting the input; several values combine into one lens. There is one interview whatever the lens: interpret the lens from its words and let it focus which open decisions you look for (a QA lens looks for what counts as done, which failures matter, what must be testable). No lens means no filter. Never ask which scope to run.
+**Scope lens.** `--scope=<value>` is an optional free-text lens: `business`, `technical`, `qa`, `security`, or any other audience; `--biz` means `--scope=business` and `--tech` means `--scope=technical`. Take these tokens out of the arguments before detecting the input; several values combine into one lens. There is one interview whatever the lens: interpret the lens from its words and let it focus which open decisions you look for (a QA lens looks for what counts as done, which failures matter, what must be testable). No lens means no filter. Never ask which scope to run. Under a non-technical lens, speak to the person in their words throughout, not only in questions: round openers, the read-back and the completion summary say what was recorded and what is left for engineering, and gloss or leave out source tags, criterion ids, section names and command names.
 
 **Research pass.** With `--scope=research`, skip the doc-aware gate and the interview: detect the input, then read [references/research-scope.md](references/research-scope.md) and follow it. The interview never reads that file.
 
@@ -88,7 +88,7 @@ Every question goes through `plain-text numbered prompt` (load it with `ToolSear
 
 Ask a question only when all three hold: a wrong guess would build the wrong thing or ship behaviour the person would reject; the code, the docs, a quick experiment, or implementation cannot settle it; and it is the answerer's call. A topic on the list below is not a reason to ask.
 
-Check the spec for these, and ask about one only when the spec leaves it unclear and it passes the test: who it is for; what done looks like; what is explicitly out; a constraint the domain implies (a regulation, a contract, a partner commitment); an irreversible data or contract change (a data model, a migration, a public contract); an external interface; a security boundary. A lens adds its audience's open decisions. Technical detail, performance, failure modes, concurrency, scale and edge cases qualify only when they pass the test; implementation, review and QA surface the rest. Cosmetic polish (message wording, flag spelling, formatting) never gets its own question: fold it into a related question's options or state it as a default the person can veto at write-back. Refine never asks for success metrics or latency budgets unless the spec is about them.
+Check the spec for these, and ask about one only when the spec leaves it unclear and it passes the test: who it is for; what done looks like; what is explicitly out; a constraint the domain implies (a regulation, a contract, a partner commitment); an irreversible data or contract change (a data model, a migration, a public contract); an external interface; a security boundary. A lens adds its audience's open decisions. Under a non-technical lens, leave the technical items on that list (data, migrations, contracts, interfaces, security) to the technical pass and planning, without recording them; ask only a consequence the answerer owns, in their words ("existing customers' exports would change format: acceptable?"). Technical detail, performance, failure modes, concurrency, scale and edge cases qualify only when they pass the test; implementation, review and QA surface the rest. Cosmetic polish (message wording, flag spelling, formatting) never gets its own question: fold it into a related question's options or state it as a default the person can veto at write-back. Refine never asks for success metrics or latency budgets unless the spec is about them.
 
 Stop when no question that passes the test remains. Asking nothing is a good outcome: report "Nothing worth asking; the spec is clear enough to build." and skip the write-back unless investigation resolved something worth recording.
 
@@ -135,11 +135,12 @@ Example: "This decides how long the rate limiter remembers a result before check
 
 ### Skipped questions are not answers
 
-A recommendation never implies consent. Three answer shapes:
+A recommendation never implies consent. Four answer shapes:
 
 - **An answer** (an option or typed text): use it.
 - **Delegation** ("you decide", "go with your recommendation"): adopt the recommendation and note it as delegated by the person.
-- **A skip** (dismissed, "skip", "I don't know", "not my call"): the question stays open. Its recommendation never enters a spec section as decided content.
+- **Someone else's call** ("not my call", "engineering decides"): park it under `## Open Questions` as `**<question>** — for <owner> to decide; leaning <X>. *(owner: engineering | product)*`. It is not a skip.
+- **A skip** (dismissed, "skip", "I don't know"): the question stays open. Its recommendation never enters a spec section as decided content.
 
 Park each skip under `## Open Questions` as `**<question>** — skipped during refine; leaning <X>, unconfirmed. *(owner: engineering | product)*`. A skipped judgment question stays a judgment question; never backfill it by grep. Keep a skip count.
 
