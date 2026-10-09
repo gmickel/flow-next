@@ -1,0 +1,132 @@
+{
+  "branch_name": "fn-288-a-business-path-bas-and-pos-can-walk",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-09T08:54:59.504466Z",
+  "created_at": "2026-10-09T07:15:11.832585Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-288-a-business-path-bas-and-pos-can-walk",
+  "impl_review_rounds": {
+    "fn-288-a-business-path-bas-and-pos-can-walk.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "c921ce1334120a2189a3607de9e03f9f35fef4a725618c912fecb636b3c93ce3",
+      "backend": "codex",
+      "base_sha": "09e291ee1e941ec7961697b85fbc2b55cf1adcc2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1c539b065bc49510c27a8655856b446a",
+            "classification": "introduced",
+            "findingId": "finding-1c539b065bc49510c27a8655856b446a",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3d2cd589c8dccd2d04da431a0d7f061d2e2b7bf4",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1173,
+      "output_sha256": "983f349b0e88f4fb3b50fab6e9dd5d195792c379fca2ef9602d5d97710df36fd",
+      "reservation_id": "4dd3641f1f7240a9958de3a49b026d24",
+      "round_consumed": true,
+      "scope": "impl:fn-288-a-business-path-bas-and-pos-can-walk.1",
+      "superseded_by": null,
+      "task": "fn-288-a-business-path-bas-and-pos-can-walk.1",
+      "timestamp": "2026-10-09T08:52:56.303026Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "8bf9dbdbc8d49a4166f933add53ce78c535f6f70cc62bbdf960473840a4c39ba",
+      "backend": "codex",
+      "base_sha": "09e291ee1e941ec7961697b85fbc2b55cf1adcc2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1c539b065bc49510c27a8655856b446a",
+            "classification": "introduced",
+            "findingId": "finding-1c539b065bc49510c27a8655856b446a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "ca852ab1997723eb4a78e253c5a0f372df407a90",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1276,
+      "output_sha256": "e07ca2a444afe1d91854ca536c46b9e593bfd4e15bfd11210caa369c11af486c",
+      "reservation_id": "4c0ffd7f78c247bfbce0012e3867d52b",
+      "round_consumed": true,
+      "scope": "impl:fn-288-a-business-path-bas-and-pos-can-walk.1",
+      "superseded_by": null,
+      "task": "fn-288-a-business-path-bas-and-pos-can-walk.1",
+      "timestamp": "2026-10-09T08:54:49.194586Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-288-a-business-path-bas-and-pos-can-walk.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-288-a-business-path-bas-and-pos-can-walk.1": 0
+  },
+  "spec_path": ".flow/specs/fn-288-a-business-path-bas-and-pos-can-walk.md",
+  "status": "done",
+  "title": "A business path BAs and POs can walk without engineering",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-09T09:27:44.417975Z"
+}

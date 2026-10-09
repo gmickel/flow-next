@@ -63,7 +63,7 @@ Per question: what ran, what was observed (numbers or output), and the decision 
 Genuine fog only, one bullet each, naming what would resolve it.
 
 ## Open Questions
-Items left for planning, plus every skipped question with its owner and unconfirmed leaning. After fill-assumptions, one entry points at the inline *(assumed — unconfirmed)* markers.
+Items left for planning, plus every skipped or handed-off question with its owner and leaning. After fill-assumptions, one entry points at the inline *(assumed — unconfirmed)* markers.
 ```
 
 **Parked unknowns.** For each existing bullet: resolved this session → move the answer into the section that owns it and delete the bullet; still unknown → keep it byte-for-byte. Append new fog as a bullet naming what would resolve it (decidable now → decide it; resolvable by scheduled work → it is a task, not fog). Drop the heading when the list empties. Fog is a question nobody can answer yet; a skipped question belongs in `## Open Questions`.
