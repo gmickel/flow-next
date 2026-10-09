@@ -2441,6 +2441,9 @@ backend (`codex`, `copilot`, `cursor`, `claude`):**
 
 CLI draws run concurrently by default. Set `review.fanoutExecution=sequential` to run them back
 to back in supplied axis order, completing each draw and its sidecars before launching the next.
+The call then waits for every draw in turn, so the host's foreground timeout must cover that; on
+Claude Code, raise `BASH_MAX_TIMEOUT_MS` (the Bash tool stops at 10 minutes by default). The setting
+orders one panel's draws; parallel `work` workers can still review at the same time.
 
 ```bash
 # Phase one - reserve ONE round, dispatch the axis draws concurrently, finalize nothing
@@ -2505,7 +2508,8 @@ dispatch captures the token it started under; a dispatch that dies before any
 receipt replaces the claim (all draws failed, snapshot or sidecar errors) and a
 finalize that refuses the round as stale release it, ownership-bound under the
 receipt lock - a replacement claim or a published receipt at the same path is
-never removed. A claim expires on the review liveness bound.
+never removed. A claim expires on the review liveness bound: the per-reviewer timeout plus 900
+seconds, or three reviewer timeouts plus 900 seconds when `review.fanoutExecution` is `sequential`.
 
 Scope ownership through the optional phases: `impl-review-fanout-finalize
 --hold-for-phases N` (CLI backends; acquired BEFORE the record, while the

@@ -89,7 +89,7 @@ fi
     def git(self, *args):
         return subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True).stdout.strip()
 
-    def execute(self, *, dry=False, update=False, autonomous=False, failure=False):
+    def execute(self, *, dry=False, update=False, autonomous=False, failure=False, close_message=None):
         if failure:
             flowctl = self.executable("flowctl-fail", '#!/bin/bash\nif [[ "$1 $2" == "spec close" ]]; then echo "injected close failure" >&2; exit 9; fi\nexec ' + shlex.quote(str(SCRIPTS / "flowctl")) + ' "$@"\n')
         else:
@@ -97,6 +97,9 @@ fi
         fence = (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").split("# --- §0.5:", 1)[1]
         fence = "# --- §0.5:" + fence
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
+        env.pop("CLOSE_COMMIT_MESSAGE", None)
+        if close_message is not None:
+            env["CLOSE_COMMIT_MESSAGE"] = close_message
         # Observe the exact head seen by the artifact/export phase and PR creation.
         tail = '''
 printf '%s' "$PHASE0_CONTEXT" > "$OBSERVATIONS/context.json"
@@ -131,6 +134,21 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 changed = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()
                 self.assertTrue(set(changed) <= {self.spec_rel, self.task_rel}, changed)
                 self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_close_commit_message_defaults_and_follows_repo_rules(self):
+        # #534: repos with commit rules pass their own close message; unset or empty keeps the default.
+        cases = ((None, f"chore(flow): close {self.spec_id}"), ("", f"chore(flow): close {self.spec_id}"),
+                 ("chore(flow): close fn-4 AB#1234", "chore(flow): close fn-4 AB#1234"))
+        for message, expected in cases:
+            with self.subTest(message=message):
+                spec = json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))
+                spec.update(status="open")
+                (self.repo / self.spec_rel).write_text(json.dumps(spec))
+                self.git("add", self.spec_rel)
+                self.git("commit", "--allow-empty", "-qm", "Reopen spec")
+                result = self.execute(close_message=message)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.git("log", "-1", "--format=%s"), expected)
 
     def test_already_closed_spec_keeps_branch_and_head(self):
         spec_path = self.repo / self.spec_rel

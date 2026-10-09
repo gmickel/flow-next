@@ -3,9 +3,10 @@
 set -e
 if [[ "$DRY_RUN" != "1" ]]; then
   if ! command -v gh >/dev/null 2>&1; then
-    echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login --hostname github.com." >&2; exit 1; fi
-  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-    echo "Error: gh CLI not authenticated; run gh auth login --hostname github.com." >&2; exit 1; fi
+    echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi
+  # github.com first; otherwise any logged-in host, since later gh calls pick the host from the remote (GitHub Enterprise, #532).
+  if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
+    echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
 fi
 # end:block
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
@@ -217,7 +218,7 @@ if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && 
     echo "Error: spec close already written locally; staging failed; PR not opened" >&2; exit 1;
   }
   if ! git -C "$REPO_ROOT" diff --cached --quiet -- "${CLOSE_PATHS[@]}"; then
-    git -C "$REPO_ROOT" commit -m "chore(flow): close $SPEC_ID" -- "${CLOSE_PATHS[@]}" || {
+    git -C "$REPO_ROOT" commit -m "${CLOSE_COMMIT_MESSAGE:-chore(flow): close $SPEC_ID}" -- "${CLOSE_PATHS[@]}" || {
       echo "Error: spec close already written locally; commit failed; PR not opened" >&2; exit 1;
     }
   fi
