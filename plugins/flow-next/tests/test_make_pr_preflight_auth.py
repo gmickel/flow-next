@@ -26,6 +26,11 @@ class PreflightAuthTests(unittest.TestCase):
         result = self.run_auth_block('[[ "$*" == *"--hostname github.com"* ]] && exit 1; exit 0')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_valid_github_com_with_expired_other_host_passes(self):
+        # Valid github.com login plus an expired login elsewhere: the all-hosts check fails, github.com passes.
+        result = self.run_auth_block('[[ "$*" == *"--hostname github.com"* ]] && exit 0; exit 1')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_unauthenticated_stops_without_naming_github_com(self):
         result = self.run_auth_block("exit 1")
         self.assertEqual(result.returncode, 1)

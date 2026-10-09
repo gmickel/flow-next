@@ -4,8 +4,8 @@ set -e
 if [[ "$DRY_RUN" != "1" ]]; then
   if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi
-  # Check every logged-in host: later gh calls pick the host from the remote, which may be GitHub Enterprise (#532).
-  if ! gh auth status >/dev/null 2>&1; then
+  # github.com first; otherwise any logged-in host, since later gh calls pick the host from the remote (GitHub Enterprise, #532).
+  if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
     echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
 fi
 # end:block

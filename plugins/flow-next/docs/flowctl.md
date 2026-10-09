@@ -2508,8 +2508,8 @@ dispatch captures the token it started under; a dispatch that dies before any
 receipt replaces the claim (all draws failed, snapshot or sidecar errors) and a
 finalize that refuses the round as stale release it, ownership-bound under the
 receipt lock - a replacement claim or a published receipt at the same path is
-never removed. A claim expires on the review liveness bound (three times longer when
-`review.fanoutExecution` is `sequential`).
+never removed. A claim expires on the review liveness bound: the per-reviewer timeout plus 900
+seconds, or three reviewer timeouts plus 900 seconds when `review.fanoutExecution` is `sequential`.
 
 Scope ownership through the optional phases: `impl-review-fanout-finalize
 --hold-for-phases N` (CLI backends; acquired BEFORE the record, while the
