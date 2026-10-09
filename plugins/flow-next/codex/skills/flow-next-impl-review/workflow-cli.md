@@ -38,7 +38,7 @@ With `review.fanoutExecution=sequential`, draws run back to back, so the host mu
 full foreground operation.
 
 ```bash
-# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s; sequential fan-out needs longer, see above).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # ROUTE: ONE deterministic verb owns canonicalization (fn-N.M ->
 # fn-N-slug.M), the repo/scope-keyed receipt path (explicit REVIEW_RECEIPT_PATH

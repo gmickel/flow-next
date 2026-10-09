@@ -8,10 +8,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Added
 
-- **Run the first-round review panel one reviewer at a time.** Opt-in
-  `review.fanoutExecution=sequential` finishes each axis and its sidecars before
-  launching the next in supplied order. Concurrent scheduling remains the default,
-  and the panel still consumes one round with the same finalizer and receipts.
+- **Run the review panel one reviewer at a time.** Set `review.fanoutExecution` to `sequential` and the first review round runs its reviewers one after another instead of all at once, which suits local models and rate-limited providers. Running them together stays the default, and the round still counts once against the cap. On Claude Code, raise `BASH_MAX_TIMEOUT_MS` so the review call can wait for all of them. Thanks to @jcarosi for the contribution (#524).
+
+### Fixed
+
+- **make-pr works when gh is logged in only to GitHub Enterprise.** The preflight checked github.com no matter where the repository lives, so `/flow-next:make-pr` stopped before export on a GHE-only machine. It now checks every host gh knows, the same way resolve-pr does. Thanks to @georgkeller for the report (#532).
 
 ## [flow-next 8.2.0] - 2026-10-09
 
