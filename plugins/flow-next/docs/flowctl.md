@@ -2650,6 +2650,14 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 - **Transport bound:** consecutive no-verdict failures are tracked separately
   per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
   with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.
+- **Repair and retry:** `TRANSPORT_UNHEALTHY` ends the current automatic loop.
+  After repairing the cause, start a new explicit `/flow-next:impl-review`
+  invocation. It reruns `flowctl review-route <task> --json`; follow the
+  returned action or refusal before dispatch. Review counters and failed
+  attempts persist. A matching scope's validated open implementation receipt
+  survives a no-verdict failure, including when the failed invocation uses a
+  replacement backend. `review-route` continues to return the fix pass and its
+  findings; the next explicit invocation follows that route after repair.
 - **Reset semantics:** a `SHIP` record resets its counter atomically, and an
   explicit human re-plan resets the relevant counters; both advance the hash
   epoch. The `review-rounds reset` command is human-only recovery, not an

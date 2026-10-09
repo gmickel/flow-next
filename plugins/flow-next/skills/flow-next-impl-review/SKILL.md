@@ -131,3 +131,10 @@ message and stop. `ESCALATE:` (other
 than the `NEEDS_HUMAN` case above), `TRANSPORT_UNHEALTHY`, `NOT_RETRYABLE:` and other refusals end this review: report the message
 as printed and stop. Never widen the reviewer's sandbox, call the reviewer CLI directly, or reset
 review state to get past one.
+
+`TRANSPORT_UNHEALTHY` ends the current invocation's automatic loop. After repairing the cause,
+start a new explicit `/flow-next:impl-review` invocation; it runs
+`flowctl review-route <task> --json` again, and you follow its returned action or refusal before
+dispatching. Review counters and failed-attempt history persist; a matching open `NEEDS_WORK`
+receipt keeps its findings for the next route, including when the failed invocation used a
+replacement backend.
