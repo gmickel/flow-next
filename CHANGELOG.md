@@ -13,6 +13,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 ### Fixed
 
 - **make-pr works when gh is logged in only to GitHub Enterprise.** The preflight checked github.com no matter where the repository lives, so `/flow-next:make-pr` stopped before export on a GHE-only machine. It now checks every host gh knows, the same way resolve-pr does. Thanks to @georgkeller for the report (#532).
+- **The spec-close commit follows your repo's commit rules.** make-pr used to write the close commit as `chore(flow): close <spec-id>` no matter what, so a repo with a subject length limit or a required work-item reference got a commit its hooks or reviewers refuse, and `flow --auto` could not finish. When your project instructions state commit-message rules, the agent now writes the close message to match, for example `chore(flow): close fn-4 AB#1234`. Without rules, or when a value the rules need is unknown, the message stays the same. Thanks to @georgkeller for the report (#534).
 
 ## [flow-next 8.2.0] - 2026-10-09
 

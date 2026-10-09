@@ -218,7 +218,7 @@ if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && 
     echo "Error: spec close already written locally; staging failed; PR not opened" >&2; exit 1;
   }
   if ! git -C "$REPO_ROOT" diff --cached --quiet -- "${CLOSE_PATHS[@]}"; then
-    git -C "$REPO_ROOT" commit -m "chore(flow): close $SPEC_ID" -- "${CLOSE_PATHS[@]}" || {
+    git -C "$REPO_ROOT" commit -m "${CLOSE_COMMIT_MESSAGE:-chore(flow): close $SPEC_ID}" -- "${CLOSE_PATHS[@]}" || {
       echo "Error: spec close already written locally; commit failed; PR not opened" >&2; exit 1;
     }
   fi

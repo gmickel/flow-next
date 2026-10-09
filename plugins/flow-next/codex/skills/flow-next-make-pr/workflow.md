@@ -11,6 +11,9 @@ Resolve `SPEC_ID` from the argument or the first current-branch `branch_name` ma
 `.flow/specs/*.json`; leave it empty if none. Source the bundled script in Bash
 with the parsed argument variables (including `AUTONOMOUS`) set. It retains the
 phase outputs in the same shell; do not print or reassemble its source.
+The spec close commits as `chore(flow): close <spec-id>`. When the project instructions set
+commit-message rules, set `CLOSE_COMMIT_MESSAGE` to a close message that follows them. Leave it
+unset when the rules need a value you cannot find, such as a work-item id; the default applies.
 
 ```bash
 source "$(dirname "$FLOWCTL")/make-pr-preflight.sh"
