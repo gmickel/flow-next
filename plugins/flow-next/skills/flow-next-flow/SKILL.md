@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Use first in a project that uses Flow-Next for any request to implement, build or deliver its specs, whatever delivery or test steps the request adds, unless the user names another skill or asks to work directly. Also for a spec or task id, an idea or change request, a pasted bug report or traceback, something slow to speed up or another number to move (hill-climbing), a behaviour-preserving cleanup, a design or behaviour choice to settle, a tracker issue, a branch, or "what should I do next". Only a quick question or a one-line edit may skip it. Flow routes the work and runs the right stage; --auto runs unattended.
+description: Use first in a project that uses Flow-Next for any request to implement, build, continue or deliver its specs, whatever delivery or test steps the request adds, unless the user names another skill or asks to work directly. Also for a spec or task id, an idea or change request, a pasted bug report or traceback, something slow to speed up or another number to move (hill-climbing), a behaviour-preserving cleanup, a design or behaviour choice to settle, a tracker issue, a branch, or "what should I do next". Only a quick question or a one-line edit may skip it. Flow routes the work and runs the right stage; --auto runs unattended.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---
