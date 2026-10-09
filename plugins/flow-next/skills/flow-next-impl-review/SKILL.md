@@ -136,4 +136,5 @@ review state to get past one.
 start a new explicit `/flow-next:impl-review` invocation; it runs
 `flowctl review-route <task> --json` again, and you follow its returned action or refusal before
 dispatching. Review counters and failed-attempt history persist; a matching open `NEEDS_WORK`
-receipt keeps its findings for the next route.
+receipt keeps its findings for the next route, including when the failed invocation used a
+replacement backend.

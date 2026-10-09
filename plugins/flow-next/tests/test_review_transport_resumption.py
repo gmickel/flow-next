@@ -142,6 +142,7 @@ class TestReviewTransportResumption(unittest.TestCase):
             "FLOW_REVIEW_BACKEND",
             "FLOW_REVIEW_EXECUTION_URL",
             "FLOW_REVIEW_EXECUTION_TOKEN",
+            "FLOW_RE_REVIEW_SESSION",
             "REVIEW_RECEIPT_PATH",
         ):
             self.env.pop(key, None)
@@ -339,6 +340,86 @@ class TestReviewTransportResumption(unittest.TestCase):
         self.assertTrue(all(not row.get("round_consumed") for row in attempts[:3]))
         self.assertEqual(attempts[-1].get("outcome"), "verdict")
         self.assertTrue(attempts[-1].get("round_consumed"))
+
+    def test_cross_backend_no_verdict_preserves_open_findings_for_original_backend(self) -> None:
+        first = self._run(
+            *self._review_args("impl-review", "codex", self.task_id, "gpt-6.1-sol"),
+            responses={"codex": "needs_work"},
+        )
+        self._assert_command(first, 0)
+        original_receipt_bytes = self.receipt.read_bytes()
+        original_receipt = json.loads(original_receipt_bytes)
+        original_findings = original_receipt["findings"]
+        original_finding = original_findings["items"][0]
+        original_finding_id = original_finding["id"]
+        self.assertEqual(original_receipt.get("verdict"), "NEEDS_WORK")
+
+        (self.repo / "app.py").write_text("value = 3\n", encoding="utf-8")
+        self._git("add", "app.py")
+        self._git("commit", "-qm", "address review finding")
+
+        copilot_failure = self._run(
+            *self._review_args("impl-review", "copilot", self.task_id, "gpt-6-astra"),
+            responses={"copilot": "nonzero_exit"},
+        )
+        snapshot = self.receipt.read_bytes() if self.receipt.exists() else None
+        route = self._run(
+            "review-route", self.task_id, "--receipt", str(self.receipt), "--json"
+        )
+        self._assert_command(copilot_failure, 2)
+        self.assertEqual(snapshot, original_receipt_bytes)
+        self._assert_command(route, 0)
+        route_payload = json.loads(route.stdout)
+        self.assertEqual(route_payload.get("action"), "fix-then-rereview", route.stdout)
+        self.assertEqual(route_payload.get("reason"), "open_receipt", route.stdout)
+
+        repaired_codex = self._run(
+            *self._review_args("impl-review", "codex", self.task_id, "gpt-6.1-sol"),
+            responses={"codex": "ship_resolved"},
+            fake_context={
+                "FLOW_FAKE_RESOLUTION_ORDINAL": str(original_finding["ordinal"]),
+            },
+        )
+        self._assert_command(repaired_codex, 0)
+        self.assertEqual(json.loads(repaired_codex.stdout).get("verdict"), "SHIP")
+
+        shipped_receipt = json.loads(self.receipt.read_text(encoding="utf-8"))
+        shipped_findings = shipped_receipt["findings"]
+        self.assertEqual(shipped_receipt.get("verdict"), "SHIP")
+        self.assertEqual(shipped_findings["round"], original_findings["round"] + 1)
+        self.assertEqual(
+            shipped_findings.get("supersedesReceiptId"),
+            original_findings["sourceReceiptId"],
+        )
+        self.assertEqual(shipped_findings["items"][0]["id"], original_finding_id)
+        self.assertEqual(shipped_findings["items"][0]["status"], "fixed")
+        self.assertEqual(
+            shipped_findings["items"][0]["firstSeenReceiptId"],
+            original_finding["firstSeenReceiptId"],
+        )
+
+        attempts = self._attempts(task_id=self.task_id)
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(attempts[0].get("backend"), "codex")
+        self.assertEqual(attempts[0].get("verdict"), "NEEDS_WORK")
+        self.assertTrue(attempts[0].get("round_consumed"))
+        self.assertEqual(attempts[1].get("backend"), "copilot")
+        self.assertEqual(attempts[1].get("failure_class"), "nonzero_exit")
+        self.assertEqual(attempts[1].get("outcome"), "transport_failure")
+        self.assertFalse(attempts[1].get("round_consumed"))
+        self.assertEqual(attempts[2].get("backend"), "codex")
+        self.assertEqual(attempts[2].get("verdict"), "SHIP")
+        self.assertEqual(attempts[2].get("outcome"), "verdict")
+        self.assertTrue(attempts[2].get("round_consumed"))
+        self.assertEqual(sum(row.get("verdict") == "SHIP" for row in attempts), 1)
+        self.assertEqual(sum(bool(row.get("round_consumed")) for row in attempts), 2)
+        state = self._spec_data()
+        self.assertEqual((state.get("impl_review_rounds") or {}).get(self.task_id, 0), 0)
+        self.assertEqual(
+            (state.get("review_pending_rounds") or {}).get(f"impl:{self.task_id}", 0),
+            0,
+        )
+        self.assertFalse(state.get("review_reservations"))
 
     def test_six_refunds_route_to_fanout_and_finalize_once(self) -> None:
         failure_codes = []

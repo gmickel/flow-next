@@ -461,7 +461,7 @@ class TestDeterministicCap(unittest.TestCase):
             ("legacy active", {"id": task_id, "verdict": "NEEDS_WORK", "mode": "codex"}, True),
             ("legacy mode omitted", {"id": task_id, "verdict": "NEEDS_WORK"}, True),
             ("foreign scope", {**active, "id": f"{self.spec_id}.2"}, False),
-            ("foreign backend", {**active, "mode": "copilot"}, False),
+            ("foreign backend", {**active, "mode": "copilot"}, True),
             ("closed", {**active, "verdict": "SHIP"}, False),
             ("deep", {**active, "verdict_before_deep": "SHIP"}, False),
             ("needs human", {**active, "verdict": "NEEDS_HUMAN"}, False),
@@ -475,7 +475,7 @@ class TestDeterministicCap(unittest.TestCase):
                 original = b"not-json\n" if receipt is None else json.dumps(receipt).encode()
                 path.write_bytes(original)
                 flowctl._clear_stale_review_receipt(
-                    str(path), open_impl_identity=(task_id, "codex")
+                    str(path), open_impl_review_id=task_id
                 )
                 if preserved:
                     self.assertEqual(path.read_bytes(), original)

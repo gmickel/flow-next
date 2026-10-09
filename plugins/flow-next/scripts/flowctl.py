@@ -43460,7 +43460,7 @@ def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
 def _clear_stale_review_receipt(
     receipt_path: Optional[str],
     *,
-    open_impl_identity: Optional[tuple[str, str]] = None,
+    open_impl_review_id: Optional[str] = None,
 ) -> None:
     """Archive stale evidence, keeping the matching open implementation cycle."""
     if not receipt_path:
@@ -43469,20 +43469,11 @@ def _clear_stale_review_receipt(
         path = Path(receipt_path)
         with cross_process_lock(_review_receipt_lock_path(path)):
             if path.exists():
-                if open_impl_identity is not None:
-                    review_id, backend = open_impl_identity
+                if open_impl_review_id is not None:
                     receipt = _review_route_read_receipt(path)
-                    mode_matches = (
-                        isinstance(receipt, dict)
-                        and (
-                            receipt.get("mode") == backend
-                            or (backend == "codex" and receipt.get("mode") is None)
-                        )
-                    )
-                    if (
-                        mode_matches
-                        and _review_route_receipt_state(receipt, review_id) == "open"
-                    ):
+                    if _review_route_receipt_state(
+                        receipt, open_impl_review_id
+                    ) == "open":
                         try:
                             if validate_review_receipt_findings(receipt):
                                 return
@@ -44652,8 +44643,8 @@ def _dispatch_backend_review(
     import uuid
 
     args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
-    open_impl_identity = (
-        (task_id or "branch", backend) if review_type == "impl" else None
+    open_impl_review_id = (
+        (task_id or "branch") if review_type == "impl" else None
     )
     # The model the resumed session originally ran (prior receipt); consumed
     # by ``_codex_run_exec``, ignored by every other adapter.
@@ -44722,7 +44713,7 @@ def _dispatch_backend_review(
                 reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(
-            receipt_path, open_impl_identity=open_impl_identity
+            receipt_path, open_impl_review_id=open_impl_review_id
         )
         if attempt.get("transport_unhealthy"):
             error_exit(
@@ -44753,7 +44744,7 @@ def _dispatch_backend_review(
                 reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(
-            receipt_path, open_impl_identity=open_impl_identity
+            receipt_path, open_impl_review_id=open_impl_review_id
         )
         if attempt.get("transport_unhealthy"):
             error_exit(
@@ -45232,8 +45223,8 @@ def _finish_backend_exec(
     failure_class = _classify_review_failure(reg, output, stderr, exit_code)
     sandbox_failure = failure_class == "sandbox"
     failure_message = _review_failure_message(backend, output, stderr)
-    open_impl_identity = (
-        (task_id or "branch", backend)
+    open_impl_review_id = (
+        (task_id or "branch")
         if (review_type or review_kind) == "impl"
         else None
     )
@@ -45262,7 +45253,7 @@ def _finish_backend_exec(
         )
     if attempt.get("transport_unhealthy"):
         _clear_stale_review_receipt(
-            receipt_path, open_impl_identity=open_impl_identity
+            receipt_path, open_impl_review_id=open_impl_review_id
         )
         count = attempt["consecutive_transport_failures"]
         cap = attempt["transport_failure_cap"]
@@ -45281,7 +45272,7 @@ def _finish_backend_exec(
 
     if sandbox_failure:
         _clear_stale_review_receipt(
-            receipt_path, open_impl_identity=open_impl_identity
+            receipt_path, open_impl_review_id=open_impl_review_id
         )
         msg = (
             "Codex sandbox blocked operations during review. Reviewers are "
@@ -45299,7 +45290,7 @@ def _finish_backend_exec(
 
     if exit_code != 0:
         _clear_stale_review_receipt(
-            receipt_path, open_impl_identity=open_impl_identity
+            receipt_path, open_impl_review_id=open_impl_review_id
         )
         msg = (stderr or output or f"{reg['cli_label']} failed").strip()
         error_exit(
@@ -45309,7 +45300,7 @@ def _finish_backend_exec(
         )
 
     _clear_stale_review_receipt(
-        receipt_path, open_impl_identity=open_impl_identity
+        receipt_path, open_impl_review_id=open_impl_review_id
     )
     error_exit(
         f"{reg['no_verdict_label']} review completed but no verdict found "
