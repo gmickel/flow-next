@@ -6,6 +6,12 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.4.1] - 2026-10-09
+
+### Fixed
+
+- **A request to implement specs reaches flow even when it says how to deliver them.** "Implement both specs. The result must be on `main`; run the tests first" now goes to flow on Claude Code in 4 of 4 runs, up from 0 of 4 on 8.4.0 (Opus 5.5 at low effort), where the delivery steps read like a complete brief and the agent coded directly. Flow's description now leads with requests to implement, build, continue or deliver a project's specs, whatever delivery or test steps they add. The rest of the routing probe holds: 65 of 66 on Claude Code and 66 of 66 on Codex, which already routed this case. Nothing changes when you type `/flow-next:flow` or another command yourself.
+
 ## [flow-next 8.4.0] - 2026-10-09
 
 In a project that uses Flow-Next, you no longer have to name the conductor. Ask to implement a spec, paste a bug report, describe an idea, or ask what to do next, and the agent hands it to `/flow-next:flow`, which picks the right stage: a failing test before a bug fix, a baseline before a speed-up, a recorded route before work starts. On a 57-case routing probe, requests reached the intended skill in 56 cases on Claude Code and 56 on Codex, up from 42 and 43 with the 8.3.0 descriptions (Opus 5.5 at low effort and gpt-6.1-sol, one session per case).
