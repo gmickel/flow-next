@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Conductor for whatever the user has - an idea or a request for a change, a spec or task id, a tracker issue, a branch or a path, a pasted bug report or console output, a how or why question about the code, something slow to speed up, a cleanup that keeps behaviour, a design fork to settle, or "what should I do next". Use when the user states any of these without naming a skill; --auto runs unattended.
+description: Use first in a project that uses Flow-Next, unless the user names another skill or asks to work directly - for a spec or task id, a request to implement, build or continue specs, an idea or change request, a pasted bug report or traceback, something slow to speed up or another number to move (hill-climbing), a behaviour-preserving cleanup, a design or behaviour choice to settle, a tracker issue, a branch, or "what should I do next". Only a quick question or a one-line edit may skip it. Flow routes the work and runs the right stage; --auto runs unattended.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---

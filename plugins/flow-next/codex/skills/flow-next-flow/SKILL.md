@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Conductor for an idea, spec or task id, tracker issue, branch, bug report, or question; --auto runs a ready spec unattended and emits PILOT_VERDICT. Use when no skill is named or to pilot a spec.
+description: In a project that uses Flow-Next, use first for a spec id to implement, change, bug, slow code or number to move, cleanup, design choice, issue, or what next. Skip for quick questions or direct work.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---
