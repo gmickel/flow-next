@@ -448,6 +448,40 @@ class TestDeterministicCap(unittest.TestCase):
             (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
         )
 
+    def test_stale_receipt_cleanup_preserves_only_matching_open_impl_receipts(self):
+        task_id = f"{self.spec_id}.1"
+        active = {
+            "type": "impl_review",
+            "id": task_id,
+            "mode": "codex",
+            "verdict": "NEEDS_WORK",
+        }
+        cases = [
+            ("active", active, True),
+            ("legacy active", {"id": task_id, "verdict": "NEEDS_WORK", "mode": "codex"}, True),
+            ("legacy mode omitted", {"id": task_id, "verdict": "NEEDS_WORK"}, True),
+            ("foreign scope", {**active, "id": f"{self.spec_id}.2"}, False),
+            ("foreign backend", {**active, "mode": "copilot"}, False),
+            ("closed", {**active, "verdict": "SHIP"}, False),
+            ("deep", {**active, "verdict_before_deep": "SHIP"}, False),
+            ("needs human", {**active, "verdict": "NEEDS_HUMAN"}, False),
+            ("wrong type", {**active, "type": "plan_review"}, False),
+            ("invalid findings", {**active, "findings": []}, False),
+            ("unreadable", None, False),
+        ]
+        for label, receipt, preserved in cases:
+            with self.subTest(receipt=label):
+                path = self.root / f"{label.replace(' ', '-')}.json"
+                original = b"not-json\n" if receipt is None else json.dumps(receipt).encode()
+                path.write_bytes(original)
+                flowctl._clear_stale_review_receipt(
+                    str(path), open_impl_identity=(task_id, "codex")
+                )
+                if preserved:
+                    self.assertEqual(path.read_bytes(), original)
+                else:
+                    self.assertFalse(path.exists())
+
     def test_default_cap_is_eight(self):
         self.assertEqual(flowctl.get_max_review_iterations(), 8)
 
@@ -1019,6 +1053,54 @@ class TestDeterministicCap(unittest.TestCase):
         row = self._spec_data()["review_attempts"][-1]
         self.assertEqual(row["failure_class"], "dispatch_exception")
         self.assertFalse(row["round_consumed"])
+
+    def test_dispatch_exceptions_preserve_matching_open_impl_receipt(self):
+        task_id = f"{self.spec_id}.1"
+        receipt_path = self.root / "impl-review-receipt.json"
+        original = json.dumps(
+            {
+                "type": "impl_review",
+                "id": task_id,
+                "mode": "codex",
+                "verdict": "NEEDS_WORK",
+            }
+        ).encode()
+        receipt_path.write_bytes(original)
+        failures = (
+            (OSError("cannot spawn reviewer"), "dispatch_exception", 2),
+            (SystemExit(7), "dispatch_error", 7),
+        )
+        for exc, failure_class, exit_code in failures:
+            with self.subTest(failure_class=failure_class):
+                flowctl.enforce_and_increment_review_cap(
+                    self.spec_id, "impl", task_id=task_id
+                )
+
+                def crash(*_args, error=exc, **_kwargs):
+                    raise error
+
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as ctx:
+                        flowctl._dispatch_backend_review(
+                            backend="codex",
+                            reg={"run_exec": crash, "cli_label": "codex"},
+                            args=mock.Mock(json=False),
+                            prompt="review",
+                            session_id=None,
+                            repo_root=self.root,
+                            resolved_spec=mock.Mock(),
+                            resolution_out={},
+                            receipt_path=str(receipt_path),
+                            spec_id=self.spec_id,
+                            review_kind="impl",
+                            review_type="impl",
+                            task_id=task_id,
+                        )
+                self.assertEqual(ctx.exception.code, exit_code)
+                self.assertEqual(receipt_path.read_bytes(), original)
+                row = self._spec_data()["review_attempts"][-1]
+                self.assertEqual(row["failure_class"], failure_class)
+                self.assertFalse(row["round_consumed"])
 
 
 # ------------- issue #279: combined finalize write transaction -------------

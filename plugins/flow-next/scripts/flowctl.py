@@ -43457,14 +43457,39 @@ def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
     )
 
 
-def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
-    """Archive valid evidence before unlinking a stale latest pointer."""
+def _clear_stale_review_receipt(
+    receipt_path: Optional[str],
+    *,
+    open_impl_identity: Optional[tuple[str, str]] = None,
+) -> None:
+    """Archive stale evidence, keeping the matching open implementation cycle."""
     if not receipt_path:
         return
     try:
         path = Path(receipt_path)
         with cross_process_lock(_review_receipt_lock_path(path)):
             if path.exists():
+                if open_impl_identity is not None:
+                    review_id, backend = open_impl_identity
+                    receipt = _review_route_read_receipt(path)
+                    mode_matches = (
+                        isinstance(receipt, dict)
+                        and (
+                            receipt.get("mode") == backend
+                            or (backend == "codex" and receipt.get("mode") is None)
+                        )
+                    )
+                    if (
+                        mode_matches
+                        and _review_route_receipt_state(receipt, review_id) == "open"
+                    ):
+                        try:
+                            if validate_review_receipt_findings(receipt):
+                                return
+                        except (KeyError, TypeError, ValueError):
+                            # A corrupt optional field follows the existing
+                            # archive-and-clear path below.
+                            pass
                 _preserve_review_receipt_generation(path)
             path.unlink(missing_ok=True)
     except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
@@ -44627,6 +44652,9 @@ def _dispatch_backend_review(
     import uuid
 
     args.managed_review_request_scope = reservation_id or uuid.uuid4().hex
+    open_impl_identity = (
+        (task_id or "branch", backend) if review_type == "impl" else None
+    )
     # The model the resumed session originally ran (prior receipt); consumed
     # by ``_codex_run_exec``, ignored by every other adapter.
     args.resume_model = resume_model
@@ -44693,7 +44721,9 @@ def _dispatch_backend_review(
                 use_json=args.json,
                 reservation_id=reservation_id,
             )
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, open_impl_identity=open_impl_identity
+        )
         if attempt.get("transport_unhealthy"):
             error_exit(
                 f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
@@ -44722,7 +44752,9 @@ def _dispatch_backend_review(
                 use_json=args.json,
                 reservation_id=reservation_id,
             )
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, open_impl_identity=open_impl_identity
+        )
         if attempt.get("transport_unhealthy"):
             error_exit(
                 f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
@@ -45200,6 +45232,11 @@ def _finish_backend_exec(
     failure_class = _classify_review_failure(reg, output, stderr, exit_code)
     sandbox_failure = failure_class == "sandbox"
     failure_message = _review_failure_message(backend, output, stderr)
+    open_impl_identity = (
+        (task_id or "branch", backend)
+        if (review_type or review_kind) == "impl"
+        else None
+    )
 
     attempt: dict = {}
     if spec_id and review_kind:
@@ -45224,7 +45261,9 @@ def _finish_backend_exec(
             findings_built=findings_built,
         )
     if attempt.get("transport_unhealthy"):
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, open_impl_identity=open_impl_identity
+        )
         count = attempt["consecutive_transport_failures"]
         cap = attempt["transport_failure_cap"]
         error_exit(
@@ -45241,7 +45280,9 @@ def _finish_backend_exec(
         )
 
     if sandbox_failure:
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, open_impl_identity=open_impl_identity
+        )
         msg = (
             "Codex sandbox blocked operations during review. Reviewers are "
             "READ-ONLY by contract: a reviewer that needed a write or a "
@@ -45257,7 +45298,9 @@ def _finish_backend_exec(
         error_exit(msg, use_json=args.json, code=3)
 
     if exit_code != 0:
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, open_impl_identity=open_impl_identity
+        )
         msg = (stderr or output or f"{reg['cli_label']} failed").strip()
         error_exit(
             f"{reg['cli_label']} failed: {msg}"
@@ -45265,7 +45308,9 @@ def _finish_backend_exec(
             use_json=args.json, code=2,
         )
 
-    _clear_stale_review_receipt(receipt_path)
+    _clear_stale_review_receipt(
+        receipt_path, open_impl_identity=open_impl_identity
+    )
     error_exit(
         f"{reg['no_verdict_label']} review completed but no verdict found "
         f"in output. Expected <verdict>SHIP</verdict>, "
