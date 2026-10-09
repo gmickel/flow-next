@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-288-a-business-path-bas-and-pos-can-walk",
   "spec_path": ".flow/tasks/fn-288-a-business-path-bas-and-pos-can-walk.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement A business path BAs and POs can walk without engineering",
   "updated_at": "2026-10-09T08:02:04.396252Z"
 }

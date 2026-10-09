@@ -115,7 +115,7 @@
     "impl:fn-288-a-business-path-bas-and-pos-can-walk.1": 0
   },
   "spec_path": ".flow/specs/fn-288-a-business-path-bas-and-pos-can-walk.md",
-  "status": "open",
+  "status": "done",
   "title": "A business path BAs and POs can walk without engineering",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-09T08:54:59.504473Z"
+  "updated_at": "2026-10-09T09:27:44.417975Z"
 }
