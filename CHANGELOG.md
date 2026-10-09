@@ -6,6 +6,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Run the first-round review panel one reviewer at a time.** Opt-in
+  `review.fanoutExecution=sequential` finishes each axis and its sidecars before
+  launching the next in supplied order. Concurrent scheduling remains the default,
+  and the panel still consumes one round with the same finalizer and receipts.
+
 ## [flow-next 8.2.0] - 2026-10-09
 
 Product owners and business analysts can run their own part of the spec without an engineer driving. One line to `/flow-next:flow` starts a business interview that keeps to product decisions, in plain words, and hands anything technical to engineering. Reviews that fall back to a smaller Claude model now reach Haiku 5.5, which is faster and costs less than Haiku 4.5.

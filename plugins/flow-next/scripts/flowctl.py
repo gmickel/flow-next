@@ -1399,6 +1399,20 @@ def default_spec_tracker_state() -> dict:
     }
 
 
+REVIEW_FANOUT_EXECUTION_VALUES = ("concurrent", "sequential")
+
+
+def _review_fanout_execution() -> str:
+    """Read the strict fan-out scheduling policy."""
+    value = get_config("review.fanoutExecution")
+    if not isinstance(value, str) or value not in REVIEW_FANOUT_EXECUTION_VALUES:
+        raise ValueError(
+            f"Invalid review.fanoutExecution value {value!r}. Expected one of: "
+            + ", ".join(REVIEW_FANOUT_EXECUTION_VALUES)
+        )
+    return value
+
+
 def get_default_config() -> dict:
     """Return default config structure."""
     return {
@@ -1416,7 +1430,10 @@ def get_default_config() -> dict:
         # land.* block, so `config get review.maxIterations` answers 8
         # rather than null on a fresh repo. In an autonomous run the config rung
         # may only lower the cap, so an autonomous agent cannot extend its own gate.
-        "review": {"backend": None, "maxIterations": DEFAULT_MAX_REVIEW_ITERATIONS},
+        "review": {
+            "backend": None, "maxIterations": DEFAULT_MAX_REVIEW_ITERATIONS,
+            "fanoutExecution": "concurrent",
+        },
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
         # flow-98 — the top-level `work.*` namespace is GONE. It held the
@@ -20137,6 +20154,14 @@ def cmd_config_set(args: argparse.Namespace) -> None:
     print_removed_config_keys_advisory()
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
+
+    if canonical_key == "review.fanoutExecution":
+        if not isinstance(args.value, str) or args.value not in REVIEW_FANOUT_EXECUTION_VALUES:
+            error_exit(
+                f"Invalid {canonical_key} value {args.value!r}. Expected one of: "
+                + ", ".join(REVIEW_FANOUT_EXECUTION_VALUES),
+                use_json=args.json, code=2,
+            )
 
     # fn-123 R5 - reject invalid host backend specs at WRITE time. The read-time
     # lenient parser treats a bad host spec as unset (loud, but late); accepting
@@ -46485,7 +46510,22 @@ def _review_fanout_run_draw(
 def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=len(draws)) as pool:
+    execution = getattr(args, "fanout_execution", None)
+    if execution is None:
+        execution = _review_fanout_execution()
+    max_workers = 1 if execution == "sequential" else len(draws)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        if execution == "sequential":
+            # Await each worker before submitting the next: coordinator interruption
+            # must not leave queued reviewers for executor shutdown to launch.
+            results = []
+            for draw in draws:
+                future = pool.submit(
+                    _review_fanout_run_draw,
+                    draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
+                )
+                results.append(future.result())
+            return results
         futs = [
             pool.submit(
                 _review_fanout_run_draw,
@@ -46928,7 +46968,14 @@ def _review_route_claim_live(receipt: Optional[dict]) -> bool:
     if not isinstance(claim, dict):
         return False
     age = _iso_age_seconds(claim.get("timestamp"))
-    return age is None or age < get_review_exec_timeout() + 900
+    timeout = get_review_exec_timeout()
+    multiplier = (
+        len(REVIEW_FANOUT_AXES)
+        if get_config("review.fanoutExecution") == "sequential"
+        else 1
+    )
+    ttl = multiplier * timeout + 900
+    return age is None or age < ttl
 
 
 def _review_route_claim(path: Path, scope_id: str) -> Optional[str]:
@@ -47476,6 +47523,10 @@ def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
 def _impl_review_fanout(args: argparse.Namespace) -> None:
     import secrets
 
+    try:
+        args.fanout_execution = _review_fanout_execution()
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     _wire_backend_review_hooks()
     args.base = args.base or _default_review_base(args.json)
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
@@ -54270,7 +54321,8 @@ def _add_impl_review_fanout_parsers(sub, backend: str) -> None:
     p = sub.add_parser(
         "impl-review-fanout",
         help=(
-            "Phase one: reserve once, dispatch concurrent axis-lens draws, "
+            "Phase one: reserve once, dispatch axis-lens draws concurrently "
+            "by default or sequentially via review.fanoutExecution, "
             "persist sidecars without finalizing (fn-215). Optional "
             "deep/validate/walkthrough passes run once against the MERGED "
             "container after finalize, before the fix pass."

@@ -34,6 +34,8 @@ The first round dispatches one reviewer draw or three, by the panel rule in
 added axis line, on the same resolved backend/model the single dispatch uses; one
 draw runs the correctness lens. The fan-out is TWO blocking foreground flowctl
 invocations with your merge between them; this is the first.
+With `review.fanoutExecution=sequential`, draws run back to back, so the host must wait for the
+full foreground operation.
 
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).

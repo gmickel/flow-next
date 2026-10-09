@@ -16,8 +16,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from unittest import mock
@@ -295,6 +297,281 @@ class TestReviewFanout(unittest.TestCase):
         return code, payload, err
 
     # 1 -----------------------------------------------------------------
+
+    def _execution_policy(self, policy) -> None:
+        (self.root / ".flow" / "config.json").write_text(
+            json.dumps({"review": {"fanoutExecution": policy}}), encoding="utf-8",
+        )
+
+    def test_default_and_explicit_concurrent_overlap(self) -> None:
+        for policy in (None, "concurrent"):
+            with self.subTest(policy=policy):
+                if policy is not None:
+                    self._execution_policy(policy)
+                barrier = threading.Barrier(3, timeout=5)
+                calls = []
+                ship = self._ship_exec(calls)
+
+                def fake(*args, barrier=barrier, ship=ship, **kwargs):
+                    barrier.wait()
+                    return ship(*args, **kwargs)
+
+                code, out, err = self._run(
+                    "codex", "impl-review-fanout", "--base", "HEAD~1", "--json",
+                    fake=fake,
+                )
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(len(calls), 3)
+                self.assertFalse(self._payload(out)["failed_draws"])
+
+    def test_one_draw_and_valid_policy_writes(self) -> None:
+        for invalid in ("typo", "true", "Concurrent", "null", "1"):
+            code, out, err = self._run(
+                "config", "set", "review.fanoutExecution", invalid, "--json",
+            )
+            self.assertNotEqual(code, 0, out + err)
+            self.assertFalse((self.root / ".flow" / "config.json").exists())
+        for value in flowctl.REVIEW_FANOUT_EXECUTION_VALUES:
+            code, out, err = self._run("config", "set", "review.fanoutExecution", value, "--json")
+            self.assertEqual(code, 0, out + err)
+            self.assertEqual(self._payload(out)["value"], value)
+        for policy in ("concurrent", "sequential"):
+            with self.subTest(policy=policy):
+                self._execution_policy(policy)
+                calls = []
+                code, out, err = self._run(
+                    "codex", "impl-review-fanout", "--base", "HEAD~1",
+                    "--draw", "correctness", "--json", fake=self._ship_exec(calls),
+                )
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(len(self._payload(out)["draws"]), 1)
+                self.assertFalse(self._payload(out)["failed_draws"])
+
+    @contextlib.contextmanager
+    def _at_claim_age(self, receipt: Path, age_seconds: int):
+        claim = json.loads(receipt.read_text(encoding="utf-8"))["claim"]
+        started = datetime.fromisoformat(claim["timestamp"].replace("Z", "+00:00"))
+        with mock.patch.object(flowctl, "datetime", wraps=datetime) as clock:
+            clock.now.return_value = started + timedelta(seconds=age_seconds)
+            yield
+
+    def _claim_standalone(self, receipt: Path) -> str:
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(self._payload(out)["action"], "fanout")
+        return self._payload(out)["claim_token"]
+
+    def test_sequential_claim_expires_at_aggregate_bound_and_preserves_new_owner(self) -> None:
+        self._execution_policy("sequential")
+        receipt = self.root / "expired-sequential-claim.json"
+        with mock.patch.object(flowctl, "get_review_exec_timeout", return_value=1800):
+            token = self._claim_standalone(receipt)
+            original_claim = json.loads(receipt.read_text(encoding="utf-8"))["claim"]
+            code, out, err = self._run(
+                "codex", "impl-review-fanout", "--base", "HEAD~1", "--receipt", str(receipt),
+                "--json", fake=self._ship_exec([]),
+            )
+            self.assertEqual(code, 0, out + err)
+            rid = self._payload(out)["rid"]
+            aggregate_bound = len(flowctl.REVIEW_FANOUT_AXES) * 1800 + 900
+            with self._at_claim_age(receipt, aggregate_bound):
+                code, out, err = self._run(
+                    "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+                )
+        self.assertEqual(code, 0, out + err)
+        route = self._payload(out)
+        self.assertEqual(route["action"], "fanout")
+        self.assertNotEqual(route["claim_token"], token)
+        self.assertEqual(route["rotated_to"], str(receipt) + ".prev")
+        previous = json.loads(Path(route["rotated_to"]).read_text(encoding="utf-8"))
+        self.assertEqual(previous["claim"]["token"], token)
+        self.assertEqual(previous["claim"]["timestamp"], original_claim["timestamp"])
+        self.assertNotIn("ttl_seconds", previous["claim"])
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--rid", rid,
+            "--merged-file", str(self._write_merged(_empty_merged_review())), "--json",
+        )
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("no longer owned", out + err)
+        self.assertEqual(json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], route["claim_token"])
+        self.assertEqual(self._rounds(), 0)
+
+    def test_sequential_order_includes_terminal_publication(self) -> None:
+        self._execution_policy("sequential")
+        axes = ["integration", "correctness", "contracts"]
+        calls = []
+        events = []
+        ship = self._ship_exec(calls)
+
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            for previous in axes[:axes.index(axis)]:
+                sidecar = next((self.root / ".flow" / "review-fanout").iterdir())
+                self.assertTrue((sidecar / f"{previous}.json").is_file())
+                self.assertTrue((sidecar / f"{previous}.review.md").is_file())
+                self.assertIn(f"draw {previous}:", (sidecar / "progress.log").read_text())
+            events.append(("start", axis))
+            result = ship(prompt, **kwargs)
+            events.append(("finish", axis))
+            return result
+
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1", "--json",
+            *[item for axis in axes for item in ("--draw", axis)], fake=fake,
+        )
+        self.assertEqual(code, 0, out + err)
+        self.assertFalse(self._payload(out)["failed_draws"])
+        self.assertEqual(events, [(event, axis) for axis in axes for event in ("start", "finish")])
+        self.assertEqual([d["axis"] for d in self._payload(out)["draws"]], axes)
+
+    def test_sequential_reuses_lifecycle_contracts(self) -> None:
+        scenarios = (
+            "test_one_reservation_both_phases", "test_partial_fail_open",
+            "test_all_fail_single_refund", "test_draw_system_exit_is_contained",
+            "test_draws_receipt_schema", "test_round_2_prompt_contains_every_merged_ordinal",
+            "test_every_cli_backend_runs_the_same_panel",
+            "test_interrupted_dispatch_finalizes_completed_draw",
+            "test_interrupted_dispatch_without_draws_refunds_once",
+        )
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                case = TestReviewFanout(scenario)
+                case.setUp()
+                try:
+                    case._execution_policy("sequential")
+                    getattr(case, scenario)()
+                finally:
+                    case.doCleanups()
+
+    def test_invalid_fanout_policy_is_scoped_to_fanout(self) -> None:
+        config = self.root / ".flow" / "config.json"
+        config.write_text(json.dumps({"review": {"fanoutExecution": "typo"}}), encoding="utf-8")
+        with mock.patch.object(flowctl, "enforce_and_increment_review_cap") as reserve:
+            calls = []
+            code, out, err = self._run(
+                "codex", "impl-review-fanout", self.task_id,
+                "--base", "HEAD~1", "--json", fake=self._ship_exec(calls),
+            )
+        self.assertEqual(code, 2, out + err)
+        reserve.assert_not_called()
+        self.assertFalse(calls)
+        self.assertEqual(self._rounds(), 0)
+
+        calls = []
+
+        def single_review(prompt, *, resolution_out, **kwargs):
+            calls.append(prompt)
+            resolution_out["model"] = "gpt-6-astra"
+            return "<verdict>SHIP</verdict>", f"session-{len(calls)}", 0, ""
+
+        review_commands = (
+            ("impl-review", self.task_id),
+            ("plan-review", self.spec_id),
+            ("completion-review", self.spec_id),
+        )
+        for index, (command, scope) in enumerate(review_commands, start=1):
+            with self.subTest(command=command):
+                receipt = self.root / f"{command}.json"
+                code, out, err = self._run(
+                    "codex", command, scope, "--base", "HEAD~1",
+                    "--receipt", str(receipt), "--json", fake=single_review,
+                )
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(self._payload(out)["verdict"], "SHIP")
+                self.assertEqual(len(calls), index)
+
+    def _interrupt_sequential_first_draw(self, *, first_has_verdict: bool) -> Path:
+        self._execution_policy("sequential")
+        started = threading.Event()
+        release = threading.Event()
+        calls = []
+
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            calls.append(axis)
+            if axis == "correctness":
+                started.set()
+                if not release.wait(timeout=5):
+                    raise RuntimeError("coordinator did not release the active reviewer")
+                if not first_has_verdict:
+                    return "provider unavailable", "sess-correctness", 1, "provider unavailable"
+            return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
+
+        def interrupted_result(future, *args, **kwargs):
+            try:
+                self.assertTrue(started.wait(timeout=5), "the real first draw worker must be active")
+                self.assertTrue(future.running(), "interrupt must occur during the coordinator wait")
+            finally:
+                release.set()
+            raise KeyboardInterrupt("coordinator interrupted while first worker was active")
+
+        with mock.patch("concurrent.futures.Future.result", autospec=True, side_effect=interrupted_result):
+            with self.assertRaisesRegex(KeyboardInterrupt, "coordinator interrupted"):
+                self._dispatch(fake)
+        self.assertEqual(calls, ["correctness"], "later draws must never start after coordinator interruption")
+        self.assertEqual(self._pending(), 1)
+        self.assertEqual(self._rounds(), 1)
+        self.assertFalse(self._attempts())
+        (sidecar,) = (self.root / ".flow/review-fanout").iterdir()
+        first = json.loads((sidecar / "correctness.json").read_text(encoding="utf-8"))
+        self.assertEqual(first["verdict"], "SHIP" if first_has_verdict else None)
+        self.assertIn("draw correctness:", (sidecar / "progress.log").read_text(encoding="utf-8"))
+        for axis in ("contracts", "integration"):
+            self.assertFalse((sidecar / f"{axis}.json").exists())
+        aggregate = json.loads((sidecar / "meta.json").read_text(encoding="utf-8"))
+        self.assertTrue(all(row["verdict"] is None for row in aggregate["draws"]))
+        return sidecar
+
+    def test_sequential_coordinator_interrupt_preserves_completed_draw_recovery(self) -> None:
+        sidecar = self._interrupt_sequential_first_draw(first_has_verdict=True)
+        receipt = self.root / "recovered.json"
+        code, result, err = self._finalize(
+            sidecar.name, self._write_merged(_empty_merged_review()), "--receipt", str(receipt),
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(result["verdict"], "SHIP")
+        self.assertEqual(self._pending(), 0)
+        published = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(sum(row.get("verdict") == "SHIP" for row in published["draws"]), 1)
+        self.assertEqual(sum(bool(row.get("round_consumed")) for row in self._attempts()), 1)
+
+    def test_sequential_coordinator_interrupt_without_verdict_refunds_once(self) -> None:
+        sidecar = self._interrupt_sequential_first_draw(first_has_verdict=False)
+        merged = self._write_merged(_empty_merged_review())
+        for _ in range(2):
+            code, _, err = self._finalize(sidecar.name, merged)
+            self.assertEqual(code, 2, err)
+        self.assertEqual(self._pending(), 0)
+        self.assertEqual(self._rounds(), 0)
+        refunds = [row for row in self._attempts() if row.get("outcome") == "transport_failure"]
+        self.assertEqual(len(refunds), 1)
+
+    def test_sequential_reviewer_keyboard_interrupt_remains_a_contained_draw_failure(self) -> None:
+        self._execution_policy("sequential")
+        calls = []
+
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            calls.append(axis)
+            if axis == "correctness":
+                raise KeyboardInterrupt("reviewer hook interrupted")
+            return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
+
+        code, panel, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(calls, list(flowctl.REVIEW_FANOUT_AXES))
+        first = panel["draws"][0]
+        self.assertEqual(first["failure_class"], "dispatch_exception")
+        self.assertIsNone(first["verdict"])
+        self.assertEqual(panel["failed_draws"], 1)
+        self.assertEqual(self._pending(), 1)
+        code, result, err = self._finalize(panel["rid"], self._write_merged(_empty_merged_review()))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(result["verdict"], "SHIP")
+        self.assertEqual(self._pending(), 0)
 
     def test_interrupted_dispatch_finalizes_completed_draw(self) -> None:
         sidecars = []

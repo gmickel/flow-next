@@ -95,6 +95,15 @@
           ],
           "default": null
         },
+        "fanoutExecution": {
+          "description": "First-round CLI review draw scheduling: concurrent (default) or sequential. Sequential finishes each draw and its sidecars before starting the next in supplied axis order. Re-review stays single. Invalid writes and persisted values are rejected before dispatch.",
+          "type": "string",
+          "enum": [
+            "concurrent",
+            "sequential"
+          ],
+          "default": "concurrent"
+        },
         "maxIterations": {
           "description": "Cumulative review-round cap per scope (default 8, minimum 1 - the cap can never be disabled). The env var MAX_REVIEW_ITERATIONS takes precedence over this key. In an autonomous run (flow --auto) this key may only lower the cap, so an autonomous agent cannot extend its own review gate.",
           "type": "integer",

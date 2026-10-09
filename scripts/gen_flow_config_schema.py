@@ -83,6 +83,12 @@ DESCRIPTIONS: dict[str, str] = {
         "/flow-next:impl-review manually instead. See "
         "docs/running-lean.md."
     ),
+    "review.fanoutExecution": (
+        "First-round CLI review draw scheduling: concurrent (default) or "
+        "sequential. Sequential finishes each draw and its sidecars before "
+        "starting the next in supplied axis order. Re-review stays single. "
+        "Invalid writes and persisted values are rejected before dispatch."
+    ),
     "review.maxIterations": (
         "Cumulative review-round cap per scope (default 8, minimum 1 - the cap "
         "can never be disabled). The env var MAX_REVIEW_ITERATIONS takes "
@@ -486,6 +492,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("planSync.crossSpec", {"type": "boolean"}),
         ("review", {"kind": "object", "open": False}),
         ("review.backend", _review_backend_fragment()),
+        ("review.fanoutExecution", {"type": "string", "enum": list(flowctl.REVIEW_FANOUT_EXECUTION_VALUES)}),
         ("review.maxIterations", {"type": "integer", "minimum": 1}),
         ("scouts", {"kind": "object", "open": False}),
         ("scouts.github", {"type": "boolean"}),
