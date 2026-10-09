@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Fixed
 
-- **A request to implement specs reaches flow even when it says how to deliver them.** "Implement both specs. The result must be on `main`; run the tests first" was implemented directly on Claude Code (Opus 5.5 at low effort) in 4 of 4 runs, because the delivery steps read like a complete brief. Flow's description now leads with requests to implement, build or deliver a project's specs, whatever delivery or test steps they add; the same request now reaches flow in 4 of 4 runs, and the rest of the routing probe holds. Codex already routed it. Thanks to the lead-placement eval for the case.
+- **A request to implement specs reaches flow even when it says how to deliver them.** "Implement both specs. The result must be on `main`; run the tests first" was implemented directly on Claude Code (Opus 5.5 at low effort) in 4 of 4 runs, because the delivery steps read like a complete brief. Flow's description now leads with requests to implement, build or deliver a project's specs, whatever delivery or test steps they add; the same request now reaches flow in 4 of 4 runs, and the rest of the routing probe holds. Codex already routed it.
 
 ## [flow-next 8.4.0] - 2026-10-09
 
