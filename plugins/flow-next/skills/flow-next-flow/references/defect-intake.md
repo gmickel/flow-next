@@ -1,6 +1,6 @@
 # Defect intake from the feature map (gated reference)
 
-> **Loaded only when** the route is a reported defect that still needs a reproduction, `.flow/features/` exists, and the report does not say where the problem is, or a direct lookup of the place it names failed (workflow.md Step 3). Without a map, or when the report names a place the agent finds directly, the reproduction runs exactly as before and this file is never read.
+> **Loaded only when** the route is a reported defect that still needs a reproduction, `.flow/features/` exists, and the report does not say where the problem is, or a direct lookup of the place it names failed (SKILL.md Step 3). Without a map, or when the report names a place the agent finds directly, the reproduction runs exactly as before and this file is never read.
 >
 > Why the gate: reading this procedure, the map index and a feature file costs a few turns. Measured on a fixture app, that roughly halved the turns on reports that do not locate themselves (an untitled screenshot) and was pure overhead on reports that name an obvious control.
 

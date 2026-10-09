@@ -59,12 +59,11 @@ class CodexFlowDispatchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         # Follow actual references from the conductor to both dispatch modes.
         skill = (self.installed / "SKILL.md").read_text()
-        for entry in ("auto.md", "workflow.md"):
-            self.assertIn(entry, skill)
+        self.assertIn("auto.md", skill)
+        for entry in ("auto.md", "SKILL.md"):
             body = (self.installed / entry).read_text()
             self.assertIn("references/tail.md", body)
-        workflow = (self.installed / "workflow.md").read_text()
-        self.assertIn("references/route-matrix.md", workflow)
+        self.assertIn("references/route-matrix.md", skill)
         for relative in ("auto.md", "references/tail.md", "references/route-matrix.md"):
             with self.subTest(relative=relative):
                 body = (self.installed / relative).read_text()

@@ -1,6 +1,6 @@
 # /flow-next:flow --auto - the unattended driver
 
-Read only when SKILL.md parsed the exact `--auto` token. One run selects one ready spec and drives it through `workflow.md`'s hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`. Every run ends with one `PILOT_VERDICT` line.
+Read only when SKILL.md parsed the exact `--auto` token. One run selects one ready spec and drives it through SKILL.md's hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`. Every run ends with one `PILOT_VERDICT` line.
 
 ## Preamble
 
@@ -142,7 +142,7 @@ When a delegated plan, implementation, or completion review exits `1` with `NOT_
 
 ## The hop loop
 
-Run workflow.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item. After Phase 6:
+Run SKILL.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item. After Phase 6:
 
 - `AUTO_TICK=1`: print the terminal line and stop.
 - `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge; external waits may continue only at cadence with current consent.
@@ -207,7 +207,7 @@ Done when: exactly one candidate has passed the full predicate, or none has and 
 
 Backlog mode: Phase 1.5 SELECT and Phase 1.6 TRIAGE run from [references/backlog-mode.md](references/backlog-mode.md#phase-15---select-wide-backlog-mode-only).
 
-## Phase 2 - CLASSIFY from the routing reference (workflow.md Step 2)
+## Phase 2 - CLASSIFY from the routing reference (SKILL.md Step 2)
 
 Derive dispatch flags from the snapshot. Only an explicit review option
 is forwarded; the stage otherwise resolves its configured backend.
@@ -240,7 +240,7 @@ QA_FRESH="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" 
 
 `QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not run its former shell probe.
 
-### Route (workflow.md Step 2 runs here)
+### Route (SKILL.md Step 2 runs here)
 
 Use the selected candidate's `route` as `ROUTE_JSON` (the top-level `route` aliases the default selection) and read it as workflow Step 2 says (`decision.value` when `decision.met`, otherwise the host decides) and print its `Route:` line. The snapshot already decided the lifecycle in code; do not call judge or re-probe lifecycle fields. Routing never asks Jev, so `available` is always false here and the code decision is used with or without a key. `pr_probe_failed: true` ends `NEEDS_HUMAN` immediately. The host still applies design-review intent, [references/route-matrix.md](references/route-matrix.md), [references/gate-selection.md](references/gate-selection.md), and [references/plan-vs-no-plan.md](references/plan-vs-no-plan.md). Echo the route row and gate section.
 
@@ -301,7 +301,7 @@ If an attempted checkout fails (any attempted checkout in the matrix, including 
 
 Done when: the worktree is on the branch this stage's matrix row names (or the plan/plan-review stay-put outcome applied), or the run has already terminated `NEEDS_HUMAN` without dispatching.
 
-## Phase 4 - DISPATCH exactly one sub-skill (workflow.md Step 3)
+## Phase 4 - DISPATCH exactly one sub-skill (SKILL.md Step 3)
 
 Record the pre-dispatch evidence snapshot before invoking the stage skill:
 
@@ -347,7 +347,7 @@ If a sub-skill returns `NEEDS_HUMAN` or `ESCALATE:`, stop this run with `NEEDS_H
 
 Done when: exactly one stage skill has been invoked and has returned; a hop that dispatched a second stage has broken the contract.
 
-## Phase 5 - VERIFY + evidence echo (workflow.md Step 4)
+## Phase 5 - VERIFY + evidence echo (SKILL.md Step 4)
 
 Echo each hop's observed evidence for the transcript-only driver, decide `advanced` from the receipt and PR re-reads below, and run the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 

@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD  # noqa: E402
 
 FLOWCTL = PLUGIN / "scripts" / "flowctl"
-WORKFLOW = "skills/flow-next-flow/workflow.md"
+WORKFLOW = "skills/flow-next-flow/SKILL.md"
 SHELL = os.name != "nt" and shutil.which("bash") and shutil.which("jq")
 
 
@@ -49,7 +49,7 @@ def live_state(**overrides):
 
 
 def keep(judge_output):
-    """Project a route result through workflow.md's shipped jq filter."""
+    """Project a route result through the flow skill's shipped jq filter."""
     program = re.search(r"jq -c '(.*?)'", fence(WORKFLOW, "--preset route"), re.S).group(1)
     out = subprocess.run(["jq", "-c", program], input=json.dumps(judge_output), capture_output=True,
                          text=True, check=True)
