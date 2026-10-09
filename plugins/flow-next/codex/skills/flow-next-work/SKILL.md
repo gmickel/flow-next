@@ -1,6 +1,6 @@
 ---
 name: flow-next-work
-description: Execute a flow-next spec or task end-to-end with worker subagents, gates, and commits. Use when asked to work on, implement, or execute fn-N.
+description: Execute a flow-next spec or task with workers, gates and commits. Run when the work command is typed or flow-next-flow routes here; plain requests to implement fn-N go to flow-next-flow.
 user-invocable: false
 ---
 

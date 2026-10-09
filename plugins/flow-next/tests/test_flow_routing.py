@@ -23,7 +23,6 @@ REPO_ROOT = PLUGIN.parent.parent
 
 FLOW_DIR = PLUGIN / "skills" / "flow-next-flow"
 FLOW_SKILL = FLOW_DIR / "SKILL.md"
-FLOW_WORKFLOW = FLOW_DIR / "workflow.md"
 FLOW_AUTO = FLOW_DIR / "auto.md"
 FLOW_REFERENCES = FLOW_DIR / "references"
 FLOW_SHIM = PLUGIN / "commands" / "flow.md"
@@ -62,10 +61,10 @@ def _frontmatter(text: str) -> str:
 class FlowSurfaceExists(unittest.TestCase):
 
     def test_no_orphan_reference(self) -> None:
-        # Every file in references/ is reached: from SKILL.md, workflow.md or
+        # Every file in references/ is reached: from SKILL.md or
         # auto.md, or linked from a reference that is itself reached.
         reached: set[str] = set()
-        frontier = [FLOW_SKILL, FLOW_WORKFLOW, FLOW_AUTO]
+        frontier = [FLOW_SKILL, FLOW_AUTO]
         while frontier:
             text = _read(frontier.pop())
             for name in set(LOCAL_REF_MENTION_RE.findall(text)) | set(
@@ -93,7 +92,7 @@ class FlowSurfaceExists(unittest.TestCase):
 
 class FlowReferenceReachability(unittest.TestCase):
     def test_every_local_reference_link_resolves(self) -> None:
-        for path in (FLOW_SKILL, FLOW_WORKFLOW):
+        for path in (FLOW_SKILL,):
             text = _read(path)
             for rel in LOCAL_REF_LINK_RE.findall(text):
                 with self.subTest(file=path.name, link=rel):

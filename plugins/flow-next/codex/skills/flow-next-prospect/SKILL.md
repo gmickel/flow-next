@@ -1,6 +1,6 @@
 ---
 name: flow-next-prospect
-description: Generate ranked candidate ideas grounded in the repo. Use when asked what to build next.
+description: Generate ranked new ideas grounded in the repo. Use when asked to brainstorm what to build; picking up existing specs or work goes to flow-next-flow.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

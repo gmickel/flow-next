@@ -6,6 +6,15 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.4.0] - 2026-10-09
+
+In a project that uses Flow-Next, you no longer have to name the conductor. Ask to implement a spec, paste a bug report, describe an idea, or ask what to do next, and the agent hands it to `/flow-next:flow`, which picks the right stage: a failing test before a bug fix, a baseline before a speed-up, a recorded route before work starts. On a 57-case routing probe, requests reached the intended skill in 56 cases on Claude Code and 56 on Codex, up from 42 and 43 with the 8.3.0 descriptions (Opus 5.5 at low effort and gpt-6.1-sol, one session per case).
+
+### Changed
+
+- **Flow picks up Flow-Next work without being named.** Spec work ("implement fn-1", "implement all the ready specs"), ideas, bug reports and tracebacks, something slow or another number to move, behaviour-preserving cleanups, design choices, tracker issues and "what should I do next" now route to flow. A quick question or a one-line edit can still be handled directly, saying "do it directly" or "without Flow-Next" opts out, and repositories that don't use Flow-Next are left alone. The work skill no longer claims plain implement requests, and prospect no longer claims "what next", so neither jumps ahead of flow; `/flow-next:work` and stages that flow dispatches behave as before. Codex gets matching catalog lines within its description budget.
+- **Attended flow runs its route instead of skipping it.** The hop loop (read the starting point, route, run the stage, re-evaluate, report) now lives in the flow skill itself instead of a separate `workflow.md` that every run had to open, so a session that loads flow has its first route call in front of it. Every flow run already read that file, so no run reads more than before.
+
 ## [flow-next 8.3.0] - 2026-10-09
 
 Teams on a local model or a rate-limited provider can now get the full three-reviewer review: one setting runs the reviewers one after another instead of all at once, still merged into one fix pass. make-pr also fits enterprise repositories better. It works when `gh` is logged in only to GitHub Enterprise, and its spec-close commit follows the repository's own commit-message rules, so an unattended run no longer stops on a hook.
