@@ -13,10 +13,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
   launching the next in supplied order. Concurrent scheduling remains the default,
   and the panel still consumes one round with the same finalizer and receipts.
 
+## [flow-next 8.2.0] - 2026-10-09
+
+Product owners and business analysts can run their own part of the spec without an engineer driving. One line to `/flow-next:flow` starts a business interview that keeps to product decisions, in plain words, and hands anything technical to engineering. Reviews that fall back to a smaller Claude model now reach Haiku 5.5, which is faster and costs less than Haiku 4.5.
+
 ### Changed
 
+- **Product owners and business analysts get a shorter, plainer interview.** Tell `/flow-next:flow` your role ("I'm the product owner, interview me on fn-12", or `/flow-next:flow fn-12 --biz`) and it runs refine with the business lens, even on a spec already marked ready. Under a business lens, refine leaves data models, migrations, contracts, interfaces and security to engineering, and asks only about a consequence you own, in your words. "Not my call" records the question for engineering instead of counting as a skip, so it adds no skipped-items checkpoint question. The read-back and summary leave out internal terms. Refine without a lens, and the technical lens, ask what they asked before. The teams guide has a four-step path for this role, including starting from a requirements document you already have ([for teams](https://flow-next.dev/guides/for-teams/#for-business-analysts-and-product-owners)).
 - **Review fallbacks and the Copilot triage judge reach Claude Haiku 5.5.** The opt-in Copilot triage judge (`FLOW_TRIAGE_LLM=1` with `--backend copilot`) now defaults to `claude-haiku-5.5` instead of `claude-haiku-4.5`. Haiku 5.5 is Anthropic's fastest model and costs less than Haiku 4.5. When a stronger model is unavailable, the `claude` review backend now tries `claude-haiku-5-5` before `claude-haiku-4-5`. The Copilot review ranking also gains `claude-opus-5.5`, `claude-sonnet-5.5`, `claude-sonnet-5` and `claude-haiku-5.5`, so a Copilot review can step down to a current Claude model before an older one. A model you name explicitly still wins. A CLI that does not serve an id rejects it, and the ladder steps past it to the next model.
-- **Product owners and business analysts get a shorter, plainer interview.** Tell `/flow-next:flow` your role ("I'm the product owner, interview me on fn-12", or `/flow-next:flow fn-12 --biz`) and it runs refine with the business lens. Before, flow could skip refine or run it without a lens, which asks technical questions. Under a business lens, refine leaves data models, migrations, contracts, interfaces and security to engineering, and asks only a consequence you own, in your words. "Not my call" now records the question for engineering instead of counting as a skip, so it no longer adds a skipped-items checkpoint question. The read-back and summary drop internal terms. The teams guide has a four-step path for this role, including starting from an existing requirements document.
 
 ## [flow-next 8.1.1] - 2026-10-07
 
