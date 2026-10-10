@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.5.0] - 2026-10-10
+
+You can now tell the reviewers what to look hardest at for a single task, not only for a whole branch. A standing review focus in your project's instructions, such as "reviews focus on over-engineering and YAGNI", now reaches every reviewer, including Codex reviewers, which never read AGENTS.md. make-pr also closes the spec and opens the pull request on Windows with the native jq.
+
 ### Changed
 
 - **Task reviews accept a review focus.** `impl-review --focus` and `impl-review-fanout --focus` now work on task-scoped reviews. Every reviewer sees the focus, the receipt records it, and a re-review keeps it. Before this, the fan-out route refused the flag, and the single-reviewer route recorded the focus on the receipt without showing it to the reviewer. The implementation-review skill now passes the review focus the project's instructions state, so a line like "reviews focus on over-engineering and YAGNI" reaches Codex reviewers, which run without the repository's AGENTS.md.
