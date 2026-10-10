@@ -8537,13 +8537,12 @@ def _parse_claude_result(
     """Parse ``claude -p --output-format json`` stdout.
 
     Returns ``(result_text, session_id, is_error, payload)``. STRICT: stdout
-    must be exactly one JSON object with ``type == "result"`` (what the CLI
-    emits under ``--output-format json``). Anything else - non-JSON, a
-    wrong-type or type-less object, a result followed by corruption - yields
-    ``("", None, True, None)``: a transport failure, never a verdict. Cursor's
-    lenient JSON-lines salvage is deliberately NOT shared here. ``payload`` is
-    the parsed object so the ladder's unavailable predicate can read
-    ``api_error_status`` beside the text.
+    must be exactly one JSON object with ``type == "result"``, a boolean
+    ``is_error``, and a string ``result``. Any malformed JSON, wrong envelope,
+    or missing or wrong-typed field is a transport failure, never a verdict.
+    Cursor's lenient JSON-lines salvage is deliberately NOT shared here.
+    ``payload`` is the parsed object so the ladder's unavailable predicate can
+    read ``api_error_status`` beside the text.
     """
     try:
         obj = json.loads((stdout or "").strip() or "null")
@@ -8552,12 +8551,18 @@ def _parse_claude_result(
     if not isinstance(obj, dict) or obj.get("type") != "result":
         return "", None, True, None
     result_text = obj.get("result")
-    if not isinstance(result_text, str):
-        result_text = ""
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         session_id = None
-    return result_text, session_id, bool(obj.get("is_error", False)), obj
+    is_error = obj.get("is_error")
+    if type(is_error) is not bool or not isinstance(result_text, str):
+        return (
+            result_text if isinstance(result_text, str) else "",
+            session_id,
+            True,
+            obj,
+        )
+    return result_text, session_id, is_error, obj
 
 
 def run_claude_exec(
@@ -8640,10 +8645,27 @@ def run_claude_exec(
         healthy_result = (
             isinstance(payload, dict)
             and payload.get("type") == "result"
-            and not is_error
+            and payload.get("is_error") is False
+            and isinstance(payload.get("result"), str)
         )
-        unavailable = (
-            not healthy_result and _claude_model_unavailable(payload, stderr)
+        valid_error_result = (
+            isinstance(payload, dict)
+            and payload.get("type") == "result"
+            and payload.get("is_error") is True
+            and isinstance(payload.get("result"), str)
+        )
+        # The stderr-only signature means no result envelope was returned.
+        # A malformed or non-matching nonempty result is terminal.
+        stderr_tag_only = (
+            not (result.stdout or "").strip()
+            and _claude_model_unavailable(None, stderr)
+        )
+        unavailable = exit_code == 0 and not healthy_result and (
+            (
+                valid_error_result
+                and _claude_model_unavailable(payload, None)
+            )
+            or stderr_tag_only
         )
         last["unavailable"] = unavailable
         if exit_code != 0:

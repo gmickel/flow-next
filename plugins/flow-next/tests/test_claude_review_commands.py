@@ -405,6 +405,27 @@ class ClaudeSessionPasses(unittest.TestCase):
 class ClaudeFailures(unittest.TestCase):
     """CLI missing -> backend-missing failure; bad payload -> RETRY, no verdict."""
 
+    def _assert_refunded_failure(self, repo, receipt, code, out, calls):
+        self.assertEqual(code, 2)
+        self.assertEqual(len(calls), 1)
+        self.assertFalse(receipt.exists())
+        result = json.loads(out)
+        self.assertNotIn("verdict", result)
+        self.assertIn(CLAUDE_MODEL_WARNING, result["error"])
+
+        spec_data = _read_json(repo / ".flow" / "specs" / f"{EPIC_ID}.json")
+        self.assertEqual(spec_data.get("review_pending_rounds", {}), {})
+        self.assertEqual(
+            (spec_data.get("impl_review_rounds") or {}).get(TASK_ID, 0), 0
+        )
+        attempt = spec_data["review_attempts"][-1]
+        self.assertIsNone(attempt["verdict"])
+        self.assertEqual(attempt["failure_class"], "nonzero_exit")
+        self.assertFalse(attempt["round_consumed"])
+        self.assertFalse(
+            (repo / ".flow" / ".cache" / "model-resolution.json").exists()
+        )
+
     def test_missing_cli_fails_before_any_spawn(self):
         with _flow_repo() as (repo, base):
             receipt = repo / "receipt.json"
@@ -420,25 +441,58 @@ class ClaudeFailures(unittest.TestCase):
 
     def test_malformed_payload_is_a_transport_failure_never_a_verdict(self):
         cases = {
-            "not-json": ("this is not json", "", 0),
-            "wrong-type": (json.dumps({"type": "assistant", "result": REVIEW_TEXT}), "", 0),
+            "not-json": ("this is not json", CLAUDE_MODEL_WARNING, 0),
+            "wrong-type": (
+                json.dumps({"type": "assistant", "result": REVIEW_TEXT}),
+                CLAUDE_MODEL_WARNING,
+                0,
+            ),
+            "missing-is-error": (
+                json.dumps({"type": "result", "result": PASS_TEXT}),
+                CLAUDE_MODEL_WARNING,
+                0,
+            ),
+            "wrong-is-error-type": (
+                json.dumps({"type": "result", "is_error": 0, "result": PASS_TEXT}),
+                CLAUDE_MODEL_WARNING,
+                0,
+            ),
+            "wrong-result-type": (
+                json.dumps({"type": "result", "is_error": False, "result": [PASS_TEXT]}),
+                CLAUDE_MODEL_WARNING,
+                0,
+            ),
             "error-envelope-with-verdict-text": (
-                _result_json("<verdict>SHIP</verdict>", is_error=True), "", 0),
+                _result_json(
+                    "<verdict>SHIP</verdict>",
+                    is_error=True,
+                    api_error_status=503,
+                ),
+                CLAUDE_MODEL_WARNING,
+                0,
+            ),
         }
         for name, result in cases.items():
             with self.subTest(case=name), _flow_repo() as (repo, base):
                 receipt = repo / "receipt.json"
-                with _fake_claude(dispatch=lambda a, i, r=result: r) as calls:
+                with _fake_claude(
+                    dispatch=lambda a, i, r=result: r
+                ) as calls:
                     code, out, _err = _impl_review(repo, base, receipt)
-                self.assertEqual(code, 2)
-                self.assertEqual(len(calls), 1)
-                self.assertFalse(receipt.exists())
-                self.assertNotIn("SHIP", json.loads(out).get("verdict", "") or "")
-                attempts = _read_json(
-                    repo / ".flow" / "specs" / f"{EPIC_ID}.json"
-                )["review_attempts"]
-                self.assertIsNone(attempts[-1]["verdict"])
-                self.assertEqual(attempts[-1]["failure_class"], "nonzero_exit")
+                self._assert_refunded_failure(repo, receipt, code, out, calls)
+
+    def test_nonzero_empty_stdout_warning_does_not_fall_back(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+
+            def dispatch(_argv, _stdin):
+                if len(calls) == 1:
+                    return "", CLAUDE_MODEL_WARNING, 7
+                return _result_json(PASS_TEXT), "", 0
+
+            with _fake_claude(dispatch=dispatch) as calls:
+                code, out, _err = _impl_review(repo, base, receipt)
+            self._assert_refunded_failure(repo, receipt, code, out, calls)
 
     def test_nonzero_process_cannot_publish_verdict_or_fall_back_on_warning(self):
         for stderr in ("", CLAUDE_MODEL_WARNING):
