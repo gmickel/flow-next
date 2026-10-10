@@ -380,7 +380,7 @@ second copy of what it says:
 
 Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, the workspace and gate results on a parallel-wave task, and — where the path allows it — the review verdict.
 
-Return `actual_model: <model>` only from host execution metadata or the Phase 1b bridge command that ran. Include the conductor's `Tier:` line in the done summary, annotated with that actual model when evidenced; never infer it from `IMPLEMENTER`. If the host exposes no executed model, omit the field and annotation.
+Return `actual_model: <model>` only from host execution metadata (including the model your environment states you run on) or the Phase 1b bridge command that ran. Include the conductor's `Tier:` line in the done summary, annotated `(model: <actual_model>)` when evidenced and `(model: not reported)` when not; never infer it from `IMPLEMENTER`.
 
 ## Rules
 

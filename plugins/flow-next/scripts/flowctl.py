@@ -23630,12 +23630,23 @@ def judge_tier_dispatch(result: dict, args: argparse.Namespace) -> dict:
     role_model = getattr(args, "role_model", None)
     can_spawn = getattr(args, "can_spawn_model", False)
     can_bridge = getattr(args, "can_bridge", False)
-    if not result["available"]:
+    if implementer:
+        # An explicit invocation model outranks the judge; a pinned role beats the spawn parameter.
+        pin = f"; role pins {role_model}" if role_model else ""
+        if can_spawn and not role_model:
+            selected_model = implementer
+            line = f"Tier: implementer - {implementer} (explicit invocation)"
+        elif can_bridge:
+            line = f"Tier: implementer - {implementer} (explicit invocation, over the bridge{pin})"
+        else:
+            reason = f"role pins {role_model}" if role_model else "no spawn-model parameter or bridge"
+            line = f"Tier: session - explicit implementer {implementer} unreachable ({reason})"
+    elif not result["available"]:
         line = f"Tier: session (jev-unavailable({result['reason']}))"
     else:
         answer = result["answers"]["tier"]
         value, confidence = result["decision"]["value"], answer["confidence"]
-        if value == "mechanical" and not implementer:
+        if value == "mechanical":
             if role_model:
                 line = f"Tier: mechanical (jev {confidence:.2f}) -> {role_model} (role pins model)"
             elif fast_model and (can_spawn or can_bridge):
@@ -23649,8 +23660,6 @@ def judge_tier_dispatch(result: dict, args: argparse.Namespace) -> dict:
             line = f"Tier: long_running (jev {confidence:.2f}) - bridge recommended"
         else:
             line = f"Tier: session (jev {answer['choice']} {confidence:.2f})"
-        if getattr(args, "explicit_model", None):
-            line += " (explicit IMPLEMENTER preserved)"
     return {"tier_line": line, "spawn_model": selected_model, "implementer": implementer}
 
 

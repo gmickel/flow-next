@@ -179,11 +179,15 @@ prints its `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the
 alternatives:` lines from that row, without a judge call.
 
 Tier selection happens before worker or scout dispatch. An explicit
-`IMPLEMENTER:` override wins. A mechanical decision changes the spawn-model
+`IMPLEMENTER:` model wins over any judge answer, with or without a key: it
+becomes the spawn-model parameter when the host can spawn it, goes over the
+bridge otherwise, and the `Tier:` line names it either way or says it was
+unreachable. A mechanical decision changes the spawn-model
 parameter as well as the prompt's `IMPLEMENTER:` field; a missing fast-scout
 model, or a host with neither model steering nor a suitable bridge, leaves the
 model unchanged and says so. A long-running decision is a recommendation only.
-Done summaries read the model that actually ran from the worker's return.
+Done summaries read the model that actually ran from the worker's return, or
+say `(model: not reported)`.
 
 ## Failure and transport contract
 
@@ -219,6 +223,7 @@ memory: bm25 (jev-unavailable(no_key))
 Tier: mechanical (jev 0.88) -> <model>
 Tier: long_running (jev 0.86) - bridge recommended
 Tier: session (jev moderate 0.61)
+Tier: implementer - <model> (explicit invocation)
 ```
 
 ## Evaluation numbers of record

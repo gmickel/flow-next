@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-10-10T21:41:43.877434Z",
+  "depends_on": [],
+  "id": "fn-291-work-routes-and-records-an-explicitly.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-291-work-routes-and-records-an-explicitly",
+  "spec_path": ".flow/tasks/fn-291-work-routes-and-records-an-explicitly.1.md",
+  "status": "todo",
+  "title": "Implement work routes and records an explicitly named implementer",
+  "updated_at": "2026-10-10T21:41:43.877434Z"
+}

@@ -152,10 +152,31 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertIsNone(pinned["implementer"])
         self.assertIn("(role pins model)", pinned["tier_line"])
         pinned = self.tier(role_model="gpt-5.6-terra", explicit_model="user-model")
-        self.assertIn("explicit IMPLEMENTER preserved", pinned["tier_line"])
+        self.assertIsNone(pinned["spawn_model"])
+        self.assertIn("user-model", pinned["tier_line"])
+        self.assertIn("role pins gpt-5.6-terra", pinned["tier_line"])
 
-    def test_tier_preserves_explicit_and_unreachable_and_unavailable(self):
-        for kwargs in ({"explicit_model": "user-model"}, {"fast_model": None},
+    def test_tier_routes_explicit_implementer_with_or_without_jev(self):
+        unavailable = {"available": False, "reason": "no_key"}
+        for result_kw in ({}, {"result": unavailable}, {"choice": "moderate"}, {"choice": "long_running"}):
+            with self.subTest(**{k: str(v) for k, v in result_kw.items()}):
+                out = self.tier(explicit_model="claude-sonnet-5-5", **result_kw)
+                # Host tool boundary: these args expand into the worker spawn's model parameter.
+                self.assertEqual(out["spawn_model_args"], {"model": "claude-sonnet-5-5"})
+                self.assertEqual(out["implementer"], "claude-sonnet-5-5")
+                self.assertEqual(out["tier_line"], "Tier: implementer - claude-sonnet-5-5 (explicit invocation)")
+        out = self.tier(explicit_model="gpt-6.1-sol", can_spawn_model=False, can_bridge=True)
+        self.assertIsNone(out["spawn_model"])
+        self.assertEqual(out["implementer"], "gpt-6.1-sol")
+        self.assertEqual(out["tier_line"], "Tier: implementer - gpt-6.1-sol (explicit invocation, over the bridge)")
+        out = self.tier(explicit_model="gpt-6.1-sol", can_spawn_model=False, result={"available": False, "reason": "no_key"})
+        self.assertIsNone(out["spawn_model"])
+        self.assertEqual(out["implementer"], "gpt-6.1-sol")
+        self.assertEqual(out["tier_line"], "Tier: session - explicit implementer gpt-6.1-sol unreachable "
+                                           "(no spawn-model parameter or bridge)")
+
+    def test_tier_preserves_unreachable_and_unavailable(self):
+        for kwargs in ({"fast_model": None},
                        {"can_spawn_model": False}, {"confidence": 0.79},
                        {"choice": "moderate"}, {"choice": "intelligent"},
                        {"result": {"available": False, "reason": "disabled"}}):
