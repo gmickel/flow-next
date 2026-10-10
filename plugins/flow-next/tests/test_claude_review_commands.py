@@ -42,6 +42,9 @@ FIXED_ARGV = [
 FORBIDDEN_TOKENS = ("--allowedTools", "Bash", "Edit", "Write")
 REVIEW_TEXT = "Reviewed the diff.\n\n<verdict>NEEDS_WORK</verdict>\n"
 PASS_TEXT = "No new issues.\n<verdict>NEEDS_WORK</verdict>\n"
+CLAUDE_MODEL_WARNING = (
+    "[claude-code:unrecognized_model] Model not found: gateway-custom-model"
+)
 
 
 def _git_raw(repo: Path, *args: str) -> str:
@@ -265,14 +268,19 @@ class ClaudeImplReview(unittest.TestCase):
             self.assertEqual(code, 0, err)
             first = _scratch(repo) / f"receipt-{base[:7]}-{head1[:7]}.diff"
             first_bytes = first.read_bytes()
+            self.assertEqual(_read_json(receipt)["review"], REVIEW_TEXT)
 
             head2 = _commit_change(repo, "def a(x):\n    return x + 2\n", "fix")
-            with _fake_claude() as calls:
+            with _fake_claude(
+                dispatch=lambda a, i: (_result_json(PASS_TEXT), CLAUDE_MODEL_WARNING, 0)
+            ) as calls:
                 code, _out, err = _impl_review(repo, base, receipt)
             self.assertEqual(code, 0, err)
             argv = calls[0]["argv"]
             _assert_fixed_read_only_argv(self, argv)
             self.assertEqual(argv[argv.index("--resume") + 1], SID)
+            self.assertIn("CONVERGENCE RATCHET", calls[0]["stdin"])
+            self.assertIn("Reviewed the diff.", calls[0]["stdin"])
             second = _scratch(repo) / f"receipt-{base[:7]}-{head2[:7]}.diff"
             self.assertEqual(_diff_files(repo), sorted([first.name, second.name]))
             self.assertEqual(second.read_text(encoding="utf-8"),
@@ -280,7 +288,61 @@ class ClaudeImplReview(unittest.TestCase):
             self.assertIn(str(second), calls[0]["stdin"])
             self.assertIn(f"{base}..{head2}", calls[0]["stdin"])
             self.assertEqual(first.read_bytes(), first_bytes)
-            self.assertEqual(_read_json(receipt)["session_id"], SID)
+            updated_receipt = _read_json(receipt)
+            self.assertEqual(updated_receipt["session_id"], SID)
+            self.assertEqual(updated_receipt["review"], PASS_TEXT)
+
+    def test_successful_primary_reviews_ignore_unknown_model_diagnostic(self):
+        for command in ("impl-review", "plan-review", "completion-review"):
+            with self.subTest(command=command), _flow_repo() as (repo, base):
+                receipt = repo / "receipt.json"
+                with _fake_claude(
+                    dispatch=lambda a, i: (_result_json(), CLAUDE_MODEL_WARNING, 0)
+                ) as calls:
+                    if command == "impl-review":
+                        code, out, err = _run_cli(
+                            "claude", command, TASK_ID, "--base", base,
+                            "--receipt", str(receipt), "--json",
+                        )
+                    elif command == "plan-review":
+                        code, out, err = _run_cli(
+                            "claude", command, EPIC_ID, "--base", base,
+                            "--receipt", str(receipt), "--json",
+                        )
+                    else:
+                        code, out, err = _run_cli(
+                            "claude", command, EPIC_ID, "--base", base,
+                            "--receipt", str(receipt), "--json",
+                        )
+                self.assertEqual(code, 0, err or out)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(_read_json(receipt)["verdict"], "NEEDS_WORK")
+                self.assertEqual(_read_json(receipt)["session_id"], SID)
+                self.assertFalse(
+                    (repo / ".flow" / ".cache" / "model-resolution.json").exists()
+                )
+
+    def test_explicit_custom_model_success_keeps_selection_and_skips_cache(self):
+        custom_model = "gateway-custom-model"
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            with _fake_claude(
+                dispatch=lambda a, i: (_result_json(), CLAUDE_MODEL_WARNING, 0)
+            ) as calls:
+                code, _out, err = _impl_review(
+                    repo, base, receipt, "--spec", f"claude:{custom_model}:medium"
+                )
+            self.assertEqual(code, 0, err)
+            self.assertEqual(len(calls), 1)
+            argv = calls[0]["argv"]
+            self.assertEqual(argv[argv.index("--model") + 1], custom_model)
+            self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+            data = _read_json(receipt)
+            self.assertEqual(data["model"], custom_model)
+            self.assertEqual(data["effort"], "medium")
+            self.assertFalse(
+                (repo / ".flow" / ".cache" / "model-resolution.json").exists()
+            )
 
 
 class ClaudeSessionPasses(unittest.TestCase):
@@ -376,6 +438,103 @@ class ClaudeFailures(unittest.TestCase):
                 )["review_attempts"]
                 self.assertIsNone(attempts[-1]["verdict"])
                 self.assertEqual(attempts[-1]["failure_class"], "nonzero_exit")
+
+    def test_nonzero_process_cannot_publish_verdict_or_fall_back_on_warning(self):
+        for stderr in ("", CLAUDE_MODEL_WARNING):
+            with self.subTest(stderr=bool(stderr)), _flow_repo() as (repo, base):
+                receipt = repo / "receipt.json"
+                with _fake_claude(
+                    dispatch=lambda a, i, e=stderr: (_result_json(PASS_TEXT), e, 7)
+                ) as calls:
+                    code, out, _err = _impl_review(repo, base, receipt)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(len(calls), 1)
+                self.assertFalse(receipt.exists())
+                spec_data = _read_json(repo / ".flow" / "specs" / f"{EPIC_ID}.json")
+                self.assertEqual(spec_data.get("review_pending_rounds", {}), {})
+                attempt = spec_data["review_attempts"][-1]
+                self.assertIsNone(attempt["verdict"])
+                self.assertEqual(attempt["failure_class"], "nonzero_exit")
+                self.assertNotIn("verdict", json.loads(out))
+
+    def test_nonzero_json_error_preserves_diagnostic_and_refunds_reservation(self):
+        diagnostic = "Upstream API request failed: service temporarily unavailable"
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            with _fake_claude(
+                dispatch=lambda a, i: (
+                    _result_json(
+                        diagnostic,
+                        is_error=True,
+                        api_error_status=503,
+                    ),
+                    "",
+                    7,
+                )
+            ) as calls:
+                code, out, _err = _impl_review(repo, base, receipt)
+
+            self.assertEqual(code, 2)
+            self.assertEqual(len(calls), 1)
+            self.assertIn(diagnostic, json.loads(out)["error"])
+            self.assertFalse(receipt.exists())
+
+            spec_data = _read_json(repo / ".flow" / "specs" / f"{EPIC_ID}.json")
+            self.assertEqual(spec_data.get("review_pending_rounds", {}), {})
+            self.assertEqual(
+                (spec_data.get("impl_review_rounds") or {}).get(TASK_ID, 0), 0
+            )
+            attempt = spec_data["review_attempts"][-1]
+            self.assertIsNone(attempt["verdict"])
+            self.assertEqual(attempt["failure_class"], "nonzero_exit")
+            self.assertEqual(attempt["outcome"], "transport_failure")
+            self.assertFalse(attempt["round_consumed"])
+            self.assertIn(diagnostic, attempt["failure_message"])
+
+    def test_genuine_model_unavailable_error_still_uses_ladder(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+
+            def dispatch(argv, _stdin):
+                if len(calls) == 1:
+                    selected_model = argv[argv.index("--model") + 1]
+                    return (
+                        _result_json(
+                            f"There's an issue with the selected model {selected_model}.",
+                            is_error=True,
+                            api_error_status=404,
+                        ),
+                        "",
+                        0,
+                    )
+                return _result_json(), "", 0
+
+            with _fake_claude(dispatch=dispatch) as calls:
+                code, _out, err = _impl_review(repo, base, receipt)
+            self.assertEqual(code, 0, err)
+            self.assertEqual(len(calls), 2)
+            first_model = calls[0]["argv"][calls[0]["argv"].index("--model") + 1]
+            second_model = calls[1]["argv"][calls[1]["argv"].index("--model") + 1]
+            self.assertNotEqual(first_model, second_model)
+            self.assertEqual(_read_json(receipt)["model"], second_model)
+
+    def test_stderr_tag_only_failure_still_uses_ladder(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+
+            def dispatch(_argv, _stdin):
+                if len(calls) == 1:
+                    return "", CLAUDE_MODEL_WARNING, 0
+                return _result_json(), "", 0
+
+            with _fake_claude(dispatch=dispatch) as calls:
+                code, _out, err = _impl_review(repo, base, receipt)
+            self.assertEqual(code, 0, err)
+            self.assertEqual(len(calls), 2)
+            self.assertNotEqual(
+                calls[0]["argv"][calls[0]["argv"].index("--model") + 1],
+                calls[1]["argv"][calls[1]["argv"].index("--model") + 1],
+            )
 
     def test_foreign_spec_rejected_before_spawn(self):
         with _flow_repo() as (repo, base):

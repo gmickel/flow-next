@@ -8585,7 +8585,8 @@ def run_claude_exec(
 
     exit_code 0 = success; non-zero on ``is_error`` / the model-unavailable
     signature / CLI failure / timeout (the CLI exits 0 on a bad model, so the
-    signature is promoted to a non-zero code here). On timeout returns
+    signature is promoted to a non-zero code here). A failed process never
+    returns stdout as reviewer output. On timeout returns
     ("", session_id or "", 2, "<msg>").
     """
     review_exec_timeout = get_review_exec_timeout()
@@ -8625,6 +8626,7 @@ def run_claude_exec(
             )
         except subprocess.TimeoutExpired:
             last["payload"] = None
+            last["unavailable"] = False
             return "", (session_id or ""), 2, f"claude timed out ({review_exec_timeout}s)"
 
         result_text, returned_session_id, is_error, payload = _parse_claude_result(
@@ -8635,7 +8637,24 @@ def run_claude_exec(
             returned_session_id = session_id or ""
         exit_code = result.returncode
         stderr = result.stderr or ""
-        if is_error or _claude_model_unavailable(payload, stderr):
+        healthy_result = (
+            isinstance(payload, dict)
+            and payload.get("type") == "result"
+            and not is_error
+        )
+        unavailable = (
+            not healthy_result and _claude_model_unavailable(payload, stderr)
+        )
+        last["unavailable"] = unavailable
+        if exit_code != 0:
+            # The shared finalizer parses verdicts before checking exit status.
+            # A failed process must never pass verdict-shaped stdout to it,
+            # but keep a CLI diagnostic available to the finalizer when stderr
+            # is empty (for example, a JSON API error envelope).
+            if result_text:
+                stderr = f"{stderr}\n{result_text}" if stderr else result_text
+            result_text = ""
+        elif is_error or unavailable:
             # An error envelope (or the exit-0 unavailable signature) is never
             # reviewer output: ``_finish_backend_exec`` parses the verdict
             # BEFORE it looks at the exit code, so the envelope's text must not
@@ -8648,8 +8667,8 @@ def run_claude_exec(
                 exit_code = 1
         return result_text, returned_session_id, exit_code, stderr
 
-    def _is_unavailable(out: Optional[str], err: Optional[str]) -> bool:
-        return _claude_model_unavailable(last.get("payload"), err)
+    def _is_unavailable(_out: Optional[str], _err: Optional[str]) -> bool:
+        return bool(last.get("unavailable"))
 
     return _dispatch_review_with_fallback(
         backend="claude",
