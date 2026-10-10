@@ -1,19 +1,66 @@
 {
   "branch_name": "fn-291-work-routes-and-records-an-explicitly",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-10T21:48:16.555101Z",
   "created_at": "2026-10-10T18:57:33.009594Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-291-work-routes-and-records-an-explicitly",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-291-work-routes-and-records-an-explicitly.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "6ede755f6e7947241b1450e305e61e983462e474d70b98f0ad265e73da7aa8fe",
+      "backend": "codex",
+      "base_sha": "39308b309fde394f4f18e8ac12f1fb7593844404",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2deb04d506f5ce60ea1857da4c504918a5817197",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "b7c1df6bd17745b3b836a4013e023040",
+      "round_consumed": true,
+      "scope": "impl:fn-291-work-routes-and-records-an-explicitly.1",
+      "superseded_by": null,
+      "task": "fn-291-work-routes-and-records-an-explicitly.1",
+      "timestamp": "2026-10-10T21:46:31.321450Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-291-work-routes-and-records-an-explicitly.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-291-work-routes-and-records-an-explicitly.1": 0
+  },
   "spec_path": ".flow/specs/fn-291-work-routes-and-records-an-explicitly.md",
   "status": "open",
   "title": "work routes and records an explicitly named implementer",
@@ -28,5 +75,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-10T21:41:37.859615Z"
+  "updated_at": "2026-10-10T21:48:16.555109Z"
 }
