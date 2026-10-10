@@ -12,6 +12,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Fixed
 
+- **make-pr closes the spec and opens the pull request on Windows.** The Windows build of jq ends each output line with CRLF, so every path make-pr read from it carried a trailing carriage return: the spec-close step matched no file and stopped before the PR opened, and other values compared unequal without an error. make-pr's scripts and resolve-pr's comment fetcher now strip the carriage return, and the troubleshooting guide gives a `jq --binary` shim for shell steps elsewhere. Thanks to @georgkeller for the report and diagnosis (#541).
 - **Test runs no longer fill `/tmp` with review lock files.** The parallel test runner gives each test file its own temporary directory and deletes it afterwards. Each run used to leave new receipt lock files behind, about 37,000 on one machine.
 
 ## [flow-next 8.4.1] - 2026-10-09

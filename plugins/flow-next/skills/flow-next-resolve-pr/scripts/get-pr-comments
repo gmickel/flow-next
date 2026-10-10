@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
+jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 
 PR_NUMBER="${1:?Usage: $0 PR_NUMBER}"
 OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
