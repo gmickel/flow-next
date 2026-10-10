@@ -6,6 +6,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.5.2] - 2026-10-11
+
 ### Fixed
 
 - **A model you name for the implementation is the model the worker runs on.** "Use claude-sonnet-5-5 for the implementation" reached work, but work's tier step never put the model on the worker spawn: it reported `Tier: session` and left the spawn's model empty, so the worker ran on Sonnet only when the agent added the model itself. A named implementer now becomes the worker's model when the host can start a worker on it, goes over the bridge otherwise, and the tier line names it, with or without a TypeSafe key. The task's done summary also records the model the worker actually ran on, or says `(model: not reported)`, so a run on a different model is visible. Found by MergeFoundry's staffing check.
