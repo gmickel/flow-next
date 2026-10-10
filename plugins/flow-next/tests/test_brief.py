@@ -716,13 +716,12 @@ class ManyCorruptAndLongRootTest(unittest.TestCase):
             shutil.rmtree(td, ignore_errors=True)
 
     def test_long_root_path_capped_at_120(self) -> None:
-        # Build a deliberately deep root so resolved path >> 120.
+        # Build a deliberately deep root so resolved path >> 120, kept under
+        # Windows' ~258-char chdir limit inside the runner's per-shard TMPDIR.
         deep = "a" * 30
         base = (
             Path(tempfile.gettempdir()).resolve()
             / "brief-long-root"
-            / deep
-            / deep
             / deep
             / deep
             / deep
