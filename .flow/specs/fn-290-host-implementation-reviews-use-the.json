@@ -1,0 +1,79 @@
+{
+  "branch_name": "fn-290-host-implementation-reviews-use-the",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-10T12:06:04.700884Z",
+  "created_at": "2026-10-10T12:01:40.202267Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-290-host-implementation-reviews-use-the",
+  "impl_review_rounds": {
+    "fn-290-host-implementation-reviews-use-the.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "dc1d1a5b40399590460f68baa0f461f98fff52e52de81b7b1a42c81a72670652",
+      "backend": "codex",
+      "base_sha": "d5660ce9404d6419e5ee857b1aad7525933a3f6a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a5cb021fb41cc6507e24f8ed8f3f79816dac66f5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "98c2588c51fa491fb8bfc361b3a1cc0c",
+      "round_consumed": true,
+      "scope": "impl:fn-290-host-implementation-reviews-use-the.1",
+      "superseded_by": null,
+      "task": "fn-290-host-implementation-reviews-use-the.1",
+      "timestamp": "2026-10-10T12:05:56.129362Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-290-host-implementation-reviews-use-the.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-290-host-implementation-reviews-use-the.1": 0
+  },
+  "spec_path": ".flow/specs/fn-290-host-implementation-reviews-use-the.md",
+  "status": "done",
+  "title": "Host implementation reviews use the project's standing review focus",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-10T12:08:33.361802Z"
+}

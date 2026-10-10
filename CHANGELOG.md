@@ -6,6 +6,12 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.5.1] - 2026-10-10
+
+### Fixed
+
+- **Host reviews get the project's standing review focus.** In 8.5.0 a focus stated in your project's instructions reached the codex, claude, copilot and cursor reviewers but not the host backend, so a host review started by work or `flow --auto` ran without it and its receipt recorded none. Host reviews now use the standing focus when the request names none, so each host reviewer's prompt shows it and the receipt records it. A focus you name still replaces it for that review.
+
 ## [flow-next 8.5.0] - 2026-10-10
 
 You can now tell the reviewers what to look hardest at for a single task, not only for a whole branch. A standing review focus in your project's instructions, such as "reviews focus on over-engineering and YAGNI", now reaches every reviewer, including Codex reviewers, which never read AGENTS.md. make-pr also closes the spec and opens the pull request on Windows with the native jq.
