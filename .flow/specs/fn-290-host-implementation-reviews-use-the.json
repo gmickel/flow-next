@@ -62,7 +62,7 @@
     "impl:fn-290-host-implementation-reviews-use-the.1": 0
   },
   "spec_path": ".flow/specs/fn-290-host-implementation-reviews-use-the.md",
-  "status": "open",
+  "status": "done",
   "title": "Host implementation reviews use the project's standing review focus",
   "tracker": {
     "baseHashFlow": null,
@@ -75,5 +75,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-10T12:06:04.700891Z"
+  "updated_at": "2026-10-10T12:08:33.361802Z"
 }

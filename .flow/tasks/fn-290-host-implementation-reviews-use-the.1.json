@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-290-host-implementation-reviews-use-the",
   "spec_path": ".flow/tasks/fn-290-host-implementation-reviews-use-the.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Host implementation reviews use the project's standing review focus",
   "updated_at": "2026-10-10T12:01:58.036687Z"
 }
