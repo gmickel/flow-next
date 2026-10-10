@@ -62,7 +62,7 @@
     "impl:fn-291-work-routes-and-records-an-explicitly.1": 0
   },
   "spec_path": ".flow/specs/fn-291-work-routes-and-records-an-explicitly.md",
-  "status": "open",
+  "status": "done",
   "title": "work routes and records an explicitly named implementer",
   "tracker": {
     "baseHashFlow": null,
@@ -75,5 +75,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-10T21:48:16.555109Z"
+  "updated_at": "2026-10-10T21:48:27.507704Z"
 }
