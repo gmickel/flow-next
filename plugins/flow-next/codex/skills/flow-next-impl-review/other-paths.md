@@ -117,7 +117,8 @@ Parse $ARGUMENTS for:
 - `--deep` / `--deep=<passes>` → set `DEEP=true` + optional `DEEP_PASSES` CSV
 - `--interactive` → set `INTERACTIVE=true` (per-finding walkthrough on NEEDS_WORK)
 - First positional arg matching `fn-*` → `TASK_ID`
-- Remaining args → focus areas
+- Remaining args → focus areas (`FOCUS_AREAS`); with none, the review focus the project's
+  instructions state. Both backend workflows render it into the reviewer prompts and the receipt.
 
 If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/master).
 
