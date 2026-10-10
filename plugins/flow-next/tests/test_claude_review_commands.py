@@ -268,7 +268,8 @@ class ClaudeImplReview(unittest.TestCase):
             self.assertEqual(code, 0, err)
             first = _scratch(repo) / f"receipt-{base[:7]}-{head1[:7]}.diff"
             first_bytes = first.read_bytes()
-            self.assertEqual(_read_json(receipt)["review"], REVIEW_TEXT)
+            prior_review = _read_json(receipt)["review"]
+            self.assertEqual(prior_review, REVIEW_TEXT)
 
             head2 = _commit_change(repo, "def a(x):\n    return x + 2\n", "fix")
             with _fake_claude(
@@ -280,7 +281,7 @@ class ClaudeImplReview(unittest.TestCase):
             _assert_fixed_read_only_argv(self, argv)
             self.assertEqual(argv[argv.index("--resume") + 1], SID)
             self.assertIn("CONVERGENCE RATCHET", calls[0]["stdin"])
-            self.assertIn("Reviewed the diff.", calls[0]["stdin"])
+            self.assertIn(prior_review, calls[0]["stdin"])
             second = _scratch(repo) / f"receipt-{base[:7]}-{head2[:7]}.diff"
             self.assertEqual(_diff_files(repo), sorted([first.name, second.name]))
             self.assertEqual(second.read_text(encoding="utf-8"),

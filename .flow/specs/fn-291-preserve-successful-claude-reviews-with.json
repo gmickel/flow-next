@@ -8,12 +8,68 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-291-preserve-successful-claude-reviews-with",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-291-preserve-successful-claude-reviews-with.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "4ca87d4612f0f139fad9d70d97b6b92f908be393129979fd82ad23e5709a5616",
+      "backend": "codex",
+      "base_sha": "39308b309fde394f4f18e8ac12f1fb7593844404",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b6e46a51078fc3c76fec253a8b1c93d0",
+            "classification": "introduced",
+            "findingId": "finding-b6e46a51078fc3c76fec253a8b1c93d0",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "32c14fb147da17ee537a232e90e0686c1271167f",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-sol",
+      "outcome": "verdict",
+      "output_bytes": 716,
+      "output_sha256": "9cf39239039cceba7d8f57155a4ea7a09948fe9cd0de97e974de0301b9d42e8a",
+      "reservation_id": "eb7a62e8eb824cf9bbfe1369d481d136",
+      "round_consumed": true,
+      "scope": "impl:fn-291-preserve-successful-claude-reviews-with.1",
+      "superseded_by": null,
+      "task": "fn-291-preserve-successful-claude-reviews-with.1",
+      "timestamp": "2026-10-10T19:51:00.215112Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-291-preserve-successful-claude-reviews-with.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-291-preserve-successful-claude-reviews-with.1": 0
+  },
   "spec_path": ".flow/specs/fn-291-preserve-successful-claude-reviews-with.md",
   "status": "open",
   "title": "Preserve successful Claude reviews with unknown-model diagnostics",
@@ -28,5 +84,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-10T18:10:00.513458Z"
+  "updated_at": "2026-10-10T19:51:00.217105Z"
 }
