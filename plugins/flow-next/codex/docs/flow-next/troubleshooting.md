@@ -19,6 +19,7 @@ Common recovery patterns for stuck tasks, broken state, and review-backend confl
 - [Worker reports a merge conflict at wave join](#worker-reports-a-merge-conflict-at-wave-join)
 - [Copilot review backend on Windows](#copilot-review-backend-on-windows)
 - [Windows: `python3` not found / Microsoft Store alias stub](#windows-python3-not-found-microsoft-store-alias-stub)
+- [Windows: values read from `jq` end in a carriage return](#windows-values-read-from-jq-end-in-a-carriage-return)
 - [`/flow-next:map`: clawpatch not found / version mismatch / Node 20](#flow-nextmap-clawpatch-not-found-version-mismatch-node-20)
 - [Uninstall](#uninstall)
 - [Cursor in-IDE browser MCP missing (`cursor-ide-browser`)](#cursor-in-ide-browser-mcp-missing-cursor-ide-browser)
@@ -191,6 +192,19 @@ Spec-driven `flowctl copilot {impl,plan,completion}-review` calls work on native
 Prefer path 1 - the alias toggle is per-machine, not durable, and does not survive a fresh Windows profile.
 
 **Sources:** Microsoft Learn [Python on Windows FAQ](https://learn.microsoft.com/windows/python/faqs) (the App Execution Alias stub + "the py launcher is not included with Store Python" + disabling the alias); python.org [Using Python on Windows](https://docs.python.org/3/using/windows.html) and [PEP 397](https://peps.python.org/pep-0397/) (the `py` launcher / `py -3`).
+
+## Windows: values read from `jq` end in a carriage return
+
+**Symptom:** on Git Bash, a path or id that came from `jq -r` matches no file (`fatal: pathspec '...json?' did not match any files`), or a comparison such as `== "true"` is false with no error.
+
+**Cause:** the Windows build of `jq.exe` ends each output line with CRLF. `read` and command substitution drop the newline but keep the carriage return, so every value carries a trailing `\r`.
+
+**Current scripts handle it:** make-pr's preflight and create scripts and resolve-pr's comment fetcher strip the carriage return from `jq` output (#541). Shell steps inside other skills still call `jq` directly. If one of them misbehaves, put a shim earlier on `PATH`, for example `~/bin/jq`, that switches jq to LF output (jq 1.7+):
+
+```bash
+#!/usr/bin/env bash
+exec "/path/to/jq.exe" --binary "$@"
+```
 
 ## `/flow-next:map`: clawpatch not found / version mismatch / Node 20
 

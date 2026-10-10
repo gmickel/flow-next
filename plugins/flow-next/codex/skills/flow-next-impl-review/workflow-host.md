@@ -246,7 +246,7 @@ AXES=(correctness contracts integration)   # AXES=(correctness) for a one-review
 for AXIS in "${AXES[@]}"; do
   "$FLOWCTL" review-prompt impl "${TASK_ID:-branch}" --axis "$AXIS" \
     --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA" --receipt "$RECEIPT_PATH" \
-    --out "${TMPDIR:-/tmp}/flow-review-${TASK_ID:-branch}-${AXIS}.md" --json || exit $?
+    ${FOCUS_AREAS:+--focus "$FOCUS_AREAS"} --out "${TMPDIR:-/tmp}/flow-review-${TASK_ID:-branch}-${AXIS}.md" --json || exit $?
 done
 ```
 
@@ -356,6 +356,7 @@ Write a receipt compatible with existing consumers:
   "review": "<full reviewer output text - findings + verdict>",
   "base": "<REVIEW_BASE_SHA>",
   "head": "<REVIEW_HEAD_SHA>",
+  "focus": "<FOCUS_AREAS; omit when the prompts carried none>",
   "draws": [{"axis": "<axis>", "model": "<slug>", "session_id": null, "verdict": "<tag or null>", "failed": false}],
   "timestamp": "<ISO-8601>"
 }

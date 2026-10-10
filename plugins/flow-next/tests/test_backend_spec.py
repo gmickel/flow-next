@@ -1591,9 +1591,11 @@ class NoEmbedRegression(unittest.TestCase):
     PINNED_BUILDER_SIGNATURES = {
         # standing_criteria (fn-281): a flag, not a payload - the builder renders
         # the same `.flow/criteria.md` instruction block completion review embeds.
+        # focus (fn-289): the caller's focus areas, as standalone reviews already
+        # take - instruction text the reviewer cannot fetch, not repo content.
         "build_review_prompt": {
             "review_type", "context_hints", "review_scope", "diff_range",
-            "spec_path", "task_spec_paths", "axis", "standing_criteria",
+            "spec_path", "task_spec_paths", "axis", "standing_criteria", "focus",
         },
         "build_standalone_review_prompt": {
             "base_branch", "focus", "review_scope", "diff_range", "axis",

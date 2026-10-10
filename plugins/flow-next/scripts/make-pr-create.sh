@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Source after authoring the body and draft inputs; preserves PR_URL for finalize.
+# Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
+jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 # fence:draft-matrix — inputs: OPEN_ITEMS_COUNT, DRAFT_FORCE, CHAIN_PARENT (from PHASE0_CONTEXT.chain_parent; empty when not chained)
 DRAFT_FLAG=""
 if [[ "$OPEN_ITEMS_COUNT" -gt 0 ]]; then DRAFT_FLAG="--draft"; fi

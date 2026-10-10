@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Source from make-pr after setting its documented inputs; outputs remain in the caller.
 set -e
+# Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
+jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 if [[ "$DRY_RUN" != "1" ]]; then
   if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi

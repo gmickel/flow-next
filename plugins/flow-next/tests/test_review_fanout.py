@@ -1653,13 +1653,96 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(data["verdict"], "SHIP")
         Path(route["receipt_path"]).unlink()
 
-    def test_task_mode_refuses_focus(self) -> None:
-        code, out, err = self._run(
-            "codex", "impl-review-fanout", self.task_id, "--base", "HEAD~1",
-            "--focus", "x", "--json", fake=self._ship_exec([]),
+    def test_task_mode_focus_reaches_every_draw_and_the_receipt(self) -> None:
+        """fn-289 R1/R2: a task review's focus is shown to every draw and
+        recorded on the receipt the draws were seen by."""
+        calls: list = []
+        receipt = self.root / "task-focus-receipt.json"
+        code, payload, err = self._dispatch(
+            self._ship_exec(calls), "--focus", "yagni, over-engineering",
+            "--receipt", str(receipt),
         )
-        self.assertEqual(code, 2, err)
-        self.assertIn("standalone", out + err)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len(calls), 3)
+        for call in calls:
+            self.assertIn("## Focus Areas\nyagni, over-engineering", call["prompt"])
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, _, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data.get("focus"), "yagni, over-engineering")
+
+    def test_single_task_review_shows_focus_and_carries_it_into_rereview(self) -> None:
+        """fn-289 R1-R3: the single-reviewer task route shows --focus to the
+        reviewer, records it, and a re-review without --focus keeps it."""
+        prompts: list = []
+
+        def needs_work(prompt, *, resolution_out, **kwargs):
+            prompts.append(prompt)
+            resolution_out["model"] = "gpt-6-astra"
+            return _merged_review("One finding."), "sess-focus", 0, ""
+
+        receipt = self.root / "single-focus-receipt.json"
+        code, out, err = self._run(
+            "codex", "impl-review", self.task_id, "--base", "HEAD~1",
+            "--focus", "yagni", "--receipt", str(receipt), "--json",
+            fake=needs_work,
+        )
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("## Focus Areas\nyagni", prompts[0])
+        self.assertEqual(
+            json.loads(receipt.read_text(encoding="utf-8")).get("focus"), "yagni",
+        )
+        # The fix the re-review checks, so the unchanged-artifact fence passes.
+        (self.root / "app.py").write_text("x = 3\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "fix")
+        # The receipt found through the environment, not --receipt, still
+        # carries the focus into the re-review.
+        with mock.patch.dict(os.environ, {"REVIEW_RECEIPT_PATH": str(receipt)}):
+            code, out, err = self._run(
+                "codex", "impl-review", self.task_id, "--base", "HEAD~2",
+                "--json", fake=needs_work,
+            )
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("## Focus Areas\nyagni", prompts[1])
+
+    def test_review_prompt_renders_task_focus(self) -> None:
+        """fn-289 R1/R4: the host route's rendered task prompt carries the
+        focus, and renders unchanged without one."""
+        rendered = {}
+        for name, extra in (("focus", ("--focus", "yagni")), ("plain", ())):
+            out_path = self.root / f"host-{name}.md"
+            code, out, err = self._run(
+                "review-prompt", "impl", self.task_id, "--base", "HEAD~1",
+                "--receipt", str(self.root / "host-none.json"),
+                "--out", str(out_path), "--json", *extra,
+            )
+            self.assertEqual(code, 0, out + err)
+            rendered[name] = out_path.read_text(encoding="utf-8")
+        self.assertIn("## Focus Areas\nyagni", rendered["focus"])
+        self.assertNotIn("## Focus Areas", rendered["plain"])
+
+    def test_task_mode_blank_focus_is_no_focus(self) -> None:
+        """fn-289 R1/R4: a whitespace-only focus renders no section and
+        records no focus."""
+        calls: list = []
+        receipt = self.root / "blank-focus-receipt.json"
+        code, payload, err = self._dispatch(
+            self._ship_exec(calls), "--focus", "   ", "--receipt", str(receipt),
+        )
+        self.assertEqual(code, 0, err)
+        for call in calls:
+            self.assertNotIn("## Focus Areas", call["prompt"])
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, _, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertIsNone(data.get("focus"))
 
     def test_hold_for_phases_fences_dispatch(self) -> None:
         """PR #392 sol review (R15): finalize --hold-for-phases holds scope

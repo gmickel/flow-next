@@ -83,7 +83,8 @@ ONE_REVIEWER=0   # 1 when the panel rule above calls for one reviewer
 "$FLOWCTL" "$BACKEND" impl-review-fanout "${args[@]}"
 ```
 
-A branch review (no task) passes the caller's focus areas with `--focus "<areas>"`. Triage
+Pass the caller's focus areas with `--focus "<areas>"`, or else the review focus the project's
+instructions state, for task and branch reviews alike. Triage
 passing means lockfile, docs, release or generated files only: the review is done.
 
 ## 3. Merge and finalize

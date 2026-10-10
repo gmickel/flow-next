@@ -1,0 +1,132 @@
+{
+  "branch_name": "fn-289-task-scoped-implementation-reviews",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-10T06:49:27.761175Z",
+  "created_at": "2026-10-10T06:34:31.083911Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-289-task-scoped-implementation-reviews",
+  "impl_review_rounds": {
+    "fn-289-task-scoped-implementation-reviews.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d5fe61967e33fdc991868c37c7623cef3fbbdba71e6b931810621e7c0a3d3e75",
+      "backend": "codex",
+      "base_sha": "c0b2893c8221967513574c89163546f1b12f2bd7",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-a1f31ea349d40f2aa7672a809e9d787c",
+            "classification": "introduced",
+            "findingId": "finding-a1f31ea349d40f2aa7672a809e9d787c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9058141c83bc8e8897f0c6bbc00817c9bd4897e6",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1182,
+      "output_sha256": "71059800b17d0f7dfea2dbb16d847d44c16205ff657df8779c06a55388c229b6",
+      "reservation_id": "6cbc21e289cb46c9a060c3045d5311c4",
+      "round_consumed": true,
+      "scope": "impl:fn-289-task-scoped-implementation-reviews.1",
+      "superseded_by": null,
+      "task": "fn-289-task-scoped-implementation-reviews.1",
+      "timestamp": "2026-10-10T06:46:04.657905Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fa705e666bd003abae790eae8fbbbb02f7ea3b9f1f4a2b34f1fca1fa36cb4130",
+      "backend": "codex",
+      "base_sha": "c0b2893c8221967513574c89163546f1b12f2bd7",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-a1f31ea349d40f2aa7672a809e9d787c",
+            "classification": "introduced",
+            "findingId": "finding-a1f31ea349d40f2aa7672a809e9d787c",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "155955932b671495b5dd5b2327ff3bcc0f36b8aa",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1334,
+      "output_sha256": "2cd16242aceeee02d05c4bd932e5b245d3a97251caf58cbe7edd2ad8e620fb22",
+      "reservation_id": "73f85f135a7647659843121b9a8b98f2",
+      "round_consumed": true,
+      "scope": "impl:fn-289-task-scoped-implementation-reviews.1",
+      "superseded_by": null,
+      "task": "fn-289-task-scoped-implementation-reviews.1",
+      "timestamp": "2026-10-10T06:49:01.545597Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-289-task-scoped-implementation-reviews.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-289-task-scoped-implementation-reviews.1": 0
+  },
+  "spec_path": ".flow/specs/fn-289-task-scoped-implementation-reviews.md",
+  "status": "done",
+  "title": "Task-scoped implementation reviews carry a review focus",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-10T08:41:21.088813Z"
+}

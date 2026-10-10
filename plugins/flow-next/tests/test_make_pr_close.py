@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -89,13 +90,19 @@ fi
     def git(self, *args):
         return subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True).stdout.strip()
 
-    def execute(self, *, dry=False, update=False, autonomous=False, failure=False, close_message=None):
+    def execute(self, *, dry=False, update=False, autonomous=False, failure=False, close_message=None, crlf_jq=False):
         if failure:
             flowctl = self.executable("flowctl-fail", '#!/bin/bash\nif [[ "$1 $2" == "spec close" ]]; then echo "injected close failure" >&2; exit 9; fi\nexec ' + shlex.quote(str(SCRIPTS / "flowctl")) + ' "$@"\n')
         else:
             flowctl = SCRIPTS / "flowctl"
         fence = (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").split("# --- §0.5:", 1)[1]
         fence = "# --- §0.5:" + fence
+        if crlf_jq:
+            # #541: Windows jq.exe ends every output line with CRLF; the script's jq wrapper must undo it.
+            real_jq = shutil.which("jq")
+            self.executable("jq", "#!/bin/bash\n" + shlex.quote(real_jq) + ' "$@" | sed \'s/$/\\r/\'; exit "${PIPESTATUS[0]}"\n')
+            wrapper = next(line for line in (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").splitlines() if line.startswith("jq() {"))
+            fence = wrapper + "\n" + fence
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(flowctl), REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main", COMMITS_AHEAD=self.git("rev-list", "--count", "main..HEAD"), DRY_RUN=str(int(dry)), UPDATE_MODE=str(int(update)), AUTONOMOUS=str(int(autonomous)), WRITE_MEMORY="0", DRAFT_FORCE="", OBSERVATIONS=str(self.root), SPEC_REL=self.spec_rel)
         env.pop("CLOSE_COMMIT_MESSAGE", None)
         if close_message is not None:
@@ -149,6 +156,17 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 result = self.execute(close_message=message)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.git("log", "-1", "--format=%s"), expected)
+
+    def test_close_stages_paths_when_jq_writes_crlf(self):
+        # #541: with CRLF jq output, every close path ended in \r and git add matched nothing.
+        result = self.execute(crlf_jq=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.git("show", f"HEAD:{self.spec_rel}"))["status"], "done")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertTrue(json.loads((self.root / "context.json").read_text(encoding="utf-8"))["spec_closed"])
+        wrapper = next(line for line in (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").splitlines() if line.startswith("jq() {"))
+        status = subprocess.run(["bash", "-c", wrapper + "\njq -n -e false >/dev/null"], env=dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"]))
+        self.assertEqual(status.returncode, 1, "the wrapper keeps jq's exit status for jq -e")
 
     def test_already_closed_spec_keeps_branch_and_head(self):
         spec_path = self.repo / self.spec_rel

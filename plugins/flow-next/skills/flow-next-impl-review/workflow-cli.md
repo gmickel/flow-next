@@ -71,17 +71,16 @@ esac
 # DEFAULT topology only — when the user gave a steering instruction ("use 1
 # reviewer instead of 3", "three different model families"), read "Steering
 # draw topology" below and add the explicit --draw args BEFORE running this.
-# Standalone reviews also carry the caller's focus areas via --focus "<areas>".
+# Reviews also carry the focus areas via --focus "<areas>".
 ONE_REVIEWER=0
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
 [ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
-# FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing);
-# STANDALONE only - it rides the draw prompts, the sidecar meta, and the
-# receipt for re-review. Task-scoped draws take their focus from the task
-# spec (flowctl refuses --focus with a task).
-[ -z "$TASK_ID" ] && [ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
+# FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing),
+# else the review focus the project's instructions state. It rides the draw
+# prompts, the sidecar meta, and the receipt for re-review.
+[ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
 [ "$RESUMED" = "1" ] || $FLOWCTL "$BACKEND" impl-review-fanout "${args[@]}"
 ```
 

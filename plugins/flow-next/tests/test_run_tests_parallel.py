@@ -182,6 +182,21 @@ class StdinIsClosed(unittest.TestCase):
         self.assertEqual(sys.stdin.read(), "")
 """
 
+# A shard that records the temp dir it sees and leaves a file in it, the way a
+# flowctl review leaves its persistent receipt lock under gettempdir().
+TMPDIR_FILE = """\
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class RecordsTempDir(unittest.TestCase):
+    def test_records_temp_dir(self):
+        tmp = tempfile.gettempdir()
+        (Path(tmp) / "leftover.lock").write_text("", encoding="utf-8")
+        (Path(__file__).parent / "seen_tmp.txt").write_text(tmp, encoding="utf-8")
+"""
+
 
 class DefaultJobsTest(unittest.TestCase):
     """R1/R5: the CI vs local split and the `CI` value semantics."""
@@ -729,6 +744,21 @@ class ShardLaunchContractTest(unittest.TestCase):
         out = buf.getvalue()
         self.assertEqual(rc, 0, out)
         self.assertIn("PASS  test_stdin.py  ran=1", out)
+
+    def test_shard_temp_dir_is_private_and_removed_after_the_shard(self):
+        (self.corpus / "test_tmp.py").write_text(TMPDIR_FILE, encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            rc = self.mod.main(
+                ["--tests-dir", str(self.corpus), "--serial", "--file-timeout", "60"]
+            )
+        out = buf.getvalue()
+        self.assertEqual(rc, 0, out)
+        seen = Path((self.corpus / "seen_tmp.txt").read_text(encoding="utf-8"))
+        # Files a shard leaves under gettempdir() (receipt locks among them)
+        # must go with the shard, never pile up in the shared temp dir.
+        self.assertNotEqual(seen, Path(tempfile.gettempdir()))
+        self.assertFalse(seen.exists(), seen)
 
     def test_successful_shard_with_a_grandchild_completes_and_captures_output(self):
         (self.corpus / "test_gc.py").write_text(GRANDCHILD_EXITS_FILE, encoding="utf-8")

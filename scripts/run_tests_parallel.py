@@ -26,9 +26,11 @@ import concurrent.futures
 import os
 import random
 import re
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -392,9 +394,14 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int)
     # Windows leg's ability to catch the real cp1252 print-crash class
     # (evidence: windows-latest run 30913423957).
     tree = _ShardTree()
+    # A private TMPDIR per shard, removed when the shard ends: tests use fresh
+    # temp repos, so each run would otherwise leave a new persistent receipt
+    # lock (flowctl keeps them under gettempdir()) in the shared temp dir.
+    shard_tmp = tempfile.mkdtemp(prefix="flow-next-shard-")
     proc = subprocess.Popen(
         cmd,
         cwd=str(REPO_ROOT),
+        env={**os.environ, "TMPDIR": shard_tmp},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -457,6 +464,7 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int)
             time.perf_counter() - collect0
         )
     tree.close()
+    shutil.rmtree(shard_tmp, ignore_errors=True)
 
     output = "".join(chunks)
     if timed_out:
