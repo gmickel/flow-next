@@ -1699,10 +1699,13 @@ class TestReviewFanout(unittest.TestCase):
         (self.root / "app.py").write_text("x = 3\n", encoding="utf-8")
         self._git("add", "-A")
         self._git("commit", "-qm", "fix")
-        code, out, err = self._run(
-            "codex", "impl-review", self.task_id, "--base", "HEAD~2",
-            "--receipt", str(receipt), "--json", fake=needs_work,
-        )
+        # The receipt found through the environment, not --receipt, still
+        # carries the focus into the re-review.
+        with mock.patch.dict(os.environ, {"REVIEW_RECEIPT_PATH": str(receipt)}):
+            code, out, err = self._run(
+                "codex", "impl-review", self.task_id, "--base", "HEAD~2",
+                "--json", fake=needs_work,
+            )
         self.assertEqual(code, 0, out + err)
         self.assertIn("## Focus Areas\nyagni", prompts[1])
 

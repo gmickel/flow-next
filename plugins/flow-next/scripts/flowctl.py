@@ -44802,9 +44802,6 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     task_id = args.task
     args.base = args.base or _default_review_base(args.json)
     base_branch = args.base
-    focus = (getattr(args, "focus", None) or "").strip() or _receipt_focus(
-        getattr(args, "receipt", None)
-    )
     standalone = task_id is None
 
     if not standalone:
@@ -44844,6 +44841,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         or _review_route_receipt_default(get_repo_root(), task_id)
     )
     args.receipt = receipt_path
+    focus = (getattr(args, "focus", None) or "").strip() or _receipt_focus(receipt_path)
     # fn-215 R11: a fan-out receipt's draws[] means the resumed primary
     # session did not author the other axes' findings — lean resume is
     # disabled for this one round so the FULL merged container is injected.
