@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-289-task-scoped-implementation-reviews",
   "spec_path": ".flow/tasks/fn-289-task-scoped-implementation-reviews.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Task-scoped implementation reviews carry a review focus",
   "updated_at": "2026-10-10T06:38:29.262734Z"
 }
