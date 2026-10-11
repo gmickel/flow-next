@@ -6,6 +6,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.5.3] - 2026-10-11
+
 ### Fixed
 
 - **A re-review that fails without a verdict keeps the open review.** After a task review returned `NEEDS_WORK` and the fixes were committed, a re-review that died before giving a verdict (a provider at capacity, a crashed CLI, a reply with no verdict) was refunded, but its cleanup also removed the open review receipt. `review-route` then stopped with `lost_receipt` and needed a person to reset the cycle. The receipt now stays in place on every no-verdict failure, from any backend, so the next run goes back to the fix loop with the same findings. Closed, foreign-scope, `NEEDS_HUMAN` and corrupt receipts are still cleared as before. Thanks to @jcarosi for the report and the original fix (#520, #530).
