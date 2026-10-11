@@ -43502,14 +43502,32 @@ def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
     )
 
 
-def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
-    """Archive valid evidence before unlinking a stale latest pointer."""
+def _clear_stale_review_receipt(
+    receipt_path: Optional[str],
+    *,
+    review_type: Optional[str] = None,
+    task_id: Optional[str] = None,
+) -> None:
+    """Archive valid evidence before unlinking a stale latest pointer.
+
+    A no-verdict failure keeps the scope's open implementation receipt (#520):
+    it is the fix loop's only container, so removing it strands review-route
+    on ``lost_receipt``.
+    """
     if not receipt_path:
         return
     try:
         path = Path(receipt_path)
         with cross_process_lock(_review_receipt_lock_path(path)):
             if path.exists():
+                if review_type == "impl":
+                    receipt = _review_route_read_receipt(path)
+                    if (
+                        _review_route_receipt_state(receipt, task_id or "branch")
+                        == "open"
+                        and validate_review_receipt_findings(receipt)
+                    ):
+                        return
                 _preserve_review_receipt_generation(path)
             path.unlink(missing_ok=True)
     except (CrossProcessLockError, OSError, ReviewReceiptHistoryError):
@@ -44738,7 +44756,9 @@ def _dispatch_backend_review(
                 use_json=args.json,
                 reservation_id=reservation_id,
             )
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, review_type=review_type, task_id=task_id
+        )
         if attempt.get("transport_unhealthy"):
             error_exit(
                 f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
@@ -44767,7 +44787,9 @@ def _dispatch_backend_review(
                 use_json=args.json,
                 reservation_id=reservation_id,
             )
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, review_type=review_type, task_id=task_id
+        )
         if attempt.get("transport_unhealthy"):
             error_exit(
                 f"TRANSPORT_UNHEALTHY: {backend} {review_type} review failed "
@@ -45268,7 +45290,9 @@ def _finish_backend_exec(
             findings_built=findings_built,
         )
     if attempt.get("transport_unhealthy"):
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, review_type=review_type, task_id=task_id
+        )
         count = attempt["consecutive_transport_failures"]
         cap = attempt["transport_failure_cap"]
         error_exit(
@@ -45285,7 +45309,9 @@ def _finish_backend_exec(
         )
 
     if sandbox_failure:
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, review_type=review_type, task_id=task_id
+        )
         msg = (
             "Codex sandbox blocked operations during review. Reviewers are "
             "READ-ONLY by contract: a reviewer that needed a write or a "
@@ -45301,7 +45327,9 @@ def _finish_backend_exec(
         error_exit(msg, use_json=args.json, code=3)
 
     if exit_code != 0:
-        _clear_stale_review_receipt(receipt_path)
+        _clear_stale_review_receipt(
+            receipt_path, review_type=review_type, task_id=task_id
+        )
         msg = (stderr or output or f"{reg['cli_label']} failed").strip()
         error_exit(
             f"{reg['cli_label']} failed: {msg}"
@@ -45309,7 +45337,9 @@ def _finish_backend_exec(
             use_json=args.json, code=2,
         )
 
-    _clear_stale_review_receipt(receipt_path)
+    _clear_stale_review_receipt(
+        receipt_path, review_type=review_type, task_id=task_id
+    )
     error_exit(
         f"{reg['no_verdict_label']} review completed but no verdict found "
         f"in output. Expected <verdict>SHIP</verdict>, "

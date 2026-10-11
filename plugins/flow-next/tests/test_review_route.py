@@ -472,6 +472,43 @@ class TestReviewRoute(unittest.TestCase):
         code, r, _ = self._route(self.task_id)
         self.assertEqual(r["action"], "fanout")
 
+    def test_no_verdict_rereview_keeps_the_open_receipt(self) -> None:
+        # #520: a re-review that ends without a verdict must not strand the
+        # open fix loop on lost_receipt.
+        data = self._spec()
+        data["impl_review_rounds"] = {self.task_id: 1}
+        data["review_attempts"] = [
+            {"counter_kind": "impl", "task": self.task_id, "verdict": "NEEDS_WORK",
+             "outcome": "verdict", "round_consumed": True},
+        ]
+        self._write_spec(data)
+        receipt = self._receipt(self.root / "r.json")
+        original = receipt.read_bytes()
+        flowctl._wire_backend_review_hooks()
+        for exit_code, stderr in ((0, ""), (2, "Selected model is at capacity")):
+            with self.subTest(exit_code=exit_code):
+                _, reservation_id = flowctl.enforce_and_increment_review_cap(
+                    self.spec_id, "impl", task_id=self.task_id,
+                    review_type="impl", return_reservation=True,
+                )
+                with contextlib.redirect_stdout(io.StringIO()), \
+                        contextlib.redirect_stderr(io.StringIO()), \
+                        self.assertRaises(SystemExit):
+                    flowctl._finish_backend_exec(
+                        backend="codex", reg=flowctl.BACKEND_REGISTRY["codex"],
+                        args=mock.Mock(json=False), receipt_path=str(receipt),
+                        output="review text without a verdict", stderr=stderr,
+                        exit_code=exit_code, spec_id=self.spec_id,
+                        review_kind="impl", review_type="impl",
+                        task_id=self.task_id, reservation_id=reservation_id,
+                    )
+                self.assertEqual(receipt.read_bytes(), original)
+                code, r, _ = self._route(self.task_id, "--receipt", str(receipt))
+                self.assertEqual(code, 0)
+                self.assertEqual(
+                    (r["action"], r["reason"]), ("fix-then-rereview", "open_receipt")
+                )
+
     def test_stalled_loop_stops_until_a_new_fix_is_committed(self) -> None:
         """fn-281 R7: after three consecutive `not-fixed` rounds on the current
         HEAD the route stops; a committed fix since the last round is reviewed."""
