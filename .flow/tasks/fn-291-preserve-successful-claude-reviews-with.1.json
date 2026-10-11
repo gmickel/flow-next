@@ -10,7 +10,7 @@
   "review": "codex:gpt-6-sol:high",
   "spec": "fn-291-preserve-successful-claude-reviews-with",
   "spec_path": ".flow/tasks/fn-291-preserve-successful-claude-reviews-with.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Preserve successful native Claude review results",
   "updated_at": "2026-10-10T18:10:00.809829Z"
 }
