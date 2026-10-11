@@ -3764,7 +3764,7 @@ def resolve_codex_sandbox(sandbox: str) -> str:
 # the cap once before calling the exec wrapper, and every ladder rung is the SAME
 # logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
 
-_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the terminal fallback
 _MODEL_CACHE_TTL_SECS = 24 * 60 * 60
 _MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 
@@ -3947,7 +3947,7 @@ def _model_cache_invalidate(
     cli_version: Optional[str],
     intent: str,
 ) -> None:
-    """Drop a stale cache entry (a cached model that just failed the signature)."""
+    """Drop a cached routing choice after its execution fails."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
@@ -4008,7 +4008,7 @@ def _warn_model_resolution(
         )
         print(
             f"warning: {backend} model {tried!r} unavailable; fell back to the "
-            f"never-fail floor ({used_desc}). Cached temporarily for this CLI "
+            f"floor ({used_desc}). Cached temporarily for this CLI "
             "version and routing intent.",
             file=sys.stderr,
         )
@@ -4041,12 +4041,14 @@ def _dispatch_review_with_fallback(
     exec 4-tuple ``(out, session_id, exit_code, stderr)``. ``explicit_model`` is
     True when the model was pinned (spec string / env) — pins bypass the ladder
     and cache entirely. ``is_unavailable(out, err)`` is the backend's distinctive
-    model-unavailable signature check. ``floor_model`` is the terminal never-fail
-    model (``"auto"`` for copilot / cursor, ``None`` for codex which omits
-    ``--model``). ``version_fn`` returns the CLI version for the cache key and is
-    called LAZILY — never on the pristine happy path. ``list_available`` (cursor
-    only) returns the CLI's live model list, consulted once on the top-model
-    failure. ``resolution_out``, when given, is populated with ``{"model":
+    model-unavailable signature check. ``floor_model`` is the terminal fallback
+    (``"auto"`` for copilot / cursor, ``None`` for codex or claude, which omit
+    ``--model``). The CLI default can also fail. ``version_fn`` returns the CLI
+    version for the cache key and is called LAZILY — never on the pristine happy
+    path. Only successful fallback executions are cached; verdict validation
+    remains downstream. ``list_available`` (cursor only) returns the CLI's live
+    model list, consulted once on the top-model failure. ``resolution_out``, when
+    given, is populated with ``{"model":
     <used>, "floor": <bool>}`` so the caller can record the actually-used model
     on the receipt.
     """
@@ -4108,9 +4110,13 @@ def _dispatch_review_with_fallback(
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:
             out, sid, rc, err = dispatch(floor_model, True)
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, floor_model, True)
         out, sid, rc, err = dispatch(cached, False)
         if rc == 0 or not is_unavailable(out, err):
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, cached, False)
         # A cached model that now fails the signature (org revoked it mid-version)
         # → drop it and re-resolve fresh from the ranking top. Self-healing.
@@ -4129,14 +4135,16 @@ def _dispatch_review_with_fallback(
         if best is not None:
             out, sid, rc, err = dispatch(best, False)
             if rc == 0 or not is_unavailable(out, err):
-                _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
-                _warn_model_resolution(backend, top, best, floor=False)
+                if rc == 0:
+                    _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
+                    _warn_model_resolution(backend, top, best, floor=False)
                 return _resolved(out, sid, rc, err, best, False)
         out, sid, rc, err = dispatch(floor_model, True)
-        _model_cache_put(
-            repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
-        )
-        _warn_model_resolution(backend, top, floor_model, floor=True)
+        if rc == 0:
+            _model_cache_put(
+                repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
+            )
+            _warn_model_resolution(backend, top, floor_model, floor=True)
         return _resolved(out, sid, rc, err, floor_model, True)
 
     # Codex / copilot: step DOWN the ranking, at most ``max_steps`` steps, then
@@ -4146,13 +4154,14 @@ def _dispatch_review_with_fallback(
             break
         out, sid, rc, err = dispatch(model, False)
         if rc == 0 or not is_unavailable(out, err):
-            if idx > 0:
+            if idx > 0 and rc == 0:
                 _model_cache_put(repo_root, backend, _ver(), cache_intent, model)
                 _warn_model_resolution(backend, top, model, floor=False)
             return _resolved(out, sid, rc, err, model, False)
     out, sid, rc, err = dispatch(floor_model, True)
-    _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
-    _warn_model_resolution(backend, top, floor_model, floor=True)
+    if rc == 0:
+        _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
+        _warn_model_resolution(backend, top, floor_model, floor=True)
     return _resolved(out, sid, rc, err, floor_model, True)
 
 

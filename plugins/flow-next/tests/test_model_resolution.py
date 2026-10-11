@@ -1110,6 +1110,345 @@ class TestCache(unittest.TestCase):
             )
 
 
+class TestFallbackCacheExecutionStatus(unittest.TestCase):
+    """Fallback decisions are cacheable only after a successful execution."""
+
+    _BACKENDS = ("codex", "copilot", "cursor", "claude")
+    _TOP = {
+        "codex": CODEX_TOP,
+        "copilot": COPILOT_TOP,
+        "cursor": CURSOR_TOP,
+        "claude": CLAUDE_TOP,
+    }
+    _SECOND = {
+        "codex": CODEX_SECOND,
+        "copilot": COPILOT_SECOND,
+        "cursor": BACKEND_REGISTRY["cursor"]["models"][1],
+        "claude": CLAUDE_SECOND,
+    }
+    _THIRD = {
+        "codex": CODEX_THIRD,
+        "copilot": BACKEND_REGISTRY["copilot"]["models"][2],
+        "cursor": BACKEND_REGISTRY["cursor"]["models"][2],
+        "claude": CLAUDE_THIRD,
+    }
+    _FLOOR = {"codex": None, "copilot": "auto", "cursor": "auto", "claude": None}
+
+    def _dispatches(self, backend: str, calls: list) -> list:
+        if backend == "codex":
+            selected = [call for call in calls if "exec" in call]
+        elif backend == "copilot":
+            selected = [call for call in calls if "--model" in call]
+        elif backend == "cursor":
+            selected = [call for call in calls if "ask" in call]
+        else:
+            selected = [call for call in calls if "-p" in call]
+        return [_model_of(call) for call in selected]
+
+    def _cached_models(self, root: Path) -> dict:
+        return {
+            key: entry["model"]
+            for key, entry in flowctl._read_model_cache(root).items()
+            if isinstance(entry, dict) and isinstance(entry.get("model"), str)
+        }
+
+    def _run(self, backend: str, root: Path, result, calls: list, diagnostics,
+             *, version: str = "2026.10.11", list_models=None):
+        flowctl._CLI_VERSION_CACHE.clear()
+        with _scripted(
+            flowctl,
+            dispatch_result=result,
+            version=version,
+            list_models=list_models,
+            calls=calls,
+        ), redirect_stderr(diagnostics):
+            spec = BackendSpec(backend)
+            if backend == "codex":
+                return flowctl.run_codex_exec(
+                    "p", sandbox="read-only", spec=spec, repo_root=root
+                )
+            if backend == "copilot":
+                return flowctl.run_copilot_exec("p", "sess", root, spec=spec)
+            if backend == "cursor":
+                return flowctl.run_cursor_exec("p", spec=spec, repo_root=root)
+            return flowctl.run_claude_exec("p", spec=spec, repo_root=root)
+
+    def _unavailable(self, backend: str) -> tuple[str, str, int]:
+        if backend == "codex":
+            return CODEX_UNAVAILABLE_STREAM, "", 1
+        if backend == "copilot":
+            return "", COPILOT_UNAVAILABLE_STREAM, 1
+        if backend == "cursor":
+            return CURSOR_UNAVAILABLE_STREAM, CURSOR_UNAVAILABLE_STREAM, 1
+        # Claude exits zero for its recognized unavailable envelope; the adapter
+        # promotes it to the shared dispatcher's non-zero unavailable signal.
+        return CLAUDE_UNAVAILABLE_JSON, "", 0
+
+    def _success(self, backend: str) -> tuple[str, str, int]:
+        if backend == "codex":
+            return CODEX_OK_STREAM, "", 0
+        if backend == "copilot":
+            return "SHIP", "", 0
+        if backend == "cursor":
+            return CURSOR_OK_STREAM, "", 0
+        return CLAUDE_OK_STREAM, "", 0
+
+    def _terminal_failure(self, *, malformed_claude: bool = False) -> tuple[str, str, int]:
+        if malformed_claude:
+            # Strict envelope parsing makes malformed exit-zero Claude output a
+            # terminal failure, not model unavailability.
+            return "not json", "", 0
+        return "", "terminal failure", 7
+
+    def _cursor_models(self, backend: str) -> Optional[list]:
+        # Cursor probes once and dispatches the best listed model; other
+        # adapters step through the shared ranking ladder.
+        return [self._SECOND[backend]] if backend == "cursor" else None
+
+    def test_preferred_success_is_not_cached_or_warned_for_any_backend(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                calls: list = []
+                diagnostics = io.StringIO()
+                out, _sid, rc, _err = self._run(
+                    backend, root,
+                    lambda _model, backend=backend: self._success(backend), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(rc, 0)
+                self.assertEqual(self._dispatches(backend, calls), [self._TOP[backend]])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+                self.assertTrue(out)
+
+    def test_terminal_intermediate_failure_is_not_cached_for_any_backend(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                top, second = self._TOP[backend], self._SECOND[backend]
+
+                def result(model, backend=backend, top=top, second=second):
+                    if model == top:
+                        return self._unavailable(backend)
+                    if model == second:
+                        return self._terminal_failure(malformed_claude=backend == "claude")
+                    return self._success(backend)
+
+                calls: list = []
+                diagnostics = io.StringIO()
+                out, _sid, rc, err = self._run(
+                    backend, root, result, calls, diagnostics,
+                    list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(rc, 1 if backend == "claude" else 7)
+                self.assertEqual(self._dispatches(backend, calls), [top, second])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+                if backend == "cursor":
+                    self.assertEqual(sum("--list-models" in call for call in calls), 1)
+                if backend == "claude":
+                    self.assertEqual(out, "")
+                else:
+                    self.assertIn("terminal failure", err)
+
+                # The next invocation starts at the stronger model again.
+                calls.clear()
+                diagnostics = io.StringIO()
+                _out, _sid, next_rc, _err = self._run(
+                    backend, root,
+                    lambda _model, backend=backend: self._success(backend), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(next_rc, 0)
+                self.assertEqual(self._dispatches(backend, calls), [top])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+
+    def test_failed_floor_is_not_cached_or_warned_and_top_is_rechecked(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                top, second, third, floor = (
+                    self._TOP[backend], self._SECOND[backend],
+                    self._THIRD[backend], self._FLOOR[backend],
+                )
+
+                floor_failures = [
+                    self._terminal_failure(malformed_claude=True)
+                    if backend == "claude"
+                    else self._terminal_failure()
+                ]
+                if backend == "claude":
+                    floor_failures.append((_claude_result(status=500, text="Overloaded"), "", 0))
+                for floor_failure in floor_failures:
+                    with self.subTest(floor_failure=floor_failure[0][:32]):
+                        calls: list = []
+                        diagnostics = io.StringIO()
+
+                        def result(
+                            model,
+                            backend=backend,
+                            top=top,
+                            second=second,
+                            third=third,
+                            floor_failure=floor_failure,
+                        ):
+                            if backend == "cursor":
+                                if model in (top, second):
+                                    return self._unavailable(backend)
+                            elif model in (top, second, third):
+                                return self._unavailable(backend)
+                            return floor_failure
+
+                        _out, _sid, rc, _err = self._run(
+                            backend, root, result, calls, diagnostics,
+                            list_models=self._cursor_models(backend),
+                        )
+                        self.assertEqual(rc, 1 if backend == "claude" else 7)
+                        expected = [top, second, floor] if backend == "cursor" else [top, second, third, floor]
+                        self.assertEqual(self._dispatches(backend, calls), expected)
+                        self.assertEqual(self._cached_models(root), {})
+                        self.assertNotIn("Cached temporarily", diagnostics.getvalue())
+                        if backend == "cursor":
+                            self.assertEqual(sum("--list-models" in call for call in calls), 1)
+
+                        calls.clear()
+                        diagnostics = io.StringIO()
+                        _out, _sid, next_rc, _err = self._run(
+                            backend, root,
+                            lambda _model, backend=backend: self._success(backend), calls,
+                            diagnostics, list_models=self._cursor_models(backend),
+                        )
+                        self.assertEqual(next_rc, 0)
+                        self.assertEqual(self._dispatches(backend, calls), [top])
+                        self.assertEqual(self._cached_models(root), {})
+                        self.assertEqual(diagnostics.getvalue(), "")
+
+    def test_successful_floor_remains_cached_for_any_backend(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                top, second, third, floor = (
+                    self._TOP[backend], self._SECOND[backend],
+                    self._THIRD[backend], self._FLOOR[backend],
+                )
+
+                def result(
+                    model,
+                    backend=backend,
+                    top=top,
+                    second=second,
+                    third=third,
+                    floor=floor,
+                ):
+                    if backend == "cursor":
+                        return self._unavailable(backend) if model != floor else self._success(backend)
+                    return self._unavailable(backend) if model in (top, second, third) else self._success(backend)
+
+                calls: list = []
+                diagnostics = io.StringIO()
+                _out, _sid, rc, _err = self._run(
+                    backend, root, result, calls, diagnostics,
+                    list_models=self._cursor_models(backend),
+                )
+                expected = [top, second, floor] if backend == "cursor" else [top, second, third, floor]
+                self.assertEqual(rc, 0)
+                self.assertEqual(self._dispatches(backend, calls), expected)
+                self.assertEqual(list(self._cached_models(root).values()), [flowctl._MODEL_CACHE_FLOOR])
+                self.assertIn("Cached temporarily", diagnostics.getvalue())
+
+    def test_failed_cached_rung_is_invalidated_without_same_call_retry(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                top, second = self._TOP[backend], self._SECOND[backend]
+                calls: list = []
+                self._run(
+                    backend, root,
+                    lambda model, backend=backend, top=top: (
+                        self._unavailable(backend)
+                        if model == top
+                        else self._success(backend)
+                    ),
+                    calls, io.StringIO(), list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(list(self._cached_models(root).values()), [second])
+
+                calls = []
+                diagnostics = io.StringIO()
+                _out, _sid, rc, err = self._run(
+                    backend, root, lambda _model: self._terminal_failure(), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(rc, 7)
+                self.assertIn("terminal failure", err)
+                self.assertEqual(self._dispatches(backend, calls), [second])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertNotIn("Cached temporarily", diagnostics.getvalue())
+                if backend == "cursor":
+                    self.assertEqual(sum("--list-models" in call for call in calls), 0)
+
+                calls = []
+                diagnostics = io.StringIO()
+                _out, _sid, next_rc, _err = self._run(
+                    backend, root,
+                    lambda _model, backend=backend: self._success(backend), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(next_rc, 0)
+                self.assertEqual(self._dispatches(backend, calls), [top])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+
+    def test_failed_cached_floor_is_invalidated_without_same_call_retry(self) -> None:
+        for backend in self._BACKENDS:
+            with self.subTest(backend=backend), _repo() as root:
+                top, second, third, floor = (
+                    self._TOP[backend], self._SECOND[backend],
+                    self._THIRD[backend], self._FLOOR[backend],
+                )
+
+                def successful_fallback(
+                    model,
+                    backend=backend,
+                    top=top,
+                    second=second,
+                    third=third,
+                    floor=floor,
+                ):
+                    if backend == "cursor":
+                        return self._unavailable(backend) if model != floor else self._success(backend)
+                    return self._unavailable(backend) if model in (top, second, third) else self._success(backend)
+
+                self._run(
+                    backend, root, successful_fallback, [], io.StringIO(),
+                    list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(list(self._cached_models(root).values()), [flowctl._MODEL_CACHE_FLOOR])
+
+                calls: list = []
+                diagnostics = io.StringIO()
+                _out, _sid, rc, err = self._run(
+                    backend, root, lambda _model: self._terminal_failure(), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(rc, 7)
+                self.assertIn("terminal failure", err)
+                self.assertEqual(self._dispatches(backend, calls), [floor])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+                if backend == "cursor":
+                    self.assertEqual(sum("--list-models" in call for call in calls), 0)
+
+                calls = []
+                diagnostics = io.StringIO()
+                _out, _sid, next_rc, _err = self._run(
+                    backend, root,
+                    lambda _model, backend=backend: self._success(backend), calls,
+                    diagnostics, list_models=self._cursor_models(backend),
+                )
+                self.assertEqual(next_rc, 0)
+                self.assertEqual(self._dispatches(backend, calls), [top])
+                self.assertEqual(self._cached_models(root), {})
+                self.assertEqual(diagnostics.getvalue(), "")
+
+
 # --- R5: receipt records the actually-used model ---
 
 
