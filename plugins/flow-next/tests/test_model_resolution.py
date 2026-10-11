@@ -525,7 +525,7 @@ class TestClaudeLadder(unittest.TestCase):
     def test_steps_down_on_stderr_tag(self) -> None:
         def result(model):
             if model == CLAUDE_TOP:
-                return (_claude_result(status=None), CLAUDE_UNAVAILABLE_STDERR, 0)
+                return ("", CLAUDE_UNAVAILABLE_STDERR, 0)
             return (CLAUDE_OK_STREAM, "", 0)
 
         calls: list = []

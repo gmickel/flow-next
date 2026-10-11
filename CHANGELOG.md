@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Claude reviews keep completed results when the CLI also warns about an unknown model.** A validated success now finalizes as usual; genuine unavailable-model errors still use the existing fallback, and nonzero exits cannot publish a verdict.
+
 ## [flow-next 8.5.2] - 2026-10-11
 
 ### Fixed
