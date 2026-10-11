@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-283-review-failures-name-their-cause-a",
   "spec_path": ".flow/tasks/fn-283-review-failures-name-their-cause-a.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement review failure cause, stale plan SHIP, queued merge",
   "updated_at": "2026-10-05T13:26:29.331576Z"
 }

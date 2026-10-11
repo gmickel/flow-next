@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-280-remove-repoprompt-support",
   "spec_path": ".flow/tasks/fn-280-remove-repoprompt-support.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Remove RepoPrompt support",
   "updated_at": "2026-10-04T11:30:48.249487Z"
 }

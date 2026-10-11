@@ -247,7 +247,7 @@
     "impl:fn-281-one-review-runner-with-the-same-panel.1": 0
   },
   "spec_path": ".flow/specs/fn-281-one-review-runner-with-the-same-panel.md",
-  "status": "open",
+  "status": "done",
   "title": "One review runner with the same panel on every backend",
   "tracker": {
     "baseHashFlow": null,
@@ -260,5 +260,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-04T22:13:59.900689Z"
+  "updated_at": "2026-10-08T13:45:19.416375Z"
 }

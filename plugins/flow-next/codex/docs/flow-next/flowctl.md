@@ -2661,6 +2661,8 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 - **Transport bound:** consecutive no-verdict failures are tracked separately
   per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
   with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.
+  A no-verdict failure keeps the scope's open implementation receipt, so
+  `review-route` resumes the fix loop instead of stopping on `lost_receipt`.
 - **Reset semantics:** a `SHIP` record resets its counter atomically, and an
   explicit human re-plan resets the relevant counters; both advance the hash
   epoch. The `review-rounds reset` command is human-only recovery, not an

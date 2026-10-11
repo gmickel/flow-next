@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-282-800-closing-fixes-reviewer-locations",
   "spec_path": ".flow/tasks/fn-282-800-closing-fixes-reviewer-locations.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement 8.0.0 closing fixes",
   "updated_at": "2026-10-04T23:54:54.944545Z"
 }

@@ -147,7 +147,7 @@
     "impl:fn-282-800-closing-fixes-reviewer-locations.1": 0
   },
   "spec_path": ".flow/specs/fn-282-800-closing-fixes-reviewer-locations.md",
-  "status": "open",
+  "status": "done",
   "title": "8.0.0 closing fixes: reviewer locations, set-backend errors, retiring a spec, criteria and stall docs",
   "tracker": {
     "baseHashFlow": null,
@@ -160,5 +160,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-05T00:27:01.218145Z"
+  "updated_at": "2026-10-08T13:45:19.806575Z"
 }

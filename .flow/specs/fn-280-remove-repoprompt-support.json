@@ -179,7 +179,7 @@
     "impl:fn-280-remove-repoprompt-support.1": 0
   },
   "spec_path": ".flow/specs/fn-280-remove-repoprompt-support.md",
-  "status": "open",
+  "status": "done",
   "title": "Remove RepoPrompt support",
   "tracker": {
     "baseHashFlow": null,
@@ -192,5 +192,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-04T12:43:50.622242Z"
+  "updated_at": "2026-10-08T13:45:19.033679Z"
 }

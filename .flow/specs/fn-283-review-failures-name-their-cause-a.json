@@ -131,7 +131,7 @@
     "impl:fn-283-review-failures-name-their-cause-a.1": 0
   },
   "spec_path": ".flow/specs/fn-283-review-failures-name-their-cause-a.md",
-  "status": "open",
+  "status": "done",
   "title": "Review failures name their cause, a rewritten spec loses its plan SHIP, land reports a queued merge",
   "tracker": {
     "baseHashFlow": null,
@@ -144,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-05T13:59:12.567205Z"
+  "updated_at": "2026-10-08T13:45:20.191861Z"
 }
