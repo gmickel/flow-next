@@ -27,9 +27,10 @@ Resolve the confirmed failed-fallback cache bug across the four review CLI adapt
 - The coordinator owns generated mirrors, the full offline suite, and independent official review gates.
 
 ## Done summary
-TBD
+Cache only exit-zero fallback executions in all four paths and invalidate failed cached choices without retrying terminal errors. Mocked regressions cover the pre-existing PR #546 finding across all four adapters. stage: impl-review - SHIP, independent Codex gpt-6-sol/high on 7b8a2619..f27cb212; no findings. Reviewer test execution was limited by its read-only sandbox; offline coordinator validations passed.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f27cb212b561efd65a62bfd31fa163d21de5f909
+- Tests: Offline isolated scripts/run_tests_parallel.py: 4009 cases, 7 skips, zero failures/errors; external networking and provider executables denied, two fixed local HTTP fixture ports allowed., test_model_resolution.py: 67 passed; test_claude_review_commands.py: 21 passed., Ruff 0.16.0 passed after B023 callback bindings were corrected; affected 67 tests rerun and passed., Manifest, Codex mirror, documentation anchors, git diff --check and flowctl validate passed.
 - PRs:

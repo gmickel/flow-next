@@ -1,21 +1,95 @@
 {
   "branch_name": "fix/claude-terminal-results-upstream-20261011",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-11T12:51:04.609983Z",
   "created_at": "2026-10-11T12:09:59.076926Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-292-avoid-caching-failed-fallback-review",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-292-avoid-caching-failed-fallback-review.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "b33ace19276ca8e0b8faee4ff3139a640fee058fab4366403ff5758e3daf4369",
+      "backend": "codex",
+      "base_sha": "7b8a2619828a159ce5e570b73090e0bf51a96400",
+      "counter_kind": "impl",
+      "failure_class": "dispatch_exception",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f27cb212b561efd65a62bfd31fa163d21de5f909",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 31,
+      "output_sha256": "d8cea1478b50df8ecf37715056821ebb0b91b31a7afacb63153da6bbaa3ad0d0",
+      "reservation_id": "bfe9869e41004c9f9507606bb039db5e",
+      "round_consumed": false,
+      "scope": "impl:fn-292-avoid-caching-failed-fallback-review.1",
+      "superseded_by": null,
+      "task": "fn-292-avoid-caching-failed-fallback-review.1",
+      "timestamp": "2026-10-11T12:34:04.459483Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "b33ace19276ca8e0b8faee4ff3139a640fee058fab4366403ff5758e3daf4369",
+      "backend": "codex",
+      "base_sha": "7b8a2619828a159ce5e570b73090e0bf51a96400",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f27cb212b561efd65a62bfd31fa163d21de5f909",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-sol",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "8bfceb8082c74341973d3ca20f447f34",
+      "round_consumed": true,
+      "scope": "impl:fn-292-avoid-caching-failed-fallback-review.1",
+      "superseded_by": null,
+      "task": "fn-292-avoid-caching-failed-fallback-review.1",
+      "timestamp": "2026-10-11T12:50:12.872285Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-292-avoid-caching-failed-fallback-review.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-292-avoid-caching-failed-fallback-review.1": 0
+  },
   "spec_path": ".flow/specs/fn-292-avoid-caching-failed-fallback-review.md",
-  "status": "open",
+  "status": "done",
   "title": "Avoid caching failed fallback review executions",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +102,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-11T12:10:15.397788Z"
+  "updated_at": "2026-10-11T12:51:04.942163Z"
 }

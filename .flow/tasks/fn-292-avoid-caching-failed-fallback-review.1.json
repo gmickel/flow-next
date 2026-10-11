@@ -10,7 +10,7 @@
   "review": "codex:gpt-6-sol:high",
   "spec": "fn-292-avoid-caching-failed-fallback-review",
   "spec_path": ".flow/tasks/fn-292-avoid-caching-failed-fallback-review.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Cache only successful fallback executions and invalidate failed cached choices",
   "updated_at": "2026-10-11T12:10:15.725500Z"
 }
