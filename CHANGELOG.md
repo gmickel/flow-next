@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Fixed
 
-- **The Codex installer no longer breaks a strict Codex config check.** Every install and reinstall wrote `multi_agent = true` at the top of `config.toml`. Codex never read that key, because multi-agent support is a `[features]` switch and has been on by default since 0.146, so older versions ignored it. Codex 0.161 and later report it as an unknown field when you run with `--strict-config`, and each flow-next update added it back after you removed it. The installer now leaves it out and removes the exact line earlier installs wrote. Any other `multi_agent` setting you wrote yourself, at the root or under `[features]`, is left as it is.
+- **The Codex installer no longer breaks a strict Codex config check.** Every install and reinstall wrote `multi_agent = true` at the top of `config.toml`. Codex never read that key: multi-agent is a `[features]` switch, on by default since Codex 0.115. A normal run ignored it, but `--strict-config` reports it as an unknown field, and each flow-next update added it back after you removed it. The installer now leaves it out and removes the exact line earlier installs wrote. A `multi_agent` setting you wrote yourself, at the root or under `[features]`, stays as it is. The installer and resolve-pr now name Codex 0.115.0 as the minimum, the first version that runs flow-next's agent roles without that switch; on an older Codex, set `multi_agent = true` under `[features]` or upgrade.
 
 ## [flow-next 8.5.3] - 2026-10-11
 

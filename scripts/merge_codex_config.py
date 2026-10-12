@@ -63,7 +63,7 @@ def merge(text: str, source: Path, max_threads: int) -> str:
 
     # Older installers prepended this root key as the first line. Codex never
     # read it (the switch lives in [features] and is on by default since
-    # 0.146), and 0.161+ rejects it under --strict-config.
+    # 0.115), and --strict-config rejects it as an unknown field.
     if re.match(r'multi_agent = true\r?\n', text):
         text = text.split('\n', 1)[1]
 
