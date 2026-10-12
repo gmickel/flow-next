@@ -419,7 +419,7 @@ The script builds the bundle in a temporary directory, runs `muse plugins instal
 - **Sandbox.** Muse's default sandbox allows writes to the active repository and its git storage but not to your home directory, so tools that cache there (for example `uv` under `~/.cache`) fail inside it.
 - **Install integrity.** Muse binds agent approval to the installed package's contents; flowctl writes nothing into its install, so the approval survives normal use. Reinstalling re-approves.
 - **POSIX only**, matching the OpenCode installer.
-- **Verification status:** the bundle, the installer and setup detection are covered by deterministic tests; agent spawning, setup, capture, plan with scouts, work with workers, codex review, and `flow --auto` through make-pr to an open pull request (sandbox disabled) were verified live on Muse Code 1.4.6 with Claude Code and the Codex install on the same machine. Re-verify on major Muse releases.
+- **Verification status:** the bundle, the installer and setup detection are covered by deterministic tests; agent spawning, setup, capture, plan with scouts, work with workers, codex review, `flow --auto` through make-pr, and land to a merged pull request (sandbox disabled) were verified live on Muse Code 1.4.6 with Claude Code and the Codex install on the same machine. Re-verify on major Muse releases.
 
 ## Windows: Python discovery
 
