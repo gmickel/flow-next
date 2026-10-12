@@ -96,11 +96,21 @@ def translate_agent(text: str, source: str) -> str:
 
 def build(plugin: Path, dest: Path) -> None:
     shutil.copytree(plugin, dest, ignore=EXCLUDED)
-    for agent in sorted((dest / "agents").glob("*.md")):
+    agents = sorted((dest / "agents").glob("*.md"))
+    for agent in agents:
         agent.write_text(
             translate_agent(agent.read_text(encoding="utf-8"), agent.name),
             encoding="utf-8",
         )
+    # `flow-next:<agent>` -> `flow-next/<agent>` for shipped agent names only;
+    # skill ids (`flow-next:flow-next-<skill>`) never match an agent name.
+    names = "|".join(re.escape(a.stem) for a in agents)
+    dispatch = re.compile(rf"flow-next:({names})\b(?!-)")
+    for doc in sorted(dest.rglob("*.md")):
+        text = doc.read_text(encoding="utf-8")
+        rewritten = dispatch.sub(r"flow-next/\1", text)
+        if rewritten != text:
+            doc.write_text(rewritten, encoding="utf-8")
     rules = dest / "references" / "working-rules.md"
     rules.write_text(rules.read_text(encoding="utf-8") + HOST_NOTE, encoding="utf-8")
     (dest / MARKER).write_text("flow-next Muse Code bundle\n", encoding="utf-8")

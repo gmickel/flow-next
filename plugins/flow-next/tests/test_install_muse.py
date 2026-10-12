@@ -101,6 +101,15 @@ class BuildRealPluginTest(unittest.TestCase):
         text = (self.bundle / "agents" / "repo-scout.md").read_text(encoding="utf-8")
         self.assertIn("disallowedTools: edit_file, write_file\n", text)
 
+    def test_agent_references_use_muse_spelling_and_skill_ids_stay(self) -> None:
+        steps = (self.bundle / "skills" / "flow-next-plan" / "steps.md").read_text(encoding="utf-8")
+        self.assertIn("flow-next/repo-scout", steps)
+        self.assertNotIn("flow-next:repo-scout", steps)
+        sync = (self.bundle / "skills" / "flow-next-sync" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("subagent_type: flow-next/plan-sync", sync)
+        snippet = (self.bundle / "skills" / "flow-next-setup" / "templates" / "claude-md-snippet.md").read_text(encoding="utf-8")
+        self.assertIn("flow-next:flow-next-plan", snippet)
+
     def test_bundle_carries_marker_and_dispatch_note(self) -> None:
         self.assertTrue((self.bundle / muse_bundle.MARKER).is_file())
         rules = (self.bundle / "references" / "working-rules.md").read_text(encoding="utf-8")

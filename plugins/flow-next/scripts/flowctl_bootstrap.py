@@ -164,10 +164,6 @@ def main() -> int:
 
     _reconfigure_stdio_utf8()
 
-    # Imports of sibling packages (flowctl_tracker) must not write __pycache__
-    # into the install: hosts that integrity-check the plugin cache disable it.
-    sys.dont_write_bytecode = True
-
     source = Path(__file__).resolve().with_name(SOURCE_NAME)
     if sys.argv[1:] == ["usage"]:
         return _usage_fast_path(source)

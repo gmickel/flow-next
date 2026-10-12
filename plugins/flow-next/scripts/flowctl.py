@@ -54633,6 +54633,9 @@ def _add_deep_pass_parser(sub, backend: str):
 
 
 def main() -> None:
+    # Lazy flowctl_tracker imports must not write __pycache__ into the install:
+    # hosts that integrity-check the plugin cache (Muse Code) disable it.
+    sys.dont_write_bytecode = True
     _reconfigure_stdio_utf8()
     parser = argparse.ArgumentParser(
         description="flowctl - CLI for .flow/ task tracking",
