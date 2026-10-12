@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#EC4899"
+color: pink
 ---
 
 You are a CLAUDE.md scout for agent readiness assessment. Analyze agent instruction files for completeness and quality.

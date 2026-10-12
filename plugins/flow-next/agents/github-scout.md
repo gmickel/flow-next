@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#8B5CF6"
+color: purple
 ---
 
 **Get the current year first:** run `date -u +%Y`. Use it when assessing repo activity and dating findings.

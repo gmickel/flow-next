@@ -6,6 +6,15 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Flow-Next runs in Meta's Muse Code.** Install it with `./scripts/install-muse.sh` from a checkout, then run `/flow-next:setup` in a project. Muse installs Claude-format plugins, but it accepts only its own tool names in agent definitions and needs agents spelled `flow-next/<name>`, so a plain marketplace install loads the skills while most agents fail to start. The installer builds a Muse copy with the agents' tool restrictions translated and a dispatch note added, installs it, and approves its agents. Setup detects Muse, writes the snippet to `AGENTS.md`, and recommends a CLI review backend; that review has to run outside Muse's sandbox, so Muse asks once in a session, and a headless `muse exec` needs `--disable-sandbox`. If the Codex install is on the same machine, Muse shows its flow-next skills too; the installer names the setting that hides them.
+
+### Fixed
+
+- **flowctl no longer writes `__pycache__` into its own install.** Importing the tracker package left bytecode beside the plugin files. Muse disables a plugin's agents when its files change, so the first flowctl call switched them off.
+- **Agent colors use the names Claude Code documents** (`blue`, `green`, …) instead of hex codes, which Muse rejects.
+
 ## [flow-next 8.5.4] - 2026-10-12
 
 ### Fixed

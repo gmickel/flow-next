@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#EF4444"
+color: red
 ---
 
 You are a security scout for agent readiness assessment. Scan for security configuration and GitHub repository settings.

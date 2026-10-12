@@ -68,6 +68,18 @@ class StartupBootstrapTest(unittest.TestCase):
             cache = Path(importlib.util.cache_from_source(str(source)))
             self.assertFalse(cache.exists())
 
+    def test_sibling_package_imports_leave_install_unmodified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            boot, source = self._install(
+                root, 'import sibling\n\ndef main():\n    print(sibling.VALUE)\n')
+            package = source.parent / "sibling"
+            package.mkdir()
+            (package / "__init__.py").write_text('VALUE = "PKG-OK"\n', encoding="utf-8")
+            result = self._run(boot, root)
+            self.assertEqual(result.stdout, "PKG-OK\n", result.stderr)
+            self.assertEqual(list(source.parent.rglob("__pycache__")), [])
+
     def test_same_size_same_mtime_source_change_is_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

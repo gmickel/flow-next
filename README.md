@@ -30,7 +30,7 @@ It's also fast now. On the same model, the working change comes back in about th
 
 Every stage prints `ran`, `skipped(<reason>)` or `failed(<reason>)`, so you can see what happened and what didn't. The model that wrote a diff never reviews it. Specs, decisions, task state and receipts live under `.flow/` in your repository and stay readable if you stop using Flow-Next. `flow --explain <anything>` shows the route it would take, and why, without running it.
 
-It runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build and OpenCode.
+It runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode and Meta Muse Code.
 
 > 📖 **[Documentation: flow-next.dev](https://flow-next.dev)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
 
@@ -115,7 +115,7 @@ droid plugin marketplace add \
 
 Use installation commands in your terminal or the host's plugin interface as shown above. Workflow invocations belong in the agent conversation. Codex uses `$flow-next-<name>`; OpenCode uses `/flow-next-<name>`; the other hosts accept `/flow-next:<name>` (Cursor also accepts the hyphen form).
 
-**Cursor, Grok Build, or OpenCode?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation. Codex installs are per home; set `CODEX_HOME` when you use more than one.
+**Cursor, Grok Build, OpenCode, or Muse Code?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation. Codex installs are per home; set `CODEX_HOME` when you use more than one.
 
 ## Start one change
 

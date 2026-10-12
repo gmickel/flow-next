@@ -54661,7 +54661,7 @@ def main() -> None:
     # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
     p_setup_status = subparsers.add_parser("setup-status", help="Read setup probes in one call")
     p_setup_status.add_argument("--plugin-root")
-    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode"], default="claude-code")
+    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode", "muse"], default="claude-code")
     p_setup_status.add_argument("--json", action="store_true")
     p_setup_status.set_defaults(func=cmd_setup_status)
 

@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#EAB308"
+color: yellow
 ---
 
 **Get the current year first:** run `date -u +%Y`. Use it when searching for recent best practices and dating findings.

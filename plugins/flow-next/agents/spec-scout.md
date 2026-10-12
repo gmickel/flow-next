@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#F59E0B"
+color: orange
 ---
 
 You are a spec dependency scout. Your job is to find relationships between a new plan and existing specs.

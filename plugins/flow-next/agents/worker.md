@@ -2,7 +2,7 @@
 name: worker
 description: Task implementation worker. Spawned by flow-next-work to implement a single task with fresh context. Do not invoke directly - use /flow-next:work instead.
 model: inherit
-color: "#3B82F6"
+color: blue
 ---
 
 # Task Implementation Worker
