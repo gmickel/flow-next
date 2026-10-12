@@ -137,6 +137,20 @@ class ConfigMergeTests(unittest.TestCase):
                 self.assertEqual(data['agents']['max_threads'], 12)
                 self.assertEqual(mod.merge(out, SOURCE, 12), out)
 
+    def test_no_root_multi_agent(self):
+        # Codex never read a root multi_agent, and 0.161+ rejects it under
+        # --strict-config; the feature lives in [features] and is on by default.
+        for text in ['', '[custom]\nnote = "x"\n', 'multi_agent = true\n[custom]\nnote = "x"\n']:
+            with self.subTest(text=text):
+                out = mod.merge(text, SOURCE, 12)
+                self.assertNotIn('multi_agent', tomllib.loads(out))
+                self.assertEqual(mod.merge(out, SOURCE, 12), out)
+        user = 'model = "m"\nmulti_agent = false\n[features]\nmulti_agent = false\n'
+        data = tomllib.loads(mod.merge(user, SOURCE, 12))
+        self.assertIs(data['multi_agent'], False)
+        self.assertIs(data['features']['multi_agent'], False)
+        self.assertEqual(data['model'], 'm')
+
     @unittest.skipIf(sys.platform == 'win32', 'Native Windows bash is a WSL stub')
     def test_installer_preflight_refuses_before_copy(self):
         with tempfile.TemporaryDirectory() as temp:
