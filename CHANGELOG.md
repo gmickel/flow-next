@@ -6,14 +6,19 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 8.6.0] - 2026-10-12
+
+Flow-Next now runs in Meta's Muse Code. One installer command gives Muse users the whole lifecycle: setup, capture, planning with its scouts, work with its workers, cross-model review, a pull request and landing. All of it ran end to end on Muse Code 1.4.6, on a machine that also had Claude Code and the Codex install. Start Muse with `--disable-sandbox` for flow-next sessions: the review CLIs cannot run inside its sandbox.
+
 ### Added
 
-- **Flow-Next runs in Meta's Muse Code.** Install it with `./scripts/install-muse.sh` from a checkout, then run `/flow-next:setup` in a project. Muse installs Claude-format plugins, but it accepts only its own tool names in agent definitions and needs agents spelled `flow-next/<name>`, so a plain marketplace install loads the skills while most agents fail to start. The installer builds a Muse copy with the agents' tool restrictions translated and a dispatch note added, installs it, and approves its agents. Setup detects Muse, writes the snippet to `AGENTS.md`, and recommends a CLI review backend; that review CLI cannot run inside Muse's sandbox, so start Muse with `--disable-sandbox` for flow-next sessions. If the Codex install is on the same machine, Muse shows its flow-next skills too; the installer names the setting that hides them.
+- **Install flow-next into Muse Code with one command.** Run `./scripts/install-muse.sh` from a checkout, start Muse with `muse --disable-sandbox`, and run `/flow-next:setup` in a project; every `/flow-next:<name>` command is then in Muse's command list. Muse loads Claude-format plugins, but it accepts only its own tool names in agent definitions and selects plugin agents as `flow-next/<name>`, so a plain marketplace install started the skills while 19 of the 21 agents could not run. The installer builds a Muse copy with the agents' tool restrictions translated and the agent names spelled Muse's way, installs it, and approves its agents. Setup recognizes the install, writes its instructions to `AGENTS.md`, which Muse reads first, and recommends a CLI review backend. For plain-language requests such as "plan X", `muse skills user-only plan --scope built-in` stops Muse's own planner from answering them instead. [Muse Code setup](https://flow-next.dev/install/#muse-code).
 
 ### Fixed
 
-- **flowctl no longer writes `__pycache__` into its own install.** Importing the tracker package left bytecode beside the plugin files. Muse disables a plugin's agents when its files change, so the first flowctl call switched them off.
+- **flowctl no longer writes `__pycache__` into its own install.** Commands that load the tracker package left Python bytecode beside the plugin files. Muse switches off a plugin's agents when its installed files change, so the first such command disabled them.
 - **Agent colors use the names Claude Code documents** (`blue`, `green`, …) instead of hex codes, which Muse rejects.
+- **The bug report form lists OpenCode as a first-class host**, not a community port, and adds Muse Code.
 
 ## [flow-next 8.5.4] - 2026-10-12
 
