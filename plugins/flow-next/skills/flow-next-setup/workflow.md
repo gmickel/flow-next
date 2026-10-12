@@ -547,6 +547,7 @@ Muse Code host notes:
 - flowctl resolves from the installed bundle (Muse substitutes ${CLAUDE_PLUGIN_ROOT}) - nothing is copied into the repo
 - Docs: AGENTS.md (Muse reads AGENTS.md before CLAUDE.md in a directory and uses only the first)
 - Review: host fails closed (single native model family) + codex/copilot/cursor/claude/none
+- Start Muse with --disable-sandbox: the review CLIs cannot run inside Muse's sandbox
 - Detection: ${PLUGIN_ROOT}/.flow-next-muse-bundle (written by install-muse.sh; never an env var)
 - Update with scripts/install-muse.sh, not a marketplace install
 ```
