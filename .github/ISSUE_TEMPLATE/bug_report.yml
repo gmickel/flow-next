@@ -20,6 +20,7 @@ body:
         - Grok Build
         - Cursor
         - OpenCode (community port)
+        - Muse Code
         - Other
     validations:
       required: true

@@ -53,6 +53,7 @@ muse plugins approve flow-next || die "muse plugins approve failed"
 
 echo "Installed flow-next into Muse Code. Commands: /flow-next:<name> (start with /flow-next:setup in a repo)."
 echo "Start Muse with --disable-sandbox (muse --disable-sandbox, muse exec --disable-sandbox): review CLIs cannot run inside its sandbox."
+echo "Optional: muse skills user-only plan --scope built-in, so plain \"plan ...\" requests reach flow-next instead of Muse's own /plan."
 if [ -d "${CODEX_HOME:-$HOME/.codex}/skills/flow-next-plan" ]; then
     echo "Note: Muse also loads the Codex install's flow-next skills from ${CODEX_HOME:-$HOME/.codex}/skills."
     echo "      To use only this install, set \"context\": {\"foreign_personal_skills\": false} in ~/.config/muse/settings.json."
