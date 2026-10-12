@@ -65,12 +65,19 @@ def merge(text: str, source: Path, max_threads: int) -> str:
     # the opening marker and first table. Never delete an entire marked region.
     cleaned = []
     preamble = False
+    root = True
     for line in text.splitlines(keepends=True):
         if line.strip() == BEGIN:
             preamble = True
         if HEADER.match(line.rstrip('\n')):
             preamble = False
+            root = False
         if preamble and re.match(r'^max_threads\s*=', line):
+            continue
+        # Older installers prepended this root key. Codex never read it (the
+        # switch lives in [features] and is on by default since 0.146), and
+        # 0.161+ rejects it under --strict-config. Drop only that exact line.
+        if root and line.rstrip('\r\n') == 'multi_agent = true':
             continue
         if OWN_COMMENT.match(line.rstrip('\n')):
             continue
@@ -114,10 +121,6 @@ def merge(text: str, source: Path, max_threads: int) -> str:
     base = ''.join(kept).rstrip() + '\n'
     if not have_agents:
         base += f'\n[agents]\nmax_threads = {max_threads}\n'
-    # Retain the installer's existing root feature switch without moving it
-    # into the last table. Other feature normalization is delegated above.
-    if 'multi_agent' not in tomllib.loads(base):
-        base = 'multi_agent = true\n' + base
     result = base + '\n' + BEGIN + '\n# Re-run install-codex.sh to regenerate\n'
     for key, (stem, description) in roles.items():
         result += f'\n[agents.{key}]\ndescription = {json.dumps(description)}\nconfig_file = {json.dumps("agents/" + stem + ".toml")}\n'
@@ -140,6 +143,8 @@ def merge(text: str, source: Path, max_threads: int) -> str:
                 raise ValueError('Unrelated array table would change; original preserved')
             continue
         allowed = {'max_threads', 'max_concurrent_threads_per_session'} if name == ('agents',) else set()
+        if name == ():
+            allowed = {'multi_agent'}
         if name == ('features',):
             allowed = {'hooks', 'codex_hooks', 'multi_agent'}
         for key, value in before.items():
