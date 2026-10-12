@@ -131,7 +131,7 @@
     "impl:fn-293-muse-code-as-a-first-class-host-via-an.1": 0
   },
   "spec_path": ".flow/specs/fn-293-muse-code-as-a-first-class-host-via-an.md",
-  "status": "open",
+  "status": "done",
   "title": "Muse Code as a first-class host via an installer",
   "tracker": {
     "baseHashFlow": null,
@@ -144,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-12T20:57:59.354921Z"
+  "updated_at": "2026-10-12T21:30:01.755110Z"
 }
