@@ -151,6 +151,17 @@ class ConfigMergeTests(unittest.TestCase):
         self.assertIs(data['features']['multi_agent'], False)
         self.assertEqual(data['model'], 'm')
 
+    def test_multi_agent_text_inside_strings_untouched(self):
+        for text in ['multi_agent = """\nmulti_agent = true\n"""\n',
+                     "developer_instructions = '''\nmulti_agent = true\n'''\n"]:
+            with self.subTest(text=text):
+                out = mod.merge(text, SOURCE, 12)
+                key = next(iter(tomllib.loads(text)))
+                self.assertEqual(tomllib.loads(out)[key], tomllib.loads(text)[key])
+        # Marker text inside a root value still refuses instead of changing it.
+        with self.assertRaises(ValueError):
+            mod.merge('multi_agent = """\n' + mod.END + '\nuser text\n"""\n', SOURCE, 12)
+
     @unittest.skipIf(sys.platform == 'win32', 'Native Windows bash is a WSL stub')
     def test_installer_preflight_refuses_before_copy(self):
         with tempfile.TemporaryDirectory() as temp:

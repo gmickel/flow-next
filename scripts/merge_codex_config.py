@@ -61,23 +61,22 @@ def merge(text: str, source: Path, max_threads: int) -> str:
 
     original_sections = sections(text)
 
+    # Older installers prepended this root key as the first line. Codex never
+    # read it (the switch lives in [features] and is on by default since
+    # 0.146), and 0.161+ rejects it under --strict-config.
+    if re.match(r'multi_agent = true\r?\n', text):
+        text = text.split('\n', 1)[1]
+
     # Remove only generator comments and the historically misplaced cap between
     # the opening marker and first table. Never delete an entire marked region.
     cleaned = []
     preamble = False
-    root = True
     for line in text.splitlines(keepends=True):
         if line.strip() == BEGIN:
             preamble = True
         if HEADER.match(line.rstrip('\n')):
             preamble = False
-            root = False
         if preamble and re.match(r'^max_threads\s*=', line):
-            continue
-        # Older installers prepended this root key. Codex never read it (the
-        # switch lives in [features] and is on by default since 0.146), and
-        # 0.161+ rejects it under --strict-config. Drop only that exact line.
-        if root and line.rstrip('\r\n') == 'multi_agent = true':
             continue
         if OWN_COMMENT.match(line.rstrip('\n')):
             continue
@@ -143,7 +142,7 @@ def merge(text: str, source: Path, max_threads: int) -> str:
                 raise ValueError('Unrelated array table would change; original preserved')
             continue
         allowed = {'max_threads', 'max_concurrent_threads_per_session'} if name == ('agents',) else set()
-        if name == ():
+        if name == () and before.get('multi_agent') is True and 'multi_agent' not in after:
             allowed = {'multi_agent'}
         if name == ('features',):
             allowed = {'hooks', 'codex_hooks', 'multi_agent'}
