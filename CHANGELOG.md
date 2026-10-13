@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+Teams that must show what was required, built, tested, reviewed and approved (GxP, medical devices, finance) can now have flow-next keep that record itself. Three opt-in pieces feed a team's validation; none makes anything compliant or certified, and with none of them set nothing changes.
+
+### Added
+
+- **Committed development evidence (`evidence.persist on`).** flowctl writes a copy of each record into `.flow/evidence/<spec-id>/` (or `evidence.dir`) the moment it writes the record, and stages it so it travels in the next commit: every plan, implementation and completion review receipt as one file per round, each QA receipt with its captures, each completed task's recorded evidence, and a run record with the flow-next version, the host, each review's backend and model, and each task's implementing model (`unknown` when flow-next does not know it). The agent copies nothing, and a later round never overwrites an earlier one. An evidence folder outside the repository or behind a symlink is refused, and a failed write fails the stage.
+- **Spec approval by pull request (`spec.approval pr`).** A spec becomes ready for implementation only when its spec PR (branch `spec/<spec-id>`) merges with at least one approving review. `spec ready` and `start` refuse an unapproved spec and tell the agent how to open the spec PR, and `flow --auto` holds it. Once the PR merges, the next selection records the approvers, the merge identity and the times with the spec and marks it ready, with no manual step. A closed PR, a merge without approval, or an unreachable forge leaves the spec not ready with the reason. The forge's branch protection decides who may approve.
+- **`flowctl trace <spec-id>`** prints a per-criterion matrix (CSV or Markdown, or JSON with `--json`): the tests that cover each R-ID and their recorded result, its QA evidence, review findings that name it, and the spec and implementation approvals. A mechanical gap check flags every criterion without evidence and every piece of evidence that names no criterion, and exits `1` when it finds one. It works without `evidence.persist` and reports what is missing.
+
 ## [flow-next 8.6.0] - 2026-10-12
 
 Flow-Next now runs in Meta's Muse Code. One installer command gives Muse users the whole lifecycle: setup, capture, planning with its scouts, work with its workers, cross-model review, a pull request and landing. All of it ran end to end on Muse Code 1.4.6, on a machine that also had Claude Code and the Codex install. Start Muse with `--disable-sandbox` for flow-next sessions: the review CLIs cannot run inside its sandbox.

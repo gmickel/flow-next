@@ -64,6 +64,11 @@ ALLOWLIST: dict[str, str] = {
     "makePr.derivedPaths": (
         "validated-only reader key (make-pr export rules); never seeded"
     ),
+    # Opt-in keys read raw and never seeded, so a default config stays
+    # byte-identical (absent = off / .flow/evidence / local).
+    "evidence.persist": "opt-in, unseeded; only the literal on activates",
+    "evidence.dir": "opt-in, unseeded; absent reads as .flow/evidence",
+    "spec.approval": "opt-in, unseeded; absent reads as local",
 }
 
 # Containers the schema-key walk must NOT descend into: their property

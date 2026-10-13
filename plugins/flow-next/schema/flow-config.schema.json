@@ -673,6 +673,38 @@
         }
       }
     },
+    "evidence": {
+      "description": "Opt-in development evidence for teams that must show what was built, tested, reviewed and approved. Absent = off.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persist": {
+          "description": "off | on, default off (absent). Only the literal on activates: flowctl then writes committed copies of every review and QA receipt (one file per round), QA captures, each task's recorded evidence and a run record into <evidence.dir>/<spec-id>/ and stages them. Any other value, including bool true, is off.",
+          "enum": [
+            "off",
+            "on"
+          ]
+        },
+        "dir": {
+          "description": "Repo-relative root of the per-spec evidence folders, default .flow/evidence. A path outside the repository or through a symlink is refused when evidence is written.",
+          "type": "string"
+        }
+      }
+    },
+    "spec": {
+      "description": "Spec lifecycle settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approval": {
+          "description": "local | pr, default local (absent). local keeps spec readiness as today. pr makes a spec ready only once its spec PR (head branch spec/<spec-id>) merges with at least one approving review; the approval is recorded with the spec. An invalid value stops instead of falling back to local.",
+          "enum": [
+            "local",
+            "pr"
+          ]
+        }
+      }
+    },
     "pilot": {
       "description": "/flow-next:flow --auto settings (the pilot key name is kept).",
       "type": "object",

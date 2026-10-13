@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,trace,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {judge,init,setup-status,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-prompt,review-rounds,review-route,review-artifact,memory,qa,prospect,chart,anchor,brief,trace,repo-map,prime,glossary,criteria,strategy,spec,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,preflight,validate,triage-skip,gate,features,checkpoint,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     judge               Optional typed System One judgments
     init                Initialize .flow/ directory
     setup-status        Read setup probes in one call
@@ -39,6 +39,9 @@ positional arguments:
     brief               Session-scope re-anchor brief — open specs, actionable
                         tasks, recent completions, memory index (token-
                         bounded, deterministic)
+    trace               Per-criterion traceability matrix (tests, QA, review
+                        findings, approvals) with a gap check; exit 1 on gaps,
+                        2 on error
     repo-map            Read clawpatch's `.clawpatch/features/*.json` feature
                         index. Bypasses .flow/ guard — gates on .clawpatch/
                         presence.

@@ -102,7 +102,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ```
 init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
-show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
+show, specs, tasks, list, cat, ready, next, start, done, block, validate, trace, triage-skip, gate,
 checkpoint, codex, copilot, cursor, claude,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
@@ -1311,6 +1311,9 @@ flowctl config set memory.enabled false [--json]
 | `features.staleAfterCommits` | int | `50` | **Feature-map due threshold.** `flowctl features status` reports the map due a maintain pass when a feature file's `**Last proven:**` commit is at least this many default-branch commits old, counting only commits that change a file outside `.flow/` and the docs-only safe paths. Values below 1 or non-integers read as the default. |
 | `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection.** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
 | `pilot.autonomy` | `ready \| backlog` | `ready` | **Backlog mode for `/flow-next:flow --auto`** (the key keeps its `pilot.` spelling). A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: `flow --auto` selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `/flow-next:flow --auto --backlog`) to enable **backlog mode** - the driver widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** - any other value (bool `true`, a typo, `null`) leaves the driver byte-for-byte in `ready` mode, and the flow skill's `references/backlog-mode.md` is never read. Backlog mode **never authors a spec or sets `ready`**, and grants no merge authority; readiness stays the human's explicit signal. Flow's separately authorized merge destination is governed by the [tail contract](../skills/flow-next-flow/references/tail.md). flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
+| `evidence.persist` | `off \| on` | `off` (absent) | **Opt-in development evidence.** Only the literal `on` activates; any other value, including bool `true`, is off. When on, flowctl writes a committed copy of each record into `<evidence.dir>/<spec-id>/` the moment it writes the record, and stages it with `git add` so it travels in the next commit: every plan, implementation and completion review receipt (`reviews/<round>-<type>-<id>.json`, one file per round), each QA receipt with its captures from `.flow/tmp/qa-<spec-id>/` (`qa/<round>/`), each completed task's recorded evidence (`tasks/<task-id>.json`, also listed in `done`'s `modified_paths`), and a run record (`run.json`: per review the backend and model, per task the implementing model from the done summary's `(model: ...)`, each with the flow-next version and host; an unknown value is written as `unknown`). A failed write, including an unsafe `evidence.dir`, fails the command that produced the record. |
+| `evidence.dir` | repo-relative path | `.flow/evidence` (absent) | Root of the per-spec evidence folders. A path that is absolute, resolves outside the repository, or passes through a symlink is refused when evidence is written. |
+| `spec.approval` | `local \| pr` | `local` (absent) | **Spec approval gate.** `local` leaves readiness as it is. Under `pr`, a spec is ready only once its spec PR (head branch `spec/<spec-id>`) has merged with at least one approving review: `spec ready` and `start` refuse an unapproved spec and point at [`references/spec-approval-pr.md`](../references/spec-approval-pr.md), `flow --auto` selection and `judge route` hold it, and the first of them to see the approved merge records the approvers, the merge identity and the times as `spec_approval` on the spec sidecar, marks it ready, and (with `evidence.persist on`) writes `approval.json` to its evidence folder. A closed or approval-less PR, or an unreachable forge, leaves the spec not ready with the reason. An invalid value is rejected by `config set` and stops every gated command instead of falling back to `local`. The forge's branch protection decides who may approve; flowctl only reads and records it. |
 | `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate.** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** - a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
 
 \* The pre-1.1.3 legacy alias `planSync.crossEpic` was **removed in 2.0.0** (it was readable through 1.x with a stderr deprecation warning). `flowctl` no longer reads or writes it - a leftover `crossEpic` key in `.flow/config.json` is inert. If you relied on it, set the canonical key once: `flowctl config set planSync.crossSpec true`.
@@ -1660,6 +1663,31 @@ branch, timestamps, counts and prior-finding lineage, then writes atomically.
 BLOCKED or NA does not close unobserved prior findings. Invalid payloads report
 all errors without replacing the previous receipt. QA resolves unattended
 target and account prerequisites before deriving scenarios.
+
+### trace
+
+```bash
+flowctl trace <spec-id> [--format md|csv] [--json]
+```
+
+Read-only traceability matrix for one spec, one row per R-ID: the tests that
+cover it (the recorded test evidence of done tasks whose `satisfies` names it),
+their result as recorded at `done`, its QA coverage from the latest QA receipt,
+review findings whose `rIds` name it, and the spec and implementation approvals.
+Task, review and QA evidence is read from the spec's evidence folder when
+`evidence.persist` wrote one, otherwise from local task state and
+`.flow/review-receipts/`. The implementation approval comes from the forge for
+the spec's branch; an unreachable forge shows `unknown` with a warning on
+stderr, never a guessed approval.
+
+The gap check always runs: a criterion with no test and no live or CLI QA
+coverage is a gap, and so is evidence that names no criterion (test evidence on
+a task without `satisfies`, or a `satisfies` or QA row naming an unknown R-ID).
+Without `evidence.persist` the command still runs and reports what is missing.
+Markdown (default) prints the matrix and a Gaps section; CSV prints the matrix
+and the gaps on stderr; `--json` returns `rows`, `gaps`, `gap_count` and
+`warnings`. Exit `0` = no gaps, `1` = gaps, `2` = error (unknown spec, invalid
+`spec.approval`).
 
 ## chart
 
