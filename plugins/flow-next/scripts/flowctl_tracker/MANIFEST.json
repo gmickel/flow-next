@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "949022d644b95a1a214198528232075cda6db5976e48380d5dba7bdbe8f4220b"
+      "sha256": "58aa81f5acb9de1157d47eba10a3c3fa098278da60eba571b3319cd14ea9a00b"
     },
     {
       "path": "flowctl_tracker/__init__.py",

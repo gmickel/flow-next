@@ -379,8 +379,9 @@ DESCRIPTIONS: dict[str, str] = {
     "evidence.persist": (
         "off | on, default off (absent). Only the literal on activates: "
         "flowctl then writes committed copies of every review and QA receipt "
-        "(one file per round), QA captures, each task's recorded evidence and "
-        "a run record into <evidence.dir>/<spec-id>/ and stages them. Any "
+        "(one file per round), QA captures, each task's recorded evidence with "
+        "its test runner's report, and a run record into "
+        "<evidence.dir>/<spec-id>/ and stages them. Any "
         "other value, including bool true, is off."
     ),
     "evidence.dir": (

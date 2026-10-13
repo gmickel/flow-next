@@ -357,6 +357,45 @@ class TraceTest(Repo):
         result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
         self.assertEqual(result["rows"][0]["tests"], [f"pytest -k r1 ({SPEC}.1)"])
 
+    def write_report(self, *cases: str) -> Path:
+        report = self.evidence() / "tests" / f"{SPEC}.1" / "junit.xml"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text('<?xml version="1.0"?><testsuites><testsuite name="s">'
+                          + "".join(cases) + "</testsuite></testsuites>", encoding="utf-8")
+        return report
+
+    def test_junit_report_gives_per_test_results_by_rid(self) -> None:
+        self.flow("config", "set", "evidence.persist", "on")
+        start = self.flow("start", f"{SPEC}.1")
+        self.assertIn(f".flow/evidence/{SPEC}/tests/{SPEC}.1/", start.stderr)
+        self.write_report('<testcase classname="ledger" name="R1: books with a cost centre"/>',
+                          '<testcase name="test_r1_rejects_missing"><failure>boom</failure></testcase>',
+                          '<testcase name="unrelated helper"/>')
+        done = json.loads(self.flow("done", f"{SPEC}.1", "--test", "pytest", "--summary", "s",
+                                    "--json").stdout)
+        record = json.loads((self.evidence() / "tasks" / f"{SPEC}.1.json").read_text())
+        self.assertEqual(record["test_reports"], [f"tests/{SPEC}.1/junit.xml"])
+        self.assertIn(f".flow/evidence/{SPEC}/tests/{SPEC}.1/junit.xml", self.staged())
+        self.assertIn(str(self.evidence() / "tasks" / f"{SPEC}.1.json"), done["modified_paths"])
+        result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
+        row = result["rows"][0]
+        self.assertEqual(row["tests"], [f"ledger R1: books with a cost centre ({SPEC}.1)",
+                                        f"test_r1_rejects_missing ({SPEC}.1)"])
+        self.assertEqual(row["test_result"], "failed, passed")
+        self.assertIn("R1: test 'test_r1_rejects_missing' failed", result["gaps"])
+
+    def test_report_without_a_test_for_a_satisfied_rid_is_a_gap(self) -> None:
+        self.flow("config", "set", "evidence.persist", "on")
+        self.flow("start", f"{SPEC}.1")
+        self.write_report('<testcase name="unrelated"/>')
+        self.flow("done", f"{SPEC}.1", "--test", "pytest", "--summary", "s")
+        gaps = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)["gaps"]
+        self.assertIn(f"R1: no test in {SPEC}.1's report names it", gaps)
+        self.assertIn("R1: no evidence", gaps)
+
+    def test_no_notice_by_default(self) -> None:
+        self.assertNotIn("evidence.persist", self.flow("start", f"{SPEC}.1").stderr)
+
     def test_errors(self) -> None:
         self.assertEqual(self.flow("trace", "fn-99", check=False).returncode, 2)
         if NO_SHIM:

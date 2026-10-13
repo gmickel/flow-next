@@ -23496,6 +23496,38 @@ def _evidence_implementing_model(summary: str) -> str:
     return value if value and value.lower() != "not reported" else "unknown"
 
 
+def evidence_test_report_notice(task_id: str) -> None:
+    """Under `evidence.persist on`, tell the agent where its test runner's report goes."""
+    if not evidence_persist_enabled():
+        return
+    try:
+        folder = evidence_target(evidence_spec_dir(spec_id_from_task(task_id)), "tests", task_id)
+    except EvidenceWriteError:
+        return  # The evidence write at done reports the unusable folder.
+    print(
+        f"evidence.persist is on: have your test runner write a JUnit XML report into "
+        f"{folder.relative_to(get_repo_root()).as_posix()}/ before `flowctl done` (for example "
+        "pytest --junitxml, vitest/jest junit reporter, bun test --reporter=junit, go via "
+        "gotestsum), and put the R-ID a test covers in its name (R7 in `R7: ...` or "
+        "`test_r7_...`). flowctl trace reads each test's result from it.",
+        file=sys.stderr,
+    )
+
+
+def _evidence_test_reports(spec_dir: Path, task_id: str) -> list[Path]:
+    """Report files the test runner wrote for this task (symlinks are refused)."""
+    folder = evidence_target(spec_dir, "tests", task_id)
+    if not folder.is_dir():
+        return []
+    reports = []
+    for path in sorted(folder.rglob("*")):
+        if path.is_symlink():
+            raise EvidenceWriteError(f"test report {path} is a symlink; refusing it as evidence")
+        if path.is_file():
+            reports.append(path)
+    return reports
+
+
 def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Path]:
     """Persist a completed task's evidence record (opt-in); return the paths."""
     if not evidence_persist_enabled():
@@ -23503,14 +23535,16 @@ def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Pat
     try:
         spec_dir = evidence_spec_dir(spec_id_from_task(task_id))
         model = _evidence_implementing_model(summary)
+        reports = _evidence_test_reports(spec_dir, task_id)
         target = evidence_target(spec_dir, "tasks", f"{task_id}.json")
         _atomic_write_file(target, json.dumps(
             {"id": task_id, "evidence": evidence, "summary": summary,
-             "implementing_model": model, "recorded_at": now_iso()},
+             "implementing_model": model, "recorded_at": now_iso(),
+             "test_reports": [path.relative_to(spec_dir).as_posix() for path in reports]},
             indent=2, sort_keys=True) + "\n")
         run = _evidence_run_record_update(spec_dir, "stages", task_id,
                                           {"task": task_id, "implementing_model": model})
-        _evidence_stage([target, run])
+        _evidence_stage([target, run, *reports])
     except (EvidenceWriteError, OSError, CrossProcessLockError) as exc:
         _evidence_fail(exc)
     return [target, run]
@@ -23689,6 +23723,42 @@ def _trace_approval_text(approval: Optional[dict]) -> str:
     return text
 
 
+_TRACE_RID_IN_NAME = re.compile(r"(?<![A-Za-z0-9])[Rr](\d+[a-z]?)(?![0-9A-Za-z])")
+
+
+def _trace_junit_cases(spec_dir: Path, task_id: str, warnings: list[str]) -> Optional[list[dict]]:
+    """Test cases from the task's JUnit XML reports, or None when it has none."""
+    import xml.etree.ElementTree as ET
+
+    folder = spec_dir / "tests" / task_id
+    if not folder.is_dir():
+        return None
+    cases: list[dict] = []
+    found = False
+    for path in sorted(folder.rglob("*.xml")):
+        if path.is_symlink():
+            continue
+        try:
+            root = ET.parse(path).getroot()
+        except (ET.ParseError, OSError) as exc:
+            warnings.append(f"test report {path.name} unreadable: {exc}")
+            continue
+        found = True
+        for case in root.iter("testcase"):
+            name = " ".join(filter(None, (case.get("classname"), case.get("name")))) or "unnamed test"
+            if case.find("failure") is not None:
+                result = "failed"
+            elif case.find("error") is not None:
+                result = "error"
+            elif case.find("skipped") is not None:
+                result = "skipped"
+            else:
+                result = "passed"
+            rids = sorted({"R" + match.group(1) for match in _TRACE_RID_IN_NAME.finditer(name)})
+            cases.append({"name": name, "result": result, "rids": rids})
+    return cases if found else None
+
+
 def trace_spec(spec_id: str) -> dict:
     """Assemble the traceability matrix and gap check for one spec."""
     flow_dir = get_flow_dir()
@@ -23717,6 +23787,21 @@ def trace_spec(spec_id: str) -> dict:
     for task in tasks:
         # A committed evidence record proves completion even where local task state is absent.
         if task["status"] != "done" and task["id"] not in persisted:
+            continue
+        # A test runner's JUnit report gives each test's own result; the R-ID in a
+        # test's name maps it. Without a report, the commands recorded at done stand.
+        cases = _trace_junit_cases(spec_dir, task["id"], warnings) if spec_dir is not None else None
+        if cases is not None:
+            for case in cases:
+                for rid in case["rids"]:
+                    if rid in tests_by_rid:
+                        tests_by_rid[rid].append({"task": task["id"], "command": case["name"],
+                                                  "result": case["result"]})
+                        if case["result"] in ("failed", "error"):
+                            gaps.append(f"{rid}: test {case['name']!r} {case['result']}")
+            for rid in task["satisfies"]:
+                if rid in tests_by_rid and not any(t["task"] == task["id"] for t in tests_by_rid[rid]):
+                    gaps.append(f"{rid}: no test in {task['id']}'s report names it")
             continue
         evidence = persisted.get(task["id"]) or task.get("evidence") or {}
         commands = evidence.get("tests") or []
@@ -37446,6 +37531,7 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     # spec.approval pr: no implementation before the spec PR is approved and merged.
     _spec_approval_gate(task_def["spec"], args.json)
+    evidence_test_report_notice(args.id)
 
     # Validate all dependencies are done (outside lock - this is read-only check)
     if not args.force:
