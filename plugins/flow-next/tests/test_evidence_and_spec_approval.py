@@ -198,6 +198,19 @@ class EvidencePersistTest(Repo):
                 proc = self.flow("done", task, "--summary", "s", "--json", check=False)
                 self.assertNotEqual(proc.returncode, 0)
                 self.assertIn(message, proc.stderr)
+                # The failed evidence write leaves the task retryable, not done.
+                shown = json.loads(self.flow("show", task, "--json").stdout)
+                self.assertEqual(shown["status"], "in_progress")
+
+    def test_symlink_inside_the_evidence_folder_is_refused(self) -> None:
+        outside = self.tempdir()
+        self.evidence().mkdir(parents=True)
+        (self.evidence() / "tasks").symlink_to(outside, target_is_directory=True)
+        self.flow("start", f"{SPEC}.1")
+        proc = self.flow("done", f"{SPEC}.1", "--summary", "s", "--json", check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("is a symlink", proc.stderr)
+        self.assertEqual(list(outside.iterdir()), [])
 
 
 @unittest.skipIf(NO_SHIM, "PATH shim cannot intercept list-form gh spawns on Windows")
@@ -257,10 +270,37 @@ class SpecApprovalTest(Repo):
 
     def test_invalid_value_stops(self) -> None:
         self.assertNotEqual(self.flow("config", "set", "spec.approval", "maybe", check=False).returncode, 0)
-        self.set_raw_config("spec.approval", "maybe")
-        proc = self.flow("start", f"{SPEC}.1", "--json", check=False)
-        self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("Invalid spec.approval value 'maybe'", proc.stdout)
+        for value in ("maybe", None):
+            with self.subTest(value=value):
+                self.set_raw_config("spec.approval", value)
+                proc = self.flow("start", f"{SPEC}.1", "--json", check=False)
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn(f"Invalid spec.approval value {value!r}", proc.stdout)
+
+    def test_unready_withdraws_approval_until_a_later_merge(self) -> None:
+        self.gh_out.write_text(json.dumps(APPROVED_PR), encoding="utf-8")
+        self.flow("spec", "ready", SPEC)
+        self.flow("spec", "unready", SPEC)  # A rewrite withdraws readiness.
+        proc = self.flow("spec", "ready", SPEC, "--json", check=False)
+        self.assertNotEqual(proc.returncode, 0)  # The old merge no longer approves.
+        later = [{**APPROVED_PR[0], "number": 9, "mergedAt": "2999-01-01T00:00:00Z"}]
+        self.gh_out.write_text(json.dumps(APPROVED_PR + later), encoding="utf-8")
+        self.flow("start", f"{SPEC}.1")
+        spec = json.loads((self.root / ".flow" / "specs" / f"{SPEC}.json").read_text())
+        self.assertEqual(spec["spec_approval"]["number"], 9)
+
+    def test_authoring_writes_point_at_the_spec_pr(self) -> None:
+        proc = self.flow("task", "create", "--spec", SPEC, "--title", "Next")
+        self.assertIn("spec-approval-pr.md", proc.stderr)
+        self.flow("config", "set", "spec.approval", "local")
+        self.assertNotIn("spec.approval", self.flow("spec", "create", "--title", "Other").stderr)
+
+    def test_trace_reads_spec_approval_from_the_forge(self) -> None:
+        self.gh_out.write_text(json.dumps(APPROVED_PR), encoding="utf-8")
+        result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
+        self.assertIn("approved by qa-lead", result["rows"][0]["spec_approval"])
+        spec = json.loads((self.root / ".flow" / "specs" / f"{SPEC}.json").read_text())
+        self.assertNotIn("spec_approval", spec)  # trace never records.
 
 
 class TraceTest(Repo):
@@ -286,6 +326,30 @@ class TraceTest(Repo):
         self.flow("done", f"{SPEC}.2", "--test", "pytest", "--summary", "s")
         result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
         self.assertIn(f"{SPEC}.2: test evidence names no criterion", result["gaps"])
+
+    def test_skipped_tests_and_unknown_finding_criteria_are_gaps(self) -> None:
+        self.flow("config", "set", "evidence.persist", "on")
+        self.flow("start", f"{SPEC}.1")
+        self.flow("done", f"{SPEC}.1", "--test", "GATE_SKIPPED:unit:docs-only", "--summary", "s")
+        review = self.evidence() / "reviews" / "r.json"
+        review.parent.mkdir()
+        review.write_text(json.dumps({"type": "impl_review", "id": f"{SPEC}.1", "findings": {
+            "items": [{"title": "t", "severity": "P1", "status": "open", "rIds": ["R9"]}]}}),
+            encoding="utf-8")
+        gaps = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)["gaps"]
+        self.assertIn("R1: no evidence", gaps)
+        self.assertIn("review finding 't' names unknown criterion R9", gaps)
+
+    def test_fresh_clone_reads_committed_task_evidence(self) -> None:
+        self.flow("config", "set", "evidence.persist", "on")
+        self.complete_task()
+        subprocess.check_call(["git", "add", "-A"], cwd=self.root)
+        subprocess.check_call(["git", "commit", "-qm", "done"], cwd=self.root)
+        clone = self.tempdir() / "clone"
+        subprocess.check_call(["git", "clone", "-q", str(self.root), str(clone)])
+        self.root = clone
+        result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
+        self.assertEqual(result["rows"][0]["tests"], [f"pytest -k r1 ({SPEC}.1)"])
 
     def test_errors(self) -> None:
         self.assertEqual(self.flow("trace", "fn-99", check=False).returncode, 2)

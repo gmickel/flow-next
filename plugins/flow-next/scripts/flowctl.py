@@ -23279,9 +23279,9 @@ def evidence_persist_enabled() -> bool:
 
 
 def spec_approval_mode() -> str:
-    """Return "local" or "pr"; an invalid configured value raises ValueError."""
-    value = _optin_config("spec.approval")
-    if value is None:
+    """Return "local" or "pr"; an invalid configured value (null included) raises ValueError."""
+    value = _get_config_from_file("spec.approval")
+    if value is _CONFIG_RAW_SENTINEL:
         return "local"
     if isinstance(value, str) and value in SPEC_APPROVAL_VALUES:
         return value
@@ -23366,6 +23366,18 @@ def evidence_spec_dir(spec_id: str) -> Path:
     return target
 
 
+def evidence_target(spec_dir: Path, *parts: str) -> Path:
+    """A path under the evidence folder; refuses any symlink on the way to it."""
+    current = spec_dir
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise EvidenceWriteError(
+                f"evidence path {current} is a symlink; refusing to write evidence there"
+            )
+    return current
+
+
 def _evidence_stage(paths: list[Path]) -> None:
     """Stage written evidence so it travels in the next commit."""
     root = get_repo_root()
@@ -23391,7 +23403,7 @@ def _evidence_round_key(receipt: dict, content: str) -> str:
 
 def _evidence_run_record_update(spec_dir: Path, section: str, key: str, entry: dict) -> Path:
     """Upsert one entry in `<spec_dir>/run.json` (the run record)."""
-    path = spec_dir / "run.json"
+    path = evidence_target(spec_dir, "run.json")
     with cross_process_lock(_review_receipt_lock_path(path)):
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
@@ -23438,9 +23450,9 @@ def evidence_record_receipt(content: str) -> None:
         spec_dir = evidence_spec_dir(spec_id)
         key = _evidence_round_key(receipt, content)
         if receipt["type"] == "qa_verdict":
-            target = spec_dir / "qa" / key / "receipt.json"
+            target = evidence_target(spec_dir, "qa", key, "receipt.json")
         else:
-            target = spec_dir / "reviews" / f"{key}-{receipt['type']}-{review_id}.json"
+            target = evidence_target(spec_dir, "reviews", f"{key}-{receipt['type']}-{review_id}.json")
         _atomic_write_file(target, content)
         run = _evidence_run_record_update(spec_dir, "reviews", target.relative_to(spec_dir).as_posix(), {
             "type": receipt["type"], "id": review_id, "verdict": receipt["verdict"],
@@ -23461,13 +23473,13 @@ def evidence_record_qa_captures(spec_id: str, receipt: dict) -> None:
     try:
         spec_dir = evidence_spec_dir(spec_id)
         key = _evidence_round_key(receipt, json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-        target = spec_dir / "qa" / key / "captures"
         copied = []
         if source.is_dir():
             for path in sorted(source.rglob("*")):
                 if path.is_symlink() or not path.is_file():
                     continue
-                dest = target / path.relative_to(source)
+                dest = evidence_target(spec_dir, "qa", key, "captures",
+                                       *path.relative_to(source).parts)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, dest)
                 copied.append(dest)
@@ -23491,7 +23503,7 @@ def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Pat
     try:
         spec_dir = evidence_spec_dir(spec_id_from_task(task_id))
         model = _evidence_implementing_model(summary)
-        target = spec_dir / "tasks" / f"{task_id}.json"
+        target = evidence_target(spec_dir, "tasks", f"{task_id}.json")
         _atomic_write_file(target, json.dumps(
             {"id": task_id, "evidence": evidence, "summary": summary,
              "implementing_model": model, "recorded_at": now_iso()},
@@ -23563,12 +23575,24 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
     rows, failure = _gh_pr_rows(head, get_repo_root())
     if rows is None:
         return {"approved": False, "reason": failure}
+    # After `spec unready` withdrew an approval, only a later merge approves the revision.
+    since = recorded.get("invalidated_at") if isinstance(recorded, dict) else None
+    rows = [row for row in rows if not since or row["state"] != "MERGED"
+            or (row.get("mergedAt") or "") > since]
     merged = sorted((row for row in rows if row["state"] == "MERGED"),
                     key=lambda row: row.get("mergedAt") or "", reverse=True)
     for row in merged:
         approval = _pr_approval(row)
         if approval["approvers"]:
             record = {"approved": True, **approval, "recorded_at": now_iso()}
+            # Evidence first: a failed write leaves the spec unrecorded, so the next call retries.
+            if evidence_persist_enabled():
+                try:
+                    target = evidence_target(evidence_spec_dir(spec_id), "approval.json")
+                    _atomic_write_file(target, json.dumps(record, indent=2, sort_keys=True) + "\n")
+                    _evidence_stage([target])
+                except (EvidenceWriteError, OSError) as exc:
+                    _evidence_fail(exc)
             spec_path = find_spec_json_path(flow_dir, spec_id)
             with _review_sidecar_lock(flow_dir, spec_id):
                 data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=True)
@@ -23577,13 +23601,6 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
                 data["updated_at"] = now_iso()
                 atomic_write_json(spec_path, data)
             spec["spec_approval"], spec["ready"] = record, True
-            if evidence_persist_enabled():
-                try:
-                    target = evidence_spec_dir(spec_id) / "approval.json"
-                    _atomic_write_file(target, json.dumps(record, indent=2, sort_keys=True) + "\n")
-                    _evidence_stage([target])
-                except (EvidenceWriteError, OSError) as exc:
-                    _evidence_fail(exc)
             return {"approved": True, "reason": "spec PR approved and merged"}
     if merged:
         return {"approved": False,
@@ -23596,6 +23613,21 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
         return {"approved": False,
                 "reason": f"spec PR #{rows[0]['number']} was closed without merge"}
     return {"approved": False, "reason": f"no spec PR from branch {head}"}
+
+
+def spec_approval_authoring_notice() -> None:
+    """After a spec authoring write under `spec.approval pr`, point at the spec-PR handoff."""
+    try:
+        if spec_approval_mode() != "pr":
+            return
+    except ValueError:
+        return  # The gated commands report an invalid value.
+    reference = _plugin_root() / "references" / "spec-approval-pr.md"
+    print(
+        "spec.approval is pr: when this spec is final, open it as a spec PR instead of "
+        f"marking it ready. Read {reference}",
+        file=sys.stderr,
+    )
 
 
 def spec_approval_pending_message(spec_id: str, reason: str) -> str:
@@ -23674,7 +23706,8 @@ def trace_spec(spec_id: str) -> dict:
     tests_by_rid: dict[str, list[dict]] = {rid: [] for rid in rids}
     gaps: list[str] = []
     for task in tasks:
-        if task["status"] != "done":
+        # A committed evidence record proves completion even where local task state is absent.
+        if task["status"] != "done" and task["id"] not in persisted:
             continue
         evidence = persisted.get(task["id"]) or task.get("evidence") or {}
         commands = evidence.get("tests") or []
@@ -23725,18 +23758,29 @@ def trace_spec(spec_id: str) -> dict:
             if not isinstance(item, dict):
                 continue
             for rid in item.get("rIds") or []:
-                if rid in findings_by_rid:
+                if rid not in findings_by_rid:
+                    gaps.append(f"review finding {item.get('title')!r} names unknown criterion {rid}")
+                else:
                     findings_by_rid[rid].append(
                         f"{receipt.get('type')} {receipt.get('id')}: {item.get('severity')} "
                         f"{item.get('title')} ({item.get('status')})")
 
     # Approvals: the recorded spec approval, and the implementation PR as the forge reports it.
     recorded = spec.get("spec_approval")
-    if isinstance(recorded, dict):
+    if isinstance(recorded, dict) and recorded.get("approved") is True:
         spec_approval = _trace_approval_text(recorded)
+    elif spec_approval_mode() == "pr":
+        # Read-only: report the spec PR as the forge sees it; recording happens elsewhere.
+        rows, failure = _gh_pr_rows(SPEC_APPROVAL_BRANCH_PREFIX + spec_id, get_repo_root())
+        if rows is None:
+            spec_approval = "unknown"
+            warnings.append(f"spec approval unknown: {failure}")
+        else:
+            rows.sort(key=lambda row: ({"MERGED": 2, "OPEN": 1, "CLOSED": 0}[row["state"]],
+                                       row.get("mergedAt") or "", row["number"]), reverse=True)
+            spec_approval = _trace_approval_text(_pr_approval(rows[0])) if rows else "no spec PR"
     else:
-        spec_approval = ("not recorded (spec.approval pr)" if spec_approval_mode() == "pr"
-                         else "not gated (spec.approval local)")
+        spec_approval = "not gated (spec.approval local)"
     branch = spec.get("branch_name")
     impl_approval = "no implementation branch"
     if branch:
@@ -23754,7 +23798,8 @@ def trace_spec(spec_id: str) -> dict:
         rid = criterion["id"]
         tests = tests_by_rid[rid]
         qa_text = qa_by_rid.get(rid, "none")
-        if not tests and not qa_text.startswith(("live", "backend_cli")):
+        ran = [t for t in tests if t["result"] != "skipped"]
+        if not ran and not qa_text.startswith(("live", "backend_cli")):
             gaps.append(f"{rid}: no evidence")
         results = sorted({t["result"] for t in tests})
         matrix.append({
@@ -32908,6 +32953,11 @@ def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
         )
         changed = bool(spec_data.get("ready", False)) != target
+        recorded = spec_data.get("spec_approval")
+        if not target and isinstance(recorded, dict) and recorded.get("approved") is True:
+            # Withdrawing readiness withdraws the spec PR approval: a revision needs its own.
+            spec_data["spec_approval"] = {"approved": False, "invalidated_at": now_iso()}
+            changed = True
         if changed:
             spec_data["ready"] = target
             spec_data["updated_at"] = now_iso()
@@ -37688,14 +37738,15 @@ def cmd_done(args: argparse.Namespace) -> None:
         except ValueError as e:
             error_exit(str(e), use_json=args.json)
 
-        # All validation passed - now write (spec to tracked file, runtime to state-dir)
+        # All validation passed - now write. Opt-in evidence goes first, so a
+        # failed evidence write leaves the task in progress and retryable.
+        evidence_paths = evidence_record_task(args.id, evidence, summary)
         atomic_write(task_spec_path, updated_spec)
         store.save_runtime(
             args.id,
             {**(runtime or {"status": "todo"}), "status": "done",
              "evidence": evidence, "updated_at": now_iso()},
         )
-    evidence_paths = evidence_record_task(args.id, evidence, summary)
 
     # NOTE: We no longer update epic timestamp on task done.
     # This reduces merge conflicts in multi-user scenarios.
@@ -58225,6 +58276,8 @@ def main() -> None:
     args = parser.parse_args()
     try:
         args.func(args)
+        if args.func in (cmd_spec_create, cmd_spec_set_plan, cmd_task_create, cmd_task_set_spec):
+            spec_approval_authoring_notice()
         sys.stdout.flush()
     except CrossProcessLockError as e:
         error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)
