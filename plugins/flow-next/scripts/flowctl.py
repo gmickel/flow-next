@@ -23726,8 +23726,11 @@ def _trace_approval_text(approval: Optional[dict]) -> str:
 _TRACE_RID_IN_NAME = re.compile(r"(?<![A-Za-z0-9])[Rr](\d+[a-z]?)(?![0-9A-Za-z])")
 
 
-def _trace_junit_cases(spec_dir: Path, task_id: str, warnings: list[str]) -> Optional[list[dict]]:
-    """Test cases from the task's JUnit XML reports, or None when it has none."""
+def _trace_junit_cases(spec_dir: Path, task_id: str, gaps: list[str]) -> Optional[list[dict]]:
+    """Test cases from the task's JUnit XML reports, or None when it has none.
+
+    An unreadable report is a gap, never a fallback to the result recorded at done.
+    """
     import xml.etree.ElementTree as ET
 
     folder = spec_dir / "tests" / task_id
@@ -23738,12 +23741,12 @@ def _trace_junit_cases(spec_dir: Path, task_id: str, warnings: list[str]) -> Opt
     for path in sorted(folder.rglob("*.xml")):
         if path.is_symlink():
             continue
+        found = True
         try:
             root = ET.parse(path).getroot()
         except (ET.ParseError, OSError) as exc:
-            warnings.append(f"test report {path.name} unreadable: {exc}")
+            gaps.append(f"{task_id}: test report {path.name} unreadable: {exc}")
             continue
-        found = True
         for case in root.iter("testcase"):
             name = " ".join(filter(None, (case.get("classname"), case.get("name")))) or "unnamed test"
             if case.find("failure") is not None:
@@ -23790,15 +23793,23 @@ def trace_spec(spec_id: str) -> dict:
             continue
         # A test runner's JUnit report gives each test's own result; the R-ID in a
         # test's name maps it. Without a report, the commands recorded at done stand.
-        cases = _trace_junit_cases(spec_dir, task["id"], warnings) if spec_dir is not None else None
+        cases = _trace_junit_cases(spec_dir, task["id"], gaps) if spec_dir is not None else None
         if cases is not None:
             for case in cases:
+                known = [rid for rid in case["rids"] if rid in tests_by_rid]
                 for rid in case["rids"]:
-                    if rid in tests_by_rid:
-                        tests_by_rid[rid].append({"task": task["id"], "command": case["name"],
-                                                  "result": case["result"]})
-                        if case["result"] in ("failed", "error"):
-                            gaps.append(f"{rid}: test {case['name']!r} {case['result']}")
+                    if rid not in tests_by_rid:
+                        gaps.append(f"{task['id']}: test {case['name']!r} ({case['result']}) "
+                                    f"names unknown criterion {rid}")
+                # A passing test without an R-ID claims nothing; a failure must never vanish.
+                if not known and case["result"] in ("failed", "error"):
+                    gaps.append(f"{task['id']}: test {case['name']!r} {case['result']} "
+                                "and names no criterion")
+                for rid in known:
+                    tests_by_rid[rid].append({"task": task["id"], "command": case["name"],
+                                              "result": case["result"], "per_test": True})
+                    if case["result"] in ("failed", "error"):
+                        gaps.append(f"{rid}: test {case['name']!r} {case['result']}")
             for rid in task["satisfies"]:
                 if rid in tests_by_rid and not any(t["task"] == task["id"] for t in tests_by_rid[rid]):
                     gaps.append(f"{rid}: no test in {task['id']}'s report names it")
@@ -23898,7 +23909,8 @@ def trace_spec(spec_id: str) -> dict:
         results = sorted({t["result"] for t in tests})
         matrix.append({
             "criterion": rid, "text": criterion["text"],
-            "tests": [f"{t['command']} ({t['task']})" for t in tests],
+            "tests": [f"{t['command']}: {t['result']} ({t['task']})" if t.get("per_test")
+                      else f"{t['command']} ({t['task']})" for t in tests],
             "test_result": ", ".join(results) if results else "none",
             "qa": qa_text, "review_findings": findings_by_rid[rid],
             "spec_approval": spec_approval, "implementation_approval": impl_approval,

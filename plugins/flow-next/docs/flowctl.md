@@ -1683,9 +1683,11 @@ forge shows `unknown` with a warning on stderr, never a guessed approval.
 Tests come from a task's JUnit XML reports under
 `<evidence.dir>/<spec-id>/tests/<task-id>/` when it has any: each test case maps
 to the R-IDs its name carries (`R7: ...`, `test_r7_...`) with its own result
-(`passed`, `failed`, `error`, `skipped`). A failed or erroring test is a gap, and
-so is a criterion the task `satisfies` that no test in its report names. A task
-without a report falls back to its recorded test evidence: the commands of done
+(`passed`, `failed`, `error`, `skipped`), shown next to the test. A failed or
+erroring test is a gap, including one that names no criterion; so is a test
+naming an unknown R-ID, an unreadable report, and a criterion the task
+`satisfies` that no test in its report names. A passing test without an R-ID is
+not mapped. A task without a report falls back to its recorded test evidence: the commands of done
 tasks whose `satisfies` names the criterion, with the result `recorded at done`.
 
 The gap check always runs: a criterion with no test and no live or CLI QA

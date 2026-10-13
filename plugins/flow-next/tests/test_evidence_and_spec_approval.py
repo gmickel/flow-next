@@ -379,10 +379,28 @@ class TraceTest(Repo):
         self.assertIn(str(self.evidence() / "tasks" / f"{SPEC}.1.json"), done["modified_paths"])
         result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
         row = result["rows"][0]
-        self.assertEqual(row["tests"], [f"ledger R1: books with a cost centre ({SPEC}.1)",
-                                        f"test_r1_rejects_missing ({SPEC}.1)"])
+        self.assertEqual(row["tests"], [f"ledger R1: books with a cost centre: passed ({SPEC}.1)",
+                                        f"test_r1_rejects_missing: failed ({SPEC}.1)"])
         self.assertEqual(row["test_result"], "failed, passed")
         self.assertIn("R1: test 'test_r1_rejects_missing' failed", result["gaps"])
+        self.assertFalse([g for g in result["gaps"] if "unrelated helper" in g])
+
+    def test_failures_without_a_known_criterion_and_unreadable_reports_are_gaps(self) -> None:
+        self.flow("config", "set", "evidence.persist", "on")
+        self.flow("start", f"{SPEC}.1")
+        report = self.write_report('<testcase name="test_r1_ok"/>',
+                                   '<testcase name="helper"><error>x</error></testcase>',
+                                   '<testcase name="test_r99_typo"/>')
+        self.flow("done", f"{SPEC}.1", "--test", "pytest", "--summary", "s")
+        gaps = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)["gaps"]
+        self.assertIn(f"{SPEC}.1: test 'helper' error and names no criterion", gaps)
+        self.assertIn(f"{SPEC}.1: test 'test_r99_typo' (passed) names unknown criterion R99", gaps)
+        report.write_text('<?xml version="1.0"?><testsuites><testcase name="R1: x">',
+                          encoding="utf-8")  # Truncated: never a fallback to "recorded at done".
+        result = json.loads(self.flow("trace", SPEC, "--json", check=False).stdout)
+        self.assertTrue(any(g.startswith(f"{SPEC}.1: test report junit.xml unreadable")
+                            for g in result["gaps"]))
+        self.assertEqual(result["rows"][0]["test_result"], "none")
 
     def test_report_without_a_test_for_a_satisfied_rid_is_a_gap(self) -> None:
         self.flow("config", "set", "evidence.persist", "on")
