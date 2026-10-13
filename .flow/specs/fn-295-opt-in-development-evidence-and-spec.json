@@ -486,7 +486,7 @@
     "impl:fn-295-opt-in-development-evidence-and-spec.1": 0
   },
   "spec_path": ".flow/specs/fn-295-opt-in-development-evidence-and-spec.md",
-  "status": "open",
+  "status": "done",
   "title": "Opt-in development evidence and spec approval for regulated teams",
   "tracker": {
     "baseHashFlow": null,
@@ -499,5 +499,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-13T22:52:32.131038Z"
+  "updated_at": "2026-10-13T22:54:41.889906Z"
 }

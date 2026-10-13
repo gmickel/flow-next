@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-295-opt-in-development-evidence-and-spec",
   "spec_path": ".flow/tasks/fn-295-opt-in-development-evidence-and-spec.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Opt-in development evidence and spec approval for regulated teams",
   "updated_at": "2026-10-13T22:10:58.321074Z"
 }
