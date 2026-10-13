@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-295-opt-in-development-evidence-and-spec",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-13T22:52:32.131031Z",
   "created_at": "2026-10-13T22:07:20.781698Z",
   "default_impl": null,
   "default_review": null,
@@ -499,5 +499,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-13T22:49:11.467333Z"
+  "updated_at": "2026-10-13T22:52:32.131038Z"
 }
