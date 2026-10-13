@@ -14,6 +14,7 @@
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-295-opt-in-development-evidence-and-spec.md",
   "status": "open",
   "title": "Opt-in development evidence and spec approval for regulated teams",
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-13T22:07:24.636590Z"
+  "updated_at": "2026-10-13T22:10:36.558455Z"
 }
