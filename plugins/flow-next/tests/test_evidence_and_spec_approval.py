@@ -283,6 +283,12 @@ class SpecApprovalTest(Repo):
         self.flow("spec", "unready", SPEC)  # A rewrite withdraws readiness.
         proc = self.flow("spec", "ready", SPEC, "--json", check=False)
         self.assertNotEqual(proc.returncode, 0)  # The old merge no longer approves.
+        spec_path = self.root / ".flow" / "specs" / f"{SPEC}.json"
+        withdrawn = json.loads(spec_path.read_text())["spec_approval"]["invalidated_at"]
+        # A merge earlier in the same second as the withdrawal does not re-approve.
+        same_second = [{**APPROVED_PR[0], "mergedAt": withdrawn[:19] + "Z"}]
+        self.gh_out.write_text(json.dumps(same_second), encoding="utf-8")
+        self.assertNotEqual(self.flow("start", f"{SPEC}.1", check=False).returncode, 0)
         later = [{**APPROVED_PR[0], "number": 9, "mergedAt": "2999-01-01T00:00:00Z"}]
         self.gh_out.write_text(json.dumps(APPROVED_PR + later), encoding="utf-8")
         self.flow("start", f"{SPEC}.1")

@@ -23557,6 +23557,15 @@ def _pr_approval(row: dict) -> dict:
     }
 
 
+def _iso_instant(value) -> Optional[datetime]:
+    """An ISO-8601 timestamp as an aware datetime, or None when unreadable."""
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
     """Under `spec.approval pr`, whether the spec's PR merged with an approval.
 
@@ -23576,9 +23585,9 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
     if rows is None:
         return {"approved": False, "reason": failure}
     # After `spec unready` withdrew an approval, only a later merge approves the revision.
-    since = recorded.get("invalidated_at") if isinstance(recorded, dict) else None
-    rows = [row for row in rows if not since or row["state"] != "MERGED"
-            or (row.get("mergedAt") or "") > since]
+    since = _iso_instant(recorded.get("invalidated_at")) if isinstance(recorded, dict) else None
+    rows = [row for row in rows if since is None or row["state"] != "MERGED"
+            or ((merged_at := _iso_instant(row.get("mergedAt"))) is not None and merged_at > since)]
     merged = sorted((row for row in rows if row["state"] == "MERGED"),
                     key=lambda row: row.get("mergedAt") or "", reverse=True)
     for row in merged:
