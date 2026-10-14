@@ -59,7 +59,7 @@ class Repo(unittest.TestCase):
     def tempdir(self) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        return Path(tmp.name)
+        return Path(tmp.name).resolve()  # macOS /var symlink, Windows 8.3 short names
 
     def flow(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
         env = {**os.environ, "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
