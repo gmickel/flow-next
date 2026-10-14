@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
@@ -197,10 +198,18 @@ class EvidencePersistTest(Repo):
                 self.flow("start", task)
                 proc = self.flow("done", task, "--summary", "s", "--json", check=False)
                 self.assertNotEqual(proc.returncode, 0)
-                self.assertIn(message, proc.stderr)
+                self.assertIn(message, json.loads(proc.stdout)["error"])  # --json keeps its envelope
                 # The failed evidence write leaves the task retryable, not done.
                 shown = json.loads(self.flow("show", task, "--json").stdout)
                 self.assertEqual(shown["status"], "in_progress")
+
+    def test_failed_receipt_copy_leaves_the_receipt_unwritten(self) -> None:
+        receipt = self.root / "receipt.json"
+        content = json.dumps({"type": "impl_review", "id": f"{SPEC}.1", "verdict": "SHIP"})
+        with mock.patch.object(flowctl, "evidence_record_receipt", side_effect=SystemExit(1)):
+            with self.assertRaises(SystemExit):
+                flowctl.atomic_write(receipt, content)
+        self.assertFalse(receipt.exists())
 
     def test_symlink_inside_the_evidence_folder_is_refused(self) -> None:
         outside = self.tempdir()
@@ -209,7 +218,7 @@ class EvidencePersistTest(Repo):
         self.flow("start", f"{SPEC}.1")
         proc = self.flow("done", f"{SPEC}.1", "--summary", "s", "--json", check=False)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("is a symlink", proc.stderr)
+        self.assertIn("is a symlink", json.loads(proc.stdout)["error"])
         self.assertEqual(list(outside.iterdir()), [])
 
 
@@ -256,6 +265,22 @@ class SpecApprovalTest(Repo):
         persisted = json.loads((self.evidence() / "approval.json").read_text())
         self.assertEqual(persisted["approvers"], record["approvers"])
 
+    def test_concurrent_unready_is_never_overwritten(self) -> None:
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, cwd)
+        old_path = os.environ["PATH"]
+        os.environ.update(PATH=f"{self.bin}{os.pathsep}{old_path}", FAKE_GH_OUT=str(self.gh_out))
+        self.addCleanup(os.environ.update, PATH=old_path)
+        self.gh_out.write_text(json.dumps(APPROVED_PR), encoding="utf-8")
+        spec_path = self.root / ".flow" / "specs" / f"{SPEC}.json"
+        stale = json.loads(spec_path.read_text())  # Read before the unready below.
+        withdrawn = {"approved": False, "invalidated_at": "2000-01-01T00:00:00Z"}
+        spec_path.write_text(json.dumps({**stale, "spec_approval": withdrawn}), encoding="utf-8")
+        status = flowctl.spec_approval_status(self.root / ".flow", stale)
+        self.assertFalse(status["approved"])
+        self.assertEqual(json.loads(spec_path.read_text())["spec_approval"], withdrawn)
+
     def test_route_holds_an_unapproved_spec(self) -> None:
         cwd = os.getcwd()
         os.chdir(self.root)
@@ -267,6 +292,10 @@ class SpecApprovalTest(Repo):
         decision = flowctl.judge_route_lifecycle(state)
         self.assertEqual(decision["value"], "host")
         self.assertIn("spec.approval is pr", decision["rule"])
+        # Held ahead of make-pr and plan review, not only ahead of task work.
+        for extra in ({"tasks_total": 1, "tasks_done": 1}, {"plan_review_status": "stale"}):
+            held = flowctl.judge_route_lifecycle({**state, "pr_exists": False, **extra})
+            self.assertEqual(held["value"], "host")
 
     def test_invalid_value_stops(self) -> None:
         self.assertNotEqual(self.flow("config", "set", "spec.approval", "maybe", check=False).returncode, 0)

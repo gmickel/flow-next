@@ -2032,11 +2032,12 @@ def atomic_write(path: Path, content: str) -> None:
 
     A finalized review or QA receipt is also copied into the committed
     evidence folder when `evidence.persist` is `on` (every receipt writer
-    goes through here, so none can skip it).
+    goes through here, so none can skip it). The copy comes first, so a
+    failed copy leaves the receipt unwritten and the stage retryable.
     """
-    _atomic_write_file(path, content)
     if '"verdict"' in content and '"type"' in content:
         evidence_record_receipt(content)
+    _atomic_write_file(path, content)
 
 
 def _atomic_write_file(path: Path, content: str) -> None:
@@ -23425,7 +23426,8 @@ def _evidence_run_record_update(spec_dir: Path, section: str, key: str, entry: d
 
 
 def _evidence_fail(exc: Exception) -> None:
-    error_exit(f"evidence persistence failed: {exc}", use_json=False)
+    # Receipt writers have no args in reach; every flowctl JSON caller passes --json.
+    error_exit(f"evidence persistence failed: {exc}", use_json="--json" in sys.argv[1:])
 
 
 def evidence_record_receipt(content: str) -> None:
@@ -23639,6 +23641,9 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
             spec_path = find_spec_json_path(flow_dir, spec_id)
             with _review_sidecar_lock(flow_dir, spec_id):
                 data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=True)
+                if data.get("spec_approval") != recorded:
+                    # A concurrent `spec unready` (or another recorder) changed it since the read.
+                    return {"approved": False, "reason": "spec approval changed while recording; retry"}
                 data["spec_approval"] = record
                 data["ready"] = True
                 data["updated_at"] = now_iso()
@@ -24028,6 +24033,10 @@ def judge_route_lifecycle(state: dict) -> dict:
         # Closing precedes PR creation; absence cannot distinguish a failed open
         # from a disappeared PR. Let the host report it, never create a replacement.
         return decision("host", "closed spec without observed PR")
+    if state.get("approval_pending"):
+        # Ahead of every row that produces work (make-pr, plan review, tasks); an
+        # observed PR keeps landing's own consent gate and its reviewers.
+        return decision("host", state["approval_pending"])
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
@@ -24035,8 +24044,6 @@ def judge_route_lifecycle(state: dict) -> dict:
         # #514: the spec changed after its plan SHIP, so its tasks may predate
         # the criteria; review the plan again before any work.
         return decision("plan_review", "plan review stale")
-    if state.get("approval_pending"):
-        return decision("host", state["approval_pending"])
     if total:
         if state.get("tasks_blocked", 0) == total - state["tasks_done"]:
             reasons = "; ".join(state.get("blocked_reasons", []))
@@ -26313,10 +26320,11 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
         if findings is None:
             error_exit("QA findings could not be parsed; receipt unchanged", code=2, use_json=args.json)
         receipt["findings"] = findings
+        # Captures first: a failed copy leaves the receipt unwritten and QA retryable.
+        evidence_record_qa_captures(review_id, receipt)
         if path.exists():
             _preserve_review_receipt_generation(path)
         atomic_write_json(path, receipt)
-    evidence_record_qa_captures(review_id, receipt)
     json_output({"success": True, "receipt": str(path), "qa_outcome": outcome})
 
 
