@@ -151,6 +151,7 @@ The verdict headline leads with the **top-5 ranked next-actions** drawn from thi
 | 13 | Run-and-observe recipe in the agent file + agent-readable dev logs (exact dev command, fixed port, literal ready line, log file location, DEBUG var; agent-tail-style capture) | High | `--fix-all` (in-root, agent-file content) |
 | 14 | Documented dev login + seeded test user + a browser surface (test-ids/roles on key elements; Playwright or chrome-devtools MCP entry) so the agent can drive the app past the login wall | Medium | `--fix-all` (in-root); MCP-install portion = explicit-consent |
 | 15 | Destructive scripts named in the agent file's never/ask-first tiers (from the destructive-script scan, FH5) | High | `--fix-all` (agent-file content) |
+| 16 | Turn a repeated agent mistake into a check: when recent history shows one mistake class twice (a reverted fix re-landed, the same correction in two commits; read from `git log -n 200 --format=%s`), recommend `/flow-next:flow` with "agents keep doing <class>", whose route captures a spec of checks per the hardening ladder | Medium | recommendation only; prime never writes the fix |
 
 **Structural actions** fire only when classification triggers them and are ALWAYS explicit-consent-only: generate a map, adopt nested instruction files, create the home base, write the greenfield bootstrap plan. Emit every finding with a freshness caveat and a suggested re-run cadence - never imply a durable badge.
 

@@ -6,9 +6,22 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Hand flow a captured profile, trace, heap snapshot or crash dump and get a diagnosis, not a fix.** Flow loads the artifact with tools you already have, names what bounds the cost or holds the memory, maps it to source, calls a cause confirmed only when a before-and-after pair or a reproduction shows it, and ends by naming the route that would fix it. It writes no code, no `.flow/` file and no pull request.
+- **Tell flow "agents keep doing X" and the mistake becomes a check.** Flow collects the class from commits, reverts, review threads and memory, then captures a spec whose criteria are checks that fail on a recorded past occurrence. Fixes follow one hardening ladder, from removing the opening (one owner, one supported way, one list) through types and a lint whose message names the fix, down to instruction text only for judgment calls. Audit's Harden path reads the same ladder, and prime recommends the route when history shows a mistake made twice.
+- **Ask flow whether a prompt or skill change behaves better and get a measured verdict.** It uses your eval harness when one exists, or builds a small blinded one (organic task, rubric only the judge sees, a judge from another model family), checks that every draw finished, and answers promote, do not promote or inconclusive. It asks for the number of draws and a budget before it spends anything.
+- **Ask flow what a diff could break and get the one fact it is safe because of, proven by running code.** The answer gives how far the proof got (stated, pointed at, walked, ran, reproduced), each risk with the check that would catch it, and what was checked and cleared. It is read-only; implementation review stays the gate.
+- **Refactors of UI meant to look the same are pinned by screenshots.** The refactor route captures named states before the change and compares by pixel diff, and never regenerates the baseline to pass.
+
 ### Changed
 
 - **Land catches up with the base once, as the last step, without restarting patience.** It used to bring a behind pull request up to date before checking review, threads, CI and patience, so a busy base cost a fresh CI run on every tick and every catch-up restarted the patience window. Land now catches up only when being behind is the one thing left before the merge, pins the update to the head it just checked so a concurrent push is never merged in unseen, and counts patience from the author's last push. After two catch-ups in a row with the base still moving it stops for a person instead of chasing the base. A base that requires a merge queue is never caught up by land, red CI caused only by merging in the base stops with the base commits named instead of spending a fix, and what merges is unchanged.
+- **Audit's Harden path picks its gate from the hardening ladder.** It still writes a lint rule or a CI step in a surface your repo already has, and now proves the gate fails on a past occurrence when the entry names one. When the right fix changes code (one owner for the state, a type, a test), or the repo has no lint or CI surface for the gate, Harden recommends flow's repeated-mistake route and leaves the entry active instead of writing a CLAUDE.md or AGENTS.md rule for a lesson a check could enforce. Entries hardened into an instruction-file rule earlier keep their liveness check.
+
+### Fixed
+
+- **A spec that talks about pull requests no longer gets routed to planning.** The direct-route default took any mention of "stacked PR", "separate PRs" or "two PRs" in a ready spec as a request for staged delivery, so a spec about landing stacked pull requests went through a planning hop it did not need. Only phrasing that states the spec's own delivery ("ship in two PRs", "split into stacked PRs", "staged across several PRs") picks the plan route now.
 
 ## [flow-next 8.7.0] - 2026-10-14
 
