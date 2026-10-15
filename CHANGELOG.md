@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Defect fixes remove the fault, not its symptom, and prove it where it was reported.** Before designing a fix, the defect route now decides whether the state that triggered the crash may legitimately occur; when it should never exist, the fix goes where that state was produced instead of a guard, retry or swallowed error where it surfaced. A failure that appears only after a restart suspects persisted state (config, caches, locks, serialized records) before code. Base and head observations run through the surface the report came from (the command, the request, the call or the app), so a unit test of the changed branch is supporting evidence, not the proof. The defect record gains a `signal:` line naming the always-on log line, check or error message that would have shown the cause at first look, proposed as a follow-up and never built inside the fix.
+
 ## [flow-next 8.8.0] - 2026-10-15
 
 Flow-Next routes four more kinds of request on its own, and unattended landing stops paying for base changes it does not need yet. Hand flow a captured profile or crash dump and it explains it without touching code; tell it agents keep making the same mistake and it captures a spec of checks that fail on a past occurrence; ask whether a prompt change behaves better and it measures; ask what a diff could break and it proves the one fact the change is safe because of. In a routing study the new requests routed correctly in 32 of 32 draws and none of the 27 existing request types changed route. Land now catches up with the base once, as the last step before an authorized merge, so a busy base costs one CI run instead of one per tick, and patience counts from the author's last push.

@@ -32,7 +32,7 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   A passed gate without a stored receipt cites the merge commit or pull request that carried it (a `review_receipt` ref can be its URL).
   Omit `outcome` only for a recorded fact that is neither passed nor failed, such as a measurement; it renders as a plain item.
 - Summarize a task's `Defect route:` block (`flow-next-work/references/defect-route.md`) in the existing prose fields and proof cells:
-  prior-fix findings, confirmed cause, introducing commit, and base/head/live observations. Cite the task records; show missing evidence as `not done: <reason>`.
+  prior-fix findings, confirmed cause, introducing commit, base/head/live observations, and the signal line as a follow-up. Cite the task records; show missing evidence as `not done: <reason>`.
 - When export has several `specs`, a task carries a `Hill climb:` block, or a QA receipt exists:
   read the matching section of [aid-rare-inputs.md](aid-rare-inputs.md).
 - At most 11 ordered `groups[]`: optional `problem`, optional `principle`, 1–7 `step`,
