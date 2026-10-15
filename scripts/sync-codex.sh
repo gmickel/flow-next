@@ -1773,7 +1773,7 @@ DIET = {
     "flow-next-setup": "Install or refresh flowctl and project instructions for flow-next in this repo. Use when asked to set up flow-next.",
     "flow-next-prospect": "Generate ranked new ideas grounded in the repo. Use when asked to brainstorm what to build; picking up existing specs or work goes to flow-next-flow.",
     "flow-next-chart": "Decision-map discovery for one oversized unclear idea before capture. Resolve one decision per invocation, brief for capture. Use when asked to chart an idea or work a chart decision.",
-    "flow-next-flow": "In a project that uses Flow-Next, use first for a spec id to implement, change, bug, slow code or number to move, cleanup, design choice, issue, or what next. Skip for quick questions or direct work.",
+    "flow-next-flow": "Use first in a Flow-Next repo for a spec id, change, bug, issue, slow code or metric, cleanup, design choice, dump to explain, repeat agent mistake, prompt change, diff risk, what next. Not quick asks",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
     "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
     "flow-next-features": "Seed or maintain the committed user-POV drive map at .flow/features/ so QA and drive reuse how a user reaches each feature.",

@@ -14,6 +14,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 - **Ask flow what a diff could break and get the one fact it is safe because of, proven by running code.** The answer gives how far the proof got (stated, pointed at, walked, ran, reproduced), each risk with the check that would catch it, and what was checked and cleared. It is read-only; implementation review stays the gate.
 - **Refactors of UI meant to look the same are pinned by screenshots.** The refactor route captures named states before the change and compares by pixel diff, and never regenerates the baseline to pass.
 
+### Changed
+
+- **Audit's Harden path picks its gate from the hardening ladder.** It still writes a lint rule or a CI step in a surface your repo already has, and now proves the gate fails on a past occurrence when the entry names one. When the right fix changes code (one owner for the state, a type, a test), or the repo has no lint or CI surface for the gate, Harden recommends flow's repeated-mistake route and leaves the entry active instead of writing a CLAUDE.md or AGENTS.md rule for a lesson a check could enforce. Entries hardened into an instruction-file rule earlier keep their liveness check.
+
 ## [flow-next 8.7.0] - 2026-10-14
 
 Teams that must show what was required, built, tested, reviewed and approved (GxP, medical devices, finance) can now have flow-next keep that record itself. Three opt-in pieces feed a team's validation; none makes anything compliant or certified, and with none of them set nothing changes. [Flow-Next in regulated environments](https://flow-next.dev/guides/regulated-environments/).

@@ -493,7 +493,7 @@ Then per-entry detail (one block each):
   [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
   [Replace only] Old guidance: <one-line>; New entry: <new_id>
   [Decision Replace] Successor: <new_id>; old marked decision_status=superseded (NOT git-rm'd)
-  [Harden only] Gate type: <lint|CI|instruction file>; Artifact: <path>;
+  [Harden only] Gate type: <lint|CI>; Artifact: <path>;
                 Gate-ref: <path>#<rule-id> -- <note>; Verified: <how it was confirmed live>
   [Harden — pointer only] Existing gate: <path>#<rule-id>; no new artifact written
   [Harden — failed] Gate type: <...>; Artifact: <path>; FAILED VERIFICATION: <reason>;
