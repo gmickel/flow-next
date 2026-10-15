@@ -18,6 +18,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 - **Audit's Harden path picks its gate from the hardening ladder.** It still writes a lint rule or a CI step in a surface your repo already has, and now proves the gate fails on a past occurrence when the entry names one. When the right fix changes code (one owner for the state, a type, a test), or the repo has no lint or CI surface for the gate, Harden recommends flow's repeated-mistake route and leaves the entry active instead of writing a CLAUDE.md or AGENTS.md rule for a lesson a check could enforce. Entries hardened into an instruction-file rule earlier keep their liveness check.
 
+### Fixed
+
+- **A spec that talks about pull requests no longer gets routed to planning.** The direct-route default took any mention of "stacked PR", "separate PRs" or "two PRs" in a ready spec as a request for staged delivery, so a spec about landing stacked pull requests went through a planning hop it did not need. Only phrasing that states the spec's own delivery ("ship in two PRs", "split into stacked PRs", "staged across several PRs") picks the plan route now.
+
 ## [flow-next 8.7.0] - 2026-10-14
 
 Teams that must show what was required, built, tested, reviewed and approved (GxP, medical devices, finance) can now have flow-next keep that record itself. Three opt-in pieces feed a team's validation; none makes anything compliant or certified, and with none of them set nothing changes. [Flow-Next in regulated environments](https://flow-next.dev/guides/regulated-environments/).
