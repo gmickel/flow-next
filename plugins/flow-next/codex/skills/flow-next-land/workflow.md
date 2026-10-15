@@ -38,9 +38,9 @@ failure there is a touchpoint failure and retains the confirmed `MERGED`.
 ## Resolve conflicts, threads, then CI
 
 Read mergeability first. A conflict stops `BLOCKED` with the exact branch needing a rebase. Unknown
-mergeability is `RESOLVING`, never permission to merge. A PR missing base commits
-(`gh api repos/<owner/repo>/compare/<base>...<head>` reports `behind_by` above 0; unreadable: `RESOLVING`)
-is caught up last, below, required by the base or not; a stack layer on a parent branch is caught up here.
+mergeability is `RESOLVING`, never permission to merge. A PR missing base commits is caught up last (below),
+required or not; a stack layer on a parent branch is caught up here by the pinned call below. Missing means
+`behind_by` above 0 from `gh api repos/<owner/repo>/compare/<base>...<head>` (unreadable: `RESOLVING`).
 
 Next enumerate all review threads with pagination. Open threads invoke
 `$flow-next-resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an isolated checkout:
@@ -52,14 +52,14 @@ afterward. `RESOLVE_PR_VERDICT=NEEDS_HUMAN` (a thread the resolver handed to a p
 thread each tick; other unresolved threads stop `RESOLVING`.
 
 Then inspect CI checks and failed logs. Pending checks stop `RESOLVING`. First, red CI on a head whose only
-commits since its last green head are catch-ups stops `BLOCKED` naming the base move, with no rerun or
-repair. Red CI in this PR's own code gets one focused fix in an isolated checkout (the same detached
-worktree), verification, and a push to the PR branch. A flaky check gets one
-`gh run rerun <run-id> --failed`; inspect prior attempts on this head first. An identical second failure is
-not a flake and gets no second rerun. If the fix does not turn CI green, stop `BLOCKED` naming the failing
-check; if the new run is pending, report `FIXING_CI` and return to the caller. External failures needing
-intervention stop `NEEDS_HUMAN` with their evidence. Re-read all gates after a repair; never spend a second
-fix on the same failure on a later invocation (the PR's commits and check attempts show it).
+commits since the newest head with green CI are catch-ups (`web-flow` base merges, below) stops `BLOCKED`
+naming the base move, with no rerun or repair. Red CI in this PR's own code gets one focused fix in an
+isolated checkout (the same detached worktree), verification, and a push to the PR branch. A flaky check
+gets one `gh run rerun <run-id> --failed`; inspect prior attempts on this head first. An identical second
+failure is not a flake and gets no second rerun. If the fix does not turn CI green, stop `BLOCKED` naming
+the failing check; if the new run is pending, report `FIXING_CI` and return to the caller. External
+failures needing intervention stop `NEEDS_HUMAN` with their evidence. Re-read all gates after a repair;
+never spend a second fix on the same failure on a later invocation (see the PR's commits and checks).
 
 ## Authorize and gate the merge
 
