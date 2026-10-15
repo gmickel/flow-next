@@ -21,7 +21,7 @@ All changes live in the defect route's gated reference, which only defect work r
 - **Diagnosis, step 2: is the state legitimate?** Before designing the fix, decide whether the state that triggered the symptom may legitimately occur. If it may, the code that broke on it is the cause and handling the state there is the fix. If it should never exist, a check where it surfaced is not the fix: trace what produced the state and fix that. Guards, retries, swallowed errors, clamped values and discarded state are where such faults usually hide, so a fix of that shape names why the state is legitimate. [paraphrase]
 - **Diagnosis, step 2: restart-only failures.** When the failure appears only after a restart, a reload or a second run, persisted state (config files, caches, lock files, serialized records, migrations) is the first candidate, eliminated with evidence before code is suspected. [paraphrase]
 - **Proof, step 4: the reported surface.** The base and head observations run through the surface the report came from: the command for a CLI report, the request for an API report, the call for a library report, the app for a UI report (the existing live-surface reference). A passing unit test of the changed branch supports the fix and is never the only proof when the report named another surface. [paraphrase]
-- **Record: the signal that would have shown it.** When the deciding fact took instrumentation or a long elimination to find, the record names the cheap, always-on signal that would have shown it at first look (a log line, a doctor check, an error message that names the value, a metric). It is a follow-up the person can pick up, never built inside the fix. When the cause was visible at first look, the line says so. [paraphrase]
+- **Record: the signal that would have shown it.** When the deciding fact took instrumentation or a long elimination to find, the record names the cheap, always-on signal that would have shown it at first look (a log line, a doctor check, an error message that names the value, a metric). It is a follow-up the person can pick up, never built inside the fix. When the cause was visible at first look, there is no signal line: a measured A/B showed a mandatory line on every defect handoff slowed small fixes. [paraphrase]
 
 ## Examples
 <!-- scope: both -->
@@ -40,11 +40,7 @@ All changes live in the defect route's gated reference, which only defect work r
 - signal: log the resolved env file path at startup; it would have shown `.env.local` overriding `.env` at first look
 ```
 
-and, for a cause visible in the first stack trace:
-
-```text
-- signal: none needed; the cause was visible at first look
-```
+A cause visible in the first stack trace gets no signal line.
 
 [inferred]
 
@@ -62,8 +58,8 @@ and, for a cause visible in the first stack trace:
 - **R1:** Diagnosis decides whether the triggering state is legitimate; when it is not, the fix targets what produced the state, and a fix shaped as a guard, retry, swallowed error or clamp states why the state is legitimate. Errors: legitimacy undecidable from evidence → asked attended, recorded default unattended. [paraphrase]
 - **R2:** A failure that appears only after a restart, reload or second run makes persisted state the first candidate, eliminated with evidence before code is suspected. No error surface beyond step 2's existing not-reproduced stop. [paraphrase]
 - **R3:** Base and head observations run through the surface the report came from; a unit test of the changed branch is supporting evidence only when the report named another surface. Errors: no surface named → the first surface a user meets, recorded. [paraphrase]
-- **R4:** The defect record carries one line naming the always-on signal that would have shown the cause at first look, or saying none was needed; the fix's diff never builds that signal. No error surface. [paraphrase]
-- **R5:** On the defect cases of the maintainer's end-to-end comparison harness, a same-time control against the change shows no worse judge score and no longer time to the first hand-back, and the record's signal line appears. No error surface beyond the harness's own verdict. [inferred]
+- **R4:** When finding the cause took instrumentation or a long elimination, the defect handoff (and the record, when there is a task) carries one line naming the always-on signal that would have shown the cause at first look; a cause visible at first look gets no signal line. The fix's diff never builds that signal. No error surface. [paraphrase]
+- **R5:** On the defect cases of the maintainer's end-to-end comparison harness, a same-time control against the change shows no worse judge score and no longer time to the first hand-back, and the signal line appears on the case whose cause took a long dig. No error surface beyond the harness's own verdict. [inferred]
 
 ## Boundaries
 <!-- scope: business -->
