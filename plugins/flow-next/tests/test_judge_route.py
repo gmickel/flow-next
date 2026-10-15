@@ -39,6 +39,7 @@ class JudgeRouteTests(unittest.TestCase):
             ({"spec_body": "Ship in two PRs"}, "plan"),
             ({"spec_body": "Split this into stacked PRs, one per layer."}, "plan"),
             ({"spec_body": "Delivery is staged across several PRs."}, "plan"),
+            ({"spec_body": "Deliver two PRs: database changes first, then the API."}, "plan"),
             ({"spec_body": "Please decompose this into tasks"}, "plan"),
             # PRs as the spec's subject, not its delivery, are not a plan signal.
             ({"spec_body": "A stacked PR whose base is its parent's branch keeps today's behaviour."}, "work_no_plan_default"),

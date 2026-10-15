@@ -24061,7 +24061,7 @@ def judge_route_lifecycle(state: dict) -> dict:
         "asks_for_plan": r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\b(?:break|split|decompose) (this|it) (down )?into tasks\b|\btask plan\b)",
         "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
         # Delivery phrasing only ("ship in two PRs", "split into stacked PRs"): PRs as the spec's subject are not a signal.
-        "staged_prs": r"\b(?:in|into|across|over|as)\s+(?:two|three|four|several|multiple|separate|stacked)\s+(?:stacked\s+)?prs?\b",
+        "staged_prs": r"\b(?:in|into|across|over|as|ship|deliver|open|split)\s+(?:two|three|four|several|multiple|separate|stacked)\s+(?:stacked\s+)?prs?\b",
     }
     for signal, pattern in patterns.items():
         if re.search(pattern, text, re.I):
