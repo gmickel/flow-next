@@ -69,7 +69,7 @@ A textual hit is never sufficient evidence of enforcement.
 - **Cluster candidates** — the cluster, not each member, is the Harden unit. Consolidate first (precedence), then evaluate the merged entry once. Never write one gate per member.
 - **Decision-track entries** (`knowledge/decisions/`) — legal and **rare**; most decisions are judgment records, not mechanizable checks. See [decision-entries.md](decision-entries.md).
 - **Stale entries** — `stale → hardened` is legal. A lesson can be stale as written and still name a real, mechanizable class; `mark-hardened` clears `stale_reason` / `stale_date` as part of the flip. Do not force a `mark-fresh` round trip first.
-- **Non-code repos** (docs sites, an Obsidian vault) — targets (a)/(b) are simply unavailable; (c) is the floor.
+- **Non-code repos** (docs sites, an Obsidian vault) — targets (a)/(b) are unavailable, so a recurring lesson goes to Recommended naming flow's repeated-mistake route and the entry stays `active`; audit writes no instruction-file rule for it.
 - **First post-ship run** — recurrence signals are derived retroactively, so the first ordinary audit after this ships may surface several candidates at once. That is intended: the thresholds above are what keeps the volume sane, and there is no first-run suppression or rate limit.
 - **Legacy flat files** — skipped as always; migrate first.
 
