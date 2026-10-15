@@ -45,9 +45,21 @@ One cohesive change to land's workflow: move the behind-base catch-up from the c
 - [ ] Scratch-repo observation recorded per R6, one line per scenario with the verdict seen: strict on (ruleset) and off; catch-up deferred until review, threads, CI and patience pass; head moved before update-branch -> 422 -> RESOLVING (distinguished from other refusals, which stay BLOCKED); patience anchored on the authored commit, including the no-push-date fallback; stale approval dismissed on catch-up -> AWAITING_REVIEW; two catch-ups plus a base move -> NEEDS_HUMAN; red CI on a catch-up-only head -> BLOCKED with no repair spent; queue-required base -> no catch-up; rules read unavailable -> strictness treated as required, queue as absent; base moved after the catch-up with strict off -> merge as the rules allow
 - [ ] CHANGELOG Unreleased entry; orchestration.md and flow-next.dev land/configuration pages updated (site on a local branch)
 ## Done summary
-TBD
+Land catches up last: mergeability and conflicts are read first; a PR missing base commits (compare API behind_by > 0, independent of strict rules) is caught up only when being behind alone stops an authorized merge, after patience and before the verdict command. The update is pinned with update-branch expected_head_sha (moved head -> RESOLVING). A base requiring a merge queue is never caught up. Catch-ups are counted by walking first parents (web-flow two-parent merges from the base); two on top with the base still moving -> NEEDS_HUMAN; an incomplete history read -> RESOLVING. Patience counts from the last authored push, with the fallbacks read from that commit. Red CI on a catch-up-only head -> BLOCKED naming the base move, no repair. Stack layers keep their early catch-up. Land's text stays at 226 lines (words +~85). Runtime docs, config schema description, CHANGELOG and Codex mirror updated; flow-next.dev land and configuration pages on local site branch docs/fn-300-land-catch-up (76e6354, 2cfaaf9), not pushed.
 
+Strictness probe (read-only, existing PRs): a no-rules repo PR 14 commits behind reads mergeStateStatus CLEAN (mf-factory-testbed#1); a strict-ruleset repo PR 28 behind reads BEHIND (turborepo-shadcn-nextjs#523). So BEHIND encodes strictness only; behind detection uses compare instead (review round 1 finding).
+
+Open item for the person: R6 scratch-repository observation (strict on via ruleset and off; deferral, expected-head 422, patience anchor, stale approval, two-catch-up stop, red catch-up-only CI, queue base, unreadable reads) needs a scratch GitHub repository on the maintainer's account; the live-tick comparison on this project's PRs comes after release.
+
+Decisions:
+- Plan route came from the staged_prs detector matching "stacked PR" in the spec text; followed the code decision (one planning hop).
+- No strictness read added: behind is detected by compare, and the catch-up happens whether or not strict rules require it.
+- Site docs committed locally, not pushed (unreleased feature).
+
+stage: impl-review - ran [round 1 three-axis NEEDS_WORK (2 findings), fix 81b26428, re-review SHIP] (model: codex gpt-6-astra high)
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4848b3fa1e8be853492d670fac8300a2823f76ff, 81b2642835c0c7a03c1d1349d802b48411f3f4ef
+- Tests: pytest test_land_named_pr test_land_config test_skill_prose_diet test_flow_config_schema_drift test_shipped_links: 37 passed, ./scripts/sync-codex.sh: mirror regenerated and fresh, flow-next.dev astro build (docs/fn-300-land-catch-up): 84 pages, complete, read-only probe: mergeStateStatus vs behind_by across 10 open PRs (BEHIND only under strict rules)
 - PRs:
