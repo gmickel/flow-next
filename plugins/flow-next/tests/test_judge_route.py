@@ -37,7 +37,12 @@ class JudgeRouteTests(unittest.TestCase):
             ({"spec_body": "Please plan this out"}, "plan"),
             ({"spec_body": "Separate owners implement each part"}, "plan"),
             ({"spec_body": "Ship in two PRs"}, "plan"),
+            ({"spec_body": "Split this into stacked PRs, one per layer."}, "plan"),
+            ({"spec_body": "Delivery is staged across several PRs."}, "plan"),
             ({"spec_body": "Please decompose this into tasks"}, "plan"),
+            # PRs as the spec's subject, not its delivery, are not a plan signal.
+            ({"spec_body": "A stacked PR whose base is its parent's branch keeps today's behaviour."}, "work_no_plan_default"),
+            ({"spec_body": "Land merges two PRs a day; separate PRs from forks need the same gates."}, "work_no_plan_default"),
             # Isolated vocabulary and negated requests are not plan signals.
             ({"spec_body": "Implement a decompose() helper for matrix factorization."}, "work_no_plan_default"),
             ({"spec_body": "Do not decompose this into tasks; deliver one PR."}, "work_no_plan_default"),
