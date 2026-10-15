@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Hand flow a captured profile, trace, heap snapshot or crash dump and get a diagnosis, not a fix.** Flow loads the artifact with tools you already have, names what bounds the cost or holds the memory, maps it to source, calls a cause confirmed only when a before-and-after pair or a reproduction shows it, and ends by naming the route that would fix it. It writes no code, no `.flow/` file and no pull request.
+- **Tell flow "agents keep doing X" and the mistake becomes a check.** Flow collects the class from commits, reverts, review threads and memory, then captures a spec whose criteria are checks that fail on a recorded past occurrence. Fixes follow one hardening ladder, from removing the opening (one owner, one supported way, one list) through types and a lint whose message names the fix, down to instruction text only for judgment calls. Audit's Harden path reads the same ladder, and prime recommends the route when history shows a mistake made twice.
+- **Ask flow whether a prompt or skill change behaves better and get a measured verdict.** It uses your eval harness when one exists, or builds a small blinded one (organic task, rubric only the judge sees, a judge from another model family), checks that every draw finished, and answers promote, do not promote or inconclusive. It asks for the number of draws and a budget before it spends anything.
+- **Ask flow what a diff could break and get the one fact it is safe because of, proven by running code.** The answer gives how far the proof got (stated, pointed at, walked, ran, reproduced), each risk with the check that would catch it, and what was checked and cleared. It is read-only; implementation review stays the gate.
+- **Refactors of UI meant to look the same are pinned by screenshots.** The refactor route captures named states before the change and compares by pixel diff, and never regenerates the baseline to pass.
+
 ## [flow-next 8.7.0] - 2026-10-14
 
 Teams that must show what was required, built, tested, reviewed and approved (GxP, medical devices, finance) can now have flow-next keep that record itself. Three opt-in pieces feed a team's validation; none makes anything compliant or certified, and with none of them set nothing changes. [Flow-Next in regulated environments](https://flow-next.dev/guides/regulated-environments/).

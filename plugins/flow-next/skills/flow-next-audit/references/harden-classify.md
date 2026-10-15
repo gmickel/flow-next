@@ -41,7 +41,7 @@ Thresholds gate **proposing** only; the human gates **applying**. They are overr
 - The repo has no surface to host the gate — see the degradation rule below; the instruction file is the universal floor, and if even that does not exist, Keep.
 - **Autofix mode.** Harden never auto-applies. Candidates are reported under Recommended only — no artifact write, no demotion. Gate surfaces are shared repo infrastructure; an autonomous sweep must not edit lint config, CI, or CLAUDE.md unattended.
 
-**Gate targets — cheapest-fitting first, discovered from repo files, never assumed and never scaffolded:**
+**Gate targets — walk the [hardening ladder](../../../references/hardening-ladder.md) from the top, discovered from repo files, never assumed and never scaffolded.** Its first, second and fourth levels (remove the opening, make the state unwritable, a behaviour test) change product code, which audit never writes: when one of them is the highest level that works, report it as a Recommended item naming flow's repeated-mistake route (`/flow-next:flow` with "agents keep doing <class>"), and the entry stays `active`. Audit writes only the ladder's lint or CI level and its instruction-text floor, into surfaces that already exist:
 
 - **(a) Lint rule** — extend the repo's existing linter config (ruff, biome, eslint, … — discovered by reading the repo, not assumed from the language). No linter configured → unavailable, fall through.
 - **(b) CI step** — a check in the repo's existing CI workflow (e.g. under `.github/workflows/`). No CI → unavailable, fall through.

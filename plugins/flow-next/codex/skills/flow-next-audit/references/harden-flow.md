@@ -19,6 +19,7 @@ Process Harden candidates **one at a time, sequentially** — each one edits sha
    - **lint** — run the linter and confirm the new rule is active in the **resolved** config: not merely present as text in a file the tool does not read, and not neutralized by a later `ignore` / disable entry.
    - **CI** — confirm the step parses and sits in a workflow AND a job that actually run on the relevant trigger, not a disabled, unreferenced, or manual-only one.
    - **instruction file** — confirm the rule landed in the substantive file the agents actually read (same discovery as Phase 6 §6.1), not an `@`-including stub.
+   - **lint and CI, against a real occurrence** — when the entry or its history names a past occurrence (a commit, a snippet), run the gate against it and see it fail, as the [hardening ladder](../../../references/hardening-ladder.md) requires. A gate that never failed on a real occurrence is reported unproven and the entry stays `active`.
 3. **Verification failed** → **stop**. The entry stays `active`, `mark-hardened` is NOT called, and the artifact edit is reported alongside a **failed graduation** with the reason (`ruff does not read this file`, `job never runs on push`, `landed in the @-include shim`). Leave the artifact for a human to fix or revert; do not silently retry with a different gate type.
 4. **Verification passed** → demote:
 
