@@ -8,13 +8,67 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-297-defect-route-legitimate-state-fixes-and",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-297-defect-route-legitimate-state-fixes-and.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0163879e086e57ee3791f2f051337c1d2f500fb3ca258e99f4c1dd54911ed54f",
+      "backend": "codex",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "classification": "introduced",
+            "findingId": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "45625d9efafbd79ccbe9bd36c6c759d4cb5f9235",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1044,
+      "output_sha256": "eacef67b1869d0495d43f7a73457ceec7e1dc5c9c35773f0acdf918d123d25d4",
+      "reservation_id": "66d8be0c1b1c46d7828d4256edd8e0d0",
+      "round_consumed": true,
+      "scope": "impl:fn-297-defect-route-legitimate-state-fixes-and.1",
+      "superseded_by": null,
+      "task": "fn-297-defect-route-legitimate-state-fixes-and.1",
+      "timestamp": "2026-10-15T20:41:52.498208Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-297-defect-route-legitimate-state-fixes-and.1": 0
+  },
   "spec_path": ".flow/specs/fn-297-defect-route-legitimate-state-fixes-and.md",
   "status": "open",
   "title": "Defect route: legitimate-state fixes and the missing signal",
@@ -29,5 +83,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-15T20:36:20.915063Z"
+  "updated_at": "2026-10-15T20:41:52.501164Z"
 }
