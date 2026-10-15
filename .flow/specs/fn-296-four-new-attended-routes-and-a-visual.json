@@ -186,7 +186,7 @@
     "impl:fn-296-four-new-attended-routes-and-a-visual.1": 0
   },
   "spec_path": ".flow/specs/fn-296-four-new-attended-routes-and-a-visual.md",
-  "status": "open",
+  "status": "done",
   "title": "Four new attended routes and a visual-parity pin",
   "tracker": {
     "baseHashFlow": null,
@@ -199,5 +199,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-15T15:39:26.337133Z"
+  "updated_at": "2026-10-15T15:41:36.161015Z"
 }
