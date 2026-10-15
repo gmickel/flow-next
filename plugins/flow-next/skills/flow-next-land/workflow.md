@@ -38,9 +38,9 @@ failure there is a touchpoint failure and retains the confirmed `MERGED`.
 ## Resolve conflicts, threads, then CI
 
 Read mergeability first. A conflict stops `BLOCKED` with the exact branch needing a rebase. Unknown
-mergeability is `RESOLVING`, never permission to merge. A PR only behind its base (`mergeStateStatus`
-`BEHIND`, reported only when the base requires up-to-date branches) is caught up last, below; a stack
-layer based on a parent branch is caught up here.
+mergeability is `RESOLVING`, never permission to merge. A PR missing base commits
+(`gh api repos/<owner/repo>/compare/<base>...<head>` reports `behind_by` above 0; unreadable: `RESOLVING`)
+is caught up last, below, required by the base or not; a stack layer on a parent branch is caught up here.
 
 Next enumerate all review threads with pagination. Open threads invoke
 `flow-next:flow-next-resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an isolated checkout:
@@ -75,12 +75,12 @@ date use that commit's earliest check-suite creation time, else its committer da
 expires, report `AWAITING_REVIEW` with `remaining_patience_seconds=<n>` (rounded up) and return; the
 caller owns cadence. A human's current merge authorization waives the wait.
 
-Catch up last, only when being behind is all that stops the merge, before the verdict command. A catch-up is
-a two-parent commit by committer `web-flow` whose second parent is from the base. Walk first parents from
-the head with `gh api repos/<owner/repo>/commits/<sha>` to the first other commit; a failed or incomplete
-read is `RESOLVING`, never an authored commit. Two catch-ups already on top stop `NEEDS_HUMAN` naming the
-moving base. A base whose effective rules (`gh api repos/<owner/repo>/rules/branches/<base>`) include
-`merge_queue` is not caught up (unreadable: no queue). Otherwise
+Catch up last: only when being behind alone stops the merge, before the verdict command. A base whose
+effective rules (`gh api repos/<owner/repo>/rules/branches/<base>`) include `merge_queue` is never caught up
+(unreadable: none). A catch-up is a two-parent commit by committer `web-flow` whose second parent is from
+the base. Walk first parents from the head with `gh api repos/<owner/repo>/commits/<sha>` to the first other
+commit; a failed or incomplete read is `RESOLVING`, never an authored commit. Two catch-ups already on top
+stop `NEEDS_HUMAN` naming the moving base. Otherwise
 `gh api -X PUT repos/<owner/repo>/pulls/<PR>/update-branch -f expected_head_sha=<head>`: a moved head is
 `RESOLVING`, another refusal `BLOCKED` naming the branch; then report `RESOLVING`.
 

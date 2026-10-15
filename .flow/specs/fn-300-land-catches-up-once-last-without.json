@@ -8,10 +8,12 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-300-land-catches-up-once-last-without",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-300-land-catches-up-once-last-without.1": 1
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
-  "plan_review_status": "ship",
+  "plan_review_status": "stale",
   "plan_reviewed_at": "2026-10-15T16:36:05.937049Z",
   "ready": true,
   "review_attempts": [
@@ -151,6 +153,58 @@
       "task": null,
       "timestamp": "2026-10-15T16:36:05.934588Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "5dd462e0c8ee07c73b38353f1596163bb54f7cd32961eb9955f89b1019ea2fb8",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "classification": "introduced",
+            "findingId": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7d6508e9ce0a99523630b80450971415",
+            "classification": "introduced",
+            "findingId": "finding-7d6508e9ce0a99523630b80450971415",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4848b3fa1e8be853492d670fac8300a2823f76ff",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2269,
+      "output_sha256": "7267a73a48ed6ef94979ca3aebf21bb707a80663704d26110b641fe5aa03b316",
+      "reservation_id": "5634b313313a42b4b5ac538aaf59cfe2",
+      "round_consumed": true,
+      "scope": "impl:fn-300-land-catches-up-once-last-without.1",
+      "superseded_by": null,
+      "task": "fn-300-land-catches-up-once-last-without.1",
+      "timestamp": "2026-10-15T16:44:55.365266Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -160,6 +214,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-300-land-catches-up-once-last-without.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-300-land-catches-up-once-last-without.md",
@@ -176,5 +231,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-15T16:36:05.937538Z"
+  "updated_at": "2026-10-15T16:45:47.254232Z"
 }
