@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Use first in a Flow-Next repo for a spec id, change, bug, issue, slow code or metric, cleanup, design choice, dump to explain, repeat agent mistake, prompt change, diff risk, what next. Not quick asks
+description: Use first in a Flow-Next repo for a spec id, change, bug, issue, slow code or metric, cleanup, design fork, dump to explain, repeated mistake, prompt change, what could break, what next. No quick asks
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---
