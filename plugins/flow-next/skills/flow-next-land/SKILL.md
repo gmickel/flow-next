@@ -17,8 +17,8 @@ before mutations, including after delegated work. Ambiguity stops
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 Read [workflow.md](workflow.md) and follow it for this invocation.
-`--dry-run` reads and reports only: no repair, catch-up, stack creation,
-verdict command, merge, branch deletion, or tracker mutation.
+`--dry-run` reads and reports only, naming any catch-up it would make last: no repair,
+catch-up, stack creation, verdict command, merge, branch deletion, or tracker mutation.
 Land owns no persistent files. It never rebases, force-pushes, or retargets.
 It never checks out a branch in the invoking checkout. Repairs use an isolated
 checkout and ordinary file-scoped commits and pushes to this PR's branch.

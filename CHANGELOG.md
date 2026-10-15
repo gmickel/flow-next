@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Land catches up with the base once, as the last step, without restarting patience.** It used to bring a behind pull request up to date before checking review, threads, CI and patience, so a busy base cost a fresh CI run on every tick and every catch-up restarted the patience window. Land now catches up only when being behind is the one thing left before the merge, pins the update to the head it just checked so a concurrent push is never merged in unseen, and counts patience from the author's last push. After two catch-ups in a row with the base still moving it stops for a person instead of chasing the base. A base that requires a merge queue is never caught up by land, red CI caused only by merging in the base stops with the base commits named instead of spending a fix, and what merges is unchanged.
+
 ## [flow-next 8.7.0] - 2026-10-14
 
 Teams that must show what was required, built, tested, reviewed and approved (GxP, medical devices, finance) can now have flow-next keep that record itself. Three opt-in pieces feed a team's validation; none makes anything compliant or certified, and with none of them set nothing changes. [Flow-Next in regulated environments](https://flow-next.dev/guides/regulated-environments/).

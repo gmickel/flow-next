@@ -37,51 +37,52 @@ failure there is a touchpoint failure and retains the confirmed `MERGED`.
 
 ## Resolve conflicts, threads, then CI
 
-Read mergeability first. A conflict stops `BLOCKED` with the exact branch
-needing a rebase. Unknown mergeability is `RESOLVING`, never permission to
-merge. If behind its base, use server-side `gh pr update-branch <PR> --repo
-<owner/repo>` without rebase; a refused catch-up is a conflict and stops
-`BLOCKED` naming the branch needing a rebase. Re-read after catch-up.
+Read mergeability first. A conflict stops `BLOCKED` with the exact branch needing a rebase. Unknown
+mergeability is `RESOLVING`, never permission to merge. A PR only behind its base (`mergeStateStatus`
+`BEHIND`, reported only when the base requires up-to-date branches) is caught up last, below; a stack
+layer based on a parent branch is caught up here.
 
 Next enumerate all review threads with pagination. Open threads invoke
-`$flow-next-resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an
-isolated checkout; the invoking checkout stays untouched. The isolated checkout is a detached
-worktree at the PR head (`git worktree add --detach <dir> <headRefOid>`, removed afterwards),
-because the invoking checkout may hold the PR branch; pushes from it go to the PR's head
-repository and branch by name (`git push <head repository URL> HEAD:<headRefName>`), which is
-the PR itself even when it comes from a fork. Resolver refusal
-`NOT_RETRYABLE: artifact unchanged since last verdict` stops `NEEDS_HUMAN`.
-Re-read the head
-and threads afterward. `RESOLVE_PR_VERDICT=NEEDS_HUMAN` (a thread the resolver handed to a
-person) stops `NEEDS_HUMAN` with its `NEEDS_HUMAN:` lines, so the run asks once instead of
-re-running on the same thread each tick; other unresolved threads stop `RESOLVING`.
+`$flow-next-resolve-pr <PR>` with `mode:autonomous`, bound to this PR and an isolated checkout:
+a detached worktree at the PR head (`git worktree add --detach <dir> <headRefOid>`, removed afterwards)
+that pushes by name (`git push <head repository URL> HEAD:<headRefName>`). Resolver refusal
+`NOT_RETRYABLE: artifact unchanged since last verdict` stops `NEEDS_HUMAN`. Re-read the head and threads
+afterward. `RESOLVE_PR_VERDICT=NEEDS_HUMAN` (a thread the resolver handed to a person) stops
+`NEEDS_HUMAN` with its `NEEDS_HUMAN:` lines, so the run asks once instead of re-running on the same
+thread each tick; other unresolved threads stop `RESOLVING`.
 
-Then inspect CI checks and failed logs. Pending checks stop `RESOLVING`.
-Red CI in this PR's own code gets one focused fix in an isolated checkout (the same detached
-worktree), verification, and a push to the PR branch. A flaky check gets one
-`gh run rerun <run-id> --failed`; inspect prior attempts on this head first.
-An identical second failure is not a flake and gets no second rerun.
-If the fix does not turn CI green, stop `BLOCKED` naming the failing check;
-if the new run is pending, report `FIXING_CI` and return to the caller.
-External failures needing intervention stop `NEEDS_HUMAN` with their evidence.
-Re-read all gates after a repair; never spend a second fix on the same failure
-on a later invocation (use the PR's commits and check attempts as evidence).
+Then inspect CI checks and failed logs. Pending checks stop `RESOLVING`. Red CI in this PR's own code
+gets one focused fix in an isolated checkout (the same detached worktree), verification, and a push to
+the PR branch. A flaky check gets one `gh run rerun <run-id> --failed`; inspect prior attempts on this
+head first. An identical second failure is not a flake and gets no second rerun. If the fix does not
+turn CI green, stop `BLOCKED` naming the failing check; if the new run is pending, report `FIXING_CI`
+and return to the caller. Red CI on a head whose only commits since its last green head are catch-ups
+stops `BLOCKED` naming the base move, with no repair. External failures needing intervention stop
+`NEEDS_HUMAN` with their evidence. Re-read all gates after a repair; never spend a second fix on the
+same failure on a later invocation (use the PR's commits and check attempts as evidence).
 
 ## Authorize and gate the merge
 
-Require green checks, a nonblocking `reviewDecision`, and zero unresolved
-threads on the current head. `CHANGES_REQUESTED` or `REVIEW_REQUIRED` stops
-`AWAITING_REVIEW`. No required reviews and no reviewer activity is allowed;
-no bot comment or approval signal is required. A failed or incomplete read
-stops safely. Honor any stricter repository instruction or branch protection.
+Require green checks, a nonblocking `reviewDecision`, and zero unresolved threads on the current head.
+`CHANGES_REQUESTED` or `REVIEW_REQUIRED` stops `AWAITING_REVIEW`. Absent reviews are fine; a failed or
+incomplete read stops safely. Honor any stricter repository instruction or branch protection.
 
-Without this PR's current session merge authorization, stop
-`AWAITING_REVIEW`, reason `merge-ready; authorization required` when ready.
-When calling flow authorizes the merge without a human's in-session merge
-authorization, require `land.patienceMinutes` since the last push, so review bots can post. Use push
-evidence; for a null push date use the head commit's earliest check-suite creation time, else its committer date. Before the
-window expires, report `AWAITING_REVIEW` with `remaining_patience_seconds=<n>` (rounded up) and return;
-the caller owns cadence. A human's current merge authorization waives the wait.
+Without this PR's current session merge authorization, stop `AWAITING_REVIEW`, reason
+`merge-ready; authorization required` when ready. When calling flow authorizes the merge without a
+human's in-session merge authorization, require `land.patienceMinutes` since the last authored push (the
+newest commit that is not a catch-up, below), so review bots can post. Use push evidence; with no push
+date use that commit's earliest check-suite creation time, else its committer date. Before the window
+expires, report `AWAITING_REVIEW` with `remaining_patience_seconds=<n>` (rounded up) and return; the
+caller owns cadence. A human's current merge authorization waives the wait.
+
+Catch up last, only when being behind is all that stops the merge, before the verdict command. A catch-up is
+a two-parent commit by committer `web-flow` whose second parent is from the base. Walk first parents from
+the head with `gh api repos/<owner/repo>/commits/<sha>` to the first other commit; a failed or incomplete
+read is `RESOLVING`, never an authored commit. Two catch-ups already on top stop `NEEDS_HUMAN` naming the
+moving base. A base whose effective rules (`gh api repos/<owner/repo>/rules/branches/<base>`) include
+`merge_queue` is not caught up (unreadable: no queue). Otherwise
+`gh api -X PUT repos/<owner/repo>/pulls/<PR>/update-branch -f expected_head_sha=<head>`: a moved head is
+`RESOLVING`, another refusal `BLOCKED` naming the branch; then report `RESOLVING`.
 
 When set, run `land.mergeVerdictCommand` once per invocation, only when all
 other gates allow merging, with a 600-second host-tool bound. Supply
@@ -107,8 +108,7 @@ person. With a human's current authorization, mark it ready with `gh pr ready <P
 Refresh the full head SHA and all gates immediately before merge. A shortened
 SHA is invalid. Ordinary PRs use `gh pr merge <PR> --repo <owner/repo>
 --squash --match-head-commit <full-head-sha>`, adding `--delete-branch` only
-after a successful fresh read proves no open PR targets the branch. The
-explicit `--repo` keeps gh from switching or deleting a local branch.
+after a successful fresh read proves no open PR targets the branch; `--repo` keeps local branches safe.
 After either merge call, re-read the exact PR: only `MERGED` with a merge
 commit confirms success, including after a command error. Never store polling state.
 A PR left open because the merge call added it to a merge queue (the call says so) reports
