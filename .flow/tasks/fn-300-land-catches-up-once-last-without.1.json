@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-300-land-catches-up-once-last-without",
   "spec_path": ".flow/tasks/fn-300-land-catches-up-once-last-without.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Reorder land's catch-up last, re-anchor patience, read strictness",
   "updated_at": "2026-10-15T16:35:21.033369Z"
 }

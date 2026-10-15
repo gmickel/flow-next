@@ -271,7 +271,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-300-land-catches-up-once-last-without.md",
-  "status": "open",
+  "status": "done",
   "title": "Land catches up once, last, without restarting patience",
   "tracker": {
     "baseHashFlow": null,
@@ -284,5 +284,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-15T16:47:19.779478Z"
+  "updated_at": "2026-10-15T16:49:10.633706Z"
 }
