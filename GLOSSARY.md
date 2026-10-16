@@ -605,13 +605,19 @@ An ordinary spec that `/flow-next:flow --goal` works toward: its acceptance crit
 
 _Avoid_: epic, program, milestone
 
-_Relates to_: Goal log, Driver, Long-horizon run
+_Relates to_: Goal log, Driver, Long-horizon run, Integration branch
 
 ## Goal log
 
 The `## Goal log` section a goal run appends to its goal spec after acting: dated entries for the source, each measurement with its commit, each child minted and why, each child's outcome, and each open question for the person. It is the run's only memory across sessions; the next run reads it from disk.
 
 _Relates to_: Goal spec
+
+## Integration branch
+
+The `goal/<branch>` branch a goal run's children land on by default, named from the goal spec's `branch_name`. The run merges the default branch into it before each measurement, measures on it, and at the end opens one final pull request from it to the default branch. A sentence in the goal spec opts out, and children then land on the default branch.
+
+_Relates to_: Goal spec, Goal log
 
 ## Hop
 

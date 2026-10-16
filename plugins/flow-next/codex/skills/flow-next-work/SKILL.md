@@ -71,6 +71,10 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--branch=new` or `--new-branch` or "new branch" or "create branch" → new branch
 - `--branch=worktree` or `--worktree` or "isolated worktree" or "worktree" → isolated worktree
 
+**Base**: `--base=<branch>` or `--base <branch>` → `DEFAULT_BASE=origin/<branch>` (a leading
+`origin/` is kept once), the branch a new spec branch starts from and the run is compared against
+(phases.md Phase 2); an unfetchable branch stops `BLOCKED` there, before any branch is created.
+
 **Review mode**:
 - `--review=<codex|copilot|cursor|claude|host|none>`, or the same backend named in words
   ("review with codex", "host review", "skip review"); `--no-review` = `none`

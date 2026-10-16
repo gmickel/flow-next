@@ -80,7 +80,7 @@ Only when the spec's `depends_on_epics` (in `$FLOWCTL show <spec-id> --json`) is
 the fence prints `BLOCKED:`: read [references/chained-spec.md](references/chained-spec.md).
 
 ```bash
-# fence:work-branch — inputs: FLOWCTL, SPEC_ID, BRANCH_NAME, BRANCH_MODE (new|current), DEFAULT_BASE (optional; defaults to origin/HEAD); origin reachable
+# fence:work-branch — inputs: FLOWCTL, SPEC_ID, BRANCH_NAME, BRANCH_MODE (new|current), DEFAULT_BASE (optional, from --base; defaults to origin/HEAD); origin reachable
 branch_git() {
   local output
   output=$(git "$@" 2>&1) || { printf "BLOCKED: git %s: %s\n" "$*" "$output" >&2; exit 2; }

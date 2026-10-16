@@ -19,10 +19,43 @@ is resumed from a transcript.
 - Add each child as a dependency of the goal, and mark ready a child it just minted.
 - Retire a child it minted that never merged, with the reason in the log.
 - Write the goal spec's `## Goal log` section.
+- With an integration branch (below): create it, merge the default branch into it, open the final
+  pull request from it, review that pull request with `flow-next:flow-next-impl-review`, and push
+  the review's fixes to it.
 
 Nothing else. It never edits another section of the goal spec, never edits a spec it did not
 mint, and never changes the goal's criteria, Boundaries or budget once the goal spec exists,
 including a goal spec it captured. Refine, chart and prospect stay outside every unattended run.
+
+## Where children land
+
+Children land on an integration branch, `goal/<the goal spec's branch_name>`, and the goal reaches
+the default branch through one final pull request. When the goal spec, or the message that started
+the run, says children land on the default branch directly, they do: no integration branch, no
+final pull request. The first run decides and logs the choice; later runs follow the log. Below,
+the goal's base is the integration branch, or the default branch when children land there.
+
+- **Create it once.** `git push origin origin/<default>:refs/heads/goal/<branch_name>`, logged with
+  the commit. A branch of that name the log does not record as this goal's stops `NEEDS_HUMAN`.
+- **Children build on it.** Dispatch work with `--base=goal/<branch_name>` and make-pr with
+  `--base goal/<branch_name>`; every other argument is auto.md's.
+- **Unchecked children are not green.** Before a child's pull request goes to land, read its checks
+  once they have had a minute to start. None, while the latest merged pull request into the default
+  branch had some, stops `NEEDS_HUMAN`: CI probably runs only on pull requests into the default
+  branch, and the person adds the integration branch (or `goal/**`) to its pull-request trigger.
+- **Keep it current.** Before Step 3 measures, merge the default branch's remote head into the
+  integration branch in a scratch worktree (`git merge`, never a rebase or force-push) and push
+  the merge. A conflict the run cannot resolve inside the goal's Boundaries is aborted and logged
+  as an open question, and the run measures the unmerged head.
+- **The final pull request.** When every criterion is met, open one pull request from the
+  integration branch to the default branch (`gh pr create`), titled with the goal, with the goal
+  log as its body, and log it. Check the integration branch out and run
+  `flow-next:flow-next-impl-review --base <its merge-base with the default branch> mode:autonomous`
+  over the whole diff under the unattended review loop, pushing its fixes to the integration
+  branch. Then hand the pull request to land under auto.md's landing rules; without landing
+  authority the run ends `DEFERRED_TO_LAND` with it. A logged final pull request comes before
+  measuring on later runs: open, land it under current consent or defer again; merged, log it and
+  end `GOAL_MET`; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
 
 ## Step 1: resolve the goal, with the guard before any write
 
@@ -43,8 +76,11 @@ including a goal spec it captured. Refine, chart and prospect stay outside every
 5. A goal marked ready is unreadied (`$FLOWCTL spec unready <goal-id> --json`) and the log says so.
 6. Read the whole goal spec (`$FLOWCTL cat <goal-id>`) every run: criteria, Boundaries, Decision
    Context, answers the person wrote, and the log.
+7. When the log has not recorded where children land, decide it now (Where children land).
 
 ## Step 2: drive an open child
+
+A final pull request the log records is handled first (Where children land).
 
 The children are the goal's dependencies the log records as minted or adopted for it. An open one
 (not closed, or closed by make-pr with its PR not yet merged; never a retired child) is this run's
@@ -58,10 +94,10 @@ Step 3, on the next tick under `--tick`.
 
 ## Step 3: measure
 
-When the log's latest entry is a measurement on the default branch's current remote head and no
+With an integration branch, bring it current first (Where children land). When the log's latest entry is a measurement on the goal base's current remote head and no
 answer was written in the spec since, decide from it (Step 4) instead of measuring again; a
-`--tick` run that measured last time mints this time. Otherwise measure on the default branch's
-current remote head, in a scratch worktree that never touches the run's checkout: fetch, `git worktree add --detach .flow/tmp/goal-measure origin/<default>`, run
+`--tick` run that measured last time mints this time. Otherwise measure on the goal base's
+current remote head, in a scratch worktree that never touches the run's checkout: fetch, `git worktree add --detach .flow/tmp/goal-measure origin/<goal base>`, run
 each criterion's check there, then remove the worktree. A criterion counts as met only on an
 observed result: a command's output, a test, a benchmark, or a merged child's receipts, recorded
 with the commit it ran on. A criterion only a person can judge counts only on the answer they
@@ -71,8 +107,9 @@ run ends `ADVANCED` after this entry.
 
 ## Step 4: decide
 
-- Every criterion met: log it and end `GOAL_MET`. The goal stays open for the person to accept
-  and close.
+- Every criterion met: log it. With an integration branch, open the final pull request (Where
+  children land); otherwise end `GOAL_MET`. The goal stays open for the person to accept and
+  close.
 - Stop `NEEDS_HUMAN`, with the log as the evidence, when a budget or stop date the goal spec
   states is reached, when the last two merged children each moved no criterion, or when every
   unmet criterion waits on an open question.
@@ -140,8 +177,8 @@ capture or a mint is stage `capture`; a measurement alone is stage `-`. A driver
 merge), and stops on `GOAL_MET`, `NEEDS_HUMAN` and `BLOCKED`.
 
 - `--tick`: one goal action, then the verdict: a goal capture, a measurement and its log entry, a
-  mint, or one child hop.
-- `--explain`: print the next goal action (capture the goal, measure, mint for a named gap, or
-  drive a named child with its route) and stop. Nothing is captured, measured or logged.
+  mint, one child hop, the final pull request with its review, or its landing.
+- `--explain`: print the next goal action (capture the goal, measure, mint for a named gap,
+  drive a named child with its route, or open or land the final pull request) and stop. Nothing is captured, measured or logged.
 
 One goal run per goal at a time: two concurrent runs can mint for the same gap.

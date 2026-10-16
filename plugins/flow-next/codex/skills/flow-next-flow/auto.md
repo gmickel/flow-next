@@ -143,7 +143,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute merge steps inline.** Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
 - Backlog mode: see backlog-mode.md §Backlog additions to the Forbidden list.
-- Touching gh anywhere except existing-PR selection, Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source.
+- Touching gh anywhere except existing-PR selection, Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
 - Printing anything after the `PILOT_VERDICT` line.
 
 ## Review no-repeat terminal
