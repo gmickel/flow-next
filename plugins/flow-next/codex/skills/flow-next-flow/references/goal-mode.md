@@ -54,16 +54,18 @@ the goal's base is the integration branch, or the default branch when children l
 - **The final pull request.** When every criterion is met, check the integration branch out and
   run `$flow-next-impl-review --base <its merge-base with the default branch>
   mode:autonomous` over the whole diff under the unattended review loop, pushing its fixes to the
-  integration branch; a review that stops ends the run with its reason. Only then open one pull
-  request from the integration branch to the default branch (`gh pr create`, `--draft` when the
-  review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the review's outcome as
-  its body, and log its URL. No spec owns its head, so bind it by that URL, confirmed with `gh pr
+  integration branch; a review that stops ends the run with its reason. Commit the log entry
+  recording the criteria met, the commit and the review's outcome to the integration branch. Only
+  then open one pull request from the integration branch to the default branch (`gh pr create`,
+  `--draft` when the review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the
+  review's outcome as its body, and commit its URL to the log there too before landing, so the
+  merged goal spec holds the whole log. No spec owns its head, so bind it by that URL, confirmed with `gh pr
   view` (head `goal/<branch_name>`, base the default branch), with the goal as its scoped spec,
   and hand it to land as [tail.md](tail.md) says; without landing authority the run ends
   `DEFERRED_TO_LAND` with it. The review and opening report stage `make-pr`, landing it `land`.
   A logged final pull request comes before measuring on
-  later runs: open, land it under current consent or defer again; merged, log it and end
-  `GOAL_MET`; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
+  later runs: open, land it under current consent or defer again; merged, end `GOAL_MET` with
+  no entry, the merged pull request being the record; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
 
 ## Step 1: resolve the goal, with the guard before any write
 
@@ -176,7 +178,9 @@ entries in plain prose, written after acting, never before. Write it with
 `$FLOWCTL spec set-plan <goal-id> --file <path> --json`, every other section unchanged byte for
 byte. The edits are `.flow` bookkeeping: they ride onto the next child's branch with its spec
 files, so with an integration branch they land there (Step 1 reads them back), and the dirty
-guard ignores them. The log never records or restores landing consent;
+guard ignores them. Entries after the last child merges, when children land on the default
+branch, stay uncommitted in the checkout: the run never commits to the default branch, and the
+person commits them when accepting and closing the goal. The log never records or restores landing consent;
 `--until=merge` holds only for the invocation it was passed to.
 
 Each child runs under the working rules like any other change: a discovery off its path is that
