@@ -176,7 +176,7 @@
     "impl:fn-297-defect-route-legitimate-state-fixes-and.1": 0
   },
   "spec_path": ".flow/specs/fn-297-defect-route-legitimate-state-fixes-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Defect route: legitimate-state fixes and the reported surface",
   "tracker": {
     "baseHashFlow": null,
@@ -189,5 +189,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T12:30:12.415478Z"
+  "updated_at": "2026-10-16T12:30:38.743909Z"
 }
