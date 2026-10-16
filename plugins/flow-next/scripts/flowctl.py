@@ -24426,7 +24426,7 @@ def judge_tier_effort(result: dict, args: argparse.Namespace, bridged: bool) -> 
     default = getattr(args, "default_effort", None)
     requested = getattr(args, "explicit_effort", None)
     role_effort = getattr(args, "role_effort", None)
-    if role_effort:
+    if role_effort and not bridged:  # A role pin configures the native spawn, never a bridged child.
         return None, f" at {role_effort} effort (role pins effort)"
     if requested:
         if not levels and not bridged:

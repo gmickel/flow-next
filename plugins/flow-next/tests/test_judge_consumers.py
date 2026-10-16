@@ -228,7 +228,7 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertEqual((out["spawn_model"], out["spawn_effort"]), ("claude-sonnet-5-5", "low"))
         self.assertEqual(out["tier_line"], "Tier: implementer - claude-sonnet-5-5 (explicit invocation)"
                                            " at low effort (host default medium)")
-        for overrides in ({"explicit_model": "gpt-6.1-sol"}, {}):
+        for overrides in ({"explicit_model": "gpt-6.1-sol"}, {}, {"role_effort": "high"}):
             with self.subTest(**overrides):
                 out = self.worker("mechanical", can_spawn_model=False, can_bridge=True, **overrides)
                 self.assertIsNone(out["spawn_effort"])

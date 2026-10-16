@@ -8,13 +8,83 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-299-worker-reasoning-effort-follows-the",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-299-worker-reasoning-effort-follows-the.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "31e6758d83181b940195c00c43552351277ec04aaee076841cc27355c15f1500",
+      "backend": "codex",
+      "base_sha": "04a03c6d3685e3ee6bafe56cd9a9dbb576ebe4f8",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6926e2a591c6a11b85400007e910addb",
+            "classification": "introduced",
+            "findingId": "finding-6926e2a591c6a11b85400007e910addb",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f704db02254192a87db666974a02833a",
+            "classification": "introduced",
+            "findingId": "finding-f704db02254192a87db666974a02833a",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b4d5cfe847157efd77f423ab616fd53c",
+            "classification": "introduced",
+            "findingId": "finding-b4d5cfe847157efd77f423ab616fd53c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "bb9f1a8673f13ef6f8be7295e8609de76270a967",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2590,
+      "output_sha256": "c6559bcb29f935ca6746c853e81f0de0cd1dc925457c2bb624ca9dc00cf05316",
+      "reservation_id": "2918e9c11af24129b6acadfadad77f51",
+      "round_consumed": true,
+      "scope": "impl:fn-299-worker-reasoning-effort-follows-the.1",
+      "superseded_by": null,
+      "task": "fn-299-worker-reasoning-effort-follows-the.1",
+      "timestamp": "2026-10-16T20:37:16.791397Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-299-worker-reasoning-effort-follows-the.1": 0
+  },
   "spec_path": ".flow/specs/fn-299-worker-reasoning-effort-follows-the.md",
   "status": "open",
   "title": "Worker reasoning effort follows the dispatch tier",
@@ -29,5 +99,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T20:25:35.242203Z"
+  "updated_at": "2026-10-16T20:37:16.794025Z"
 }
