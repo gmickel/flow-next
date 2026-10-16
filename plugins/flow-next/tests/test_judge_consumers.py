@@ -192,5 +192,65 @@ class JudgeConsumerTests(unittest.TestCase):
         self.assertIn("bridge recommended", out["tier_line"])
 
 
+    def worker(self, choice="moderate", confidence=0.88, **overrides):
+        args = dict(task="fn-1.1", effort_levels="low,medium,high,xhigh,max", default_effort="medium",
+                    explicit_effort=None, role_effort=None)
+        args.update(overrides)
+        return self.tier(choice, confidence, **args)
+
+    def test_worker_effort_follows_tier_within_host_levels(self):
+        unavailable = {"result": {"available": False, "reason": "no_key"}}
+        cases = (({"choice": "mechanical"}, "low", " at low effort (host default medium)"),
+                 ({"choice": "intelligent"}, "high", " at high effort (host default medium)"),
+                 ({"choice": "moderate"}, None, " at default effort"),
+                 ({"choice": "long_running"}, None, " at default effort"),
+                 ({"choice": "intelligent", "confidence": 0.79}, None, " at default effort"),
+                 ({"choice": "mechanical", "default_effort": "low"}, None, " at default effort"),
+                 ({"choice": "intelligent", "default_effort": "max"}, None, " at default effort"),
+                 (unavailable, None, " at default effort"),
+                 ({"choice": "intelligent", "explicit_effort": "low"}, "low", " at low effort (requested)"),
+                 ({"choice": "mechanical", "role_effort": "high", "explicit_effort": "low"}, None,
+                  " at high effort (role pins effort)"),
+                 ({"choice": "mechanical", "effort_levels": None}, None,
+                  "; effort not applied (host spawn takes no effort)"),
+                 ({"choice": "mechanical", "default_effort": None}, None,
+                  "; effort not applied (host default effort unknown)"),
+                 ({"explicit_effort": "xhigh", "effort_levels": None}, None,
+                  "; effort xhigh not applied (host spawn takes no effort)"))
+        for overrides, spawn_effort, suffix in cases:
+            with self.subTest(**{k: str(v) for k, v in overrides.items()}):
+                out = self.worker(**overrides)
+                self.assertEqual(out["spawn_effort"], spawn_effort)
+                self.assertTrue(out["tier_line"].endswith(suffix), out["tier_line"])
+
+    def test_explicit_model_keeps_tier_effort_and_bridge_carries_it(self):
+        out = self.worker("mechanical", explicit_model="claude-sonnet-5-5")
+        self.assertEqual((out["spawn_model"], out["spawn_effort"]), ("claude-sonnet-5-5", "low"))
+        self.assertEqual(out["tier_line"], "Tier: implementer - claude-sonnet-5-5 (explicit invocation)"
+                                           " at low effort (host default medium)")
+        for overrides in ({"explicit_model": "gpt-6.1-sol"}, {}):
+            with self.subTest(**overrides):
+                out = self.worker("mechanical", can_spawn_model=False, can_bridge=True, **overrides)
+                self.assertIsNone(out["spawn_effort"])
+                self.assertEqual(out["implementer"], overrides.get("explicit_model", "fast-test-model") + " at low")
+        # Scouts (no --task) keep their own effort selection.
+        out = self.tier(effort_levels="low,medium,high", default_effort="medium")
+        self.assertEqual(out["tier_line"], "Tier: mechanical (jev 0.88) -> fast-test-model")
+
+    def test_worker_effort_reaches_the_cli_result_without_a_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for args in (["init"], ["spec", "create", "--title", "Demo"],
+                         ["task", "create", "--spec", "fn-1-demo", "--title", "Rename a constant"]):
+                subprocess.run([*FLOWCTL_CMD, *args, "--json"], cwd=tmp, check=True, capture_output=True)
+            env = {k: v for k, v in os.environ.items() if k != "TYPESAFE_API_KEY"}
+            run = subprocess.run([*FLOWCTL_CMD, "judge", "--preset", "tier", "--task", "fn-1-demo.1", "--can-spawn-model",
+                                  "--effort-levels", "low,medium,high", "--default-effort", "medium", "--json"],
+                                 cwd=tmp, env=env, capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        out = json.loads(run.stdout)
+        self.assertEqual((out["tier_line"], out["spawn_effort"]),
+                         ("Tier: session (jev-unavailable(no_key)) at default effort", None))
+
+
 if __name__ == "__main__":
     unittest.main()

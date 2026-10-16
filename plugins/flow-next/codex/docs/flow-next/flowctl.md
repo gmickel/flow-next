@@ -1236,7 +1236,12 @@ over 32k tokens at four characters per token is rejected without sending.
 The command never writes state, answers, or credentials to disk.
 
 `--task` assembles tier inputs from the task and returns `tier_line`,
-`spawn_model` and `implementer`. Unknown tasks fail.
+`spawn_model`, `spawn_effort` and `implementer`. Unknown tasks fail. For a worker
+the caller passes the host facts `--effort-levels <lowest,...,highest>` and
+`--default-effort <level>`, plus `--explicit-effort` or `--role-effort` when one
+applies; `spawn_effort` is the level for the spawn's effort parameter, or null
+for the host default. A bridged implementer carries the effort as
+`<model> at <effort>` in `implementer`.
 
 `--spec` assembles route facts from the live spec and repository. A failed
 PR probe returns `pr_probe_failed: true` and no `decision`, so the caller

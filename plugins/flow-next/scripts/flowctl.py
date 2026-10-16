@@ -24407,7 +24407,43 @@ def judge_tier_dispatch(result: dict, args: argparse.Namespace) -> dict:
             line = f"Tier: long_running (jev {confidence:.2f}) - bridge recommended"
         else:
             line = f"Tier: session (jev {answer['choice']} {confidence:.2f})"
-    return {"tier_line": line, "spawn_model": selected_model, "implementer": implementer}
+    bridged = bool(implementer) and not selected_model and can_bridge
+    effort, suffix = judge_tier_effort(result, args, bridged)
+    spawn_effort = None
+    if effort and bridged:
+        implementer = f"{implementer} at {effort}"
+    elif effort:
+        spawn_effort = effort
+    return {"tier_line": line + suffix, "spawn_model": selected_model, "implementer": implementer,
+            "spawn_effort": spawn_effort}
+
+
+def judge_tier_effort(result: dict, args: argparse.Namespace, bridged: bool) -> tuple:
+    """Worker effort from the tier answer, one step on the host's ladder; requested and role efforts win."""
+    if not getattr(args, "task", None):
+        return None, ""  # Scouts keep their own effort selection.
+    levels = [level.strip() for level in (getattr(args, "effort_levels", None) or "").split(",") if level.strip()]
+    default = getattr(args, "default_effort", None)
+    requested = getattr(args, "explicit_effort", None)
+    role_effort = getattr(args, "role_effort", None)
+    if role_effort:
+        return None, f" at {role_effort} effort (role pins effort)"
+    if requested:
+        if not levels and not bridged:
+            return None, f"; effort {requested} not applied (host spawn takes no effort)"
+        return requested, f" at {requested} effort (requested)"
+    answer = result["answers"]["tier"] if result.get("available") else None
+    step = {"mechanical": -1, "intelligent": 1}.get(answer["choice"], 0) if answer and answer["confidence"] >= 0.8 else 0
+    if not step:
+        return None, " at default effort"
+    if not levels:
+        return None, "; effort not applied (host spawn takes no effort)"
+    if default not in levels:
+        return None, "; effort not applied (host default effort unknown)"
+    level = levels[min(max(levels.index(default) + step, 0), len(levels) - 1)]
+    if level == default:
+        return None, " at default effort"
+    return level, f" at {level} effort (host default {default})"
 
 
 def cmd_judge(args: argparse.Namespace) -> None:
@@ -55443,6 +55479,10 @@ def main() -> None:
     p_judge.add_argument("--role-model", help="Model pinned by the dispatched role")
     p_judge.add_argument("--can-spawn-model", action="store_true", help="Host supports native model selection")
     p_judge.add_argument("--can-bridge", action="store_true", help="Host verified bridge reach")
+    p_judge.add_argument("--effort-levels", help="Worker spawn's effort levels, lowest first, comma-separated")
+    p_judge.add_argument("--default-effort", help="Effort a worker spawn without one runs at")
+    p_judge.add_argument("--explicit-effort", help="Effort the invocation or routing block names")
+    p_judge.add_argument("--role-effort", help="Effort pinned by the dispatched role")
     p_judge.add_argument("--json", action="store_true", help="JSON output")
     p_judge.set_defaults(func=cmd_judge)
 
