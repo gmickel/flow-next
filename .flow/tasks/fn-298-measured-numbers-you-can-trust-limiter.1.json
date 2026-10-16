@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-298-measured-numbers-you-can-trust-limiter",
   "spec_path": ".flow/tasks/fn-298-measured-numbers-you-can-trust-limiter.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Measured numbers you can trust: limiter, errors, work done",
   "updated_at": "2026-10-16T20:26:44.820641Z"
 }

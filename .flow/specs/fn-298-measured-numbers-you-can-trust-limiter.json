@@ -118,7 +118,7 @@
     "impl:fn-298-measured-numbers-you-can-trust-limiter.1": 0
   },
   "spec_path": ".flow/specs/fn-298-measured-numbers-you-can-trust-limiter.md",
-  "status": "open",
+  "status": "done",
   "title": "Measured numbers you can trust: limiter, errors, work done",
   "tracker": {
     "baseHashFlow": null,
@@ -131,5 +131,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T22:36:01.629036Z"
+  "updated_at": "2026-10-16T22:36:35.075590Z"
 }
