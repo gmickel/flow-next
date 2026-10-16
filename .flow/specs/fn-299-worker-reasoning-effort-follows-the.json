@@ -10,6 +10,7 @@
   "id": "fn-299-worker-reasoning-effort-follows-the",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-15T09:52:38.487878Z"
+  "updated_at": "2026-10-16T20:25:35.242203Z"
 }
