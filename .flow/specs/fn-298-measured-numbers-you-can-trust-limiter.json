@@ -10,13 +10,67 @@
     "fn-296-four-new-attended-routes-and-a-visual"
   ],
   "id": "fn-298-measured-numbers-you-can-trust-limiter",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-298-measured-numbers-you-can-trust-limiter.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "ea3a638d95fc6cc8868420e5aa8c2316f05682a14b12302ea405f6fd52a563c4",
+      "backend": "codex",
+      "base_sha": "1d10c8f7a5f341ec1018bc37167e2432dd2aec35",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-c9c3fe1a951b768dfb6d7e8dd1c4d450",
+            "classification": "introduced",
+            "findingId": "finding-c9c3fe1a951b768dfb6d7e8dd1c4d450",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8af12d9e9bd39669aaaa7294b4ac0d900eca4ecc",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1111,
+      "output_sha256": "2356e721f43099e5c4127e31b1e8af3128e60651aa20a49ebc6cf96d71c92383",
+      "reservation_id": "350f57c5a32c4aa7912255b6dca643ae",
+      "round_consumed": true,
+      "scope": "impl:fn-298-measured-numbers-you-can-trust-limiter.1",
+      "superseded_by": null,
+      "task": "fn-298-measured-numbers-you-can-trust-limiter.1",
+      "timestamp": "2026-10-16T20:44:57.686514Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-298-measured-numbers-you-can-trust-limiter.1": 0
+  },
   "spec_path": ".flow/specs/fn-298-measured-numbers-you-can-trust-limiter.md",
   "status": "open",
   "title": "Measured numbers you can trust: limiter, errors, work done",
@@ -31,5 +85,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T20:26:17.172667Z"
+  "updated_at": "2026-10-16T20:44:57.689370Z"
 }
