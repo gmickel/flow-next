@@ -139,9 +139,13 @@ When your prompt's `IMPLEMENTER` line or the project routing block names an impl
    first change. Its measured loop replaces Phase 2's single change, and each
    kept attempt is its own Phase 3 commit.
 
-5. Read **Optional** files as needed during implementation.
+5. **Measured slowness:** when the acceptance is a baseline and a target for
+   one number moved once, read
+   [measured-numbers.md](../references/measured-numbers.md) before measuring.
 
-6. Continue to Phase 2 only after investigation is complete.
+6. Read **Optional** files as needed during implementation.
+
+7. Continue to Phase 2 only after investigation is complete.
 
 Done when: every Required file named by either Investigation targets heading has been read, the similar-code search has been reported (reuse / extend / new), and no code has been written yet.
 

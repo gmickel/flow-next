@@ -21,11 +21,14 @@ fixture bank). Otherwise build a small blinded one in scratch:
   arms in one pass; without one, say so and the verdict is `inconclusive`;
 - grading from what candidates did (transcripts, files, output), never from what they say they did.
 
-**Check before trusting the gap.** Every draw finished the task, and the gap is larger than the
-run-to-run spread inside each arm. To push a score up over many attempts afterwards, the
-hill-climb route takes this harness as its frozen measurement.
+**Check before trusting the gap** per [measured-numbers.md](../../../references/measured-numbers.md):
+every draw finished the task, the gap holds draw by draw and is larger than the run-to-run spread
+inside each arm, and the verdict carries how many draws on each side completed. To push a score
+up over many attempts afterwards, the hill-climb route takes this harness as its frozen
+measurement.
 
 Example: a support bot's system prompt is rewritten to stop it promising refunds. Twelve organic
 customer messages, five draws per arm per message, the rubric held by a judge from another family
 that sees `set-a` and `set-b`. Baseline promised a refund in 14 of 60 replies, candidate in 1 of
-60, every draw completed, and both offered the refund form when the order qualified: `promote`.
+60, all 60 draws completed on each side, and both offered the refund form when the order
+qualified: `promote`.
