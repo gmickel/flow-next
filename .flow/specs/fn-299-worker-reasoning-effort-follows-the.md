@@ -50,7 +50,7 @@ A spec with five tasks: two config bumps and a doc mirror (mechanical, low effor
 <!-- scope: both -->
 
 - **R1:** With a judge available, each worker's effort follows its tier: one level below the host default for mechanical, the default for moderate and long-running, one level above for intelligent, bounded by the host's lowest and highest levels. Errors: no tier answer → host default. [paraphrase]
-- **R2:** An explicit invocation effort, a role pin or a routing-block effort wins over the tier effort. No error surface beyond today's precedence rules. [paraphrase]
+- **R2:** An explicit invocation effort, a role pin or a routing-block effort wins over the tier effort. An explicit invocation that names a model but no effort keeps that model and still takes the tier effort: the tier call runs and its answer sets the effort, even though the explicit branch of `judge_tier_dispatch` ignores the answer for model selection today. No error surface beyond today's precedence rules. [paraphrase]
 - **R3:** Without a judge key, or when the judge is disabled or unavailable, every worker runs at the host default effort. No error surface. [paraphrase]
 - **R4:** The effort reaches the worker through the host's spawn effort parameter or the bridge's reasoning-effort setting; where neither exists, or the spawn rejects the level, the worker runs at the default and the tier line says why. Errors: rejected level → one retry at the default, never a third level. [paraphrase]
 - **R5:** The tier line names the effort applied or not applied, and the done summary keeps it. No error surface. [paraphrase]
@@ -72,6 +72,8 @@ A spec with five tasks: two config bumps and a doc mirror (mechanical, low effor
 The tier call already answers how hard a task is; using that answer for effort as well costs no extra call and keeps the model family, so diversity and behaviour stay as configured. [paraphrase] The maintainer decided on 2026-10-15 that without a judge key effort stays at the host default rather than following a code rule from task signals, matching the model tier's fallback. [paraphrase] The main risk is a lowered effort producing weaker diffs that cost extra review rounds and end slower overall; R6 measures exactly that before release. [inferred]
 
 Delivery order: 4 of 6 in this set; independent. Route: direct. [paraphrase]
+
+The model-only case in R2 (added 2026-10-16) matters because callers that pin the implementer's model still want per-task effort. MergeFoundry adds "use <model> for the implementation" to every flow run it starts, and never an effort. If an explicit model also pinned the effort, this spec would never change effort for those runs. [inferred]
 
 ## Strategy Alignment
 
