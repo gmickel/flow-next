@@ -548,7 +548,7 @@
     "impl:fn-302-goal-mode-flow-goal-builds-toward-a.1": 0
   },
   "spec_path": ".flow/specs/fn-302-goal-mode-flow-goal-builds-toward-a.md",
-  "status": "open",
+  "status": "done",
   "title": "Goal mode: flow --goal builds toward a goal spec's bar",
   "tracker": {
     "baseHashFlow": null,
@@ -561,5 +561,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T13:57:19.444675Z"
+  "updated_at": "2026-10-16T13:58:19.946258Z"
 }

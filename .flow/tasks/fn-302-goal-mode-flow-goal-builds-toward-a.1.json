@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-302-goal-mode-flow-goal-builds-toward-a",
   "spec_path": ".flow/tasks/fn-302-goal-mode-flow-goal-builds-toward-a.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Goal mode: flow --goal builds toward a goal spec's bar",
   "updated_at": "2026-10-16T13:22:46.679363Z"
 }
