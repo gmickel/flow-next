@@ -8,13 +8,75 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-301-qa-re-checks-only-what-changed-since",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-301-qa-re-checks-only-what-changed-since.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "c2a5c5061ff676b64e875cf845a64310753d7941daf6c0b9b7dd850bcf9665f1",
+      "backend": "codex",
+      "base_sha": "0b008d9bd884e8f444220d25d0621d88e540a52b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8d6ce912f8616b59836f68ac15be7c67",
+            "classification": "introduced",
+            "findingId": "finding-8d6ce912f8616b59836f68ac15be7c67",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4f5655dc4c440461fc099fc32e2976d2",
+            "classification": "introduced",
+            "findingId": "finding-4f5655dc4c440461fc099fc32e2976d2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "24fea0a36cc7ee0af7db3fbcb9119a6bd258825b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1535,
+      "output_sha256": "fc538f030d5df37f785ba32ce7324c93bf9d7ca8ee6b5d9bb8b2e94b3d7609ae",
+      "reservation_id": "1b1a266ae33a4e09a5de6ae653f69263",
+      "round_consumed": true,
+      "scope": "impl:fn-301-qa-re-checks-only-what-changed-since.1",
+      "superseded_by": null,
+      "task": "fn-301-qa-re-checks-only-what-changed-since.1",
+      "timestamp": "2026-10-16T20:39:26.715805Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-301-qa-re-checks-only-what-changed-since.1": 0
+  },
   "spec_path": ".flow/specs/fn-301-qa-re-checks-only-what-changed-since.md",
   "status": "open",
   "title": "QA re-checks only what changed since its last pass",
@@ -29,5 +91,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T20:25:39.846521Z"
+  "updated_at": "2026-10-16T20:39:26.718531Z"
 }

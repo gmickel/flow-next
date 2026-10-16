@@ -19,9 +19,9 @@ git diff --name-only <prior head_sha> HEAD
 ```
 
 Also run in full when the diff touches shared code broadly (styles, layout, state stores,
-routing, auth, a component most pages use, dependencies or build config), when the acceptance
-criteria changed in a way you cannot map to particular scenarios, or when you cannot tell what a
-surface depends on.
+routing, auth, a component most pages use, dependencies or build config), when the spec's
+acceptance criteria changed since the prior pass (`git diff <prior head_sha> HEAD -- <the spec
+file>` adds, removes or rewords one), or when you cannot tell what a surface depends on.
 
 ## Re-run or carry
 
@@ -29,12 +29,9 @@ Derive the scenarios as §2.1 says, keeping the prior receipt's scenario ids for
 already had. Then sort them:
 
 - **Re-run** every scenario that failed or was blocked last time; every scenario whose surface the
-  diff touches, counting the code it drives through and the shared code it depends on; every
-  scenario for a criterion that is new or whose text changed since the prior pass
-  (`git diff <prior head_sha> HEAD -- <the spec file>`); and one load-bearing scenario that
-  exercises the whole app as the smoke run.
-- **Carry** a scenario that passed last time, on a surface the diff does not touch, for a
-  criterion whose text has not changed.
+  diff touches, counting the code it drives through and the shared code it depends on; and one
+  load-bearing scenario that exercises the whole app as the smoke run.
+- **Carry** a scenario that passed last time, on a surface the diff does not touch.
 
 Drive the smoke scenario first. When it fails, file it as usual and run every scenario in full.
 
@@ -43,5 +40,4 @@ Drive the smoke scenario first. When it fails, file it as usual and run every sc
 A carried scenario is not driven. Record it in the receipt as `{"id": "<prior id>", "run":
 "carried"}`; `flowctl qa receipt` copies its outcome, R-IDs, evidence and original head from the
 prior receipt and refuses one that did not pass there. A criterion all of whose scenarios carried
-reads `carried` in the coverage table. Never record a carried scenario as live, and never let a
-carried result satisfy a criterion whose text changed.
+reads `carried` in the coverage table. Never record a carried scenario as live.
