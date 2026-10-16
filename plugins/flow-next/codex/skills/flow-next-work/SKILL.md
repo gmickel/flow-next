@@ -73,7 +73,8 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 
 **Base**: `--base=<branch>` or `--base <branch>` → `DEFAULT_BASE=origin/<branch>` (a leading
 `origin/` is kept once), the branch a new spec branch starts from and the run is compared against
-(phases.md Phase 2); an unfetchable branch stops `BLOCKED` there, before any branch is created.
+(phases.md Phase 2); an unfetchable branch, or a spec with a chain parent, stops `BLOCKED` there,
+before any branch is created.
 
 **Review mode**:
 - `--review=<codex|copilot|cursor|claude|host|none>`, or the same backend named in words

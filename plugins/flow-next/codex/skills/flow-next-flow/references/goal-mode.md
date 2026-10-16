@@ -47,15 +47,16 @@ the goal's base is the integration branch, or the default branch when children l
   integration branch in a scratch worktree (`git merge`, never a rebase or force-push) and push
   the merge. A conflict the run cannot resolve inside the goal's Boundaries is aborted and logged
   as an open question, and the run measures the unmerged head.
-- **The final pull request.** When every criterion is met, open one pull request from the
-  integration branch to the default branch (`gh pr create`), titled with the goal, with the goal
-  log as its body, and log it. Check the integration branch out and run
-  `$flow-next-impl-review --base <its merge-base with the default branch> mode:autonomous`
-  over the whole diff under the unattended review loop, pushing its fixes to the integration
-  branch. Then hand the pull request to land under auto.md's landing rules; without landing
-  authority the run ends `DEFERRED_TO_LAND` with it. A logged final pull request comes before
-  measuring on later runs: open, land it under current consent or defer again; merged, log it and
-  end `GOAL_MET`; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
+- **The final pull request.** When every criterion is met, check the integration branch out and
+  run `$flow-next-impl-review --base <its merge-base with the default branch>
+  mode:autonomous` over the whole diff under the unattended review loop, pushing its fixes to the
+  integration branch; a review that stops ends the run with its reason. Only then open one pull
+  request from the integration branch to the default branch (`gh pr create`, `--draft` when the
+  review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the review's outcome as
+  its body, and log it. Hand it to land under auto.md's landing rules; without landing authority
+  the run ends `DEFERRED_TO_LAND` with it. A logged final pull request comes before measuring on
+  later runs: open, land it under current consent or defer again; merged, log it and end
+  `GOAL_MET`; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
 
 ## Step 1: resolve the goal, with the guard before any write
 
@@ -177,7 +178,7 @@ capture or a mint is stage `capture`; a measurement alone is stage `-`. A driver
 merge), and stops on `GOAL_MET`, `NEEDS_HUMAN` and `BLOCKED`.
 
 - `--tick`: one goal action, then the verdict: a goal capture, a measurement and its log entry, a
-  mint, one child hop, the final pull request with its review, or its landing.
+  mint, one child hop, the final review with its pull request, or its landing.
 - `--explain`: print the next goal action (capture the goal, measure, mint for a named gap,
   drive a named child with its route, or open or land the final pull request) and stop. Nothing is captured, measured or logged.
 

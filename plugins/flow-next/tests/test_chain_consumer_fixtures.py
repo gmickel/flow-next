@@ -110,7 +110,7 @@ class WorkBranchTestCase(unittest.TestCase):
         self.w = ConsumerWorld(self.tmp)
         self.fence = fence(WORK, "work-branch")
 
-    def run_branch(self, spec: str, branch: str, mode: str, base: str = "origin/main") -> tuple[int, dict[str, str]]:
+    def run_branch(self, spec: str, branch: str, mode: str, base: str = "") -> tuple[int, dict[str, str]]:
         return self.w.run_rc(self.fence, {"FLOWCTL": str(self.w.bin / "flowctl"), "SPEC_ID": spec, "BRANCH_NAME": branch, "BRANCH_MODE": mode, "DEFAULT_BASE": base},
                              ["BASE_BRANCH", "CHAIN_PARENT"], cwd=self.w.work)
 
@@ -174,6 +174,15 @@ class WorkBranchTestCase(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("BLOCKED: git fetch", got["_stderr"])
         self.assertEqual(git(self.w.work, "branch", "--list", "C"), "")
+
+    def test_base_argument_on_a_chained_spec_blocks_before_any_branch(self) -> None:
+        parent, child, _ = parent_child(self.w)
+        git(self.w.work, "checkout", "-q", "main")
+        git(self.w.work, "branch", "-D", "B")
+        rc, got = self.run_branch(child, "B", "new", base="origin/main")
+        self.assertEqual(rc, 2)
+        self.assertIn(f"BLOCKED: --base origin/main conflicts with chain parent {parent}", got["_stdout"])
+        self.assertEqual(git(self.w.work, "branch", "--list", "B"), "")
 
     def test_current_branch_needs_the_parent_tip_in_its_ancestry(self) -> None:
         parent, child, a_tip = parent_child(self.w)
