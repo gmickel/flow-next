@@ -29,7 +29,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) needs
 
 ## Driving unattended
 
-Run `/flow-next:flow --auto` by default once the harness is observed holding a session through a full route. One invocation then drives one ready item hop after hop to its PR. Until that is observed, run `/flow-next:flow --auto --tick` per invocation. Each hop lands its receipts, evidence echo, and ledger entry before the run ends, so the next invocation classifies from disk.
+Run `/flow-next:flow --auto` by default once the harness is observed holding a session through a full route. One invocation then drives one ready item hop after hop to its PR. Until that is observed, run `/flow-next:flow --auto --tick` per invocation. Goal mode (`/flow-next:flow --goal <spec-id or source>`, toward an outcome larger than one spec) follows the same rule, with `--tick` doing one goal action per invocation. Each hop lands its receipts, evidence echo, and ledger entry before the run ends, so the next invocation classifies from disk.
 
 ## Discover, then invoke
 

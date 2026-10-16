@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Goal mode: `/flow-next:flow --goal <spec-id or source>` works toward an outcome larger than one spec.** Name a goal spec, or hand it a PRD, a design document, a migration target or a sentence and it captures the goal first. Each run measures the goal's criteria on the default branch, mints the next child spec for the largest gap, and builds it through the ordinary `flow --auto` pipeline, with the same routing, reviews and gates as a spec you wrote; `--until=merge` lands each child before the next measurement. Measurements, mints, decisions and open questions go to a `## Goal log` in the goal spec, so a run that lasts days resumes from disk, and the run ends `GOAL_MET` only on recorded evidence for every criterion. A run without `--goal` loads nothing new. Thanks to @DanielKillenberger for proposing it in #559.
+
 ### Changed
 
 - **Defect fixes remove the fault, not its symptom, and prove it where it was reported.** Before designing a fix, the defect route now decides whether the state that triggered the crash may legitimately occur; when it should never exist, the fix goes where that state was produced instead of a guard, retry or swallowed error where it surfaced. A failure that appears only after a restart suspects persisted state (config, caches, locks, serialized records) before code. Base and head observations run through the surface the report came from (the command, the request, the call or the app), so a unit test of the changed branch is supporting evidence, not the proof.

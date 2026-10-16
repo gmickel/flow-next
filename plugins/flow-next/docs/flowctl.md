@@ -515,7 +515,7 @@ is refused.
 
 ### spec ready / spec unready
 
-Mark / clear the spec's human-owned readiness gate. Readiness is orthogonal to `status` - a ready spec stays `open` through planning and work, and `done` specs may be toggled.
+Mark / clear the spec's readiness gate, which a person sets (a `flow --goal` run also sets it for a child it minted). Readiness is orthogonal to `status` - a ready spec stays `open` through planning and work, and `done` specs may be toggled.
 
 ```bash
 flowctl spec ready fn-1 [--json]

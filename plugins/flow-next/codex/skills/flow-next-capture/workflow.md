@@ -2,6 +2,8 @@
 
 Execute these phases in order; stop on a user-blocking error rather than continuing with bad state.
 
+Under `from:goal`, the source named in [references/from-goal.md](references/from-goal.md) stands in for the conversation wherever this file reads the user's turns.
+
 This file is the spine every run walks. Path-specific machinery (autofix, `--rewrite`, chart briefings, strategy, splits, glossary, readiness, tracker, must-ask detail) sits in `references/*.md` behind gates. When a gate sentinel prints, STOP and Read the named reference before the next step; when it is silent, read nothing.
 
 ## Preamble
@@ -57,7 +59,7 @@ On the sentinel, read [references/strategy-alignment.md](references/strategy-ali
 ### 0.4 — Compaction detection
 
 Look for compaction signals: `[compacted]` markers, truncated tool output, system-summary blocks, or later turns relying on a result that is not visible. Only when one is present: read [references/compaction.md](references/compaction.md) and decide
-whether to proceed or refuse as it says.
+whether to proceed or refuse as it says. Under `from:goal` this check does not run: the source is read from disk or the invocation.
 
 ### 0.5 — Duplicate branch
 
@@ -114,7 +116,7 @@ Each criterion must let a reviewer point at behavior and say met or not. One tha
 
 ### 2.5 — Spec-count gate
 
-At 8+ criteria, or criteria serving more than one independently shippable outcome: GATE ACTIVE — STOP. Read [references/split-proposal.md](references/split-proposal.md) and decide 1 vs N specs (it owns the Phase 4 `split-as-proposed` choice, §5.2b, and the split close). Capture never auto-splits.
+At 8+ criteria, or criteria serving more than one independently shippable outcome: GATE ACTIVE — STOP. Read [references/split-proposal.md](references/split-proposal.md) and decide 1 vs N specs (it owns the Phase 4 `split-as-proposed` choice, §5.2b, and the split close). Capture never auto-splits. Under `from:goal`, [references/from-goal.md](references/from-goal.md) decides instead.
 
 ### 2.6 — Business context
 

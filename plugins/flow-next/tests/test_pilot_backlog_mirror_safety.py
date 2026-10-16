@@ -58,7 +58,7 @@ PILOT_BACKLOG = FLOW / "references" / "backlog-mode.md"
 PILOT_QA = FLOW / "references" / "qa-stage.md"
 # The files a `--auto` run can load, relative to the flow skill dir; every one
 # needs a mirror counterpart.
-AUTO_ROUTED_FILES = ("auto.md", "references/backlog-mode.md", "references/qa-stage.md")
+AUTO_ROUTED_FILES = ("auto.md", "references/backlog-mode.md", "references/goal-mode.md", "references/qa-stage.md")
 
 # Canonical tracker-sync (carries the R14 Phase-0 fix from fn-68.2).
 TS_STEPS = PLUGIN / "skills" / "flow-next-tracker-sync" / "steps.md"

@@ -29,7 +29,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is a 
 
 ## Driving unattended
 
-Run `/flow-next:flow --auto` (or the hyphen form) by default. One invocation drives one ready item hop after hop to its PR. There is no host loop primitive, so repetition is a person or an external scheduler re-invoking it. Where a scheduler cuts sessions short, run `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. Unattended QA under `--auto` needs the browser tool's Auto-run allow-list (`../../skills/flow-next-drive/references/cursor-ide-browser.md`).
+Run `/flow-next:flow --auto` (or the hyphen form) by default. One invocation drives one ready item hop after hop to its PR. There is no host loop primitive, so repetition is a person or an external scheduler re-invoking it. For an outcome larger than one spec, `/flow-next:flow --goal <spec-id or source>` builds child specs toward it the same way; re-invoke it until it prints `GOAL_MET`. Where a scheduler cuts sessions short, run `/flow-next:flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut. Unattended QA under `--auto` needs the browser tool's Auto-run allow-list (`../../skills/flow-next-drive/references/cursor-ide-browser.md`).
 
 ## Discover, then invoke
 

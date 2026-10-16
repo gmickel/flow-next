@@ -12,6 +12,7 @@
   "id": "fn-302-goal-mode-flow-goal-builds-toward-a",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -30,5 +31,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T12:44:39.679509Z"
+  "updated_at": "2026-10-16T13:22:17.944332Z"
 }

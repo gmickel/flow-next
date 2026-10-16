@@ -29,7 +29,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) shell
 
 ## Driving unattended
 
-Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days).
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days). For an outcome larger than one spec, `/flow-next:flow --goal <spec-id or source> --until=merge` builds child specs toward it the same way; drive it with `/goal keep running /flow-next:flow --goal <goal> --until=merge until PILOT_VERDICT=GOAL_MET or a stop`.
 
 ## Discover, then invoke
 

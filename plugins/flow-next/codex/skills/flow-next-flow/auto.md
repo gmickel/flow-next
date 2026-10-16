@@ -1,6 +1,6 @@
 # /flow-next:flow --auto - the unattended driver
 
-Read only when SKILL.md parsed the exact `--auto` token. One run selects one ready spec and drives it through SKILL.md's hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`. Every run ends with one `PILOT_VERDICT` line.
+Read only when SKILL.md parsed the exact `--auto` or `--goal` token. One run selects one ready spec and drives it through SKILL.md's hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`; a goal run drives its goal's children this way, one at a time. Every run ends with one `PILOT_VERDICT` line.
 
 ## Preamble
 
@@ -29,7 +29,7 @@ The first `pilot snapshot` below returns the hard guard before selection, ledger
 
 Retain an explicit request in the current user message to review the selected spec's design before work (for example, "flow --auto fn-12; review its design first") as host context for CLASSIFY. This intent is separate from argument parsing and `--review`, which selects a backend; it expires with this run.
 
-Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. `--auto` never accepts intent, a path, a branch, or free text. The ready flag is the consent boundary and there is no capture upstream of it. The shared SKILL.md parse accepts only `--until=merge` as a destination; invalid or valueless `--until` stops before these phases. Other unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
+Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. Outside goal mode, `--auto` never accepts intent, a path, a branch, or free text: the ready flag is the consent boundary and there is no capture upstream of it. Goal mode (`--goal`) takes a spec id or any source and rests on the goal the person named instead ([references/goal-mode.md](references/goal-mode.md)). The shared SKILL.md parse accepts only `--until=merge` as a destination; invalid or valueless `--until` stops before these phases. Other unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
 
 Use `PREV` because host argument interpolation rewrites positional tokens inside skill code blocks.
 
@@ -42,7 +42,10 @@ PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
 PILOT_BACKLOG_OVERRIDE=""    # "" = use config; "1" = force backlog (--backlog)
 AUTO_TICK=0                  # 1 = one hop then stop; 0 = hop until a terminal
+PILOT_GOAL_MODE=0            # 1 = --goal: references/goal-mode.md drives the run
+PILOT_GOAL=""                # goal mode: every positional word, a spec id or a source
 
+for ARG in $RAW_ARGS; do [ "$ARG" = "--goal" ] && PILOT_GOAL_MODE=1; done
 PREV=""
 for ARG in $RAW_ARGS; do
   case "$PREV" in
@@ -52,21 +55,28 @@ for ARG in $RAW_ARGS; do
   esac
   case "$ARG" in
     --until=merge) : ;;                         # validated by SKILL.md; not a build-stage argument
-    --auto)       : ;;                         # consumed by SKILL.md mode detection
+    --auto|--goal) : ;;                         # consumed by SKILL.md mode detection and the pre-scan above
     --tick)       AUTO_TICK=1 ;;
     --review|--research|--depth) PREV="$ARG" ;;
     --explain|--dry-run) PILOT_DRY_RUN=1 ;;
-    --backlog)    PILOT_BACKLOG_OVERRIDE=1 ;;
+    --backlog)
+      if [ "$PILOT_GOAL_MODE" = 1 ]; then echo "--backlog does not apply with --goal (ignored)" >&2
+      else PILOT_BACKLOG_OVERRIDE=1; fi ;;
     --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
     --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
     --depth=*)    PILOT_DEPTH="${ARG#--depth=}" ;;
     -*) echo "Unknown flag: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
-    *) [ -z "$PILOT_SPEC" ] && PILOT_SPEC="$ARG" || echo "Unknown argument: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
+    *)
+      if [ "$PILOT_GOAL_MODE" = 1 ]; then PILOT_GOAL="${PILOT_GOAL:+$PILOT_GOAL }$ARG"
+      elif [ -z "$PILOT_SPEC" ]; then PILOT_SPEC="$ARG"
+      else echo "Unknown argument: $ARG (ignored by /flow-next:flow --auto)" >&2; fi ;;
   esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:flow --auto)" >&2
-export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK
+export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK PILOT_GOAL_MODE PILOT_GOAL
 ```
+
+**`PILOT_GOAL_MODE=1`: read [references/goal-mode.md](references/goal-mode.md) now and follow it.** It resolves the goal and the child this run drives, using the snapshot and guard fences below, and returns to Phase 2 with that child as the named scope. A run without `--goal` never reads it.
 
 Resolve the scope and capture the hop with one read-only call. Shell variables do not survive between prompt turns, so the snapshot is written to `.flow/tmp/pilot-snapshot.json` (gitignored), and every later fence that reads it starts with the same read line, which stops `NEEDS_HUMAN` when the file is missing or unparseable. An unresolved scope or snapshot error ends `NEEDS_HUMAN` with the error, never a host re-derivation or widened backlog.
 
@@ -105,7 +115,7 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
+Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`, and so does goal mode, whatever the config says. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
 
 When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute its backlog-only setup, then continue with Phase 1**. The reference owns the backlog-only verdict extension, SELECT/TRIAGE/ASK (Phases 1.5 and 1.6), and the backlog terminals and decision log; this file keeps the autonomy export, dispatch allowlist, and never-author guards. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
 
@@ -121,19 +131,19 @@ Every run ends with exactly one terminal line, the last line of the response, wi
 PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> stage=<stage> reason="<one line>"
 ```
 
-Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (when the QA gate selected it), `make-pr`, `land`, or `-`. A run that dispatched more than one stage names every dispatched stage in order joined by `+` (for example `stage=work+qa+make-pr`) and carries the last hop's verdict. A `--tick` run names one stage.
+Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/goal-mode.md](references/goal-mode.md)). Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly `plan`, `plan-review`, `work`, `qa` (when the QA gate selected it), `make-pr`, `land`, `capture` (goal mode only), or `-`. A run that dispatched more than one stage names every dispatched stage in order joined by `+` (for example `stage=work+qa+make-pr`) and carries the last hop's verdict. A `--tick` run names one stage.
 
 `DEFERRED_TO_LAND` is a distinct *non-terminal-work* verdict (stage `land`): without current landing authority, every remaining all-done candidate has an open PR that land owns. An authorized landing tick also uses it for an observed external wait per `references/tail.md`. It is deliberately separated from `NO_WORK` so a driver can route it to `$flow-next-land` instead of stopping; an all-done spec with an open PR is real outstanding work, never absence of work.
 
 ## Forbidden
 
 - Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. `references/prototype-before-ask.md` licenses no question to the user here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. Capture, refine, chart, resolve-pr, merge, and release are **never** stages of this run (capture/refine/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge belong to land downstream of the PR; release is separate).
+- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, plus `capture` in goal mode only, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. Refine, chart, resolve-pr, merge, and release are **never** stages of this run, and capture is never one outside goal mode (refine and chart are human authoring and discovery upstream of the consent boundary, as capture is in ready and backlog runs; goal mode's own capture is licensed in [references/goal-mode.md](references/goal-mode.md); resolve-pr/merge belong to land downstream of the PR; release is separate).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. Under `--tick`, the `make-pr` that follows a fresh QA verdict runs on the next tick.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute merge steps inline.** Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
 - Backlog mode: see backlog-mode.md §Backlog additions to the Forbidden list.
-- Touching gh anywhere except existing-PR selection, Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`.
+- Touching gh anywhere except existing-PR selection, Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source.
 - Printing anything after the `PILOT_VERDICT` line.
 
 ## Review no-repeat terminal
@@ -142,10 +152,10 @@ When a delegated plan, implementation, or completion review exits `1` with `NOT_
 
 ## The hop loop
 
-Run SKILL.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item. After Phase 6:
+Run SKILL.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item; a goal run fixes one child at a time. After Phase 6:
 
 - `AUTO_TICK=1`: print the terminal line and stop.
-- `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge; external waits may continue only at cadence with current consent.
+- `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge (goal mode returns to its measure step instead); external waits may continue only at cadence with current consent.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, rerun the snapshot fence for the same spec, and return to Phase 2 for the same spec.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with `make-pr`: without landing authority, print the terminal line and stop. With `FLOW_UNTIL=merge` or current explicit scoped consent, bind the confirmed PR per `references/tail.md`, append `make-pr` to `DISPATCHED_STAGES` and re-classify this same item for land.
 - Any other outcome (`NEEDS_HUMAN`, `ASKED`, `BLOCKED`, `DEFERRED_TO_LAND`, `NO_WORK`) ends the run, except the observed landing wait explicitly handled above.
@@ -178,7 +188,7 @@ fi
 
 ## Phase 1 - SELECT (two-pass)
 
-**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default). In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
+**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default) outside goal mode; in goal mode the goal reference names the item, which still passes `eligible` as a named scope does, or takes the existing-PR path below. In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
 
 **Existing-PR selection.** Before the open/ready build predicate, read the
 named spec (or closed specs in the candidate inventory) and its exact known PR
@@ -268,7 +278,7 @@ Apply these existing outcomes to the observed PR for `existing_pr_tail` or `all_
 
 ### Explain stop
 
-`--explain` stops after classification. For explain, keep the snapshot route for classification and print the `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:` lines from its lifecycle decision as [references/explain.md](references/explain.md) says (no judge call). It also prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing.
+`--explain` stops after classification (goal mode stops at its next goal action instead, per its reference). For explain, keep the snapshot route for classification and print the `Next:`, `Route:`, `Signal:`, `Skip/narrow:`, and `Why not the alternatives:` lines from its lifecycle decision as [references/explain.md](references/explain.md) says (no judge call). It also prints the selected spec, the classified stage, the routing row and gate section it came from, the review backend, task counts, consulted status fields, the resolved zero-task route as would-record (with its signal), the PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on an explain run), records no route, checks out no branch, and dispatches nothing.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"

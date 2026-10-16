@@ -26,7 +26,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is th
 
 ## Driving unattended
 
-Run `$flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/goal` (opt-in `[features] goals = true`, CLI >= 0.128.0, no `$skill-in-goal` syntax), write a plain-text objective that runs `flow --auto --tick` once per turn and stops on `PILOT_VERDICT=NO_WORK`. The parent sandbox must allow the stages' subprocesses and network.
+Run `$flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/goal` (opt-in `[features] goals = true`, CLI >= 0.128.0, no `$skill-in-goal` syntax), write a plain-text objective that runs `flow --auto --tick` once per turn and stops on `PILOT_VERDICT=NO_WORK`. The parent sandbox must allow the stages' subprocesses and network. For an outcome larger than one spec, `$flow-next-flow --goal <spec-id or source> --until=merge` builds child specs toward it the same way; a `/goal` objective re-runs it until `PILOT_VERDICT=GOAL_MET` or a stop.
 
 ## Discover, then invoke
 

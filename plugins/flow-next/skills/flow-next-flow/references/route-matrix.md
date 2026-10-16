@@ -32,8 +32,8 @@ working-rules.md instead.
 
 Rarer starting states live in [route-matrix-more.md](route-matrix-more.md); read it when one of
 these fits: no written direction (strategy), a search for candidate investments or a theme to
-narrow (prospect), one large idea with unclear boundaries (chart), a metric improved over repeated
-attempts (hill climb), a prompt or skill change whose behaviour should be measured, a spec needing an independent design review (plan-review), a spec whose
+narrow (prospect), one large idea with unclear boundaries (chart), an outcome to reach over
+several specs (goal mode), a metric improved over repeated attempts (hill climb), a prompt or skill change whose behaviour should be measured, a spec needing an independent design review (plan-review), a spec whose
 open tasks are all blocked, a closed spec with no pull request, a feature map to seed or maintain,
 output too dense to read (visual), or chat prose that needs discipline (prose).
 

@@ -33094,7 +33094,7 @@ def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
 
 
 def cmd_spec_ready(args: argparse.Namespace) -> None:
-    """Mark a spec ready for execution (human-owned gate; fn-58.1)."""
+    """Mark a spec ready for execution (the consent gate; fn-58.1)."""
     _cmd_spec_set_ready(args, target=True)
 
 
@@ -57636,11 +57636,11 @@ def main() -> None:
         p_close.add_argument("--json", action="store_true", help="JSON output")
         p_close.set_defaults(func=cmd_spec_close)
 
-        # fn-58.1 (R2): human-owned readiness gate. Lazy on-disk — the sidecar
+        # fn-58.1 (R2): the readiness (consent) gate. Lazy on-disk — the sidecar
         # carries `ready` only after a toggle changes state; both verbs are
         # idempotent no-ops when the value already matches.
         p_ready = parent_sub.add_parser(
-            "ready", help=f"Mark {noun} ready for execution (human-owned gate)"
+            "ready", help=f"Mark {noun} ready for execution (consent gate: a person, or a goal run for a child it minted)"
         )
         p_ready.add_argument(
             "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
