@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-301-qa-re-checks-only-what-changed-since",
   "spec_path": ".flow/tasks/fn-301-qa-re-checks-only-what-changed-since.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement QA re-checks only what changed since its last pass",
   "updated_at": "2026-10-16T20:25:49.371181Z"
 }

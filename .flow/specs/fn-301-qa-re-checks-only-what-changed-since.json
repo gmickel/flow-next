@@ -132,7 +132,7 @@
     "impl:fn-301-qa-re-checks-only-what-changed-since.1": 0
   },
   "spec_path": ".flow/specs/fn-301-qa-re-checks-only-what-changed-since.md",
-  "status": "open",
+  "status": "done",
   "title": "QA re-checks only what changed since its last pass",
   "tracker": {
     "baseHashFlow": null,
@@ -145,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T23:02:01.055763Z"
+  "updated_at": "2026-10-16T23:02:24.683598Z"
 }
