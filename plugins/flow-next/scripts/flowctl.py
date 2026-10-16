@@ -26228,11 +26228,71 @@ def cmd_prospect_write(args: argparse.Namespace) -> None:
     json_output({"success": True, "artifact_id": artifact_id, "path": str(path), **fm})
 
 
+def _qa_receipt_scenarios(value, path: Path, review_id, branch: str, head: str, errors: list[str]) -> Optional[list]:
+    """Stamp live scenarios with this head; copy carried ones from the prior receipt."""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        errors.append("scenarios: expected a list")
+        return None
+    prior = None
+    rows, seen = [], set()
+    for i, row in enumerate(value):
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"].strip():
+            errors.append(f"scenarios[{i}].id: expected a non-empty string")
+            continue
+        if row["id"] in seen:
+            errors.append(f"scenarios[{i}].id: duplicate")
+            continue
+        seen.add(row["id"])
+        if row.get("run") == "carried":
+            if prior is None:
+                prior = _qa_prior_scenarios(path, review_id, branch)
+            if isinstance(prior, str):
+                errors.append(f"scenarios[{i}]: {prior}")
+                continue
+            source = prior.get(row["id"])
+            if source is None:
+                errors.append(f"scenarios[{i}]: {row['id']} is not in the prior receipt")
+            elif source.get("outcome") != "PASS" or not isinstance(source.get("head_sha"), str):
+                errors.append(f"scenarios[{i}]: {row['id']} did not pass in the prior receipt")
+            elif source["head_sha"] == head:
+                errors.append(f"scenarios[{i}]: {row['id']} ran at the same head; record it as live")
+            else:
+                rows.append({"id": row["id"], "rids": source.get("rids", []), "outcome": "PASS", "run": "carried",
+                             "evidence": source.get("evidence", []), "head_sha": source["head_sha"]})
+        elif row.get("run") == "live":
+            if row.get("outcome") not in ("PASS", "FAIL", "BLOCKED"):
+                errors.append(f"scenarios[{i}].outcome: expected PASS, FAIL or BLOCKED")
+            for key in ("rids", "evidence"):
+                if not isinstance(row.get(key, []), list) or not all(isinstance(v, str) for v in row.get(key, [])):
+                    errors.append(f"scenarios[{i}].{key}: expected a list of strings")
+            rows.append({"id": row["id"], "rids": row.get("rids", []), "outcome": row.get("outcome"), "run": "live",
+                         "evidence": row.get("evidence", []), "head_sha": head})
+        else:
+            errors.append(f"scenarios[{i}].run: expected live or carried")
+    return rows
+
+
+def _qa_prior_scenarios(path: Path, review_id, branch: str):
+    """Scenarios of the prior receipt by id, or why a carry cannot use it."""
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        return "no prior receipt to carry from"
+    if not isinstance(prior, dict) or prior.get("id") != review_id:
+        return "the prior receipt is for another spec"
+    if prior.get("branch") != branch:
+        return "the prior receipt is from another branch"
+    rows = prior.get("scenarios")
+    return {row["id"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)} if isinstance(rows, list) else {}
+
+
 def cmd_qa_receipt(args: argparse.Namespace) -> None:
     """Persist QA judgment and retain the existing structured finding lineage."""
     if args.skeleton:
         json_output({"id": "fn-1-example", "qa_outcome": "SHIP", "findings": [],
-                     "rid_coverage": {"rids": []}})
+                     "rid_coverage": {"rids": []}, "scenarios": []})
         return
     data = _artifact_payload(args)
     errors = []
@@ -26272,24 +26332,28 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
         errors.append("rid_coverage: expected an object with a rids list")
     else:
         for i, row in enumerate(coverage.get("rids", [])):
-            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "no_live_scenario", "backend_cli"):
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "carried", "no_live_scenario", "backend_cli"):
                 errors.append(f"rid_coverage.rids[{i}]: invalid id or coverage")
     mode = data.get("mode") or ("receipt" if args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") else "interactive")
     if not isinstance(mode, str):
         errors.append("mode: expected a string")
-    _artifact_errors(errors, args)
     head = _resolve_review_sha("HEAD")
     if head is None:
         error_exit("qa receipt cannot resolve HEAD", code=2, use_json=args.json)
+    branch = _export_run_git(["branch", "--show-current"])[1].strip()
+    path = Path(args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or get_flow_dir() / "review-receipts" / f"qa-{review_id}.json")
+    scenarios = _qa_receipt_scenarios(data.get("scenarios"), path, review_id, branch, head, errors)
+    _artifact_errors(errors, args)
     if coverage:
         coverage = {"covered": sum(r["coverage"] != "no_live_scenario" for r in coverage.get("rids", [])),
                     "total": len(coverage.get("rids", [])), "rids": coverage.get("rids", [])}
     verdict = "SHIP" if outcome in ("SHIP", "NA") else "NEEDS_WORK"
-    path = Path(args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or get_flow_dir() / "review-receipts" / f"qa-{review_id}.json")
     receipt = {"type": "qa_verdict", "id": review_id, "mode": mode, "verdict": verdict,
-               "qa_outcome": outcome, "head_sha": head, "branch": _export_run_git(["branch", "--show-current"])[1].strip(),
+               "qa_outcome": outcome, "head_sha": head, "branch": branch,
                "rid_coverage": coverage, "open_p0p1": [item for item in items if item["severity"] in ("P0", "P1")],
                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if scenarios is not None:
+        receipt["scenarios"] = scenarios
     reason_key = "blocked_reason" if outcome == "BLOCKED" else "na_reason" if outcome == "NA" else None
     if reason_key and data.get(reason_key):
         receipt[reason_key] = data[reason_key]

@@ -1661,8 +1661,12 @@ flowctl qa receipt --from-json qa.json [--receipt receipt.json] --json
 ```
 
 The payload supplies `id`, `qa_outcome`, findings and R-ID coverage; optional
-mode and BLOCKED/NA reasons are host-authored. The command derives commit,
-branch, timestamps, counts and prior-finding lineage, then writes atomically.
+mode, BLOCKED/NA reasons and per-scenario outcomes are host-authored. The command
+derives commit, branch, timestamps, counts and prior-finding lineage, then writes
+atomically. Live scenarios are stamped with the current head. A scenario recorded
+as `{"id": ..., "run": "carried"}` copies its outcome, R-IDs, evidence and head
+from the prior receipt at the same path; a carry from another spec or branch, or
+of a scenario that did not pass there, is refused.
 BLOCKED or NA does not close unobserved prior findings. Invalid payloads report
 all errors without replacing the previous receipt. QA resolves unattended
 target and account prerequisites before deriving scenarios.

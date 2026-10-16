@@ -142,11 +142,19 @@ One row per `acceptance_criteria[].id`, in spec order, never renumbered:
 | R3 | <…> | — | ⚠️ no live scenario |
 | R7 | <…> | — | backend/CLI — not live-QA-able |
 | R9 | <…> | — | subtracted (fn-1.2 · test_x) |
+| R4 | <…> | S6 | carried (@a1b2c3d4) |
 ```
 
 Coverage is exactly one of `live`, `subtracted (<task-id> · <test-cmd>)` (all three §2.0
-conditions held), `backend/CLI — not live-QA-able`, or `⚠️ no live scenario` (user-observable but
-not covered: a gap). A runtime or UI criterion is never `subtracted`.
+conditions held), `carried (@<sha8>)` (every scenario for it carried from a prior pass, §2.3),
+`backend/CLI — not live-QA-able`, or `⚠️ no live scenario` (user-observable but not covered: a
+gap). A runtime or UI criterion is never `subtracted`.
+
+### 2.3 After a prior pass
+
+When `.flow/review-receipts/qa-<spec-id>.json` (or the `--receipt` path) holds a receipt from an
+earlier head, read [references/recheck.md](references/recheck.md): it decides which scenarios
+re-run and which carry their prior result.
 
 ---
 
@@ -265,8 +273,8 @@ Pick the first that applies:
    Set `blocked_reason`.
 2. **NA**: no criterion is user-observable. Set `na_reason`.
 3. **NEEDS_WORK** (NO): any open P0 or P1, or a `⚠️ no live scenario` row.
-4. **SHIP** (YES): every scenario passed on the live app, no open P0/P1, and every user-observable
-   R-ID is `live` or `subtracted`.
+4. **SHIP** (YES): every scenario that ran passed on the live app, no open P0/P1, and every
+   user-observable R-ID is `live`, `subtracted` or `carried`.
 
 ### 6.2 Evidence check
 
@@ -286,8 +294,11 @@ fi
 
 Write the JSON payload with the Write tool to `$QA_RECEIPT_INPUT` (shape:
 `$FLOWCTL qa receipt --skeleton`): `id`, `qa_outcome`, every Phase 5 finding under `findings`,
-`rid_coverage.rids` (`[{id, coverage}]`, coverage one of `live`, `subtracted`,
-`no_live_scenario`, `backend_cli`), and `blocked_reason` or `na_reason` for those outcomes only.
+`rid_coverage.rids` (`[{id, coverage}]`, coverage one of `live`, `subtracted`, `carried`,
+`no_live_scenario`, `backend_cli`), `scenarios` (one row per scenario: `{id, rids, outcome, run:
+"live", evidence}` with `outcome` `PASS`, `FAIL` or `BLOCKED` and `evidence` the capture paths, or
+`{id, run: "carried"}` for a carried one), and `blocked_reason` or `na_reason` for those outcomes
+only.
 Set `mode` to `receipt` when the caller passed `--receipt` or set `REVIEW_RECEIPT_PATH`, otherwise
 `interactive`; left out, it becomes `receipt`, because the call below always passes `--receipt`.
 
