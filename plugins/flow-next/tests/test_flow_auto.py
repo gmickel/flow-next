@@ -116,13 +116,15 @@ class HardGuardFence(unittest.TestCase):
     def test_guard_stop_carries_the_goal_prefix_only_in_goal_mode(self) -> None:
         snapshot = json.dumps({'guards': {'dirty': [' M code.py']}})
         for prefix, expected in (
-            ('goal fn-40; ', 'reason="goal fn-40; dirty working tree at tick start"'),
-            (None, 'reason="dirty working tree at tick start"'),
+            ('goal fn-40; ', 'spec=fn-40 stage=- reason="goal fn-40; dirty working tree at tick start"'),
+            (None, 'spec=- stage=- reason="dirty working tree at tick start"'),
         ):
             env = {**os.environ, 'PILOT_SNAPSHOT': snapshot}
             env.pop('GOAL_REASON_PREFIX', None)
+            env.pop('GOAL_SPEC', None)
             if prefix is not None:
                 env['GOAL_REASON_PREFIX'] = prefix
+                env['GOAL_SPEC'] = 'fn-40'
             result = subprocess.run(['bash', '-c', self._hard_guard_fence()], env=env,
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

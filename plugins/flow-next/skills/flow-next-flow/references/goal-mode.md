@@ -28,8 +28,8 @@ including a goal spec it captured. Refine, chart and prospect stay outside every
 
 1. Run auto.md's snapshot fence with `PILOT_SPEC` empty and apply its guards; a dirty tree stops
    `NEEDS_HUMAN` before any write. On the command line of every auto.md fence a goal run runs, set
-   `GOAL_REASON_PREFIX="goal <the goal id, or the source until it resolves>; "`, so a fence that
-   stops the run carries the goal too.
+   `GOAL_REASON_PREFIX="goal <the goal id, or the source until it resolves>; "`, and `GOAL_SPEC=<goal-id>`
+   once the goal resolves, so a fence that stops the run names the goal too.
 2. `PILOT_GOAL` empty: stop `NEEDS_HUMAN`, reason `--goal needs a spec id or a source`.
 3. `$FLOWCTL show "$PILOT_GOAL" --json` resolves: that spec is the goal. A closed goal stops
    `NEEDS_HUMAN`.

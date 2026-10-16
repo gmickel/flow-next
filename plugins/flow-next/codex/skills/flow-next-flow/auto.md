@@ -85,24 +85,24 @@ SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
 SNAPSHOT_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
 mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE" \
-  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot reset the pilot snapshot file\""; exit 1; }
+  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot reset the pilot snapshot file\""; exit 1; }
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
-  printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="%spilot snapshot failed: %s"\n' "${GOAL_REASON_PREFIX:-}" "$PILOT_SNAPSHOT"
+  printf 'PILOT_VERDICT=NEEDS_HUMAN spec=%s stage=- reason="%spilot snapshot failed: %s"\n' "${GOAL_SPEC:--}" "${GOAL_REASON_PREFIX:-}" "$PILOT_SNAPSHOT"
   exit 1
 fi
 printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE" \
-  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot write the pilot snapshot file\""; exit 1; }
+  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot write the pilot snapshot file\""; exit 1; }
 [ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
 ```
 
 ```bash
 # fence:pilot-guards
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq '.guards.dirty | length')" -gt 0 ]; then
   echo "Evidence: dirty non-.flow working tree at run start"
   printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.dirty[]'
-  echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}dirty working tree at tick start\""
+  echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}dirty working tree at tick start\""
   exit 0
 fi
 ```
@@ -225,7 +225,7 @@ is forwarded; the stage otherwise resolves its configured backend.
 ```bash
 REVIEW_ARG=""
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 BACKEND_NAME="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"')"
 if [ -n "${PILOT_REVIEW:-}" ]; then
   BACKEND_NAME="$PILOT_REVIEW"
@@ -241,7 +241,7 @@ A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`.
 QA_STAGE_ENABLED=0
 QA_STAGE_AUTO=0
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')"
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1
 [ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1
