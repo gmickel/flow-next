@@ -96,7 +96,7 @@ if [[ -n "$CHAIN_PARENT" && -n "${DEFAULT_BASE:-}" ]]; then
   echo "BLOCKED: --base $DEFAULT_BASE conflicts with chain parent $CHAIN_PARENT, whose branch $CHAIN_PARENT_BRANCH is this spec's base"; exit 2
 fi
 if [[ -n "$CHAIN_PARENT" ]]; then
-  git fetch -q origin "refs/heads/$CHAIN_PARENT_BRANCH:refs/remotes/origin/$CHAIN_PARENT_BRANCH" \
+  git fetch -q origin "refs/heads/${CHAIN_PARENT_BRANCH}:refs/remotes/origin/${CHAIN_PARENT_BRANCH}" \
     || { echo "BLOCKED: cannot fetch parent branch $CHAIN_PARENT_BRANCH from origin"; exit 2; }
   BASE_BRANCH="origin/$CHAIN_PARENT_BRANCH"
 else

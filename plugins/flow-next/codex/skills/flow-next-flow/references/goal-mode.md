@@ -200,6 +200,6 @@ request, or wait for its merge), and stops on `GOAL_MET`, `NEEDS_HUMAN` and `BLO
 - `--tick`: one goal action, then the verdict: a goal capture, a measurement and its log entry, a
   mint, one child hop, the final review with its pull request, or its landing.
 - `--explain`: print the next goal action (capture the goal, measure, mint for a named gap,
-  drive a named child with its route, or open or land the final pull request) and stop. Nothing is captured, measured or logged.
+  drive a named child with its route, or open or land the final pull request) and stop. Nothing is captured, measured or logged. The verdict is `NO_WORK`, as for any explain run.
 
 One goal run per goal at a time: two concurrent runs can mint for the same gap.
