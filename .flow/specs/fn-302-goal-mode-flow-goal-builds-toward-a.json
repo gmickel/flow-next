@@ -1,13 +1,21 @@
 {
   "branch_name": "fn-302-goal-mode-flow-goal-builds-toward-a",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-10-16T07:14:41.740782Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-297-defect-route-legitimate-state-fixes-and"
   ],
   "id": "fn-302-goal-mode-flow-goal-builds-toward-a",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-302-goal-mode-flow-goal-builds-toward-a.md",
   "status": "open",
   "title": "Goal mode: flow --goal builds toward a goal spec's bar",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T11:54:13.976079Z"
+  "updated_at": "2026-10-16T12:44:39.679509Z"
 }
