@@ -1,20 +1,168 @@
 {
   "branch_name": "fn-303-goal-mode-children-land-on-an",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-16T17:06:35.245529Z",
   "created_at": "2026-10-16T15:27:58.162965Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-303-goal-mode-children-land-on-an",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-303-goal-mode-children-land-on-an.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "795d66f2fa3079e47288272110399d7bf83cceba73bc3ec49724b234fc13a13e",
+      "backend": "codex",
+      "base_sha": "18434ae5b85dd4ed301b8d6b08c9280ac7d3da3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6443811fd53d42befe25ff108ebfc254",
+            "classification": "introduced",
+            "findingId": "finding-6443811fd53d42befe25ff108ebfc254",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-49bcb8fff9cbe3632b3d0487c79434a6",
+            "classification": "introduced",
+            "findingId": "finding-49bcb8fff9cbe3632b3d0487c79434a6",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-80f697acc86b4e3c417b763acd3441bc",
+            "classification": "introduced",
+            "findingId": "finding-80f697acc86b4e3c417b763acd3441bc",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-736cff72efce9ca3c33747ffc962b7ff",
+            "classification": "introduced",
+            "findingId": "finding-736cff72efce9ca3c33747ffc962b7ff",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "97b2402f8c5ea1bd4b1810ca27403d24959c1422",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 3528,
+      "output_sha256": "1569da56df8e2b2afba603344306e7ff4ec96c9bbe2bd2d2d0fa8e8f37c414d7",
+      "reservation_id": "d2980cae1340432d993208458d12145d",
+      "round_consumed": true,
+      "scope": "impl:fn-303-goal-mode-children-land-on-an.1",
+      "superseded_by": null,
+      "task": "fn-303-goal-mode-children-land-on-an.1",
+      "timestamp": "2026-10-16T16:59:24.395319Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "0019a05f55d61c35dce4c28572318e6872631522a590dedaab7a1c1b84b37a9b",
+      "backend": "codex",
+      "base_sha": "18434ae5b85dd4ed301b8d6b08c9280ac7d3da3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6443811fd53d42befe25ff108ebfc254",
+            "classification": "introduced",
+            "findingId": "finding-6443811fd53d42befe25ff108ebfc254",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-49bcb8fff9cbe3632b3d0487c79434a6",
+            "classification": "introduced",
+            "findingId": "finding-49bcb8fff9cbe3632b3d0487c79434a6",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-80f697acc86b4e3c417b763acd3441bc",
+            "classification": "introduced",
+            "findingId": "finding-80f697acc86b4e3c417b763acd3441bc",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-736cff72efce9ca3c33747ffc962b7ff",
+            "classification": "introduced",
+            "findingId": "finding-736cff72efce9ca3c33747ffc962b7ff",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "withdrawn"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "797286fdb99e8c91a95025efa6c2ea345ba87829",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1621,
+      "output_sha256": "4698b15c5fd9e5ce5cdb8dbc267fcae6d4ce8b3260c856b3e71a61c62f943ec5",
+      "reservation_id": "5b04535364e24519b79985a9baf2054b",
+      "round_consumed": true,
+      "scope": "impl:fn-303-goal-mode-children-land-on-an.1",
+      "superseded_by": null,
+      "task": "fn-303-goal-mode-children-land-on-an.1",
+      "timestamp": "2026-10-16T17:04:38.608655Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-303-goal-mode-children-land-on-an.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-303-goal-mode-children-land-on-an.1": 0
+  },
   "spec_path": ".flow/specs/fn-303-goal-mode-children-land-on-an.md",
   "status": "open",
   "title": "Goal mode: children land on an integration branch",
@@ -29,5 +177,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T16:50:14.806780Z"
+  "updated_at": "2026-10-16T17:06:35.245536Z"
 }
