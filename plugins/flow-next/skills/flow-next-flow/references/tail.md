@@ -23,7 +23,9 @@ tracker restrictions; never widen the target.
    Confirm with `gh pr view <PR> --json url,number,state,headRefName,baseRefName,headRefOid,mergeCommit`.
    Multiple plausible targets, failed/truncated probes or conflicting identity
    stop `NEEDS_HUMAN`. Bind the PR once; a missing or closed-unmerged target
-   stops and is never replaced or reopened. A closed spec without an observed
+   stops and is never replaced or reopened. A goal run binds per child: the child's
+   confirmed merge ends that binding, and the next child binds its own PR under the
+   same invocation's consent. A closed spec without an observed
    PR also stops; only an open spec with no prior target takes the build route.
 2. An OPEN PR routes to the landing offer or authorized dispatch even if its
    local spec is closed or no longer ready. Keep existing build/review/QA gates
@@ -80,7 +82,8 @@ fi
 ```
 
 A confirmed merge ends either mode's run, even if the tracker touchpoint failed;
-report that failure with the merge commit. Do not select another item. An
+report that failure with the merge commit. Do not select another item; a goal run
+returns to its measure step instead, per its reference. An
 unconfirmed `MERGED` result or `NO_WORK` cannot prove completion.
 
 `--tick` stops after one land dispatch. A long-running invocation continues only when `LAND_CONTINUE=1`. Name the wait mechanism and its bound in the report: use the soonest of land's reported remaining patience, a bounded `gh pr checks <bound-pr> --watch --interval 30` watch when checks are pending, or the caller interval (default 30 minutes). Bound the watch with the host tool timeout to the smaller of remaining patience and caller interval; on timeout re-read the exact PR. Without a remaining-time report, use the caller interval as the bound. Never tight-poll or spend repair attempts on an unchanged external wait.

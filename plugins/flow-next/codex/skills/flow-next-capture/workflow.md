@@ -72,7 +72,7 @@ When the conversation or `$ARGUMENTS` names a chart briefing (a `.flow/charts/*-
 ### 0.6 — Idempotency
 
 - **`REWRITE_TARGET` set** → GATE ACTIVE — STOP. Read [references/rewrite-mode.md](references/rewrite-mode.md) and validate the target (an existing spec, not a task; otherwise exit 2). It also governs Phases 4-6 for the rewrite.
-- **Otherwise**, if an earlier turn shows a prior capture (`Spec captured at .flow/specs/<id>.md`), run §0.6 in `references/duplicate-branch.md` (rewrite / proceed / abort; autofix exits 2).
+- **Otherwise**, if an earlier turn shows a prior capture (`Spec captured at .flow/specs/<id>.md`), run §0.6 in `references/duplicate-branch.md` (rewrite / proceed / abort; autofix exits 2). Under `from:goal`, [references/from-goal.md](references/from-goal.md) says what counts as a prior capture.
 
 ---
 

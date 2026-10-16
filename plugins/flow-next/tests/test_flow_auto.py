@@ -113,6 +113,23 @@ class HardGuardFence(unittest.TestCase):
 
     @_POSIX_BASH
     @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_guard_stop_carries_the_goal_prefix_only_in_goal_mode(self) -> None:
+        snapshot = json.dumps({'guards': {'dirty': [' M code.py']}})
+        for prefix, expected in (
+            ('goal fn-40; ', 'reason="goal fn-40; dirty working tree at tick start"'),
+            (None, 'reason="dirty working tree at tick start"'),
+        ):
+            env = {**os.environ, 'PILOT_SNAPSHOT': snapshot}
+            env.pop('GOAL_REASON_PREFIX', None)
+            if prefix is not None:
+                env['GOAL_REASON_PREFIX'] = prefix
+            result = subprocess.run(['bash', '-c', self._hard_guard_fence()], env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(expected, result.stdout.splitlines()[-1])
+
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
     def test_snapshot_fences_fail_closed_in_a_fresh_shell(self) -> None:
         # Shell variables do not survive between tool calls: a fence run in a
         # fresh shell reads the snapshot file and stops when it is absent.

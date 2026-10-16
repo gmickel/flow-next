@@ -27,7 +27,9 @@ including a goal spec it captured. Refine, chart and prospect stay outside every
 ## Step 1: guard, then resolve the goal
 
 1. Run auto.md's snapshot fence with `PILOT_SPEC` empty and apply its guards; a dirty tree stops
-   `NEEDS_HUMAN` before any write.
+   `NEEDS_HUMAN` before any write. On the command line of every auto.md fence a goal run runs, set
+   `GOAL_REASON_PREFIX="goal <the goal id, or the source until it resolves>; "`, so a fence that
+   stops the run carries the goal too.
 2. `PILOT_GOAL` empty: stop `NEEDS_HUMAN`, reason `--goal needs a spec id or a source`.
 3. `$FLOWCTL show "$PILOT_GOAL" --json` resolves: that spec is the goal. A closed goal stops
    `NEEDS_HUMAN`.
@@ -43,19 +45,22 @@ including a goal spec it captured. Refine, chart and prospect stay outside every
 
 ## Step 2: drive an open child
 
-The children are the goal's dependencies the log records as minted for it. An open one (not
-closed, or closed with its PR not yet merged) is this run's item: set `PILOT_SPEC` to it, rerun
-auto.md's snapshot fence for it, and continue at auto.md's Phase 2. It must pass `eligible` like
-any named scope, and every stage, gate, strike and guard is auto.md's. One child is open at a
+The children are the goal's dependencies the log records as minted or adopted for it. An open one
+(not closed, or closed by make-pr with its PR not yet merged; never a retired child) is this run's
+item: set `PILOT_SPEC` to it, rerun auto.md's snapshot fence for it, and continue at auto.md's
+Phase 2. It must pass `eligible` like any named scope, and every stage, gate, strike and guard is auto.md's. One child is open at a
 time; after a crash that left two, drive the older first.
 
 A child's PR without landing authority, a deferral to land, a strike, or `NEEDS_HUMAN` ends the
-goal run with that outcome, logged. A confirmed merge returns to Step 3.
+goal run with that outcome, logged. A confirmed merge ends that child's PR binding and returns to
+Step 3.
 
 ## Step 3: measure
 
-Measure on the default branch's current remote head, in a scratch worktree that never touches the
-run's checkout: fetch, `git worktree add --detach .flow/tmp/goal-measure origin/<default>`, run
+When the log's latest entry is a measurement on the default branch's current remote head and no
+answer was written in the spec since, decide from it (Step 4) instead of measuring again; a
+`--tick` run that measured last time mints this time. Otherwise measure on the default branch's
+current remote head, in a scratch worktree that never touches the run's checkout: fetch, `git worktree add --detach .flow/tmp/goal-measure origin/<default>`, run
 each criterion's check there, then remove the worktree. A criterion counts as met only on an
 observed result: a command's output, a test, a benchmark, or a merged child's receipts, recorded
 with the commit it ran on. A criterion only a person can judge counts only on the answer they
@@ -83,8 +88,9 @@ instead.
 Then invoke `$flow-next-capture from:goal <goal-id>`. Size the child for one pull request;
 a child is never itself a goal and never mints. When capture refuses (it would ask, it would
 cross a Boundary or reopen a settled decision, the gap is too large), record an open question;
-when it names an open spec that already covers the gap, take that spec as the child if it is
-ready, otherwise record a question. On success:
+when it names an open spec that already covers the gap, adopt that spec as the child if it is
+ready (log it as adopted; an adopted spec is never retired by this run), otherwise record a
+question. On success:
 
 ```bash
 "$FLOWCTL" spec add-dep <goal-id> <child-id> --json

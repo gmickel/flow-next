@@ -85,24 +85,24 @@ SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
 SNAPSHOT_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
 mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE" \
-  || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot reset the pilot snapshot file"'; exit 1; }
+  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot reset the pilot snapshot file\""; exit 1; }
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
-  printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot failed: %s"\n' "$PILOT_SNAPSHOT"
+  printf 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="%spilot snapshot failed: %s"\n' "${GOAL_REASON_PREFIX:-}" "$PILOT_SNAPSHOT"
   exit 1
 fi
 printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE" \
-  || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="cannot write the pilot snapshot file"'; exit 1; }
+  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot write the pilot snapshot file\""; exit 1; }
 [ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
 ```
 
 ```bash
 # fence:pilot-guards
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 if [ "$(printf '%s' "$PILOT_SNAPSHOT" | jq '.guards.dirty | length')" -gt 0 ]; then
   echo "Evidence: dirty non-.flow working tree at run start"
   printf '%s' "$PILOT_SNAPSHOT" | jq -r '.guards.dirty[]'
-  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
+  echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}dirty working tree at tick start\""
   exit 0
 fi
 ```
@@ -137,7 +137,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 
 ## Forbidden
 
-- Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. `references/prototype-before-ask.md` licenses no question to the user here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself.
+- Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. `references/prototype-before-ask.md` licenses no question to the user here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself, except goal mode's scratch probe before a mint, which its reference licenses.
 - Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, plus `capture` in goal mode only, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. Refine, chart, resolve-pr, merge, and release are **never** stages of this run, and capture is never one outside goal mode (refine and chart are human authoring and discovery upstream of the consent boundary, as capture is in ready and backlog runs; goal mode's own capture is licensed in [references/goal-mode.md](references/goal-mode.md); resolve-pr/merge belong to land downstream of the PR; release is separate).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. Under `--tick`, the `make-pr` that follows a fresh QA verdict runs on the next tick.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
@@ -225,7 +225,7 @@ is forwarded; the stage otherwise resolves its configured backend.
 ```bash
 REVIEW_ARG=""
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 BACKEND_NAME="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"')"
 if [ -n "${PILOT_REVIEW:-}" ]; then
   BACKEND_NAME="$PILOT_REVIEW"
@@ -241,7 +241,7 @@ A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`.
 QA_STAGE_ENABLED=0
 QA_STAGE_AUTO=0
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="pilot snapshot missing or unreadable; rerun the snapshot step"'; exit 1; }
+printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')"
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1
 [ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1

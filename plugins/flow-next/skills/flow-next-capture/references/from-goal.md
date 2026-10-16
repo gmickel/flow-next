@@ -19,6 +19,11 @@ the gap the goal run stated in this session (the criterion, its last result, the
 premise, any probe result). A line is untagged only when it is the source's own words. The
 compaction check (§0.4) does not apply, because nothing comes from the transcript.
 
+The duplicate scan (§0.2) never counts the goal itself, or a child already recorded in its goal
+log, as a match for a new child; it still counts every other open spec. An earlier capture in
+this session (the goal, or another child) is not a repeat for §0.6: only a capture for the same
+gap is.
+
 ## Writing the goal
 
 The criteria are the bar. Each must be checkable: a command, a test, a benchmark, or a judgment a

@@ -10,13 +10,131 @@
     "fn-297-defect-route-legitimate-state-fixes-and"
   ],
   "id": "fn-302-goal-mode-flow-goal-builds-toward-a",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-302-goal-mode-flow-goal-builds-toward-a.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "88d23dc6b33e72394ce16f224709a8e6d6ba790c4960a2e7bf25187fd2035407",
+      "backend": "codex",
+      "base_sha": "1d2c0fb88a02863c4e05d7a5d4ea28d72f04be8d",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-9e57d556c027aacf464881df653bdeb5",
+            "classification": "introduced",
+            "findingId": "finding-9e57d556c027aacf464881df653bdeb5",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-74431e98ee285d7d497c6b3d332f8c6f",
+            "classification": "introduced",
+            "findingId": "finding-74431e98ee285d7d497c6b3d332f8c6f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-6846e30cd43a2579a239884258763bfe",
+            "classification": "introduced",
+            "findingId": "finding-6846e30cd43a2579a239884258763bfe",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-fdfcce253de722f57b6535ecb9362918",
+            "classification": "introduced",
+            "findingId": "finding-fdfcce253de722f57b6535ecb9362918",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8c44f8f79ba7b03619ded6a5d932f58e",
+            "classification": "introduced",
+            "findingId": "finding-8c44f8f79ba7b03619ded6a5d932f58e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4eb8005a8ea2574d5ced363ee395e402",
+            "classification": "introduced",
+            "findingId": "finding-4eb8005a8ea2574d5ced363ee395e402",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-012623ce3390ebd670b09cd1aa86b1c8",
+            "classification": "introduced",
+            "findingId": "finding-012623ce3390ebd670b09cd1aa86b1c8",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d495353ba1d741ca630a51a2b99bb658",
+            "classification": "introduced",
+            "findingId": "finding-d495353ba1d741ca630a51a2b99bb658",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b152bda31c5bfdc112e3b24f7fba2cb2",
+            "classification": "introduced",
+            "findingId": "finding-b152bda31c5bfdc112e3b24f7fba2cb2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9954e210ee9329c44d3eda07f82fe75127d14149",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 7493,
+      "output_sha256": "5d21a62c99cad78a930e8050464d3844640042e7683c628cfd43a1ad0933c111",
+      "reservation_id": "80b448acde9242aa85fd99dab9c9c7da",
+      "round_consumed": true,
+      "scope": "impl:fn-302-goal-mode-flow-goal-builds-toward-a.1",
+      "superseded_by": null,
+      "task": "fn-302-goal-mode-flow-goal-builds-toward-a.1",
+      "timestamp": "2026-10-16T13:44:56.141455Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-302-goal-mode-flow-goal-builds-toward-a.1": 0
+  },
   "spec_path": ".flow/specs/fn-302-goal-mode-flow-goal-builds-toward-a.md",
   "status": "open",
   "title": "Goal mode: flow --goal builds toward a goal spec's bar",
@@ -31,5 +149,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T13:22:17.944332Z"
+  "updated_at": "2026-10-16T13:44:56.145915Z"
 }
