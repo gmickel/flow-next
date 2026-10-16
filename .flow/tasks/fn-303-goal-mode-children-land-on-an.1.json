@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-303-goal-mode-children-land-on-an",
   "spec_path": ".flow/tasks/fn-303-goal-mode-children-land-on-an.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Goal mode: children land on an integration branch",
   "updated_at": "2026-10-16T16:50:26.916893Z"
 }

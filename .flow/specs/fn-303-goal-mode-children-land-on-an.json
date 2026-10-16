@@ -164,7 +164,7 @@
     "impl:fn-303-goal-mode-children-land-on-an.1": 0
   },
   "spec_path": ".flow/specs/fn-303-goal-mode-children-land-on-an.md",
-  "status": "open",
+  "status": "done",
   "title": "Goal mode: children land on an integration branch",
   "tracker": {
     "baseHashFlow": null,
@@ -177,5 +177,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-16T17:06:35.245536Z"
+  "updated_at": "2026-10-16T17:06:52.126243Z"
 }
