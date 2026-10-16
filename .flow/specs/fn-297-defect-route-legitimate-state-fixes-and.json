@@ -123,7 +123,7 @@
   },
   "spec_path": ".flow/specs/fn-297-defect-route-legitimate-state-fixes-and.md",
   "status": "open",
-  "title": "Defect route: legitimate-state fixes and the missing signal",
+  "title": "Defect route: legitimate-state fixes and the reported surface",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,

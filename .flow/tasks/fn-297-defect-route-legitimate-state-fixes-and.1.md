@@ -1,7 +1,7 @@
 ---
-satisfies: [R1, R2, R3, R4, R5]
+satisfies: [R1, R2, R3, R4]
 ---
-# fn-297-defect-route-legitimate-state-fixes-and.1 Implement Defect route: legitimate-state fixes and the missing signal
+# fn-297-defect-route-legitimate-state-fixes-and.1 Implement Defect route: legitimate-state fixes and the reported surface
 
 ## Description
 TBD

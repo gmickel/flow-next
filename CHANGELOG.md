@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Changed
 
-- **Defect fixes remove the fault, not its symptom, and prove it where it was reported.** Before designing a fix, the defect route now decides whether the state that triggered the crash may legitimately occur; when it should never exist, the fix goes where that state was produced instead of a guard, retry or swallowed error where it surfaced. A failure that appears only after a restart suspects persisted state (config, caches, locks, serialized records) before code. Base and head observations run through the surface the report came from (the command, the request, the call or the app), so a unit test of the changed branch is supporting evidence, not the proof. When finding the cause took instrumentation or a long elimination, the handoff ends with a `signal:` line naming the always-on log line, check or error message that would have shown it at first look, proposed as a follow-up and never built inside the fix.
+- **Defect fixes remove the fault, not its symptom, and prove it where it was reported.** Before designing a fix, the defect route now decides whether the state that triggered the crash may legitimately occur; when it should never exist, the fix goes where that state was produced instead of a guard, retry or swallowed error where it surfaced. A failure that appears only after a restart suspects persisted state (config, caches, locks, serialized records) before code. Base and head observations run through the surface the report came from (the command, the request, the call or the app), so a unit test of the changed branch is supporting evidence, not the proof.
 
 ## [flow-next 8.8.0] - 2026-10-15
 

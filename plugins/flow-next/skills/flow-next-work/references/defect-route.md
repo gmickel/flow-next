@@ -37,8 +37,6 @@ Then diagnose before designing the fix:
 
 Design the fix only after the mechanism is confirmed, and first decide whether the state that triggered the symptom may legitimately occur. If it may, the code that broke on it is the cause and handling the state there is the fix. If it should never exist, a check where it surfaced hides the fault: trace what produced the state and fix that. A fix shaped as a guard, retry, swallowed error, clamped value or discarded state says why the state is legitimate. When code, docs and history cannot settle legitimacy, it is a product question: attended, ask it; unattended, take the default the evidence supports and record it in the diagnosis line. Temporary instrumentation does not ship.
 
-When finding the cause took instrumentation or a long elimination, name the cheap, always-on signal that would have shown it at first look (a log line, a doctor check, an error message that names the value, a metric): the defect handoff, with or without a task, ends its follow-ups with one line, `signal: <the signal and what it would have shown>`, and the record repeats it. When the cause was visible at first look, write no signal line. The fix never builds the signal.
-
 ## 3. Bisect when a known-good revision exists
 
 Only when the report or the history names a revision where the behaviour was correct (a tag, a
@@ -67,5 +65,4 @@ Defect route:
 - introduced by: <sha> <subject> (<PR>) | skipped: <reason>
 - base: <observation at base sha, through <surface>> | head: <observation at head sha>
 - live: <head observation on the app> | not run: <reason> | no live surface
-- signal: <the always-on signal that would have shown the cause at first look> (only when the cause took a long dig)
 ```

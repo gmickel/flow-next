@@ -125,7 +125,7 @@ The sharpening tool for a defect is **reproduction, not conversation** - refine 
 3. **Bisect** when a known-good revision exists, to name the change that introduced the defect. Skipped, with the reason, when there is none or the reproduction is too costly.
 4. **Prove on base and head.** A cheap reproduction test is committed failing before the fix. The same reproduction fails on the base and passes on the head, through the surface the report came from (the command, the request, the call or the app); a unit test of the changed branch is supporting evidence only.
 
-The findings of each step go into the task's done summary and the PR briefing, and, when the cause took a long dig, one line naming the always-on signal that would have shown it at first look, proposed as a follow-up rather than built. Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
+The findings of each step go into the task's done summary and the PR briefing. Entry is `/flow-next:work "fix: <report>"` for a direct fix, or `/flow-next:capture` when the diagnosis conversation itself carries decisions worth locking down (a root-cause discussion that ruled out approaches is spec material). What still holds: the regression test, review, receipts.
 
 ### Refactoring
 
