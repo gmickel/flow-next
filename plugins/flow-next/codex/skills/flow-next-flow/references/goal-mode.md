@@ -35,8 +35,12 @@ the run, says children land on the default branch directly, they do: no integrat
 final pull request. The first run decides and logs the choice; later runs follow the log. Below,
 the goal's base is the integration branch, or the default branch when children land there.
 
-- **Create it once.** `git push origin origin/<default>:refs/heads/goal/<branch_name>`, logged with
-  the commit. A branch of that name the log does not record as this goal's stops `NEEDS_HUMAN`.
+- **Create it once.** In a scratch worktree at `origin/<default>`, write the goal spec's two files
+  (`.flow/specs/<goal-id>.md` and `.json`) from the checkout with one more log entry,
+  `children land on goal/<branch_name>` and the default-branch commit, commit only those, push the
+  commit as `refs/heads/goal/<branch_name>`, remove the worktree, then write the same entry in the
+  checkout. The branch carries its own record. A branch of that name whose copy of the goal spec
+  does not record it as this goal's stops `NEEDS_HUMAN`.
 - **Children build on it.** Dispatch work with `--base=goal/<branch_name>` and make-pr with
   `--base goal/<branch_name>`; every other argument is auto.md's.
 - **Unchecked children are not green.** Before a child's pull request goes to land, read its checks
@@ -53,31 +57,41 @@ the goal's base is the integration branch, or the default branch when children l
   integration branch; a review that stops ends the run with its reason. Only then open one pull
   request from the integration branch to the default branch (`gh pr create`, `--draft` when the
   review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the review's outcome as
-  its body, and log it. Hand it to land under auto.md's landing rules; without landing authority
-  the run ends `DEFERRED_TO_LAND` with it. A logged final pull request comes before measuring on
+  its body, and log its URL. No spec owns its head, so bind it by that URL, confirmed with `gh pr
+  view` (head `goal/<branch_name>`, base the default branch), with the goal as its scoped spec,
+  and hand it to land as [tail.md](tail.md) says; without landing authority the run ends
+  `DEFERRED_TO_LAND` with it. The review and opening report stage `make-pr`, landing it `land`.
+  A logged final pull request comes before measuring on
   later runs: open, land it under current consent or defer again; merged, log it and end
   `GOAL_MET`; closed unmerged, `NEEDS_HUMAN`, never reopened or replaced.
 
 ## Step 1: resolve the goal, with the guard before any write
 
 1. `PILOT_GOAL` empty: stop `NEEDS_HUMAN`, reason `--goal needs a spec id or a source`.
-2. `$FLOWCTL show "$PILOT_GOAL" --json` resolves: that spec is the goal (a read, so it comes
-   first). A closed goal stops `NEEDS_HUMAN`.
+2. `git fetch`. `$FLOWCTL show "$PILOT_GOAL" --json` resolves, or the checkout lacks it and an
+   `origin/goal/<b>` branch holds `.flow/specs/<PILOT_GOAL>.md` with `branch_name` `<b>` (`git
+   show`): that spec is the goal (reads, so they come first).
 3. Run auto.md's snapshot fence with `PILOT_SPEC` empty and apply its guards; a dirty tree stops
    `NEEDS_HUMAN` before any write. On the command line of every auto.md fence a goal run runs, set
    `GOAL_REASON_PREFIX="goal <the goal id, or the source until it resolves>; "`, and
    `GOAL_SPEC=<goal-id>` once the goal is known, so a fence that stops the run names the goal too.
-4. Otherwise `PILOT_GOAL` is a source (a path, a URL, a tracker issue, pasted text). An open spec
-   whose goal log's first entry names this same source is the goal; this keeps a re-sent
-   invocation on the goal it already started. With none, capture it:
+4. Otherwise `PILOT_GOAL` is a source (a path, a URL, a tracker issue, pasted text). An open spec,
+   in the checkout or on an `origin/goal/*` branch as in item 2, whose goal log's first entry
+   names this same source is the goal; this keeps a re-sent invocation on the goal it already
+   started. With none, capture it:
    `$flow-next-capture from:goal <source>`. A refusal (no checkable outcome, a duplicate)
    stops `NEEDS_HUMAN` with capture's reason and nothing written. On success write the first log
    entry: the date and `goal captured from <source>`. Under `--tick` the run ends `ADVANCED`
    after this entry.
-5. A goal marked ready is unreadied (`$FLOWCTL spec unready <goal-id> --json`) and the log says so.
-6. Read the whole goal spec (`$FLOWCTL cat <goal-id>`) every run: criteria, Boundaries, Decision
+5. Children land the goal log on the integration branch, so its copy can be newer than the
+   checkout's. When `origin/goal/<branch_name>`'s goal spec logs an entry the checkout's copy
+   lacks (the log is append-only), write each spec file that branch holds for the goal and its
+   children over the checkout's copy (`git show origin/goal/<branch_name>:<path>`; nothing
+   staged). A closed goal stops `NEEDS_HUMAN`.
+6. A goal marked ready is unreadied (`$FLOWCTL spec unready <goal-id> --json`) and the log says so.
+7. Read the whole goal spec (`$FLOWCTL cat <goal-id>`) every run: criteria, Boundaries, Decision
    Context, answers the person wrote, and the log.
-7. When the log has not recorded where children land, decide it now (Where children land).
+8. When the log has not recorded where children land, decide it now (Where children land).
 
 ## Step 2: drive an open child
 
@@ -108,8 +122,9 @@ run ends `ADVANCED` after this entry.
 
 ## Step 4: decide
 
-- Every criterion met: log it. With an integration branch, open the final pull request (Where
-  children land); otherwise end `GOAL_MET`. The goal stays open for the person to accept and
+- Every criterion met: log it. Without an integration branch, end `GOAL_MET`. With one, open the
+  final pull request (Where children land), or stop `NEEDS_HUMAN` with the open question when the
+  default branch's merge into it waits on one. The goal stays open for the person to accept and
   close.
 - Stop `NEEDS_HUMAN`, with the log as the evidence, when a budget or stop date the goal spec
   states is reached, when the last two merged children each moved no criterion, or when every
@@ -160,7 +175,8 @@ A `## Goal log` section at the end of the goal spec, created by the first entry:
 entries in plain prose, written after acting, never before. Write it with
 `$FLOWCTL spec set-plan <goal-id> --file <path> --json`, every other section unchanged byte for
 byte. The edits are `.flow` bookkeeping: they ride onto the next child's branch with its spec
-files, and the dirty guard ignores them. The log never records or restores landing consent;
+files, so with an integration branch they land there (Step 1 reads them back), and the dirty
+guard ignores them. The log never records or restores landing consent;
 `--until=merge` holds only for the invocation it was passed to.
 
 Each child runs under the working rules like any other change: a discovery off its path is that
@@ -174,8 +190,8 @@ PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN|GOAL_MET> s
 
 `spec=` names the child the run worked on, or the goal when no child was dispatched. A goal
 capture or a mint is stage `capture`; a measurement alone is stage `-`. A driver re-invokes on
-`ADVANCED`, treats `DEFERRED_TO_LAND` as it does today (land the child's PR, or wait for its
-merge), and stops on `GOAL_MET`, `NEEDS_HUMAN` and `BLOCKED`.
+`ADVANCED`, treats `DEFERRED_TO_LAND` as it does today (land the child's or the final pull
+request, or wait for its merge), and stops on `GOAL_MET`, `NEEDS_HUMAN` and `BLOCKED`.
 
 - `--tick`: one goal action, then the verdict: a goal capture, a measurement and its log entry, a
   mint, one child hop, the final review with its pull request, or its landing.
