@@ -22,10 +22,10 @@ fixture bank). Otherwise build a small blinded one in scratch:
 - grading from what candidates did (transcripts, files, output), never from what they say they did.
 
 **Check before trusting the gap** per [measured-numbers.md](../../../references/measured-numbers.md):
-every draw finished the task, the gap holds draw by draw and is larger than the run-to-run spread
-inside each arm, and the verdict carries how many draws on each side completed. To push a score
-up over many attempts afterwards, the hill-climb route takes this harness as its frozen
-measurement.
+count the draws on each side that finished the task and judge on those, check the gap holds draw
+by draw and is larger than the run-to-run spread inside each arm, and give the completion count
+with the verdict. To push a score up over many attempts afterwards, the hill-climb route takes
+this harness as its frozen measurement.
 
 Example: a support bot's system prompt is rewritten to stop it promising refunds. Twelve organic
 customer messages, five draws per arm per message, the rubric held by a judge from another family
