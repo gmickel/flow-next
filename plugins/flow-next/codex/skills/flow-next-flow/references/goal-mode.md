@@ -38,7 +38,8 @@ including a goal spec it captured. Refine, chart and prospect stay outside every
    invocation on the goal it already started. With none, capture it:
    `$flow-next-capture from:goal <source>`. A refusal (no checkable outcome, a duplicate)
    stops `NEEDS_HUMAN` with capture's reason and nothing written. On success write the first log
-   entry: the date and `goal captured from <source>`.
+   entry: the date and `goal captured from <source>`. Under `--tick` the run ends `ADVANCED`
+   after this entry.
 5. A goal marked ready is unreadied (`$FLOWCTL spec unready <goal-id> --json`) and the log says so.
 6. Read the whole goal spec (`$FLOWCTL cat <goal-id>`) every run: criteria, Boundaries, Decision
    Context, answers the person wrote, and the log.
@@ -53,7 +54,7 @@ time; after a crash that left two, drive the older first.
 
 A child's PR without landing authority, a deferral to land, a strike, or `NEEDS_HUMAN` ends the
 goal run with that outcome, logged. A confirmed merge ends that child's PR binding and returns to
-Step 3.
+Step 3, on the next tick under `--tick`.
 
 ## Step 3: measure
 
@@ -65,7 +66,8 @@ each criterion's check there, then remove the worktree. A criterion counts as me
 observed result: a command's output, a test, a benchmark, or a merged child's receipts, recorded
 with the commit it ran on. A criterion only a person can judge counts only on the answer they
 wrote in the spec, quoted with its date; without one it is an open question (Step 6), never a
-pass. Log one dated measurement entry: each criterion, its result, the commit.
+pass. Log one dated measurement entry: each criterion, its result, the commit. Under `--tick` the
+run ends `ADVANCED` after this entry.
 
 ## Step 4: decide
 
@@ -97,9 +99,10 @@ question. On success:
 "$FLOWCTL" spec ready <child-id> --json
 ```
 
-Log the mint (child, criterion, why it was next), then drive it (Step 2). The child is routed
-exactly as a spec a person wrote: plan or no-plan, plan review, QA and every other gate follow
-their own rules.
+Log the mint (child, criterion, why it was next), then drive it (Step 2). Under `--tick` the
+run ends `ADVANCED` after the mint's log entry, or after the question or adoption a refusal led
+to; the next tick drives the child. The child is routed exactly as a spec a person wrote: plan
+or no-plan, plan review, QA and every other gate follow their own rules.
 
 A child this goal minted that never merged, whose premise a probe falsified or that another
 child covers, may be retired:

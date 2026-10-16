@@ -25,7 +25,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 ## Mode detection
 
-Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`, and so does `--goal`, because goal mode is unattended; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
+Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`, and so does `--goal`, because goal mode is unattended; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto` or `--goal`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
 
 ```bash
 FLOW_UNTIL=""
