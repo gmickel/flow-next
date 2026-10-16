@@ -1,6 +1,6 @@
 # Re-check after a prior pass (gated reference)
 
-> Read from [workflow.md](../workflow.md) §2.3 only when the spec has a QA receipt from an earlier head.
+> Read from [workflow.md](../workflow.md) §1.4 only when the spec has a QA receipt from an earlier head.
 
 A scenario that passed live on a surface nothing has touched since does not need driving again.
 Drive what could have changed and carry the rest, cited with the head and evidence it was

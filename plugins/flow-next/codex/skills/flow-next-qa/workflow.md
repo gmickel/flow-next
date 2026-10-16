@@ -90,6 +90,18 @@ only the matching feature file. The map supplies navigation only; scenarios stil
 spec and SHIP still rests on live evidence. A map that does not cover this target (no matching
 surface or feature, or a malformed entry) counts as absent for that target: derive routes as usual.
 
+### 1.4 Prior pass
+
+Before deriving scenarios, look for an earlier QA receipt:
+
+```bash
+RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
+[ -f "$RECEIPT_PATH" ] && jq -c '{id, branch, head_sha, scenarios: (.scenarios // [] | length)}' "$RECEIPT_PATH"
+```
+
+When it prints a receipt from an earlier head, read [references/recheck.md](references/recheck.md)
+now: it decides which scenarios re-run and which carry their prior result.
+
 ### Autonomous preflight
 
 Under `NO_PROMPT=1`, resolve the target (§3.1) and accounts (§3.2) now. A missing target, or
@@ -146,15 +158,9 @@ One row per `acceptance_criteria[].id`, in spec order, never renumbered:
 ```
 
 Coverage is exactly one of `live`, `subtracted (<task-id> · <test-cmd>)` (all three §2.0
-conditions held), `carried (@<sha8>)` (every scenario for it carried from a prior pass, §2.3),
+conditions held), `carried (@<sha8>)` (every scenario for it carried from a prior pass, §1.4),
 `backend/CLI — not live-QA-able`, or `⚠️ no live scenario` (user-observable but not covered: a
 gap). A runtime or UI criterion is never `subtracted`.
-
-### 2.3 After a prior pass
-
-When `.flow/review-receipts/qa-<spec-id>.json` (or the `--receipt` path) holds a receipt from an
-earlier head, read [references/recheck.md](references/recheck.md): it decides which scenarios
-re-run and which carry their prior result.
 
 ---
 
