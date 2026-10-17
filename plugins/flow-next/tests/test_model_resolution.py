@@ -847,47 +847,64 @@ class TestReviewDiffAdapterBoundary(unittest.TestCase):
         with _git_repo() as (root, (c0, c1, _c2)):
             scratch = root / ".flow" / "tmp" / "claude-review"
             diff_path = scratch / _diff_name("fn-9.1-impl", c0, c1)
-            calls: list = []
 
             def result(_model):
                 self.assertTrue(diff_path.is_file(), "diff must exist before the CLI runs")
                 return "<verdict>SHIP</verdict>", "", 0
 
-            with _scripted(flowctl, dispatch_result=result, calls=calls), \
-                    mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
-                output, _sid, rc, err = flowctl._dispatch_backend_review(
-                    backend="copilot", reg=flowctl.BACKEND_REGISTRY["copilot"],
-                    args=argparse.Namespace(json=False), prompt="Review the patch.",
-                    session_id="11111111-2222-3333-4444-555555555555",
-                    repo_root=root,
-                    resolved_spec=BackendSpec("copilot", COPILOT_TOP, "high"),
-                    resolution_out={}, receipt_path=str(diff_path.parent / "fn-9.1-impl.json"),
-                    spec_id="fn-9", review_kind="impl", review_type="impl",
-                    reviewed_head_sha=c1, reviewed_base_sha=c0,
-                )
+            flowctl._wire_backend_review_hooks()
+            for transport, platform in (("posix", "posix"), ("windows", "win32")):
+                with self.subTest(transport=transport):
+                    calls: list = []
+                    inputs: list = []
+                    with _scripted(
+                        flowctl, dispatch_result=result, calls=calls, inputs=inputs,
+                    ), mock.patch.object(flowctl.sys, "platform", platform), \
+                            mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
+                        output, _sid, rc, err = flowctl._dispatch_backend_review(
+                            backend="copilot", reg=flowctl.BACKEND_REGISTRY["copilot"],
+                            args=argparse.Namespace(json=False), prompt="Review the patch.",
+                            session_id="11111111-2222-3333-4444-555555555555",
+                            repo_root=root,
+                            resolved_spec=BackendSpec("copilot", COPILOT_TOP, "high"),
+                            resolution_out={}, receipt_path=str(diff_path.parent / "fn-9.1-impl.json"),
+                            spec_id="fn-9", review_kind="impl", review_type="impl",
+                            reviewed_head_sha=c1, reviewed_base_sha=c0,
+                        )
 
-            self.assertEqual(rc, 0, err)
-            self.assertIn("<verdict>SHIP</verdict>", output)
-            expected = subprocess.run(
-                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
-                text=True, check=True,
-            ).stdout
-            self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
-            copilot_call = next(call for call in calls if "-p" in call)
-            prompt = copilot_call[copilot_call.index("-p") + 1]
-            self.assertIn("## Diff delivery (copilot backend)", prompt)
-            self.assertIn("no shell access", prompt)
-            self.assertIn(str(diff_path), prompt)
-            self.assertIn(f"{c0}..{c1}", prompt)
-            self.assertIn("--allow-all-tools", copilot_call)
-            deny_tool_indexes = [
-                index for index, value in enumerate(copilot_call)
-                if value == "--deny-tool"
-            ]
-            self.assertEqual(
-                [copilot_call[index + 1] for index in deny_tool_indexes],
-                ["write", "shell"],
-            )
+                    self.assertEqual(rc, 0, err)
+                    self.assertIn("<verdict>SHIP</verdict>", output)
+                    expected = subprocess.run(
+                        ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
+                        text=True, check=True,
+                    ).stdout
+                    self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
+                    copilot_calls = [call for call in calls if "--model" in call]
+                    self.assertEqual(len(copilot_calls), 1)
+                    copilot_call = copilot_calls[0]
+                    self.assertEqual("-p" in copilot_call, transport == "posix")
+                    if transport == "posix":
+                        prompt = copilot_call[copilot_call.index("-p") + 1]
+                        self.assertEqual(inputs, [None])
+                    else:
+                        self.assertEqual(len(inputs), 1)
+                        prompt = inputs[0]
+                        self.assertIsInstance(prompt, str)
+                        self.assertNotIn(prompt, copilot_call)
+                    self.assertTrue(prompt.startswith("Review the patch."))
+                    self.assertIn("## Diff delivery (copilot backend)", prompt)
+                    self.assertIn("no shell access", prompt)
+                    self.assertIn(str(diff_path), prompt)
+                    self.assertIn(f"{c0}..{c1}", prompt)
+                    self.assertIn("--allow-all-tools", copilot_call)
+                    deny_tool_indexes = [
+                        index for index, value in enumerate(copilot_call)
+                        if value == "--deny-tool"
+                    ]
+                    self.assertEqual(
+                        [copilot_call[index + 1] for index in deny_tool_indexes],
+                        ["write", "shell"],
+                    )
 
     def test_copilot_fanout_uses_receipt_range_and_axis_identity(self) -> None:
         with _git_repo() as (root, (c0, c1, _c2)):
@@ -896,33 +913,52 @@ class TestReviewDiffAdapterBoundary(unittest.TestCase):
             diff_path = sidecar_dir.parent.parent / "tmp" / "claude-review" / (
                 _diff_name("rid-contracts", c0, c1)
             )
-            calls: list = []
 
             def result(_model):
                 self.assertTrue(diff_path.is_file(), "fanout diff must exist before the CLI runs")
                 return "<verdict>SHIP</verdict>", "", 0
 
             flowctl._wire_backend_review_hooks()
-            with _scripted(flowctl, dispatch_result=result, calls=calls), \
-                    mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
-                draw = flowctl._review_fanout_run_draw(
-                    {"axis": "contracts", "spec": BackendSpec("copilot", COPILOT_TOP, "high")},
-                    "Review the contracts axis.", root,
-                    argparse.Namespace(claude_range=(c0, c1, "rid"), json=True),
-                    sidecar_dir,
-                )
+            for transport, platform in (("posix", "posix"), ("windows", "win32")):
+                with self.subTest(transport=transport):
+                    calls: list = []
+                    inputs: list = []
+                    with _scripted(
+                        flowctl, dispatch_result=result, calls=calls, inputs=inputs,
+                    ), mock.patch.object(flowctl.sys, "platform", platform), \
+                            mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
+                        draw = flowctl._review_fanout_run_draw(
+                            {"axis": "contracts", "spec": BackendSpec("copilot", COPILOT_TOP, "high")},
+                            "Review the contracts axis.", root,
+                            argparse.Namespace(claude_range=(c0, c1, "rid"), json=True),
+                            sidecar_dir,
+                        )
 
-            self.assertFalse(draw["failed"])
-            self.assertEqual(draw["backend"], "copilot")
-            expected = subprocess.run(
-                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
-                text=True, check=True,
-            ).stdout
-            self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
-            copilot_call = next(call for call in calls if "-p" in call)
-            prompt = copilot_call[copilot_call.index("-p") + 1]
-            self.assertIn(str(diff_path), prompt)
-            self.assertIn(f"{c0}..{c1}", prompt)
+                    self.assertFalse(draw["failed"])
+                    self.assertEqual(draw["backend"], "copilot")
+                    self.assertEqual(draw["axis"], "contracts")
+                    self.assertEqual(draw["verdict"], "SHIP")
+                    self.assertEqual(draw["exit_code"], 0)
+                    expected = subprocess.run(
+                        ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
+                        text=True, check=True,
+                    ).stdout
+                    self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
+                    copilot_calls = [call for call in calls if "--model" in call]
+                    self.assertEqual(len(copilot_calls), 1)
+                    copilot_call = copilot_calls[0]
+                    self.assertEqual("-p" in copilot_call, transport == "posix")
+                    if transport == "posix":
+                        prompt = copilot_call[copilot_call.index("-p") + 1]
+                        self.assertEqual(inputs, [None])
+                    else:
+                        self.assertEqual(len(inputs), 1)
+                        prompt = inputs[0]
+                        self.assertIsInstance(prompt, str)
+                        self.assertNotIn(prompt, copilot_call)
+                    self.assertTrue(prompt.startswith("Review the contracts axis."))
+                    self.assertIn(str(diff_path), prompt)
+                    self.assertIn(f"{c0}..{c1}", prompt)
 
     def test_copilot_diff_materialisation_error_precedes_managed_and_cli(self) -> None:
         with _git_repo() as (root, (c0, c1, _c2)):
