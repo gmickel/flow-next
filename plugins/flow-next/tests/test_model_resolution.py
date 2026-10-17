@@ -855,6 +855,7 @@ class TestReviewDiffAdapterBoundary(unittest.TestCase):
             flowctl._wire_backend_review_hooks()
             for transport, platform in (("posix", "posix"), ("windows", "win32")):
                 with self.subTest(transport=transport):
+                    diff_path.unlink(missing_ok=True)
                     calls: list = []
                     inputs: list = []
                     with _scripted(
@@ -921,6 +922,7 @@ class TestReviewDiffAdapterBoundary(unittest.TestCase):
             flowctl._wire_backend_review_hooks()
             for transport, platform in (("posix", "posix"), ("windows", "win32")):
                 with self.subTest(transport=transport):
+                    diff_path.unlink(missing_ok=True)
                     calls: list = []
                     inputs: list = []
                     with _scripted(
