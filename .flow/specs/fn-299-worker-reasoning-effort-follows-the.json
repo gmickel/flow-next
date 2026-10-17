@@ -224,7 +224,7 @@
     "impl:fn-299-worker-reasoning-effort-follows-the.1": 0
   },
   "spec_path": ".flow/specs/fn-299-worker-reasoning-effort-follows-the.md",
-  "status": "open",
+  "status": "done",
   "title": "Worker reasoning effort follows the dispatch tier",
   "tracker": {
     "baseHashFlow": null,
@@ -237,5 +237,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-17T01:15:57.442318Z"
+  "updated_at": "2026-10-17T01:20:12.328932Z"
 }
