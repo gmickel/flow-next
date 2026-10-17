@@ -1,0 +1,193 @@
+{
+  "branch_name": "investigate/qwen-native-review-20261010",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-11T07:47:03.134995Z",
+  "created_at": "2026-10-10T18:09:50.382435Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-291-preserve-successful-claude-reviews-with",
+  "impl_review_rounds": {
+    "fn-291-preserve-successful-claude-reviews-with.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "4ca87d4612f0f139fad9d70d97b6b92f908be393129979fd82ad23e5709a5616",
+      "backend": "codex",
+      "base_sha": "39308b309fde394f4f18e8ac12f1fb7593844404",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b6e46a51078fc3c76fec253a8b1c93d0",
+            "classification": "introduced",
+            "findingId": "finding-b6e46a51078fc3c76fec253a8b1c93d0",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "32c14fb147da17ee537a232e90e0686c1271167f",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-sol",
+      "outcome": "verdict",
+      "output_bytes": 716,
+      "output_sha256": "9cf39239039cceba7d8f57155a4ea7a09948fe9cd0de97e974de0301b9d42e8a",
+      "reservation_id": "eb7a62e8eb824cf9bbfe1369d481d136",
+      "round_consumed": true,
+      "scope": "impl:fn-291-preserve-successful-claude-reviews-with.1",
+      "superseded_by": null,
+      "task": "fn-291-preserve-successful-claude-reviews-with.1",
+      "timestamp": "2026-10-10T19:51:00.215112Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "3a027791fbf5eed79ea33f261c8fea92b95fa36dbb0245b20e5529af81a0a3b8",
+      "backend": "codex",
+      "base_sha": "39308b309fde394f4f18e8ac12f1fb7593844404",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-87fddff3b082189fffcdf2bc64e3e20d",
+            "classification": "introduced",
+            "findingId": "finding-87fddff3b082189fffcdf2bc64e3e20d",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3c93daef51011df855fb29e8a1b99367",
+            "classification": "introduced",
+            "findingId": "finding-3c93daef51011df855fb29e8a1b99367",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "acfd179ae82bda87e659e97ac642823cc4217a74",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-sol",
+      "outcome": "verdict",
+      "output_bytes": 2753,
+      "output_sha256": "61fec53f23d8143511e0f9df65977a7dc587b3ce571c6e872bce1a1ca242bf14",
+      "reservation_id": "5b419962d64d4ba897276ab3e25fe4c2",
+      "round_consumed": true,
+      "scope": "impl:fn-291-preserve-successful-claude-reviews-with.1",
+      "superseded_by": null,
+      "task": "fn-291-preserve-successful-claude-reviews-with.1",
+      "timestamp": "2026-10-10T20:05:03.253139Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "b54227d6fc7189d68c0288e7519cdb480d2e537ceac3e2409a343f66d5365d30",
+      "backend": "codex",
+      "base_sha": "39308b309fde394f4f18e8ac12f1fb7593844404",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-87fddff3b082189fffcdf2bc64e3e20d",
+            "classification": "introduced",
+            "findingId": "finding-87fddff3b082189fffcdf2bc64e3e20d",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3c93daef51011df855fb29e8a1b99367",
+            "classification": "introduced",
+            "findingId": "finding-3c93daef51011df855fb29e8a1b99367",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "57eaa175861a8cd1b51f5eceb515ec765726e890",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-sol",
+      "outcome": "verdict",
+      "output_bytes": 233491,
+      "output_sha256": "ccdc485cade3db4a8c5a56d5ce8edf00140e1877ff205d0193c85861d0889c80",
+      "reservation_id": "dc7b695a7b0744aa84eddd07382ea5c3",
+      "round_consumed": true,
+      "scope": "impl:fn-291-preserve-successful-claude-reviews-with.1",
+      "superseded_by": null,
+      "task": "fn-291-preserve-successful-claude-reviews-with.1",
+      "timestamp": "2026-10-11T07:31:54.352070Z",
+      "tool_calls": 29,
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-291-preserve-successful-claude-reviews-with.1": 2
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-291-preserve-successful-claude-reviews-with.1": 0
+  },
+  "spec_path": ".flow/specs/fn-291-preserve-successful-claude-reviews-with.md",
+  "status": "done",
+  "title": "Preserve successful Claude reviews with unknown-model diagnostics",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-11T07:47:03.469644Z"
+}
