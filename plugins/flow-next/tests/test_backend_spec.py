@@ -100,7 +100,7 @@ class TestRegistryShape(unittest.TestCase):
         )
 
     def test_copilot_effort_set(self) -> None:
-        # Copilot rejects ``none`` and ``minimal`` (see fn-27 model catalog).
+        # Flow-Next retains its configured review effort subset.
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["efforts"],
             {"low", "medium", "high", "xhigh"},
@@ -851,8 +851,7 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
 
 
 class TestRunCopilotExecHonorsSpec(unittest.TestCase):
-    """``run_copilot_exec`` must honor the spec. The claude-* effort skip
-    is a live fn-27 bug fix and must remain intact."""
+    """``run_copilot_exec`` must honor the spec's model and reasoning effort."""
 
     def setUp(self) -> None:
         self._env_snapshot = os.environ.copy()
@@ -877,25 +876,24 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
         argv, _ = captured[0]
         self.assertIn("--model", argv)
         self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
-        # gpt-5.4 accepts --effort (non-claude model).
-        self.assertIn("--effort", argv)
-        self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+        self.assertIn("--reasoning-effort", argv)
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "medium")
+        self.assertNotIn("--effort", argv)
 
-    def test_claude_model_skips_effort_flag(self) -> None:
-        # THE fn-27 live bug fix: Claude models reject --effort. Must stay.
+    def test_claude_opus_high_effort_reaches_copilot_cli(self) -> None:
         captured: list = []
-        spec = BackendSpec("copilot", "claude-opus-4.5", "xhigh")
+        spec = BackendSpec("copilot", "claude-opus-5.5", "high")
         with _stub_subprocess(flowctl, captured, stdout="verdict"):
             flowctl.run_copilot_exec(
                 "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
             )
         argv, _ = captured[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-4.5")
-        # --effort must NOT appear for claude-* — Copilot CLI rejects it.
+        self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-5.5")
+        self.assertIn("--reasoning-effort", argv)
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "high")
         self.assertNotIn("--effort", argv)
 
-    def test_claude_haiku_also_skips_effort(self) -> None:
-        # Every claude-* model, not just opus. Use .startswith("claude-").
+    def test_claude_haiku_effort_reaches_copilot_cli(self) -> None:
         captured: list = []
         spec = BackendSpec("copilot", "claude-haiku-4.5", "low")
         with _stub_subprocess(flowctl, captured, stdout="verdict"):
@@ -904,10 +902,11 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
             )
         argv, _ = captured[0]
         self.assertEqual(argv[argv.index("--model") + 1], "claude-haiku-4.5")
+        self.assertIn("--reasoning-effort", argv)
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "low")
         self.assertNotIn("--effort", argv)
 
     def test_gpt_model_keeps_effort(self) -> None:
-        # Sanity — non-claude must keep --effort.
         captured: list = []
         spec = BackendSpec("copilot", "gpt-4.1", "high")
         with _stub_subprocess(flowctl, captured, stdout="verdict"):
@@ -915,8 +914,9 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
                 "prompt", session_id="s1", repo_root=self.repo_root, spec=spec
             )
         argv, _ = captured[0]
-        self.assertIn("--effort", argv)
-        self.assertEqual(argv[argv.index("--effort") + 1], "high")
+        self.assertIn("--reasoning-effort", argv)
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "high")
+        self.assertNotIn("--effort", argv)
 
     def test_explicit_spec_wins_over_env(self) -> None:
         os.environ["FLOW_COPILOT_MODEL"] = "gpt-4.1"
@@ -929,7 +929,7 @@ class TestRunCopilotExecHonorsSpec(unittest.TestCase):
             )
         argv, _ = captured[0]
         self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
-        self.assertEqual(argv[argv.index("--effort") + 1], "xhigh")
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "xhigh")
 
 
 # --- resolve_review_spec precedence (fn-28.3) ---

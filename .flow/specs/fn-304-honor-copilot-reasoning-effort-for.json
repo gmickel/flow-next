@@ -1,0 +1,131 @@
+{
+  "branch_name": "fix/copilot-high-effort-upstream-20261018",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-17T13:07:12.269653Z",
+  "created_at": "2026-10-17T12:06:02.104471Z",
+  "default_impl": null,
+  "default_review": "copilot:claude-opus-5.5:high",
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-304-honor-copilot-reasoning-effort-for",
+  "impl_review_rounds": {
+    "fn-304-honor-copilot-reasoning-effort-for.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "ff3f8bff36dda4377eac82a9531f186ac0d8807451b0d236e1a5f4a6b87fecdf",
+      "backend": "copilot",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "copilot",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b5d103c1bddec7c114926108c5795ee29adb3799",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "claude-opus-5.5",
+      "outcome": "verdict",
+      "output_bytes": 2023,
+      "output_sha256": "88082584910c002716755b141bc93feee4ec6dfa3c559587859939a82a7bf733",
+      "reservation_id": "6e3c4750889e48ffa25228bb5eb678dc",
+      "round_consumed": true,
+      "scope": "impl:fn-304-honor-copilot-reasoning-effort-for.1",
+      "superseded_by": null,
+      "task": "fn-304-honor-copilot-reasoning-effort-for.1",
+      "timestamp": "2026-10-17T12:30:06.860518Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "86b8b7df559d6f5543d570c695bd7de459ea83270970590fb31c79a46f3d78f7",
+      "backend": "copilot",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "copilot",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-d9e04a522df5b78dce5a842c07b20166",
+            "classification": "introduced",
+            "findingId": "finding-d9e04a522df5b78dce5a842c07b20166",
+            "firstSeenThisRound": true,
+            "severity": "P3",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-47004e06dbaa66d5b9d32ba5d6ceb890",
+            "classification": "pre_existing",
+            "findingId": "finding-47004e06dbaa66d5b9d32ba5d6ceb890",
+            "firstSeenThisRound": true,
+            "severity": "P3",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "97f0cd4a8e4ebc7c3665ff975358d2d0c571b0bc",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "claude-opus-5.5",
+      "outcome": "verdict",
+      "output_bytes": 3761,
+      "output_sha256": "6b90bb42f435f587e6b62c5aacf9d82ea132378b394009d08f1de14b15a091a2",
+      "reservation_id": "5388114c8c654382b763cc413d9b7cc6",
+      "round_consumed": true,
+      "scope": "impl:fn-304-honor-copilot-reasoning-effort-for.1",
+      "superseded_by": null,
+      "task": "fn-304-honor-copilot-reasoning-effort-for.1",
+      "timestamp": "2026-10-17T12:50:23.078553Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-304-honor-copilot-reasoning-effort-for.1": 2
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-304-honor-copilot-reasoning-effort-for.1": 0
+  },
+  "spec_path": ".flow/specs/fn-304-honor-copilot-reasoning-effort-for.md",
+  "status": "done",
+  "title": "Honor Copilot reasoning effort for Claude reviews",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-17T23:21:14.812317Z"
+}

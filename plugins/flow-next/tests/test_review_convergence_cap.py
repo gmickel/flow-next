@@ -2763,14 +2763,12 @@ class TestAttemptRowResolvedModel(_CombinedFinalizeWriteBase):
         )
         self.assertIsNone(row_model)
 
-    def test_copilot_claude_model_records_no_effort(self) -> None:
-        # PR #349 round 3: copilot omits --effort for claude-* models, so
-        # the row must not attribute an effort that never reached the CLI.
-        self.assertFalse(flowctl._effort_reached_cli("copilot", "claude-opus-5"))
-        self.assertTrue(flowctl._effort_reached_cli("copilot", "gpt-5.6-sol"))
-        self.assertTrue(flowctl._effort_reached_cli("codex", "gpt-5.6-sol"))
-        self.assertTrue(flowctl._effort_reached_cli("cursor", "cursor-opus-high"))
-        self.assertFalse(flowctl._effort_reached_cli("codex", None))
+    def test_copilot_claude_model_records_effort(self) -> None:
+        # Copilot's supported --reasoning-effort option reaches Claude models.
+        self.assertTrue(flowctl._effort_reached_cli("claude-opus-5"))
+        self.assertTrue(flowctl._effort_reached_cli("gpt-5.6-sol"))
+        self.assertTrue(flowctl._effort_reached_cli("cursor-opus-high"))
+        self.assertFalse(flowctl._effort_reached_cli(None))
 
     def test_ladder_floor_values_are_what_lands_never_the_ranking_top(self) -> None:
         """The row takes the SAME values the receipt does - `_receipt_model_effort`

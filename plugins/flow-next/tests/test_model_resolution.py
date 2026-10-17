@@ -451,7 +451,7 @@ class TestCopilotLadder(unittest.TestCase):
         dispatched = [_model_of(c) for c in calls if "-p" in c or "--session-id" in " ".join(c) or "--model" in c]
         self.assertEqual(dispatched[:2], [COPILOT_TOP, COPILOT_SECOND])
 
-    def test_floor_uses_auto_and_omits_effort(self) -> None:
+    def test_floor_uses_auto_and_omits_reasoning_effort(self) -> None:
         calls: list = []
         res = {}
         with _scripted(flowctl, dispatch_result=lambda m: ("", COPILOT_UNAVAILABLE_STREAM, 1) if m != "auto" else ("SHIP", "", 0), calls=calls):
@@ -462,6 +462,7 @@ class TestCopilotLadder(unittest.TestCase):
         floor_argv = [c for c in calls if "--model" in c][-1]
         self.assertEqual(_model_of(floor_argv), "auto")
         self.assertNotIn("--effort", floor_argv)
+        self.assertNotIn("--reasoning-effort", floor_argv)
         self.assertEqual(res["model"], "auto")
         self.assertTrue(res["floor"])
 
@@ -684,9 +685,8 @@ def _diff_name(receipt_id: str, base: str, head: str) -> str:
     return f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
 
 
-class TestClaudeAdapterBoundary(unittest.TestCase):
-    """fn-221 R2: ``_claude_run_exec`` delivers the diff by path on PRIMARY
-    dispatches (``args.claude_range`` set), never on optional passes."""
+class TestReviewDiffAdapterBoundary(unittest.TestCase):
+    """Pinned diffs reach Claude and Copilot primary dispatches by readable path."""
 
     def _call(self, root, *, args, session_id=None, calls=None, inputs=None, seen=None):
         scratch = root / ".flow" / "tmp" / "claude-review"
@@ -817,22 +817,136 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
     def test_dispatch_backend_review_sets_the_range_field(self) -> None:
         # The driver, not the adapter, owns the range: the primary boundary
         # stamps (base, head, receipt-id) on args before run_exec sees them.
-        recorded: dict = {}
+        for backend, review_kind in (("claude", "impl"), ("copilot", "completion")):
+            with self.subTest(backend=backend, review_kind=review_kind):
+                recorded: dict = {}
 
-        def run_exec(prompt, *, session_id, repo_root, spec, resolution_out, args):
-            recorded["range"] = args.claude_range
-            return "ok", "sid", 0, ""
+                def run_exec(
+                    prompt, *, session_id, repo_root, spec, resolution_out, args,
+                    recorded=recorded,
+                ):
+                    recorded["range"] = args.claude_range
+                    return "ok", "sid", 0, ""
 
-        args = argparse.Namespace(json=False)
-        flowctl._dispatch_backend_review(
-            backend="claude", reg={"run_exec": run_exec, "cli_label": "claude"},
-            args=args, prompt="p", session_id=None, repo_root=Path("."),
-            resolved_spec=BackendSpec("claude"), resolution_out={},
-            receipt_path="/x/.flow/review-receipts/fn-9.1-impl.json",
-            spec_id="fn-9", review_kind="impl", review_type="impl",
-            reviewed_head_sha="b" * 40, reviewed_base_sha="a" * 40,
-        )
-        self.assertEqual(recorded["range"], ("a" * 40, "b" * 40, "fn-9.1-impl"))
+                flowctl._dispatch_backend_review(
+                    backend=backend,
+                    reg={"run_exec": run_exec, "cli_label": backend},
+                    args=argparse.Namespace(json=False), prompt="p", session_id=None,
+                    repo_root=Path("."), resolved_spec=BackendSpec(backend),
+                    resolution_out={},
+                    receipt_path=f"/x/.flow/review-receipts/fn-9.1-{review_kind}.json",
+                    spec_id="fn-9", review_kind=review_kind, review_type=review_kind,
+                    reviewed_head_sha="b" * 40, reviewed_base_sha="a" * 40,
+                )
+                self.assertEqual(
+                    recorded["range"],
+                    ("a" * 40, "b" * 40, f"fn-9.1-{review_kind}"),
+                )
+
+    def test_copilot_impl_dispatch_reads_the_complete_pinned_diff(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            scratch = root / ".flow" / "tmp" / "claude-review"
+            diff_path = scratch / _diff_name("fn-9.1-impl", c0, c1)
+            calls: list = []
+
+            def result(_model):
+                self.assertTrue(diff_path.is_file(), "diff must exist before the CLI runs")
+                return "<verdict>SHIP</verdict>", "", 0
+
+            with _scripted(flowctl, dispatch_result=result, calls=calls), \
+                    mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
+                output, _sid, rc, err = flowctl._dispatch_backend_review(
+                    backend="copilot", reg=flowctl.BACKEND_REGISTRY["copilot"],
+                    args=argparse.Namespace(json=False), prompt="Review the patch.",
+                    session_id="11111111-2222-3333-4444-555555555555",
+                    repo_root=root,
+                    resolved_spec=BackendSpec("copilot", COPILOT_TOP, "high"),
+                    resolution_out={}, receipt_path=str(diff_path.parent / "fn-9.1-impl.json"),
+                    spec_id="fn-9", review_kind="impl", review_type="impl",
+                    reviewed_head_sha=c1, reviewed_base_sha=c0,
+                )
+
+            self.assertEqual(rc, 0, err)
+            self.assertIn("<verdict>SHIP</verdict>", output)
+            expected = subprocess.run(
+                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
+                text=True, check=True,
+            ).stdout
+            self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
+            copilot_call = next(call for call in calls if "-p" in call)
+            prompt = copilot_call[copilot_call.index("-p") + 1]
+            self.assertIn("## Diff delivery (copilot backend)", prompt)
+            self.assertIn("no shell access", prompt)
+            self.assertIn(str(diff_path), prompt)
+            self.assertIn(f"{c0}..{c1}", prompt)
+            self.assertIn("--allow-all-tools", copilot_call)
+            deny_tool_indexes = [
+                index for index, value in enumerate(copilot_call)
+                if value == "--deny-tool"
+            ]
+            self.assertEqual(
+                [copilot_call[index + 1] for index in deny_tool_indexes],
+                ["write", "shell"],
+            )
+
+    def test_copilot_fanout_uses_receipt_range_and_axis_identity(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            sidecar_dir = root / ".flow" / "review-fanout" / "rid"
+            sidecar_dir.mkdir(parents=True)
+            diff_path = sidecar_dir.parent.parent / "tmp" / "claude-review" / (
+                _diff_name("rid-contracts", c0, c1)
+            )
+            calls: list = []
+
+            def result(_model):
+                self.assertTrue(diff_path.is_file(), "fanout diff must exist before the CLI runs")
+                return "<verdict>SHIP</verdict>", "", 0
+
+            flowctl._wire_backend_review_hooks()
+            with _scripted(flowctl, dispatch_result=result, calls=calls), \
+                    mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
+                draw = flowctl._review_fanout_run_draw(
+                    {"axis": "contracts", "spec": BackendSpec("copilot", COPILOT_TOP, "high")},
+                    "Review the contracts axis.", root,
+                    argparse.Namespace(claude_range=(c0, c1, "rid"), json=True),
+                    sidecar_dir,
+                )
+
+            self.assertFalse(draw["failed"])
+            self.assertEqual(draw["backend"], "copilot")
+            expected = subprocess.run(
+                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
+                text=True, check=True,
+            ).stdout
+            self.assertEqual(diff_path.read_text(encoding="utf-8"), expected)
+            copilot_call = next(call for call in calls if "-p" in call)
+            prompt = copilot_call[copilot_call.index("-p") + 1]
+            self.assertIn(str(diff_path), prompt)
+            self.assertIn(f"{c0}..{c1}", prompt)
+
+    def test_copilot_diff_materialisation_error_precedes_managed_and_cli(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            scratch = root / ".flow" / "tmp" / "claude-review"
+            with tempfile.TemporaryDirectory() as elsewhere:
+                scratch.parent.mkdir(parents=True, exist_ok=True)
+                scratch.symlink_to(elsewhere, target_is_directory=True)
+                calls: list = []
+                managed = mock.Mock(return_value=None)
+                with _scripted(
+                    flowctl,
+                    dispatch_result=lambda _model: ("<verdict>SHIP</verdict>", "", 0),
+                    calls=calls,
+                ), mock.patch.object(flowctl, "_managed_review_exec", managed):
+                    _out, sid, rc, err = flowctl._copilot_run_exec(
+                        "p", session_id="copilot-session", repo_root=root,
+                        spec=BackendSpec("copilot", COPILOT_TOP, "high"),
+                        resolution_out={},
+                        args=argparse.Namespace(claude_range=(c0, c1, "rcpt")),
+                    )
+                self.assertEqual((sid, rc), ("copilot-session", 2))
+                self.assertIn("symlink", err)
+                managed.assert_not_called()
+                self.assertEqual(calls, [])
 
 
 # --- R4: per-CLI-version cache ---
