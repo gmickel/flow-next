@@ -6,6 +6,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.0.1] - 2026-10-18
+
 ### Fixed
 
 - **Work runs the test command your repository asks for before finishing.** When a repository's instructions name a command to run before finishing, committing, pushing or opening a pull request (for example `bun run lint:check && bun test` in a session-completion checklist), work's final gate now runs that command as written, once per spec. Before, it often read such a checklist as not asking and ran only focused tests. A command the instructions only list, and a repository with no such instruction, still get focused tests, as before.
