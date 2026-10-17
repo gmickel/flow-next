@@ -116,6 +116,30 @@ class FlowReferenceReachability(unittest.TestCase):
                 with self.subTest(reference=name, reader=label):
                     self.assertTrue(found, f"{label} does not link {name}")
 
+    def test_measured_numbers_reference_is_read_by_its_routes_only(self) -> None:
+        # The routes that report a number (slowness, hill climb, prompt-change eval) and the
+        # implementer paths that take the slowness measurement link it; nothing else does.
+        name = "measured-numbers.md"
+        expected = {
+            "skills/flow-next-flow/references/route-matrix.md",
+            "skills/flow-next-flow/references/measure-behaviour-change.md",
+            "skills/flow-next-work/references/hill-climb.md",
+            "skills/flow-next-work/phases.md",
+            "skills/flow-next-work/references/worker-bridge.md",
+            "agents/worker.md",
+            "docs/pipeline-variations.md",
+        }
+        linkers = set()
+        for path in PLUGIN.rglob("*.md"):
+            rel = path.relative_to(PLUGIN).as_posix()
+            if rel.startswith("codex/"):
+                continue
+            for link in re.findall(r"\]\(([^)#]*" + re.escape(name) + r")(?:#[^)]*)?\)", _read(path)):
+                linkers.add(rel)
+                with self.subTest(file=rel, link=link):
+                    self.assertTrue((path.parent / link).resolve().is_file(), f"{rel} links {link}")
+        self.assertEqual(linkers, expected)
+
     def test_every_auto_md_reference_link_resolves(self) -> None:
         for rel in LOCAL_REF_LINK_RE.findall(_read(FLOW_AUTO)):
             with self.subTest(link=rel):
