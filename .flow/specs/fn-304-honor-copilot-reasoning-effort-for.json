@@ -1,7 +1,7 @@
 {
   "branch_name": "fix/copilot-high-effort-upstream-20261018",
-  "completion_review_status": "not_required",
-  "completion_reviewed_at": "2026-10-17T13:07:12.269653Z",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-10-17T23:26:33.969358Z",
   "created_at": "2026-10-17T12:06:02.104471Z",
   "default_impl": null,
   "default_review": "copilot:claude-opus-5.5:high",
@@ -103,14 +103,60 @@
       "task": "fn-304-honor-copilot-reasoning-effort-for.1",
       "timestamp": "2026-10-17T12:50:23.078553Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "424fa9ecb2c47bb1be6845b4d83c8239122d230b09a239df856c9b0254368cbf",
+      "backend": "copilot",
+      "base_sha": "f360d3a8d1d3f16b83f60fd4d3a6e8d1e67b7282",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "copilot",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-ebead2a01b5751b897be359c36676198",
+            "classification": "pre_existing",
+            "findingId": "finding-ebead2a01b5751b897be359c36676198",
+            "firstSeenThisRound": true,
+            "severity": "P3",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "ae80c9c5c327e0c6120d96d9b2482b8dd170bc28",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "claude-opus-5.5",
+      "outcome": "verdict",
+      "output_bytes": 4963,
+      "output_sha256": "8a96c671ede75396e71c4e6ff20db4b62f649445a94b578914274451399daeea",
+      "reservation_id": "c6d02cb8b78f4ad3aa8abfef78f5954a",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-10-17T23:26:33.967133Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-304-honor-copilot-reasoning-effort-for.1": 2
+    "impl:fn-304-honor-copilot-reasoning-effort-for.1": 2,
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-304-honor-copilot-reasoning-effort-for.1": 0
   },
   "spec_path": ".flow/specs/fn-304-honor-copilot-reasoning-effort-for.md",
@@ -127,5 +173,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-17T23:21:14.812317Z"
+  "updated_at": "2026-10-17T23:26:33.969773Z"
 }
