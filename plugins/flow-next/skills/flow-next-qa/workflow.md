@@ -353,7 +353,10 @@ is posted. The post is best-effort and never changes the receipt.
 ### Before you finish
 
 - One receipt exists at `RECEIPT_PATH` with `qa_outcome`, `verdict`, `head_sha`, `branch`,
-  `rid_coverage` and `open_p0p1`, whatever the outcome.
+  `rid_coverage`, `open_p0p1` and `scenarios`, whatever the outcome.
 - Every criterion is a coverage row; no runtime or UI criterion is `subtracted`.
+- Every scenario is a `scenarios` row, `live` at this head or `carried` from a scenario that
+  passed in the prior receipt, and a `carried` criterion has only carried scenarios
+  (references/recheck.md).
 - Every filed finding was reproduced twice and cites real evidence.
 - Under `NO_PROMPT=1`, nothing was asked.
