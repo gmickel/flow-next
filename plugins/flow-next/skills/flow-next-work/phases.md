@@ -184,7 +184,9 @@ here, inline.** Print `Scheduling: inline (single task)`.
    section when step 7 ran a completion review that returned SHIP; otherwise nothing fires.
 3. **Implement** to the acceptance criteria, following working-rules.md: a failing test first
    where cheap (on the defect route, [references/defect-route.md](references/defect-route.md); on
-   the hill-climb route, [references/hill-climb.md](references/hill-climb.md) replaces this step),
+   the hill-climb route, [references/hill-climb.md](references/hill-climb.md) replaces this step;
+   a measured slowness moved once is measured per
+   [measured-numbers.md](../../references/measured-numbers.md)),
    one focused test per criterion and per enumerated error case, the focused tests for the code
    you changed. Never weaken a test, gate or assertion to make the change pass; a gate you believe
    is wrong is `BLOCKED: TOOLING_FAILURE`. Do not edit `.flow/features/`.
