@@ -12,7 +12,7 @@ When changing shipped skills, agents, references or platform behaviour, also rea
 
 On Codex, invoke skills as `$flow-next-<name>` or through the skill picker.
 Other hosts that read this file use their native Flow-Next invocation syntax;
-do not apply Codex syntax to Claude, Cursor, Grok, or OpenCode commands.
+do not apply Codex syntax to Claude, Cursor, Grok, OpenCode, or Muse commands.
 Use the current harness's actual tool interfaces. Canonical product prose may
 use Claude names because the Codex mirror is generated; that is not an
 instruction to call unavailable tools in this development session.

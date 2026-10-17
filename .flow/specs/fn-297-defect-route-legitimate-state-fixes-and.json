@@ -1,0 +1,193 @@
+{
+  "branch_name": "fn-297-defect-route-legitimate-state-fixes-and",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-16T12:30:12.415472Z",
+  "created_at": "2026-10-15T09:40:05.031799Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-297-defect-route-legitimate-state-fixes-and",
+  "impl_review_rounds": {
+    "fn-297-defect-route-legitimate-state-fixes-and.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0163879e086e57ee3791f2f051337c1d2f500fb3ca258e99f4c1dd54911ed54f",
+      "backend": "codex",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "classification": "introduced",
+            "findingId": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "45625d9efafbd79ccbe9bd36c6c759d4cb5f9235",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1044,
+      "output_sha256": "eacef67b1869d0495d43f7a73457ceec7e1dc5c9c35773f0acdf918d123d25d4",
+      "reservation_id": "66d8be0c1b1c46d7828d4256edd8e0d0",
+      "round_consumed": true,
+      "scope": "impl:fn-297-defect-route-legitimate-state-fixes-and.1",
+      "superseded_by": null,
+      "task": "fn-297-defect-route-legitimate-state-fixes-and.1",
+      "timestamp": "2026-10-15T20:41:52.498208Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "9764ee3fa7eae73b08c0a5972c577c60ee44def9729bb39e0e155fd21a2cb360",
+      "backend": "codex",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "classification": "introduced",
+            "findingId": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-fdc795456c51679e15acba62a9b241e9",
+            "classification": "introduced",
+            "findingId": "finding-fdc795456c51679e15acba62a9b241e9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3bec86976c3e69801596da20cf5e964a2df7ccbc",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2031,
+      "output_sha256": "20344130f249122e2b974f1dcbc9337d61b273a8620646851a9bc68c09067d36",
+      "reservation_id": "a8fba90d28924180b13d0d4d1d2f255d",
+      "round_consumed": true,
+      "scope": "impl:fn-297-defect-route-legitimate-state-fixes-and.1",
+      "superseded_by": null,
+      "task": "fn-297-defect-route-legitimate-state-fixes-and.1",
+      "timestamp": "2026-10-15T22:46:41.493675Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fd9edf3d0c8987468fe765bccba4f109ce71c2b94b88b89d27244bdef8eca68c",
+      "backend": "codex",
+      "base_sha": "627efd03862b663482ec34a66d7559f482a14529",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "classification": "introduced",
+            "findingId": "finding-1677d4a2b9e91966690595c7aaca8fce",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-fdc795456c51679e15acba62a9b241e9",
+            "classification": "introduced",
+            "findingId": "finding-fdc795456c51679e15acba62a9b241e9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4d349f5d2dcc2e8b79b72f4223829f4360ed4314",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1438,
+      "output_sha256": "499e9b6669ef1c388274d0d06aabc230420b76747253a1fc7952b18ce3958999",
+      "reservation_id": "082ddec289994826a583d38418f9b989",
+      "round_consumed": true,
+      "scope": "impl:fn-297-defect-route-legitimate-state-fixes-and.1",
+      "superseded_by": null,
+      "task": "fn-297-defect-route-legitimate-state-fixes-and.1",
+      "timestamp": "2026-10-16T12:28:27.856063Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-297-defect-route-legitimate-state-fixes-and.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-297-defect-route-legitimate-state-fixes-and.1": 0
+  },
+  "spec_path": ".flow/specs/fn-297-defect-route-legitimate-state-fixes-and.md",
+  "status": "done",
+  "title": "Defect route: legitimate-state fixes and the reported surface",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-16T12:30:38.743909Z"
+}

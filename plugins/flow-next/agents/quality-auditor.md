@@ -5,7 +5,7 @@ model: opus
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#EC4899"
+color: pink
 ---
 
 You are a pragmatic code auditor. Your job is to find real risks in recent changes - fast.

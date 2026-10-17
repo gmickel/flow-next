@@ -102,7 +102,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ```
 init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
-show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
+show, specs, tasks, list, cat, ready, next, start, done, block, validate, trace, triage-skip, gate,
 checkpoint, codex, copilot, cursor, claude,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
@@ -515,7 +515,7 @@ is refused.
 
 ### spec ready / spec unready
 
-Mark / clear the spec's human-owned readiness gate. Readiness is orthogonal to `status` - a ready spec stays `open` through planning and work, and `done` specs may be toggled.
+Mark / clear the spec's readiness gate, which a person sets (a `flow --goal` run also sets it for a child it minted). Readiness is orthogonal to `status` - a ready spec stays `open` through planning and work, and `done` specs may be toggled.
 
 ```bash
 flowctl spec ready fn-1 [--json]
@@ -1233,7 +1233,12 @@ over 32k tokens at four characters per token is rejected without sending.
 The command never writes state, answers, or credentials to disk.
 
 `--task` assembles tier inputs from the task and returns `tier_line`,
-`spawn_model` and `implementer`. Unknown tasks fail.
+`spawn_model`, `spawn_effort` and `implementer`. Unknown tasks fail. For a worker
+the caller passes the host facts `--effort-levels <lowest,...,highest>` and
+`--default-effort <level>`, plus `--explicit-effort` or `--role-effort` when one
+applies; `spawn_effort` is the level for the spawn's effort parameter, or null
+for the host default. A bridged implementer carries the effort as
+`<model> at <effort>` in `implementer`.
 
 `--spec` assembles route facts from the live spec and repository. A failed
 PR probe returns `pr_probe_failed: true` and no `decision`, so the caller
@@ -1303,7 +1308,7 @@ flowctl config set memory.enabled false [--json]
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. Strict enum: invalid CLI writes are rejected, and malformed persisted values return runtime `INVALID_INPUT` before status claims or lifecycle sequence work. In autonomous mode `always-ask` resolves to *queue*, not prompt. |
 | `tracker.readyState` | string | `null` | **Readiness projection.** The tracker workflow state that means "ready for work" - a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` - a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready - a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag - **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/refine's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
-| `land.patienceMinutes` | int | `10` | Minutes since the last push to wait, so review bots can post, when calling flow authorizes merging without a human's current in-session merge authorization. A human's current authorization waives the wait. Unknown push time holds. |
+| `land.patienceMinutes` | int | `10` | Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when calling flow authorizes merging without a human's current in-session merge authorization. A human's current authorization waives the wait. Unknown push time holds. |
 | `land.mergeVerdictCommand` | string or `null` | `""` | Optional command, run once per invocation after the other merge gates pass, with a 600-second bound. Exit 0 allows merging; any non-zero result, missing/unexecutable command or timeout blocks. Runs in the invoking repository without switching its checkout; judge the remote `FLOW_HEAD_SHA`, not local HEAD. Environment also supplies `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID` (empty for multiple matches), and space-separated `FLOW_SPEC_IDS`. Dry-run never executes it. Unset, null and empty disable it. See [Landing upgrade](#landing-upgrade). |
 | `pipeline.qa` | `off \| on \| auto` | `off` | **Optional live QA stage.** Set with `flowctl config set pipeline.qa <off\|on\|auto>`; what each value does, and the skip line a skipped stage records, is in [`gate-selection.md`](../skills/flow-next-flow/references/gate-selection.md), which attended flow and `flow --auto` both read. This is a **string-enum** knob, **NOT a bool**; **any other value, including bool `true`, is OFF**. flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
 | `chart.maxDecisions` | int | `12` | **Chart size ceiling.** Charting-time only: `chart create --initial-map-file` refuses past this count without `--force-size --reason` (audited: actor, ceiling, proposed count, timestamp, reason). Later sharpening from Open Questions may grow past it. |
@@ -1311,6 +1316,9 @@ flowctl config set memory.enabled false [--json]
 | `features.staleAfterCommits` | int | `50` | **Feature-map due threshold.** `flowctl features status` reports the map due a maintain pass when a feature file's `**Last proven:**` commit is at least this many default-branch commits old, counting only commits that change a file outside `.flow/` and the docs-only safe paths. Values below 1 or non-integers read as the default. |
 | `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection.** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
 | `pilot.autonomy` | `ready \| backlog` | `ready` | **Backlog mode for `/flow-next:flow --auto`** (the key keeps its `pilot.` spelling). A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: `flow --auto` selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `/flow-next:flow --auto --backlog`) to enable **backlog mode** - the driver widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** - any other value (bool `true`, a typo, `null`) leaves the driver byte-for-byte in `ready` mode, and the flow skill's `references/backlog-mode.md` is never read. Backlog mode **never authors a spec or sets `ready`**, and grants no merge authority; readiness stays the human's explicit signal. Flow's separately authorized merge destination is governed by the [tail contract](../skills/flow-next-flow/references/tail.md). flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
+| `evidence.persist` | `off \| on` | `off` (absent) | **Opt-in development evidence.** Only the literal `on` activates; any other value, including bool `true`, is off. When on, flowctl writes a committed copy of each record into `<evidence.dir>/<spec-id>/` the moment it writes the record, and stages it with `git add` so it travels in the next commit: every plan, implementation and completion review receipt (`reviews/<round>-<type>-<id>.json`, one file per round), each QA receipt with its captures from `.flow/tmp/qa-<spec-id>/` (`qa/<round>/`), each completed task's recorded evidence (`tasks/<task-id>.json`, also listed in `done`'s `modified_paths`) with the report files the agent had its test runner write into `tests/<task-id>/` (`start` prints that path on stderr; a JUnit XML report gives `trace` each test's result), and a run record (`run.json`: per review the backend and model, per task the implementing model from the done summary's `(model: ...)`, each with the flow-next version and host; an unknown value is written as `unknown`). A failed write, including an unsafe `evidence.dir`, fails the command that produced the record. |
+| `evidence.dir` | repo-relative path | `.flow/evidence` (absent) | Root of the per-spec evidence folders. A path that is absolute, resolves outside the repository, or passes through a symlink is refused when evidence is written. |
+| `spec.approval` | `local \| pr` | `local` (absent) | **Spec approval gate.** `local` leaves readiness as it is. Under `pr`, a spec is ready only once its spec PR (head branch `spec/<spec-id>`) has merged with at least one approving review: `spec ready` and `start` refuse an unapproved spec and point at [`references/spec-approval-pr.md`](../references/spec-approval-pr.md), `flow --auto` selection and `judge route` hold it, and the first of them to see the approved merge records the approvers, the merge identity and the times as `spec_approval` on the spec sidecar, marks it ready, and (with `evidence.persist on`) writes `approval.json` to its evidence folder. `spec create`, `spec set-plan`, `task create` and `task set-spec` print a one-line pointer to that reference on stderr. `spec unready` (which a capture rewrite runs) withdraws a recorded approval, and only a spec PR merged after that counts again. A closed or approval-less PR, or an unreachable forge, leaves the spec not ready with the reason. An invalid value is rejected by `config set` and stops every gated command instead of falling back to `local`. The forge's branch protection decides who may approve; flowctl only reads and records it. |
 | `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate.** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** - a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
 
 \* The pre-1.1.3 legacy alias `planSync.crossEpic` was **removed in 2.0.0** (it was readable through 1.x with a stderr deprecation warning). `flowctl` no longer reads or writes it - a leftover `crossEpic` key in `.flow/config.json` is inert. If you relied on it, set the canonical key once: `flowctl config set planSync.crossSpec true`.
@@ -1655,11 +1663,52 @@ flowctl qa receipt --from-json qa.json [--receipt receipt.json] --json
 ```
 
 The payload supplies `id`, `qa_outcome`, findings and R-ID coverage; optional
-mode and BLOCKED/NA reasons are host-authored. The command derives commit,
-branch, timestamps, counts and prior-finding lineage, then writes atomically.
+mode, BLOCKED/NA reasons and per-scenario outcomes are host-authored. The command
+derives commit, branch, timestamps, counts and prior-finding lineage, then writes
+atomically. Live scenarios are stamped with the current head. A scenario recorded
+as `{"id": ..., "run": "carried"}` copies its outcome, R-IDs, evidence and head
+from the prior receipt at the same path; a carry from another spec or branch, or
+of a scenario that did not pass there, is refused.
 BLOCKED or NA does not close unobserved prior findings. Invalid payloads report
 all errors without replacing the previous receipt. QA resolves unattended
 target and account prerequisites before deriving scenarios.
+
+### trace
+
+```bash
+flowctl trace <spec-id> [--format md|csv] [--json]
+```
+
+Read-only traceability matrix for one spec, one row per R-ID: the tests that
+cover it and their results, its QA coverage from the latest QA receipt,
+review findings whose `rIds` name it, and the spec and implementation approvals.
+Task, review and QA evidence is read from the spec's evidence folder when
+`evidence.persist` wrote one, otherwise from local task state and
+`.flow/review-receipts/`. The implementation approval comes from the forge for
+the spec's branch, and under `spec.approval pr` an unrecorded spec approval is
+read from the spec PR the same way (trace never records it); an unreachable
+forge shows `unknown` with a warning on stderr, never a guessed approval.
+
+Tests come from a task's JUnit XML reports under
+`<evidence.dir>/<spec-id>/tests/<task-id>/` when it has any: each test case maps
+to the R-IDs its name carries (`R7: ...`, `test_r7_...`) with its own result
+(`passed`, `failed`, `error`, `skipped`), shown next to the test. A failed or
+erroring test is a gap, including one that names no criterion; so is a test
+naming an unknown R-ID, an unreadable report, and a criterion the task
+`satisfies` that no test in its report names. A passing test without an R-ID is
+not mapped. A task without a report falls back to its recorded test evidence: the commands of done
+tasks whose `satisfies` names the criterion, with the result `recorded at done`.
+
+The gap check always runs: a criterion with no test and no live or CLI QA
+coverage is a gap, and so is evidence that names no criterion (test evidence on
+a task without `satisfies`, or a `satisfies`, QA row or review finding naming
+an unknown R-ID). Skipped gates (`GATE_SKIPPED`) are listed but never count as
+evidence. Persisted task records count on a fresh clone without local task state.
+Without `evidence.persist` the command still runs and reports what is missing.
+Markdown (default) prints the matrix and a Gaps section; CSV prints the matrix
+and the gaps on stderr; `--json` returns `rows`, `gaps`, `gap_count` and
+`warnings`. Exit `0` = no gaps, `1` = gaps, `2` = error (unknown spec, invalid
+`spec.approval`).
 
 ## chart
 
@@ -2934,7 +2983,7 @@ those conditions can allow the authorized merge. Tighten this in three ways:
    judge `FLOW_HEAD_SHA`; the invoking checkout may be on another branch.
    A non-zero result, unavailable command or timeout blocks the merge.
 
-`land.patienceMinutes` defaults to 10 minutes since the last push when
+`land.patienceMinutes` defaults to 10 minutes since the last authored push when
 calling flow authorizes the merge without a human's current in-session merge
 authorization. A human's current authorization waives that wait. The command
 and environment contract is in the [configuration table](#config).

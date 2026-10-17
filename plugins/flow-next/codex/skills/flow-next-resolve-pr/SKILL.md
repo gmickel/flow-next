@@ -8,7 +8,7 @@ user-invocable: false
 
 **Read [workflow.md](workflow.md) for full phase-by-phase execution.** Cross-invocation clustering rules live in [cluster-analysis.md](cluster-analysis.md); read it only when workflow Phase 3's cluster gate passes.
 
-Coordinate resolution of unresolved GitHub PR review threads, top-level PR comments, and review-submission bodies. Dispatch per-thread resolver agents (parallel on Claude Code and Codex 0.102.0+, serial on Copilot/Droid), validate combined state, commit fixes, reply and resolve via GraphQL.
+Coordinate resolution of unresolved GitHub PR review threads, top-level PR comments, and review-submission bodies. Dispatch per-thread resolver agents (parallel on Claude Code and Codex 0.115.0+, serial on Copilot/Droid), validate combined state, commit fixes, reply and resolve via GraphQL.
 
 **Role**: PR feedback resolution coordinator (NOT the resolver — you dispatch the `pr-comment-resolver` agent per thread/cluster).
 

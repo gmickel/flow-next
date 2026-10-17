@@ -110,7 +110,8 @@ and loop as it says.
 A route that has no spec never creates one just to open a pull request: when a pull request is
 asked for, open it directly (`gh pr create`) with the handoff as its body. Follow-ups are listed
 in the handoff (and the pull request body), not captured as specs, attended or unattended; the
-person decides later which become specs.
+person decides later which become specs. A `flow --goal` run is the one exception: the person
+named a goal, and the run mints specs only for that goal's unmet criteria.
 
 ## Handoff
 

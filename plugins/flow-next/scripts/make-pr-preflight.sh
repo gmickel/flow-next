@@ -18,7 +18,7 @@ if [[ "$DRY_RUN" == "1" && "$BASE_REF" =~ ^[0-9a-f]{7,40}$ ]] && git -C "$REPO_R
 elif [[ -n "$BASE_REF" && "$BASE_REF" != refs/* ]]; then
   BASE_BRANCH="${BASE_REF#origin/}"
   if [[ "$DRY_RUN" != "1" ]]; then
-    git -C "$REPO_ROOT" fetch -q origin "refs/heads/$BASE_BRANCH:refs/remotes/origin/$BASE_BRANCH" || { echo "Error: cannot refresh origin/$BASE_BRANCH" >&2; exit 1; }
+    git -C "$REPO_ROOT" fetch -q origin "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" || { echo "Error: cannot refresh origin/$BASE_BRANCH" >&2; exit 1; }
   fi
   BASE_REF="origin/$BASE_BRANCH"
 fi
@@ -47,7 +47,7 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     DEP_BRANCH=$(printf '%s' "$DEP_JSON" | jq -r '.branch_name // empty')
     [[ -z "$DEP_BRANCH" ]] && continue
     DEP_REF=""
-    if git -C "$REPO_ROOT" fetch -q origin "refs/heads/$DEP_BRANCH:refs/remotes/origin/$DEP_BRANCH" 2>/dev/null; then DEP_REF="refs/remotes/origin/$DEP_BRANCH"; fi
+    if git -C "$REPO_ROOT" fetch -q origin "refs/heads/${DEP_BRANCH}:refs/remotes/origin/${DEP_BRANCH}" 2>/dev/null; then DEP_REF="refs/remotes/origin/$DEP_BRANCH"; fi
     if DEP_PR_LIST=$(gh pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
       DEP_PR_JSON=$(printf '%s' "$DEP_PR_LIST" | jq -c '(map(select(.state=="OPEN")) + map(select(.state=="MERGED")) + map(select(.state=="CLOSED"))) | .[0] // empty')
     elif [[ "$DRY_RUN" == "1" ]]; then
@@ -95,7 +95,7 @@ if [[ -n "$CHAIN_PARENT" ]]; then
     MERGED)
       PARENT_PR_BASE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')
       : "${PARENT_PR_BASE:=${CHAIN_BASE#origin/}}"
-      git -C "$REPO_ROOT" fetch -q origin "refs/heads/$PARENT_PR_BASE:refs/remotes/origin/$PARENT_PR_BASE" 2>/dev/null \
+      git -C "$REPO_ROOT" fetch -q origin "refs/heads/${PARENT_PR_BASE}:refs/remotes/origin/${PARENT_PR_BASE}" 2>/dev/null \
         || { echo "NEEDS_HUMAN: cannot refresh chain base $PARENT_PR_BASE from origin; no rewrite" >&2; exit 2; }
       REWRITE_ONTO="origin/$PARENT_PR_BASE"; BASE_REF="$REWRITE_ONTO"; CHAIN_REWRITE=1 ;;
     CLOSED)

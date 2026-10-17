@@ -2,7 +2,7 @@
 """Post-copy flowctl_tracker manifest verification (fn-139.5, R1).
 
 Called by every installer that copies the package (install-codex.sh,
-install-cursor.sh, install-opencode.sh) AFTER copying, with the directory that should contain
+install-cursor.sh, install-opencode.sh, install-muse.sh) AFTER copying, with the directory that should contain
 `flowctl_tracker/` as argv[1]. Integrity is verified where it can actually
 run - the installer - and fails loudly there, instead of surfacing later as
 an ImportError mid-command. There is deliberately NO per-command hashing.

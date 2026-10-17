@@ -10,6 +10,8 @@ Locks:
       placed below the hosts that prove themselves with their own signal.
       A PLUGIN_ROOT carrying .flow-next-opencode-manifest is opencode; GROK_AGENT
       still wins; absence of the file is not an OpenCode signal.
+      A PLUGIN_ROOT carrying .flow-next-muse-bundle is muse ahead of every
+      inherited marker; MUSE_SESSION_ID alone decides nothing.
   (b) Codex mirror Step-0 is unconditional PLATFORM=codex — even with
       GROK_AGENT=1 and every other host signal set, the mirror returns codex.
 
@@ -43,6 +45,7 @@ HOST_ENV_KEYS = (
     "CLAUDECODE",
     "CURSOR_TRACE_ID",
     "CODEX_HOME",
+    "MUSE_SESSION_ID",
 )
 
 _BASH = shutil.which("bash")
@@ -146,6 +149,13 @@ def _build_opencode_install(home: Path) -> Path:
     return root
 
 
+def _build_muse_install(home: Path) -> Path:
+    """Temp Muse bundle: the install-muse.sh marker beside the Claude manifest."""
+    root = _build_claude_install(home)
+    (root / ".flow-next-muse-bundle").write_text("flow-next Muse Code bundle\n", encoding="utf-8")
+    return root
+
+
 def _build_neutral_root(home: Path) -> Path:
     """A plugin root that is not under ~/.cursor and carries no host manifest."""
     root = home / "plugin-src" / "flow-next"
@@ -158,6 +168,7 @@ ROOTS = {
     "claude": _build_claude_install,
     "cursor": _build_cursor_install,
     "opencode": _build_opencode_install,
+    "muse": _build_muse_install,
 }
 
 # (case, plugin root kind, host env, expected PLATFORM)
@@ -193,6 +204,17 @@ CANONICAL_CASES = (
     ("opencode manifest at plugin root", "opencode", {}, "opencode"),
     ("grok wins over opencode manifest", "opencode", {"GROK_AGENT": "1"}, "grok"),
     ("inherited CLAUDECODE with opencode manifest", "opencode", {"CLAUDECODE": "1"}, "opencode"),
+    ("muse bundle", "muse", {"MUSE_SESSION_ID": "s"}, "muse"),
+    # A Muse session launched from a Claude Code shell inherits CLAUDECODE, and
+    # the Muse cache also carries the Claude manifest.
+    ("muse bundle with inherited CLAUDECODE", "muse",
+     {"MUSE_SESSION_ID": "s", "CLAUDECODE": "1"}, "muse"),
+    ("muse bundle with inherited grok and droid", "muse",
+     {"GROK_AGENT": "1", "DROID_PLUGIN_ROOT": "/tmp/droid"}, "muse"),
+    # Codex and Claude Code children of a Muse shell inherit MUSE_SESSION_ID.
+    ("inherited MUSE_SESSION_ID on a codex root", "neutral", {"MUSE_SESSION_ID": "s"}, "codex"),
+    ("inherited MUSE_SESSION_ID on a claude root", "claude",
+     {"MUSE_SESSION_ID": "s", "CLAUDECODE": "1"}, "claude-code"),
 )
 
 # The Codex mirror returns codex whatever the host signals say.

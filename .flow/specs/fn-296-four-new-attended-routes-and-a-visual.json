@@ -1,0 +1,203 @@
+{
+  "branch_name": "fn-296-four-new-attended-routes-and-a-visual",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-15T15:39:26.337126Z",
+  "created_at": "2026-10-15T09:40:03.890666Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-296-four-new-attended-routes-and-a-visual",
+  "impl_review_rounds": {
+    "fn-296-four-new-attended-routes-and-a-visual.1": 2
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "664686f514e596f910672785bf049266d847892dd3faa1c864fc1a4bef44dbff",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-49b339d4a48aaf3d98a17c7df4728764",
+            "classification": "introduced",
+            "findingId": "finding-49b339d4a48aaf3d98a17c7df4728764",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8134dd40b8e0c63e5d32f226964ed08b",
+            "classification": "introduced",
+            "findingId": "finding-8134dd40b8e0c63e5d32f226964ed08b",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1af934cac2341cb3c36be8116ea6fbe8",
+            "classification": "introduced",
+            "findingId": "finding-1af934cac2341cb3c36be8116ea6fbe8",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-a0118f5c0c387a3707b3501a58087cbd",
+            "classification": "introduced",
+            "findingId": "finding-a0118f5c0c387a3707b3501a58087cbd",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d87797350c91a1abedceb5bc71af99bc",
+            "classification": "introduced",
+            "findingId": "finding-d87797350c91a1abedceb5bc71af99bc",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "61e3198a8dcf0dbef5d6ce8da8966e00eb3cf214",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4115,
+      "output_sha256": "536ea543950bcaa9090ba4e7d48d3f862920bd73cd9437d709bb03f7b1b96e4d",
+      "reservation_id": "116f1023b0b04eeeac7d6faf85fb0fb0",
+      "round_consumed": true,
+      "scope": "impl:fn-296-four-new-attended-routes-and-a-visual.1",
+      "superseded_by": null,
+      "task": "fn-296-four-new-attended-routes-and-a-visual.1",
+      "timestamp": "2026-10-15T15:32:47.643690Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fbc649e4dc1b75374688582e2338568ec487d05c4354b688bfba3aea9bbd31ae",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-49b339d4a48aaf3d98a17c7df4728764",
+            "classification": "introduced",
+            "findingId": "finding-49b339d4a48aaf3d98a17c7df4728764",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-8134dd40b8e0c63e5d32f226964ed08b",
+            "classification": "introduced",
+            "findingId": "finding-8134dd40b8e0c63e5d32f226964ed08b",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1af934cac2341cb3c36be8116ea6fbe8",
+            "classification": "introduced",
+            "findingId": "finding-1af934cac2341cb3c36be8116ea6fbe8",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-a0118f5c0c387a3707b3501a58087cbd",
+            "classification": "introduced",
+            "findingId": "finding-a0118f5c0c387a3707b3501a58087cbd",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3876175b9ccab41e8d85f8d8a5b2b5b1",
+            "classification": "introduced",
+            "findingId": "finding-3876175b9ccab41e8d85f8d8a5b2b5b1",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d87797350c91a1abedceb5bc71af99bc",
+            "classification": "introduced",
+            "findingId": "finding-d87797350c91a1abedceb5bc71af99bc",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "not_fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6e5bb0aa6a4f74c0152411b364d45118c5363b62",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2766,
+      "output_sha256": "a05daffb3021719db38deb848e489b6b4735073f5b6074805122dd1e51b3bf2f",
+      "reservation_id": "5a39d0b3b8984e6bbd351ef0a2ce3346",
+      "round_consumed": true,
+      "scope": "impl:fn-296-four-new-attended-routes-and-a-visual.1",
+      "superseded_by": null,
+      "task": "fn-296-four-new-attended-routes-and-a-visual.1",
+      "timestamp": "2026-10-15T15:39:01.696649Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-296-four-new-attended-routes-and-a-visual.1": 0
+  },
+  "spec_path": ".flow/specs/fn-296-four-new-attended-routes-and-a-visual.md",
+  "status": "done",
+  "title": "Four new attended routes and a visual-parity pin",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-15T15:41:36.161015Z"
+}

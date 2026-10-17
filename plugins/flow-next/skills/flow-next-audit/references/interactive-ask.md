@@ -72,7 +72,7 @@ resolved config, and only then is the entry demoted to a pointer at the gate
 
 Options:
   1. Accept — write the lint rule, verify, demote (recommended)
-  2. Pick a different gate type (CI step / CLAUDE.md rule)
+  2. Pick a different gate type (CI step)
   3. Decline — keep the entry as context
 ```
 

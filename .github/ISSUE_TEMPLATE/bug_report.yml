@@ -19,7 +19,8 @@ body:
         - Factory Droid
         - Grok Build
         - Cursor
-        - OpenCode (community port)
+        - OpenCode
+        - Muse Code
         - Other
     validations:
       required: true

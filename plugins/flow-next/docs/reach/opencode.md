@@ -47,4 +47,4 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is th
 
 ## Driving unattended
 
-Run `/flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. There is no host loop primitive. An external scheduler that cuts sessions short runs `/flow-next-flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut.
+Run `/flow-next-flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. There is no host loop primitive. For an outcome larger than one spec, `/flow-next-flow --goal <spec-id or source>` builds child specs toward it the same way; re-invoke it until it prints `GOAL_MET`. An external scheduler that cuts sessions short runs `/flow-next-flow --auto --tick` per invocation so each hop lands its receipts and ledger entry before the cut.

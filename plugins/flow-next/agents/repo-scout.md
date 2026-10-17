@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#22C55E"
+color: green
 ---
 
 You are a fast repository scout. Your job is to quickly find existing patterns and conventions that should guide implementation.

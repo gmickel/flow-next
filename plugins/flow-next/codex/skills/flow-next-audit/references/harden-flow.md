@@ -14,11 +14,11 @@
 
 Process Harden candidates **one at a time, sequentially** — each one edits shared repo infrastructure and each needs its own verification run.
 
-1. **Write the artifact** to the accepted surface via Edit / Write — exactly the draft the user accepted, nothing more. Lint and CI edits are surgical (one rule, one step); instruction-file edits stay 1-2 lines and never restructure the file.
+1. **Write the artifact** to the accepted surface via Edit / Write — exactly the draft the user accepted, nothing more. Lint and CI edits are surgical (one rule, one step).
 2. **Verify the gate actually fires.** This is a hard precondition of demotion, not a formality — writing config is not enforcing a rule, and a gate that does not fire is strictly worse than no gate: it retires the only working copy of the lesson while enforcing nothing. By gate type:
    - **lint** — run the linter and confirm the new rule is active in the **resolved** config: not merely present as text in a file the tool does not read, and not neutralized by a later `ignore` / disable entry.
    - **CI** — confirm the step parses and sits in a workflow AND a job that actually run on the relevant trigger, not a disabled, unreferenced, or manual-only one.
-   - **instruction file** — confirm the rule landed in the substantive file the agents actually read (same discovery as Phase 6 §6.1), not an `@`-including stub.
+   - **lint and CI, against a real occurrence** — when the entry or its history names a past occurrence (a commit, a snippet), run the gate against it and see it fail, as the [hardening ladder](../../../references/hardening-ladder.md) requires. A gate that never failed on a real occurrence is reported unproven and the entry stays `active`.
 3. **Verification failed** → **stop**. The entry stays `active`, `mark-hardened` is NOT called, and the artifact edit is reported alongside a **failed graduation** with the reason (`ruff does not read this file`, `job never runs on push`, `landed in the @-include shim`). Leave the artifact for a human to fix or revert; do not silently retry with a different gate type.
 4. **Verification passed** → demote:
 
@@ -33,7 +33,7 @@ Process Harden candidates **one at a time, sequentially** — each one edits sha
 
    - lint: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes` (`DTZ` is the literal token in the select list)
    - CI: `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate` (the command string as written in the YAML)
-   - instruction file: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate` (the rule line's own wording)
+   - instruction file, only for pointer-demotion to a rule that already exists: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- existing instruction-file rule` (the rule line's own wording)
 
 **Never `git rm` on Harden — on any track.** The entry file stays on disk with its body intact; it becomes a pointer at the gate, so provenance survives and "why does this rule exist?" stays answerable. For `knowledge/decisions/` entries the supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status — `mark-hardened` touches only status, `hardened_into`, `last_audited`, and `audit_notes`.
 

@@ -85,7 +85,7 @@ default path and names the reason, `jev-unavailable(<reason>)`.
 | `route` | None; code only, never sent | The live spec's lifecycle, decided in code (see [Decision order](#decision-order)). Intake routing is the host's. |
 | `fork-gate` | Fork-kind Choice on the host's fork sentence | `observable` or `product_or_preference` at confidence >= 0.5 is a hint; otherwise `host`. Never `none`. |
 | `memory-rerank` | One Score per BM25 hit, up to 15 | Reorder by score, descending; ties keep BM25 order; none dropped. |
-| `tier` | Tier Choice and two Nouls | `mechanical` at confidence >= 0.8 selects the configured fast tier; `long_running` at >= 0.8 recommends a bridge. All other answers retain the current model. |
+| `tier` | Tier Choice and two Nouls | `mechanical` at confidence >= 0.8 selects the configured fast tier; `long_running` at >= 0.8 recommends a bridge. All other answers retain the current model. A worker's effort goes one level below the host default for `mechanical` and one above for `intelligent`, both at >= 0.8; every other answer keeps the default. |
 
 No preset predicts whether review, QA, or landing will pass, and none
 decides whether QA runs.
@@ -186,6 +186,17 @@ unreachable. A mechanical decision changes the spawn-model
 parameter as well as the prompt's `IMPLEMENTER:` field; a missing fast-scout
 model, or a host with neither model steering nor a suitable bridge, leaves the
 model unchanged and says so. A long-running decision is a recommendation only.
+
+A worker's reasoning effort follows the same answer, one level on the host's own
+scale and never past its lowest or highest level: below the default for a
+confident mechanical task, above it for a confident intelligent one, the default
+for everything else and whenever the judge is unavailable. An effort the
+invocation or routing block names, or one the worker role pins, wins; an explicit
+model without an effort still takes the tier's effort. The effort reaches the
+worker through the host's spawn effort parameter or, for a bridged implementer,
+the bridge's effort setting. Where neither exists, or the spawn rejects the level
+and the one retry at the default runs, the `Tier:` line says effort was not
+applied and why. Scouts keep their own effort.
 Done summaries read the model that actually ran from the worker's return, or
 say `(model: not reported)`.
 
@@ -220,10 +231,12 @@ fork-gate: observable (host)
 fork-gate: preference (host, jev hint product_or_preference 0.71)
 memory: reranked (jev, 15 entries)
 memory: bm25 (jev-unavailable(no_key))
-Tier: mechanical (jev 0.88) -> <model>
-Tier: long_running (jev 0.86) - bridge recommended
-Tier: session (jev moderate 0.61)
-Tier: implementer - <model> (explicit invocation)
+Tier: long_running (jev 0.86) - bridge recommended at default effort
+Tier: session (jev moderate 0.61) at default effort
+Tier: session (jev intelligent 0.84) at high effort (host default medium)
+Tier: mechanical (jev 0.91) -> <model> at low effort (host default medium)
+Tier: implementer - <model> (explicit invocation) at xhigh effort (requested)
+Tier: mechanical (jev 0.88) -> <model>; effort not applied (host spawn takes no effort)
 ```
 
 ## Evaluation numbers of record

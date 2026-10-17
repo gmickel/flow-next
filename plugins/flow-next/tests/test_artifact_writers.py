@@ -103,6 +103,56 @@ class ArtifactWritersTest(unittest.TestCase):
             self.assertEqual(receipt["verdict"], "NEEDS_WORK")
             self.assertEqual(receipt["findings"]["items"], [])
 
+    def commit(self):
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "commit.gpgsign=false",
+                        "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-qm", "fix"],
+                       cwd=self.root, env=self.env, check=True, capture_output=True)
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.root, env=self.env, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    def test_qa_receipt_carries_prior_passes_with_their_head_and_evidence(self):
+        first = {"id": "fn-3-shop", "qa_outcome": "NEEDS_WORK", "findings": [{"id": "coupon-expired", "severity": "P1", "confidence": 100, "classification": "introduced", "reason": "accepted", "file": "coupon"}],
+                 "rid_coverage": {"rids": [{"id": "R1", "coverage": "live"}, {"id": "R2", "coverage": "live"}]},
+                 "scenarios": [{"id": "S1 add to cart", "rids": ["R1"], "outcome": "PASS", "run": "live", "evidence": ["qa/s1.png"]},
+                               {"id": "S2 expired coupon", "rids": ["R2"], "outcome": "FAIL", "run": "live", "evidence": ["qa/s2.png"]}]}
+        path = Path(self.cli("qa", "receipt", data=first)["receipt"])
+        prior = json.loads(path.read_text())
+        self.assertEqual({row["head_sha"] for row in prior["scenarios"]}, {prior["head_sha"]})
+        new_head = self.commit()
+        second = {"id": "fn-3-shop", "qa_outcome": "SHIP", "findings": [],
+                  "rid_coverage": {"rids": [{"id": "R1", "coverage": "carried"}, {"id": "R2", "coverage": "live"}]},
+                  "scenarios": [{"id": "S1 add to cart", "run": "carried"},
+                                {"id": "S2 expired coupon", "rids": ["R2"], "outcome": "PASS", "run": "live", "evidence": ["qa/s2-fixed.png"]}]}
+        self.cli("qa", "receipt", data=second)
+        receipt = json.loads(path.read_text())
+        carried, live = receipt["scenarios"]
+        self.assertEqual(carried, {"id": "S1 add to cart", "rids": ["R1"], "outcome": "PASS", "run": "carried",
+                                   "evidence": ["qa/s1.png"], "head_sha": prior["head_sha"]})
+        self.assertEqual((live["run"], live["head_sha"]), ("live", new_head))
+        self.assertEqual(receipt["rid_coverage"]["covered"], 2)
+        self.commit()
+        self.cli("qa", "receipt", data={**second, "scenarios": [{"id": "S1 add to cart", "run": "carried"}]})
+        self.assertEqual(json.loads(path.read_text())["scenarios"][0]["head_sha"], prior["head_sha"])
+
+    def test_qa_receipt_refuses_a_carry_the_prior_receipt_does_not_back(self):
+        base = {"id": "fn-4-shop", "qa_outcome": "SHIP", "findings": [], "rid_coverage": {"rids": []}}
+        carry = lambda *ids: {**base, "scenarios": [{"id": i, "run": "carried"} for i in ids]}
+        path = self.root / ".flow/review-receipts/qa-fn-4-shop.json"
+        self.assertIn("no prior receipt", json.dumps(self.cli("qa", "receipt", data=carry("S1"), code=2)))
+        self.assertFalse(path.exists())
+        self.cli("qa", "receipt", data={**base, "scenarios": [
+            {"id": "S1", "outcome": "FAIL", "run": "live"}, {"id": "S2", "outcome": "PASS", "run": "live"}]})
+        self.assertIn("did not pass", json.dumps(self.cli("qa", "receipt", data=carry("S1"), code=2)))
+        self.assertIn("not in the prior receipt", json.dumps(self.cli("qa", "receipt", data=carry("S9"), code=2)))
+        self.assertIn("same head", json.dumps(self.cli("qa", "receipt", data=carry("S2"), code=2)))
+        self.commit()
+        subprocess.run(["git", "checkout", "-qb", "other"], cwd=self.root, env=self.env, check=True)
+        self.assertIn("another branch", json.dumps(self.cli("qa", "receipt", data=carry("S2"), code=2)))
+        before = path.read_bytes()
+        error = self.cli("qa", "receipt", data={**base, "scenarios": [{"id": "S3", "outcome": "MAYBE", "run": "live"}, {"run": "replayed"}]}, code=2)
+        self.assertGreaterEqual(len(error["errors"]), 2)
+        self.assertEqual(path.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

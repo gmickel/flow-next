@@ -61,6 +61,12 @@ def merge(text: str, source: Path, max_threads: int) -> str:
 
     original_sections = sections(text)
 
+    # Older installers prepended this root key as the first line. Codex never
+    # read it (the switch lives in [features] and is on by default since
+    # 0.115), and --strict-config rejects it as an unknown field.
+    if re.match(r'multi_agent = true\r?\n', text):
+        text = text.split('\n', 1)[1]
+
     # Remove only generator comments and the historically misplaced cap between
     # the opening marker and first table. Never delete an entire marked region.
     cleaned = []
@@ -114,10 +120,6 @@ def merge(text: str, source: Path, max_threads: int) -> str:
     base = ''.join(kept).rstrip() + '\n'
     if not have_agents:
         base += f'\n[agents]\nmax_threads = {max_threads}\n'
-    # Retain the installer's existing root feature switch without moving it
-    # into the last table. Other feature normalization is delegated above.
-    if 'multi_agent' not in tomllib.loads(base):
-        base = 'multi_agent = true\n' + base
     result = base + '\n' + BEGIN + '\n# Re-run install-codex.sh to regenerate\n'
     for key, (stem, description) in roles.items():
         result += f'\n[agents.{key}]\ndescription = {json.dumps(description)}\nconfig_file = {json.dumps("agents/" + stem + ".toml")}\n'
@@ -140,6 +142,8 @@ def merge(text: str, source: Path, max_threads: int) -> str:
                 raise ValueError('Unrelated array table would change; original preserved')
             continue
         allowed = {'max_threads', 'max_concurrent_threads_per_session'} if name == ('agents',) else set()
+        if name == () and before.get('multi_agent') is True and 'multi_agent' not in after:
+            allowed = {'multi_agent'}
         if name == ('features',):
             allowed = {'hooks', 'codex_hooks', 'multi_agent'}
         for key, value in before.items():

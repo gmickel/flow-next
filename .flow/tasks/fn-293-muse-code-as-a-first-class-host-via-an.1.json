@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-10-12T20:16:45.476568Z",
+  "depends_on": [],
+  "id": "fn-293-muse-code-as-a-first-class-host-via-an.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-293-muse-code-as-a-first-class-host-via-an",
+  "spec_path": ".flow/tasks/fn-293-muse-code-as-a-first-class-host-via-an.1.md",
+  "status": "done",
+  "title": "Implement Muse Code as a first-class host via an installer",
+  "updated_at": "2026-10-12T20:16:45.476568Z"
+}

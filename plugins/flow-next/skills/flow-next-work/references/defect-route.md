@@ -31,11 +31,11 @@ Get a reproduction that fires reliably before diagnosis starts. When the symptom
 
 Then diagnose before designing the fix:
 
-1. List the candidate causes, with step 1's refuted hypotheses marked as already eliminated.
+1. List the candidate causes, with step 1's refuted hypotheses marked as already eliminated. When the failure appears only after a restart, a reload or a second run, persisted state (config files, caches, lock files, serialized records, migrations) is the first candidate, eliminated with evidence before the code is suspected.
 2. Eliminate candidates one at a time with runtime evidence (instrumentation, logs, a narrowed input), running first the check that rules out the most remaining candidates.
 3. Confirm the surviving mechanism with evidence. Reading source can propose a cause; it never confirms one.
 
-Design the fix only after the mechanism is confirmed. Temporary instrumentation does not ship.
+Design the fix only after the mechanism is confirmed, and first decide whether the state that triggered the symptom may legitimately occur. If it may, the code that broke on it is the cause and handling the state there is the fix. If it should never exist, a check where it surfaced hides the fault: trace what produced the state and fix that. A fix shaped as a guard, retry, swallowed error, clamped value or discarded state says why the state is legitimate. When code, docs and history cannot settle legitimacy, it is a product question: attended, ask it; unattended, take the default the evidence supports and record it in the diagnosis line. Temporary instrumentation does not ship.
 
 ## 3. Bisect when a known-good revision exists
 
@@ -45,12 +45,14 @@ skip this step and record `introduced by: skipped: no known-good revision`.
 
 ## 4. Prove on base and head
 
+Both observations run through the surface the report came from: the command for a CLI report, the request for an API report, the call for a library report, the app for a UI report. A passing unit test of the changed branch supports the fix and is never the only proof when the report named another surface. A report that names no surface uses the one a user meets first, and the record says which.
+
 When the reproduction is a cheap test, write it before the fix and run it: seeing it fail on the unchanged code is the base observation, and seeing it pass after the fix is the head observation. No temporary worktree, separate commit, or lint round is needed for that. Commit the failing test on its own only when the change is being committed anyway. A reproduction that is expensive or needs a whole integration stack stays preferred rather than required (worker Phase 3). Otherwise, run the same reproduction on the base and on the head:
 
 - It must fail on base and pass on head.
 - **It passes on base:** it does not capture this defect. Record that, do not claim the fix, and return to step 2 for a reproduction that does.
 - **A live surface** (a web or desktop app): read [defect-live-surface.md](defect-live-surface.md) for the base and head drives.
-- **A library with no live surface:** the test alone is the proof.
+- **A library report:** a test that makes the reported call is the proof.
 
 ## Record
 
@@ -61,6 +63,6 @@ Defect route:
 - prior fixes: <what each source found>; unchecked: <source> (<reason>) | none
 - diagnosis: eliminated <cause> (<evidence>); ...; confirmed <mechanism> (<evidence>)
 - introduced by: <sha> <subject> (<PR>) | skipped: <reason>
-- base: <observation at base sha> | head: <observation at head sha>
+- base: <observation at base sha, through <surface>> | head: <observation at head sha>
 - live: <head observation on the app> | not run: <reason> | no live surface
 ```

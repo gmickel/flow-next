@@ -1,6 +1,7 @@
 """Execute the complete shipped create/update block, including prose-era skips."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -100,3 +101,30 @@ class PreflightBaseRefTests(unittest.TestCase):
                         # A live run still refreshes a branch named by the ref and fails closed on a SHA.
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn("cannot refresh " + expected, result.stderr)
+
+
+class ZshSourcingTests(unittest.TestCase):
+    """Hosts source these blocks in the person's shell, often zsh, where `$NAME:r` is a modifier."""
+
+    def test_no_unbraced_variable_before_a_colon(self):
+        plugin = SCRIPT.parents[1]
+        trap = re.compile(r'\$[A-Za-z_][A-Za-z0-9_]*:[hteruqQaAcslgx&]')
+        files = [*(plugin / "scripts").glob("*.sh"), *(plugin / "skills").rglob("*.md")]
+        hits = [f"{p.relative_to(plugin)}: {line.strip()}" for p in files
+                for line in p.read_text(encoding="utf-8").splitlines() if trap.search(line)]
+        self.assertEqual(hits, [])
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("zsh") or not shutil.which("git"), "zsh and git")
+    def test_preflight_refreshes_a_named_base_under_zsh(self):
+        from chain_fixture_support import fence, git
+        block = fence(SCRIPT.parent / "make-pr-preflight.sh", "chain-detect").split("CHAIN_BASE=\"\"", 1)[0]
+        with tempfile.TemporaryDirectory() as temp:
+            origin, clone = Path(temp) / "origin.git", Path(temp) / "clone"
+            git(Path(temp), "init", "-q", "--bare", "-b", "main", str(origin))
+            git(Path(temp), "clone", "-q", str(origin), str(clone))
+            git(clone, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "base")
+            git(clone, "push", "-q", "origin", "HEAD:refs/heads/goal/release")
+            result = subprocess.run(["zsh", "-c", block + 'printf "BASE=%s" "$BASE_REF"'], cwd=clone,
+                                    env=dict(os.environ, REPO_ROOT=str(clone), BASE_REF="goal/release", DRY_RUN="0"),
+                                    text=True, capture_output=True)
+            self.assertEqual(result.stdout, "BASE=origin/goal/release", result.stderr)

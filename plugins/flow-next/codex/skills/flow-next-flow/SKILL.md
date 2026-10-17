@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: In a project that uses Flow-Next, use first for a spec id to implement, change, bug, slow code or number to move, cleanup, design choice, issue, or what next. Skip for quick questions or direct work.
+description: Use first in a Flow-Next repo for a spec id, change, bug, issue, slow code or metric, cleanup, design fork, dump to explain, repeated mistake, prompt change, what could break, what next. No quick asks
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---
@@ -25,7 +25,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 ## Mode detection
 
-Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
+Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`, and so does `--goal`, because goal mode is unattended; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto` or `--goal`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
 
 ```bash
 FLOW_UNTIL=""
@@ -36,7 +36,7 @@ LAND_SCOPE_PR=""
 AUTO=0
 for ARG in $ARGUMENTS; do
   case "$ARG" in
-    --auto) AUTO=1 ;;
+    --auto|--goal) AUTO=1 ;;
     --until=merge) FLOW_UNTIL=merge ;;
     --until|--until=*) FLOW_DESTINATION_ERROR=1 ;;
   esac
@@ -64,7 +64,7 @@ Attended flow and `flow --auto` are two drivers and are never nested. Without `-
 NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs
 ```
 
-With `--auto` there is no marker refusal, because `--auto` sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
+With `--auto` or `--goal` there is no marker refusal, because the unattended run sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
 
 ## Invariants (every run)
 

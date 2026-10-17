@@ -42,6 +42,8 @@ PARSED_VARS = (
     "PILOT_REVIEW",
     "PILOT_RESEARCH",
     "PILOT_DEPTH",
+    "PILOT_GOAL_MODE",
+    "PILOT_GOAL",
 )
 
 _POSIX_BASH = unittest.skipIf(
@@ -67,6 +69,13 @@ class VerdictGrammar(unittest.TestCase):
     def test_grammar_line(self) -> None:
         text = _read(AUTO_MD)
         self.assertIn(VERDICT_GRAMMAR_LINE, text)
+
+    def test_goal_mode_grammar_adds_goal_met(self) -> None:
+        self.assertIn(
+            "PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN|GOAL_MET> "
+            'spec=<id> stage=<stage> reason="goal <goal-id>; <one line>"',
+            _read(FLOW_REFERENCES / "goal-mode.md"),
+        )
 
     def test_already_merged_closed_spec_names_no_work(self) -> None:
         # A driver keyed on NO_WORK must stop on an already-merged scoped spec.
@@ -101,6 +110,25 @@ class HardGuardFence(unittest.TestCase):
             if dirty:
                 self.assertNotIn('PASSED', result.stdout)
 
+
+    @_POSIX_BASH
+    @unittest.skipUnless(shutil.which("jq"), "requires jq")
+    def test_guard_stop_carries_the_goal_prefix_only_in_goal_mode(self) -> None:
+        snapshot = json.dumps({'guards': {'dirty': [' M code.py']}})
+        for prefix, expected in (
+            ('goal fn-40; ', 'spec=fn-40 stage=- reason="goal fn-40; dirty working tree at tick start"'),
+            (None, 'spec=- stage=- reason="dirty working tree at tick start"'),
+        ):
+            env = {**os.environ, 'PILOT_SNAPSHOT': snapshot}
+            env.pop('GOAL_REASON_PREFIX', None)
+            env.pop('GOAL_SPEC', None)
+            if prefix is not None:
+                env['GOAL_REASON_PREFIX'] = prefix
+                env['GOAL_SPEC'] = 'fn-40'
+            result = subprocess.run(['bash', '-c', self._hard_guard_fence()], env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(expected, result.stdout.splitlines()[-1])
 
     @_POSIX_BASH
     @unittest.skipUnless(shutil.which("jq"), "requires jq")
@@ -171,6 +199,8 @@ class ArgumentParseFence(unittest.TestCase):
         "PILOT_REVIEW": "",
         "PILOT_RESEARCH": "grep",
         "PILOT_DEPTH": "short",
+        "PILOT_GOAL_MODE": "0",
+        "PILOT_GOAL": "",
     }
 
     @_POSIX_BASH
@@ -210,6 +240,9 @@ class ArgumentParseFence(unittest.TestCase):
             ("--auto fn-4 --tick", {"PILOT_SPEC": "fn-4", "AUTO_TICK": "1"}),
             ("--review codex --depth long --research=custom", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "custom"}),
             ("", {}),
+            ("--goal fn-40 --until=merge", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-40"}),
+            ("--goal docs/linux port.md --tick", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "docs/linux port.md", "AUTO_TICK": "1"}),
+            ("fn-40 --goal --review=codex", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-40", "PILOT_REVIEW": "codex"}),
         )
         for arguments, overrides in cases:
             with self.subTest(arguments=arguments):
@@ -220,11 +253,18 @@ class ArgumentParseFence(unittest.TestCase):
     def test_lookalike_flags_do_not_set_the_flags(self) -> None:
         # Exact tokens only: a prefix or suffix lookalike is an unknown flag,
         # warned to stderr and ignored.
-        for arguments in ("--ticket", "--auto-x", "--explainer", "--backlogs", "--spec"):
+        for arguments in ("--ticket", "--auto-x", "--explainer", "--backlogs", "--spec", "--goals"):
             with self.subTest(arguments=arguments):
                 parsed, stderr = self._parse(arguments)
                 self.assertEqual(parsed, self.DEFAULTS)
                 self.assertIn(arguments, stderr)
+
+    @_POSIX_BASH
+    def test_backlog_does_not_apply_with_goal(self) -> None:
+        parsed, stderr = self._parse("--goal fn-40 --backlog")
+        self.assertEqual(parsed["PILOT_BACKLOG_OVERRIDE"], "")
+        self.assertEqual(parsed["PILOT_GOAL"], "fn-40")
+        self.assertIn("--backlog", stderr)
 
     @_POSIX_BASH
     def test_second_positional_id_does_not_double_assign(self) -> None:

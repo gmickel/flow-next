@@ -313,7 +313,7 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "land": "/flow-next:land settings for one named pull request. Unknown legacy keys are ignored.",
     "land.patienceMinutes": (
-        "Minutes since the last push to wait, so review bots can post, when no human authorized the merge in-session."
+        "Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when no human authorized the merge in-session."
     ),
     "land.mergeVerdictCommand": (
         "Optional merge-verdict command run once after the other merge gates pass. "
@@ -371,6 +371,31 @@ DESCRIPTIONS: dict[str, str] = {
         "force surfacing before action - a matching item is parked with a "
         "question instead of advanced full-auto. Empty = full-auto for every "
         "workable item."
+    ),
+    "evidence": (
+        "Opt-in development evidence for teams that must show what was "
+        "built, tested, reviewed and approved. Absent = off."
+    ),
+    "evidence.persist": (
+        "off | on, default off (absent). Only the literal on activates: "
+        "flowctl then writes committed copies of every review and QA receipt "
+        "(one file per round), QA captures, each task's recorded evidence with "
+        "its test runner's report, and a run record into "
+        "<evidence.dir>/<spec-id>/ and stages them. Any "
+        "other value, including bool true, is off."
+    ),
+    "evidence.dir": (
+        "Repo-relative root of the per-spec evidence folders, default "
+        ".flow/evidence. A path outside the repository or through a symlink "
+        "is refused when evidence is written."
+    ),
+    "spec": "Spec lifecycle settings.",
+    "spec.approval": (
+        "local | pr, default local (absent). local keeps spec readiness as "
+        "today. pr makes a spec ready only once its spec PR (head branch "
+        "spec/<spec-id>) merges with at least one approving review; the "
+        "approval is recorded with the spec. An invalid value stops instead "
+        "of falling back to local."
     ),
 }
 
@@ -621,6 +646,11 @@ def _build_table() -> list[tuple[str, dict]]:
         ("chart.claimStaleAfter", {"type": "number"}),
         ("features", {"kind": "object", "open": False}),
         ("features.staleAfterCommits", {"type": "integer", "minimum": 1}),
+        ("evidence", {"kind": "object", "open": False}),
+        ("evidence.persist", {"enum": ["off", "on"]}),
+        ("evidence.dir", {"type": "string"}),
+        ("spec", {"kind": "object", "open": False}),
+        ("spec.approval", {"enum": list(flowctl.SPEC_APPROVAL_VALUES)}),
         ("pilot", {"kind": "object", "open": False}),
         ("pilot.autonomy", {"enum": ["ready", "backlog"]}),
         (

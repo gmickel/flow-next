@@ -5,7 +5,7 @@
 
 ## Harden
 
-**Meaning:** the entry is correct, keeps getting re-learned, and states a rule a machine can check. Graduate it into an enforced gate (lint rule / CI step / instruction-file rule) and demote the entry to a pointer at that gate — the file stays on disk, body intact. The lesson stops riding the context window on every run and starts firing automatically — for every agent and every human, in every harness.
+**Meaning:** the entry is correct, keeps getting re-learned, and states a rule a machine can check. Graduate it into an enforced gate (a lint rule or a CI step) and demote the entry to a pointer at that gate — the file stays on disk, body intact. The lesson stops riding the context window on every run and starts firing automatically — for every agent and every human, in every harness.
 
 An entry that is re-injected each run and re-taught each time is the anti-pattern: the agent re-fixes the same class instead of the class being impossible. Harden closes that loop.
 
@@ -38,16 +38,15 @@ Thresholds gate **proposing** only; the human gates **applying**. They are overr
 - The entry is one of several overlapping entries → Consolidate first; the merged entry is the Harden unit.
 - One-off lesson, no recurrence signal → Keep.
 - Judgment-only lesson ("prefer X style when ambiguous", "escalate when the review disagrees") → not Harden. A gate that cannot decide mechanically becomes a false-positive generator. With a recurrence signal **and a nameable retrieval defect** the entry is an Update (retrieval-fix variant); with recurrence but no nameable defect — as without recurrence at all — it falls through to the ordinary reference-drift check, so Keep absent drift of its own. Recurrence alone never licenses a metadata edit: §0.75.1's counters never decrease, so an ungated branch re-fires on the same entry every run.
-- The repo has no surface to host the gate — see the degradation rule below; the instruction file is the universal floor, and if even that does not exist, Keep.
+- The repo has no lint or CI surface to host the gate → not a gate audit can write; report it under Recommended naming flow's repeated-mistake route, which can add a check or test as code, and the entry stays `active`.
 - **Autofix mode.** Harden never auto-applies. Candidates are reported under Recommended only — no artifact write, no demotion. Gate surfaces are shared repo infrastructure; an autonomous sweep must not edit lint config, CI, or CLAUDE.md unattended.
 
-**Gate targets — cheapest-fitting first, discovered from repo files, never assumed and never scaffolded:**
+**Gate targets — walk the [hardening ladder](../../../references/hardening-ladder.md) from the top, discovered from repo files, never assumed and never scaffolded.** Its first, second and fourth levels (remove the opening, make the state unwritable, a behaviour test) change product code, which audit never writes: when one of them is the highest level that works, report it as a Recommended item naming flow's repeated-mistake route (`/flow-next:flow` with "agents keep doing <class>"; that route captures the spec instead of returning the lesson here), and the entry stays `active`. Audit writes only the ladder's lint or CI level, into surfaces that already exist. Instruction text is the ladder's level for lessons that need judgment, which are never Harden candidates (above), so audit writes no new instruction-file gate; instruction-file gates hardened earlier keep their liveness check (§0.75.2):
 
 - **(a) Lint rule** — extend the repo's existing linter config (ruff, biome, eslint, … — discovered by reading the repo, not assumed from the language). No linter configured → unavailable, fall through.
-- **(b) CI step** — a check in the repo's existing CI workflow (e.g. under `.github/workflows/`). No CI → unavailable, fall through.
-- **(c) Instruction-file rule** — a one-to-two-line rule appended to the **substantive** CLAUDE.md / AGENTS.md (the one that is not just an `@`-include shim — the same "which file is real" discovery as [workflow.md](../workflow.md) Phase 6). This is the **universal floor** and the degradation target for review-shaped lessons, since a first-class review-checklist gate type is deliberately out of v1 (no canonical checklist artifact exists to write into).
+- **(b) CI step** — a check in the repo's existing CI workflow (e.g. under `.github/workflows/`). No CI → unavailable; with neither surface, the entry goes to Recommended as above.
 
-**Never scaffold infrastructure to host a gate.** Do not create a linter setup, a CI pipeline, or a config file that does not already exist. The gate lands in what the repo already has, or it degrades to (c), or the entry stays Keep.
+**Never scaffold infrastructure to host a gate.** Do not create a linter setup, a CI pipeline, or a config file that does not already exist. The gate lands in what the repo already has, or the entry goes to Recommended as above.
 
 **Duplication guard (run BEFORE proposing):** grep the candidate gate surfaces (linter config, CI workflows, instruction files) for a rule already covering the class.
 
@@ -70,7 +69,7 @@ A textual hit is never sufficient evidence of enforcement.
 - **Cluster candidates** — the cluster, not each member, is the Harden unit. Consolidate first (precedence), then evaluate the merged entry once. Never write one gate per member.
 - **Decision-track entries** (`knowledge/decisions/`) — legal and **rare**; most decisions are judgment records, not mechanizable checks. See [decision-entries.md](decision-entries.md).
 - **Stale entries** — `stale → hardened` is legal. A lesson can be stale as written and still name a real, mechanizable class; `mark-hardened` clears `stale_reason` / `stale_date` as part of the flip. Do not force a `mark-fresh` round trip first.
-- **Non-code repos** (docs sites, an Obsidian vault) — targets (a)/(b) are simply unavailable; (c) is the floor.
+- **Non-code repos** (docs sites, an Obsidian vault) — targets (a)/(b) are unavailable, so a recurring lesson goes to Recommended naming flow's repeated-mistake route and the entry stays `active`; audit writes no instruction-file rule for it.
 - **First post-ship run** — recurrence signals are derived retroactively, so the first ordinary audit after this ships may surface several candidates at once. That is intended: the thresholds above are what keeps the volume sane, and there is no first-run suppression or rate limit.
 - **Legacy flat files** — skipped as always; migrate first.
 

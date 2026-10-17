@@ -35,13 +35,13 @@ For **Claude Code / Droid**:
 }
 ```
 
-For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (the `/flow-next:` snippet is wired in Step 7's write mapping, NOT the Codex `$flow-next-` one):
+For **Cursor** (`PLATFORM=cursor`) and **Muse** (`PLATFORM=muse`) — both read AGENTS.md (Muse uses it ahead of CLAUDE.md), so recommend it (the `/flow-next:` snippet is wired in Step 7's write mapping, NOT the Codex `$flow-next-` one):
 ```json
 {
   "header": "Docs",
   "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
   "options": [
-    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor reads this)"},
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor and Muse read this)"},
     {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
     {"label": "Both", "description": "Add flow-next section to both files"},
     {"label": "Skip", "description": "Don't update documentation"}

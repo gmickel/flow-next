@@ -3,7 +3,7 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode, and Meta Muse Code.
 
 First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host.
 
@@ -23,6 +23,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 - [Grok Build (Claude Code compatibility)](#grok-build-claude-code-compatibility)
 - [Cursor](#cursor)
 - [OpenCode](#opencode)
+- [Muse Code](#muse-code)
 - [Windows: Python discovery](#windows-python-discovery)
 - [Windows + Copilot review backend](#windows-copilot-review-backend)
 - [Claude Code CLI review backend](#claude-code-cli-review-backend)
@@ -42,6 +43,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Namespaced slash commands (`/flow-next:*`), plugin-resolved flowctl, multi-agent verified. See [Grok Build](#grok-build-claude-code-compatibility) |
 | Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace - does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified) - see [Cursor](#cursor) |
+| Muse Code (Meta) | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-muse.sh` | `.claude-plugin/plugin.json` (installed as a Muse bundle with translated agents) | **First-class** (installer delivery; see [Muse Code](#muse-code)) |
 | OpenCode | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-opencode.sh` | n/a (OpenCode has no plugin format - the installer scatters canonical files into `~/.config/opencode/`) | **First-class** (installer delivery; multi-agent fan-out, codex + host review, and setup verified live) - see [OpenCode](#opencode) |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
@@ -50,7 +52,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 
 `/flow-next:setup` **copies nothing into your repo.** It runs `flowctl init`, writes a slim versioned docs snippet (CLAUDE.md / AGENTS.md), walks the config ceremony, and optionally seeds user-owned files (`SPEC.md`, `.flow/criteria.md`, `.codex/agents/*.toml` on Codex).
 
-Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Cursor, Grok, and OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
+Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Muse Code by substituting `${CLAUDE_PLUGIN_ROOT}` in skill text, Cursor, Grok, and OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
 
 **Plugin updates land silently - no setup re-run.** Re-run it only when setup says the docs-snippet schema bumped, or to change configuration. Repos set up before this layout carry leftover `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` snapshots; setup offers to delete them, and deleting them changes nothing observable.
 
@@ -93,9 +95,11 @@ where it does (moved from the setup skill; nothing here is read at runtime):
 
 **OpenCode ordering matters.** OpenCode has no plugin-root env var and no host-process marker. Without a positive signal it would fall through to `else → codex` and setup would write Codex-shaped `$flow-next-` snippets — wrong, because OpenCode command stubs are the flat `/flow-next-<name>` form (filenames, not `/flow-next:<name>`). **Installer signal:** the OpenCode installer (`install-opencode.sh`) writes `.flow-next-opencode-manifest` at the config root, which IS the plugin root two levels above SKILL.md. After `PLUGIN_ROOT` is derived, `[ -f "${PLUGIN_ROOT}/.flow-next-opencode-manifest" ]` → `PLATFORM=opencode`. Never an env var, never an absence signal. The OpenCode rung MUST come after Grok, BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
 
+**Muse rung first — the bundle marker.** `install-muse.sh` writes `.flow-next-muse-bundle` at the bundle root, which is the resolved `PLUGIN_ROOT` inside Muse's plugin cache. No other host loads that bundle, so the marker is a positive signal no inherited variable can fake, and it sits above every rung. Muse's own session variable (`MUSE_SESSION_ID`) is deliberately not used: Codex and Claude Code children of a Muse shell inherit it. The Muse cache also carries `.claude-plugin/plugin.json`, so a Muse session launched from a Claude Code shell (inherited `CLAUDECODE`) would otherwise classify `claude-code`.
+
 **Known nesting edge (Droid → Grok) — NEEDS-HUMAN.** A grok child inherits `CLAUDECODE` from a Claude parent, and the Claude rung now sits BELOW grok, so Claude-from-parent does not misfire. It did **not** disprove `DROID_PLUGIN_ROOT` propagation: if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Treat nested Droid→Grok as **unsupported pending a this-process-is-grok discriminator** unless a NEEDS-HUMAN smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Cursor-from-grok remains correct via its higher-precedence signal. The mirror-image nesting edge is Claude-from-Grok / Claude-from-Cursor: a Claude Code session launched inside a grok or Cursor agent shell inherits that host's marker and classifies as the parent host. That trade is deliberate - both markers are set by the parent's own process, and the reverse (Claude outranking them on an inherited `CLAUDECODE`) is the far more common nesting, since Claude sessions routinely spawn grok / cursor-agent bridges.
 
-**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`; (11) `PLUGIN_ROOT` carrying `.flow-next-opencode-manifest` (no higher signal) → `opencode`; (12) same + `GROK_AGENT=1` → `grok`; (13) same + inherited `CLAUDECODE=1` without `.claude-plugin/plugin.json` → `opencode`.
+**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`; (11) `PLUGIN_ROOT` carrying `.flow-next-opencode-manifest` (no higher signal) → `opencode`; (12) same + `GROK_AGENT=1` → `grok`; (13) same + inherited `CLAUDECODE=1` without `.claude-plugin/plugin.json` → `opencode`; (14) `PLUGIN_ROOT` carrying `.flow-next-muse-bundle` → `muse`, also with inherited `CLAUDECODE`, `GROK_AGENT` or `DROID_PLUGIN_ROOT`; (15) inherited `MUSE_SESSION_ID` on a Codex or Claude plugin root → that root's host.
 
 ## Factory Droid (native support)
 
@@ -390,6 +394,36 @@ Then restart OpenCode (or start a new session) and run **`/flow-next-setup`**. S
 - **No native blocking-ask primitive** - interactive skills degrade to the numbered-prompt fallback already present in canonical prose.
 - **Model tiers pin via agent definitions, not dispatches.** OpenCode has no dispatch-time model parameter - subagents inherit the session model unless their own agent file pins one. To give a tier (e.g. the reviewer) a real cross-family model, write a 5-line user agent definition pinned to it and restart OpenCode; the conductor matches the routing-block model to the roster agent (verified live, 1.18.19 - honored pin, honest receipt; without a pin, host review degrades to the session model and fail-closes rather than self-reviewing). Recipe: [`reach/opencode.md`](reach/opencode.md#pinning-a-tiers-model-one-user-file-config-time).
 - **Verification status:** installed layout, generated agents/commands, manifest determinism, and fail-closed generation are covered by deterministic tests; live host behavior (skill path injection for the resolution rung, agent/command discovery) was verified manually against opencode 1.18.19 - re-verify on major OpenCode releases. Something broken? File an issue.
+
+## Muse Code
+
+**First-class, installer-delivered.** [Muse Code](https://dev.meta.ai/docs/muse-code) (Meta's coding agent CLI) installs Claude-format plugins as-is: skills, commands and agents load, and it substitutes `${CLAUDE_PLUGIN_ROOT}` in skill text, so `flowctl` resolves from its plugin cache. Two things stop the canonical plugin from working there unchanged, so `./scripts/install-muse.sh` builds a Muse bundle at install time instead of using the marketplace:
+
+- **Agent tool names.** Muse accepts only its own tool names in an agent's `disallowedTools` (`edit_file`, `write_file`, `bash`); a Claude name such as `Edit` makes the agent definition invalid when it is spawned, after install and approval have already succeeded. No single list is valid on both hosts. The bundle translates `Edit` → `edit_file` and `Write` → `write_file`, and drops `Task`, which Muse lets no definition deny.
+- **Agent selection.** Muse selects a plugin agent as `subagent_type: "flow-next/<name>"`. Any other spelling runs Muse's built-in general-purpose agent instead, silently. The bundle appends one dispatch note to `references/working-rules.md`, which every skill reads first.
+
+### Install
+
+```bash
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
+  && /tmp/flow-next-install/scripts/install-muse.sh \
+  && trash /tmp/flow-next-install
+```
+
+The script builds the bundle in a temporary directory, runs `muse plugins install <bundle> --scope user` and `muse plugins approve flow-next` (Muse requires approval before plugin agents activate), and deletes the bundle. Muse owns the installed copy; re-run after `git pull` to update. Then start a new Muse session in a project with `muse --disable-sandbox` (the review CLIs cannot run inside Muse's sandbox; see the caveats) and run **`/flow-next:setup`**. Setup detects Muse by the `.flow-next-muse-bundle` marker at the plugin root, writes the `/flow-next:` snippet to `AGENTS.md`, and offers review backends the way it does on Grok.
+
+### Caveats / intentional limits
+
+- **Use the installer, not a marketplace install.** `muse plugins marketplace add` of this repository installs the canonical plugin: skills and commands work, but 19 of the 21 agents cannot be spawned and setup does not detect Muse.
+- **Same machine as Codex.** Muse also loads skills from `~/.codex/skills` and `~/.claude/skills` by default, so the Codex install's flow-next skills appear beside this one. Runs pick the plugin's skills, but the duplicates take space in Muse's skill catalog. Set `"context": {"foreign_personal_skills": false}` in `~/.config/muse/settings.json` to load only this install; the installer prints the same note when it finds the Codex skills.
+- **Muse's own `/plan`.** Muse ships a built-in `plan` skill that the model loads on its own for planning requests, so a plain "plan X" reaches flow-next only part of the time. `/flow-next:plan` and `/flow-next:flow` always do. To make plain requests reliable, run `muse skills user-only plan --scope built-in` once: Muse's planner then runs only when you type `/plan` (undo with `muse skills enable plan --scope built-in`). The snippet's spelling in `AGENTS.md` (Codex `$flow-next-` or `/flow-next:`) made no difference in the same runs.
+- **Instructions file.** Muse reads only the first of `AGENTS.md` and `CLAUDE.md` in a directory, `AGENTS.md` first. A repository set up under Claude Code has its snippet in `CLAUDE.md`, which Muse skips when an `AGENTS.md` exists: choose `Both` at setup's Docs question, or run `/flow-next:setup` once in Muse.
+- **Read-only is partial.** Read-only scouts are refused `write_file` and `edit_file`, but keep the shell (as on Claude Code) and can spawn a child agent.
+- **Review.** Muse reaches one model family natively, so `review.backend host` fails closed; use a CLI backend (`codex`, `copilot`, `cursor`, `claude`). Those CLIs write to their own home (for example `~/.codex`), which Muse's sandbox keeps read-only, and Muse does not offer to run them outside it. Start Muse with `--disable-sandbox` for flow-next sessions, interactive (`muse --disable-sandbox`) or headless (`muse exec --disable-sandbox`); Muse's approval judge stays on. Do that only in an environment you already trust. Inside the sandbox the review fails and flow-next records it as `NEEDS_HUMAN` or "no verdict", never as a pass.
+- **Sandbox.** Muse's default sandbox allows writes to the active repository and its git storage but not to your home directory, so tools that cache there (for example `uv` under `~/.cache`) fail inside it.
+- **Install integrity.** Muse binds agent approval to the installed package's contents; flowctl writes nothing into its install, so the approval survives normal use. Reinstalling re-approves.
+- **POSIX only**, matching the OpenCode installer.
+- **Verification status:** the bundle, the installer and setup detection are covered by deterministic tests; agent spawning, setup, capture, plan with scouts, work with workers, codex review, `flow --auto` through make-pr, and land to a merged pull request (sandbox disabled) were verified live on Muse Code 1.4.6 with Claude Code and the Codex install on the same machine. Re-verify on major Muse releases.
 
 ## Windows: Python discovery
 

@@ -27,7 +27,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) is on
 
 ## Driving unattended
 
-Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under a `/loop`-style primitive where present, run one hop per interval with `/flow-next:flow --auto --tick`. An unattended run stops with `NEEDS_HUMAN` when the reviewer tier cannot be satisfied cross-family.
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under a `/loop`-style primitive where present, run one hop per interval with `/flow-next:flow --auto --tick`. For an outcome larger than one spec, `/flow-next:flow --goal <spec-id or source>` builds child specs toward it the same way until it prints `GOAL_MET`. An unattended run stops with `NEEDS_HUMAN` when the reviewer tier cannot be satisfied cross-family.
 
 ## Discover, then invoke
 

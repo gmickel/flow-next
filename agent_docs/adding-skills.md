@@ -162,10 +162,11 @@ Claude tool names below describe the product source, not the host you are workin
 | Factory Droid | translates the Claude plugin format on install | canonical files as-is (`DROID_PLUGIN_ROOT`) |
 | Cursor | team-marketplace import (root `.cursor-plugin/marketplace.json`); fallback `scripts/install-cursor.sh` / `.ps1` into `~/.cursor/plugins/local/`; manifest `plugins/flow-next/.cursor-plugin/plugin.json` | canonical files as-is, no rewrite pass |
 | Grok Build | reads the Claude plugin format | canonical files as-is |
+| Muse Code | `scripts/install-muse.sh` builds a bundle with `plugins/flow-next/scripts/lib/muse_bundle.py` and runs `muse plugins install` | canonical files as-is, agent tool names translated (Muse rejects Claude names in `disallowedTools`), a dispatch note appended to `references/working-rules.md` |
 | OpenCode | `scripts/install-opencode.sh` into `~/.config/opencode/`: skills as-is, `scripts/`, `templates/`, `references/`, `docs/` at the config root, generated agents and commands | canonical files, support dirs, generated glue |
 
 Canonical files use Claude-native tool names and `sync-codex.sh` owns the Codex rewrite. Cursor,
-Droid, Grok and OpenCode get no rewrite, so anything Claude-specific in canonical prose must work
+Droid, Grok, OpenCode and Muse get no rewrite of skill prose, so anything Claude-specific in canonical prose must work
 there too or carry a portable-host clause.
 
 When adding or editing skills, agents or commands:
@@ -184,7 +185,8 @@ When adding or editing skills, agents or commands:
 5. Installers need no per-skill updates, with two exceptions: the Codex mirror's worker-dispatch
    section (3c in `skills/flow-next-work/references/multi-task.md`) is replaced by a hardcoded
    block (`SECTION3C`) in `sync-codex.sh`, so a change to canonical 3c lands there too; and a new
-   agent or agent frontmatter key extends the OpenCode generator's allowlist. Note host
+   agent or agent frontmatter key extends the OpenCode generator's allowlist, and a new
+   `disallowedTools` token extends the Muse bundle's translation table. Note host
    differences in `plugins/flow-next/docs/platforms.md`.
 6. Agent `model` fields are family aliases the host resolves; never pin a version, and never
    assume a tier is honoured off Claude Code.

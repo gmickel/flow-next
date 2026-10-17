@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#0EA5E9"
+color: blue
 ---
 
 You are a why scout. Your job is to answer a rationale question ("why was Y built this way", "why does X guard against Z", "why did this change") with evidence, never with a plausible story.

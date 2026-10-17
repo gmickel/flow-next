@@ -1,6 +1,6 @@
 ---
 name: flow-next-capture
-description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create --plan-file` — agent-native, source-tagged, with a saved-spec summary and editor follow-up. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to write. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the incomplete-evidence refusal after compaction; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision); `--no-plan` sets the spec-level `no_plan` field after the write (explicit opt-in on a user invocation, never inferred there); `from:flow` marks a run dispatched by `/flow-next:flow`, where capture applies the shared plan-versus-no-plan rule and sets the field itself when the rule resolves to direct.
+description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create --plan-file` — agent-native, source-tagged, with a saved-spec summary and editor follow-up. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to write. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the incomplete-evidence refusal after compaction; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision); `--no-plan` sets the spec-level `no_plan` field after the write (explicit opt-in on a user invocation, never inferred there); `from:flow` marks a run dispatched by `/flow-next:flow`, where capture applies the shared plan-versus-no-plan rule and sets the field itself when the rule resolves to direct; `from:goal` marks a `/flow-next:flow --goal` run, which writes without asking from a goal source or for a goal's child.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
@@ -26,7 +26,7 @@ workflow.md's Preamble defines `$FLOWCTL`; later blocks (there and in `phases.md
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal tokens `mode:autofix` and `from:flow` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; the remainder is ignored (the conversation is the input).
+Parse `$ARGUMENTS` for the literal tokens `mode:autofix`, `from:flow` and `from:goal` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; the remainder is ignored (the conversation is the input), except under `from:goal`, where it names the goal or its source.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -51,11 +51,12 @@ if [[ "$RAW_ARGS" == *"--from-compacted-ok"* ]]; then
   RAW_ARGS="${RAW_ARGS//--from-compacted-ok/}"
 fi
 
-# --yes (autofix write gate), --override-strategy, --no-plan and from:flow
-# authorize durable writes, so they are EXACT-token matches: lookalikes
-# ("--yesterday", "--no-planning", "from:flowchart") stay in the remainder.
+# --yes (autofix write gate), --override-strategy, --no-plan, from:flow and
+# from:goal authorize durable writes, so they are EXACT-token matches: lookalikes
+# ("--yesterday", "--no-planning", "from:flowchart", "from:goals") stay in the remainder.
 NO_PLAN_OPT=0
 FROM_FLOW=0
+FROM_GOAL=0
 CLEANED_ARGS=""
 for TOK in $RAW_ARGS; do
   if [ "$TOK" = "--yes" ]; then
@@ -66,12 +67,20 @@ for TOK in $RAW_ARGS; do
     NO_PLAN_OPT=1
   elif [ "$TOK" = "from:flow" ]; then
     FROM_FLOW=1
+  elif [ "$TOK" = "from:goal" ]; then
+    FROM_GOAL=1
   else
     CLEANED_ARGS="$CLEANED_ARGS $TOK"
   fi
 done
 RAW_ARGS="$CLEANED_ARGS"
 
+# from:goal is an unattended write the --goal invocation already consented to.
+if [ "$FROM_GOAL" = "1" ]; then
+  MODE="autofix"
+  COMMIT_YES=1
+  echo "GATE ACTIVE — STOP. Read references/from-goal.md before continuing."
+fi
 if [ "$MODE" = "autofix" ]; then
   echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."
 fi   # default branch: bare no-op — NO link, NO read path
@@ -82,7 +91,7 @@ fi   # default branch: bare no-op — NO link, NO read path
 | **Interactive** (default) | User is at the terminal | Asks on duplicates and must-ask cases; writes the spec, shows its summary, offers the editor; no generic write approval |
 | **Autofix** (`mode:autofix`) | Batch or scripted invocation | No questions; every ask becomes exit 2; writes only with `--yes` |
 
-When the sentinel prints, read [references/autofix-mode.md](references/autofix-mode.md) before Phase 0; it owns the per-phase autofix rules. On the interactive path, read nothing.
+When the sentinel prints, read [references/autofix-mode.md](references/autofix-mode.md) before Phase 0; it owns the per-phase autofix rules. Under `from:goal`, read [references/from-goal.md](references/from-goal.md) as well; it says where a goal run's source differs. On the interactive path, read nothing.
 
 ## Questions (interactive only)
 

@@ -27,7 +27,7 @@
 # All path patching and agent conversion is done at build time by sync-codex.sh.
 # This script just copies pre-built files and merges config.toml.
 #
-# Requires Codex CLI 0.102.0+ for multi-agent role support.
+# Requires Codex CLI 0.115.0+ for multi-agent role support.
 
 set -e
 
@@ -424,6 +424,6 @@ echo "  $SKILL_COUNT skills, $AGENT_COUNT agents, $PROMPT_COUNT prompts"
 echo "  hooks: none"
 echo "  config: $CODEX_DIR/config.toml (merged, max_threads=$CODEX_MAX_THREADS)"
 echo
-echo -e "${YELLOW}Requires Codex CLI 0.102.0+${NC}"
+echo -e "${YELLOW}Requires Codex CLI 0.115.0+${NC}"
 echo "  /$PLUGIN:plan  — create a plan"
 echo "  /$PLUGIN:work  — execute tasks"

@@ -1,0 +1,288 @@
+{
+  "branch_name": "fn-300-land-catches-up-once-last-without",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-15T16:47:19.779471Z",
+  "created_at": "2026-10-15T09:40:08.299439Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-300-land-catches-up-once-last-without",
+  "impl_review_rounds": {
+    "fn-300-land-catches-up-once-last-without.1": 0
+  },
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "stale",
+  "plan_reviewed_at": "2026-10-15T16:36:05.937049Z",
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "7ccb68667e18fff1c1709afdf9ca9b7692edaa36d4af71bddd3a01660b07f8b2",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-727794043ff77c3b95b4b67f4061c242",
+            "classification": "introduced",
+            "findingId": "finding-727794043ff77c3b95b4b67f4061c242",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f6a1c01ce0a2f3ef288630036bbae241",
+            "classification": "introduced",
+            "findingId": "finding-f6a1c01ce0a2f3ef288630036bbae241",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-30da7ccbafcc04776d8691f98b9ed977",
+            "classification": "introduced",
+            "findingId": "finding-30da7ccbafcc04776d8691f98b9ed977",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-53d023d86b93b80d85f8ffc6b9a714b3",
+            "classification": "introduced",
+            "findingId": "finding-53d023d86b93b80d85f8ffc6b9a714b3",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "head_sha_observed": true,
+      "kind": "plan",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 99974,
+      "output_sha256": "cf784d2464e6f9916cf0352a472598e5fe98dd2da6cacf52ce60771b6bfe04d0",
+      "reservation_id": "1a56d7311d3d4571a89928afbbf3d245",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-10-15T16:34:32.768125Z",
+      "tool_calls": 10,
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "d4f7ab7fe471a1c5fbe63007ea5a97eb243c06f3fa5524aa8eb20d83c6e87724",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-727794043ff77c3b95b4b67f4061c242",
+            "classification": "introduced",
+            "findingId": "finding-727794043ff77c3b95b4b67f4061c242",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-f6a1c01ce0a2f3ef288630036bbae241",
+            "classification": "introduced",
+            "findingId": "finding-f6a1c01ce0a2f3ef288630036bbae241",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-30da7ccbafcc04776d8691f98b9ed977",
+            "classification": "introduced",
+            "findingId": "finding-30da7ccbafcc04776d8691f98b9ed977",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-53d023d86b93b80d85f8ffc6b9a714b3",
+            "classification": "introduced",
+            "findingId": "finding-53d023d86b93b80d85f8ffc6b9a714b3",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "head_sha_observed": true,
+      "kind": "plan",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 895,
+      "output_sha256": "4d6ce435775a4bd79938892556845f9cd6d42d64e59aef71056dceacb823ce2b",
+      "reservation_id": "a3bd6ec21e4845c19a482f60052c5492",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-10-15T16:36:05.934588Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "5dd462e0c8ee07c73b38353f1596163bb54f7cd32961eb9955f89b1019ea2fb8",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "classification": "introduced",
+            "findingId": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7d6508e9ce0a99523630b80450971415",
+            "classification": "introduced",
+            "findingId": "finding-7d6508e9ce0a99523630b80450971415",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4848b3fa1e8be853492d670fac8300a2823f76ff",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2269,
+      "output_sha256": "7267a73a48ed6ef94979ca3aebf21bb707a80663704d26110b641fe5aa03b316",
+      "reservation_id": "5634b313313a42b4b5ac538aaf59cfe2",
+      "round_consumed": true,
+      "scope": "impl:fn-300-land-catches-up-once-last-without.1",
+      "superseded_by": null,
+      "task": "fn-300-land-catches-up-once-last-without.1",
+      "timestamp": "2026-10-15T16:44:55.365266Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "350c37c1dff4e6cc332bb074ee998347013d9bbd486b153820f75af6b99c16be",
+      "backend": "codex",
+      "base_sha": "002ed38cc4cae03d75e3b55bb3631a562d322d3b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "classification": "introduced",
+            "findingId": "finding-bfa9211dc5f2d315df0eec625d4f49da",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-7d6508e9ce0a99523630b80450971415",
+            "classification": "introduced",
+            "findingId": "finding-7d6508e9ce0a99523630b80450971415",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "81b2642835c0c7a03c1d1349d802b48411f3f4ef",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1611,
+      "output_sha256": "770b5156e5ea8acf74ae372da142a33d0bc74002da84eb1a86e6aefc2ac2903a",
+      "reservation_id": "c0b612948ce0437c91f7b5341ce8092b",
+      "round_consumed": true,
+      "scope": "impl:fn-300-land-catches-up-once-last-without.1",
+      "superseded_by": null,
+      "task": "fn-300-land-catches-up-once-last-without.1",
+      "timestamp": "2026-10-15T16:47:03.970043Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-300-land-catches-up-once-last-without.1": 1,
+    "plan": 1,
+    "plan#completion": 0
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-300-land-catches-up-once-last-without.1": 0,
+    "plan": 0
+  },
+  "spec_path": ".flow/specs/fn-300-land-catches-up-once-last-without.md",
+  "status": "done",
+  "title": "Land catches up once, last, without restarting patience",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-15T16:49:10.633706Z"
+}

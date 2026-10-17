@@ -8,6 +8,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 
 import argparse
 import copy
+import csv
 import errno
 import hashlib
 import heapq
@@ -2028,7 +2029,19 @@ def atomic_write(path: Path, content: str) -> None:
     mode is a long-standing source of platform-divergent behavior — files
     look "modified" in git diffs across OSes, and round-trip comparisons
     in tests get spurious mismatches.
+
+    A finalized review or QA receipt is also copied into the committed
+    evidence folder when `evidence.persist` is `on` (every receipt writer
+    goes through here, so none can skip it). The copy comes first, so a
+    failed copy leaves the receipt unwritten and the stage retryable.
     """
+    if '"verdict"' in content and '"type"' in content:
+        evidence_record_receipt(content)
+    _atomic_write_file(path, content)
+
+
+def _atomic_write_file(path: Path, content: str) -> None:
+    """The temp + rename write behind `atomic_write`, without evidence hooks."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
@@ -20261,6 +20274,13 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 use_json=args.json,
             )
 
+    if canonical_key == "spec.approval" and args.value not in SPEC_APPROVAL_VALUES:
+        error_exit(
+            f"Invalid spec.approval value {args.value!r}. Expected one of: local, pr. "
+            "Use: flowctl config set spec.approval local|pr",
+            use_json=args.json,
+        )
+
     if canonical_key == "tracker.conflictTiebreak":
         raw_val = args.value
         if (
@@ -23280,6 +23300,723 @@ def judge_startable_target(repo: Path, text: str = "") -> str | None:
     return None
 
 
+# --- Opt-in development evidence and spec approval -------------------------
+#
+# Both are inert unless a team opts in: `evidence.persist` activates only on
+# the literal "on" (anything else is off), and `spec.approval` absent means
+# "local". An invalid `spec.approval` value stops instead of falling back,
+# because a typo would otherwise silently remove a gate the team chose.
+
+EVIDENCE_DEFAULT_DIR = ".flow/evidence"
+SPEC_APPROVAL_VALUES = ("local", "pr")
+SPEC_APPROVAL_BRANCH_PREFIX = "spec/"
+_EVIDENCE_RECEIPT_TYPES = frozenset(
+    {"plan_review", "impl_review", "completion_review", "qa_verdict"}
+)
+
+
+class EvidenceWriteError(Exception):
+    """A configured evidence write could not be completed."""
+
+
+def _optin_config(key: str):
+    """Read an unseeded opt-in key from the config file; None when absent."""
+    value = _get_config_from_file(key)
+    return None if value is _CONFIG_RAW_SENTINEL else value
+
+
+def evidence_persist_enabled() -> bool:
+    return _optin_config("evidence.persist") == "on"
+
+
+def spec_approval_mode() -> str:
+    """Return "local" or "pr"; an invalid configured value (null included) raises ValueError."""
+    value = _get_config_from_file("spec.approval")
+    if value is _CONFIG_RAW_SENTINEL:
+        return "local"
+    if isinstance(value, str) and value in SPEC_APPROVAL_VALUES:
+        return value
+    raise ValueError(
+        f"Invalid spec.approval value {value!r} in .flow/config.json. Expected "
+        "one of: local, pr. Fix it with: flowctl config set spec.approval local|pr"
+    )
+
+
+def _plugin_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def evidence_flow_next_version() -> str:
+    root = _plugin_root()
+    for name in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
+                 "plugin.json", ".cursor-plugin/plugin.json"):
+        try:
+            version = json.loads((root / name).read_text(encoding="utf-8")).get("version")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(version, str) and version:
+            return version
+    return "unknown"
+
+
+def evidence_host() -> str:
+    """The host flowctl runs under, from the host's own signals; else unknown.
+
+    Same rung order as setup's host detection. Nothing is guessed: without a
+    positive signal the answer is "unknown".
+    """
+    root = _plugin_root()
+    env = os.environ
+    claude_manifest = (root / ".claude-plugin" / "plugin.json").is_file()
+    if (root / ".flow-next-muse-bundle").exists():
+        return "muse"
+    if env.get("DROID_PLUGIN_ROOT"):
+        return "droid"
+    cursor_home = Path(env.get("CURSOR_HOME") or Path.home() / ".cursor").resolve()
+    if (env.get("CURSOR_AGENT") and (root / ".cursor-plugin" / "plugin.json").is_file()
+            and (root == cursor_home or cursor_home in root.parents)):
+        return "cursor"
+    if env.get("GROK_AGENT"):
+        return "grok"
+    if (root / ".flow-next-opencode-manifest").exists():
+        return "opencode"
+    if env.get("CLAUDECODE") and claude_manifest:
+        return "claude-code"
+    if not claude_manifest and ((root / ".codex-plugin" / "plugin.json").is_file()
+                                or (root / "plugin.json").is_file()):
+        return "codex"
+    return "unknown"
+
+
+def evidence_spec_dir(spec_id: str) -> Path:
+    """Return `<evidence.dir>/<spec-id>/`, refusing a path outside the repo or
+    through a symlink."""
+    root = get_repo_root()
+    raw = _optin_config("evidence.dir")
+    rel = raw.strip() if isinstance(raw, str) and raw.strip() else EVIDENCE_DEFAULT_DIR
+    rel_path = Path(rel)
+    if rel_path.is_absolute():
+        raise EvidenceWriteError(
+            f"evidence.dir {rel!r} must be a repo-relative path"
+        )
+    current = root
+    for part in (rel_path / spec_id).parts:
+        current = current / part
+        if current.is_symlink():
+            raise EvidenceWriteError(
+                f"evidence.dir {rel!r} resolves through a symlink ({current}); "
+                "refusing to write evidence there"
+            )
+    target = root / rel_path / spec_id
+    real_root = root.resolve()
+    real_target = target.resolve()
+    if real_target != real_root and real_root not in real_target.parents:
+        raise EvidenceWriteError(
+            f"evidence.dir {rel!r} resolves outside the repository ({real_target})"
+        )
+    return target
+
+
+def evidence_target(spec_dir: Path, *parts: str) -> Path:
+    """A path under the evidence folder; refuses any symlink on the way to it."""
+    current = spec_dir
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise EvidenceWriteError(
+                f"evidence path {current} is a symlink; refusing to write evidence there"
+            )
+    return current
+
+
+def _evidence_stage(paths: list[Path]) -> None:
+    """Stage written evidence so it travels in the next commit."""
+    root = get_repo_root()
+    proc = subprocess.run(
+        ["git", "add", "--", *[str(path) for path in paths]],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        raise EvidenceWriteError(
+            "git add of evidence failed: " + (proc.stderr.strip() or f"exit {proc.returncode}")
+        )
+
+
+def _evidence_round_key(receipt: dict, content: str) -> str:
+    """Stable per-round key: rewrites of one round keep its timestamp and round."""
+    stamp = re.sub(r"[^0-9A-Za-z]", "", str(receipt.get("timestamp") or ""))
+    if not stamp:
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    findings = receipt.get("findings")
+    review_round = findings.get("round") if isinstance(findings, dict) else None
+    return f"{stamp}-r{review_round}" if isinstance(review_round, int) else stamp
+
+
+def _evidence_run_record_update(spec_dir: Path, section: str, key: str, entry: dict) -> Path:
+    """Upsert one entry in `<spec_dir>/run.json` (the run record)."""
+    path = evidence_target(spec_dir, "run.json")
+    with cross_process_lock(_review_receipt_lock_path(path)):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            record = {}
+        except (OSError, ValueError) as exc:
+            raise EvidenceWriteError(f"cannot read run record {path}: {exc}") from exc
+        if not isinstance(record, dict):
+            raise EvidenceWriteError(f"run record {path} is not a JSON object")
+        rows = record.get(section)
+        rows = [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        rows = [row for row in rows if row.get("key") != key]
+        rows.append({"key": key, **entry, "flow_next_version": evidence_flow_next_version(),
+                     "host": evidence_host()})
+        rows.sort(key=lambda row: str(row.get("key")))
+        record[section] = rows
+        _atomic_write_file(path, json.dumps(record, indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def _evidence_fail(exc: Exception) -> None:
+    # Receipt writers have no args in reach; every flowctl JSON caller passes --json.
+    error_exit(f"evidence persistence failed: {exc}", use_json="--json" in sys.argv[1:])
+
+
+def evidence_record_receipt(content: str) -> None:
+    """Copy one finalized review/QA receipt into the evidence folder (opt-in)."""
+    try:
+        receipt = json.loads(content)
+    except ValueError:
+        return
+    if not (isinstance(receipt, dict) and receipt.get("type") in _EVIDENCE_RECEIPT_TYPES
+            and isinstance(receipt.get("verdict"), str) and isinstance(receipt.get("id"), str)):
+        return
+    if not evidence_persist_enabled():
+        return
+    review_id = receipt["id"]
+    if is_task_id(review_id):
+        spec_id = spec_id_from_task(review_id)
+    elif is_spec_id(review_id):
+        spec_id = review_id
+    else:
+        return  # No spec to file it under (a branch-scoped review).
+    try:
+        spec_dir = evidence_spec_dir(spec_id)
+        key = _evidence_round_key(receipt, content)
+        if receipt["type"] == "qa_verdict":
+            target = evidence_target(spec_dir, "qa", key, "receipt.json")
+        else:
+            target = evidence_target(spec_dir, "reviews", f"{key}-{receipt['type']}-{review_id}.json")
+        _atomic_write_file(target, content)
+        run = _evidence_run_record_update(spec_dir, "reviews", target.relative_to(spec_dir).as_posix(), {
+            "type": receipt["type"], "id": review_id, "verdict": receipt["verdict"],
+            "backend": receipt.get("mode") or "unknown",
+            "model": receipt.get("model") or "unknown",
+            "timestamp": receipt.get("timestamp") or "unknown",
+        })
+        _evidence_stage([target, run])
+    except (EvidenceWriteError, OSError, CrossProcessLockError) as exc:
+        _evidence_fail(exc)
+
+
+def evidence_record_qa_captures(spec_id: str, receipt: dict) -> None:
+    """Copy the QA captures behind a just-written QA receipt (opt-in)."""
+    if not evidence_persist_enabled():
+        return
+    source = get_flow_dir() / "tmp" / f"qa-{spec_id}"
+    try:
+        spec_dir = evidence_spec_dir(spec_id)
+        key = _evidence_round_key(receipt, json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+        copied = []
+        if source.is_dir():
+            for path in sorted(source.rglob("*")):
+                if path.is_symlink() or not path.is_file():
+                    continue
+                dest = evidence_target(spec_dir, "qa", key, "captures",
+                                       *path.relative_to(source).parts)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, dest)
+                copied.append(dest)
+        if copied:
+            _evidence_stage(copied)
+    except (EvidenceWriteError, OSError) as exc:
+        _evidence_fail(exc)
+
+
+def _evidence_implementing_model(summary: str) -> str:
+    """The implementing model a done summary evidences, else unknown."""
+    match = re.search(r"\(model:\s*([^);]+)", summary or "")
+    value = match.group(1).strip() if match else ""
+    return value if value and value.lower() != "not reported" else "unknown"
+
+
+def evidence_test_report_notice(task_id: str) -> None:
+    """Under `evidence.persist on`, tell the agent where its test runner's report goes."""
+    if not evidence_persist_enabled():
+        return
+    try:
+        folder = evidence_target(evidence_spec_dir(spec_id_from_task(task_id)), "tests", task_id)
+    except EvidenceWriteError:
+        return  # The evidence write at done reports the unusable folder.
+    print(
+        f"evidence.persist is on: have your test runner write a JUnit XML report into "
+        f"{folder.relative_to(get_repo_root()).as_posix()}/ before `flowctl done` (for example "
+        "pytest --junitxml, vitest/jest junit reporter, bun test --reporter=junit, go via "
+        "gotestsum), and put the R-ID a test covers in its name (R7 in `R7: ...` or "
+        "`test_r7_...`). flowctl trace reads each test's result from it.",
+        file=sys.stderr,
+    )
+
+
+def _evidence_test_reports(spec_dir: Path, task_id: str) -> list[Path]:
+    """Report files the test runner wrote for this task (symlinks are refused)."""
+    folder = evidence_target(spec_dir, "tests", task_id)
+    if not folder.is_dir():
+        return []
+    reports = []
+    for path in sorted(folder.rglob("*")):
+        if path.is_symlink():
+            raise EvidenceWriteError(f"test report {path} is a symlink; refusing it as evidence")
+        if path.is_file():
+            reports.append(path)
+    return reports
+
+
+def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Path]:
+    """Persist a completed task's evidence record (opt-in); return the paths."""
+    if not evidence_persist_enabled():
+        return []
+    try:
+        spec_dir = evidence_spec_dir(spec_id_from_task(task_id))
+        model = _evidence_implementing_model(summary)
+        reports = _evidence_test_reports(spec_dir, task_id)
+        target = evidence_target(spec_dir, "tasks", f"{task_id}.json")
+        _atomic_write_file(target, json.dumps(
+            {"id": task_id, "evidence": evidence, "summary": summary,
+             "implementing_model": model, "recorded_at": now_iso(),
+             "test_reports": [path.relative_to(spec_dir).as_posix() for path in reports]},
+            indent=2, sort_keys=True) + "\n")
+        run = _evidence_run_record_update(spec_dir, "stages", task_id,
+                                          {"task": task_id, "implementing_model": model})
+        _evidence_stage([target, run, *reports])
+    except (EvidenceWriteError, OSError, CrossProcessLockError) as exc:
+        _evidence_fail(exc)
+    return [target, run]
+
+
+def _gh_pr_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
+    """All PRs with head branch `head`, or (None, reason) when the forge cannot be read."""
+    try:
+        proc = subprocess.run(
+            ["gh", "pr", "list", "--head", head, "--state", "all", "--limit", "50",
+             "--json", "number,url,state,mergedAt,mergedBy,reviews"],
+            cwd=repo, capture_output=True, text=True, timeout=20, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"forge unreachable: {exc}"
+    if proc.returncode != 0:
+        detail = (proc.stderr.strip().splitlines() or [f"gh exit {proc.returncode}"])[0]
+        return None, f"forge unreachable: {detail}"
+    try:
+        rows = json.loads(proc.stdout)
+    except ValueError:
+        return None, "forge unreachable: unreadable gh output"
+    if not isinstance(rows, list) or not all(
+        isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
+        and isinstance(row.get("number"), int) for row in rows
+    ):
+        return None, "forge unreachable: unexpected gh output"
+    return rows, ""
+
+
+def _pr_approval(row: dict) -> dict:
+    """Approvers and merge identity of one PR row, as the forge reports them."""
+    approvers = [
+        {"login": (review.get("author") or {}).get("login") or "unknown",
+         "approved_at": review.get("submittedAt") or "unknown"}
+        for review in row.get("reviews") or []
+        if isinstance(review, dict) and review.get("state") == "APPROVED"
+    ]
+    return {
+        "pr": row.get("url"), "number": row["number"], "state": row["state"],
+        "approvers": approvers,
+        "merged_by": (row.get("mergedBy") or {}).get("login") or "unknown",
+        "merged_at": row.get("mergedAt") or "unknown",
+    }
+
+
+def _iso_instant(value) -> Optional[datetime]:
+    """An ISO-8601 timestamp as an aware datetime, or None when unreadable."""
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
+    """Under `spec.approval pr`, whether the spec's PR merged with an approval.
+
+    A newly observed approval is recorded with the spec (and in its evidence
+    folder when persistence is on) and marks it ready. Returns
+    {"approved": bool, "reason": str}; the forge failing to answer is "not
+    approved", never a guess.
+    """
+    spec_id = spec["id"]
+    recorded = spec.get("spec_approval")
+    if isinstance(recorded, dict) and recorded.get("approved") is True:
+        if spec.get("ready") is True:
+            return {"approved": True, "reason": "spec PR approved and merged"}
+        return {"approved": False, "reason": "marked not ready after its spec PR merged"}
+    head = SPEC_APPROVAL_BRANCH_PREFIX + spec_id
+    rows, failure = _gh_pr_rows(head, get_repo_root())
+    if rows is None:
+        return {"approved": False, "reason": failure}
+    # After `spec unready` withdrew an approval, only a later merge approves the revision.
+    since = _iso_instant(recorded.get("invalidated_at")) if isinstance(recorded, dict) else None
+    rows = [row for row in rows if since is None or row["state"] != "MERGED"
+            or ((merged_at := _iso_instant(row.get("mergedAt"))) is not None and merged_at > since)]
+    merged = sorted((row for row in rows if row["state"] == "MERGED"),
+                    key=lambda row: row.get("mergedAt") or "", reverse=True)
+    for row in merged:
+        approval = _pr_approval(row)
+        if approval["approvers"]:
+            record = {"approved": True, **approval, "recorded_at": now_iso()}
+            # Evidence first: a failed write leaves the spec unrecorded, so the next call retries.
+            if evidence_persist_enabled():
+                try:
+                    target = evidence_target(evidence_spec_dir(spec_id), "approval.json")
+                    _atomic_write_file(target, json.dumps(record, indent=2, sort_keys=True) + "\n")
+                    _evidence_stage([target])
+                except (EvidenceWriteError, OSError) as exc:
+                    _evidence_fail(exc)
+            spec_path = find_spec_json_path(flow_dir, spec_id)
+            with _review_sidecar_lock(flow_dir, spec_id):
+                data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=True)
+                if data.get("spec_approval") != recorded:
+                    # A concurrent `spec unready` (or another recorder) changed it since the read.
+                    return {"approved": False, "reason": "spec approval changed while recording; retry"}
+                data["spec_approval"] = record
+                data["ready"] = True
+                data["updated_at"] = now_iso()
+                atomic_write_json(spec_path, data)
+            spec["spec_approval"], spec["ready"] = record, True
+            return {"approved": True, "reason": "spec PR approved and merged"}
+    if merged:
+        return {"approved": False,
+                "reason": f"spec PR #{merged[0]['number']} merged without an approving review"}
+    open_rows = [row for row in rows if row["state"] == "OPEN"]
+    if open_rows:
+        return {"approved": False,
+                "reason": f"spec PR #{open_rows[0]['number']} is open, awaiting approval and merge"}
+    if rows:
+        return {"approved": False,
+                "reason": f"spec PR #{rows[0]['number']} was closed without merge"}
+    return {"approved": False, "reason": f"no spec PR from branch {head}"}
+
+
+def spec_approval_authoring_notice() -> None:
+    """After a spec authoring write under `spec.approval pr`, point at the spec-PR handoff."""
+    try:
+        if spec_approval_mode() != "pr":
+            return
+    except ValueError:
+        return  # The gated commands report an invalid value.
+    reference = _plugin_root() / "references" / "spec-approval-pr.md"
+    print(
+        "spec.approval is pr: when this spec is final, open it as a spec PR instead of "
+        f"marking it ready. Read {reference}",
+        file=sys.stderr,
+    )
+
+
+def spec_approval_pending_message(spec_id: str, reason: str) -> str:
+    reference = _plugin_root() / "references" / "spec-approval-pr.md"
+    return (
+        f"spec.approval is pr: spec {spec_id} is not approved ({reason}). "
+        "Implementation starts after its spec PR merges with an approving "
+        f"review. To open the spec PR, read {reference}"
+    )
+
+
+def _spec_approval_gate(spec_id: str, use_json: bool) -> None:
+    """Stop when `spec.approval pr` and the spec has no approved, merged PR."""
+    try:
+        mode = spec_approval_mode()
+    except ValueError as exc:
+        error_exit(str(exc), use_json=use_json)
+    if mode != "pr":
+        return
+    flow_dir = get_flow_dir()
+    spec = normalize_epic(load_json_or_exit(
+        find_spec_json_path(flow_dir, spec_id), f"Spec {spec_id}", use_json=use_json))
+    status = spec_approval_status(flow_dir, spec)
+    if not status["approved"]:
+        error_exit(spec_approval_pending_message(spec_id, status["reason"]), use_json=use_json)
+
+
+# --- trace: per-criterion traceability matrix (read-only) ------------------
+
+TRACE_COLUMNS = ("criterion", "text", "tests", "test_result", "qa", "review_findings",
+                 "spec_approval", "implementation_approval")
+
+
+def _trace_read_json(path: Path) -> Optional[dict]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _trace_approval_text(approval: Optional[dict]) -> str:
+    if not approval:
+        return "none"
+    approvers = ", ".join(f"{a['login']} at {a['approved_at']}" for a in approval["approvers"])
+    text = f"PR #{approval['number']} {approval['state'].lower()}"
+    text += f"; approved by {approvers}" if approvers else "; no approving review"
+    if approval["state"] == "MERGED":
+        text += f"; merged by {approval['merged_by']} at {approval['merged_at']}"
+    return text
+
+
+_TRACE_RID_IN_NAME = re.compile(r"(?<![A-Za-z0-9])[Rr](\d+[a-z]?)(?![0-9A-Za-z])")
+
+
+def _trace_junit_cases(spec_dir: Path, task_id: str, gaps: list[str]) -> Optional[list[dict]]:
+    """Test cases from the task's JUnit XML reports, or None when it has none.
+
+    An unreadable report is a gap, never a fallback to the result recorded at done.
+    """
+    import xml.etree.ElementTree as ET
+
+    folder = spec_dir / "tests" / task_id
+    if not folder.is_dir():
+        return None
+    cases: list[dict] = []
+    found = False
+    for path in sorted(folder.rglob("*.xml")):
+        if path.is_symlink():
+            continue
+        found = True
+        try:
+            root = ET.parse(path).getroot()
+        except (ET.ParseError, OSError) as exc:
+            gaps.append(f"{task_id}: test report {path.name} unreadable: {exc}")
+            continue
+        for case in root.iter("testcase"):
+            name = " ".join(filter(None, (case.get("classname"), case.get("name")))) or "unnamed test"
+            if case.find("failure") is not None:
+                result = "failed"
+            elif case.find("error") is not None:
+                result = "error"
+            elif case.find("skipped") is not None:
+                result = "skipped"
+            else:
+                result = "passed"
+            rids = sorted({"R" + match.group(1) for match in _TRACE_RID_IN_NAME.finditer(name)})
+            cases.append({"name": name, "result": result, "rids": rids})
+    return cases if found else None
+
+
+def trace_spec(spec_id: str) -> dict:
+    """Assemble the traceability matrix and gap check for one spec."""
+    flow_dir = get_flow_dir()
+    spec = normalize_epic(load_json_or_exit(
+        find_spec_json_path(flow_dir, spec_id), f"Spec {spec_id}", use_json=True))
+    spec_section, tasks, _summary, _created, _text = _export_spec_summary(
+        flow_dir, spec, use_json=True)
+    criteria = spec_section["spec_sections"]["acceptance_criteria"]
+    rids = [c["id"] for c in criteria]
+    warnings: list[str] = []
+    try:
+        spec_dir = evidence_spec_dir(spec_id)
+    except EvidenceWriteError as exc:
+        warnings.append(f"evidence folder unreadable: {exc}")
+        spec_dir = None
+
+    # Task evidence: the committed evidence folder first, local runtime state second.
+    persisted = {}
+    if spec_dir is not None and (spec_dir / "tasks").is_dir():
+        for path in sorted((spec_dir / "tasks").glob("*.json")):
+            record = _trace_read_json(path)
+            if record and isinstance(record.get("evidence"), dict):
+                persisted[record.get("id")] = record["evidence"]
+    tests_by_rid: dict[str, list[dict]] = {rid: [] for rid in rids}
+    gaps: list[str] = []
+    for task in tasks:
+        # A committed evidence record proves completion even where local task state is absent.
+        if task["status"] != "done" and task["id"] not in persisted:
+            continue
+        # A test runner's JUnit report gives each test's own result; the R-ID in a
+        # test's name maps it. Without a report, the commands recorded at done stand.
+        cases = _trace_junit_cases(spec_dir, task["id"], gaps) if spec_dir is not None else None
+        if cases is not None:
+            for case in cases:
+                known = [rid for rid in case["rids"] if rid in tests_by_rid]
+                for rid in case["rids"]:
+                    if rid not in tests_by_rid:
+                        gaps.append(f"{task['id']}: test {case['name']!r} ({case['result']}) "
+                                    f"names unknown criterion {rid}")
+                # A passing test without an R-ID claims nothing; a failure must never vanish.
+                if not known and case["result"] in ("failed", "error"):
+                    gaps.append(f"{task['id']}: test {case['name']!r} {case['result']} "
+                                "and names no criterion")
+                for rid in known:
+                    tests_by_rid[rid].append({"task": task["id"], "command": case["name"],
+                                              "result": case["result"], "per_test": True})
+                    if case["result"] in ("failed", "error"):
+                        gaps.append(f"{rid}: test {case['name']!r} {case['result']}")
+            for rid in task["satisfies"]:
+                if rid in tests_by_rid and not any(t["task"] == task["id"] for t in tests_by_rid[rid]):
+                    gaps.append(f"{rid}: no test in {task['id']}'s report names it")
+            continue
+        evidence = persisted.get(task["id"]) or task.get("evidence") or {}
+        commands = evidence.get("tests") or []
+        commands = [commands] if isinstance(commands, str) else [str(c) for c in commands if c]
+        if commands and not task["satisfies"]:
+            gaps.append(f"{task['id']}: test evidence names no criterion")
+        for rid in task["satisfies"]:
+            if rid not in tests_by_rid:
+                gaps.append(f"{task['id']}: names unknown criterion {rid}")
+                continue
+            for command in commands:
+                tests_by_rid[rid].append({
+                    "task": task["id"], "command": command,
+                    "result": "skipped" if command.startswith("GATE_SKIPPED") else "recorded at done",
+                })
+
+    # Review and QA receipts: the evidence folder, else the default receipt home.
+    receipts: list[dict] = []
+    if spec_dir is not None:
+        for path in sorted(spec_dir.glob("reviews/*.json")) + sorted(spec_dir.glob("qa/*/receipt.json")):
+            record = _trace_read_json(path)
+            if record:
+                receipts.append(record)
+    if not receipts:
+        for path in sorted((flow_dir / "review-receipts").glob("*.json")):
+            record = _trace_read_json(path)
+            if record and isinstance(record.get("id"), str) and (
+                    record["id"] == spec_id or record["id"].startswith(spec_id + ".")):
+                receipts.append(record)
+    qa = [r for r in receipts if r.get("type") == "qa_verdict" and r.get("id") == spec_id]
+    qa.sort(key=lambda r: str(r.get("timestamp") or ""))
+    qa_by_rid: dict[str, str] = {}
+    if qa:
+        latest = qa[-1]
+        coverage = latest.get("rid_coverage") or {}
+        for row in coverage.get("rids", []) if isinstance(coverage, dict) else []:
+            if not isinstance(row, dict):
+                continue
+            if row.get("id") not in tests_by_rid:
+                gaps.append(f"QA coverage names unknown criterion {row.get('id')}")
+                continue
+            qa_by_rid[row["id"]] = f"{row.get('coverage')} (QA {latest.get('qa_outcome')})"
+    findings_by_rid: dict[str, list[str]] = {rid: [] for rid in rids}
+    for receipt in receipts:
+        findings = receipt.get("findings")
+        items = findings.get("items") if isinstance(findings, dict) else None
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            for rid in item.get("rIds") or []:
+                if rid not in findings_by_rid:
+                    gaps.append(f"review finding {item.get('title')!r} names unknown criterion {rid}")
+                else:
+                    findings_by_rid[rid].append(
+                        f"{receipt.get('type')} {receipt.get('id')}: {item.get('severity')} "
+                        f"{item.get('title')} ({item.get('status')})")
+
+    # Approvals: the recorded spec approval, and the implementation PR as the forge reports it.
+    recorded = spec.get("spec_approval")
+    if isinstance(recorded, dict) and recorded.get("approved") is True:
+        spec_approval = _trace_approval_text(recorded)
+    elif spec_approval_mode() == "pr":
+        # Read-only: report the spec PR as the forge sees it; recording happens elsewhere.
+        rows, failure = _gh_pr_rows(SPEC_APPROVAL_BRANCH_PREFIX + spec_id, get_repo_root())
+        if rows is None:
+            spec_approval = "unknown"
+            warnings.append(f"spec approval unknown: {failure}")
+        else:
+            rows.sort(key=lambda row: ({"MERGED": 2, "OPEN": 1, "CLOSED": 0}[row["state"]],
+                                       row.get("mergedAt") or "", row["number"]), reverse=True)
+            spec_approval = _trace_approval_text(_pr_approval(rows[0])) if rows else "no spec PR"
+    else:
+        spec_approval = "not gated (spec.approval local)"
+    branch = spec.get("branch_name")
+    impl_approval = "no implementation branch"
+    if branch:
+        rows, failure = _gh_pr_rows(branch, get_repo_root())
+        if rows is None:
+            impl_approval = "unknown"
+            warnings.append(f"implementation approval unknown: {failure}")
+        else:
+            rows.sort(key=lambda row: ({"MERGED": 2, "OPEN": 1, "CLOSED": 0}[row["state"]],
+                                       row["number"]), reverse=True)
+            impl_approval = _trace_approval_text(_pr_approval(rows[0])) if rows else "no PR"
+
+    matrix = []
+    for criterion in criteria:
+        rid = criterion["id"]
+        tests = tests_by_rid[rid]
+        qa_text = qa_by_rid.get(rid, "none")
+        ran = [t for t in tests if t["result"] != "skipped"]
+        if not ran and not qa_text.startswith(("live", "backend_cli")):
+            gaps.append(f"{rid}: no evidence")
+        results = sorted({t["result"] for t in tests})
+        matrix.append({
+            "criterion": rid, "text": criterion["text"],
+            "tests": [f"{t['command']}: {t['result']} ({t['task']})" if t.get("per_test")
+                      else f"{t['command']} ({t['task']})" for t in tests],
+            "test_result": ", ".join(results) if results else "none",
+            "qa": qa_text, "review_findings": findings_by_rid[rid],
+            "spec_approval": spec_approval, "implementation_approval": impl_approval,
+        })
+    return {"spec": spec_id, "rows": matrix, "gaps": gaps, "warnings": warnings}
+
+
+def _trace_cell(value) -> str:
+    return "; ".join(value) if isinstance(value, list) else str(value)
+
+
+def cmd_trace(args: argparse.Namespace) -> None:
+    """Print the per-criterion traceability matrix; exit 1 when gaps exist."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json, code=2)
+    flow_dir = get_flow_dir()
+    folded = casefold_handle(args.id)
+    if not folded or not is_spec_id(folded):
+        error_exit(f"Invalid spec ID: {args.id}", use_json=args.json, code=2)
+    spec_id = expand_bare_spec_id(flow_dir, folded, use_json=args.json)
+    if not find_spec_json_path(flow_dir, spec_id).exists():
+        error_exit(f"Spec {args.id} not found", use_json=args.json, code=2)
+    try:
+        result = trace_spec(spec_id)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    for warning in result["warnings"]:
+        print(f"Warning: {warning}", file=sys.stderr)
+    if args.json:
+        json_output({**result, "gap_count": len(result["gaps"])})
+    elif args.format == "csv":
+        writer = csv.writer(sys.stdout, lineterminator="\n")
+        writer.writerow(TRACE_COLUMNS)
+        for row in result["rows"]:
+            writer.writerow([_trace_cell(row[col]) for col in TRACE_COLUMNS])
+    else:
+        print(f"# Traceability: {spec_id}\n")
+        print("| " + " | ".join(TRACE_COLUMNS) + " |")
+        print("|" + "---|" * len(TRACE_COLUMNS))
+        for row in result["rows"]:
+            cells = [_trace_cell(row[col]).replace("|", "\\|").replace("\n", " ")
+                     for col in TRACE_COLUMNS]
+            print("| " + " | ".join(cells) + " |")
+        print("\n## Gaps\n")
+        print("\n".join(f"- {gap}" for gap in result["gaps"]) or "None.")
+    if not args.json and args.format == "csv" and result["gaps"]:
+        for gap in result["gaps"]:
+            print(f"Gap: {gap}", file=sys.stderr)
+    sys.exit(1 if result["gaps"] else 0)
+
+
 def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
     """Assemble live lifecycle facts in code; the host never summarizes lifecycle or PR state."""
     state = dict(state)
@@ -23302,6 +24039,11 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
                                 for t in tasks if t["status"] == "blocked"],
             "pr_exists": None, "pr_ref": None,
         }
+        if spec_approval_mode() == "pr":
+            approval = spec_approval_status(flow_dir, spec)
+            state["ready"] = approval["approved"]
+            if not approval["approved"]:
+                state["approval_pending"] = spec_approval_pending_message(spec_id, approval["reason"])
         branch = spec.get("branch_name")
         if not branch:
             # No branch means nothing to probe: absence is observed, not a probe failure.
@@ -23341,6 +24083,10 @@ def judge_route_lifecycle(state: dict) -> dict:
         # Closing precedes PR creation; absence cannot distinguish a failed open
         # from a disappeared PR. Let the host report it, never create a replacement.
         return decision("host", "closed spec without observed PR")
+    if state.get("approval_pending"):
+        # Ahead of every row that produces work (make-pr, plan review, tasks); an
+        # observed PR keeps landing's own consent gate and its reviewers.
+        return decision("host", state["approval_pending"])
     total = state["tasks_total"]
     if total and state["tasks_done"] == total:
         return decision("all_done_make_pr", "all tasks done")
@@ -23364,7 +24110,8 @@ def judge_route_lifecycle(state: dict) -> dict:
         # Affirmative requests only: a negated request or a code identifier is not a plan signal.
         "asks_for_plan": r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\b(?:break|split|decompose) (this|it) (down )?into tasks\b|\btask plan\b)",
         "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
-        "staged_prs": r"\b(separate|two|three|several|multiple|staged|stacked)\s+prs?\b|\bin (two|three) prs\b",
+        # Delivery phrasing only ("ship in two PRs", "split into stacked PRs"): PRs as the spec's subject are not a signal.
+        "staged_prs": r"\b(?:in|into|across|over|as|ship|deliver|open|split)\s+(?:two|three|four|several|multiple|separate|stacked)\s+(?:stacked\s+)?prs?\b",
     }
     for signal, pattern in patterns.items():
         if re.search(pattern, text, re.I):
@@ -23710,7 +24457,43 @@ def judge_tier_dispatch(result: dict, args: argparse.Namespace) -> dict:
             line = f"Tier: long_running (jev {confidence:.2f}) - bridge recommended"
         else:
             line = f"Tier: session (jev {answer['choice']} {confidence:.2f})"
-    return {"tier_line": line, "spawn_model": selected_model, "implementer": implementer}
+    bridged = bool(implementer) and not selected_model and can_bridge
+    effort, suffix = judge_tier_effort(result, args, bridged)
+    spawn_effort = None
+    if effort and bridged:
+        implementer = f"{implementer} at {effort}"
+    elif effort:
+        spawn_effort = effort
+    return {"tier_line": line + suffix, "spawn_model": selected_model, "implementer": implementer,
+            "spawn_effort": spawn_effort}
+
+
+def judge_tier_effort(result: dict, args: argparse.Namespace, bridged: bool) -> tuple:
+    """Worker effort from the tier answer, one step on the host's ladder; requested and role efforts win."""
+    if not getattr(args, "task", None):
+        return None, ""  # Scouts keep their own effort selection.
+    levels = [level.strip() for level in (getattr(args, "effort_levels", None) or "").split(",") if level.strip()]
+    default = getattr(args, "default_effort", None)
+    requested = getattr(args, "explicit_effort", None)
+    role_effort = getattr(args, "role_effort", None)
+    if role_effort and not bridged:  # A role pin configures the native spawn, never a bridged child.
+        return None, f" at {role_effort} effort (role pins effort)"
+    if requested:
+        if not levels and not bridged:
+            return None, f"; effort {requested} not applied (host spawn takes no effort)"
+        return requested, f" at {requested} effort (requested)"
+    answer = result["answers"]["tier"] if result.get("available") else None
+    step = {"mechanical": -1, "intelligent": 1}.get(answer["choice"], 0) if answer and answer["confidence"] >= 0.8 else 0
+    if not step:
+        return None, " at default effort"
+    if not levels:
+        return None, "; effort not applied (host spawn takes no effort)"
+    if default not in levels:
+        return None, "; effort not applied (host default effort unknown)"
+    level = levels[min(max(levels.index(default) + step, 0), len(levels) - 1)]
+    if level == default:
+        return None, " at default effort"
+    return level, f" at {level} effort (host default {default})"
 
 
 def cmd_judge(args: argparse.Namespace) -> None:
@@ -25531,11 +26314,71 @@ def cmd_prospect_write(args: argparse.Namespace) -> None:
     json_output({"success": True, "artifact_id": artifact_id, "path": str(path), **fm})
 
 
+def _qa_receipt_scenarios(value, path: Path, review_id, branch: str, head: str, errors: list[str]) -> Optional[list]:
+    """Stamp live scenarios with this head; copy carried ones from the prior receipt."""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        errors.append("scenarios: expected a list")
+        return None
+    prior = None
+    rows, seen = [], set()
+    for i, row in enumerate(value):
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"].strip():
+            errors.append(f"scenarios[{i}].id: expected a non-empty string")
+            continue
+        if row["id"] in seen:
+            errors.append(f"scenarios[{i}].id: duplicate")
+            continue
+        seen.add(row["id"])
+        if row.get("run") == "carried":
+            if prior is None:
+                prior = _qa_prior_scenarios(path, review_id, branch)
+            if isinstance(prior, str):
+                errors.append(f"scenarios[{i}]: {prior}")
+                continue
+            source = prior.get(row["id"])
+            if source is None:
+                errors.append(f"scenarios[{i}]: {row['id']} is not in the prior receipt")
+            elif source.get("outcome") != "PASS" or not isinstance(source.get("head_sha"), str):
+                errors.append(f"scenarios[{i}]: {row['id']} did not pass in the prior receipt")
+            elif source["head_sha"] == head:
+                errors.append(f"scenarios[{i}]: {row['id']} ran at the same head; record it as live")
+            else:
+                rows.append({"id": row["id"], "rids": source.get("rids", []), "outcome": "PASS", "run": "carried",
+                             "evidence": source.get("evidence", []), "head_sha": source["head_sha"]})
+        elif row.get("run") == "live":
+            if row.get("outcome") not in ("PASS", "FAIL", "BLOCKED"):
+                errors.append(f"scenarios[{i}].outcome: expected PASS, FAIL or BLOCKED")
+            for key in ("rids", "evidence"):
+                if not isinstance(row.get(key, []), list) or not all(isinstance(v, str) for v in row.get(key, [])):
+                    errors.append(f"scenarios[{i}].{key}: expected a list of strings")
+            rows.append({"id": row["id"], "rids": row.get("rids", []), "outcome": row.get("outcome"), "run": "live",
+                         "evidence": row.get("evidence", []), "head_sha": head})
+        else:
+            errors.append(f"scenarios[{i}].run: expected live or carried")
+    return rows
+
+
+def _qa_prior_scenarios(path: Path, review_id, branch: str):
+    """Scenarios of the prior receipt by id, or why a carry cannot use it."""
+    try:
+        prior = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        return "no prior receipt to carry from"
+    if not isinstance(prior, dict) or prior.get("id") != review_id:
+        return "the prior receipt is for another spec"
+    if prior.get("branch") != branch:
+        return "the prior receipt is from another branch"
+    rows = prior.get("scenarios")
+    return {row["id"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)} if isinstance(rows, list) else {}
+
+
 def cmd_qa_receipt(args: argparse.Namespace) -> None:
     """Persist QA judgment and retain the existing structured finding lineage."""
     if args.skeleton:
         json_output({"id": "fn-1-example", "qa_outcome": "SHIP", "findings": [],
-                     "rid_coverage": {"rids": []}})
+                     "rid_coverage": {"rids": []}, "scenarios": []})
         return
     data = _artifact_payload(args)
     errors = []
@@ -25575,24 +26418,28 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
         errors.append("rid_coverage: expected an object with a rids list")
     else:
         for i, row in enumerate(coverage.get("rids", [])):
-            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "no_live_scenario", "backend_cli"):
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row.get("coverage") not in ("live", "subtracted", "carried", "no_live_scenario", "backend_cli"):
                 errors.append(f"rid_coverage.rids[{i}]: invalid id or coverage")
     mode = data.get("mode") or ("receipt" if args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") else "interactive")
     if not isinstance(mode, str):
         errors.append("mode: expected a string")
-    _artifact_errors(errors, args)
     head = _resolve_review_sha("HEAD")
     if head is None:
         error_exit("qa receipt cannot resolve HEAD", code=2, use_json=args.json)
+    branch = _export_run_git(["branch", "--show-current"])[1].strip()
+    path = Path(args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or get_flow_dir() / "review-receipts" / f"qa-{review_id}.json")
+    scenarios = _qa_receipt_scenarios(data.get("scenarios"), path, review_id, branch, head, errors)
+    _artifact_errors(errors, args)
     if coverage:
         coverage = {"covered": sum(r["coverage"] != "no_live_scenario" for r in coverage.get("rids", [])),
                     "total": len(coverage.get("rids", [])), "rids": coverage.get("rids", [])}
     verdict = "SHIP" if outcome in ("SHIP", "NA") else "NEEDS_WORK"
-    path = Path(args.receipt or os.environ.get("REVIEW_RECEIPT_PATH") or get_flow_dir() / "review-receipts" / f"qa-{review_id}.json")
     receipt = {"type": "qa_verdict", "id": review_id, "mode": mode, "verdict": verdict,
-               "qa_outcome": outcome, "head_sha": head, "branch": _export_run_git(["branch", "--show-current"])[1].strip(),
+               "qa_outcome": outcome, "head_sha": head, "branch": branch,
                "rid_coverage": coverage, "open_p0p1": [item for item in items if item["severity"] in ("P0", "P1")],
                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if scenarios is not None:
+        receipt["scenarios"] = scenarios
     reason_key = "blocked_reason" if outcome == "BLOCKED" else "na_reason" if outcome == "NA" else None
     if reason_key and data.get(reason_key):
         receipt[reason_key] = data[reason_key]
@@ -25624,6 +26471,8 @@ def cmd_qa_receipt(args: argparse.Namespace) -> None:
         if findings is None:
             error_exit("QA findings could not be parsed; receipt unchanged", code=2, use_json=args.json)
         receipt["findings"] = findings
+        # Captures first: a failed copy leaves the receipt unwritten and QA retryable.
+        evidence_record_qa_captures(review_id, receipt)
         if path.exists():
             _preserve_review_receipt_generation(path)
         atomic_write_json(path, receipt)
@@ -32345,11 +33194,35 @@ def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
+    if target:
+        # Under spec.approval pr, readiness comes from an approved, merged spec PR.
+        try:
+            approval_mode = spec_approval_mode()
+        except ValueError as exc:
+            error_exit(str(exc), use_json=args.json)
+        if approval_mode == "pr":
+            current = normalize_epic(
+                load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+            )
+            recorded = current.get("spec_approval")
+            if not (isinstance(recorded, dict) and recorded.get("approved") is True):
+                status = spec_approval_status(flow_dir, current)
+                if not status["approved"]:
+                    error_exit(
+                        spec_approval_pending_message(args.id, status["reason"]),
+                        use_json=args.json,
+                    )
+
     with _review_sidecar_lock(flow_dir, args.id):
         spec_data = normalize_epic(
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
         )
         changed = bool(spec_data.get("ready", False)) != target
+        recorded = spec_data.get("spec_approval")
+        if not target and isinstance(recorded, dict) and recorded.get("approved") is True:
+            # Withdrawing readiness withdraws the spec PR approval: a revision needs its own.
+            spec_data["spec_approval"] = {"approved": False, "invalidated_at": now_iso()}
+            changed = True
         if changed:
             spec_data["ready"] = target
             spec_data["updated_at"] = now_iso()
@@ -32371,7 +33244,7 @@ def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
 
 
 def cmd_spec_ready(args: argparse.Namespace) -> None:
-    """Mark a spec ready for execution (human-owned gate; fn-58.1)."""
+    """Mark a spec ready for execution (the consent gate; fn-58.1)."""
     _cmd_spec_set_ready(args, target=True)
 
 
@@ -36827,6 +37700,10 @@ def cmd_start(args: argparse.Namespace) -> None:
         error_exit(f"Task {args.id} has neither spec nor epic", use_json=args.json)
     depends_on = task_def.get("depends_on", []) or []
 
+    # spec.approval pr: no implementation before the spec PR is approved and merged.
+    _spec_approval_gate(task_def["spec"], args.json)
+    evidence_test_report_notice(args.id)
+
     # Validate all dependencies are done (outside lock - this is read-only check)
     if not args.force:
         for dep in depends_on:
@@ -37127,7 +38004,9 @@ def cmd_done(args: argparse.Namespace) -> None:
         except ValueError as e:
             error_exit(str(e), use_json=args.json)
 
-        # All validation passed - now write (spec to tracked file, runtime to state-dir)
+        # All validation passed - now write. Opt-in evidence goes first, so a
+        # failed evidence write leaves the task in progress and retryable.
+        evidence_paths = evidence_record_task(args.id, evidence, summary)
         atomic_write(task_spec_path, updated_spec)
         store.save_runtime(
             args.id,
@@ -37146,7 +38025,7 @@ def cmd_done(args: argparse.Namespace) -> None:
                 "message": f"Task {args.id} completed",
                 # fn-192 R3: the tracked paths this command wrote, so a
                 # caller can stage them without guessing.
-                "modified_paths": [str(task_spec_path)],
+                "modified_paths": [str(task_spec_path)] + [str(p) for p in evidence_paths],
             }
         )
     else:
@@ -42793,6 +43672,16 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     specs.sort(key=lambda spec: spec["id"])
     if spec_id and not any(spec["id"] == spec_id for spec in specs):
         raise ValueError(f"Spec {spec_id} not found")
+    # spec.approval pr: a spec is ready only once its spec PR merged with an approval.
+    approval_pending = {}
+    if spec_approval_mode() == "pr":
+        for spec in specs:
+            if spec["status"] == "done" or (spec_id and spec["id"] != spec_id):
+                continue
+            approval = spec_approval_status(flow_dir, spec)
+            spec["ready"] = approval["approved"]
+            if not approval["approved"]:
+                approval_pending[spec["id"]] = spec_approval_pending_message(spec["id"], approval["reason"])
     status = subprocess.run(["git", "status", "--porcelain", "-z"], cwd=repo,
                             capture_output=True, check=True).stdout.split(b"\0")
     dirty = []
@@ -42910,7 +43799,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
             "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
             "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
             "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}" for t in tasks if t["status"] == "blocked"],
-            "pr_exists": None if prs["probe_failed"] else bool(pr_ref), "pr_ref": pr_ref})
+            "pr_exists": None if prs["probe_failed"] else bool(pr_ref), "pr_ref": pr_ref,
+            **({"approval_pending": approval_pending[spec["id"]]} if spec["id"] in approval_pending else {})})
         # Every candidate is routed in code; only the selected one carries full PR history.
         route = judge_route(state)
         if candidate is not selected:
@@ -54683,6 +55573,9 @@ def _add_deep_pass_parser(sub, backend: str):
 
 
 def main() -> None:
+    # Lazy flowctl_tracker imports must not write __pycache__ into the install:
+    # hosts that integrity-check the plugin cache (Muse Code) disable it.
+    sys.dont_write_bytecode = True
     _reconfigure_stdio_utf8()
     parser = argparse.ArgumentParser(
         description="flowctl - CLI for .flow/ task tracking",
@@ -54700,6 +55593,10 @@ def main() -> None:
     p_judge.add_argument("--role-model", help="Model pinned by the dispatched role")
     p_judge.add_argument("--can-spawn-model", action="store_true", help="Host supports native model selection")
     p_judge.add_argument("--can-bridge", action="store_true", help="Host verified bridge reach")
+    p_judge.add_argument("--effort-levels", help="Worker spawn's effort levels, lowest first, comma-separated")
+    p_judge.add_argument("--default-effort", help="Effort a worker spawn without one runs at")
+    p_judge.add_argument("--explicit-effort", help="Effort the invocation or routing block names")
+    p_judge.add_argument("--role-effort", help="Effort pinned by the dispatched role")
     p_judge.add_argument("--json", action="store_true", help="JSON output")
     p_judge.set_defaults(func=cmd_judge)
 
@@ -54711,7 +55608,7 @@ def main() -> None:
     # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
     p_setup_status = subparsers.add_parser("setup-status", help="Read setup probes in one call")
     p_setup_status.add_argument("--plugin-root")
-    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode"], default="claude-code")
+    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode", "muse"], default="claude-code")
     p_setup_status.add_argument("--json", action="store_true")
     p_setup_status.set_defaults(func=cmd_setup_status)
 
@@ -56495,6 +57392,20 @@ def main() -> None:
     )
     p_brief.set_defaults(func=cmd_brief)
 
+    p_trace = subparsers.add_parser(
+        "trace",
+        help=(
+            "Per-criterion traceability matrix (tests, QA, review findings, "
+            "approvals) with a gap check; exit 1 on gaps, 2 on error"
+        ),
+    )
+    p_trace.add_argument("id", help="Spec id (fn-N or fn-N-slug)")
+    p_trace.add_argument("--format", choices=("md", "csv"), default="md",
+                         help="Matrix format (default: md)")
+    p_trace.add_argument("--json", action="store_true",
+                         help="JSON rows plus the gap-check result")
+    p_trace.set_defaults(func=cmd_trace)
+
     # repo-map list (fn-50.2)
     p_repo_map = subparsers.add_parser(
         "repo-map",
@@ -56879,11 +57790,11 @@ def main() -> None:
         p_close.add_argument("--json", action="store_true", help="JSON output")
         p_close.set_defaults(func=cmd_spec_close)
 
-        # fn-58.1 (R2): human-owned readiness gate. Lazy on-disk — the sidecar
+        # fn-58.1 (R2): the readiness (consent) gate. Lazy on-disk — the sidecar
         # carries `ready` only after a toggle changes state; both verbs are
         # idempotent no-ops when the value already matches.
         p_ready = parent_sub.add_parser(
-            "ready", help=f"Mark {noun} ready for execution (human-owned gate)"
+            "ready", help=f"Mark {noun} ready for execution (consent gate: a person, or a goal run for a child it minted)"
         )
         p_ready.add_argument(
             "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
@@ -57635,6 +58546,8 @@ def main() -> None:
     args = parser.parse_args()
     try:
         args.func(args)
+        if args.func in (cmd_spec_create, cmd_spec_set_plan, cmd_task_create, cmd_task_set_spec):
+            spec_approval_authoring_notice()
         sys.stdout.flush()
     except CrossProcessLockError as e:
         error_exit(f"Runtime lock unavailable: {e}", use_json=args.json)

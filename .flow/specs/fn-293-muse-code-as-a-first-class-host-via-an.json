@@ -1,0 +1,148 @@
+{
+  "branch_name": "fix/muse-code-support",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-12T20:57:59.354913Z",
+  "created_at": "2026-10-12T20:14:38.913707Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-293-muse-code-as-a-first-class-host-via-an",
+  "impl_review_rounds": {
+    "fn-293-muse-code-as-a-first-class-host-via-an.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "5ea6eeca49a2bb310d34dbc821ac2c8916c12f8101ee6736f4d5dd18def0ef48",
+      "backend": "codex",
+      "base_sha": "8e3d7b80d07eabf7eff30ef8b50746c634fd26fe",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-19eb07dc65dc464889251c341db9dadb",
+            "classification": "introduced",
+            "findingId": "finding-19eb07dc65dc464889251c341db9dadb",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f314e0e1a842eed7a755527cc3cc477e",
+            "classification": "introduced",
+            "findingId": "finding-f314e0e1a842eed7a755527cc3cc477e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "173552638d3460b81cb1e606e8844e4d035e63e5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 2181,
+      "output_sha256": "c808a6d9baaa5b21973e7203e6f70859e7983722a2c7470a7e81fffc2c692fa7",
+      "reservation_id": "69f48068467544abb9b58abffdf936e8",
+      "round_consumed": true,
+      "scope": "impl:fn-293-muse-code-as-a-first-class-host-via-an.1",
+      "superseded_by": null,
+      "task": "fn-293-muse-code-as-a-first-class-host-via-an.1",
+      "timestamp": "2026-10-12T20:46:34.364716Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "d446935626c40b59dce970b322d58f8c07e7e4ff4438d73d412dc72b3b76b31e",
+      "backend": "codex",
+      "base_sha": "8e3d7b80d07eabf7eff30ef8b50746c634fd26fe",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-19eb07dc65dc464889251c341db9dadb",
+            "classification": "introduced",
+            "findingId": "finding-19eb07dc65dc464889251c341db9dadb",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-f314e0e1a842eed7a755527cc3cc477e",
+            "classification": "introduced",
+            "findingId": "finding-f314e0e1a842eed7a755527cc3cc477e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "eed90c0d4c5fab3e21734945f83a5cf925d6bf3e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1761,
+      "output_sha256": "f6a1b254654186445b7517219b1977592fdadffe3e104cd9e86bd3d792514b72",
+      "reservation_id": "84c17c7e7b7243868448a0488f009dbb",
+      "round_consumed": true,
+      "scope": "impl:fn-293-muse-code-as-a-first-class-host-via-an.1",
+      "superseded_by": null,
+      "task": "fn-293-muse-code-as-a-first-class-host-via-an.1",
+      "timestamp": "2026-10-12T20:51:55.291150Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-293-muse-code-as-a-first-class-host-via-an.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-293-muse-code-as-a-first-class-host-via-an.1": 0
+  },
+  "spec_path": ".flow/specs/fn-293-muse-code-as-a-first-class-host-via-an.md",
+  "status": "done",
+  "title": "Muse Code as a first-class host via an installer",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-12T21:30:01.755110Z"
+}

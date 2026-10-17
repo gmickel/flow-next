@@ -30,7 +30,7 @@ It's also fast now. On the same model, the working change comes back in about th
 
 Every stage prints `ran`, `skipped(<reason>)` or `failed(<reason>)`, so you can see what happened and what didn't. The model that wrote a diff never reviews it. Specs, decisions, task state and receipts live under `.flow/` in your repository and stay readable if you stop using Flow-Next. `flow --explain <anything>` shows the route it would take, and why, without running it.
 
-It runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build and OpenCode.
+It runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode and Meta Muse Code.
 
 > 📖 **[Documentation: flow-next.dev](https://flow-next.dev)** · 💬 **[Discord](https://discord.gg/f3DYq8AAm5)**
 
@@ -115,7 +115,7 @@ droid plugin marketplace add \
 
 Use installation commands in your terminal or the host's plugin interface as shown above. Workflow invocations belong in the agent conversation. Codex uses `$flow-next-<name>`; OpenCode uses `/flow-next-<name>`; the other hosts accept `/flow-next:<name>` (Cursor also accepts the hyphen form).
 
-**Cursor, Grok Build, or OpenCode?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation. Codex installs are per home; set `CODEX_HOME` when you use more than one.
+**Cursor, Grok Build, OpenCode, or Muse Code?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation. Codex installs are per home; set `CODEX_HOME` when you use more than one.
 
 ## Start one change
 
@@ -142,6 +142,7 @@ The full documentation is at [flow-next.dev](https://flow-next.dev). This reposi
 - [Evidence & evals](https://flow-next.dev/project/evidence/): the benchmark against a plain agent, the research behind verification, and our own evals, including the ones that killed a feature.
 - [Going autonomous](https://flow-next.dev/autonomy/going-autonomous/): `flow --auto`, `--until=merge`, the Decisions list and when a run stops.
 - [For teams](https://flow-next.dev/guides/for-teams/): the spec as the handover between product, engineering and the agent, plus the tracker bridge to Linear, GitHub, GitLab and Jira.
+- [Regulated environments](https://flow-next.dev/guides/regulated-environments/): opt-in committed development evidence (`evidence.persist`), spec approval by pull request (`spec.approval`) and the `flowctl trace` matrix, which feed your team's validation rather than replace it.
 - [Model routing](https://flow-next.dev/guides/model-routing/): send each job to the model or harness that fits it, from one block in your instruction file.
 - [Review backends](https://flow-next.dev/reference/review-backends/): Codex, Copilot, Cursor, Claude and host review, and why the reviewer must come from another family.
 - [Configuration](https://flow-next.dev/flowctl/configuration/): every `.flow/config.json` key, generated from the schema.

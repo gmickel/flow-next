@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#22C55E"
+color: green
 ---
 
 You are a testing scout for agent readiness assessment. Scan for test infrastructure that enables agents to verify their work.

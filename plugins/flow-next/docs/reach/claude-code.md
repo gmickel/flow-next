@@ -7,7 +7,7 @@ How this harness obtains a model for a [tier](../orchestration.md#tiers-what-kin
 | Mechanism | Here |
 |---|---|
 | In-session model | **Yes** - chosen in the harness; it is the default executor for every unset tier. |
-| In-host subagent | **Yes** - subagents are spawned in-host, and an agent definition's model field is honored, so a tier can execute on a different model without leaving the session. |
+| In-host subagent | **Yes** - subagents are spawned in-host, and an agent definition's model field is honored, so a tier can execute on a different model without leaving the session. On current builds the spawn also takes an `effort` (`low`, `medium`, `high`, `xhigh`, `max`, lowest first; observed on 2.1.296, absent on 2.1.283, so check the spawn's parameters before passing effort facts), which overrides an agent definition's `effort` field; a level the model lacks runs as the highest level it supports below it. A spawn without one runs at the session's effort: `--effort` or settings, else the model's default (documented 2026-10-16). |
 | Shell out to another CLI | **Yes** - the harness runs shell commands, so any CLI installed and authenticated on the machine is reachable, in either direction. |
 
 ## What is unavailable
@@ -26,7 +26,7 @@ The `claude` review backend (`review.backend claude`, observed 2026-09-05) shell
 
 ## Driving unattended
 
-Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days).
+Run `/flow-next:flow --auto` by default. One invocation drives one ready item hop after hop to its PR, and the next invocation takes the next item. Under `/loop` or `/goal`, run one hop per interval with `/loop 30m /flow-next:flow --auto --tick` or `/goal keep running /flow-next:flow --auto --tick until PILOT_VERDICT=NO_WORK` (`/loop` jobs expire after 7 days). For an outcome larger than one spec, `/flow-next:flow --goal <spec-id or source> --until=merge` builds child specs toward it the same way; drive it with `/goal keep running /flow-next:flow --goal <goal> --until=merge until PILOT_VERDICT=GOAL_MET or a stop`.
 
 ## Discover, then invoke
 

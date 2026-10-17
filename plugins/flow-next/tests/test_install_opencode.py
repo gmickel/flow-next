@@ -51,6 +51,10 @@ READ_SURFACE_EXCLUSIONS = {
         "dest-root ownership/detection file written by the installer, "
         "not a support dir to copy"
     ),
+    ".flow-next-muse-bundle": (
+        "Muse bundle detection marker written by install-muse.sh, "
+        "not a support dir to copy"
+    ),
     "commit": "non-filesystem noise (URL fragment)",
     "..": "non-filesystem noise (../../../ matching ../../ then ..)",
 }

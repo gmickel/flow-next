@@ -14,7 +14,7 @@
   change legitimately altered), and record it in the Decisions list. A call that is not (irreversible, a product
   choice the spec does not settle, or one that makes merging unsafe) stops the run `NEEDS_HUMAN`
   before the merge.
-  Fix a discovery only when it blocks the goal, as its own commit; list the rest as follow-ups
+  Fix a discovery only when it blocks the change you were asked for, as its own commit; list the rest as follow-ups
   in the final report. Keep a
   Decisions list in the final report and the pull request body: each default you chose, finding
   you declined and review you skipped, with the evidence behind it.

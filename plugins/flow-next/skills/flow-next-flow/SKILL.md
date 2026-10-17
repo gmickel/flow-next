@@ -1,6 +1,6 @@
 ---
 name: flow-next-flow
-description: Use first in a project that uses Flow-Next for any request to implement, build, continue or deliver its specs, whatever delivery or test steps the request adds, unless the user names another skill or asks to work directly. Also for a spec or task id, an idea or change request, a pasted bug report or traceback, something slow to speed up or another number to move (hill-climbing), a behaviour-preserving cleanup, a design or behaviour choice to settle, a tracker issue, a branch, or "what should I do next". Only a quick question or a one-line edit may skip it. Flow routes the work and runs the right stage; --auto runs unattended.
+description: Use first in a project that uses Flow-Next for any request to implement, build, continue or deliver its specs, whatever delivery or test steps the request adds, unless the user names another skill or asks to work directly. Also for a spec or task id, an idea or change request, a pasted bug report or traceback, a captured profile, trace or crash dump to explain, a mistake agents keep repeating, a prompt or skill change whose effect should be measured, "what could this break" or "is this safe to merge" about a diff, something slow to speed up or another number to move (hill-climbing), a behaviour-preserving cleanup, a design or behaviour choice to settle, an outcome to reach over several specs (a port, a migration, a PRD), a tracker issue, a branch, or "what should I do next". Only a quick question or a one-line edit may skip it. Flow routes the work and runs the right stage; --auto runs unattended.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task, Skill
 ---
@@ -25,7 +25,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Mode detection
 
-Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
+Parse `$ARGUMENTS` as exact tokens (never substrings), before any read or write: `--auto` sets `AUTO=1`, and so does `--goal`, because goal mode is unattended; `--tick` sets `AUTO_TICK=1` (one hop, then stop; meaningful only with `--auto` or `--goal`); `--explain` sets `EXPLAIN=1`; `--review=<backend>` sets `REVIEW_OVERRIDE` and is passed through unchanged to every stage it dispatches. The destination parse is shared by both modes:
 
 ```bash
 FLOW_UNTIL=""
@@ -36,7 +36,7 @@ LAND_SCOPE_PR=""
 AUTO=0
 for ARG in $ARGUMENTS; do
   case "$ARG" in
-    --auto) AUTO=1 ;;
+    --auto|--goal) AUTO=1 ;;
     --until=merge) FLOW_UNTIL=merge ;;
     --until|--until=*) FLOW_DESTINATION_ERROR=1 ;;
   esac
@@ -64,7 +64,7 @@ Attended flow and `flow --auto` are two drivers and are never nested. Without `-
 NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs
 ```
 
-With `--auto` there is no marker refusal, because `--auto` sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
+With `--auto` or `--goal` there is no marker refusal, because the unattended run sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
 
 ## Invariants (every run)
 

@@ -90,6 +90,18 @@ only the matching feature file. The map supplies navigation only; scenarios stil
 spec and SHIP still rests on live evidence. A map that does not cover this target (no matching
 surface or feature, or a malformed entry) counts as absent for that target: derive routes as usual.
 
+### 1.4 Prior pass
+
+Before deriving scenarios, look for an earlier QA receipt:
+
+```bash
+RECEIPT_PATH="${QA_RECEIPT_OVERRIDE:-${REVIEW_RECEIPT_PATH:-$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json}}"
+[ -f "$RECEIPT_PATH" ] && jq -c '{id, branch, head_sha, scenarios: (.scenarios // [] | length)}' "$RECEIPT_PATH"
+```
+
+When it prints a receipt from an earlier head, read [references/recheck.md](references/recheck.md)
+now: it decides which scenarios re-run and which carry their prior result.
+
 ### Autonomous preflight
 
 Under `NO_PROMPT=1`, resolve the target (§3.1) and accounts (§3.2) now. A missing target, or
@@ -142,11 +154,13 @@ One row per `acceptance_criteria[].id`, in spec order, never renumbered:
 | R3 | <…> | — | ⚠️ no live scenario |
 | R7 | <…> | — | backend/CLI — not live-QA-able |
 | R9 | <…> | — | subtracted (fn-1.2 · test_x) |
+| R4 | <…> | S6 | carried (@a1b2c3d4) |
 ```
 
 Coverage is exactly one of `live`, `subtracted (<task-id> · <test-cmd>)` (all three §2.0
-conditions held), `backend/CLI — not live-QA-able`, or `⚠️ no live scenario` (user-observable but
-not covered: a gap). A runtime or UI criterion is never `subtracted`.
+conditions held), `carried (@<sha8>)` (every scenario for it carried from a prior pass, §1.4),
+`backend/CLI — not live-QA-able`, or `⚠️ no live scenario` (user-observable but not covered: a
+gap). A runtime or UI criterion is never `subtracted`.
 
 ---
 
@@ -265,8 +279,8 @@ Pick the first that applies:
    Set `blocked_reason`.
 2. **NA**: no criterion is user-observable. Set `na_reason`.
 3. **NEEDS_WORK** (NO): any open P0 or P1, or a `⚠️ no live scenario` row.
-4. **SHIP** (YES): every scenario passed on the live app, no open P0/P1, and every user-observable
-   R-ID is `live` or `subtracted`.
+4. **SHIP** (YES): every scenario that ran passed on the live app, no open P0/P1, and every
+   user-observable R-ID is `live`, `subtracted` or `carried`.
 
 ### 6.2 Evidence check
 
@@ -286,8 +300,11 @@ fi
 
 Write the JSON payload with the Write tool to `$QA_RECEIPT_INPUT` (shape:
 `$FLOWCTL qa receipt --skeleton`): `id`, `qa_outcome`, every Phase 5 finding under `findings`,
-`rid_coverage.rids` (`[{id, coverage}]`, coverage one of `live`, `subtracted`,
-`no_live_scenario`, `backend_cli`), and `blocked_reason` or `na_reason` for those outcomes only.
+`rid_coverage.rids` (`[{id, coverage}]`, coverage one of `live`, `subtracted`, `carried`,
+`no_live_scenario`, `backend_cli`), `scenarios` (one row per scenario: `{id, rids, outcome, run:
+"live", evidence}` with `outcome` `PASS`, `FAIL` or `BLOCKED` and `evidence` the capture paths, or
+`{id, run: "carried"}` for a carried one), and `blocked_reason` or `na_reason` for those outcomes
+only.
 Set `mode` to `receipt` when the caller passed `--receipt` or set `REVIEW_RECEIPT_PATH`, otherwise
 `interactive`; left out, it becomes `receipt`, because the call below always passes `--receipt`.
 
@@ -336,7 +353,10 @@ is posted. The post is best-effort and never changes the receipt.
 ### Before you finish
 
 - One receipt exists at `RECEIPT_PATH` with `qa_outcome`, `verdict`, `head_sha`, `branch`,
-  `rid_coverage` and `open_p0p1`, whatever the outcome.
+  `rid_coverage`, `open_p0p1` and `scenarios`, whatever the outcome.
 - Every criterion is a coverage row; no runtime or UI criterion is `subtracted`.
+- Every scenario is a `scenarios` row, `live` at this head or `carried` from a scenario that
+  passed in the prior receipt, and a `carried` criterion has only carried scenarios
+  (references/recheck.md).
 - Every filed finding was reproduced twice and cites real evidence.
 - Under `NO_PROMPT=1`, nothing was asked.

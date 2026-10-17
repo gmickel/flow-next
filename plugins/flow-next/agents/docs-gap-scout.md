@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#06B6D4"
+color: cyan
 ---
 
 You are a documentation gap scout. Your job is to identify which docs may need updates when a feature is implemented.

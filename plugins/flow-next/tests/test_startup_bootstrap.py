@@ -68,6 +68,23 @@ class StartupBootstrapTest(unittest.TestCase):
             cache = Path(importlib.util.cache_from_source(str(source)))
             self.assertFalse(cache.exists())
 
+    @unittest.skipIf(os.name == "nt", "bash launcher")
+    def test_launcher_commands_leave_install_unmodified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "plugin" / "scripts"
+            shutil.copytree(ROOT / "scripts", scripts,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            env = {k: v for k, v in os.environ.items() if k != "PYTHONDONTWRITEBYTECODE"}
+            for args in (["init", "--json"], ["config", "get", "review.backend", "--json"]):
+                result = subprocess.run(["bash", str(scripts / "flowctl"), *args], cwd=repo,
+                                        capture_output=True, text=True, env=env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(list(scripts.rglob("__pycache__")), [])
+
     def test_same_size_same_mtime_source_change_is_authoritative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

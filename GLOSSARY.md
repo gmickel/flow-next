@@ -589,7 +589,7 @@ The one read-only health check a drive-capable run performs before driving an in
 
 ## Routing reference
 
-The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, `flow --auto`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files. The same directory also holds two gated auto-only references (`backlog-mode.md`, `qa-stage.md`) that `auto.md` reads under `--backlog` and the QA gate; they are workflow, not routing rules, and carry no decision record.
+The set of six small reference files the flow skill owns under `plugins/flow-next/skills/flow-next-flow/references/`, one per routing rule, progressively disclosed through step-scoped conditional pointers so the agent reads only the files the current step needs: `route-matrix.md`, `spec-count.md`, `plan-vs-no-plan.md`, `gate-selection.md`, `prototype-before-ask.md`, and `tail.md`. Each opens with a decision record. Flow, `flow --explain`, `flow --auto`, capture's closer, plan's next-steps menu, and work's zero-task ask read the same files. The same directory also holds three gated auto-only references (`backlog-mode.md`, `goal-mode.md`, `qa-stage.md`) that `auto.md` reads under `--backlog`, `--goal` and the QA gate; they are workflow, not routing rules, and carry no decision record.
 
 ## Driver
 
@@ -598,6 +598,26 @@ The thing that invokes the unattended conductor and owns repetition: a human run
 _Avoid_: mode, conductor mode, autopilot
 
 _Relates to_: Routing reference, Hop, Tick, Long-horizon run, Pilot
+
+## Goal spec
+
+An ordinary spec that `/flow-next:flow --goal` works toward: its acceptance criteria are the bar, its Boundaries hold what no child spec may change, and it stays unready, because the `--goal` invocation is the consent. A goal run measures the bar, mints the next child spec through capture `from:goal`, builds it through the `flow --auto` hop loop, and repeats until `GOAL_MET` or a person is needed. Not a host's `/goal` command, which is a driver that can re-invoke a goal run.
+
+_Avoid_: epic, program, milestone
+
+_Relates to_: Goal log, Driver, Long-horizon run, Integration branch
+
+## Goal log
+
+The `## Goal log` section a goal run appends to its goal spec after acting: dated entries for the source, each measurement with its commit, each child minted and why, each child's outcome, and each open question for the person. It is the run's only memory across sessions; the next run reads it from disk.
+
+_Relates to_: Goal spec
+
+## Integration branch
+
+The `goal/<branch>` branch a goal run's children land on by default, named from the goal spec's `branch_name`. The run merges the default branch into it before each measurement, measures on it, and at the end opens one final pull request from it to the default branch. A sentence in the goal spec opts out, and children then land on the default branch.
+
+_Relates to_: Goal spec, Goal log
 
 ## Hop
 

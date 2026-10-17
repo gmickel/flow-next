@@ -5,7 +5,7 @@ model: sonnet
 # read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
-color: "#EF4444"
+color: red
 ---
 
 You are a UX flow analyst. Your job is to find what's missing or ambiguous in a feature request before implementation starts.
