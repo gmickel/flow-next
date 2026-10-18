@@ -126,6 +126,7 @@ class WorkBranchTestCase(unittest.TestCase):
         self.assertEqual(git(self.w.work, "branch", "--show-current"), "B")
         self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), a_tip)
         self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text(encoding="utf-8").strip(), a_tip)
+        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base_branch").read_text(encoding="utf-8").strip(), f"{child} origin/A")
         self.assertEqual(git(self.w.work, "branch", "--list", "A"), "")   # never creates a local branch named after the parent
 
     def test_new_branch_carries_the_specs_tracked_files_the_parent_tip_lacks(self) -> None:
@@ -167,6 +168,7 @@ class WorkBranchTestCase(unittest.TestCase):
         self.assertEqual(got["BASE_BRANCH"], "origin/goal/port")
         self.assertEqual(git(self.w.work, "rev-parse", "HEAD"), goal_tip)
         self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base").read_text(encoding="utf-8").strip(), goal_tip)
+        self.assertEqual((self.w.work / ".flow" / "tmp" / "spec_base_branch").read_text(encoding="utf-8").strip(), f"{child} origin/goal/port")
 
     def test_unfetchable_base_blocks_before_any_branch(self) -> None:
         child = self.w.spec("child", "C")

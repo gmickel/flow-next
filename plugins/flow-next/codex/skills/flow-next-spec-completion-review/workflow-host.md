@@ -52,19 +52,28 @@ an empty blob, and falsely refuses the next round as NOT_RETRYABLE. The fence
 fails closed (no reservation) whenever the range cannot be bound or diffed.
 
 ```bash
-DIFF_BASE="${BASE_COMMIT:-main}"
-# master is a fallback for the DEFAULT only. An explicit BASE_COMMIT that does
-# not resolve fails closed: silently reviewing against master would bind and
-# hash a range the caller never asked for.
-if ! git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1; then
-  if [[ -n "${BASE_COMMIT:-}" ]]; then
-    echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
-    exit 1
-  fi
-  DIFF_BASE="master"
+# The CLI backends' order: an explicit BASE_COMMIT, the base work recorded for
+# this spec, the chain parent's branch, then the repository's default branch.
+# An explicit BASE_COMMIT that does not resolve fails closed: silently reviewing
+# against another base would bind and hash a range the caller never asked for.
+if [[ -n "${BASE_COMMIT:-}" ]]; then
+  git rev-parse --verify --quiet "$BASE_COMMIT^{commit}" >/dev/null \
+    || { echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2; exit 1; }
+  DIFF_BASE="$BASE_COMMIT"
+else
+  DIFF_BASE="" REC_SPEC="" REC_BASE=""
+  read -r REC_SPEC REC_BASE < "$(git rev-parse --show-toplevel)/.flow/tmp/spec_base_branch" 2>/dev/null || true
+  [[ "$REC_SPEC" == "$SPEC_ID" ]] || REC_BASE=""
+  PARENT_BRANCH="$("$FLOWCTL" spec chain "$SPEC_ID" --json 2>/dev/null | jq -r '.parent_branch // empty')" || PARENT_BRANCH=""
+  for CANDIDATE in "$REC_BASE" ${PARENT_BRANCH:+"origin/$PARENT_BRANCH" "$PARENT_BRANCH"} \
+      "$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" \
+      origin/main main origin/master master; do
+    if [[ -n "$CANDIDATE" ]] && git rev-parse --verify --quiet "$CANDIDATE^{commit}" >/dev/null; then
+      DIFF_BASE="$CANDIDATE"; break
+    fi
+  done
+  [[ -n "$DIFF_BASE" ]] || { echo "cannot resolve diff base; pass BASE_COMMIT; not reserving a round" >&2; exit 1; }
 fi
-git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
-  || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
 REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.env"
 REVIEW_HEAD_SHA="$(git rev-parse HEAD)" || exit 1
 REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
