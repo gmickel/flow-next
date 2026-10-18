@@ -14,6 +14,19 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLOWCTL_SOURCE_DIR="$SCRIPT_DIR"
 
+# FLOWCTL_BIN names the flowctl a host orchestrator wants every call to use.
+# Delegate before the Python probe so that flowctl needs no Python. A value
+# that is not executable fails loudly: falling back would let two flowctls
+# write one repo. A value naming this launcher runs it normally.
+if [ -n "${FLOWCTL_BIN:-}" ] && ! [ "$FLOWCTL_BIN" -ef "${BASH_SOURCE[0]}" ]; then
+  if [ -f "$FLOWCTL_BIN" ] && [ -x "$FLOWCTL_BIN" ]; then
+    exec "$FLOWCTL_BIN" "$@"
+  fi
+  echo "flowctl: FLOWCTL_BIN is set but is not an executable file: $FLOWCTL_BIN" >&2
+  echo "  Fix the path, or unset FLOWCTL_BIN to use the plugin's bundled flowctl." >&2
+  exit 1
+fi
+
 FLOW_PY=()
 FLOW_PY_TOO_OLD=()
 for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
