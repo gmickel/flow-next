@@ -350,11 +350,14 @@ class FlowctlBinDelegationTest(unittest.TestCase):
 
     def test_non_executable_value_fails_loudly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            for value in (str(Path(tmp) / "missing"), tmp):
+            plain = Path(tmp) / "plain"
+            plain.write_text("#!/bin/sh\necho ran\n", encoding="utf-8")
+            plain.chmod(0o644)
+            for value in (str(Path(tmp) / "missing"), tmp, str(plain)):
                 result = self._run(SCRIPT_LAUNCHER, "usage", flowctl_bin=value)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertIn("FLOWCTL_BIN is set but is not an executable file", result.stderr)
+                self.assertIn("FLOWCTL_BIN is set but could not be run", result.stderr)
 
     def test_value_naming_this_launcher_runs_it(self) -> None:
         expected = BUNDLED_USAGE.read_text(encoding="utf-8")
