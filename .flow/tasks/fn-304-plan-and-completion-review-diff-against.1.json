@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-304-plan-and-completion-review-diff-against",
   "spec_path": ".flow/tasks/fn-304-plan-and-completion-review-diff-against.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Plan and completion review diff against the spec's own base",
   "updated_at": "2026-10-18T10:55:57.214723Z"
 }

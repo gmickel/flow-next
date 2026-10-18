@@ -131,7 +131,7 @@
     "impl:fn-304-plan-and-completion-review-diff-against.1": 0
   },
   "spec_path": ".flow/specs/fn-304-plan-and-completion-review-diff-against.md",
-  "status": "open",
+  "status": "done",
   "title": "Plan and completion review diff against the spec's own base",
   "tracker": {
     "baseHashFlow": null,
@@ -144,5 +144,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-18T11:11:14.838832Z"
+  "updated_at": "2026-10-18T11:15:16.003929Z"
 }
