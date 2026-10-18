@@ -28,13 +28,17 @@ REM decides what runs (PATHEXT finds flowctl.exe from a bare flowctl path); a
 REM value it cannot run fails loudly, because falling back would let two
 REM flowctls write one repo. A value naming this launcher (or its bash twin)
 REM runs it normally; %%~fI normalizes slashes so a forward-slash path to this
-REM file cannot recurse. 9009 is cmd.exe's "not recognized" exit code.
+REM file cannot recurse. The hint needs a pre-check: a failed CALL sets
+REM errorlevel 1, which a delegated flowctl can also return.
 IF NOT DEFINED FLOW_NEXT_FLOWCTL GOTO :probe
 FOR %%I IN ("%FLOW_NEXT_FLOWCTL%") DO SET "_bin=%%~fI"
 IF /I "%_bin%"=="%self%" GOTO :probe
 IF /I "%_bin%"=="%dp0%flowctl" GOTO :probe
+SET "_found="
+IF EXIST "%_bin%" IF NOT EXIST "%_bin%\*" SET "_found=1"
+FOR %%E IN (%PATHEXT%) DO IF EXIST "%_bin%%%E" SET "_found=1"
+IF NOT DEFINED _found GOTO :bad_bin
 CALL "%_bin%" %*
-IF ERRORLEVEL 9009 IF NOT ERRORLEVEL 9010 GOTO :bad_bin
 EXIT /b %errorlevel%
 
 :bad_bin

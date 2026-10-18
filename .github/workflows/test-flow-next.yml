@@ -531,7 +531,7 @@ jobs:
             $env:FLOW_NEXT_FLOWCTL = $bad
             $out = & $flowctl init --json 2>&1 | Out-String
             Write-Host "[$bad] exit $LASTEXITCODE`n$out"
-            Check "unrunnable FLOW_NEXT_FLOWCTL fails without falling back ($bad)" ($LASTEXITCODE -ne 0 -and $out -notmatch '"success": true' -and -not (Test-Path (Join-Path $repo ".flow"))) "exit $LASTEXITCODE"
+            Check "unrunnable FLOW_NEXT_FLOWCTL fails without falling back ($bad)" ($LASTEXITCODE -eq 1 -and $out -match "FLOW_NEXT_FLOWCTL is set but could not be run" -and $out -notmatch '"success": true' -and -not (Test-Path (Join-Path $repo ".flow"))) "exit $LASTEXITCODE"
           }
 
           # An unrelated `flowctl` CLI tells its users to export FLOWCTL_BIN; it must change nothing.
@@ -549,6 +549,7 @@ jobs:
       - name: Git Bash — bash `flowctl` delegates to FLOW_NEXT_FLOWCTL
         shell: bash
         run: |
+          set +e  # the checks below run commands that are meant to exit non-zero
           failed=0
           check() { if [ "$2" = ok ]; then echo "PASS: $1"; else echo "FAIL: $1 -> $3"; failed=1; fi; }
           FLOWCTL="$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl"
