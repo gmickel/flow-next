@@ -6,6 +6,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.0.2] - 2026-10-18
+
+### Fixed
+
+- **Completion review judges only your spec's own changes when the spec lands on a branch other than your default branch.** On a release integration branch, a chained spec or a `flow --goal` child, completion review now compares against the branch the spec was built on, so commits from the other specs on that branch no longer count as part of this one. Without `--base`, it uses the base work started the spec from, then the parent spec's branch, then your default branch. Thanks to @DanielKillenberger for reporting it in #569.
+- **Plan review and completion review run on repositories whose default branch is `master`.** Without `--base`, both now find your default branch the way implementation review does. Before, they stopped with `cannot resolve review snapshot: main...HEAD`. Thanks to @DanielKillenberger for reporting it in #538.
+
 ## [flow-next 9.0.1] - 2026-10-18
 
 ### Fixed
