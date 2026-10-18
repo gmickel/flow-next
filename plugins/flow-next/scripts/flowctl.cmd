@@ -21,23 +21,25 @@ EXIT /b
 SETLOCAL
 CALL :find_dp0
 
-REM FLOWCTL_BIN names the flowctl a host orchestrator wants every call to use.
-REM Delegate before the Python probe so that flowctl needs no Python. A value
-REM that is not a file fails loudly: falling back would let two flowctls write
-REM one repo. A value naming this launcher (or its bash twin) runs it normally;
-REM %%~fI normalizes slashes so a forward-slash path to this file cannot recurse.
-IF NOT DEFINED FLOWCTL_BIN GOTO :probe
-FOR %%I IN ("%FLOWCTL_BIN%") DO SET "_bin=%%~fI"
+REM FLOW_NEXT_FLOWCTL names the flowctl a host orchestrator wants every call to use
+REM (never FLOWCTL_BIN: an unrelated flowctl CLI tells its users to set that).
+REM Delegate before the Python probe so that flowctl needs no Python. cmd.exe
+REM decides what runs (PATHEXT finds flowctl.exe from a bare flowctl path); a
+REM value it cannot run fails loudly, because falling back would let two
+REM flowctls write one repo. A value naming this launcher (or its bash twin)
+REM runs it normally; %%~fI normalizes slashes so a forward-slash path to this
+REM file cannot recurse. 9009 is cmd.exe's "not recognized" exit code.
+IF NOT DEFINED FLOW_NEXT_FLOWCTL GOTO :probe
+FOR %%I IN ("%FLOW_NEXT_FLOWCTL%") DO SET "_bin=%%~fI"
 IF /I "%_bin%"=="%self%" GOTO :probe
 IF /I "%_bin%"=="%dp0%flowctl" GOTO :probe
-IF EXIST "%_bin%\*" GOTO :bad_bin
-IF NOT EXIST "%_bin%" GOTO :bad_bin
 CALL "%_bin%" %*
+IF ERRORLEVEL 9009 IF NOT ERRORLEVEL 9010 GOTO :bad_bin
 EXIT /b %errorlevel%
 
 :bad_bin
-ECHO flowctl: FLOWCTL_BIN is set but is not an executable file: "%FLOWCTL_BIN%" 1>&2
-ECHO   Fix the path, or unset FLOWCTL_BIN to use the plugin's bundled flowctl. 1>&2
+ECHO flowctl: FLOW_NEXT_FLOWCTL is set but could not be run: "%FLOW_NEXT_FLOWCTL%" 1>&2
+ECHO   Fix the path, or unset FLOW_NEXT_FLOWCTL to use the plugin's bundled flowctl. 1>&2
 EXIT /b 1
 
 :probe

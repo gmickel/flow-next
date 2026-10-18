@@ -14,16 +14,17 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLOWCTL_SOURCE_DIR="$SCRIPT_DIR"
 
-# FLOWCTL_BIN names the flowctl a host orchestrator wants every call to use.
+# FLOW_NEXT_FLOWCTL names the flowctl a host orchestrator wants every call to use
+# (never FLOWCTL_BIN: an unrelated `flowctl` CLI tells its users to set that).
 # Delegate before the Python probe so that flowctl needs no Python. The OS
 # decides what runs (Git Bash finds flowctl.exe from a bare flowctl path); a
 # value it cannot run fails loudly, because falling back would let two
 # flowctls write one repo. A value naming this launcher runs it normally.
-if [ -n "${FLOWCTL_BIN:-}" ] && ! [ "$FLOWCTL_BIN" -ef "${BASH_SOURCE[0]}" ]; then
+if [ -n "${FLOW_NEXT_FLOWCTL:-}" ] && ! [ "$FLOW_NEXT_FLOWCTL" -ef "${BASH_SOURCE[0]}" ]; then
   shopt -s execfail
-  exec "$FLOWCTL_BIN" "$@"
-  echo "flowctl: FLOWCTL_BIN is set but could not be run: $FLOWCTL_BIN" >&2
-  echo "  Fix the path, or unset FLOWCTL_BIN to use the plugin's bundled flowctl." >&2
+  exec "$FLOW_NEXT_FLOWCTL" "$@"
+  echo "flowctl: FLOW_NEXT_FLOWCTL is set but could not be run: $FLOW_NEXT_FLOWCTL" >&2
+  echo "  Fix the path, or unset FLOW_NEXT_FLOWCTL to use the plugin's bundled flowctl." >&2
   exit 1
 fi
 

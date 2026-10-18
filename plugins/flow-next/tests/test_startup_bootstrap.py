@@ -325,12 +325,12 @@ class StartupBootstrapTest(unittest.TestCase):
 
 @unittest.skipIf(os.name == "nt", "the bash launcher is covered by the Git Bash smoke on Windows")
 class FlowctlBinDelegationTest(unittest.TestCase):
-    """FLOWCTL_BIN hands every call to another flowctl without moving the plugin root."""
+    """FLOW_NEXT_FLOWCTL hands every call to another flowctl without moving the plugin root."""
 
-    def _run(self, launcher: Path, *args: str, flowctl_bin: str | None, path: str | None = None):
-        env = {k: v for k, v in os.environ.items() if k != "FLOWCTL_BIN"}
-        if flowctl_bin is not None:
-            env["FLOWCTL_BIN"] = flowctl_bin
+    def _run(self, launcher: Path, *args: str, value: str | None, path: str | None = None):
+        env = {k: v for k, v in os.environ.items() if k != "FLOW_NEXT_FLOWCTL"}
+        if value is not None:
+            env["FLOW_NEXT_FLOWCTL"] = value
         if path is not None:
             env["PATH"] = path
         return subprocess.run([str(launcher), *args], env=env, capture_output=True, text=True)
@@ -344,7 +344,7 @@ class FlowctlBinDelegationTest(unittest.TestCase):
             bindir = Path(tmp) / "bin"
             bindir.mkdir()
             (bindir / "dirname").symlink_to(shutil.which("dirname"))
-            result = self._run(SCRIPT_LAUNCHER, "task", "a b", flowctl_bin=str(engine), path=str(bindir))
+            result = self._run(SCRIPT_LAUNCHER, "task", "a b", value=str(engine), path=str(bindir))
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "engine:task|engine:a b|")
 
@@ -354,10 +354,10 @@ class FlowctlBinDelegationTest(unittest.TestCase):
             plain.write_text("#!/bin/sh\necho ran\n", encoding="utf-8")
             plain.chmod(0o644)
             for value in (str(Path(tmp) / "missing"), tmp, str(plain)):
-                result = self._run(SCRIPT_LAUNCHER, "usage", flowctl_bin=value)
+                result = self._run(SCRIPT_LAUNCHER, "usage", value=value)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertIn("FLOWCTL_BIN is set but could not be run", result.stderr)
+                self.assertIn("FLOW_NEXT_FLOWCTL is set but could not be run", result.stderr)
 
     def test_value_naming_this_launcher_runs_it(self) -> None:
         expected = BUNDLED_USAGE.read_text(encoding="utf-8")
@@ -365,14 +365,26 @@ class FlowctlBinDelegationTest(unittest.TestCase):
             link = Path(tmp) / "flowctl"
             link.symlink_to(SCRIPT_LAUNCHER)
             for value in (str(SCRIPT_LAUNCHER), str(link)):
-                result = self._run(SCRIPT_LAUNCHER, "usage", flowctl_bin=value, path=os.environ["PATH"])
+                result = self._run(SCRIPT_LAUNCHER, "usage", value=value, path=os.environ["PATH"])
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, expected)
 
     def test_empty_value_is_unset(self) -> None:
-        result = self._run(SCRIPT_LAUNCHER, "usage", flowctl_bin="")
+        result = self._run(SCRIPT_LAUNCHER, "usage", value="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, BUNDLED_USAGE.read_text(encoding="utf-8"))
+
+    def test_unrelated_flowctl_bin_is_ignored(self) -> None:
+        # An unrelated `flowctl` CLI tells its users to export FLOWCTL_BIN.
+        with tempfile.TemporaryDirectory() as tmp:
+            other = Path(tmp) / "flowctl"
+            other.write_text("#!/bin/sh\necho other-flowctl\n", encoding="utf-8")
+            other.chmod(0o755)
+            env = {k: v for k, v in os.environ.items() if k != "FLOW_NEXT_FLOWCTL"}
+            env["FLOWCTL_BIN"] = str(other)
+            result = subprocess.run([str(SCRIPT_LAUNCHER), "usage"], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, BUNDLED_USAGE.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

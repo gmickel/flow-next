@@ -503,35 +503,86 @@ jobs:
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
 
-      - name: PowerShell — `flowctl.cmd` delegates to FLOWCTL_BIN
+      - name: PowerShell — `flowctl.cmd` delegates to FLOW_NEXT_FLOWCTL
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
+          $failed = $false
+          function Check($label, $ok, $detail) {
+            if ($ok) { Write-Host "PASS: $label" } else { Write-Host "FAIL: $label -> $detail"; $script:failed = $true }
+          }
           $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
           $engine = Join-Path $env:RUNNER_TEMP "engine.cmd"
-          Set-Content -Path $engine -Value "@ECHO engine:%*" -Encoding ascii
+          Set-Content -Path $engine -Value "@ECHO engine:%*`r`n@EXIT /b 7" -Encoding ascii
           $repo = Join-Path $env:RUNNER_TEMP "cmd-bin-repo"
           New-Item -ItemType Directory -Force -Path $repo | Out-Null
           Set-Location $repo
           git init -q
 
-          $env:FLOWCTL_BIN = $engine
+          $env:FLOW_NEXT_FLOWCTL = $engine
           $out = (& $flowctl task start x 2>&1 | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or $out -ne "engine:task start x") { Write-Error "delegation failed (exit $LASTEXITCODE): $out"; exit 1 }
+          Check "delegates and passes the exit code through" ($LASTEXITCODE -eq 7 -and $out -eq "engine:task start x") "exit $LASTEXITCODE, out: $out"
 
-          $env:FLOWCTL_BIN = Join-Path $env:RUNNER_TEMP "missing.exe"
+          $env:FLOW_NEXT_FLOWCTL = $engine -replace '\.cmd$', ''
+          $out = (& $flowctl task start x 2>&1 | Out-String).Trim()
+          Check "PATHEXT resolves an extensionless FLOW_NEXT_FLOWCTL" ($LASTEXITCODE -eq 7 -and $out -eq "engine:task start x") "exit $LASTEXITCODE, out: $out"
+
+          foreach ($bad in @((Join-Path $env:RUNNER_TEMP "missing.exe"), (Join-Path $env:RUNNER_TEMP "no-such-dir\flowctl.exe"), $env:RUNNER_TEMP)) {
+            $env:FLOW_NEXT_FLOWCTL = $bad
+            $out = & $flowctl init --json 2>&1 | Out-String
+            Write-Host "[$bad] exit $LASTEXITCODE`n$out"
+            Check "unrunnable FLOW_NEXT_FLOWCTL fails without falling back ($bad)" ($LASTEXITCODE -ne 0 -and $out -notmatch '"success": true' -and -not (Test-Path (Join-Path $repo ".flow"))) "exit $LASTEXITCODE"
+          }
+
+          # An unrelated `flowctl` CLI tells its users to export FLOWCTL_BIN; it must change nothing.
+          Remove-Item Env:FLOW_NEXT_FLOWCTL
+          $env:FLOWCTL_BIN = $engine
           $out = & $flowctl init --json 2>&1 | Out-String
-          if ($LASTEXITCODE -ne 1 -or $out -notmatch "FLOWCTL_BIN is set but is not an executable file") { Write-Error "missing FLOWCTL_BIN did not fail loudly (exit $LASTEXITCODE): $out"; exit 1 }
+          Check "unrelated FLOWCTL_BIN is ignored" ($LASTEXITCODE -eq 0 -and $out -match '"success": true') "exit $LASTEXITCODE, out: $out"
+          Remove-Item Env:FLOWCTL_BIN
 
-          $env:FLOWCTL_BIN = $env:RUNNER_TEMP
-          & $flowctl init --json 2>&1 | Out-Null
-          if ($LASTEXITCODE -ne 1) { Write-Error "directory FLOWCTL_BIN did not fail (exit $LASTEXITCODE)"; exit 1 }
-
-          # Forward slashes to this launcher must run it, not recurse.
-          $env:FLOWCTL_BIN = $flowctl -replace '\\', '/'
+          $env:FLOW_NEXT_FLOWCTL = $flowctl -replace '\\', '/'
           $out = & $flowctl init --json 2>&1 | Out-String
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch '"success": true') { Write-Error "self FLOWCTL_BIN did not run the launcher (exit $LASTEXITCODE): $out"; exit 1 }
-          Write-Host "PASS: flowctl.cmd honours FLOWCTL_BIN"
+          Check "forward-slash self path runs the launcher" ($LASTEXITCODE -eq 0 -and $out -match '"success": true') "exit $LASTEXITCODE, out: $out"
+          if ($failed) { exit 1 }
+
+      - name: Git Bash — bash `flowctl` delegates to FLOW_NEXT_FLOWCTL
+        shell: bash
+        run: |
+          failed=0
+          check() { if [ "$2" = ok ]; then echo "PASS: $1"; else echo "FAIL: $1 -> $3"; failed=1; fi; }
+          FLOWCTL="$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl"
+          REPO="$RUNNER_TEMP/bash-bin-repo"; mkdir -p "$REPO"; cd "$REPO"; git init -q
+          printf '#!/bin/sh\necho "engine:$*"\nexit 7\n' > "$RUNNER_TEMP/engine.sh"; chmod +x "$RUNNER_TEMP/engine.sh"
+
+          out="$(FLOW_NEXT_FLOWCTL="$RUNNER_TEMP/engine.sh" "$FLOWCTL" task start x 2>&1)"; rc=$?
+          [ "$rc" = 7 ] && [ "$out" = "engine:task start x" ] && r=ok || r=bad; check "delegates and passes the exit code through" "$r" "rc=$rc out=$out"
+
+          # Extensionless path to a real .exe: Git Bash must find echo.exe.
+          out="$(FLOW_NEXT_FLOWCTL=/usr/bin/echo "$FLOWCTL" task start x 2>&1)"; rc=$?
+          [ "$rc" = 0 ] && [ "$out" = "task start x" ] && r=ok || r=bad; check "extensionless .exe path runs" "$r" "rc=$rc out=$out"
+
+          WINPATH="$(cygpath -w /usr/bin/echo.exe)"
+          out="$(FLOW_NEXT_FLOWCTL="$WINPATH" "$FLOWCTL" task start x 2>&1)"; rc=$?
+          [ "$rc" = 0 ] && [ "$out" = "task start x" ] && r=ok || r=bad; check "backslash Windows path runs" "$r" "rc=$rc out=$out"
+
+          for bad in "$RUNNER_TEMP/missing" "$RUNNER_TEMP"; do
+            out="$(FLOW_NEXT_FLOWCTL="$bad" "$FLOWCTL" init --json 2>&1)"; rc=$?
+            [ "$rc" = 1 ] && echo "$out" | grep -q "FLOW_NEXT_FLOWCTL is set but could not be run" && [ ! -e .flow ] && r=ok || r=bad
+            check "unrunnable FLOW_NEXT_FLOWCTL fails loudly ($bad)" "$r" "rc=$rc out=$out"
+          done
+
+          # Informational: whether Git Bash can exec a .cmd engine directly.
+          printf '@ECHO engine:%%*\r\n' > "$RUNNER_TEMP/engine2.cmd"
+          out="$(FLOW_NEXT_FLOWCTL="$RUNNER_TEMP/engine2.cmd" "$FLOWCTL" task start x 2>&1)"; echo "INFO .cmd engine from Git Bash: rc=$? out=$out"
+
+          out="$(FLOWCTL_BIN="$RUNNER_TEMP/engine.sh" "$FLOWCTL" init --json 2>&1)"; rc=$?
+          [ "$rc" = 0 ] && echo "$out" | grep -q '"success": true' && r=ok || r=bad; check "unrelated FLOWCTL_BIN is ignored" "$r" "rc=$rc out=$out"
+          rm -rf .flow
+
+          out="$(FLOW_NEXT_FLOWCTL="$FLOWCTL" "$FLOWCTL" init --json 2>&1)"; rc=$?
+          [ "$rc" = 0 ] && echo "$out" | grep -q '"success": true' && r=ok || r=bad; check "self path runs the launcher" "$r" "rc=$rc out=$out"
+          exit "$failed"
 
   ci:
     name: CI
