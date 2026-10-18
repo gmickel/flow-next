@@ -311,7 +311,7 @@ class TestHostStandaloneImplReview(unittest.TestCase):
             ):
                 with self.subTest(record=record, chain=chain, base_commit=base_commit):
                     (temp / ".flow" / "tmp" / "spec_base_branch").write_text(
-                        record + "\n", encoding="utf-8")
+                        record + "\n", encoding="utf-8", newline="\n")   # work's printf writes LF
                     log.unlink(missing_ok=True)
                     chain_log.unlink(missing_ok=True)
                     env = os.environ.copy()
