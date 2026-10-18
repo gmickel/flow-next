@@ -14,11 +14,33 @@ GOTO :start
 
 :find_dp0
 SET "dp0=%~dp0"
+SET "self=%~f0"
 EXIT /b
 
 :start
 SETLOCAL
 CALL :find_dp0
+
+REM FLOWCTL_BIN names the flowctl a host orchestrator wants every call to use.
+REM Delegate before the Python probe so that flowctl needs no Python. A value
+REM that is not a file fails loudly: falling back would let two flowctls write
+REM one repo. A value naming this launcher (or its bash twin) runs it normally;
+REM %%~fI normalizes slashes so a forward-slash path to this file cannot recurse.
+IF NOT DEFINED FLOWCTL_BIN GOTO :probe
+FOR %%I IN ("%FLOWCTL_BIN%") DO SET "_bin=%%~fI"
+IF /I "%_bin%"=="%self%" GOTO :probe
+IF /I "%_bin%"=="%dp0%flowctl" GOTO :probe
+IF EXIST "%_bin%\*" GOTO :bad_bin
+IF NOT EXIST "%_bin%" GOTO :bad_bin
+CALL "%_bin%" %*
+EXIT /b %errorlevel%
+
+:bad_bin
+ECHO flowctl: FLOWCTL_BIN is set but is not an executable file: "%FLOWCTL_BIN%" 1>&2
+ECHO   Fix the path, or unset FLOWCTL_BIN to use the plugin's bundled flowctl. 1>&2
+EXIT /b 1
+
+:probe
 
 SET "_prog="
 SET "_old="

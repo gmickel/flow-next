@@ -503,6 +503,36 @@ jobs:
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
 
+      - name: PowerShell — `flowctl.cmd` delegates to FLOWCTL_BIN
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
+          $engine = Join-Path $env:RUNNER_TEMP "engine.cmd"
+          Set-Content -Path $engine -Value "@ECHO engine:%*" -Encoding ascii
+          $repo = Join-Path $env:RUNNER_TEMP "cmd-bin-repo"
+          New-Item -ItemType Directory -Force -Path $repo | Out-Null
+          Set-Location $repo
+          git init -q
+
+          $env:FLOWCTL_BIN = $engine
+          $out = (& $flowctl task start x 2>&1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $out -ne "engine:task start x") { Write-Error "delegation failed (exit $LASTEXITCODE): $out"; exit 1 }
+
+          $env:FLOWCTL_BIN = Join-Path $env:RUNNER_TEMP "missing.exe"
+          $out = & $flowctl init --json 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 1 -or $out -notmatch "FLOWCTL_BIN is set but is not an executable file") { Write-Error "missing FLOWCTL_BIN did not fail loudly (exit $LASTEXITCODE): $out"; exit 1 }
+
+          $env:FLOWCTL_BIN = $env:RUNNER_TEMP
+          & $flowctl init --json 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 1) { Write-Error "directory FLOWCTL_BIN did not fail (exit $LASTEXITCODE)"; exit 1 }
+
+          # Forward slashes to this launcher must run it, not recurse.
+          $env:FLOWCTL_BIN = $flowctl -replace '\\', '/'
+          $out = & $flowctl init --json 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch '"success": true') { Write-Error "self FLOWCTL_BIN did not run the launcher (exit $LASTEXITCODE): $out"; exit 1 }
+          Write-Host "PASS: flowctl.cmd honours FLOWCTL_BIN"
+
   ci:
     name: CI
     if: always()
