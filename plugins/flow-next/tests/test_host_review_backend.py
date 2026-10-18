@@ -295,24 +295,28 @@ class TestHostStandaloneImplReview(unittest.TestCase):
             stub = temp / "flowctl-stub"
             stub.write_text(
                 "#!/usr/bin/env bash\n"
-                'if [[ "$1 $2" == "spec chain" ]]; then printf "%s\\n" "$CHAIN_JSON"; exit 0; fi\n'
+                'if [[ "$1" == "show" ]]; then printf \'{"id": "fn-1-demo"}\\n\'; exit 0; fi\n'
+                'if [[ "$1 $2" == "spec chain" ]]; then echo chain >> "$CHAIN_LOG"; printf "%s\\n" "$CHAIN_JSON"; exit 0; fi\n'
                 f'printf "%s\\n" "$*" >> "{log.as_posix()}"\necho "{{}}"\n',
                 encoding="utf-8",
             )
             stub.chmod(0o755)
+            chain_log = temp / "chain.log"
             for record, chain, base_commit, want in (
-                ("fn-1 integration", "{}", "", integration),
+                ("fn-1-demo integration", '{"parent_branch": "master"}', "", integration),
                 ("fn-9 integration", "{}", "", master),
-                ("fn-1 gone", '{"parent_branch": "integration"}', "", integration),
-                ("fn-1 integration", "{}", "master", master),
-                ("fn-1 integration", "{}", "nope", None),
+                ("fn-1-demo gone", '{"parent_branch": "integration"}', "", integration),
+                ("fn-1-demo integration", "{}", "master", master),
+                ("fn-1-demo integration", "{}", "nope", None),
             ):
                 with self.subTest(record=record, chain=chain, base_commit=base_commit):
                     (temp / ".flow" / "tmp" / "spec_base_branch").write_text(
                         record + "\n", encoding="utf-8")
                     log.unlink(missing_ok=True)
+                    chain_log.unlink(missing_ok=True)
                     env = os.environ.copy()
                     env.update({"FLOWCTL": stub.as_posix(), "SPEC_ID": "fn-1", "CHAIN_JSON": chain,
+                                "CHAIN_LOG": chain_log.as_posix(),
                                 "BASE_COMMIT": base_commit, "TMPDIR": temp.as_posix()})
                     result = subprocess.run([_bash_executable(), "-c", reserve], cwd=temp, env=env,
                                             text=True, capture_output=True, check=False)
@@ -325,6 +329,8 @@ class TestHostStandaloneImplReview(unittest.TestCase):
                     else:
                         self.assertEqual(len(increments), 1, result.stdout + result.stderr)
                         self.assertIn(f"--base {want} ", increments[0])
+                    if record.startswith("fn-1-demo integration") and not base_commit:
+                        self.assertFalse(chain_log.exists())   # a valid record needs no chain lookup
 
     def test_standalone_skips_reservation_and_attaches_directly(self) -> None:
         host = _read("flow-next-impl-review/workflow-host.md")

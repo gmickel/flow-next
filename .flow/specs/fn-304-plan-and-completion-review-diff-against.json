@@ -8,12 +8,74 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-304-plan-and-completion-review-diff-against",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-304-plan-and-completion-review-diff-against.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0aab128a3e5feaaa08ec3df8ff232970aaac4c9f6a5afa576170958ce69d73f9",
+      "backend": "codex",
+      "base_sha": "271f7e36d9ebf4241edb021d5c283864eb1c35d6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "classification": "introduced",
+            "findingId": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "classification": "introduced",
+            "findingId": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "12d09ad224cd795f4870fd61e0eb3289c9322443",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1914,
+      "output_sha256": "ab051896b4b47f6f4e738b1b3b93163ee81a372a600c1aac4d5b294bdf5ac36d",
+      "reservation_id": "7f7fcd0a423840618eec23b05d20d89d",
+      "round_consumed": true,
+      "scope": "impl:fn-304-plan-and-completion-review-diff-against.1",
+      "superseded_by": null,
+      "task": "fn-304-plan-and-completion-review-diff-against.1",
+      "timestamp": "2026-10-18T11:08:27.892058Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-304-plan-and-completion-review-diff-against.1": 0
+  },
   "spec_path": ".flow/specs/fn-304-plan-and-completion-review-diff-against.md",
   "status": "open",
   "title": "Plan and completion review diff against the spec's own base",
@@ -28,5 +90,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-18T10:55:24.969613Z"
+  "updated_at": "2026-10-18T11:08:27.895149Z"
 }

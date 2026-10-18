@@ -62,17 +62,23 @@ if [[ -n "${BASE_COMMIT:-}" ]]; then
     || { echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2; exit 1; }
   DIFF_BASE="$BASE_COMMIT"
 else
-  DIFF_BASE="" REC_SPEC="" REC_BASE=""
+  DIFF_BASE="" REC_SPEC="" REC_BASE="" PARENT_BRANCH=""
+  # Work records the canonical spec id; SPEC_ID may be a short alias.
+  CANONICAL_ID="$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.id // empty')" || CANONICAL_ID=""
   read -r REC_SPEC REC_BASE < "$(git rev-parse --show-toplevel)/.flow/tmp/spec_base_branch" 2>/dev/null || true
-  [[ "$REC_SPEC" == "$SPEC_ID" ]] || REC_BASE=""
-  PARENT_BRANCH="$("$FLOWCTL" spec chain "$SPEC_ID" --json 2>/dev/null | jq -r '.parent_branch // empty')" || PARENT_BRANCH=""
-  for CANDIDATE in "$REC_BASE" ${PARENT_BRANCH:+"origin/$PARENT_BRANCH" "$PARENT_BRANCH"} \
-      "$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" \
-      origin/main main origin/master master; do
-    if [[ -n "$CANDIDATE" ]] && git rev-parse --verify --quiet "$CANDIDATE^{commit}" >/dev/null; then
-      DIFF_BASE="$CANDIDATE"; break
-    fi
-  done
+  if [[ -n "$REC_BASE" && "$REC_SPEC" == "${CANONICAL_ID:-$SPEC_ID}" ]] \
+      && git rev-parse --verify --quiet "$REC_BASE^{commit}" >/dev/null; then
+    DIFF_BASE="$REC_BASE"
+  else
+    PARENT_BRANCH="$("$FLOWCTL" spec chain "$SPEC_ID" --json 2>/dev/null | jq -r '.parent_branch // empty')" || PARENT_BRANCH=""
+    for CANDIDATE in ${PARENT_BRANCH:+"origin/$PARENT_BRANCH" "$PARENT_BRANCH"} \
+        "$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" \
+        origin/main main origin/master master; do
+      if [[ -n "$CANDIDATE" ]] && git rev-parse --verify --quiet "$CANDIDATE^{commit}" >/dev/null; then
+        DIFF_BASE="$CANDIDATE"; break
+      fi
+    done
+  fi
   [[ -n "$DIFF_BASE" ]] || { echo "cannot resolve diff base; pass BASE_COMMIT; not reserving a round" >&2; exit 1; }
 fi
 REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.env"
