@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Feature-map proofs no longer pass on an app that is only half up.** Seed and maintain now count an instance as ready only once it works from an empty data directory with migrations and seed data in place, so an open port or a passing database health check is no longer enough. A journey whose seed data lacks something it needs fails with that reason instead of being shortened until it passes. Dry-run and test modes are checked for what they actually skip. A proof run in a stand-in, such as a container standing in for a fresh VM, lists the setup steps the real target will not get, so those steps stay marked unverified.
+
 ## [flow-next 9.1.0] - 2026-10-19
 
 You can now run flow-next on a flowctl of your choice, such as your own build, a port to another language or a fork you are testing, by setting one environment variable. Every skill, agent and hook on every host sends its calls there, with no skill edits and nothing copied into your repository, and the flowctl you name does not need Python. Without the variable nothing changes: a call took 316 ms before and after the change, over 80 alternating runs on Linux.
