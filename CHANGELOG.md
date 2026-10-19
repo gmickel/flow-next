@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.1.0] - 2026-10-19
+
+You can now run flow-next on a flowctl of your choice, such as your own build, a port to another language or a fork you are testing, by setting one environment variable. Every skill, agent and hook on every host sends its calls there, with no skill edits and nothing copied into your repository, and the flowctl you name does not need Python. Without the variable nothing changes: a call took 316 ms before and after the change, over 80 alternating runs on Linux.
+
+### Added
+
+- **Set `FLOW_NEXT_FLOWCTL` to send every flowctl call to a flowctl you choose.** The plugin's launchers, `scripts/flowctl` for bash, Git Bash and WSL and `scripts/flowctl.cmd` for cmd and PowerShell, pass each call with all its arguments to that flowctl before they look for Python, and return its exit code. Skills still find their helper scripts beside the plugin's launcher, so make-pr and map keep working. If the system cannot run the value, the launcher stops with `flowctl: FLOW_NEXT_FLOWCTL is set but could not be run`; it does not fall back to the bundled flowctl, so two flowctls never write the same `.flow/`. A value that names the launcher itself runs it as before. Point the variable at your flowctl directly, not at a wrapper that calls the plugin's launcher again. On Windows a path without its extension resolves the way the shell resolves commands (`flowctl` finds `flowctl.exe`), and Git Bash accepts a Windows backslash path too.
+
 ## [flow-next 9.0.2] - 2026-10-18
 
 ### Fixed
