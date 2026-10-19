@@ -125,6 +125,18 @@ Use installation commands in your terminal or the host's plugin interface as sho
 
 [Your first 30 minutes](https://flow-next.dev/first-30-minutes/) walks through the same three steps on a two-file Python example, review setup and all. You need your agent, Python 3.11+ and the project's own tools; review and PR steps also use `jq` and `gh`.
 
+## If you're an agent
+
+If you are an agent or bot operating Flow-Next on someone's project, this repository's `AGENTS.md` and `CLAUDE.md` are not for you; they are rules for changing Flow-Next itself. What you need:
+
+- Install for your host, then run `/flow-next:setup` once in the project.
+- Hand everything to `/flow-next:flow <what the person gave you>`, verbatim. Don't call plan, work or review yourself unless the person names one; Flow picks the route. `--explain` previews the route without running anything.
+- Attended, relay `Flow stopped at` and `Next` to your person. Decisions about what to build or whether to merge are theirs.
+- Unattended, use `--auto`; plain `flow` refuses under an autonomy marker. The last line is always `PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>`, and `NEEDS_HUMAN` means stop and show the reason.
+- Only specs the person marked ready run unattended, and a merge needs their consent in this session or `--until=merge`.
+
+[For agents](https://flow-next.dev/for-agents/) has the full contract: every verdict and what to do with it, the run forms, and the safety rules.
+
 ## Land a pull request
 
 `/flow-next:land <PR>` works one named PR to the finish: it resolves review feedback and CI failures, then squash merges it once you've authorized the merge. make-pr commits the finished spec and task statuses before it opens the PR, so the merge carries them to your base branch. Land checks every spec on the PR's branch and merges only when all of them are closed.
