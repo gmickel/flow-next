@@ -4169,22 +4169,16 @@ def _dispatch_review_with_fallback(
     return _resolved(out, sid, rc, err, floor_model, True)
 
 
-def _effort_reached_cli(backend: str, model: Optional[str]) -> bool:
+def _effort_reached_cli(model: Optional[str]) -> bool:
     """Did the resolved effort actually govern the dispatched run? (#349 r3)
 
     The attempt row must record what was SENT, not what was resolved:
     - a ladder floor (model None) dispatches with CLI defaults - neither
       model nor effort was pinned;
-    - copilot deliberately omits ``--effort`` for ``claude-*`` models
-      (they reject the flag);
     - cursor bakes effort into the model slug and codex pins it via
       ``-c`` - both really sent it.
     """
-    if model is None:
-        return False
-    if backend == "copilot" and model.startswith("claude-"):
-        return False
-    return True
+    return model is not None
 
 
 def _receipt_model_effort(
@@ -7343,7 +7337,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
             "gpt-5.5",
             "gpt-5.4",
-            "claude-fable-5.1",  # rolled out to Copilot 2026-09-05; Claude-family, so --effort is dropped
+            "claude-fable-5.1",  # rolled out to Copilot 2026-09-05
             "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
@@ -7361,10 +7355,8 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-5-mini",
             "gpt-4.1",
         ],
-        # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
-        # ``minimal`` — Claude-family models reject ``--effort`` entirely, which
-        # ``run_copilot_exec`` handles by dropping the flag when model starts
-        # with ``claude-``.
+        # Flow-Next retains its established review effort set. Every accepted
+        # tier is passed through Copilot's ``--reasoning-effort`` option.
         "efforts": {"low", "medium", "high", "xhigh"},
         "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
@@ -8071,9 +8063,9 @@ def run_copilot_exec(
     When ``spec`` is ``None`` (defensive / non-review callers), fall back
     to bare-copilot resolution (env + registry defaults).
 
-    Claude-model effort skip: ``--effort`` is dropped when
-    ``effective_model`` starts with ``claude-`` (Copilot rejects
-    reasoning-effort on Claude-family models).
+    Every non-floor dispatch sends the resolved effort with Copilot's
+    ``--reasoning-effort`` option, for both Claude-family and OpenAI-family
+    models.
 
     Returns:
         tuple: (stdout, session_id, exit_code, stderr)
@@ -8108,10 +8100,10 @@ def run_copilot_exec(
     marker.parent.mkdir(parents=True, exist_ok=True)
 
     # fn-76: ONE model per dispatch, driven by the fallback ladder. At the floor
-    # ``model`` is ``"auto"`` and ``--effort`` is omitted (R5). ``--effort`` is
-    # also dropped for Claude-family models (Copilot rejects it) and, since a
-    # failed model-unavailable dispatch never touches the marker, ladder retries
-    # keep using ``--session-id`` until one succeeds.
+    # ``model`` is ``"auto"`` and ``--reasoning-effort`` is omitted (R5). Every
+    # non-floor dispatch sends the resolved effort for all model families.
+    # Since a failed model-unavailable dispatch never touches the marker, ladder
+    # retries keep using ``--session-id`` until one succeeds.
     def _dispatch(model, is_floor):
         common_args = [
             "--output-format",
@@ -8136,8 +8128,8 @@ def run_copilot_exec(
             "--model",
             model,
         ]
-        if not is_floor and not model.startswith("claude-"):
-            common_args += ["--effort", effective_effort]
+        if not is_floor:
+            common_args += ["--reasoning-effort", effective_effort]
 
         session_arg = (
             f"--resume={session_id}" if marker.exists()
@@ -44678,7 +44670,13 @@ def _copilot_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    """Copilot spawn: deliver the primary diff by path before marker-based execution."""
+    try:
+        prompt = _review_prompt_with_materialised_diff(
+            prompt, backend="copilot", repo_root=repo_root, args=args,
+        )
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"copilot review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -44713,11 +44711,11 @@ def _cursor_run_exec(
     )
 
 
-class ClaudeReviewDiffError(RuntimeError):
-    """The reviewed diff could not be materialised for the claude reviewer."""
+class ReviewDiffError(RuntimeError):
+    """The reviewed diff could not be materialised for a reviewer."""
 
 
-def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
+def _review_diff_text(repo_root: Path, base: str, head: str) -> str:
     """``git diff <base>..<head>`` at ``repo_root`` for delivery by path."""
     try:
         result = subprocess.run(
@@ -44727,12 +44725,12 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
             cwd=str(repo_root),
         )
     except (subprocess.SubprocessError, OSError) as exc:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {exc}"
         ) from exc
     if result.returncode != 0:
         detail = (result.stderr or "").strip() or f"exit {result.returncode}"
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {detail}"
         )
     text = result.stdout
@@ -44741,7 +44739,7 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
     return text
 
 
-def _claude_materialise_review_diff(
+def _materialise_review_diff(
     repo_root: Path, receipt_id: str, base: str, head: str
 ) -> Path:
     """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
@@ -44762,29 +44760,41 @@ def _claude_materialise_review_diff(
         or "\\" in receipt_id
         or receipt_id in (".", "..")
     ):
-        raise ClaudeReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
+        raise ReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
     tmp_root = repo_root / ".flow" / "tmp"
     directory = tmp_root / "claude-review"
     directory.mkdir(parents=True, exist_ok=True)
     if directory.is_symlink():
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"refusing symlinked review scratch directory: {directory}"
         )
     leaf = directory / f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
     if leaf.is_symlink():
-        raise ClaudeReviewDiffError(f"refusing symlinked review diff path: {leaf}")
+        raise ReviewDiffError(f"refusing symlinked review diff path: {leaf}")
     expected_root = repo_root.resolve() / ".flow" / "tmp"
     resolved = leaf.resolve()
     if expected_root not in resolved.parents:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"review diff path escapes {expected_root}: {resolved}"
         )
-    atomic_write(leaf, _claude_review_diff_text(repo_root, base, head))
+    atomic_write(leaf, _review_diff_text(repo_root, base, head))
     return leaf
 
 
-def _claude_diff_transport_note(path: Path, base: str, head: str) -> str:
-    """Prompt tail telling the shell-less claude reviewer where the diff lives."""
+def _diff_transport_note(
+    path: Path, base: str, head: str, *, backend: str = "claude",
+) -> str:
+    """Prompt tail telling a shell-less reviewer how to read the pinned diff."""
+    if backend == "copilot":
+        return (
+            "\n\n## Diff delivery (copilot backend)\n\n"
+            "This Copilot review session has no shell access, so `git diff` and "
+            "other shell commands cannot run. Shell and write tools are denied; "
+            "use the available read-only file tools to inspect the patch. The "
+            f"complete diff for `{base}..{head}` has been written to `{path}`. "
+            "Read it with an available file-viewing tool, then review it together "
+            "with repository files at their normal paths.\n"
+        )
     return (
         "\n\n## Diff delivery (claude backend)\n\n"
         "This session has no shell: `git diff` and every other command are "
@@ -44792,6 +44802,20 @@ def _claude_diff_transport_note(path: Path, base: str, head: str) -> str:
         f"diff for `{base}..{head}` has been written to `{path}` - read it with "
         "Read instead of running git. Repository files are readable at their "
         "normal paths.\n"
+    )
+
+
+def _review_prompt_with_materialised_diff(
+    prompt: str, *, backend: str, repo_root: Path, args: argparse.Namespace,
+) -> str:
+    """Attach a readable pinned diff on primary impl/plan/completion dispatches."""
+    review_range = getattr(args, "claude_range", None)
+    if review_range is None:
+        return prompt
+    base, head, receipt_id = review_range
+    diff_path = _materialise_review_diff(repo_root, receipt_id, base, head)
+    return prompt + _diff_transport_note(
+        diff_path, base, head, backend=backend,
     )
 
 
@@ -44814,16 +44838,12 @@ def _claude_run_exec(
     is written and the resumed session keeps the primary's file. A failed
     materialisation returns a non-zero tuple BEFORE the CLI is spawned.
     """
-    review_range = getattr(args, "claude_range", None)
-    if review_range is not None:
-        base, head, receipt_id = review_range
-        try:
-            diff_path = _claude_materialise_review_diff(
-                repo_root, receipt_id, base, head
-            )
-        except (ClaudeReviewDiffError, OSError) as exc:
-            return "", (session_id or ""), 2, f"claude review diff: {exc}"
-        prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    try:
+        prompt = _review_prompt_with_materialised_diff(
+            prompt, backend="claude", repo_root=repo_root, args=args,
+        )
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"claude review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -45613,9 +45633,8 @@ def _dispatch_backend_review(
     )
     # fn-221: this helper IS the primary-dispatch boundary (impl / plan /
     # completion; ``_dispatch_session_pass`` never comes through here), so the
-    # reviewed range travels to the adapter on ``args`` - consumed by
-    # ``_claude_run_exec``, which delivers the diff by path; every other
-    # adapter ignores it. Never derived from the current HEAD downstream.
+    # reviewed range travels to the adapters on ``args`` - Claude and Copilot
+    # deliver the diff by path. Never derived from the current HEAD downstream.
     if reviewed_base_sha and reviewed_head_sha:
         receipt_id = (
             Path(receipt_path).stem if receipt_path
@@ -45982,8 +46001,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         # except a ladder FLOOR records neither (the receipt's "auto"/
         # "default" is a selector placeholder, not a resolved model; an
         # explicit auto pin has floor unset and records honestly), and
-        # effort rides only when it actually reached the CLI (copilot
-        # omits --effort for claude-* models).
+        # effort rides only when it actually reached the CLI.
         reviewed_model=(
             None
             if _resolution.get("floor")
@@ -46000,7 +46018,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_effort=(
             _dispatched_effort
             if not _resolution.get("floor")
-            and _effort_reached_cli(backend, effective_model)
+            and _effort_reached_cli(effective_model)
             else None
         ),
         reservation_id=reservation_id,
@@ -46477,8 +46495,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         # except a ladder FLOOR records neither (the receipt's "auto"/
         # "default" is a selector placeholder, not a resolved model; an
         # explicit auto pin has floor unset and records honestly), and
-        # effort rides only when it actually reached the CLI (copilot
-        # omits --effort for claude-* models).
+        # effort rides only when it actually reached the CLI.
         reviewed_model=(
             None
             if _resolution.get("floor")
@@ -46495,7 +46512,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_effort=(
             _dispatched_effort
             if not _resolution.get("floor")
-            and _effort_reached_cli(backend, effective_model)
+            and _effort_reached_cli(effective_model)
             else None
         ),
         reservation_id=reservation_id,
@@ -46822,8 +46839,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         # except a ladder FLOOR records neither (the receipt's "auto"/
         # "default" is a selector placeholder, not a resolved model; an
         # explicit auto pin has floor unset and records honestly), and
-        # effort rides only when it actually reached the CLI (copilot
-        # omits --effort for claude-* models).
+        # effort rides only when it actually reached the CLI.
         reviewed_model=(
             None
             if _resolution.get("floor")
@@ -46840,7 +46856,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_effort=(
             _dispatched_effort
             if not _resolution.get("floor")
-            and _effort_reached_cli(backend, effective_model)
+            and _effort_reached_cli(effective_model)
             else None
         ),
         reservation_id=reservation_id,
@@ -47355,7 +47371,7 @@ def _review_fanout_run_draw(
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
     if getattr(args, "claude_range", None):
-        # One diff file per draw: a claude reviewer may hold it open.
+        # One diff file per draw: a reviewer may hold it open.
         base_sha, head_sha, rid = args.claude_range
         args.claude_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
@@ -49766,7 +49782,7 @@ def _resolve_copilot_review_spec(
 
     Caller uses ``resolved.model`` / ``resolved.effort`` for receipts and
     passes the spec to ``run_copilot_exec`` which honors ``spec.model`` /
-    ``spec.effort`` and still skips ``--effort`` for ``claude-*`` models.
+    ``spec.effort`` through Copilot's ``--reasoning-effort`` option.
     """
     spec_arg = getattr(args, "spec", None)
     if spec_arg:

@@ -1546,8 +1546,7 @@ echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
 # we gate on `available` alone and let a real auth failure fail the e2e below.
 copilot_available="$(command -v copilot >/dev/null 2>&1 && echo True || echo False)"
 if [[ "$copilot_available" == "True" ]]; then
-  # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
-  # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
+  # Use gpt-5-mini + effort=low to keep the live smoke test's cost down.
   export FLOW_COPILOT_MODEL=gpt-5-mini
   export FLOW_COPILOT_EFFORT=low
 

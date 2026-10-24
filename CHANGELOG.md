@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Copilot reviews honor the selected reasoning effort and see the complete pinned change.** The review dispatch passes that effort for Claude and OpenAI models and provides the exact implementation, plan, completion, or fan-out diff at a readable path.
+
 ## [flow-next 9.2.0] - 2026-10-24
 
 Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.
