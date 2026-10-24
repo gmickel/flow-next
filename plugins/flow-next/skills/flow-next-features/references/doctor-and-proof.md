@@ -18,6 +18,10 @@ One read-only check answering **is this instance worth driving**. It does not cl
 
 All three must pass before a drive. One failure is a stop, not a hope.
 
+### Ready means usable
+
+A process that answers is not yet ready. Launch reaches a usable state from an empty data dir, migrations and seed data included, and readiness is a usable signal: the seeded page renders, the command returns real output. An open port or a passing database health check is not enough; the check can pass while init scripts still run.
+
 ### When it runs
 
 - Before the first drive of the run.
@@ -78,6 +82,8 @@ Exercise the path a user takes: the documented URL, the sidebar label, the CLI t
 
 Never a test-only endpoint, a hidden debug view, a `?e2e=1` bypass, or an admin RPC the product UI does not expose. A route proven only that way does not land.
 
+When the safe path is a dry-run or test mode, observe what it actually skips (files, network, git refs) instead of trusting its name. Some dry-runs still touch the network or open a browser.
+
 ### Unreachable is reported, never substituted
 
 When a route cannot be reached, report:
@@ -88,6 +94,12 @@ When a route cannot be reached, report:
 Never record it as verified-via-another-path. Reaching a similar screen by a shortcut does not prove the documented user entry point. An unstated prerequisite is itself drift (seed: name it in the failure list; maintain: treat it as map drift).
 
 A feature is `verified-unreachable` only with that pair. Maintain owns that label; seed simply does not land the route and names the failure.
+
+Missing seed data is the same case. When the baseline seed lacks a precondition a journey needs, the journey fails with that reason (seed: in the failure list; maintain: in the feature's `Gotchas`). Never weaken the journey, by a shorter path or a looser end state, to make it pass.
+
+### Stand-in proof names what it did not prove
+
+A proof run in a stand-in for the real target (a container for a fresh VM, a local stack for a remote one) lists in the index's baseline preconditions every setup step the stand-in provided that the real target will not. Those steps stay unverified until a run on the real target covers them.
 
 ### Cleanup never eats evidence
 

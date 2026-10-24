@@ -194,6 +194,10 @@ When adding or editing skills, agents or commands:
 Host details:
 
 - **Hook matchers** use a regex OR: `"matcher": "Bash|Execute"` (Claude `Bash`, Droid `Execute`).
+- **Search tools** differ by host: native Claude Code on macOS/Linux has no Grep or Glob tool,
+  and Codex subagents have only a sandboxed shell without network. Say what to find and let the
+  agent pick its tool; never forbid read-only shell search (`sync-codex.sh` hard-fails on that
+  directive). Table: `plugins/flow-next/docs/platforms.md` "Search and web tools by host".
 - **Agent permissions** use a `disallowedTools` list, not a `tools` allowlist. Read-only agents
   deny `Edit`, `Write` and `Task` (a spawned writing subagent is a way out of read-only; shell
   writes also need the host sandbox and a read-only contract); writing agents deny only what

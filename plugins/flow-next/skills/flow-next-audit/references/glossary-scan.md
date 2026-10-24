@@ -67,7 +67,7 @@ For each `(group, entry)` where `count > 0`:
      > /tmp/glossary-corpus.zlist
    ```
 
-   On platforms where Bash file ops gate behind permissions, the host agent should fall back to Glob with the equivalent exclusion pattern.
+   On platforms where Bash file ops gate behind permissions, the host agent should fall back to its file-search tool with the equivalent exclusion pattern.
 
 2. **Search for the term** — case-insensitive, whole-word match (matches T2's `_glossary_term_matches` invariant). Normalize whitespace in the term first (collapse runs of whitespace to a single space), then anchor with `\b`:
 
@@ -77,7 +77,7 @@ For each `(group, entry)` where `count > 0`:
                  < /tmp/glossary-corpus.zlist 2>/dev/null | wc -l | tr -d ' ')
    ```
 
-   The agent may also use the Grep tool directly with an equivalent pattern; either path is fine.
+   The agent may also run an equivalent search with any read-only search tool it has; either path is fine.
 
 3. **Search for each `_Avoid_` alias** — same matching rule. Aggregate alias hits per-alias so the report can name the offending alias.
 

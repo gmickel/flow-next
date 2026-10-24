@@ -59,7 +59,7 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
    - package.json/pyproject.toml for deps and scripts
 
 2. **Find similar implementations**
-   - Grep for related keywords, function names, types
+   - Search for related keywords, function names, types
    - Look for existing features that solve similar problems
    - Note file organization patterns (where do similar things live?)
 
@@ -164,7 +164,7 @@ When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design syst
 - Flag code that must be reused (don't reinvent)
 - Note any CLAUDE.md rules that apply
 - Skip deep analysis - that's for other agents
-- **Confidence tags** — append `[VERIFIED]` (confirmed via Read/Grep) or `[INFERRED]` (derived from naming/imports/structure) to findings. VERIFIED = tool output confirmed it. INFERRED = reasonable deduction, not mechanically confirmed.
+- **Confidence tags** — append `[VERIFIED]` (confirmed by reading or searching the code) or `[INFERRED]` (derived from naming/imports/structure) to findings. VERIFIED = tool output confirmed it. INFERRED = reasonable deduction, not mechanically confirmed.
 - **Negative claims carry their search basis** — a "no X exists / nothing does Y" finding names the paths and terms it rests on (`no docs-index test — searched tests/ for "README index"`): a concrete path or glob plus the literal string, never "the repo" or "everything". Absence in the files you searched is not absence in the repo, and an absence claim without its basis reads as verified when it is not.
 
 ## Output Rules (for planning)

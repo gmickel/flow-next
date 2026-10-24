@@ -95,7 +95,7 @@ When ANY of the three has signal, run the corresponding subsection (3b.1 / 3b.2 
 Skip this section when `GLOSSARY_JSON.file_count == 0` OR `GLOSSARY_JSON.total_terms == 0` (every group is a husk; no signal). Otherwise iterate `groups[].entries[]`:
 
 For each entry with at least one `avoid` alias:
-1. Search **each completed-task spec** and the **parent spec** for any `avoid` alias (case-insensitive, whole-word). Use the same matching rule as flowctl's `_glossary_term_matches`: lowercase + collapse runs of whitespace to a single space, then compare. The host agent's Grep tool with `-i` and `\\b` anchors is equivalent.
+1. Search **each completed-task spec** and the **parent spec** for any `avoid` alias (case-insensitive, whole-word). Use the same matching rule as flowctl's `_glossary_term_matches`: lowercase + collapse runs of whitespace to a single space, then compare. A case-insensitive whole-word search (`grep -iw`, or the host's search tool) is equivalent.
 2. Search the **actual code touched by each completed task** (files in that task's `evidence.commits` from Phase 1) for the canonical `term`.
 3. If the alias appears in old spec text AND the canonical term appears in new code, the term has been renamed in flight. Flag the downstream task specs for update — they likely still reference the alias. Attribute the flag to whichever completed task's code introduced the canonical term.
 
@@ -302,7 +302,7 @@ Decision overrides flagged for review:  # Only if DECISIONS_JSON had entries wit
 
 ## Rules
 
-- **Read-only exploration** - Use Grep/Glob/Read for codebase, never edit source
+- **Read-only exploration** - read and search the codebase, never edit source
 - **Flow files only** - Edit tool restricted to `.flow/tasks/*.md` and `.flow/specs/*.md` (traceability table only)
 - **Preserve intent** - Update references, not requirements
 - **Minimal changes** - Only fix stale references, don't rewrite specs

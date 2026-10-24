@@ -44959,6 +44959,29 @@ def _default_review_base(use_json: bool) -> str:
     )
 
 
+def _completion_review_base(spec_id: str, use_json: bool) -> str:
+    """Resolve an omitted completion-review ``--base`` to the spec's own base.
+
+    The base work recorded for this spec's run, then the chain parent's branch,
+    then the repository's default branch. A record written for another spec,
+    or a branch that no longer resolves, falls through to the next source.
+    """
+    flow_dir = get_flow_dir()
+    try:
+        record = (flow_dir / "tmp" / "spec_base_branch").read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        record = ""
+    recorded_spec, _, recorded_base = record.strip().partition(" ")
+    if recorded_spec == spec_id and recorded_base and _resolve_review_sha(recorded_base):
+        return recorded_base
+    parent_branch = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json)["parent_branch"]
+    if parent_branch:
+        for candidate in (f"origin/{parent_branch}", parent_branch):
+            if _resolve_review_sha(candidate):
+                return candidate
+    return _default_review_base(use_json)
+
+
 def _build_backend_review_findings(
     review_text: str,
     *,
@@ -46337,7 +46360,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         )
     )
 
-    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    base_branch = args.base or _default_review_base(args.json)
     resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
     try:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
@@ -46652,7 +46675,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         )
     )
 
-    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    base_branch = args.base or _completion_review_base(epic_id, args.json)
     receipt_path = (
         getattr(args, "receipt", None)
         or os.environ.get("REVIEW_RECEIPT_PATH")
@@ -55458,7 +55481,9 @@ def _add_plan_review_parser(sub, backend: str):
     p.add_argument(
         "--files", help="Optional comma-separated relevant code file paths",
     )
-    p.add_argument("--base", default="main", help="Base branch for context")
+    p.add_argument(
+        "--base", help="Base branch for context (default: the repo's default branch)"
+    )
     p.add_argument("--receipt", help="Receipt file path for session continuity")
     p.add_argument(
         "--force",
@@ -55490,7 +55515,11 @@ def _add_completion_review_parser(sub, backend: str):
         help="Require a scoped local execution provider before reserving a review",
     )
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
-    p.add_argument("--base", default="main", help="Base branch for diff")
+    p.add_argument(
+        "--base",
+        help="Base branch for diff (default: the spec's recorded base, its chain "
+        "parent's branch, then the repo's default branch)",
+    )
     p.add_argument("--receipt", help="Receipt file path for session continuity")
     p.add_argument(
         "--force",

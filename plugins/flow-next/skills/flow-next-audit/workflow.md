@@ -182,10 +182,10 @@ A memory entry has dimensions that can independently go stale:
 For each entry:
 
 1. **Read** the file (already loaded in Phase 0; re-read body if it was elided).
-2. **Verify the `module` field** — Glob for the path. If missing, Glob for the basename across the repo (renamed?). Grep for any class / function names mentioned in the body.
+2. **Verify the `module` field** — search for the path. If missing, search for the basename across the repo (renamed?). Search the code for any class / function names mentioned in the body.
 3. **Verify referenced files** in the body — same pattern. List broken references.
 4. **Check git log** in the affected area (if the path resolves): `git log --oneline -10 -- <path>`. Recent activity = code is alive; long quiet = candidate for deletion if also unreferenced elsewhere.
-5. **Search for successor patterns** — if the entry is a bug, Grep for the symptom keywords in the current codebase. If matches turn up in code that looks like a re-implementation, the problem domain may persist under a new shape (Replace, not Delete).
+5. **Search for successor patterns** — if the entry is a bug, search for the symptom keywords in the current codebase. If matches turn up in code that looks like a re-implementation, the problem domain may persist under a new shape (Replace, not Delete).
 6. **Carry the recurrence artifacts** from the §0.75.1 pre-scan into the evidence (`## Update` heading count, entry-file commit count, `related_to` size). **State them as artifacts, never as a usage count** — there is no read-side telemetry; nothing records that an entry fired during a run, so recurrence is inference over write-side artifacts plus judgment. For a recurrence-qualified entry, additionally judge **mechanizability** (is the lesson a deterministic check a gate could run?) and, if yes, discover which gate surfaces exist in this repo — an existing linter config, an existing CI workflow, the substantive instruction file. Never assume a surface; never scaffold one.
 7. **Form a recommendation:** Keep / Update / Consolidate / Replace / Delete / Harden + 2-4 evidence bullets + confidence (low / medium / high). Apply the precedence rule in [phases.md](phases.md) — correctness (Replace / Delete) wins over Consolidate, which wins over Harden.
 
@@ -203,7 +203,7 @@ When `TOTAL >= 3` AND the entries don't share heavy overlap (different modules /
 | Cursor | Host's generic subagent dispatch (no Explore/general-purpose builtins — only the plugin's own agents register) | Disallow Edit/Write in the prompt |
 | Fallback | Main thread sequential | Use when no subagent primitive is available |
 
-Investigation subagents are **read-only**. They must not Edit, Write, Bash beyond Read / Grep / Glob, or git-mutate. Each returns a structured payload:
+Investigation subagents are **read-only**. They must not Edit, Write, git-mutate, or run any command that changes state; read-only shell search is allowed, and on hosts without dedicated search tools it is the only search. Each returns a structured payload:
 
 ```yaml
 entry_id: bug/runtime-errors/oauth-callback-2025-08-12
@@ -224,7 +224,7 @@ open_questions:
 
 When spawning subagents, include this directive in the task prompt:
 
-> Use Read, Grep, Glob for all file investigation. Do NOT use shell commands (`ls`, `find`, `cat`, `grep`, `bash`) for file operations. This avoids permission prompts and is more reliable. Do NOT edit, create, or delete any files. Return only the structured evidence payload defined in the workflow.
+> Investigate read-only, with whatever read and search tools you have. Do NOT edit, create, or delete any files, and run no command that changes anything. Return only the structured evidence payload defined in the workflow.
 
 The orchestrator (this skill, on the main thread) merges results, cross-references them in Phase 1.75, and executes all writes / deletes centrally.
 
@@ -234,7 +234,7 @@ For Replace candidates, **investigation can be parallel; the actual replacement 
 
 ### 1.3 — Investigation depth heuristics
 
-- **Auto-Delete evidence** = `module` path missing AND no Grep hits for any class / function names mentioned in the body AND no successor pattern in the same domain. All three together = unambiguous Delete (code gone + problem domain gone). Two of three = Replace candidate. One of three = Update or Keep.
+- **Auto-Delete evidence** = `module` path missing AND no search hits for any class / function names mentioned in the body AND no successor pattern in the same domain. All three together = unambiguous Delete (code gone + problem domain gone). Two of three = Replace candidate. One of three = Update or Keep.
 - **Cosmetic drift** (Update territory): file renamed, module field outdated, related-doc paths broken, but the solution body still describes how the code works today.
 - **Substantive drift** (Replace territory): the body's recommended fix conflicts with current code, the architectural approach changed, or the preferred pattern is different. **The boundary:** if you find yourself rewriting the solution section or changing what the entry recommends, that is Replace, not Update.
 
@@ -339,8 +339,8 @@ Replace requires writing a trustworthy successor. Apply the **Evidence sufficien
 
 ### Auto-Delete criteria (all four required)
 
-- The referenced files are gone (Glob confirms).
-- No Grep hits for class / function names from the body.
+- The referenced files are gone (a file search confirms).
+- No search hits for class / function names from the body.
 - No successor pattern visible in the same problem domain.
 - No `related_to` cross-reference points at this entry from other entries.
 

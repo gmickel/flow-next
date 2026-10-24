@@ -9,6 +9,46 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 ### Fixed
 
 - **Claude reviews keep completed results when the CLI also warns about an unknown model.** A validated success now finalizes as usual; genuine unavailable-model errors still use the existing fallback, and nonzero exits cannot publish a verdict.
+
+## [flow-next 9.2.0] - 2026-10-24
+
+Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.
+
+**What changes when you upgrade.** Nothing to configure. Upgrade now if you use capture, audit or the feature map on Claude Code on macOS or Linux, or on Codex. Before 9.2.0 their subagents were told to search only with the Grep and Glob tools and never the shell. Native Claude Code on macOS and Linux has had no Grep or Glob tool since Claude Code 2.1.117, and Codex subagents have only a shell, so many reports came back with nothing verified.
+
+### Fixed
+
+- **Capture checks what your conversation says about the code again.** Capture's codebase verification, audit's checks of memory entries and the feature map's source readers now tell the subagent to investigate read-only with whatever read and search tools it has. In our test on Claude Code, 9 of 18 Explore reports and 16 of 18 repo-scout reports said they could not search before the fix, and none did after it. The share of false claims about the code that the reports caught rose from about 0.6 to 0.96 and above.
+- **No skill or scout depends on a particular search tool.** The remaining places that treated Grep and Glob as the only way to search, in audit, features seed, memory migrate, plan-sync and repo-scout, now work with any host's search tools, including the shell.
+- **Web scouts say when they have no web.** docs-scout and practice-scout use the host's web search and page fetch, and say so instead of answering from memory when a session has neither. github-scout falls back to web search when `gh` cannot reach GitHub, as in Codex's read-only subagents, and says that private repositories were not searched.
+- The Codex mirror build now fails on any directive that locks a subagent to Grep and Glob or forbids read-only shell search.
+
+## [flow-next 9.1.1] - 2026-10-19
+
+### Changed
+
+- **Feature-map proofs no longer pass on an app that is only half up.** Seed and maintain now count an instance as ready only once it works from an empty data directory with migrations and seed data in place, so an open port or a passing database health check is no longer enough. A journey whose seed data lacks something it needs fails with that reason instead of being shortened until it passes. Dry-run and test modes are checked for what they actually skip. A proof run in a stand-in, such as a container standing in for a fresh VM, lists the setup steps the real target will not get, so those steps stay marked unverified.
+
+## [flow-next 9.1.0] - 2026-10-19
+
+You can now run flow-next on a flowctl of your choice, such as your own build, a port to another language or a fork you are testing, by setting one environment variable. Every skill, agent and hook on every host sends its calls there, with no skill edits and nothing copied into your repository, and the flowctl you name does not need Python. Without the variable nothing changes: a call took 316 ms before and after the change, over 80 alternating runs on Linux.
+
+### Added
+
+- **Set `FLOW_NEXT_FLOWCTL` to send every flowctl call to a flowctl you choose.** The plugin's launchers, `scripts/flowctl` for bash, Git Bash and WSL and `scripts/flowctl.cmd` for cmd and PowerShell, pass each call with all its arguments to that flowctl before they look for Python, and return its exit code. Skills still find their helper scripts beside the plugin's launcher, so make-pr and map keep working. If the system cannot run the value, the launcher stops with `flowctl: FLOW_NEXT_FLOWCTL is set but could not be run`; it does not fall back to the bundled flowctl, so two flowctls never write the same `.flow/`. A value that names the launcher itself runs it as before. Point the variable at your flowctl directly, not at a wrapper that calls the plugin's launcher again. On Windows a path without its extension resolves the way the shell resolves commands (`flowctl` finds `flowctl.exe`), and Git Bash accepts a Windows backslash path too.
+
+## [flow-next 9.0.2] - 2026-10-18
+
+### Fixed
+
+- **Completion review judges only your spec's own changes when the spec lands on a branch other than your default branch.** On a release integration branch, a chained spec or a `flow --goal` child, completion review now compares against the branch the spec was built on, so commits from the other specs on that branch no longer count as part of this one. Without `--base`, it uses the base work started the spec from, then the parent spec's branch, then your default branch. Thanks to @DanielKillenberger for reporting it in #569.
+- **Plan review and completion review run on repositories whose default branch is `master`.** Without `--base`, both now find your default branch the way implementation review does. Before, they stopped with `cannot resolve review snapshot: main...HEAD`. Thanks to @DanielKillenberger for reporting it in #538.
+
+## [flow-next 9.0.1] - 2026-10-18
+
+### Fixed
+
+- **Work runs the test command your repository asks for when work is finished.** When your repository's instructions name a command to run at the end of the work (a session-completion or definition-of-done checklist, or before committing, pushing or opening a pull request), work's final gate now runs that command as written, once per spec. Before, it read such a checklist as not asking and ran only focused tests. A command your instructions only list, and a repository with no such instruction, still get focused tests. It is not yet reliable: on a repository whose checklist names `bun run lint:check && bun test`, work ran it in 5 of 9 runs, against none of 9 before; on a repository that only lists its commands, it ran the suite in none of 6.
 ## [flow-next 9.0.0] - 2026-10-17
 
 `/flow-next:flow --goal` takes on work bigger than one spec. Give it a goal as a goal spec, a PRD, a migration target or a single sentence. It measures where things stand against the goal's criteria, writes a spec for the biggest gap, builds it through the normal pipeline with the same reviews and gates as a spec you wrote, then measures again. It keeps going until every criterion has evidence behind it. Each child spec lands on an integration branch, and the goal reaches your default branch in one final pull request with a full review. A goal that takes days picks up where it left off. [Goal mode](https://flow-next.dev/autonomy/goal-mode/) shows how to start one. Thanks to @DanielKillenberger for proposing it in #559.
