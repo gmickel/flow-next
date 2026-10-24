@@ -213,14 +213,17 @@ class PilotGuardSafety(unittest.TestCase):
 
     def test_flow_only_changes_do_not_enter_the_dirty_guard(self) -> None:
         spec_id = self._create_spec(ready=True)
-        flow_tmp = self.repo / ".flow" / "tmp"
-        flow_tmp.mkdir(parents=True, exist_ok=True)
-        (flow_tmp / "flow-only-fixture.md").write_text("fixture\n", encoding="utf-8")
+        spec_path = next((self.repo / ".flow").rglob(f"{spec_id}.json"))
+        relative_spec_path = spec_path.relative_to(self.repo).as_posix()
+        pilot_support._git(self.repo, "add", "-f", ".flow")
+        pilot_support._git(self.repo, "commit", "-qm", "fixture flow state baseline")
+        spec_path.write_text(
+            spec_path.read_text(encoding="utf-8") + "\n", encoding="utf-8"
+        )
         status = pilot_support._git(
             self.repo, "status", "--porcelain", "--untracked-files=all"
         ).stdout.splitlines()
-        self.assertTrue(status)
-        self.assertTrue(all(row[3:].startswith(".flow/") for row in status), status)
+        self.assertIn(f" M {relative_spec_path}", status)
 
         result = self._snapshot(spec_id)
 
