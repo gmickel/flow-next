@@ -1,7 +1,7 @@
 {
   "branch_name": "investigate/qwen-native-review-20261010",
-  "completion_review_status": "not_required",
-  "completion_reviewed_at": "2026-10-11T07:47:03.134995Z",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-10-24T17:48:08.722718Z",
   "created_at": "2026-10-10T18:09:50.382435Z",
   "default_impl": null,
   "default_review": null,
@@ -165,14 +165,51 @@
       "timestamp": "2026-10-11T07:31:54.352070Z",
       "tool_calls": 29,
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "e3a1c8b56620269fbae948cb97f21c083de854b4396142f51954b732e7269039",
+      "backend": "copilot",
+      "base_sha": "f70767b9242370bdd7078b1f953bf2a849781178",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "copilot",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b8b9a916e163940fb0c6a312f63a6c9152def466",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "claude-opus-5.5",
+      "outcome": "verdict",
+      "output_bytes": 6073,
+      "output_sha256": "e7843e272f758bd4944e46e748d332bddad8ba0f311cfcfc3269eade66815dbb",
+      "reservation_id": "ebaab2d7c6084af3b94da5ecd97ab660",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-10-24T17:48:08.719083Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-291-preserve-successful-claude-reviews-with.1": 2
+    "impl:fn-291-preserve-successful-claude-reviews-with.1": 2,
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-291-preserve-successful-claude-reviews-with.1": 0
   },
   "spec_path": ".flow/specs/fn-291-preserve-successful-claude-reviews-with.md",
@@ -189,5 +226,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-11T07:47:03.469644Z"
+  "updated_at": "2026-10-24T17:48:08.723373Z"
 }
