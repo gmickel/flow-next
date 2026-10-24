@@ -6,6 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Claude reviews keep completed results when the CLI also warns about an unknown model.** A validated success now finalizes as usual; genuine unavailable-model errors still use the existing fallback, and nonzero exits cannot publish a verdict.
+- **Failed model fallback executions are no longer cached.** Only fallbacks that exit successfully are cached; a failed cached model or floor is invalidated and returned without another dispatch.
+
 ## [flow-next 9.2.0] - 2026-10-24
 
 Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.
