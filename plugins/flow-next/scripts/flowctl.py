@@ -44675,7 +44675,7 @@ def _copilot_run_exec(
         prompt = _review_prompt_with_materialised_diff(
             prompt, backend="copilot", repo_root=repo_root, args=args,
         )
-    except (ClaudeReviewDiffError, OSError) as exc:
+    except (ReviewDiffError, OSError) as exc:
         return "", (session_id or ""), 2, f"copilot review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
@@ -44711,11 +44711,11 @@ def _cursor_run_exec(
     )
 
 
-class ClaudeReviewDiffError(RuntimeError):
-    """The reviewed diff could not be materialised for the claude reviewer."""
+class ReviewDiffError(RuntimeError):
+    """The reviewed diff could not be materialised for a reviewer."""
 
 
-def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
+def _review_diff_text(repo_root: Path, base: str, head: str) -> str:
     """``git diff <base>..<head>`` at ``repo_root`` for delivery by path."""
     try:
         result = subprocess.run(
@@ -44725,12 +44725,12 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
             cwd=str(repo_root),
         )
     except (subprocess.SubprocessError, OSError) as exc:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {exc}"
         ) from exc
     if result.returncode != 0:
         detail = (result.stderr or "").strip() or f"exit {result.returncode}"
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {detail}"
         )
     text = result.stdout
@@ -44739,7 +44739,7 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
     return text
 
 
-def _claude_materialise_review_diff(
+def _materialise_review_diff(
     repo_root: Path, receipt_id: str, base: str, head: str
 ) -> Path:
     """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
@@ -44760,28 +44760,28 @@ def _claude_materialise_review_diff(
         or "\\" in receipt_id
         or receipt_id in (".", "..")
     ):
-        raise ClaudeReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
+        raise ReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
     tmp_root = repo_root / ".flow" / "tmp"
     directory = tmp_root / "claude-review"
     directory.mkdir(parents=True, exist_ok=True)
     if directory.is_symlink():
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"refusing symlinked review scratch directory: {directory}"
         )
     leaf = directory / f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
     if leaf.is_symlink():
-        raise ClaudeReviewDiffError(f"refusing symlinked review diff path: {leaf}")
+        raise ReviewDiffError(f"refusing symlinked review diff path: {leaf}")
     expected_root = repo_root.resolve() / ".flow" / "tmp"
     resolved = leaf.resolve()
     if expected_root not in resolved.parents:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"review diff path escapes {expected_root}: {resolved}"
         )
-    atomic_write(leaf, _claude_review_diff_text(repo_root, base, head))
+    atomic_write(leaf, _review_diff_text(repo_root, base, head))
     return leaf
 
 
-def _claude_diff_transport_note(
+def _diff_transport_note(
     path: Path, base: str, head: str, *, backend: str = "claude",
 ) -> str:
     """Prompt tail telling a shell-less reviewer how to read the pinned diff."""
@@ -44813,8 +44813,8 @@ def _review_prompt_with_materialised_diff(
     if review_range is None:
         return prompt
     base, head, receipt_id = review_range
-    diff_path = _claude_materialise_review_diff(repo_root, receipt_id, base, head)
-    return prompt + _claude_diff_transport_note(
+    diff_path = _materialise_review_diff(repo_root, receipt_id, base, head)
+    return prompt + _diff_transport_note(
         diff_path, base, head, backend=backend,
     )
 
@@ -44842,7 +44842,7 @@ def _claude_run_exec(
         prompt = _review_prompt_with_materialised_diff(
             prompt, backend="claude", repo_root=repo_root, args=args,
         )
-    except (ClaudeReviewDiffError, OSError) as exc:
+    except (ReviewDiffError, OSError) as exc:
         return "", (session_id or ""), 2, f"claude review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
@@ -44927,6 +44927,29 @@ def _default_review_base(use_json: bool) -> str:
         use_json=use_json,
         code=2,
     )
+
+
+def _completion_review_base(spec_id: str, use_json: bool) -> str:
+    """Resolve an omitted completion-review ``--base`` to the spec's own base.
+
+    The base work recorded for this spec's run, then the chain parent's branch,
+    then the repository's default branch. A record written for another spec,
+    or a branch that no longer resolves, falls through to the next source.
+    """
+    flow_dir = get_flow_dir()
+    try:
+        record = (flow_dir / "tmp" / "spec_base_branch").read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        record = ""
+    recorded_spec, _, recorded_base = record.strip().partition(" ")
+    if recorded_spec == spec_id and recorded_base and _resolve_review_sha(recorded_base):
+        return recorded_base
+    parent_branch = evaluate_spec_chain(flow_dir, spec_id, use_json=use_json)["parent_branch"]
+    if parent_branch:
+        for candidate in (f"origin/{parent_branch}", parent_branch):
+            if _resolve_review_sha(candidate):
+                return candidate
+    return _default_review_base(use_json)
 
 
 def _build_backend_review_findings(
@@ -46305,7 +46328,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         )
     )
 
-    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    base_branch = args.base or _default_review_base(args.json)
     resolved_spec = reg["resolve_spec"](args, None, spec_id=epic_id)
     try:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
@@ -46619,7 +46642,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         )
     )
 
-    base_branch = args.base if hasattr(args, "base") and args.base else "main"
+    base_branch = args.base or _completion_review_base(epic_id, args.json)
     receipt_path = (
         getattr(args, "receipt", None)
         or os.environ.get("REVIEW_RECEIPT_PATH")
@@ -55424,7 +55447,9 @@ def _add_plan_review_parser(sub, backend: str):
     p.add_argument(
         "--files", help="Optional comma-separated relevant code file paths",
     )
-    p.add_argument("--base", default="main", help="Base branch for context")
+    p.add_argument(
+        "--base", help="Base branch for context (default: the repo's default branch)"
+    )
     p.add_argument("--receipt", help="Receipt file path for session continuity")
     p.add_argument(
         "--force",
@@ -55456,7 +55481,11 @@ def _add_completion_review_parser(sub, backend: str):
         help="Require a scoped local execution provider before reserving a review",
     )
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
-    p.add_argument("--base", default="main", help="Base branch for diff")
+    p.add_argument(
+        "--base",
+        help="Base branch for diff (default: the spec's recorded base, its chain "
+        "parent's branch, then the repo's default branch)",
+    )
     p.add_argument("--receipt", help="Receipt file path for session continuity")
     p.add_argument(
         "--force",

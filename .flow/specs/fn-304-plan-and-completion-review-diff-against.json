@@ -1,0 +1,148 @@
+{
+  "branch_name": "fn-304-plan-and-completion-review-diff-against",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-18T11:11:14.838825Z",
+  "created_at": "2026-10-18T10:55:20.527177Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-304-plan-and-completion-review-diff-against",
+  "impl_review_rounds": {
+    "fn-304-plan-and-completion-review-diff-against.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0aab128a3e5feaaa08ec3df8ff232970aaac4c9f6a5afa576170958ce69d73f9",
+      "backend": "codex",
+      "base_sha": "271f7e36d9ebf4241edb021d5c283864eb1c35d6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "classification": "introduced",
+            "findingId": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "classification": "introduced",
+            "findingId": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "12d09ad224cd795f4870fd61e0eb3289c9322443",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1914,
+      "output_sha256": "ab051896b4b47f6f4e738b1b3b93163ee81a372a600c1aac4d5b294bdf5ac36d",
+      "reservation_id": "7f7fcd0a423840618eec23b05d20d89d",
+      "round_consumed": true,
+      "scope": "impl:fn-304-plan-and-completion-review-diff-against.1",
+      "superseded_by": null,
+      "task": "fn-304-plan-and-completion-review-diff-against.1",
+      "timestamp": "2026-10-18T11:08:27.892058Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "bf21093b666d437843108cf49635ee7756bf2c5cd4f5290fd38816a33b7af956",
+      "backend": "codex",
+      "base_sha": "271f7e36d9ebf4241edb021d5c283864eb1c35d6",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "classification": "introduced",
+            "findingId": "finding-18f309439ccbd5eb31e4bff737ddc8ba",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "classification": "introduced",
+            "findingId": "finding-25b1fa68b2ebbe6e8b0e1e25ffe618f2",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5ab34056b4839fbc73516435ceedce2357285434",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 1427,
+      "output_sha256": "784490e4a2dca42ee726ede1b54ea94b7bbc213e72cb98d0d6582366868ca83a",
+      "reservation_id": "de846d7dc886411d8fa6f081ff3dd860",
+      "round_consumed": true,
+      "scope": "impl:fn-304-plan-and-completion-review-diff-against.1",
+      "superseded_by": null,
+      "task": "fn-304-plan-and-completion-review-diff-against.1",
+      "timestamp": "2026-10-18T11:11:01.117513Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-304-plan-and-completion-review-diff-against.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-304-plan-and-completion-review-diff-against.1": 0
+  },
+  "spec_path": ".flow/specs/fn-304-plan-and-completion-review-diff-against.md",
+  "status": "done",
+  "title": "Plan and completion review diff against the spec's own base",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-18T11:15:16.003929Z"
+}

@@ -30,7 +30,7 @@ Group entries by `(module, category)` pair. For each cluster:
 
 - Count entries.
 - Note cross-references (`related_to` frontmatter field pointing into the same cluster).
-- Spot-check drift: does the most-referenced file in the cluster still exist? Use Glob.
+- Spot-check drift: does the most-referenced file in the cluster still exist? Check with a file search.
 
 Compute impact: `cluster_score = entries + 2 * cross_refs + (3 if missing_anchor_file else 0)`. The highest-scoring cluster is the recommended starting area.
 

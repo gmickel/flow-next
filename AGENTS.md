@@ -1,5 +1,8 @@
 # Flow-Next Agent development entry point
 
+Using Flow-Next in another project rather than changing it? This file does not
+apply; read [For agents](https://flow-next.dev/for-agents/) instead.
+
 Read [the shared development policy](agent_docs/project.md) before repository
 work. It owns architecture, source ownership, verification, and delivery rules.
 This file owns host guidance only; keep common rules in that policy.

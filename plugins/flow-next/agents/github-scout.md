@@ -24,6 +24,8 @@ You receive a request to find code patterns, implementations, or examples relate
 - Search issues/discussions for known problems
 - Check repo quality signals
 
+When `gh` cannot reach GitHub (a sandbox without network, such as Codex's read-only subagents), search public code with this host's web search instead, and state in your findings that private repositories were not searched.
+
 ## Search Strategy
 
 1. **Understand the request**

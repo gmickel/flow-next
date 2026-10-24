@@ -24,7 +24,7 @@ Run notes and live evidence land under `.flow/tmp/features-<run-id>/` (gitignore
 | Observable evidence | what a drive can capture | screenshots, CLI stdout, files written, HTTP traces |
 | Isolation | can two instances run side by side | ports, data dirs, profiles; say so in the index when they cannot |
 
-Read first. Grep/Glob second. Ask third, and only for a remaining unknown.
+Read first. Search second. Ask third, and only for a remaining unknown.
 
 Ask via `AskUserQuestion` (call `ToolSearch` with `select:AskUserQuestion` first if its schema is not loaded). On portable hosts without that tool, a plain-text numbered prompt with a final `Other - type your own answer` option. Never silently skip.
 

@@ -24,7 +24,7 @@ Run notes and live evidence land under `.flow/tmp/features-<run-id>/` (gitignore
 | Observable evidence | what a drive can capture | screenshots, CLI stdout, files written, HTTP traces |
 | Isolation | can two instances run side by side | ports, data dirs, profiles; say so in the index when they cannot |
 
-Read first. Grep/Glob second. Ask third, and only for a remaining unknown.
+Read first. Search second. Ask third, and only for a remaining unknown.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 

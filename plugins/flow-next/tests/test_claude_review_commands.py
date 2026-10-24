@@ -465,6 +465,122 @@ class ReviewArgumentDefaults(unittest.TestCase):
             self.assertEqual(_read_json(receipt)["base"], "main")
             self.assertIn(f"{base}..", calls[0]["stdin"])
 
+    def _on_master_with_work_branch(self, repo: Path, base: str) -> None:
+        _git(repo, "checkout", "-q", "-b", "work")
+        _git(repo, "branch", "-f", "master", base)
+        subprocess.run(["git", "-C", str(repo), "branch", "-D", "main"],
+                       capture_output=True, check=False)
+
+    def test_spec_reviews_without_base_use_a_master_default_branch(self):
+        for command in ("plan-review", "completion-review"):
+            with self.subTest(command=command), _flow_repo() as (repo, base):
+                self._on_master_with_work_branch(repo, base)
+                receipt = repo / "receipt.json"
+                with _fake_claude() as calls:
+                    code, _out, err = _run_cli(
+                        "claude", command, EPIC_ID, "--receipt", str(receipt), "--json")
+                self.assertEqual(code, 0, err)
+                self.assertEqual(len(calls), 1)
+                if command == "completion-review":
+                    self.assertEqual(_read_json(receipt)["base"], "master")
+
+    def _integration_repo(self, repo: Path, base: str) -> str:
+        """master <- integration (another child's commit) <- work (this spec)."""
+        self._on_master_with_work_branch(repo, base)
+        _git(repo, "checkout", "-q", "-b", "integration")
+        (repo / "src" / "other_child.py").write_text("x = 1\n", encoding="utf-8")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "other child")
+        integration = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "checkout", "-q", "-B", "work", integration)
+        _commit_change(repo, "def a(x):\n    return x + 2\n", "this child")
+        return integration
+
+    def _record_base(self, repo: Path, spec_id: str, branch: str) -> None:
+        (repo / ".flow" / "tmp").mkdir(parents=True, exist_ok=True)
+        (repo / ".flow" / "tmp" / "spec_base_branch").write_text(
+            f"{spec_id} {branch}\n", encoding="utf-8")
+
+    def test_completion_review_without_base_uses_the_recorded_spec_base(self):
+        with _flow_repo() as (repo, base):
+            integration = self._integration_repo(repo, base)
+            self._record_base(repo, EPIC_ID, "integration")
+            receipt = repo / "receipt.json"
+            with _fake_claude() as calls:
+                code, _out, err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(_read_json(receipt)["base"], "integration")
+            self.assertIn(f"{integration}..", calls[0]["stdin"])
+            self.assertNotIn("other_child.py", calls[0]["stdin"])
+
+    def test_completion_review_ignores_another_specs_or_a_dead_record(self):
+        for spec_id, branch in (("fn-9-other", "integration"), (EPIC_ID, "gone")):
+            with self.subTest(spec=spec_id, branch=branch), _flow_repo() as (repo, base):
+                self._integration_repo(repo, base)
+                self._record_base(repo, spec_id, branch)
+                receipt = repo / "receipt.json"
+                with _fake_claude():
+                    code, _out, err = _run_cli(
+                        "claude", "completion-review", EPIC_ID, "--receipt", str(receipt),
+                        "--json")
+                self.assertEqual(code, 0, err)
+                self.assertEqual(_read_json(receipt)["base"], "master")
+
+    def test_completion_review_without_base_uses_the_chain_parent_branch(self):
+        with _flow_repo() as (repo, base):
+            integration = self._integration_repo(repo, base)
+            _git(repo, "branch", "-m", "integration", "fn-0-parent")
+            flow = repo / ".flow"
+            (flow / "specs" / "fn-0-parent.json").write_text(json.dumps({
+                "id": "fn-0-parent", "title": "Parent", "status": "open",
+                "branch_name": "fn-0-parent"}), encoding="utf-8")
+            (flow / "tasks" / "fn-0-parent.1.json").write_text(json.dumps({
+                "id": "fn-0-parent.1", "epic": "fn-0-parent", "title": "t",
+                "status": "done"}), encoding="utf-8")
+            spec_json = flow / "specs" / f"{EPIC_ID}.json"
+            data = json.loads(spec_json.read_text(encoding="utf-8"))
+            data["depends_on_epics"] = ["fn-0-parent"]
+            spec_json.write_text(json.dumps(data), encoding="utf-8")
+            receipt = repo / "receipt.json"
+            with _fake_claude() as calls:
+                code, _out, err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(_read_json(receipt)["base"], "fn-0-parent")
+            self.assertIn(f"{integration}..", calls[0]["stdin"])
+
+    def test_completion_review_explicit_base_wins_and_fails_closed(self):
+        with _flow_repo() as (repo, base):
+            self._integration_repo(repo, base)
+            self._record_base(repo, EPIC_ID, "integration")
+            receipt = repo / "receipt.json"
+            with _fake_claude():
+                code, _out, err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--base", "master",
+                    "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(_read_json(receipt)["base"], "master")
+            with _fake_claude() as calls:
+                code, out, _err = _run_cli(
+                    "claude", "completion-review", EPIC_ID, "--base", "nope", "--json")
+            self.assertEqual(code, 2)
+            self.assertIn("nope", json.loads(out)["error"])
+            self.assertEqual(calls, [])
+
+    def test_spec_reviews_without_any_base_name_base(self):
+        for command in ("plan-review", "completion-review"):
+            with self.subTest(command=command), _flow_repo() as (repo, _base):
+                _git(repo, "checkout", "-q", "-b", "work")
+                for name in ("main", "master"):
+                    subprocess.run(["git", "-C", str(repo), "branch", "-D", name],
+                                   capture_output=True, check=False)
+                with _fake_claude() as calls:
+                    code, out, _err = _run_cli("claude", command, EPIC_ID, "--json")
+                self.assertEqual(code, 2)
+                self.assertIn("pass --base", json.loads(out)["error"])
+                self.assertEqual(calls, [])
+
     def test_impl_review_without_base_or_default_branch_names_base(self):
         with _flow_repo() as (repo, _base):
             _git(repo, "checkout", "-q", "-b", "work")

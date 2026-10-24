@@ -771,6 +771,59 @@ class TestReviewDiffAdapterBoundary(unittest.TestCase):
             self.assertEqual(inputs, ["p"])  # no transport note appended
             self.assertEqual(sorted(p.name for p in scratch.iterdir()), before)
 
+            # Copilot's deep/validator path resumes the same session. It keeps
+            # the primary artifact available without writing another file.
+            flowctl._wire_backend_review_hooks()
+            calls = []
+            inputs = []
+            copilot_diff = scratch / _diff_name("fn-9.1-impl", c0, c1)
+            expected = subprocess.run(
+                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True,
+                text=True, check=True,
+            ).stdout
+
+            def copilot_result(_model):
+                self.assertTrue(copilot_diff.is_file())
+                self.assertEqual(copilot_diff.read_text(encoding="utf-8"), expected)
+                return "<verdict>SHIP</verdict>", "", 0
+
+            with _scripted(
+                flowctl, dispatch_result=copilot_result, calls=calls, inputs=inputs,
+            ), mock.patch.object(flowctl, "get_repo_root", return_value=root), \
+                    mock.patch.object(flowctl, "_managed_review_exec", return_value=None):
+                flowctl._dispatch_backend_review(
+                    backend="copilot", reg=flowctl.BACKEND_REGISTRY["copilot"],
+                    args=argparse.Namespace(json=False), prompt="Review the patch.",
+                    session_id="copilot-session", repo_root=root,
+                    resolved_spec=BackendSpec("copilot", COPILOT_TOP, "high"),
+                    resolution_out={}, receipt_path=str(scratch / "fn-9.1-impl.json"),
+                    spec_id="fn-9", review_kind="impl", review_type="impl",
+                    reviewed_head_sha=c1, reviewed_base_sha=c0,
+                )
+                primary_bytes = copilot_diff.read_bytes()
+                primary_call = next(call for call in calls if "--model" in call)
+                primary_prompt = (
+                    primary_call[primary_call.index("-p") + 1]
+                    if "-p" in primary_call else inputs[0]
+                )
+                self.assertIn(str(copilot_diff), primary_prompt)
+
+                flowctl._dispatch_session_pass(
+                    "copilot", "Continue the review.", session_id="copilot-session",
+                    spec_arg=f"copilot:{COPILOT_TOP}:high", use_json=False,
+                    fail_label="deep pass",
+                )
+
+            copilot_calls = [call for call in calls if "--model" in call]
+            self.assertEqual(len(copilot_calls), 2)
+            self.assertIn("--resume=copilot-session", copilot_calls[1])
+            optional_prompt = (
+                copilot_calls[1][copilot_calls[1].index("-p") + 1]
+                if "-p" in copilot_calls[1] else inputs[1]
+            )
+            self.assertEqual(optional_prompt, "Continue the review.")
+            self.assertEqual(copilot_diff.read_bytes(), primary_bytes)
+
     def test_two_receipt_ids_write_two_files(self) -> None:
         with _git_repo() as (root, (c0, c1, _c2)):
             scratch = root / ".flow" / "tmp" / "claude-review"

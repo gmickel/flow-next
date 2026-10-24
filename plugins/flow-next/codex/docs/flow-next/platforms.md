@@ -16,6 +16,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 ## Contents
 
 - [Install matrix](#install-matrix)
+- [Search and web tools by host](#search-and-web-tools-by-host)
 - [What setup does](#what-setup-does)
 - [Setup host detection: rung order and rationale](#setup-host-detection-rung-order-and-rationale)
 - [Factory Droid (native support)](#factory-droid-native-support)
@@ -47,6 +48,22 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 | OpenCode | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-opencode.sh` | n/a (OpenCode has no plugin format - the installer scatters canonical files into `~/.config/opencode/`) | **First-class** (installer delivery; multi-agent fan-out, codex + host review, and setup verified live) - see [OpenCode](#opencode) |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
+
+## Search and web tools by host
+
+Scouts and investigation subagents search with whatever read-only tools their host gives them, so
+skill prose never names Grep or Glob as the only way to search and never forbids read-only shell
+search (`scripts/sync-codex.sh` fails the build on such a directive).
+
+| Host | Code search | Web |
+|---|---|---|
+| Claude Code, native macOS/Linux build (2.1.117+) | no Grep or Glob tool; Bash with bundled search | WebSearch, WebFetch |
+| Claude Code, Windows or npm install | Grep, Glob, Bash | WebSearch, WebFetch |
+| Codex | shell only, in a read-only sandbox without network | built-in web search (`web_search` in `config.toml`) |
+| Droid, Cursor, OpenCode, Grok Build, Muse Code | the host's own search tools and shell | the host's own web tools |
+
+The `claude` review backend is the exception: flowctl passes `--tools Read Grep Glob` explicitly,
+and Claude Code provides tools that are named this way.
 
 ## What setup does
 
@@ -239,6 +256,7 @@ CODEX_BIN="${CODEX_HOME:-$HOME/.codex}/scripts"
 ### Caveats
 
 - `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching).
+- Read-only subagents run without network, so `github-scout` cannot reach GitHub through `gh`; it falls back to Codex's web search for public code and says private repositories were not searched.
 - Global install prompts (`/prompts:*`) are global-only (`${CODEX_HOME:-$HOME/.codex}/prompts/`); native plugin avoids this limitation.
 
 ## Grok Build (Claude Code compatibility)

@@ -9,7 +9,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 
 Memory entries decay. A `.flow/memory/bug/runtime-errors/` entry logged six months ago might reference a renamed file, a deleted function, or a codepath that no longer exists. Without periodic review, the store accumulates zombie entries and `memory-scout` surfaces outdated advice.
 
-This skill IS the audit. The host agent (Claude Code / Codex / Droid) walks `.flow/memory/`, reads each entry, uses Read/Grep/Glob/git to verify references against the current codebase, applies engineering judgment, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Optional autofix mode applies unambiguous actions and marks ambiguous as stale.
+This skill IS the audit. The host agent (Claude Code / Codex / Droid) walks `.flow/memory/`, reads each entry, reads and searches the code and git history to verify references against the current codebase, applies engineering judgment, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Optional autofix mode applies unambiguous actions and marks ambiguous as stale.
 
 **Harden** is the graduation path: a lesson that keeps getting re-learned and states a mechanically checkable rule should stop riding the context window and become a gate. The audit proposes an artifact in a surface the repo already has — a lint rule or a CI step — verifies the gate actually fires, and only then demotes the entry to a pointer at it (file stays on disk, provenance intact). Propose-and-confirm by design: gate surfaces are shared repo infrastructure, so Harden never applies unattended.
 

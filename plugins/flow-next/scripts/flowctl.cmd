@@ -14,11 +14,39 @@ GOTO :start
 
 :find_dp0
 SET "dp0=%~dp0"
+SET "self=%~f0"
 EXIT /b
 
 :start
 SETLOCAL
 CALL :find_dp0
+
+REM FLOW_NEXT_FLOWCTL names the flowctl a host orchestrator wants every call to use
+REM (never FLOWCTL_BIN: an unrelated flowctl CLI tells its users to set that).
+REM Delegate before the Python probe so that flowctl needs no Python. cmd.exe
+REM decides what runs (PATHEXT finds flowctl.exe from a bare flowctl path); a
+REM value it cannot run fails loudly, because falling back would let two
+REM flowctls write one repo. A value naming this launcher (or its bash twin)
+REM runs it normally; %%~fI normalizes slashes so a forward-slash path to this
+REM file cannot recurse. The hint needs a pre-check: a failed CALL sets
+REM errorlevel 1, which a delegated flowctl can also return.
+IF NOT DEFINED FLOW_NEXT_FLOWCTL GOTO :probe
+FOR %%I IN ("%FLOW_NEXT_FLOWCTL%") DO SET "_bin=%%~fI"
+IF /I "%_bin%"=="%self%" GOTO :probe
+IF /I "%_bin%"=="%dp0%flowctl" GOTO :probe
+SET "_found="
+IF EXIST "%_bin%" IF NOT EXIST "%_bin%\*" SET "_found=1"
+FOR %%E IN (%PATHEXT%) DO IF EXIST "%_bin%%%E" SET "_found=1"
+IF NOT DEFINED _found GOTO :bad_bin
+CALL "%_bin%" %*
+EXIT /b %errorlevel%
+
+:bad_bin
+ECHO flowctl: FLOW_NEXT_FLOWCTL is set but could not be run: "%FLOW_NEXT_FLOWCTL%" 1>&2
+ECHO   Fix the path, or unset FLOW_NEXT_FLOWCTL to use the plugin's bundled flowctl. 1>&2
+EXIT /b 1
+
+:probe
 
 SET "_prog="
 SET "_old="

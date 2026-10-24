@@ -270,6 +270,68 @@ class TestHostStandaloneImplReview(unittest.TestCase):
                 calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
                 self.assertFalse(any("increment" in call for call in calls), calls)
 
+    def test_host_completion_base_follows_the_spec_base(self) -> None:
+        reserve = _bash_fence_containing(
+            _read("flow-next-spec-completion-review/workflow-host.md"), "review-rounds increment")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            git = ["git", "-C", str(temp), "-c", "user.email=t@t.t", "-c", "user.name=t"]
+
+            def commit(name: str) -> str:
+                (temp / name).write_text(name, encoding="utf-8")
+                subprocess.run([*git, "add", name], check=True)
+                subprocess.run([*git, "commit", "-q", "-m", name], check=True)
+                return subprocess.run([*git, "rev-parse", "HEAD"], check=True,
+                                      capture_output=True, text=True).stdout.strip()
+
+            subprocess.run([*git, "init", "-q", "-b", "master"], check=True)
+            master = commit("base.txt")
+            subprocess.run([*git, "checkout", "-q", "-b", "integration"], check=True)
+            integration = commit("other_child.txt")
+            subprocess.run([*git, "checkout", "-q", "-b", "work"], check=True)
+            commit("this_child.txt")
+            (temp / ".flow" / "tmp").mkdir(parents=True)
+            log = temp / "flowctl.log"
+            stub = temp / "flowctl-stub"
+            stub.write_text(
+                "#!/usr/bin/env bash\n"
+                'if [[ "$1" == "show" ]]; then printf \'{"id": "fn-1-demo"}\\n\'; exit 0; fi\n'
+                'if [[ "$1 $2" == "spec chain" ]]; then echo chain >> "$CHAIN_LOG"; printf "%s\\n" "$CHAIN_JSON"; exit 0; fi\n'
+                f'printf "%s\\n" "$*" >> "{log.as_posix()}"\necho "{{}}"\n',
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+            chain_log = temp / "chain.log"
+            for record, chain, base_commit, want in (
+                ("fn-1-demo integration", '{"parent_branch": "master"}', "", integration),
+                ("fn-9 integration", "{}", "", master),
+                ("fn-1-demo gone", '{"parent_branch": "integration"}', "", integration),
+                ("fn-1-demo integration", "{}", "master", master),
+                ("fn-1-demo integration", "{}", "nope", None),
+            ):
+                with self.subTest(record=record, chain=chain, base_commit=base_commit):
+                    (temp / ".flow" / "tmp" / "spec_base_branch").write_text(
+                        record + "\n", encoding="utf-8", newline="\n")   # work's printf writes LF
+                    log.unlink(missing_ok=True)
+                    chain_log.unlink(missing_ok=True)
+                    env = os.environ.copy()
+                    env.update({"FLOWCTL": stub.as_posix(), "SPEC_ID": "fn-1", "CHAIN_JSON": chain,
+                                "CHAIN_LOG": chain_log.as_posix(),
+                                "BASE_COMMIT": base_commit, "TMPDIR": temp.as_posix()})
+                    result = subprocess.run([_bash_executable(), "-c", reserve], cwd=temp, env=env,
+                                            text=True, capture_output=True, check=False)
+                    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+                    increments = [call for call in calls if "increment" in call]
+                    if want is None:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("BASE_COMMIT 'nope' does not resolve", result.stderr)
+                        self.assertEqual(increments, [])
+                    else:
+                        self.assertEqual(len(increments), 1, result.stdout + result.stderr)
+                        self.assertIn(f"--base {want} ", increments[0])
+                    if record.startswith("fn-1-demo integration") and not base_commit:
+                        self.assertFalse(chain_log.exists())   # a valid record needs no chain lookup
+
     def test_standalone_skips_reservation_and_attaches_directly(self) -> None:
         host = _read("flow-next-impl-review/workflow-host.md")
         reserve = _bash_fence_after(host, "### Convergence reservation and recovery fence")
