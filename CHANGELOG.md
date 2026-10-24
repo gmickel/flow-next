@@ -8,7 +8,9 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## [flow-next 9.2.0] - 2026-10-24
 
-**Upgrade now if you use capture, audit or the feature map on Claude Code or Codex.** Three investigation subagents were told to search only with the Grep and Glob tools and never to use the shell. Native Claude Code on macOS and Linux has had no Grep or Glob tool since Claude Code 2.1.117, and Codex subagents have only a shell, so a subagent that followed the instruction could not search the code at all and came back with nothing verified.
+Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.
+
+**What changes when you upgrade.** Nothing to configure. Upgrade now if you use capture, audit or the feature map on Claude Code on macOS or Linux, or on Codex. Before 9.2.0 their subagents were told to search only with the Grep and Glob tools and never the shell. Native Claude Code on macOS and Linux has had no Grep or Glob tool since Claude Code 2.1.117, and Codex subagents have only a shell, so many reports came back with nothing verified.
 
 ### Fixed
 
