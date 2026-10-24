@@ -77,7 +77,7 @@ The goal is automated migration with human oversight on judgment calls — not a
 
 ## Subagent dispatch (mostly N/A)
 
-This skill runs almost entirely on the main thread. Phase 1's "one entry per prompt turn" rule means classification iterates serially in the orchestrator — there is no investigation step independent enough to dispatch in parallel. Cross-platform tool naming (`Task` on Claude Code, `spawn_agent` on Codex, platform-equivalent on Droid) is documented here only for the rare case where the agent needs to spawn a focused investigation subagent (e.g. resolving an ambiguous override by reading a referenced file): keep such dispatches read-only (Read / Grep / Glob), do not let subagents call `flowctl memory add` directly, and merge results back on the main thread before Phase 2.
+This skill runs almost entirely on the main thread. Phase 1's "one entry per prompt turn" rule means classification iterates serially in the orchestrator — there is no investigation step independent enough to dispatch in parallel. Cross-platform tool naming (`Task` on Claude Code, `spawn_agent` on Codex, platform-equivalent on Droid) is documented here only for the rare case where the agent needs to spawn a focused investigation subagent (e.g. resolving an ambiguous override by reading a referenced file): keep such dispatches read-only (reads and searches only), do not let subagents call `flowctl memory add` directly, and merge results back on the main thread before Phase 2.
 
 ## Forbidden
 

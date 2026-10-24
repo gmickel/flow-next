@@ -2212,6 +2212,20 @@ else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
 fi
 
+# Search tools differ by host: Codex subagents have only the shell, and native
+# Claude Code on macOS/Linux has no Grep or Glob tool (search runs through
+# Bash). A directive that names Grep/Glob as the investigation tools or forbids
+# shell commands leaves a read-only subagent unable to search at all. Fix the
+# canonical prose; never add a transform for it.
+search_lock=$( { grep -rniE 'use read, grep, glob|do not use shell commands' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$search_lock" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $search_lock investigation directives lock subagents to Grep/Glob or forbid shell search — use a host-neutral read-only directive"
+  { grep -rniE 'use read, grep, glob|do not use shell commands' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No investigation directive locks subagents out of shell search"
+fi
+
 # fn-202 (#363 codex P2 + P1): every relative `docs/` markdown link in mirror
 # skill prose AND generated agent TOML bodies (fn-207 R6) must carry the owned
 # `flow-next/` namespace segment AND resolve on disk under

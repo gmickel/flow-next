@@ -210,8 +210,8 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
 
 **When to use** (must meet ALL):
 
-- The referenced files / modules are gone (Glob confirms).
-- No Grep hits for class / function names mentioned in the body.
+- The referenced files / modules are gone (a file search confirms).
+- No search hits for class / function names mentioned in the body.
 - No successor pattern visible in the same problem domain.
 - No `related_to` cross-reference points at this entry from other active entries.
 
@@ -224,7 +224,7 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
 
 **Auto-Delete criteria** (interactive too — bypass Phase 3 ask when ALL hold):
 
-- Implementation gone (`module` path missing, no Grep hits).
+- Implementation gone (`module` path missing, no search hits).
 - Problem domain gone (no successor pattern in the codebase).
 - No active dependents (`related_to`).
 - No conflicting newer entry suggesting a replacement.

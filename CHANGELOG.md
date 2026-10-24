@@ -6,6 +6,17 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.2.0] - 2026-10-24
+
+**Upgrade now if you use capture, audit or the feature map on Claude Code or Codex.** Three investigation subagents were told to search only with the Grep and Glob tools and never to use the shell. Native Claude Code on macOS and Linux has had no Grep or Glob tool since Claude Code 2.1.117, and Codex subagents have only a shell, so a subagent that followed the instruction could not search the code at all and came back with nothing verified.
+
+### Fixed
+
+- **Capture checks what your conversation says about the code again.** Capture's codebase verification, audit's checks of memory entries and the feature map's source readers now tell the subagent to investigate read-only with whatever read and search tools it has. In our test on Claude Code, 9 of 18 Explore reports and 16 of 18 repo-scout reports said they could not search before the fix, and none did after it. The share of false claims about the code that the reports caught rose from about 0.6 to 0.96 and above.
+- **Every scout and skill says what to find, not which tool finds it.** The remaining places that treated Grep and Glob as the only way to search, in audit, features seed, memory migrate, plan-sync and repo-scout, now work with any host's search tools, including the shell.
+- **Web scouts say when they have no web.** docs-scout and practice-scout use the host's web search and page fetch, and say so instead of answering from memory when a session has neither. github-scout falls back to web search when `gh` cannot reach GitHub, as in Codex's read-only subagents, and says that private repositories were not searched.
+- The Codex mirror build now fails on any directive that locks a subagent to Grep and Glob or forbids read-only shell search.
+
 ## [flow-next 9.1.1] - 2026-10-19
 
 ### Changed

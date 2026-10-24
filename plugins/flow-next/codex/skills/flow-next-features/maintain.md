@@ -46,7 +46,7 @@ This file is self-sufficient. Do not assume SKILL.md already exported `$FLOWCTL`
 
 **Goal:** the index matches the feature files on disk, and drift memos from prior QA/maintain runs are in this pass's targets.
 
-Read `.flow/features/README.md`. Glob `.flow/features/*.md`, excluding the index. Compare:
+Read `.flow/features/README.md`. List `.flow/features/*.md`, excluding the index. Compare:
 
 | Mismatch | Fix |
 |----------|-----|
@@ -98,7 +98,7 @@ Dispatch **one** `spawn_agent` with `agent_type: explorer` **per feature file**,
 
 Pass each reader an identity (the feature file path) plus the contract pointer. Do not embed the file body. Instruct:
 
-> Use Read, Grep, Glob. Do not drive. Do not Edit, Write, or mutate git. Return only the payload below.
+> Investigate read-only, with whatever read and search tools you have. Do not drive. Do not Edit, Write, or mutate git. Return only the payload below.
 
 Return shape (exactly these keys):
 
