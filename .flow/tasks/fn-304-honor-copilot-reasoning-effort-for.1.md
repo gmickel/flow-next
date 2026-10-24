@@ -66,7 +66,7 @@ The existing flow-next.dev Copilot paragraph is at [Review backends, Per-backend
 ### Lifecycle handoff
 
 - Implementation review: `SHIP`, official run `5388114c8c654382b763cc413d9b7cc6`.
-- Completion review: `not_required` under the single-task policy because this task's official SHIP review covers the spec surface; no separate completion review ran.
+- Completion review: `SHIP`, reservation `c6d02cb8b78f4ad3aa8abfef78f5954a` (2026-10-17), recorded in the spec review ledger.
 - QA: skipped under policy; this change has no UI path.
 - The coordinator owns Flow task state and Git bookkeeping.
 
