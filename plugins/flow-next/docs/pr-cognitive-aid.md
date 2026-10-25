@@ -152,7 +152,9 @@ Full validation rules, bounds, and fallback behavior are defined by the
 
 Every pull-request size uses the same deterministic briefing. The artifact
 supplies all content; rendering reads no live Flow state. Invalid artifacts
-produce no briefing, so make-pr uses its existing fallback.
+produce no briefing, so make-pr uses its existing fallback. A diff over 500
+changed files can never validate, so make-pr writes that fallback directly, in
+the briefing's section order.
 
 The briefing leads with what a reviewer needs before opening the diff and does
 not repeat what the forge already shows (the changed-file list, line totals).

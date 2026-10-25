@@ -6,6 +6,13 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.3.1] - 2026-10-25
+
+### Fixed
+
+- **Pull requests over 500 changed files get a reviewer-first body in less than half the time.** The briefing artifact holds at most 500 files, so a large diff, such as a branch that carries a formatter upgrade, could never validate. make-pr still composed it, failed, and then wrote its fallback body in whatever shape it chose. It now checks the size first, goes straight to the fallback and writes it in the briefing's order: Why, Review focus, Needs you, What changes, Reading order, Tradeoffs, Verified. On a real 1,251-file pull request, two runs took 84 and 100 seconds instead of 218 and 275, at about half the cost.
+- **A bulk mechanical change is one sentence, not a file list.** A formatter run, codemod or regenerated tree is named in Review focus by its commit, with how it was checked, so the reviewer knows what to skip.
+
 ## [flow-next 9.3.0] - 2026-10-25
 
 Pull-request bodies from make-pr now open with what a reviewer needs before the diff: where to start, where to look hard and why, the feedback the author wants, and every check that failed or was never run. Across 12 real pull requests, a reviewer reaches those after about 150 words instead of about 720, and the body no longer repeats the changed-file list and line totals your forge already shows. make-pr is no slower: 131 seconds against 137 at the median, over 12 runs each.

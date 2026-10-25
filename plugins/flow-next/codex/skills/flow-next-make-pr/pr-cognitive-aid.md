@@ -10,6 +10,7 @@ Per-task evidence is under `specs[].tasks[]` (or the host's `tasks`), not `tasks
 CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
 ```
 Reuse `current` exactly; otherwise author a private 0600 `AID_INPUT` tempfile outside the repository.
+Over 500 changed files (`diff_summary.files_changed`) no artifact can validate: skip to the fallback under Render.
 Replace skeleton identities, paths and evidence with export values; declare every R-ID, even uncovered:
 ```json
 {"schemaVersion":1,"artifactId":"aid-001","specId":"fn-7-rate-limit","specIds":["fn-7-rate-limit"],"baseSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","headSha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","generatedAt":"2026-09-21T12:00:00Z",
@@ -29,6 +30,8 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   security, compatibility); then the feedback you want from the reviewer (for example "check the API
   shape and the migration; the logic passed two review rounds"). Unproven work goes in `proof` cells
   and `openItems`, which render under Needs you.
+- A bulk mechanical change (a formatter run, a codemod, a regenerated tree) is one sentence in the review
+  focus naming its commit and how it was checked; never describe its files one by one.
 - Optional `shape`: one fenced ```diff or ```text block of at most 25 lines showing the new or changed
   public surface (types, signatures, CLI flags, schema, config keys) or a call tree of the load-bearing
   flow, when the change has one; leave it out otherwise. Every name in it must appear in the diff or
@@ -81,6 +84,8 @@ The renderer keeps authored sections and every group's title and summary, names 
 row as its start file and lists mechanical and generated files under Safe to skim; it never repeats the forge's
 file list or totals. No body budget or preview loop. Never merge export fields into rendered output.
 Invalid, stale or unsupported artifacts render nothing: print a stderr note and set `PR_AID_CURRENT=false`.
-Write a labeled fallback from the export's goal, tasks, verification and open items to `BODY_FILE`, excluding rejected fields.
+Write a labeled fallback to `BODY_FILE` from the export's goal, tasks, verification and open items, excluding
+rejected fields. Keep the briefing's order and rules: Why, Review focus, Needs you, What changes, Reading order
+(numbered group titles and summaries with one start file each), Tradeoffs, Verified; no file lists or totals.
 On success set `PR_AID_CURRENT=true`.
 Keep the immutable artifact local. Next, [create-and-finalize.md](create-and-finalize.md) creates the PR and runs the tracker facade with `$PR_URL`.
