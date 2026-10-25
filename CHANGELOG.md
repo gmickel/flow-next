@@ -6,6 +6,12 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.2.1] - 2026-10-25
+
+### Fixed
+
+- **A spec whose requirements are in the wrong section now says so instead of silently having none.** QA, make-pr and completion review read criteria only from `## Acceptance Criteria`. A spec that kept its R-ID bullets elsewhere, such as under `## Requirements`, used to yield zero criteria with no message, so QA had nothing to test against and make-pr reported no uncovered R-IDs. Writing such a spec (`flowctl spec create --plan-file`, `spec set-plan`) now prints a warning naming how many R-ID bullets were not read, and `flowctl validate` lists the same warning. A spec whose criteria parse is unaffected, even when other sections mention R-IDs.
+
 ## [flow-next 9.2.0] - 2026-10-24
 
 Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.
