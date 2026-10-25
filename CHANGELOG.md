@@ -6,6 +6,8 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.3.0] - 2026-10-25
+
 Pull-request bodies from make-pr now open with what a reviewer needs before the diff: where to start, where to look hard and why, the feedback the author wants, and every check that failed or was never run. Across 12 real pull requests, a reviewer reaches those after about 150 words instead of about 720, and the body no longer repeats the changed-file list and line totals your forge already shows. make-pr is no slower: 131 seconds against 137 at the median, over 12 runs each.
 
 **What changes when you upgrade.** Nothing to configure. New pull requests get the new body; an open one changes when make-pr refreshes it with `--update`. The headings are now Why, Review focus, Needs you, Shape, What changes for a user or operator, Reading order, Tradeoffs and Verified, so a tool that parses the old Scope, Blast radius, Verification or Open items headings needs to follow them. The stored aid artifact keeps every file row and stays at schema version 1. Its one addition is an optional `shape` field, which a consumer that rejects unknown fields must accept before it reads new artifacts.
