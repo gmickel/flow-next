@@ -29326,6 +29326,20 @@ def _pr_aid_array(
     return value
 
 
+def _pr_aid_single_fence(value: str) -> bool:
+    """True when value is exactly one backtick-fenced code block.
+
+    The body renders `shape` verbatim, so nothing may close the fence before its last line
+    (a closing line is up to three spaces, then at least as many backticks as the opener)."""
+    lines = value.strip().splitlines()
+    opener = re.match(r"(`{3,})[^`]*$", lines[0]) if lines else None
+    if not opener or len(lines) < 2:
+        return False
+    fence = opener.group(1)
+    closes = re.compile(r" {0,3}" + fence + r"`*[ \t]*$")
+    return bool(closes.match(lines[-1])) and not any(closes.match(line) for line in lines[1:-1])
+
+
 def _pr_aid_string(
     value: Any, path: str, *, maximum: int, allow_empty: bool = False
 ) -> str:
@@ -29773,8 +29787,7 @@ def validate_pr_cognitive_aid(
         if "shape" in walkthrough:
             shape = check(_pr_aid_string, walkthrough["shape"], "changeWalkthrough.shape",
                           maximum=4000, allow_empty=True)
-            if shape and shape.strip() and not (shape.strip().startswith("```")
-                                                and shape.strip().endswith("```")):
+            if shape and shape.strip() and not _pr_aid_single_fence(shape):
                 fail("changeWalkthrough.shape", "must be one fenced code block")
         proof = check(
             _pr_aid_array,

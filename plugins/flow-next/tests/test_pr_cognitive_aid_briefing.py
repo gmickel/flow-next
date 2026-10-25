@@ -160,13 +160,21 @@ class BriefingTests(unittest.TestCase):
         self.assertIn(f"## Shape\n\n{SHAPE}\n", text)
         self.assertLess(text.index("## Needs you"), text.index("## Shape"))
         self.assertLess(text.index("## Shape"), text.index("## What changes"))
-        for bad in ("+ def render(artifact)", "```diff\nunclosed", 7):
+        for bad in ("+ def render(artifact)", "```diff\nunclosed", 7,
+                    "```text\nok\n```\n## Forged\n```text\nx\n```",
+                    "```text\nok\n   ```\n## Forged\n```"):
             value = full_artifact()
             value["changeWalkthrough"]["shape"] = bad
             with self.subTest(shape=bad), \
                  self.assertRaisesRegex(flowctl.PrCognitiveAidValidationError,
                                         "changeWalkthrough.shape"):
                 render(value)
+
+    def test_longer_fence_may_contain_shorter_fences(self):
+        value = full_artifact()
+        shape = "````text\nexample:\n```\ncode\n```\n````"
+        value["changeWalkthrough"]["shape"] = shape
+        self.assertIn(f"## Shape\n\n{shape}\n", render(value))
 
     def test_unknown_walkthrough_fields_are_still_rejected(self):
         value = artifact()
