@@ -6,6 +6,22 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+Pull-request bodies from make-pr now open with what a reviewer needs before the diff: where to start, where to look hard and why, the feedback the author wants, and every check that failed or was never run. Across 12 real pull requests, a reviewer reaches those after about 150 words instead of about 720, and the body no longer repeats the changed-file list and line totals your forge already shows. make-pr is no slower: 131 seconds against 137 at the median, over 12 runs each.
+
+**What changes when you upgrade.** Nothing to configure. New pull requests get the new body; an open one changes when make-pr refreshes it with `--update`. The headings are now Why, Review focus, Needs you, Shape, What changes for a user or operator, Reading order, Tradeoffs and Verified, so a tool that parses the old Scope, Blast radius, Verification or Open items headings needs to follow them. The stored aid artifact keeps every file row and stays at schema version 1. Its one addition is an optional `shape` field, which a consumer that rejects unknown fields must accept before it reads new artifacts.
+
+### Changed
+
+- **Review focus comes right after Why.** It names the file to start with, one to three places to look hard and why, and the feedback the author wants.
+- **Needs you puts open work on the first screen.** Failed and unverified checks and open items sit together near the top; checks that passed move to Verified at the end.
+- **Reading order replaces the file tree.** Each group keeps its number, its requirement ids and what to check, and names one file to start at. Mechanical and generated files are listed once as safe to skim. File and line totals, per-group file counts, "Rest of diff" and the coverage line are gone; one line names any requirement that nothing covers.
+- **make-pr no longer re-runs tests to fill the body.** Proof comes from receipts, task evidence and CI, and a gate with no recorded result shows as unverified.
+
+### Added
+
+- **Shape shows the public surface.** When a change adds or changes types, signatures, CLI flags, schema, config keys or a call path, the body carries a short fenced sketch of it, and every name in the sketch comes from the diff or the spec. In our test on six pull requests of 54 and 64 changed files, all of about 100 names in the sketches were found there.
+- `changeWalkthrough.shape` in the aid artifact: optional, one fenced code block of up to 4,000 characters, rendered as written; the validator rejects any other form.
+
 ## [flow-next 9.2.1] - 2026-10-25
 
 ### Fixed

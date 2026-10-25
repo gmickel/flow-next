@@ -60,12 +60,8 @@ class MultiSpecArtifactTests(unittest.TestCase):
             flowctl.validate_pr_cognitive_aid(value, expected_spec_id=SIBLING)
         text = flowctl.render_pr_cognitive_aid_markdown(value)
         self.assertEqual(text, flowctl.render_pr_cognitive_aid_markdown(value))
-        self.assertIn("[fn-136:R6]", text)
-        self.assertIn("[fn-250:R1]", text)
-        self.assertIn("Coverage fn-136: R6 → groups 1, 3", text)
-        self.assertIn("Coverage fn-250: R1 → group 3; R7 → uncovered", text)
-        self.assertLess(text.index("fn-136: R6"), text.index("fn-250: R1"))
-        self.assertIn("| fn-250:R7 | unevidenced |", text)
+        self.assertIn("[fn-136:R6, fn-250:R1]", text)
+        self.assertIn("\nUncovered: fn-250:R7\n", text)
         self.assertNotIn("fn-251:", text)
         sparse = copy.deepcopy(value)
         for row in sparse["changeWalkthrough"]["groups"][2]["files"]:
@@ -85,11 +81,11 @@ class MultiSpecArtifactTests(unittest.TestCase):
         self.assertEqual(flowctl.spec_short_id("wor-17-sibling"), "wor-17")
         flowctl.validate_pr_cognitive_aid(value)
         text = flowctl.render_pr_cognitive_aid_markdown(value)
-        self.assertIn("Coverage wor-17: R1 → group 3; R7 → uncovered", text)
-        self.assertIn("[wor-17:R1]", text)
+        self.assertIn("Uncovered: wor-17:R7", text)
+        self.assertIn("wor-17:R1]", text)
 
-    def test_undeclared_tags_follow_group_spec(self):
-        for source_kind, source_ref, tagged in (
+    def test_group_sources_never_add_an_undeclared_tag(self):
+        for source_kind, source_ref, _tagged in (
             ("spec", "fn-251-no-requirements", False),
             ("spec", SPEC_ID, True),
             ("task", SPEC_ID + ".1", True),
@@ -108,8 +104,8 @@ class MultiSpecArtifactTests(unittest.TestCase):
                 row = group["files"][0]
                 row.update(summary="Review this change", sourceRefs=["diff", "spec"])
                 text = flowctl.render_pr_cognitive_aid_markdown(value)
-                # A group RID is inherited, so it gets a qualified tag instead.
-                self.assertEqual("[requirement undeclared]" in text, tagged and source_kind != "rid")
+                # Requirement ids show once on the group title; nothing tags their absence.
+                self.assertNotIn("requirement undeclared", text)
 
     def test_invalid_spec_sets(self):
         for ids in ([SIBLING], [SPEC_ID, SPEC_ID], [SPEC_ID, "bad"],

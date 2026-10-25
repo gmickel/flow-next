@@ -763,21 +763,21 @@ import flowctl
 artifact = json.loads((plugin / "tests/fixtures/pr-cognitive-aid/v1/golden.json").read_text(encoding="utf-8"))
 walkthrough = artifact["changeWalkthrough"]
 walkthrough.update(userImpact="Review the change.", blastRadius="Markdown only.",
-                   tradeoffs="Full detail stays in the artifact.", openItems="Forge check pending.")
+                   tradeoffs="Full detail stays in the artifact.", openItems="Forge check pending.",
+                   shape="```text\nrender(artifact) -> body\n```")
 body = flowctl.render_pr_cognitive_aid_markdown(artifact)
 assert re.findall(r"^## (.+)$", body, re.M) == [
-    "Why", "What changes for a user or operator", "Scope", "Blast radius",
-    "Verification", "Tradeoffs", "Open items"]
-for field in ("userImpact", "blastRadius", "tradeoffs", "openItems"):
+    "Why", "Review focus", "Needs you", "Shape", "What changes for a user or operator",
+    "Reading order", "Tradeoffs", "Verified"], re.findall(r"^## (.+)$", body, re.M)
+for field in ("userImpact", "blastRadius", "tradeoffs", "openItems", "shape"):
     assert walkthrough[field] in body
 assert body == flowctl.render_pr_cognitive_aid_markdown(artifact)
-assert "Coverage:" in body and "→ group" in body
-assert "files changed;" in body and " : " in body
-assert "```diff" not in body
+assert "Start at " in body and "Safe to skim: " in body
+assert "files changed" not in body and "Coverage" not in body and "Rest of diff" not in body
 assert "<details" not in body
 PY_BRIEFING
   then
-    ok "T10" "artifact renders one bounded seven-section briefing"
+    ok "T10" "artifact renders the reviewer-first briefing"
   else
     fail "T10" "briefing renderer contract failed"
   fi

@@ -22,11 +22,22 @@ Use a unique portable `artifactId`; optional `supersedesArtifactId` names `lates
 Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` before citing full 40-hex commit refs.
 
 - `changeWalkthrough.thesis`: intent and approach. Optional authored strings:
-  `userImpact` describes user/operator changes; `blastRadius` names scope, reading order and what is unproven;
-  `tradeoffs` records rejected alternatives; `openItems` records unfinished work.
+  `userImpact` describes user/operator changes; `tradeoffs` records rejected alternatives;
+  `openItems` records unfinished work.
+- `blastRadius` is the review focus, rendered right after Why, in two to five short sentences: where to
+  start reading; then one to three places to look hard, each with why (risk, surprising decision,
+  security, compatibility); then the feedback you want from the reviewer (for example "check the API
+  shape and the migration; the logic passed two review rounds"). Unproven work goes in `proof` cells
+  and `openItems`, which render under Needs you.
+- Optional `shape`: one fenced ```diff or ```text block of at most 25 lines showing the new or changed
+  public surface (types, signatures, CLI flags, schema, config keys) or a call tree of the load-bearing
+  flow, when the change has one; leave it out otherwise. Every name in it must appear in the diff or
+  the spec. Never a file list: the forge already shows the changed files.
 - Unevidenced work belongs in `openItems`; required PR findings belong there or in Tradeoffs.
 - Unattended runs put the run's Decisions list (defaults chosen, findings declined, reviews
   skipped, each with its evidence; working-rules.md) in `tradeoffs`, so it reaches the PR body.
+- Proof comes from recorded evidence: receipts, task evidence and CI. Do not re-run tests or gates
+  to fill the body; a gate with no recorded result is `unverified`, with the gap in `value`.
 - `proof[]` has at most 16 cells with `label` and `value` (each at most 160 characters), `sourceRefs`, and optional `outcome`.
   Use `pass` for a known green gate, `fail` for failure, `unverified` for inconclusive or never-run steps with the gap in `value`.
   A passed gate without a stored receipt cites the merge commit or pull request that carried it (a `review_receipt` ref can be its URL).
@@ -39,10 +50,11 @@ Export `tasks[].evidence.commits` are SHORT SHAs: expand with `git rev-parse` be
   optional `kept`, optional `verify`; author `ordinal`, `title`, `summary`, `sourceRefs`, `rIds`, `taskIds`.
   Group order is review order; `files` is required even when `[]`. Group `summary` renders "what to check here" in one or two sentences.
   Each file belongs to exactly one group: use the first whose review needs it, cite other specs' requirement IDs on its row and name those specs in its summary.
-- Describe files a reviewer must read from `diff_summary.files[]`; let the rest be counted. Use
+- Describe files a reviewer must read from `diff_summary.files[]`, the one to start with first in each
+  group; classify the rest. Use
   `path`, `summary`, and `attentionClass` unless a state/lockfile/mirror pattern supplies it. Explicit classes win.
   Canonical means must read; mechanical/generated mean safe to skim.
-  Unlisted canonical paths appear under Rest of diff; spec/task markdown under `.flow/` is canonical: describe it or class it mechanical.
+  Unlisted canonical paths stay in the artifact only; spec/task markdown under `.flow/` is canonical: describe it or class it mechanical.
   Every id in a record's `rIds`/`taskIds` needs its source id in that record's effective `sourceRefs`.
   For an id its group does not cite, add the source to the group's `sourceRefs`, or give the row complete `sourceRefs`, including its task and diff sources.
   A row inherits group references unless it supplies its own; its nonempty `rIds` alone determine displayed tags.
@@ -65,8 +77,9 @@ Create a private 0600 `BODY_FILE` tempfile. Render once, redirecting stdout dire
 # Newly composed dry-run input: use this instead.
 "$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT" > "$BODY_FILE"
 ```
-The renderer keeps authored sections and every group's title and summary; at most 10 described rows per group, with extra rows counted.
-Keep essential guidance above row 11; no body budget or preview loop. Never merge export fields into rendered output.
+The renderer keeps authored sections and every group's title and summary, names each group's first described
+row as its start file and lists mechanical and generated files under Safe to skim; it never repeats the forge's
+file list or totals. No body budget or preview loop. Never merge export fields into rendered output.
 Invalid, stale or unsupported artifacts render nothing: print a stderr note and set `PR_AID_CURRENT=false`.
 Write a labeled fallback from the export's goal, tasks, verification and open items to `BODY_FILE`, excluding rejected fields.
 On success set `PR_AID_CURRENT=true`.

@@ -141,7 +141,7 @@ Example journeys (research-led, prototype-led reversal with supersession, multi-
 | **Product Owner / PM** | `/flow-next:chart` (optional), `/flow-next:capture`, `/flow-next:refine --biz` | Chart Outcome/frontier/cost; `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO may chart an oversized unclear idea, or draft the spec from a `prospect`-promoted candidate / conversation / chart briefing via `capture`. |
 | **Tech lead / Senior eng** | `/flow-next:refine --tech` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
-| **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first; uses Scope and requirement coverage to find the canonical changes, then checks Verification and Open items. |
+| **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first: Review focus and Needs you, then the Reading order's start files. |
 | **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete / Harden per entry. |
 | **Platform / DevOps, Quality** (extendable) | `/flow-next:refine <id> --scope=platform` (or `--scope=qa`, any free-text lens); standing `SPEC.md` scaffold sections | Their R-IDs in the coverage table; `/flow-next:qa` verdicts (Quality) | Any role that gates delivery can add its layer to the same spec: copy the bundled template to a repo-root `SPEC.md` and add the role's standing sections (`## Platform & operations`, `## Quality gates`, …), then run refine with the role's lens (`--scope=platform` focuses it on deployment, IAM, cost, observability). R-IDs are append-only and source-tagged, so a platform session adds criteria without disturbing the product layer, the read-back names every section it changed, and coverage later shows which task satisfies each ops requirement. Pattern surfaced by field teams; the lens is free text, so any role can use it. See [spec-template.md](spec-template.md#customizing-the-scaffold-for-your-project). |
 
@@ -255,11 +255,11 @@ The QA discipline (P0/P1/P2 taxonomy, evidence rules, session hygiene) is a lean
 
 ### [8] PR-as-cognitive-aid: Handover #6
 
-`/flow-next:make-pr <spec-id>` authors one aid artifact from the spec, task evidence, review receipts, decisions, and diff. flowctl renders its short briefing: Why, What changes for a user or operator, Scope, Blast radius, Verification, Tradeoffs, and Open items. Empty sections are omitted.
+`/flow-next:make-pr <spec-id>` authors one aid artifact from the spec, task evidence, review receipts, decisions, and diff. flowctl renders its short briefing: Why, Review focus, Needs you, Shape, What changes for a user or operator, Reading order, Tradeoffs, and Verified. Empty sections are omitted, and nothing the forge already shows (changed files, line totals) is repeated.
 
-Scope groups files into diff-fenced trees with purposes and requirement IDs. Undescribed files collapse to a count; canonical attention means must read, while mechanical and generated changes are safe to skim. The complete walkthrough stays in the stored artifact for other consumers. See [`pr-cognitive-aid.md`](pr-cognitive-aid.md) for the rendering and consumer contract.
+Review focus names where to start, one to three places to look hard and why, and the feedback the author wants. Needs you collects failed or unverified checks and open work. Reading order gives each group what to check and the file to start at; mechanical and generated files are named once as safe to skim. The complete walkthrough, with every file row, stays in the stored artifact for other consumers. See [`pr-cognitive-aid.md`](pr-cognitive-aid.md) for the rendering and consumer contract.
 
-A structural sketch appears only when structure actually changed, preferably in a diff fence. Proof cells draw their outcomes from gates that ran and their receipts; unrun steps stay unverified. Open items and Tradeoffs carry findings that the spec requires to be recorded in the PR.
+Shape, a fenced sketch of the new or changed public surface or a call tree, appears only when the change has one, and every name in it comes from the diff or the spec. Proof cells draw their outcomes from recorded receipts and task evidence, never from re-running tests for the body; unrecorded gates stay unverified. Open items and Tradeoffs carry findings that the spec requires to be recorded in the PR.
 
 On a real create with completed tasks, make-pr commits the spec close before composing the artifact, so the artifact describes the opening PR head. Incomplete tasks proceed as a draft without a close commit; a failed close stops creation. Dry-run and body-only updates never close.
 
@@ -269,11 +269,11 @@ On a real create with completed tasks, make-pr commits the spec close before com
 
 The reviewer reads the PR body before the diff. Reading order:
 
-1. **Why and user impact** - does the change match what the team agreed to?
-2. **Scope** - follow canonical files and requirement coverage; inspect any uncovered requirement.
-3. **Blast radius** - assess the affected users, systems, and risks.
-4. **Verification** - distinguish passing gates from failed, unverified, or outcome-free evidence.
-5. **Tradeoffs and Open items** - assess rejected alternatives and unfinished work.
+1. **Why and Review focus** - does the change match what the team agreed to, where does review start, and what feedback is wanted?
+2. **Needs you** - check or accept each failed or unverified gate and open item.
+3. **Shape and user impact** - judge the public surface before its implementation.
+4. **Reading order** - follow each group from its start file; inspect any uncovered requirement.
+5. **Tradeoffs and Verified** - assess rejected alternatives and the recorded evidence.
 
 When review threads land, run `/flow-next:resolve-pr <PR#>`. The skill fetches threads, triages by validity, dispatches per-thread resolver agents (parallel on Claude Code, serial on Codex / Copilot / Droid), and replies + resolves via GraphQL. See the [skills catalog on flow-next.dev](https://flow-next.dev/skills/) row for `/flow-next:resolve-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative.
 

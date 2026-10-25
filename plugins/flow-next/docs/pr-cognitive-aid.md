@@ -57,24 +57,25 @@ uncovered requirements remain visible.
 
 Membership requires a spec newly done at HEAD and at least one of its task files changed in the range; the host is always included, while record-only sibling closes are excluded. Siblings whose recorded branch has a done spec at its merge base with HEAD are also excluded, including true merge commits; squash landings, deleted branches, and absent branch names remain eligible.
 The undeclared-requirements abort applies only to the host; sibling requirements remain visible as uncovered.
-Under several specs, an undeclared row tag appears only when its group cites a spec that declares requirements.
+Under several specs, requirement ids render qualified (`fn-12:R1`).
 Land selects specs by branch name. With no match, it reads recursive git trees at the head and the base: newly done specs qualify only with a task entry new or changed against base. Truncated reads need human attention. Land repairs the pull request it is given; merging requires session merge authorization. A null push date falls back to the head's earliest check-suite creation time, then committer date.
 Two listed specs sharing a number within the same ID prefix cannot be qualified unambiguously.
 
 ## Sparse authoring
 
-Four optional authored fields are additive within `changeWalkthrough`.
+Five optional authored fields are additive within `changeWalkthrough`.
 The stored `schemaVersion` remains `1` and the artifact path above is unchanged.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `userImpact` | string | What changes for a user or operator. |
-| `blastRadius` | string | Who or what the change touches and why it is safe or risky. |
+| `blastRadius` | string | The review focus: where to start reading, one to three places to look hard and why, and the feedback wanted. |
 | `tradeoffs` | string | Rejected alternatives a reviewer would otherwise ask about. |
-| `openItems` | string | Work that remains unfinished. |
+| `openItems` | string | Work that remains unfinished and no proof cell names. |
+| `shape` | string | One fenced code block (`diff` or `text`) of the new or changed public surface, or a call tree. |
 
 Each field allows an empty string and up to 4,000 characters. Omit fields with
-no authored content. Existing artifacts without them remain valid. Wrong types
+no authored content. A nonblank `shape` must open and close with a code fence. Existing artifacts without them remain valid. Wrong types
 are rejected with the field's path; unknown fields remain rejected.
 
 Each `changeWalkthrough.proof[]` cell also accepts an additive optional
@@ -153,55 +154,49 @@ Every pull-request size uses the same deterministic briefing. The artifact
 supplies all content; rendering reads no live Flow state. Invalid artifacts
 produce no briefing, so make-pr uses its existing fallback.
 
+The briefing leads with what a reviewer needs before opening the diff and does
+not repeat what the forge already shows (the changed-file list, line totals).
 Sections appear in this order, and empty sections have neither a heading nor
 a placeholder:
 
 | Section | Artifact content |
 | --- | --- |
 | Why | `changeWalkthrough.thesis`, with the intent and approach. |
+| Review focus | `changeWalkthrough.blastRadius`. |
+| Needs you | Proof cells with outcome `fail` or `unverified`, then each line of `openItems` as `- Open: …`. |
+| Shape | `changeWalkthrough.shape`, verbatim. |
 | What changes for a user or operator | `changeWalkthrough.userImpact`. |
-| Scope | Grouped files and requirement coverage from the artifact. |
-| Blast radius | `changeWalkthrough.blastRadius`. |
-| Verification | `changeWalkthrough.proof[]`. |
+| Reading order | The groups, in review order. |
 | Tradeoffs | `changeWalkthrough.tradeoffs`. |
-| Open items | `changeWalkthrough.openItems`. |
+| Verified | The remaining proof cells. |
 
-Scope opens with files changed, lines added/removed, and generated/mechanical counts
-summed from artifact rows. Every group has a numbered bold title and trimmed,
-neutralized summary, including fileless problem, principle, kept and verify groups.
-Described files are normal Markdown list items: added/deleted/renamed marker when
-applicable, a code-span path linked through `diffUrl` when available, ` : `, purpose,
-and requirement tags. Modified files have no marker; there are no fences or tree glyphs.
-A row's nonempty `rIds` determine its tags; otherwise tags inherit.
-Coverage retains all citations: `Coverage: R1 → group 1; R2 → groups 1, 3`.
-Fileless groups use the same numbers. Uncovered requirements get a per-criterion
-table; no declared requirements means no coverage, table or requirement tags.
+Reading order gives every group a numbered bold title, its requirement ids once
+(`[R1, R2]`, qualified under several specs), and its trimmed, neutralized summary,
+including fileless problem, principle, kept and verify groups. A group with a
+described canonical row ends with `Start at` and that row's code-span path, linked
+through `diffUrl` when available; the first described row in author order is the
+start file, and row summaries stay in the artifact. Groups whose files are all
+undescribed collapse into one closing `Safe to skim:` line, which also names the
+remaining mechanical and generated files: by path when there are at most five,
+otherwise as counts with their group numbers. `Uncovered: R7` names declared
+requirements that no group or row cites; nothing is printed when all are covered
+or none are declared. Sparse expansion's appended rows stay in the artifact; the
+body names them only when they are mechanical or generated. Spec and task markdown
+under `.flow/` is canonical unless explicitly classed mechanical. Whitespace-only
+summaries are rejected with the field name; empty file summaries remain legal.
 
-Each group's count covers its omitted rows, including described rows beyond ten.
-Sparse expansion's appended rows appear once after all groups under `Rest of diff`,
-with mechanical/generated counts and canonical not-described paths (linked like rows)
-when there are at most five, otherwise a count. An empty row summary implies no
-safe-to-skim claim. Spec and task markdown under `.flow/` is canonical unless explicitly
-classed mechanical. Untagged complete artifacts keep their existing group attribution.
-Whitespace-only summaries are rejected with the field name; empty file summaries remain legal.
+Outcome `pass` receives a checked box; `fail` and `unverified` receive unchecked
+boxes with their distinct status and the cell's note. A cell without an outcome
+is a plain list item with no checkbox, so old artifacts keep their evidence
+without gaining a pass claim. Absent proof cells omit Verified.
 
-Verification renders only authored proof cells. Outcome `pass` receives a
-checked box; `fail` and `unverified` receive unchecked boxes with their distinct
-status and the cell's note. A cell without an outcome is a plain list item with no
-checkbox. Old artifacts therefore keep their evidence without gaining a pass
-claim. Proof cells with no outcome are still valid, and absent proof cells
-omit the section entirely.
-
-The renderer makes one deterministic pass with no body line budget. Why keeps
-its authored line breaks; all four authored fields, titles and summaries of every group, coverage,
-the applicable requirement table and every proof cell render in full.
-Each group shows at most 10 described canonical file rows in author order.
-Additional described rows join its count as “N more described files”, distinct
-from mechanical, generated and not-described files. Schema caps bound the
-remaining content. Counted lines and coverage have a preceding blank line;
-a blank line also separates each count from the next group's title.
-Apostrophes and quotation marks render literally; markup-injection characters
-remain neutralized, including mentions (`@name`), which would ping a user. Issue and pull-request numbers (`#123`), URLs and bare commit SHAs stay live links, so `fixes #1` in authored prose closes that issue on merge, as it would in a hand-written body.
+The renderer makes one deterministic pass with no body line budget. Why and the
+authored fields keep their line breaks. Apostrophes and quotation marks render
+literally; markup-injection characters remain neutralized, including mentions
+(`@name`), which would ping a user. Issue and pull-request numbers (`#123`), URLs
+and bare commit SHAs stay live links, so `fixes #1` in authored prose closes that
+issue on merge, as it would in a hand-written body. Shape is the one field that
+renders as authored, inside its own code fence.
 
 Artifact ID, base SHA and head SHA appear together in one invisible HTML
 comment. File statistics, repeated provenance, review plans and generated-by
