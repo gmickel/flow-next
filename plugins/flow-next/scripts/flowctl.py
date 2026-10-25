@@ -32136,6 +32136,9 @@ def _apply_spec_plan_writes(
         current["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, current)
         spec_data.update(current)
+    stray_warning = _stray_rid_warning(spec_json_path.stem, content)
+    if stray_warning:
+        print(f"Warning: {stray_warning}", file=sys.stderr)
     return stale
 
 
@@ -38437,6 +38440,26 @@ def _legacy_spec_headings_warning(spec_id: str, spec_text: str) -> Optional[str]
     )
 
 
+def _stray_rid_warning(spec_id: str, spec_text: str) -> Optional[str]:
+    """One warning when no criteria parse but R-ID bullets exist elsewhere.
+
+    Specs with criteria often cite R-IDs in other sections (`- **R3 is a
+    deletion…**` under Decision Context); only the silent zero is flagged.
+    """
+    found, residue = _export_scan_acceptance_criteria(spec_text)
+    if found:
+        return None
+    masked = _mask_html_comments(spec_text)
+    total = sum(1 for line in masked.splitlines() if _AC_RESIDUE_RE.match(line))
+    stray = total - residue
+    if stray <= 0:
+        return None
+    return (
+        f"Spec {spec_id}: {stray} R-ID bullet(s) outside ## Acceptance Criteria "
+        "are not read as criteria"
+    )
+
+
 def validate_epic(
     flow_dir: Path,
     epic_id: str,
@@ -38477,6 +38500,9 @@ def validate_epic(
             legacy_warning = _legacy_spec_headings_warning(epic_id, spec_md_text)
             if legacy_warning:
                 warnings.append(legacy_warning)
+            stray_warning = _stray_rid_warning(epic_id, spec_md_text)
+            if stray_warning:
+                warnings.append(stray_warning)
 
     # Validate spec dependencies
     deps = epic_data.get("depends_on_epics", [])
