@@ -96,16 +96,16 @@ Frontmatter is authoring guidance, not spec content, and may be stripped from th
 
 ### Leaving a section out
 
-`/flow-next:capture` writes the sections your template names and adds none it leaves out. The seven canonical sections are named as headings. The auxiliary sections (`Conversation Evidence`, `Strategy Alignment`, `Parked unknowns`, `Requirement coverage` and the rest) are named in the frontmatter `auxiliary_sections` list, and each still appears only when its own trigger fires.
+`/flow-next:capture` writes the sections your template names and adds none it leaves out, with one exception: `## Open Questions`, where a question handed to someone else is parked with its owner, is written whenever such a question comes up, because dropping it would lose the question. The seven canonical sections are named as headings. The auxiliary sections (`Conversation Evidence`, `Strategy Alignment`, `Parked unknowns`, `Requirement coverage` and the rest) are named in the frontmatter `auxiliary_sections` list, and each still appears only when its own trigger fires.
 
-Position follows the template as well. An auxiliary section you place as a heading in your `SPEC.md` lands where you put it. One that is named only in the list takes the placement its list entry states, which for the bundled entries is `Conversation Evidence` at the top of the body and `Requirement coverage` at the end.
+Position follows the template as well. An auxiliary section you place as a heading in your `SPEC.md` lands where you put it. One that is named only in the list takes the placement its list entry states, which for the bundled entries is `Conversation Evidence` at the top of the body and `Requirement coverage` at the end. `Open Questions` goes where your template places it, otherwise just before `Requirement coverage`.
 
 To stop a section from landing in your specs, delete its entry from that list in your `SPEC.md`. Two entries are worth knowing about:
 
 - **`Conversation Evidence`** is the block of verbatim user quotes capture puts at the top of a spec. No tool reads it. Capture still collects the quotes during the run and still checks every untagged criterion against them before it writes. Dropping the entry costs one thing. A reviewer who later doubts an untagged criterion can no longer look the quote up in the spec.
 - **`Requirement coverage`** is the placeholder table capture adds on a planned route. `/flow-next:plan` writes its own coverage table, so dropping the entry only means the table arrives with the plan.
 
-A `SPEC.md` written from scratch, with no `auxiliary_sections` list, gets no auxiliary sections from capture. A `SPEC.md` copied from the bundled file keeps the list and behaves as before.
+A `SPEC.md` written from scratch, with no `auxiliary_sections` list, gets no auxiliary sections from capture other than `Open Questions`. A `SPEC.md` copied from the bundled file keeps the list and behaves as before.
 
 ### What breaks if you rename or remove a canonical heading
 
