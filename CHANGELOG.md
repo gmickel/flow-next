@@ -6,6 +6,12 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.3.2] - 2026-10-27
+
+### Fixed
+
+- **A question that waits on someone else now says who decides, so each role can find its own.** When a conversation hands a decision to someone who isn't there ("product decides"), capture parks it under `## Open Questions` with its owner, `*(owner: product)*`, where it used to land among the unknowns with no owner. Refine accepts any role, not only product or engineering, and once the owner answers it moves the answer into the section it belongs to. Backlog mode's parked questions carry the same tag. A product owner, QA lead or engineer can ask the agent for the open questions for their role across every branch, or have a scheduled task post them to chat: [For teams](https://flow-next.dev/guides/for-teams/#questions-that-wait-on-someone-else) walks through it. Nothing to configure, including in a repository with its own `SPEC.md`.
+
 ## [flow-next 9.3.1] - 2026-10-25
 
 ### Fixed

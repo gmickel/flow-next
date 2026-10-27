@@ -139,10 +139,10 @@ A recommendation never implies consent. Four answer shapes:
 
 - **An answer** (an option or typed text): use it.
 - **Delegation** ("you decide", "go with your recommendation"): adopt the recommendation and note it as delegated by the person.
-- **Someone else's call** ("not my call", "engineering decides"): park it under `## Open Questions` as `**<question>** — for <owner> to decide; leaning <X>. *(owner: engineering | product)*`. It is not a skip.
+- **Someone else's call** ("not my call", "engineering decides"): park it under `## Open Questions` as `**<question>** — for <owner> to decide; leaning <X>. *(owner: <role>)*`, where `<role>` is the role they named (product, engineering, qa, security), never a person. It is not a skip.
 - **A skip** (dismissed, "skip", "I don't know"): the question stays open. Its recommendation never enters a spec section as decided content.
 
-Park each skip under `## Open Questions` as `**<question>** — skipped during refine; leaning <X>, unconfirmed. *(owner: engineering | product)*`. A skipped judgment question stays a judgment question; never backfill it by grep. Keep a skip count.
+Park each skip under `## Open Questions` as `**<question>** — skipped during refine; leaning <X>, unconfirmed. *(owner: <role>)*` (the role the question belongs to). A skipped judgment question stays a judgment question; never backfill it by grep. Keep a skip count.
 
 With one or more skips: read [references/skipped-items.md](references/skipped-items.md) and ask its checkpoint before the write-back.
 
@@ -155,7 +155,7 @@ Refine settles requirements; plan and work own the rest. No task creation, sizin
 Write each answer into the section it belongs in, whatever the lens: a target user in `## Goal & Context`, an out-of-scope call in `## Boundaries`, a contract in `## API Contracts`, a testable commitment in `## Acceptance Criteria`, a rationale in `## Decision Context`. The sections come from the resolved template ([templates/spec.md](../../templates/spec.md), or the repo's own `SPEC.md`); a section the project added is a section like any other.
 
 - **Everything else comes back byte-for-byte**, and the read-back names every section this session changed. Keep the layout the spec has: when `## Decision Context` carries `### Motivation` / `### Implementation Tradeoffs`, put a rationale under the one it fits and never add or remove sub-headings.
-- **Auxiliary sections** (`Strategy Alignment`, `Strategy Conflicts`, `Glossary Conflicts`, `Conversation Evidence`, `Resolved via Codebase`, `Resolved via Project Docs`, `Resolved via Experiment`, `Resolved via Research`, `Parked unknowns`) come back byte-for-byte. Refine only appends its own entries to the three `Resolved via` sections it owns (Codebase, Project Docs, Experiment). `Resolved via Research` belongs to the research pass. The one thing refine may take out is a `Parked unknowns` bullet this session resolved; write-back.md says how.
+- **Auxiliary sections** (`Strategy Alignment`, `Strategy Conflicts`, `Glossary Conflicts`, `Conversation Evidence`, `Resolved via Codebase`, `Resolved via Project Docs`, `Resolved via Experiment`, `Resolved via Research`, `Parked unknowns`) come back byte-for-byte. Refine only appends its own entries to the three `Resolved via` sections it owns (Codebase, Project Docs, Experiment). `Resolved via Research` belongs to the research pass. The one thing refine may take out is a `Parked unknowns` bullet or an `## Open Questions` entry this session resolved; write-back.md says how.
 - **Precision.** Record an answer at the precision given: a preference ("performance matters here") goes to `## Decision Context` as guidance; a number becomes a criterion only when the person stated it. Your recommended options never become thresholds.
 - **Acceptance criteria** are append-only: never renumber or replace an R-ID; take the next unused number. Leave criteria an earlier session wrote exactly as they are. For the criteria you add, the person's own words stay untagged and anything else carries a tag (write-back.md § Source tags).
 

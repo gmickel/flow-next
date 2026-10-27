@@ -507,6 +507,11 @@ question` with `--subject-id`, `--blocked-stage`, `--reason-code`,
 or normalized `issue.id` for a tracker-only item; the display handle is locator
 input only, never hash identity.
 
+The question line ends with who decides, `*(owner: <role>)*`: the role the
+blocking reason points at (missing scope or intent → product; a technical block
+→ engineering). The same line goes into the spec's `## Open Questions` entry. The
+tag is prose, so it changes neither the question id nor dedup.
+
 Where the question parks depends on whether a spec exists:
 
 - **Spec-backed** (`question <spec-id>`) - the durable parked state lives in the

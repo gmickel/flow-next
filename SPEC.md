@@ -32,6 +32,7 @@ auxiliary_sections:
   - Resolved via Experiment  # written by /flow-next:refine when a question was settled by running something
   - Resolved via Research    # written by /flow-next:refine --scope=research, or by plan when its research scouts ran
   - Parked unknowns          # optional fog slot; one bullet per genuinely-unknown item, emptied as they resolve
+  - Open Questions           # a decision for someone outside the conversation; each names its owner role
   - Requirement coverage     # written by /flow-next:capture only when it judges the route plan; /flow-next:plan fills it; closes the body unless you place it as a heading
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
@@ -180,12 +181,28 @@ replaces it.
 -->
 
 <!--
+OPTIONAL AUXILIARY SECTION — `## Open Questions`:
+Written by capture, refine and flow's backlog mode when a decision belongs to
+someone who is not in the conversation ("product decides", "ask security"). One
+bullet per question, naming who decides as a role, never a person:
+
+- **<question>** — for <owner> to decide; leaning <X>. *(owner: <role>)*
+
+<role> is product, engineering, or the team's own word (qa, security). Teammates
+find the questions for their role by that tag, on any branch. When the owner
+answers, the answer moves into the section that owns it and the bullet is
+deleted; a question posted to the tracker keeps its anchor, marked answered.
+-->
+
+<!--
 OPTIONAL AUXILIARY SECTION — `## Parked unknowns`:
 Written only when the spec actually carries fog. One bullet per genuinely-unknown
 item, each passing the fog-or-ticket test: decidable now → decide it here and now,
 so it never reaches this section; resolvable by scheduled work → make it a task or
 a ticket; genuinely unknown (needs a decision, an experiment, or an outside answer
-nobody has yet) → park it here, one line, naming what would resolve it.
+nobody has yet) → park it here, one line, naming what would resolve it. A
+decision someone can make but who is not in the conversation is not fog: it goes
+to `## Open Questions` with its owner.
 
 Graduate-on-resolution: the moment refine or plan resolves a parked item, its
 answer moves into the canonical section that owns it and the bullet is DELETED
