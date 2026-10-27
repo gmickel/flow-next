@@ -47,7 +47,8 @@ briefing's context and decision excerpts).
 except `## Open Questions`: a question handed to someone else is always kept.
 Auxiliary sections are named in the frontmatter `auxiliary_sections` list. Drop an
 entry (e.g. `Conversation Evidence`, which no tool reads) and captured specs stop
-carrying it. A SPEC.md with no such list gets no auxiliary sections.
+carrying it. A SPEC.md with no such list gets no auxiliary sections except
+Open Questions.
 
 Full guide:
 flow-next docs, "Customizing the scaffold for your project"
