@@ -54,12 +54,13 @@ the goal's base is the integration branch, or the default branch when children l
   the merge. A conflict the run cannot resolve inside the goal's Boundaries is aborted and logged
   as an open question, and the run measures the unmerged head.
 - **The final pull request.** When every criterion is met, check the integration branch out and
-  run `$flow-next-impl-review --base <its merge-base with the default branch>
+  resolve the review backend before any review runs: the invocation's `--review=<backend>` when
+  one was passed, otherwise `$FLOWCTL review-backend <goal-id>`. `none` or `ASK` skips the review,
+  with the outcome `skipped(config: review=none)` or `skipped(config: no review backend)`.
+  Otherwise run `$flow-next-impl-review --base <its merge-base with the default branch>
   mode:autonomous`, plus the invocation's `--review=<backend>` when one was passed, over the whole
   diff under the unattended review loop, pushing its fixes to the integration branch; a review
-  that stops ends the run with its reason. When that backend is `none`, or none is passed and
-  `$FLOWCTL review-backend <goal-id>` reads `ASK`, the review is skipped instead, and its outcome
-  is `skipped(config: review=none)` or `skipped(config: no review backend)`. Commit the log entry
+  that stops ends the run with its reason. Commit the log entry
   recording the criteria met, the commit and the review's outcome to the integration branch. Only
   then open one pull request from the integration branch to the default branch (`gh pr create`,
   `--draft` when the review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the
