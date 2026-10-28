@@ -1,20 +1,67 @@
 {
   "branch_name": "fn-305-goal-runs-finish-without-a-review",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-28T23:18:40.476915Z",
   "created_at": "2026-10-28T22:30:31.525832Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-305-goal-runs-finish-without-a-review",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-305-goal-runs-finish-without-a-review.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "094c46385d5b51245eb0492b1673a3a384d171301e71736a6c6797483bf0d64d",
+      "backend": "codex",
+      "base_sha": "272a4020f684a806947689bdd811eb8f1cd3889e",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6a37e08a282962e2ebba440096c22cf172b20e3c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "1c20e664a4ab4602a92941b064385ba7",
+      "round_consumed": true,
+      "scope": "impl:fn-305-goal-runs-finish-without-a-review.1",
+      "superseded_by": null,
+      "task": "fn-305-goal-runs-finish-without-a-review.1",
+      "timestamp": "2026-10-28T23:18:25.564925Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-305-goal-runs-finish-without-a-review.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-305-goal-runs-finish-without-a-review.1": 0
+  },
   "spec_path": ".flow/specs/fn-305-goal-runs-finish-without-a-review.md",
   "status": "open",
   "title": "Goal runs finish without a review backend or child-PR waits",
@@ -29,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-28T23:12:19.123995Z"
+  "updated_at": "2026-10-28T23:18:40.476921Z"
 }
