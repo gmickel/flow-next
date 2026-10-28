@@ -74,7 +74,10 @@ newest commit that is not a catch-up, below), so review bots can post. Use the p
 commit's SHA (an actor match fails: a catch-up push is attributed to whoever triggered it); with no push
 date use that commit's earliest check-suite creation time, else its committer date. Before the window
 expires, report `AWAITING_REVIEW` with `remaining_patience_seconds=<n>` (rounded up) and return; the
-caller owns cadence. A human's current merge authorization waives the wait.
+caller owns cadence. A human's current merge authorization waives the wait. So does a goal run's
+authorization for one of its child pull requests whose observed base is that goal's integration
+branch (`goal/<name>`): the child reaches the default branch only through the goal's final pull
+request, which waits as usual.
 
 Catch up last: only when being behind alone stops the merge, before the verdict command. A base whose
 effective rules (`gh api repos/<owner/repo>/rules/branches/<base>`) include `merge_queue` is never caught up

@@ -42,7 +42,9 @@ the goal's base is the integration branch, or the default branch when children l
   checkout. The branch carries its own record. A branch of that name whose copy of the goal spec
   does not record it as this goal's stops `NEEDS_HUMAN`.
 - **Children build on it.** Dispatch work with `--base=goal/<branch_name>` and make-pr with
-  `--base goal/<branch_name>`; every other argument is auto.md's.
+  `--base goal/<branch_name>`; every other argument is auto.md's. Hand each child's pull request
+  to land as a child of this goal into `goal/<branch_name>`: it waits for no review bots, because
+  only the final pull request reaches the default branch ([tail.md](tail.md)).
 - **Unchecked children are not green.** Before a child's pull request goes to land, read its checks
   once they have had a minute to start. None, while the latest merged pull request into the default
   branch had some, stops `NEEDS_HUMAN`: CI probably runs only on pull requests into the default
@@ -53,8 +55,11 @@ the goal's base is the integration branch, or the default branch when children l
   as an open question, and the run measures the unmerged head.
 - **The final pull request.** When every criterion is met, check the integration branch out and
   run `$flow-next-impl-review --base <its merge-base with the default branch>
-  mode:autonomous` over the whole diff under the unattended review loop, pushing its fixes to the
-  integration branch; a review that stops ends the run with its reason. Commit the log entry
+  mode:autonomous`, plus the invocation's `--review=<backend>` when one was passed, over the whole
+  diff under the unattended review loop, pushing its fixes to the integration branch; a review
+  that stops ends the run with its reason. When that backend is `none`, or none is passed and
+  `$FLOWCTL review-backend <goal-id>` reads `ASK`, the review is skipped instead, and its outcome
+  is `skipped(config: review=none)` or `skipped(config: no review backend)`. Commit the log entry
   recording the criteria met, the commit and the review's outcome to the integration branch. Only
   then open one pull request from the integration branch to the default branch (`gh pr create`,
   `--draft` when the review left an `OPEN_ITEM:`), titled with the goal, with the goal log and the

@@ -6,6 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **A goal reaches its final pull request in a repository with no review backend.** `flow --goal` used to build and merge every child onto the integration branch and then stop at the final whole-diff review, because nothing was configured to run it. The final review now follows the same rule as each child's review: with no backend, or `--review=none`, it is skipped and the skip is recorded in the goal log and the pull request body. A `--review=<backend>` on the goal invocation now reaches the final review as well.
+- **Goal children stop waiting for review bots.** Under `--until=merge`, land held each child's pull request into the integration branch for `land.patienceMinutes` (10 minutes by default), though children reach the default branch only through the final pull request. Children now merge as soon as their checks pass; the final pull request keeps the wait.
+
 ## [flow-next 9.3.2] - 2026-10-27
 
 ### Fixed
