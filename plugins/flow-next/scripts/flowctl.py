@@ -3777,7 +3777,7 @@ def resolve_codex_sandbox(sandbox: str) -> str:
 # the cap once before calling the exec wrapper, and every ladder rung is the SAME
 # logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
 
-_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the terminal fallback
 _MODEL_CACHE_TTL_SECS = 24 * 60 * 60
 _MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 
@@ -3960,7 +3960,7 @@ def _model_cache_invalidate(
     cli_version: Optional[str],
     intent: str,
 ) -> None:
-    """Drop a stale cache entry (a cached model that just failed the signature)."""
+    """Drop a cached routing choice after its execution fails."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
@@ -4021,7 +4021,7 @@ def _warn_model_resolution(
         )
         print(
             f"warning: {backend} model {tried!r} unavailable; fell back to the "
-            f"never-fail floor ({used_desc}). Cached temporarily for this CLI "
+            f"floor ({used_desc}). Cached temporarily for this CLI "
             "version and routing intent.",
             file=sys.stderr,
         )
@@ -4054,12 +4054,14 @@ def _dispatch_review_with_fallback(
     exec 4-tuple ``(out, session_id, exit_code, stderr)``. ``explicit_model`` is
     True when the model was pinned (spec string / env) — pins bypass the ladder
     and cache entirely. ``is_unavailable(out, err)`` is the backend's distinctive
-    model-unavailable signature check. ``floor_model`` is the terminal never-fail
-    model (``"auto"`` for copilot / cursor, ``None`` for codex which omits
-    ``--model``). ``version_fn`` returns the CLI version for the cache key and is
-    called LAZILY — never on the pristine happy path. ``list_available`` (cursor
-    only) returns the CLI's live model list, consulted once on the top-model
-    failure. ``resolution_out``, when given, is populated with ``{"model":
+    model-unavailable signature check. ``floor_model`` is the terminal fallback
+    (``"auto"`` for copilot / cursor, ``None`` for codex or claude, which omit
+    ``--model``). The CLI default can also fail. ``version_fn`` returns the CLI
+    version for the cache key and is called LAZILY — never on the pristine happy
+    path. Only successful fallback executions are cached; verdict validation
+    remains downstream. ``list_available`` (cursor only) returns the CLI's live
+    model list, consulted once on the top-model failure. ``resolution_out``, when
+    given, is populated with ``{"model":
     <used>, "floor": <bool>}`` so the caller can record the actually-used model
     on the receipt.
     """
@@ -4121,9 +4123,13 @@ def _dispatch_review_with_fallback(
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:
             out, sid, rc, err = dispatch(floor_model, True)
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, floor_model, True)
         out, sid, rc, err = dispatch(cached, False)
         if rc == 0 or not is_unavailable(out, err):
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, cached, False)
         # A cached model that now fails the signature (org revoked it mid-version)
         # → drop it and re-resolve fresh from the ranking top. Self-healing.
@@ -4142,14 +4148,16 @@ def _dispatch_review_with_fallback(
         if best is not None:
             out, sid, rc, err = dispatch(best, False)
             if rc == 0 or not is_unavailable(out, err):
-                _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
-                _warn_model_resolution(backend, top, best, floor=False)
+                if rc == 0:
+                    _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
+                    _warn_model_resolution(backend, top, best, floor=False)
                 return _resolved(out, sid, rc, err, best, False)
         out, sid, rc, err = dispatch(floor_model, True)
-        _model_cache_put(
-            repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
-        )
-        _warn_model_resolution(backend, top, floor_model, floor=True)
+        if rc == 0:
+            _model_cache_put(
+                repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
+            )
+            _warn_model_resolution(backend, top, floor_model, floor=True)
         return _resolved(out, sid, rc, err, floor_model, True)
 
     # Codex / copilot: step DOWN the ranking, at most ``max_steps`` steps, then
@@ -4159,13 +4167,14 @@ def _dispatch_review_with_fallback(
             break
         out, sid, rc, err = dispatch(model, False)
         if rc == 0 or not is_unavailable(out, err):
-            if idx > 0:
+            if idx > 0 and rc == 0:
                 _model_cache_put(repo_root, backend, _ver(), cache_intent, model)
                 _warn_model_resolution(backend, top, model, floor=False)
             return _resolved(out, sid, rc, err, model, False)
     out, sid, rc, err = dispatch(floor_model, True)
-    _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
-    _warn_model_resolution(backend, top, floor_model, floor=True)
+    if rc == 0:
+        _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
+        _warn_model_resolution(backend, top, floor_model, floor=True)
     return _resolved(out, sid, rc, err, floor_model, True)
 
 
@@ -8550,13 +8559,12 @@ def _parse_claude_result(
     """Parse ``claude -p --output-format json`` stdout.
 
     Returns ``(result_text, session_id, is_error, payload)``. STRICT: stdout
-    must be exactly one JSON object with ``type == "result"`` (what the CLI
-    emits under ``--output-format json``). Anything else - non-JSON, a
-    wrong-type or type-less object, a result followed by corruption - yields
-    ``("", None, True, None)``: a transport failure, never a verdict. Cursor's
-    lenient JSON-lines salvage is deliberately NOT shared here. ``payload`` is
-    the parsed object so the ladder's unavailable predicate can read
-    ``api_error_status`` beside the text.
+    must be exactly one JSON object with ``type == "result"``, a boolean
+    ``is_error``, and a string ``result``. Any malformed JSON, wrong envelope,
+    or missing or wrong-typed field is a transport failure, never a verdict.
+    Cursor's lenient JSON-lines salvage is deliberately NOT shared here.
+    ``payload`` is the parsed object so the ladder's unavailable predicate can
+    read ``api_error_status`` beside the text.
     """
     try:
         obj = json.loads((stdout or "").strip() or "null")
@@ -8565,12 +8573,18 @@ def _parse_claude_result(
     if not isinstance(obj, dict) or obj.get("type") != "result":
         return "", None, True, None
     result_text = obj.get("result")
-    if not isinstance(result_text, str):
-        result_text = ""
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         session_id = None
-    return result_text, session_id, bool(obj.get("is_error", False)), obj
+    is_error = obj.get("is_error")
+    if type(is_error) is not bool or not isinstance(result_text, str):
+        return (
+            result_text if isinstance(result_text, str) else "",
+            session_id,
+            True,
+            obj,
+        )
+    return result_text, session_id, is_error, obj
 
 
 def run_claude_exec(
@@ -8598,7 +8612,8 @@ def run_claude_exec(
 
     exit_code 0 = success; non-zero on ``is_error`` / the model-unavailable
     signature / CLI failure / timeout (the CLI exits 0 on a bad model, so the
-    signature is promoted to a non-zero code here). On timeout returns
+    signature is promoted to a non-zero code here). A failed process never
+    returns stdout as reviewer output. On timeout returns
     ("", session_id or "", 2, "<msg>").
     """
     review_exec_timeout = get_review_exec_timeout()
@@ -8638,6 +8653,7 @@ def run_claude_exec(
             )
         except subprocess.TimeoutExpired:
             last["payload"] = None
+            last["unavailable"] = False
             return "", (session_id or ""), 2, f"claude timed out ({review_exec_timeout}s)"
 
         result_text, returned_session_id, is_error, payload = _parse_claude_result(
@@ -8648,7 +8664,41 @@ def run_claude_exec(
             returned_session_id = session_id or ""
         exit_code = result.returncode
         stderr = result.stderr or ""
-        if is_error or _claude_model_unavailable(payload, stderr):
+        healthy_result = (
+            isinstance(payload, dict)
+            and payload.get("type") == "result"
+            and payload.get("is_error") is False
+            and isinstance(payload.get("result"), str)
+        )
+        valid_error_result = (
+            isinstance(payload, dict)
+            and payload.get("type") == "result"
+            and payload.get("is_error") is True
+            and isinstance(payload.get("result"), str)
+        )
+        # The stderr-only signature means no result envelope was returned.
+        # A malformed or non-matching nonempty result is terminal.
+        stderr_tag_only = (
+            not (result.stdout or "").strip()
+            and _claude_model_unavailable(None, stderr)
+        )
+        unavailable = exit_code == 0 and not healthy_result and (
+            (
+                valid_error_result
+                and _claude_model_unavailable(payload, None)
+            )
+            or stderr_tag_only
+        )
+        last["unavailable"] = unavailable
+        if exit_code != 0:
+            # The shared finalizer parses verdicts before checking exit status.
+            # A failed process must never pass verdict-shaped stdout to it,
+            # but keep a CLI diagnostic available to the finalizer when stderr
+            # is empty (for example, a JSON API error envelope).
+            if result_text:
+                stderr = f"{stderr}\n{result_text}" if stderr else result_text
+            result_text = ""
+        elif is_error or unavailable:
             # An error envelope (or the exit-0 unavailable signature) is never
             # reviewer output: ``_finish_backend_exec`` parses the verdict
             # BEFORE it looks at the exit code, so the envelope's text must not
@@ -8661,8 +8711,8 @@ def run_claude_exec(
                 exit_code = 1
         return result_text, returned_session_id, exit_code, stderr
 
-    def _is_unavailable(out: Optional[str], err: Optional[str]) -> bool:
-        return _claude_model_unavailable(last.get("payload"), err)
+    def _is_unavailable(_out: Optional[str], _err: Optional[str]) -> bool:
+        return bool(last.get("unavailable"))
 
     return _dispatch_review_with_fallback(
         backend="claude",
