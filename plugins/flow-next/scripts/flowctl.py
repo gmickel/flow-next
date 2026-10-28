@@ -29376,6 +29376,20 @@ def _pr_aid_array(
     return value
 
 
+def _pr_aid_single_fence(value: str) -> bool:
+    """True when value is exactly one backtick-fenced code block.
+
+    The body renders `shape` verbatim, so nothing may close the fence before its last line
+    (a closing line is up to three spaces, then at least as many backticks as the opener)."""
+    lines = value.strip().splitlines()
+    opener = re.match(r"(`{3,})[^`]*$", lines[0]) if lines else None
+    if not opener or len(lines) < 2:
+        return False
+    fence = opener.group(1)
+    closes = re.compile(r" {0,3}" + fence + r"`*[ \t]*$")
+    return bool(closes.match(lines[-1])) and not any(closes.match(line) for line in lines[1:-1])
+
+
 def _pr_aid_string(
     value: Any, path: str, *, maximum: int, allow_empty: bool = False
 ) -> str:
@@ -29809,7 +29823,7 @@ def validate_pr_cognitive_aid(
     walkthrough = check(_pr_aid_object, artifact.get("changeWalkthrough"), "changeWalkthrough")
     if walkthrough is not None:
         keys(walkthrough, "changeWalkthrough", required={"thesis", "proof", "groups"},
-             optional={"userImpact", "blastRadius", "tradeoffs", "openItems"})
+             optional={"userImpact", "blastRadius", "tradeoffs", "openItems", "shape"})
         check(
             _pr_aid_string,
             walkthrough.get("thesis"),
@@ -29820,6 +29834,11 @@ def validate_pr_cognitive_aid(
             if field in walkthrough:
                 check(_pr_aid_string, walkthrough[field], f"changeWalkthrough.{field}",
                       maximum=4000, allow_empty=True)
+        if "shape" in walkthrough:
+            shape = check(_pr_aid_string, walkthrough["shape"], "changeWalkthrough.shape",
+                          maximum=4000, allow_empty=True)
+            if shape and shape.strip() and not _pr_aid_single_fence(shape):
+                fail("changeWalkthrough.shape", "must be one fenced code block")
         proof = check(
             _pr_aid_array,
             walkthrough.get("proof"),
@@ -30342,11 +30361,12 @@ def _pr_aid_prose(value: Any) -> str:
     return escaped
 
 
-PR_AID_DESCRIBED_ROWS_PER_GROUP = 10
-
-
 def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
-    """Render one briefing in a single pass using only the validated artifact."""
+    """Render one briefing in a single pass using only the validated artifact.
+
+    The reviewer's first screen carries intent, where to start and look hard, and what still
+    needs them; the reading order follows, one entry file per group, and nothing the forge's own
+    file list already shows (totals, per-file counts) is repeated."""
     artifact = validate_pr_cognitive_aid(artifact)
     walkthrough = artifact["changeWalkthrough"]
     groups = walkthrough["groups"]
@@ -30362,49 +30382,9 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
     declared = list(dict.fromkeys(
         source["ref"] for source in artifact["sources"] if source["kind"] == "rid"
     ))
-    coverage = {rid: [group for group in groups
-                      if any(rid in requirements(record)
-                             for record in [group, *group["files"]])]
-                for rid in declared}
-    numbers = {id(group): index for index, group in enumerate(groups, start=1)}
-
-    def evidenced_by(evidence: list[dict[str, Any]]) -> str:
-        return ("group " if len(evidence) == 1 else "groups ") + ", ".join(
-            str(numbers[id(group)]) for group in evidence)
-
-    coverage_line = ""
-    table = []
-    if declared:
-        coverage_line = "Coverage: " + "; ".join(
-            f"{rid} → " + (evidenced_by(evidence) if evidence else "uncovered")
-            for rid, evidence in coverage.items()
-        )
-        if len(artifact.get("specIds", [])) > 1:
-            per_spec = []
-            for member in artifact["specIds"]:
-                short = spec_short_id(member)
-                entries = [f"{rid.split(':', 1)[1]} → " +
-                           (evidenced_by(evidence) if evidence else "uncovered")
-                           for rid, evidence in coverage.items() if rid.startswith(short + ":")]
-                if entries:
-                    per_spec.append(f"Coverage {short}: " + "; ".join(entries))
-            coverage_line = "\n\n".join(per_spec)
-        if any(not evidence for evidence in coverage.values()):
-            table = ["| Requirement | Groups |", "|---|---|"] + [
-                f"| {rid} | " + (evidenced_by(evidence).replace("|", "\\|")
-                                 if evidence else "unevidenced") + " |"
-                for rid, evidence in coverage.items()
-            ]
-
-    def counted(files: list[dict[str, Any]]) -> str:
-        counts = {"mechanical": 0, "generated": 0, "not described": 0, "more described": 0}
-        for record in files:
-            attention = record["attentionClass"]
-            category = (attention if attention != "canonical" else
-                        "more described" if record["summary"].strip() else "not described")
-            counts[category] += 1
-        return "; ".join(f"{count} {kind} file{'' if count == 1 else 's'}"
-                         for kind, count in counts.items() if count)
+    uncovered = [rid for rid in declared
+                 if not any(rid in requirements(record)
+                            for group in groups for record in [group, *group["files"]])]
 
     def file_link(record: dict[str, Any]) -> str:
         path = " ".join(record["path"].splitlines())
@@ -30416,95 +30396,72 @@ def render_pr_cognitive_aid_markdown(artifact: Any) -> str:
             return f"[{label}]({url})"
         return label
 
-    multi_spec = len(artifact.get("specIds", [])) > 1
-    declaring_specs = {rid.split(":", 1)[0] for rid in declared}
-
-    def group_declares(group: dict[str, Any]) -> bool:
-        if not multi_spec:
-            return bool(declared)
-        cited = {rid.split(":", 1)[0] for rid in requirements(group)}
-        for ref in group["sourceRefs"]:
-            source = sources[ref]
-            if source["kind"] in ("spec", "task"):
-                cited.add(spec_short_id(source["ref"].split(".", 1)[0]))
-        return bool(cited & declaring_specs)
-
-    trees = []
-    leftovers = []
-    for group in groups:
-        described, remaining = [], []
-        for record in group["files"]:
-            if record.get("restOfDiff"):
-                leftovers.append(record)
-                continue
-            if (record["attentionClass"] != "canonical" or not record["summary"].strip()
-                    or len(described) >= PR_AID_DESCRIBED_ROWS_PER_GROUP):
-                remaining.append(record)
-                continue
-            rids = record.get("rIds") or requirements(record) or requirements(group)
-            marker = record["changeType"] + " " if record["changeType"] in ("added", "deleted", "renamed") else ""
-            tag = f" [{', '.join(rids)}]" if rids else (" [requirement undeclared]" if group_declares(group) else "")
-            row = f"- {marker}{file_link(record)} : {_pr_aid_plain_text(record['summary'])}{tag}"
-            described.append(row)
-        trees.append({"title": f"{numbers[id(group)]}. {_pr_aid_plain_text(group['title'])}",
-                      "summary": _pr_aid_prose(group["summary"]),
-                      "rows": described,
-                      "remaining": remaining})
-
-    proof = []
-    for cell in walkthrough["proof"]:
-        outcome = cell.get("outcome")
-        prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
-        status = f"{outcome}: " if outcome in ("fail", "unverified") else ""
-        proof.append(f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
-                      f"{_pr_aid_plain_text(cell['value'])}")
-    fields = [("userImpact", "What changes for a user or operator"),
-              ("blastRadius", "Blast radius"), ("tradeoffs", "Tradeoffs"),
-              ("openItems", "Open items")]
-    prose = {key: [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
-             for key, _ in fields}
-    why = [_pr_aid_prose(line) for line in walkthrough["thesis"].strip().splitlines()]
-
     def section(title: str, content: list[str]) -> list[str]:
         return [f"## {title}", "", *content, ""] if content else []
 
-    files = [record for group in groups for record in group["files"]]
-    additions = sum(record.get("additions") or 0 for record in files)
-    deletions = sum(record.get("deletions") or 0 for record in files)
-    generated = sum(record["attentionClass"] == "generated" for record in files)
-    mechanical = sum(record["attentionClass"] == "mechanical" for record in files)
-    scope = [f"{len(files)} files changed; +{additions}/-{deletions} lines; "
-             f"{generated} generated, {mechanical} mechanical."]
-    for tree in trees:
-        if scope:
-            scope.append("")
-        scope.extend([f"**{tree['title']}**", "", tree["summary"]])
-        rows = tree["rows"]
-        if rows:
-            scope.extend(["", *rows])
-        if tree["remaining"]:
-            scope.extend(["", counted(tree["remaining"])])
-    if leftovers:
-        canonical = [record for record in leftovers if record["attentionClass"] == "canonical"]
-        counts = counted([record for record in leftovers if record["attentionClass"] != "canonical"])
-        if canonical:
-            paths = ("not described: " + ", ".join(file_link(record) for record in canonical)
-                     if len(canonical) <= 5 else f"{len(canonical)} not described files")
-            counts = "; ".join(filter(None, (counts, paths)))
-        scope.extend(["", "Rest of diff: " + counts])
-    if coverage_line:
-        if scope:
-            scope.append("")
-        scope.append(coverage_line)
-    if table:
-        scope.extend(["", *table])
-    lines = [*section("Why", why),
-             *section(fields[0][1], prose["userImpact"]),
-             *section("Scope", scope),
-             *section("Blast radius", prose["blastRadius"]),
-             *section("Verification", proof),
-             *section("Tradeoffs", prose["tradeoffs"]),
-             *section("Open items", prose["openItems"])]
+    order, whole, loose = [], [], []
+    for number, group in enumerate(groups, start=1):
+        title = _pr_aid_plain_text(group["title"])
+        listed = [record for record in group["files"] if not record.get("restOfDiff")]
+        described = [record for record in listed
+                     if record["attentionClass"] == "canonical" and record["summary"].strip()]
+        skimmable = [record for record in group["files"]
+                     if record["attentionClass"] in ("mechanical", "generated")]
+        if listed and not described:
+            whole.append(f"{number}. {title}")
+            continue
+        loose.extend((number, record) for record in skimmable)
+        rids = list(dict.fromkeys([*requirements(group),
+                                   *(rid for record in group["files"]
+                                     for rid in record.get("rIds") or [])]))
+        tag = f" [{', '.join(rids)}]" if rids else ""
+        if order:
+            order.append("")
+        order.extend([f"**{number}. {title}**{tag}", "", _pr_aid_prose(group["summary"])])
+        if described:
+            order.extend(["", f"Start at {file_link(described[0])}"])
+    skim = list(whole)
+    if loose and len(loose) <= 5:
+        skim.extend(file_link(record) for _, record in loose)
+    elif loose:
+        for kind in ("generated", "mechanical"):
+            numbers = [number for number, record in loose if record["attentionClass"] == kind]
+            if numbers:
+                where = ", ".join(str(number) for number in dict.fromkeys(numbers))
+                plural = "" if len(set(numbers)) == 1 else "s"
+                skim.append(f"{len(numbers)} {kind} file{'' if len(numbers) == 1 else 's'} "
+                            f"(group{plural} {where})")
+    if skim:
+        order.extend(["", "Safe to skim: " + "; ".join(skim)])
+    if uncovered:
+        order.extend(["", "Uncovered: " + ", ".join(uncovered)])
+
+    def proof_line(cell: dict[str, Any]) -> str:
+        outcome = cell.get("outcome")
+        prefix = "- [x] " if outcome == "pass" else "- [ ] " if outcome else "- "
+        status = f"{outcome}: " if outcome in ("fail", "unverified") else ""
+        return (f"{prefix}{status}{_pr_aid_prose(cell['label'])}: "
+                f"{_pr_aid_plain_text(cell['value'])}")
+
+    def prose(key: str) -> list[str]:
+        return [_pr_aid_prose(line) for line in walkthrough.get(key, "").strip().splitlines()]
+
+    flagged = [proof_line(cell) for cell in walkthrough["proof"]
+               if cell.get("outcome") in ("fail", "unverified")]
+    passed = [proof_line(cell) for cell in walkthrough["proof"]
+              if cell.get("outcome") not in ("fail", "unverified")]
+    opened = [f"- Open: {line}" if line.strip() else line for line in prose("openItems")]
+    needs_you = flagged + ([""] if flagged and opened else []) + opened
+    shape = walkthrough.get("shape", "").strip()
+    lines = [*section("Why", [_pr_aid_prose(line)
+                              for line in walkthrough["thesis"].strip().splitlines()]),
+             *section("Review focus", prose("blastRadius")),
+             *section("Needs you", needs_you),
+             *section("Shape", [shape] if shape else []),
+             *section("What changes for a user or operator", prose("userImpact")),
+             *section("Reading order", order),
+             *section("Tradeoffs", prose("tradeoffs")),
+             *section("Verified", passed)]
     identity = artifact["artifactId"].replace("--", "&#45;&#45;")
     lines.append(f"<!-- artifact={identity} base={artifact['baseSha']} head={artifact['headSha']} -->")
     return "\n".join(lines).rstrip() + "\n"
@@ -32186,6 +32143,9 @@ def _apply_spec_plan_writes(
         current["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, current)
         spec_data.update(current)
+    stray_warning = _stray_rid_warning(spec_json_path.stem, content)
+    if stray_warning:
+        print(f"Warning: {stray_warning}", file=sys.stderr)
     return stale
 
 
@@ -38487,6 +38447,26 @@ def _legacy_spec_headings_warning(spec_id: str, spec_text: str) -> Optional[str]
     )
 
 
+def _stray_rid_warning(spec_id: str, spec_text: str) -> Optional[str]:
+    """One warning when no criteria parse but R-ID bullets exist elsewhere.
+
+    Specs with criteria often cite R-IDs in other sections (`- **R3 is a
+    deletion…**` under Decision Context); only the silent zero is flagged.
+    """
+    found, residue = _export_scan_acceptance_criteria(spec_text)
+    if found:
+        return None
+    masked = _mask_html_comments(spec_text)
+    total = sum(1 for line in masked.splitlines() if _AC_RESIDUE_RE.match(line))
+    stray = total - residue
+    if stray <= 0:
+        return None
+    return (
+        f"Spec {spec_id}: {stray} R-ID bullet(s) outside ## Acceptance Criteria "
+        "are not read as criteria"
+    )
+
+
 def validate_epic(
     flow_dir: Path,
     epic_id: str,
@@ -38527,6 +38507,9 @@ def validate_epic(
             legacy_warning = _legacy_spec_headings_warning(epic_id, spec_md_text)
             if legacy_warning:
                 warnings.append(legacy_warning)
+            stray_warning = _stray_rid_warning(epic_id, spec_md_text)
+            if stray_warning:
+                warnings.append(stray_warning)
 
     # Validate spec dependencies
     deps = epic_data.get("depends_on_epics", [])

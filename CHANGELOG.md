@@ -11,6 +11,43 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 - **Claude reviews keep completed results when the CLI also warns about an unknown model.** A validated success now finalizes as usual; genuine unavailable-model errors still use the existing fallback, and nonzero exits cannot publish a verdict.
 - **Failed model fallback executions are no longer cached.** Only fallbacks that exit successfully are cached; a failed cached model or floor is invalidated and returned without another dispatch.
 
+## [flow-next 9.3.2] - 2026-10-27
+
+### Fixed
+
+- **A question that waits on someone else now says who decides, so each role can find its own.** When a conversation hands a decision to someone who isn't there ("product decides"), capture parks it under `## Open Questions` with its owner, `*(owner: product)*`, where it used to land among the unknowns with no owner. Refine accepts any role, not only product or engineering, and once the owner answers it moves the answer into the section it belongs to. Backlog mode's parked questions carry the same tag. A product owner, QA lead or engineer can ask the agent for the open questions for their role across every branch, or have a scheduled task post them to chat: [For teams](https://flow-next.dev/guides/for-teams/#questions-that-wait-on-someone-else) walks through it. Nothing to configure, including in a repository with its own `SPEC.md`.
+
+## [flow-next 9.3.1] - 2026-10-25
+
+### Fixed
+
+- **Pull requests over 500 changed files get a reviewer-first body in less than half the time.** The briefing artifact holds at most 500 files, so a large diff, such as a branch that carries a formatter upgrade, could never validate. make-pr still composed it, failed, and then wrote its fallback body in whatever shape it chose. It now checks the size first, goes straight to the fallback and writes it in the briefing's order: Why, Review focus, Needs you, What changes, Reading order, Tradeoffs, Verified. On a real 1,251-file pull request, two runs took 84 and 100 seconds instead of 218 and 275, at about half the cost.
+- **A bulk mechanical change is one sentence, not a file list.** A formatter run, codemod or regenerated tree is named in Review focus by its commit, with how it was checked, so the reviewer knows what to skip.
+
+## [flow-next 9.3.0] - 2026-10-25
+
+Pull-request bodies from make-pr now open with what a reviewer needs before the diff: where to start, where to look hard and why, the feedback the author wants, and every check that failed or was never run. Across 12 real pull requests, a reviewer reaches those after about 150 words instead of about 720, and the body no longer repeats the changed-file list and line totals your forge already shows. make-pr is no slower: 131 seconds against 137 at the median, over 12 runs each.
+
+**What changes when you upgrade.** Nothing to configure. New pull requests get the new body; an open one changes when make-pr refreshes it with `--update`. The headings are now Why, Review focus, Needs you, Shape, What changes for a user or operator, Reading order, Tradeoffs and Verified, so a tool that parses the old Scope, Blast radius, Verification or Open items headings needs to follow them. The stored aid artifact keeps every file row and stays at schema version 1. Its one addition is an optional `shape` field, which a consumer that rejects unknown fields must accept before it reads new artifacts.
+
+### Changed
+
+- **Review focus comes right after Why.** It names the file to start with, one to three places to look hard and why, and the feedback the author wants.
+- **Needs you puts open work on the first screen.** Failed and unverified checks and open items sit together near the top; checks that passed move to Verified at the end.
+- **Reading order replaces the file tree.** Each group keeps its number, its requirement ids and what to check, and names one file to start at. Mechanical and generated files are listed once as safe to skim. File and line totals, per-group file counts, "Rest of diff" and the coverage line are gone; one line names any requirement that nothing covers.
+- **make-pr no longer re-runs tests to fill the body.** Proof comes from receipts, task evidence and CI, and a gate with no recorded result shows as unverified.
+
+### Added
+
+- **Shape shows the public surface.** When a change adds or changes types, signatures, CLI flags, schema, config keys or a call path, the body carries a short fenced sketch of it, and every name in the sketch comes from the diff or the spec. In our test on six pull requests of 54 and 64 changed files, all of about 100 names in the sketches were found there.
+- `changeWalkthrough.shape` in the aid artifact: optional, one fenced code block of up to 4,000 characters, rendered as written; the validator rejects any other form.
+
+## [flow-next 9.2.1] - 2026-10-25
+
+### Fixed
+
+- **A spec whose requirements are in the wrong section now says so instead of silently having none.** QA, make-pr and completion review read criteria only from `## Acceptance Criteria`. A spec that kept its R-ID bullets elsewhere, such as under `## Requirements`, used to yield zero criteria with no message, so QA had nothing to test against and make-pr reported no uncovered R-IDs. Writing such a spec (`flowctl spec create --plan-file`, `spec set-plan`) now prints a warning naming how many R-ID bullets were not read, and `flowctl validate` lists the same warning. A spec whose criteria parse is unaffected, even when other sections mention R-IDs.
+
 ## [flow-next 9.2.0] - 2026-10-24
 
 Capture, audit and the feature map can check your code again on Claude Code and Codex. Their read-only subagents now search with whatever tools the host provides, and in our test on Claude Code the share of false claims about the code that capture's check caught rose from about 0.6 to 0.96 and above.

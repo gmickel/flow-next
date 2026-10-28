@@ -1436,26 +1436,20 @@ overwrites an existing generation. `current` returns a labeled
 `current|absent|stale|unsupported|invalid` selection and exposes no artifact on
 non-current states. `render` emits one deterministic Markdown briefing for a
 validated file or the supported current generation, regardless of diff size.
-Empty sections disappear; linked list rows and proof-cell checklists carry
-the review content. One pass preserves the thesis's authored line breaks,
-all four authored fields, titles and trimmed summaries of every group in review order, coverage, the applicable
-requirement table and every proof cell. There is no body line budget. Each group
-shows at most 10 described canonical rows in author order; extra rows count as
-“N more described files”, separately from mechanical, generated and not-described
-files. Blank lines precede counts and coverage and separate counts from the next
-group title. Each group summary is a neutralized paragraph below its bold title.
-Scope starts with file and added/removed line totals plus generated/mechanical counts.
-Rows use an added/deleted/renamed marker when applicable, a linked code-span path (plain
-code span without `diffUrl`), ` : `, purpose and requirement tags; no fences or tree glyphs.
-Sparse appended rows carry `restOfDiff: true` and appear once after all groups under
-Rest of diff: mechanical/generated counts and at most five canonical not-described
-paths, otherwise a count. Untagged complete artifacts retain group attribution.
-A row's nonempty `rIds` override inherited display tags; coverage retains every citation,
-including fileless groups: `R1 → group 1; R2 → groups 1, 3` (several specs: `Coverage fn-12:`).
-Whitespace-only summaries fail validation by field name; empty row summaries remain legal.
-Authored markup and mentions are neutralized; issue and pull-request numbers stay live links.
-With no declared requirements, coverage, the table and requirement
-tags are omitted; declared but uncovered requirements remain named. See the
+Empty sections disappear. Sections run Why, Review focus, Needs you (failed and
+unverified proof cells, then open items), Shape, What changes for a user or
+operator, Reading order, Tradeoffs and Verified; there is no body line budget and
+no forge-visible file list or totals. Reading order shows each group's numbered
+title with its requirement ids, its neutralized summary and `Start at` its first
+described canonical row (linked through `diffUrl`, otherwise a code span); groups
+whose files are all undescribed and the remaining mechanical or generated files
+close in one `Safe to skim:` line (paths up to five, otherwise counts). Sparse
+appended rows carry `restOfDiff: true` and stay in the artifact. `Uncovered:` names
+declared requirements no group or row cites. Whitespace-only summaries fail
+validation by field name; empty row summaries remain legal. Authored markup and
+mentions are neutralized; issue and pull-request numbers stay live links; `shape`
+renders as its authored code fence.
+See the
 [briefing contract](pr-cognitive-aid.md#markdown-briefing) for section order
 and proof outcomes.
 

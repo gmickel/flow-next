@@ -96,9 +96,10 @@ class SparseInputTests(unittest.TestCase):
                 self.assertEqual(output.getvalue().encode("utf-8"),
                                  flowctl.render_pr_cognitive_aid_markdown(expected).encode("utf-8"))
                 if value is sparse:
+                    # The appended row stays in the artifact; the body names only start files.
                     self.assertIn(described, output.getvalue())
-                    self.assertIn(omitted, output.getvalue())
-                    self.assertIn("Rest of diff: not described:", output.getvalue())
+                    self.assertNotIn(omitted, output.getvalue())
+                    self.assertIn(omitted, json.dumps(expected))
 
     def test_file_commands_report_parse_errors_as_human_text(self):
         with tempfile.TemporaryDirectory() as tmp:

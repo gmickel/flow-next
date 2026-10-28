@@ -45,7 +45,7 @@ update, before body delivery.
 ## Phase 2: Deliver the briefing
 
 Use rendered `BODY_FILE` unchanged, before `Ref` / Stack lines.
-The renderer's numbered groups and linked file lists supply the structural sketch.
+The authored `shape` block and the renderer's numbered groups supply the structural sketch.
 
 For dry-run, print `BODY_FILE` and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and
 complete it.

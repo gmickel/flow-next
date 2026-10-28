@@ -68,6 +68,8 @@ Items left for planning, plus every skipped or handed-off question with its owne
 
 **Parked unknowns.** For each existing bullet: resolved this session → move the answer into the section that owns it and delete the bullet; still unknown → keep it byte-for-byte. Append new fog as a bullet naming what would resolve it (decidable now → decide it; resolvable by scheduled work → it is a task, not fog). Drop the heading when the list empties. Fog is a question nobody can answer yet; a skipped question belongs in `## Open Questions`.
 
+**Open Questions.** An entry answered this session moves into the section that owns it and the bullet is deleted. An entry behind a `flow-next:question` anchor keeps the anchor, flipped to `status=answered`, with the answer under it. Unanswered entries come back byte-for-byte.
+
 Write the merged body per the write pattern, get approval, then:
 
 ```bash

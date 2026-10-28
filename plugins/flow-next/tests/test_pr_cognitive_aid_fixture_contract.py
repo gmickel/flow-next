@@ -155,7 +155,7 @@ class CrossRenderParityTests(unittest.TestCase):
 
     def test_maximum_fixture_renders_briefing(self) -> None:
         self.assertIn("## Why", self.rendered)
-        self.assertIn("Coverage:", self.rendered)
+        self.assertIn("## Reading order", self.rendered)
         self.assertNotIn("<details", self.rendered)
 
 

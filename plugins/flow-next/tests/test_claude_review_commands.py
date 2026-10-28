@@ -523,6 +523,39 @@ class ClaudeFailures(unittest.TestCase):
                 code, out, _err = _impl_review(repo, base, receipt)
             self._assert_refunded_failure(repo, receipt, code, out, calls)
 
+    def test_timeout_with_partial_ship_and_warning_refunds_without_fallback(self):
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+
+            def dispatch(argv, _stdin):
+                raise subprocess.TimeoutExpired(
+                    argv,
+                    1,
+                    output=_result_json("<verdict>SHIP</verdict>"),
+                    stderr=CLAUDE_MODEL_WARNING,
+                )
+
+            with _fake_claude(dispatch=dispatch) as calls:
+                code, out, _err = _impl_review(repo, base, receipt)
+            self.assertEqual(code, 2)
+            self.assertEqual(len(calls), 1)
+            self.assertFalse(receipt.exists())
+            result = json.loads(out)
+            self.assertNotIn("verdict", result)
+            self.assertIn("timed out", result["error"])
+            self.assertNotIn("<verdict>SHIP</verdict>", result["error"])
+            spec_data = _read_json(repo / ".flow" / "specs" / f"{EPIC_ID}.json")
+            self.assertEqual(spec_data.get("review_pending_rounds", {}), {})
+            self.assertEqual(
+                (spec_data.get("impl_review_rounds") or {}).get(TASK_ID, 0), 0
+            )
+            attempt = spec_data["review_attempts"][-1]
+            self.assertIsNone(attempt["verdict"])
+            self.assertFalse(attempt["round_consumed"])
+            self.assertFalse(
+                (repo / ".flow" / ".cache" / "model-resolution.json").exists()
+            )
+
     def test_nonzero_process_cannot_publish_verdict_or_fall_back_on_warning(self):
         for stderr in ("", CLAUDE_MODEL_WARNING):
             with self.subTest(stderr=bool(stderr)), _flow_repo() as (repo, base):

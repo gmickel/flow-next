@@ -224,6 +224,40 @@ class TestSpecTemplateCascade(unittest.TestCase):
         hits = [w for w in legacy["warnings"] if "legacy spec headings" in w]
         self.assertEqual(len(hits), 1, legacy.get("warnings"))
 
+    def test_rids_outside_acceptance_warn_when_no_criteria_parse(self) -> None:
+        stray_path = self.root / "stray.md"
+        stray_path.write_text(
+            "# Stray\n\n## Requirements\n- **R1 Title.** first\n"
+            "- **R2 Title.** second\n\n## Acceptance criteria\n"
+            "- **Author.** a plain check\n",
+            encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "spec", "create", "--title", "Stray", "--plan-file",
+            str(stray_path), "--json",
+        )
+        self.assertEqual(code, 0, err or out)
+        spec_id = json.loads(out)["id"]
+        self.assertIn("2 R-ID bullet(s) outside ## Acceptance Criteria", err)
+
+        code, out, err = self._run("validate", "--spec", spec_id, "--json")
+        self.assertEqual(code, 0, err or out)
+        hits = [w for w in json.loads(out)["warnings"] if "outside ## Acceptance" in w]
+        self.assertEqual(len(hits), 1, out)
+
+        # Criteria parse, and Decision Context cites an R-ID: no warning.
+        cited_path = self.root / "cited.md"
+        cited_path.write_text(
+            "# Cited\n\n## Acceptance Criteria\n- **R1:** first\n\n"
+            "## Decision Context\n- **R1 is narrow:** on purpose\n",
+            encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "spec", "set-plan", spec_id, "--file", str(cited_path), "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        self.assertNotIn("outside ## Acceptance", err)
+
     # --- round-1 review findings (fn-220 host review) ---
 
     def test_skeleton_has_no_leading_blank_line(self) -> None:
