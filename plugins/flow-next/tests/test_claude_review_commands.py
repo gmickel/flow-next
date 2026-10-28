@@ -345,6 +345,35 @@ class ClaudeImplReview(unittest.TestCase):
                 (repo / ".flow" / ".cache" / "model-resolution.json").exists()
             )
 
+    def test_ship_with_unknown_model_warning_keeps_explicit_model(self):
+        model = "gateway-custom-model"
+        warning = (
+            '[claude-code:unrecognized_model] '
+            '{"model":"gateway-custom-model","query_source":"sdk"}'
+        )
+        review = "No new issues.\n<verdict>SHIP</verdict>\n"
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            with _fake_claude(
+                dispatch=lambda a, i: (_result_json(review), warning, 0)
+            ) as calls:
+                code, out, err = _impl_review(
+                    repo, base, receipt, "--spec", f"claude:{model}:medium"
+                )
+            self.assertEqual(code, 0, err or out)
+            self.assertEqual(len(calls), 1)
+            argv = calls[0]["argv"]
+            self.assertEqual(argv[argv.index("--model") + 1], model)
+            self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+            data = _read_json(receipt)
+            self.assertEqual(data["verdict"], "SHIP")
+            self.assertEqual(data["review"], review)
+            self.assertEqual(data["model"], model)
+            self.assertEqual(data["effort"], "medium")
+            self.assertFalse(
+                (repo / ".flow" / ".cache" / "model-resolution.json").exists()
+            )
+
 
 class ClaudeSessionPasses(unittest.TestCase):
     """deep-pass / validate resume the primary session and write nothing."""
