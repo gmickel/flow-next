@@ -63,7 +63,7 @@
     "impl:fn-305-goal-runs-finish-without-a-review.1": 0
   },
   "spec_path": ".flow/specs/fn-305-goal-runs-finish-without-a-review.md",
-  "status": "open",
+  "status": "done",
   "title": "Goal runs finish without a review backend or child-PR waits",
   "tracker": {
     "baseHashFlow": null,
@@ -76,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-28T23:18:40.476921Z"
+  "updated_at": "2026-10-28T23:20:56.089122Z"
 }

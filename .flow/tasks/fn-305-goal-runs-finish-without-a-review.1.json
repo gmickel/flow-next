@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-305-goal-runs-finish-without-a-review",
   "spec_path": ".flow/tasks/fn-305-goal-runs-finish-without-a-review.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Goal runs finish without a review backend or child-PR waits",
   "updated_at": "2026-10-28T23:12:28.899736Z"
 }
