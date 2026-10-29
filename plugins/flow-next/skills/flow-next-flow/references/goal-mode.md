@@ -32,8 +32,9 @@ the bar is met or a person is needed.
   A stage that returns leaving changes outside `.flow/` stops the run `NEEDS_HUMAN`, state left
   for diagnosis.
 - Build with the stage skills under `mode:autonomous` (capture, plan, plan-review, work, qa,
-  make-pr, land, impl-review), passing the invocation's `--review=<backend>` to those that take it;
-  never copy their steps. A stage's `NEEDS_HUMAN` or `ESCALATE:` ends the run with its reason. Merge
+  make-pr, land, impl-review), passing the invocation's `--review=<backend>` to those that take it.
+  Invoke the skill each time a child reaches its stage, even when its text is already in context:
+  running its steps yourself is copying them, and so is a merge without land. A stage's `NEEDS_HUMAN` or `ESCALATE:` ends the run with its reason. Merge
   a pull request only through land, never reopen or replace a closed one, never write planning
   state onto a branch with an open one, and never force-push or rebase a shared branch.
 - The `## Goal log` at the end of the goal spec is the run's only memory between sessions: dated
@@ -92,8 +93,7 @@ came from; later runs follow the log unless the goal spec changed.
 
 ## Your call
 
-How to split the goal into children, how large each one is, in what order, whether to work several
-at once (your own subagents, each in its own worktree), and when to measure. Settle a route's
+How to split the goal into children, how large each one is, in what order, and when to measure. Settle a route's
 premise with a scratch probe first when that is cheap ([prototype-before-ask.md](prototype-before-ask.md));
 a premise no probe settles, or a product choice, is a question.
 
