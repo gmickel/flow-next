@@ -1,0 +1,35 @@
+{
+  "branch_name": "fn-306-goal-mode-integration-branch-always",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-10-28T22:31:17.492853Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [
+    "fn-305-goal-runs-finish-without-a-review"
+  ],
+  "id": "fn-306-goal-mode-integration-branch-always",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "spec_path": ".flow/specs/fn-306-goal-mode-integration-branch-always.md",
+  "status": "open",
+  "title": "Goal mode: integration branch always, rigor set by the goal",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-10-29T00:14:56.666549Z"
+}

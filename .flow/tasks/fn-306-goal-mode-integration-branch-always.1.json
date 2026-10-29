@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-10-29T00:15:10.665980Z",
+  "depends_on": [],
+  "id": "fn-306-goal-mode-integration-branch-always.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-306-goal-mode-integration-branch-always",
+  "spec_path": ".flow/tasks/fn-306-goal-mode-integration-branch-always.1.md",
+  "status": "todo",
+  "title": "Implement Goal mode: integration branch always, rigor set by the goal",
+  "updated_at": "2026-10-29T00:15:10.665980Z"
+}
