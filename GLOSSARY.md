@@ -601,7 +601,7 @@ _Relates to_: Routing reference, Hop, Tick, Long-horizon run, Pilot
 
 ## Goal spec
 
-An ordinary spec that `/flow-next:flow --goal` works toward: its acceptance criteria are the bar, its Boundaries hold what no child spec may change, and it stays unready, because the `--goal` invocation is the consent. A goal run measures the bar, mints the next child spec through capture `from:goal`, builds it through the `flow --auto` hop loop, and repeats until `GOAL_MET` or a person is needed. Not a host's `/goal` command, which is a driver that can re-invoke a goal run.
+An ordinary spec that `/flow-next:flow --goal` works toward: its acceptance criteria are the bar, its Boundaries hold what no child spec may change, and it stays unready, because the `--goal` invocation is the consent. A goal run measures the bar, mints child specs through capture `from:goal`, builds them with the stage skills at the rigor the goal spec states (the repository's configuration when it states none), and repeats until `GOAL_MET` or a person is needed. Not a host's `/goal` command, which is a driver that can re-invoke a goal run.
 
 _Avoid_: epic, program, milestone
 
@@ -609,13 +609,13 @@ _Relates to_: Goal log, Driver, Long-horizon run, Integration branch
 
 ## Goal log
 
-The `## Goal log` section a goal run appends to its goal spec after acting: dated entries for the source, each measurement with its commit, each child minted and why, each child's outcome, and each open question for the person. It is the run's only memory across sessions; the next run reads it from disk.
+The `## Goal log` section a goal run appends to its goal spec after acting: dated entries for the source, the rigor applied and the words it came from, each measurement with its commit, each child minted and why, each child's outcome, and each open question for the person. It is the run's only memory across sessions; the next run reads it from disk.
 
 _Relates to_: Goal spec
 
 ## Integration branch
 
-The `goal/<branch>` branch a goal run's children land on by default, named from the goal spec's `branch_name`. The run merges the default branch into it before each measurement, measures on it, and at the end opens one final pull request from it to the default branch. A sentence in the goal spec opts out, and children then land on the default branch.
+The `goal/<branch>` branch a goal run's children always land on, named from the goal spec's `branch_name`. The run keeps it current by merging the default branch into it, measures on it, and at the end opens one final pull request from it to the default branch, which runs the repository's CI; the default branch sees the goal only through that pull request.
 
 _Relates to_: Goal spec, Goal log
 

@@ -1,6 +1,6 @@
 # /flow-next:flow --auto - the unattended driver
 
-Read only when SKILL.md parsed the exact `--auto` or `--goal` token. One run selects one ready spec and drives it through SKILL.md's hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`; a goal run drives its goal's children this way, one at a time. Every run ends with one `PILOT_VERDICT` line.
+Read only when SKILL.md parsed the exact `--auto` or `--goal` token. One run selects one ready spec and drives it through SKILL.md's hop (Step 2 route, Step 3 run the stage, Step 4 re-evaluate) until a terminal, or through exactly one hop under `--tick`; a goal run follows its own reference instead. Every run ends with one `PILOT_VERDICT` line.
 
 ## Preamble
 
@@ -76,7 +76,7 @@ done
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK PILOT_GOAL_MODE PILOT_GOAL
 ```
 
-**`PILOT_GOAL_MODE=1`: read [references/goal-mode.md](references/goal-mode.md) now and follow it.** It resolves the goal and the child this run drives, using the snapshot and guard fences below, and returns to Phase 2 with that child as the named scope. A run without `--goal` never reads it.
+**`PILOT_GOAL_MODE=1`: read [references/goal-mode.md](references/goal-mode.md) now and follow it in place of the phases below.** It uses the snapshot and guard fences below for its start guard. A run without `--goal` never reads it.
 
 Resolve the scope and capture the hop with one read-only call. Shell variables do not survive between prompt turns, so the snapshot is written to `.flow/tmp/pilot-snapshot.json` (gitignored), and every later fence that reads it starts with the same read line, which stops `NEEDS_HUMAN` when the file is missing or unparseable. An unresolved scope or snapshot error ends `NEEDS_HUMAN` with the error, never a host re-derivation or widened backlog.
 
@@ -138,7 +138,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 ## Forbidden
 
 - Asking the user anything on the run path. The run is autonomous; ambiguity maps to `NEEDS_HUMAN`. `references/prototype-before-ask.md` licenses no question to the user here: an unattended fork that is not observable is `NEEDS_HUMAN` in ready mode and `ASKED` in backlog mode; an observable fork may be settled by running something only inside the dispatched stage's existing license, never by the run itself, except goal mode's scratch probe before a mint, which its reference licenses.
-- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, plus `capture` and the final `impl-review` in goal mode only, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. Refine, chart, resolve-pr, merge, and release are **never** stages of this run, and neither capture nor impl-review is one outside goal mode (refine and chart are human authoring and discovery upstream of the consent boundary, as capture is in ready and backlog runs; goal mode's capture and final review are licensed in [references/goal-mode.md](references/goal-mode.md); resolve-pr/merge belong to land downstream of the PR; release is separate).
+- Dispatching any skill outside the stage set `{plan, plan-review, work, qa, make-pr, land}`, plus `capture` and `impl-review` in goal mode only, with `qa` only when `references/gate-selection.md` selected it for this hop and `land` only through the currently authorized, scoped handoff in `references/tail.md`. Refine, chart, resolve-pr, merge, and release are **never** stages of this run, and neither capture nor impl-review is one outside goal mode (refine and chart are human authoring and discovery upstream of the consent boundary, as capture is in ready and backlog runs; goal mode's capture and review are licensed in [references/goal-mode.md](references/goal-mode.md); resolve-pr/merge belong to land downstream of the PR; release is separate).
 - Dispatching two stages in one hop. Each hop dispatches exactly one stage; the next hop re-classifies from observed state. Under `--tick`, the `make-pr` that follows a fresh QA verdict runs on the next tick.
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute a pull request's merge steps inline.** Goal mode's merge of the default branch into its integration branch is not one. Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
@@ -152,10 +152,10 @@ When a delegated plan, implementation, or completion review exits `1` with `NOT_
 
 ## The hop loop
 
-Run SKILL.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item; a goal run fixes one child at a time. After Phase 6:
+Run SKILL.md Steps 2 to 4 with the unattended guards, branch resolution, evidence, and ledger actions in Phases 2 to 6 below. Selection (Phase 1) runs once per run and fixes the item. After Phase 6:
 
 - `AUTO_TICK=1`: print the terminal line and stop.
-- `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge (goal mode returns to its measure step instead); external waits may continue only at cadence with current consent.
+- `STAGE=land`: use `references/tail.md`'s observed outcome and continuation rule, bypassing pilot strikes. Stop on confirmed merge; external waits may continue only at cadence with current consent.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with a stage other than `make-pr` or `land`: append the stage to `DISPATCHED_STAGES` (joined by `+`), re-run the dirty-tree guard, rerun the snapshot fence for the same spec, and return to Phase 2 for the same spec.
 - `AUTO_TICK=0` and the hop ended `ADVANCED` with `make-pr`: without landing authority, print the terminal line and stop. With `FLOW_UNTIL=merge` or current explicit scoped consent, bind the confirmed PR per `references/tail.md`, append `make-pr` to `DISPATCHED_STAGES` and re-classify this same item for land.
 - Any other outcome (`NEEDS_HUMAN`, `ASKED`, `BLOCKED`, `DEFERRED_TO_LAND`, `NO_WORK`) ends the run, except the observed landing wait explicitly handled above.
@@ -188,7 +188,7 @@ fi
 
 ## Phase 1 - SELECT (two-pass)
 
-**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default) outside goal mode; in goal mode the goal reference names the item, which still passes `eligible` as a named scope does, or takes the existing-PR path below. In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
+**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default) outside goal mode. In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
 
 **Existing-PR selection.** Before the open/ready build predicate, read the
 named spec (or closed specs in the candidate inventory) and its exact known PR

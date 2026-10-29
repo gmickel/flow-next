@@ -25,9 +25,9 @@ tracker restrictions; never widen the target.
    Confirm with `gh pr view <PR> --json url,number,state,headRefName,baseRefName,headRefOid,mergeCommit`.
    Multiple plausible targets, failed/truncated probes or conflicting identity
    stop `NEEDS_HUMAN`. Bind the PR once; a missing or closed-unmerged target
-   stops and is never replaced or reopened. A goal run binds per child: the child's
-   confirmed merge ends that binding, and the next child binds its own PR under the
-   same invocation's consent. A closed spec without an observed
+   stops and is never replaced or reopened. A goal run binds each child's PR on its
+   own under the same invocation's consent; that child's confirmed merge ends its
+   binding. A closed spec without an observed
    PR also stops; only an open spec with no prior target takes the build route.
 2. An OPEN PR routes to the landing offer or authorized dispatch even if its
    local spec is closed or no longer ready. Keep existing build/review/QA gates

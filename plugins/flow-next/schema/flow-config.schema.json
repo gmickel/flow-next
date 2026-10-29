@@ -593,7 +593,7 @@
       "additionalProperties": true,
       "properties": {
         "patienceMinutes": {
-          "description": "Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when no human authorized the merge in-session.",
+          "description": "Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when no human authorized the merge in-session. A goal run's child pull request into its integration branch waits for none.",
           "type": "integer",
           "default": 10
         },

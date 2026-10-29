@@ -33,11 +33,11 @@ goal. Leave route recording to the goal run (no `no_plan` write); the goal stays
 
 ## Writing a child
 
-One pull request of work. Its Goal & Context names the goal and the criterion it serves; it
-carries the goal's Boundaries that apply and the goal's settled decisions in its Decision
-Context. Exit 2, naming the reason, when the child would cross a goal Boundary or reopen a settled
-decision, when it trips the spec-count tripwire (the goal run mints a smaller one), or when a
-duplicate is found (name the matching specs). Route recording is left to the run that builds it,
+The gap the goal run stated, at the size it chose; skip the spec-count gate (§2.5) here too. Its
+Goal & Context names the goal and the criterion it serves; it carries the goal's Boundaries that
+apply and the goal's settled decisions in its Decision Context. Exit 2, naming the reason, when the
+child would cross a goal Boundary or reopen a settled decision, or when a duplicate is found (name
+the matching specs). Route recording is left to the run that builds it,
 as for any spec a person wrote.
 
 ## Never, under from:goal

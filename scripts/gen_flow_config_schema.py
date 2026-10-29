@@ -313,7 +313,8 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "land": "/flow-next:land settings for one named pull request. Unknown legacy keys are ignored.",
     "land.patienceMinutes": (
-        "Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when no human authorized the merge in-session."
+        "Minutes since the last authored push (a catch-up of the base does not count) to wait, so review bots can post, when no human authorized the merge in-session. "
+        "A goal run's child pull request into its integration branch waits for none."
     ),
     "land.mergeVerdictCommand": (
         "Optional merge-verdict command run once after the other merge gates pass. "
