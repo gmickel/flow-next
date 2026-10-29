@@ -6,6 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Goals always use an integration branch, and the goal spec sets how strict the run is.** `--goal` no longer lands children on your main branch: every child lands on `goal/<branch>`, and main sees the goal only through one final pull request, which runs your CI. Say in plain words in the goal spec how much ceremony you want. "Prototype: commit each feature straight once the tests pass, one review at the end" gets exactly that, with no pull request or review per child. Say nothing, and your repository's configuration applies as before: a pull request and review per child, then a final review. The goal log records the rigor applied and the words it came from. A goal already landing on main from an earlier release finishes that way.
+- **The goal run decides how to split the work.** It picks how many children, how big and in what order, and drives each one through the usual stages itself instead of the one-child-per-hop loop. Every child still goes through capture, work, pull request and land, and is routed like any spec you write. On the goals we tried, runs finished with the same results in less time and for less money.
+
 ## [flow-next 9.3.3] - 2026-10-29
 
 ### Fixed
