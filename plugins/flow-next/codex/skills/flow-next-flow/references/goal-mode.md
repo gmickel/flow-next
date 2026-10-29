@@ -111,8 +111,8 @@ criterion.
 ## Stop and finish
 
 - Stop `NEEDS_HUMAN`, with the log as the evidence, when a budget or stop date the goal states is
-  reached, when the last two merged children each moved no criterion, or when every unmet criterion
-  waits on a question.
+  reached, when the last two children landed (merged, or committed and closed) each moved no
+  criterion, or when every unmet criterion waits on a question.
 - A final pull request the log records comes first on a later run: open, land it under current
   consent or defer again; merged, end `GOAL_MET`, the merged pull request being the record; closed
   unmerged, `NEEDS_HUMAN`.
