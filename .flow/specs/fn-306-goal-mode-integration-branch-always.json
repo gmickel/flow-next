@@ -10,13 +10,99 @@
     "fn-305-goal-runs-finish-without-a-review"
   ],
   "id": "fn-306-goal-mode-integration-branch-always",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-306-goal-mode-integration-branch-always.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "1384fa392a337d395b9367833e5a1383f1f6da8e1c1344c0a9626f5e0223afce",
+      "backend": "codex",
+      "base_sha": "6c84c23f0edb5332c632bef154ae9489a96733a9",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-0f03be308b470057b055e54d00201e50",
+            "classification": "introduced",
+            "findingId": "finding-0f03be308b470057b055e54d00201e50",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-149a83f62113cc80a43e84901a690449",
+            "classification": "introduced",
+            "findingId": "finding-149a83f62113cc80a43e84901a690449",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0fd4e2a5cad57ad5eb5c3d874ec43fac",
+            "classification": "introduced",
+            "findingId": "finding-0fd4e2a5cad57ad5eb5c3d874ec43fac",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-49b9995707ab6932048eee161796d535",
+            "classification": "introduced",
+            "findingId": "finding-49b9995707ab6932048eee161796d535",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7d552509bee5f4a6e8d9429d472bcb73",
+            "classification": "introduced",
+            "findingId": "finding-7d552509bee5f4a6e8d9429d472bcb73",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f691748e8eef64295e079fd254d582e86d84b9b5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 4791,
+      "output_sha256": "cebd2df3f28a08fc9fa2648dfe707542ad2f4d4e7b8028786ddaa2ee83d6b864",
+      "reservation_id": "900cbce4a371411a87929b6d90f584f1",
+      "round_consumed": true,
+      "scope": "impl:fn-306-goal-mode-integration-branch-always.1",
+      "superseded_by": null,
+      "task": "fn-306-goal-mode-integration-branch-always.1",
+      "timestamp": "2026-10-29T08:02:44.771597Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-306-goal-mode-integration-branch-always.1": 0
+  },
   "spec_path": ".flow/specs/fn-306-goal-mode-integration-branch-always.md",
   "status": "open",
   "title": "Goal mode: integration branch always, rigor set by the goal",
@@ -31,5 +117,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-29T00:14:56.666549Z"
+  "updated_at": "2026-10-29T08:02:44.776832Z"
 }

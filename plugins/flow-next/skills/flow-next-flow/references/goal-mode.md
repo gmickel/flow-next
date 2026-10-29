@@ -29,6 +29,8 @@ the bar is met or a person is needed.
 - Start on a clean tree: run auto.md's snapshot fence with `PILOT_SPEC` empty and apply its guards,
   setting `GOAL_REASON_PREFIX="goal <the goal id, or the source until it resolves>; "` and, once the
   goal is known, `GOAL_SPEC=<goal-id>` on the command line of every auto.md fence the run runs.
+  A stage that returns leaving changes outside `.flow/` stops the run `NEEDS_HUMAN`, state left
+  for diagnosis.
 - Build with the stage skills under `mode:autonomous` (capture, plan, plan-review, work, qa,
   make-pr, land, impl-review), passing the invocation's `--review=<backend>` to those that take it;
   never copy their steps. A stage's `NEEDS_HUMAN` or `ESCALATE:` ends the run with its reason. Merge
@@ -75,13 +77,15 @@ through one final pull request, which runs the repository's CI.
 
 The goal spec sets, in plain words, how strict a child's path to the integration branch is: a pull
 request per child or commits straight onto the integration branch, review per child, the final
-review, QA, waits on CI and review bots. Where it says nothing, the repository's configuration
+review, QA. Where it says nothing, the repository's configuration
 applies: each child goes through work with `--base=goal/<branch_name>`, make-pr with
 `--base goal/<branch_name>` and land, named to land as this goal's child into its integration
 branch so it waits for no review bots ([tail.md](tail.md)); review follows `review.backend` and the
 working rules' risk rule, QA follows `pipeline.qa`, and the whole diff gets a final review. A goal
 that asks for less gets less: a prototype's children may be committed straight onto the integration
-branch once their tests pass, each closed with `$FLOWCTL spec close <child-id> --json`. Words that
+branch once their tests pass, each closed with `$FLOWCTL spec close <child-id> --json`. A child's
+pull request waits for its checks in land; a goal that wants no such waits has its children
+committed straight. Words that
 conflict with the Boundaries or a repository rule (branch protection, required checks) follow the
 stricter one, and the conflict is logged. The first run logs the rigor it applied and the words it
 came from; later runs follow the log unless the goal spec changed.
@@ -114,9 +118,9 @@ criterion.
 - Every criterion met: resolve the final review's backend first (the invocation's
   `--review=<backend>`, else `$FLOWCTL review-backend <goal-id>`). `none` or `ASK`, or a goal that
   asked for no final review, skips it with the outcome `skipped(config: review=none)`,
-  `skipped(config: no review backend)` or `skipped(goal: <its words>)`. Otherwise run
-  `flow-next:flow-next-impl-review --base <the integration branch's merge-base with the default
-  branch> mode:autonomous` over the whole diff under the unattended review loop, pushing its fixes
+  `skipped(config: no review backend)` or `skipped(goal: <its words>)`. Otherwise, with the
+  integration branch's pushed head checked out, run `flow-next:flow-next-impl-review --base <the
+  integration branch's merge-base with the default branch> mode:autonomous` over the whole diff under the unattended review loop, pushing its fixes
   to the integration branch. Commit the log entry (criteria met, commit, review outcome), open one
   pull request from the integration branch to the default branch with `gh pr create` (`--draft`
   when the review left an `OPEN_ITEM:`), titled with the goal, with the log and the review outcome
