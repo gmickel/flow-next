@@ -274,7 +274,7 @@
     "impl:fn-306-goal-mode-integration-branch-always.1": 0
   },
   "spec_path": ".flow/specs/fn-306-goal-mode-integration-branch-always.md",
-  "status": "open",
+  "status": "done",
   "title": "Goal mode: integration branch always, rigor set by the goal",
   "tracker": {
     "baseHashFlow": null,
@@ -287,5 +287,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-29T16:01:20.041749Z"
+  "updated_at": "2026-10-29T18:52:40.362509Z"
 }
