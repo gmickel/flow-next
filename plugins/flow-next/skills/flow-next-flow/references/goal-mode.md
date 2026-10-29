@@ -100,7 +100,8 @@ a premise no probe settles, or a product choice, is a question.
 Mint a child with `flow-next:flow-next-capture from:goal <goal-id>` after stating in the session
 the gap it serves (the criterion, its last result, the route, the premise), then
 `$FLOWCTL spec add-dep <goal-id> <child-id> --json` and `$FLOWCTL spec ready <child-id> --json`,
-and log the mint. A child is never itself a goal. When capture names an open, ready spec that
+and log the mint. A child is routed exactly as a spec a person wrote: record its route by
+[plan-vs-no-plan.md](plan-vs-no-plan.md) before any stage runs. A child is never itself a goal. When capture names an open, ready spec that
 covers the gap, adopt it (logged; this run never retires it). A child this goal minted that never
 merged, whose premise a probe falsified or that another child covers, may be retired with
 `$FLOWCTL spec close <child-id> --retire superseded --by <id> --json` (or `--retire moot`), logged.
