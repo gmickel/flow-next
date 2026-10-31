@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-308-wasted-calls-on-the-hot-paths-audit",
   "spec_path": ".flow/tasks/fn-308-wasted-calls-on-the-hot-paths-audit.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Wasted calls on the hot paths (audit 2026-10 wave 2)",
   "updated_at": "2026-10-31T14:49:17.166743Z"
 }
