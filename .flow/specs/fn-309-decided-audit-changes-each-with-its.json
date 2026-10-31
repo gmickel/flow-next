@@ -8,13 +8,129 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-309-decided-audit-changes-each-with-its",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-309-decided-audit-changes-each-with-its.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "78898362b7a116473165b85420642cd454ae624ec8e0e666230e81d97f3ca067",
+      "backend": "codex",
+      "base_sha": "8a6e050c151f90b74850e156bad1c6d822ad7684",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-37cacd0982d175d9199c332e3453fbd2",
+            "classification": "introduced",
+            "findingId": "finding-37cacd0982d175d9199c332e3453fbd2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-28510f17fd5dd8164f41a428e11fb04f",
+            "classification": "introduced",
+            "findingId": "finding-28510f17fd5dd8164f41a428e11fb04f",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e8326c194c830d1ba8b4237fc67d1a9807084c00",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1831,
+      "output_sha256": "c0dd57a481f4b043f6521d6174d66b3c090b770e650dc22b75ada8e250bf6172",
+      "reservation_id": "2a647c6b744143fca589a763b535d031",
+      "round_consumed": true,
+      "scope": "impl:fn-309-decided-audit-changes-each-with-its.1",
+      "superseded_by": null,
+      "task": "fn-309-decided-audit-changes-each-with-its.1",
+      "timestamp": "2026-10-31T16:30:22.324005Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "7a06a562695e229dee432c217366a02fe680c0da7998787c78e4453dc85bce89",
+      "backend": "codex",
+      "base_sha": "8a6e050c151f90b74850e156bad1c6d822ad7684",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-37cacd0982d175d9199c332e3453fbd2",
+            "classification": "introduced",
+            "findingId": "finding-37cacd0982d175d9199c332e3453fbd2",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-28510f17fd5dd8164f41a428e11fb04f",
+            "classification": "introduced",
+            "findingId": "finding-28510f17fd5dd8164f41a428e11fb04f",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6620e10ad70b6248882c88a4043b7a58761509b3",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1506,
+      "output_sha256": "d0cf841b8e8b2c5f958403eb63af92d369320323c515ce2549cf3821399e5802",
+      "reservation_id": "29849e427b494d8dbb50118090f0764c",
+      "round_consumed": true,
+      "scope": "impl:fn-309-decided-audit-changes-each-with-its.1",
+      "superseded_by": null,
+      "task": "fn-309-decided-audit-changes-each-with-its.1",
+      "timestamp": "2026-10-31T16:32:01.741498Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-309-decided-audit-changes-each-with-its.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-309-decided-audit-changes-each-with-its.1": 0
+  },
   "spec_path": ".flow/specs/fn-309-decided-audit-changes-each-with-its.md",
   "status": "open",
   "title": "Decided audit changes, each with its test (audit 2026-10 wave 3)",
@@ -29,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T16:03:18.569039Z"
+  "updated_at": "2026-10-31T16:32:01.743763Z"
 }
