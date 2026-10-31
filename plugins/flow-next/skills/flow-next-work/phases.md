@@ -36,14 +36,15 @@ and apply it before any claim; `--reclaim` is passed only for an owner it admits
 ---
 
 **Flow task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M)** → SINGLE_TASK_MODE:
-- Read task: `$FLOWCTL show <id> --json`
-- Read spec: `$FLOWCTL cat <id>`
-- Get parent spec from task data for context: `$FLOWCTL show <spec-id> --json && $FLOWCTL cat <spec-id>`
+- Read task metadata: `$FLOWCTL show <id> --json`, and its parent spec's: `$FLOWCTL show <spec-id> --json`
+- Bodies: Phase 3's `anchor` returns the task and spec bodies on the inline path, so read them
+  here (`$FLOWCTL cat <id>`, `$FLOWCTL cat <spec-id>`) only when the task goes to the multi-task route
 - **This is the only task to execute** — no loop to next task
 
 **Flow spec ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → SPEC_MODE:
 - Read spec metadata: `$FLOWCTL show <id> --json`
-- Read spec markdown: `$FLOWCTL cat <id>`
+- Read spec markdown (`$FLOWCTL cat <id>`) for the zero-task fork, a direct continuation or the
+  multi-task route; one open task built inline reads it once, through Phase 3's `anchor`
 - **Zero-task fork:** if the metadata's `tasks` array is EMPTY, the spec was
   never planned — distinct from all-tasks-done, where tasks exist and read
   `done` (that state proceeds normally and reaches 3g). Read

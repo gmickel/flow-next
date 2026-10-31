@@ -64,6 +64,7 @@ Set `MODE=full` or `MODE=targeted` based on the match; for targeted also set `TA
 ```bash
 MODE=full
 TARGETED_TYPE=""
+OWNER=""; REPO=""
 if [ -n "${ZSH_VERSION:-}" ]; then setopt BASH_REMATCH KSH_ARRAYS; fi   # zsh: bash-style regex captures
 if [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#discussion_r([0-9]+)$ ]]; then
   MODE=targeted; TARGETED_TYPE=review_thread
@@ -77,6 +78,14 @@ elif [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)$ ]]; the
   OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"; PR_NUMBER="${BASH_REMATCH[3]}"
 elif [[ "$TARGET" =~ ^[0-9]+$ ]]; then
   PR_NUMBER="$TARGET"
+fi
+# Every later call acts on this checkout's repository, so a URL for another one stops here.
+if [ -n "${OWNER:-}" ]; then
+  CURRENT_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || exit 1
+  if [ "$(printf '%s' "$OWNER/$REPO" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$CURRENT_REPO" | tr '[:upper:]' '[:lower:]')" ]; then
+    echo "This URL is for $OWNER/$REPO, but this checkout is $CURRENT_REPO. Run resolve-pr from a checkout of $OWNER/$REPO." >&2
+    exit 1
+  fi
 fi
 ```
 

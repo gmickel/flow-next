@@ -47,14 +47,15 @@ persisted spec:
 
 ```bash
 $FLOWCTL show "$SPEC_ID" --json
-$FLOWCTL cat "$SPEC_ID"
 $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
-This re-anchor is mandatory before every fix cycle, and its checkpoint is the
-cycle's only one: backend files never save another. A user-edited spec is the
-source of truth; never review or restore a stale generated/checkpoint copy
-unless recovering after context compaction.
+This checkpoint is mandatory before every dispatch, and it is the cycle's only
+one: backend files never save another. The reviewer receives the spec through
+flowctl, so read its body only in the Fix Loop, which reads the current file
+before editing it. A user-edited spec is the source of truth; never review or
+restore a stale generated/checkpoint copy unless recovering after context
+compaction.
 
 For host, provide the current spec/task material and review focus.
 
