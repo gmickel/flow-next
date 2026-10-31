@@ -39,7 +39,7 @@ If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
 2. Fix code and run tests
 3. Commit fixes
-4. Re-run step 2 (receipt enables session continuity when `mode == "claude"`; the re-review resumes the session with a new diff file for the new range)
+4. Re-run step 1 (receipt enables session continuity when `mode == "claude"`; the re-review resumes the session with a new diff file for the new range)
 5. Stop or loop as workflow-common.md's Fix Loop step 5 says
 
 ## Step 3: Receipt

@@ -59,6 +59,7 @@ class SnapshotProbeReadTests(unittest.TestCase):
         return {
             "ok": ({"probes": {key: {"status": "ok", "value": value}}}, []),
             "error": ({"probes": {key: {"status": "error", "value": None}}}, None),
+            "malformed": ({"probes": {key: {"status": "ok", "value": None}}}, None),
             "missing": (None, None),
         }
 

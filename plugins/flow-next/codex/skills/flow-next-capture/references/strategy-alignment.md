@@ -17,7 +17,7 @@ Read `STRATEGY.md` (when populated) so Phase 2's source-tagging can apply `[stra
 
 ```bash
 # The preflight snapshot holds strategy status; a failed probe there asks flowctl live.
-STRATEGY_STATUS_JSON=$(jq -ce 'if .probes.strategy.status == "ok" then .probes.strategy.value else error("strategy probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) \
+STRATEGY_STATUS_JSON=$(jq -ce '.probes.strategy | if .status == "ok" and (.value.sections_filled | type) == "number" then .value else error("strategy probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) \
   || STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')
 STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
 

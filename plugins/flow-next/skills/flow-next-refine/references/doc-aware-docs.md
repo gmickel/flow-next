@@ -13,7 +13,7 @@ glossary comes from the interview's preflight bundle; a failed probe there lists
 
 ```bash
 REFINE_PREFLIGHT="${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json"   # the same literal path as Setup
-jq -ce 'if .probes.glossary.status == "ok" then .probes.glossary.value else error("glossary probe") end' "$REFINE_PREFLIGHT" 2>/dev/null \
+jq -ce '.probes.glossary | if .status == "ok" and (.value.groups | type) == "array" then .value else error("glossary probe") end' "$REFINE_PREFLIGHT" 2>/dev/null \
   || "$FLOWCTL" glossary list --json
 ```
 

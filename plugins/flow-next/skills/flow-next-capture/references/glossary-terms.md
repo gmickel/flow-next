@@ -11,7 +11,7 @@ Capture joins `/flow-next:refine` as a glossary writer. Gate first — same husk
 
 ```bash
 # The preflight snapshot holds the glossary; a failed probe there lists it live.
-GLOSSARY_TERMS=$(jq -er 'if .probes.glossary.status == "ok" then (.probes.glossary.value.total_terms // 0) else error("glossary probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) \
+GLOSSARY_TERMS=$(jq -er '.probes.glossary | if .status == "ok" and (.value.total_terms | type) == "number" then .value.total_terms else error("glossary probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) \
   || GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
 ```
 
