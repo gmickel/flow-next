@@ -2,7 +2,7 @@
 
 > Loaded ONLY when at least one of the three Phase-3 must-ask conditions actually fires. A capture
 > with an unambiguous title, testable criteria, and no scope conflict never reads this file.
-> Interactive asks (one question per turn); autofix exits 2 with which case fired.
+> Interactive asks; autofix exits 2 with which case fired.
 
 ## Interactive question shape (3.1)
 
@@ -22,9 +22,9 @@ Confidence tier rules (the full table is in [confidence-tiers.md](confidence-tie
 
 The third tier matters: it prevents the "always recommend" failure mode that trains users to defer.
 
-## One question per turn (3.3)
+## Several cases (3.3)
 
-Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `plain-text numbered prompt` contract and overwhelms users.
+When several cases fire, ask any case whose answer changes which others apply on its own and first; ask the rest together or one at a time, as reads best.
 
 ## Case (a) — Ambiguous title
 
