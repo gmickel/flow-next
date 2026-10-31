@@ -262,7 +262,7 @@
     "impl:fn-309-decided-audit-changes-each-with-its.1": 0
   },
   "spec_path": ".flow/specs/fn-309-decided-audit-changes-each-with-its.md",
-  "status": "open",
+  "status": "done",
   "title": "Decided audit changes, each with its test (audit 2026-10 wave 3)",
   "tracker": {
     "baseHashFlow": null,
@@ -275,5 +275,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T16:40:50.787333Z"
+  "updated_at": "2026-10-31T16:43:13.865922Z"
 }
