@@ -6,6 +6,32 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.5.0] - 2026-10-31
+
+Agents spend less of each run re-reading what they already hold, and pull request feedback gets a complete answer. The dependency view makes 22 flowctl calls instead of 295 on this repository, work's single-task path reads the task and spec once instead of twice, and new specs start about 1.3 KB smaller. resolve-pr now replies to and resolves every thread in a cluster, and stops on a link from another repository before it fetches anything.
+
+**What changes when you upgrade.** `flow --auto` no longer accepts `--dry-run` as a preview: it warns, ignores the flag and runs. Use `--explain` to preview a route. `--research` is ignored the same way.
+
+### Changed
+
+- **Every thread in a resolve-pr cluster gets its own reply and resolution.** One resolver still handles related threads together, and now returns a verdict for each thread, so no thread in the cluster is left unanswered.
+- **resolve-pr acts only on the repository you run it from.** A pull request or comment link for another repository stops before any fetch, with a message naming both repositories.
+- **Work and plan review read less.** Work's single-task path reads the task and spec once, through its anchor. Plan review reads the spec only when it has to fix it, and edits it in place, so changes you make to the spec while review runs survive the fix.
+- **The dependency view is faster.** `/flow-next:deps` reads detail only for open specs: 22 `flowctl show` calls instead of 295 on this repository, with identical output.
+- **Shorter instructions on the paths agents run most.** impl-review's host and flag paths lose most of a 7.9 KB reference; flow `--auto`, audit, resolve-pr and prime each lose a few KB of stale or duplicated text. Every rule an agent follows is still stated once, where it acts.
+- **New specs are smaller.** The spec template keeps one link to the [scaffold guide](https://flow-next.dev/guides/spec-scaffold/) instead of carrying its customization guide in comments: the skeleton goes from 9.6 KB to 8.3 KB.
+- **prime's setup fixes use the tools' current versions.** The hook, linter, formatter, test and CI fixes state what each config must do, and the agent creates it with the tool's own commands (`npx husky init`, `pre-commit autoupdate`, `biome init`). No version is pinned in the skill, so none goes stale; a pinned Biome schema made Biome warn on every run against any other installed version.
+- **map supports clawpatch 0.8.** The supported range is `>=0.4.0 <0.9.0`.
+- **memory-migrate runs unattended.** Under `mode:autonomous` or `FLOW_AUTONOMOUS=1` it behaves as `mode:autofix`: no questions, mechanical defaults, originals kept.
+- **Capture orders its must-ask questions itself**, asking first any question whose answer decides which others apply.
+- **One RepoPrompt notice.** The skills no longer carry their own copy of the RepoPrompt removal notice; flowctl prints it for a stored `rp`, a typed `--review=rp` gets flowctl's list of backends, and plan review and completion review name the accepted values for any unknown one.
+
+### Fixed
+
+- **Flags survive zsh.** flow, flow `--auto`, features, capture, QA and resolve-pr dropped flags or regex captures when the shell was zsh.
+- **resolve-pr's reply step finishes cleanly** when the last thread needs a human; it used to exit with an error after posting every reply.
+- **On Codex, prime dispatches its scouts** through the Codex mirror's rewrite like the other skills.
+
 ## [flow-next 9.4.0] - 2026-10-29
 
 `--goal` now fits the goal instead of one fixed process. A prototype can say "commit each feature straight, one review at the end" and get exactly that; a gated release keeps a pull request, review and CI per child. Either way the goal builds on its own integration branch and reaches main through one final pull request. The run also decides how to cut the goal into pieces itself: on a six-feature PRD goal with full gates it finished in 0.63x the time at 0.59x the cost of 9.3.3, and on a library port in about the same time (1.11x) at 0.81x the cost, with the same hidden-test results (one run per version per goal).
