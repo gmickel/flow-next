@@ -41,11 +41,8 @@ Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 
 ## Version pin
 
-```
-SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"
-```
-
-The supported clawpatch range; the bundled script (`scripts/map.sh`) holds the values it enforces. It parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
+The supported clawpatch range lives in one place, `SUPPORTED_MIN` and `SUPPORTED_MAX_EXCL` in the
+bundled script (`scripts/map.sh`). It parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
 
 clawpatch is pre-1.0 with frequent minor releases. The README forecasts breaking changes between minor releases — tolerant parsing matters.
 

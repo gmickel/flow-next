@@ -47,7 +47,7 @@ esac
         self.assertFalse((self.root / ".gitignore").exists())
 
     def test_version_degrades_and_map_failure_propagates(self):
-        result = self.run_map(TEST_VERSION="0.5.0", TEST_EXIT="7")
+        result = self.run_map(TEST_VERSION="0.9.0", TEST_EXIT="7")
         self.assertEqual(result.returncode, 7)
         self.assertIn("outside supported range", result.stderr)
         self.assertIn("live-output", result.stdout)

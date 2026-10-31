@@ -40,7 +40,6 @@ PARSED_VARS = (
     "PILOT_BACKLOG_OVERRIDE",
     "PILOT_DRY_RUN",
     "PILOT_REVIEW",
-    "PILOT_RESEARCH",
     "PILOT_DEPTH",
     "PILOT_GOAL_MODE",
     "PILOT_GOAL",
@@ -197,7 +196,6 @@ class ArgumentParseFence(unittest.TestCase):
         "PILOT_BACKLOG_OVERRIDE": "",
         "PILOT_DRY_RUN": "0",
         "PILOT_REVIEW": "",
-        "PILOT_RESEARCH": "grep",
         "PILOT_DEPTH": "short",
         "PILOT_GOAL_MODE": "0",
         "PILOT_GOAL": "",
@@ -224,21 +222,19 @@ class ArgumentParseFence(unittest.TestCase):
         # arguments -> the values that differ from DEFAULTS
         cases = (
             (
-                "fn-12 --tick --backlog --explain --review=codex --research custom --depth=long",
+                "fn-12 --tick --backlog --explain --review=codex --depth=long",
                 {
                     "PILOT_SPEC": "fn-12",
                     "AUTO_TICK": "1",
                     "PILOT_BACKLOG_OVERRIDE": "1",
                     "PILOT_DRY_RUN": "1",
                     "PILOT_REVIEW": "codex",
-                    "PILOT_RESEARCH": "custom",
                     "PILOT_DEPTH": "long",
                 },
             ),
             ("wor-17-x", {"PILOT_SPEC": "wor-17-x"}),
-            ("fn-9 --dry-run", {"PILOT_SPEC": "fn-9", "PILOT_DRY_RUN": "1"}),
             ("--auto fn-4 --tick", {"PILOT_SPEC": "fn-4", "AUTO_TICK": "1"}),
-            ("--review codex --depth long --research=custom", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long", "PILOT_RESEARCH": "custom"}),
+            ("--review codex --depth long", {"PILOT_REVIEW": "codex", "PILOT_DEPTH": "long"}),
             ("", {}),
             ("--goal fn-40 --until=merge", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-40"}),
             ("--goal docs/linux port.md --tick", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "docs/linux port.md", "AUTO_TICK": "1"}),
@@ -248,6 +244,22 @@ class ArgumentParseFence(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 parsed, _ = self._parse(arguments)
                 self.assertEqual(parsed, {**self.DEFAULTS, **overrides})
+
+    @_POSIX_BASH
+    def test_retired_flags_warn_and_change_nothing(self) -> None:
+        # --research chose a research backend that no longer exists and --dry-run was
+        # --explain's alias: both are unknown flags now.
+        cases = (
+            ("fn-9 --research=grep", "--research=grep", {"PILOT_SPEC": "fn-9"}),
+            ("fn-9 --dry-run", "--dry-run", {"PILOT_SPEC": "fn-9"}),
+            ("--research grep fn-9", "--research", {"PILOT_SPEC": "fn-9"}),
+            ("--goal fn-9 --research grep", "--research", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-9"}),
+        )
+        for arguments, flag, overrides in cases:
+            with self.subTest(arguments=arguments):
+                parsed, stderr = self._parse(arguments)
+                self.assertEqual(parsed, {**self.DEFAULTS, **overrides})
+                self.assertIn(f"Unknown flag: {flag}", stderr)
 
     @_POSIX_BASH
     def test_lookalike_flags_do_not_set_the_flags(self) -> None:

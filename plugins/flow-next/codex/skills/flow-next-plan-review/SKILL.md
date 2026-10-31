@@ -16,9 +16,8 @@ selected review backend:**
 - `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 
-Do not load the other backend files. `BACKEND=none` and an explicit
-`--review=rp` or `--review=export` terminate from the common workflow without
-loading any backend file.
+Do not load the other backend files. `BACKEND=none` and an unknown explicit
+value terminate from the common workflow without loading any backend file.
 
 Conduct a John Carmack-level review of spec plans.
 
@@ -32,7 +31,7 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 Read and execute [workflow.md](workflow.md) Phase 0 once. It defines `$FLOWCTL`,
 parses an explicit `--review` mode before configured-backend resolution,
-resolves `SPEC_ID`, and handles `ASK`, `none`, `rp` and `export`. Never invoke
+resolves `SPEC_ID`, and handles `ASK`, `none` and unknown values. Never invoke
 `flowctl review-backend` a second time.
 
 ## Common Critical Rules
@@ -63,7 +62,7 @@ unattended run (working-rules.md's review loop applies); it is not a focus area.
 ## Workflow
 
 1. Execute [workflow.md](workflow.md) Phase 0.
-2. If it returns for `none`, `rp` or `export`, stop. Do not read a backend file.
+2. If it returns for `none` or an unknown value, stop. Do not read a backend file.
 3. Read exactly the selected `workflow-<backend>.md`.
 4. Execute one backend dispatch and carry its verdict directly into the shared
    Fix Loop below.
@@ -101,8 +100,9 @@ workspace. Fix that instead (Windows resolves via `auto`).
 When the verdict is `NEEDS_WORK`:
 
 1. Parse all valid issues from reviewer feedback.
-2. Fix the user-edited current spec, never a checkpoint copy: edit the spec
-   file in place (`spec_path` from `$FLOWCTL show <SPEC_ID> --json`), then
+2. Fix the user-edited current spec, never a checkpoint copy: read the spec
+   file now (`spec_path` from `$FLOWCTL show <SPEC_ID> --json`), edit it in
+   place with targeted edits (a whole-file rewrite drops a person's edits), then
    persist that file. The file on disk is the input, so an edit the user made
    between cycles survives; on a `set-plan` failure, surface its error and stop
    the cycle.

@@ -215,10 +215,7 @@ Use the Step 2 response, without repeating shell probes or config calls:
 - `tools` supplies the `HAVE_CODEX`, `HAVE_COPILOT`, `HAVE_CURSOR`,
   `HAVE_CLAUDE`, and `HAVE_GROK` availability flags.
 - `config` supplies raw `CURRENT_BACKEND`, `CURRENT_SPEC_IDS`, and
-  `CURRENT_QA`. Only null means unset; false is an answer. A `CURRENT_BACKEND`
-  of `rp` (or `rp:...`) names a removed backend: tell the user in one line
-  "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review
-  backends: claude, codex, copilot, cursor, host." and treat it as unset.
+  `CURRENT_QA`. Only null means unset; false is an answer.
 - `criteria_exists` supplies `CRITERIA_EXISTS`; symlinks count as existing.
 - `tracker_active` supplies `TRACKER_CONFIGURED` from the canonical predicate.
 

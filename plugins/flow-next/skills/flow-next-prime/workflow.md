@@ -254,8 +254,9 @@ names / command shapes, never secret values.
 ### 2.8 DE1 env cross-reference (per-member scoping)
 
 Diff declared `.env.example` vars against **env reads in SOURCE** (`process.env`, `os.environ`,
-`getenv`), NOT executed - static cross-reference only (setup/migrate never run, rule 4). Scoping,
-eval-hardened:
+`getenv`), NOT executed - static cross-reference only (setup/migrate never run, rule 4). The
+emitter's `substance.env_crossref` pools declarations across members and counts docs sources, so it
+is not the grade. Scoping, eval-hardened:
 
 - **Iterate WORKSPACE MEMBER dirs, not root-only** - per-package `.env.example` is the correct
   monorepo pattern (a root-only probe false-negatived 4 real files).
@@ -266,9 +267,10 @@ eval-hardened:
 - **Filter well-known platform/CI vars.** `>~30%` undeclared = **"stale template" ⚠️**; downgrade
   to "template does not mirror documented config" when the vars are documented in a config doc.
 
-DE4 setup scripts are graded here too, **by content not execution** (rule 4): a setup script must
-chain real stages (install AND migrate/seed keywords found) - one that only prints instructions
-is ❌.
+DE4 setup scripts are graded here too, by you, **by content not execution** (rule 4): a setup
+script must chain real stages (install AND migrate/seed keywords found in the setup script itself)
+- one that only prints instructions is ❌. The emitter's `setup_stages` lists candidate scripts, but
+its `has_install` pools every `package.json` script, so it is not the grade.
 
 ### 2.9 Operability ladder computation (per-surface tiers → min-deployable headline)
 
