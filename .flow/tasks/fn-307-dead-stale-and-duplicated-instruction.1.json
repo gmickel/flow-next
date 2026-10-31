@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-307-dead-stale-and-duplicated-instruction",
   "spec_path": ".flow/tasks/fn-307-dead-stale-and-duplicated-instruction.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Dead, stale and duplicated instruction text (audit 2026-10 wave 1)",
   "updated_at": "2026-10-31T11:46:38.337279Z"
 }

@@ -72,7 +72,7 @@
     "impl:fn-307-dead-stale-and-duplicated-instruction.1": 0
   },
   "spec_path": ".flow/specs/fn-307-dead-stale-and-duplicated-instruction.md",
-  "status": "open",
+  "status": "done",
   "title": "Dead, stale and duplicated instruction text (audit 2026-10 wave 1)",
   "tracker": {
     "baseHashFlow": null,
@@ -85,5 +85,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T12:39:32.758063Z"
+  "updated_at": "2026-10-31T12:44:20.210035Z"
 }
