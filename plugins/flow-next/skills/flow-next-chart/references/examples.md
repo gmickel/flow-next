@@ -78,7 +78,7 @@ If grounding finds nothing consequential: create nothing; `CHART_VERDICT=NO_WORK
 
 | Field | Value |
 |---|---|
-| **Inferred operation** | Re-entry: probe `flowctl chart locate <selector>` (local ledger only). On success, read back canonical D-ID/title/record link; re-anchor chart; if open decision, pin and enter work mode. If locate missing, ask for local chart id - no mutation |
+| **Inferred operation** | Re-entry: run `flowctl chart locate <selector>` (local ledger only). On success, read back canonical D-ID/title/record link; re-anchor chart; if open decision, pin and enter work mode. If locate fails, ask for local chart id - no mutation |
 | **Read-back point** | Always read back local id + title + record link before claim/work. Resolved/superseded URLs show history + frontier options - never silent reassignment |
 | **Evidence/consent boundary** | No remote search, no title inference, no create-on-miss. Failures mutate nothing. Parent URL -> chart status/frontier; open decision URL -> that D-ID only |
 | **Terminal verdict** | After work: normal one-decision verdict. Locate-only history view: `CHART_VERDICT=NO_WORK chart=<id> decision=<D> reason="historical decision; no new work selected"`. Locate failure: `CHART_VERDICT=BLOCKED chart=- decision=- reason="locator failed local ledger; no mutation"` |
@@ -206,7 +206,7 @@ CHART_VERDICT=COMPLETE chart=fn-140 decision=- reason="multi-spec briefing B1 co
 | `chart attach-asset --asset-file` | Safe artefact while open |
 | `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only; after a `chart reopen` the same proposal mints the next B-ID |
 | `chart claim` / `release-claim [--break-stale --reason]` | Claims; no silent expiry |
-| `chart locate <selector>` | Local ledger re-entry (may be absent - degrade) |
+| `chart locate <selector>` | Local ledger re-entry |
 
 ## Automation flag map (not required vocabulary)
 
@@ -223,7 +223,7 @@ CHART_VERDICT=COMPLETE chart=fn-140 decision=- reason="multi-spec briefing B1 co
 | Correct a disproved note | `resolve --sharpen-file` (`notes_append`) |
 | Reverse prior answer | `resolve --supersedes` |
 | Brief for capture | `chart briefing --proposal-file` |
-| Re-enter from tracker URL | `chart locate` (local only; degrade if missing) |
+| Re-enter from tracker URL | `chart locate` (local only) |
 
 ---
 

@@ -36,7 +36,7 @@ Frozen string format (anchor — must match across backends): `regenerate | loos
 
 ## Numbered-options fallback
 
-When plain text is the prompt mechanism (or the platform tool errors), print this **exact** string format. Do not paraphrase, re-order, or add commentary — the smoke test in task 6 grep-checks this format:
+When plain text is the prompt mechanism (or the platform tool errors), print this **exact** string format. Do not paraphrase, re-order, or add commentary:
 
 ```
 Saved: .flow/prospects/<artifact-id>.md

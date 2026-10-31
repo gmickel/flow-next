@@ -27,6 +27,6 @@ When spawning subagents, include this directive in the task prompt:
 
 > Investigate read-only, with whatever read and search tools you have. Do NOT edit, create, or delete any files, and run no command that changes anything. Return only the structured payload defined in the workflow.
 
-The orchestrator (this skill, on the main thread) merges results into Phase 2's `[inferred]` confidence — verified references can be tagged `[paraphrase]`; unverified or missing files stay `[inferred]` and surface in Phase 4 read-back for user review; material unknowns still use Phase 3's questions.
+The orchestrator (this skill, on the main thread) merges results into Phase 2's `[inferred]` confidence — verified references can be tagged `[paraphrase]`; unverified or missing files stay `[inferred]` and surface in the §5.6a saved-spec summary; material unknowns still use Phase 3's questions.
 
 For 1-2 file references, investigate on the main thread — no subagent overhead is worth it.

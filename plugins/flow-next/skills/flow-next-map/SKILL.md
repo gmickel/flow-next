@@ -45,9 +45,9 @@ Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"
 ```
 
-Single source of truth for the supported clawpatch range. The bundled script parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
+The supported clawpatch range; the bundled script (`scripts/map.sh`) holds the values it enforces. It parses `clawpatch --version` with a tolerant `(\d+\.\d+\.\d+)` regex and compares against this range. **Outside-range → warn one line to stderr and degrade (continue). Never block.** Re-verify on each clawpatch minor release.
 
-clawpatch is pre-1.0 (v0.4.0, 2026-05-22; weekly minor releases). The README forecasts breaking changes between minor releases — tolerant parsing matters.
+clawpatch is pre-1.0 with frequent minor releases. The README forecasts breaking changes between minor releases — tolerant parsing matters.
 
 ## Workflow
 

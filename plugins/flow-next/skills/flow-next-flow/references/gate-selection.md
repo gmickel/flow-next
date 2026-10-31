@@ -10,7 +10,7 @@
 
 `auto` only: read [qa-auto.md](qa-auto.md) to decide both halves and record the line.
 
-QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to make-pr, and their findings become open items on a draft PR. The evidence-aware subtraction inside QA is unchanged: runtime, UI, and integration criteria are always re-driven; deterministic re-runnable tests subtract.
+QA never hard-blocks the loop; `NEEDS_WORK` and `BLOCKED` advance to make-pr, and their findings become open items on a draft PR.
 
 Attended, QA leaves its verdict uncommitted; on a spec branch (not the default branch), commit only
 the receipt QA wrote and its `.history` directory with `chore(flow): qa verdict <spec-id>`, the

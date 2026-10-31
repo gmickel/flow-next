@@ -23,11 +23,6 @@ Single-round clustering (grouping new-only threads by theme) has too many false 
 
 First-round "one helper would fix these" opportunities are handled individually. If the same theme re-emerges a round later, the pattern triggers clustering naturally — no need to guess on the first pass.
 
-The resolver's **confirmed bot sibling audit** is narrower and runs in the same
-cycle: once a bot finding is proven valid, it checks adjacent call sites for the
-same violated invariant and fixes only confirmed siblings. That evidence-bounded
-scan does not form a cluster and does not relax this cross-round gate.
-
 ## Categorization
 
 Assign each participating item (new threads + previously-resolved threads) exactly one category from this fixed enum:
@@ -101,13 +96,3 @@ Items outside any cluster are dispatched individually as `review_threads` / `pr_
 ## No-cluster fallback
 
 If no clusters are identified after analysis (signal fired but no new-thread-with-prior-resolved pattern materialized), proceed with all items as individual. The only cost incurred was the analysis itself — no harm done.
-
-## `--no-cluster` override
-
-The user flag `--no-cluster` skips this entire phase. All new items go individual. Useful when:
-
-- The user wants speed on a small PR where clustering overhead isn't worth it.
-- The user knows the review is one-shot (e.g., a specific reviewer who only commented once).
-- The user is debugging and wants deterministic per-thread behavior.
-
-`--no-cluster` is equivalent to forcing the gate to fail — Phase 3 is a no-op.

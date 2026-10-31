@@ -119,7 +119,7 @@ Reproducible environment setup.
 | DE4 | Setup script chains real stages (static + cross-ref) | Not existence: the setup script must chain real stages - `install` AND `migrate`/`seed` keywords found in its CONTENT (static + cross-reference evidence only; setup/migrate/seed are NEVER executed during assessment per the non-mutating policy). A `setup.sh` that only prints instructions = ❌. |
 | DE5 | Devcontainer is non-empty | Empty devcontainer json with no `features`/`postCreateCommand` = "checkbox artifact" ⚠️, not ✅. Evidence = the config quoted. |
 | DE6 | Docker available | Dockerfile or docker-compose.yml |
-| DE7 | Codebase feature map present | `[[ -d .clawpatch ]]` + `"$FLOWCTL" repo-map list --count > 0` (informational — not scored; surfaces `/flow-next:map` suggestion in Top Recommendations when missing; `$FLOWCTL` resolved via the bundled Droid+Claude fallback — see `workflow.md` DE7 detection block) |
+| DE7 | Codebase feature map present | `[[ -d .clawpatch ]]` + `"$FLOWCTL" repo-map list --count > 0` (informational — not scored; surfaces `/flow-next:map` suggestion in Top Recommendations when missing; `$FLOWCTL` resolved via the bundled Droid+Claude fallback — see [references/map-suggestion.md](references/map-suggestion.md)) |
 
 ### Scoring
 - ✅ 80%+: One-command setup possible
@@ -379,8 +379,6 @@ Used for maturity level calculation and remediation decisions.
 | 5 | Autonomous | 85%+ overall, all pillars ≥80% |
 
 **Agent Readiness Score / maturity level** = average of Pillars 1-5 scores **ONLY**. The scored tier groups (AO/DR/TO/HP-core/FH-scored) are NOT folded in - cross-repo level comparability requires a stable denominator (the 48 legacy criteria). The tier groups surface as separate group pass-count lines and drive the verdict headline + ranked actions instead.
-
-**Floor checks (the "all pillars ≥ N%" columns above):** pillars OR groups whose criteria are ALL excluded (shape/tier N/A, greenfield deferral, inactive harness - per the N/A whitelist) are SKIPPED, never counted as a 0% pillar that caps the level.
 
 ### Hard gates (cap the maturity level regardless of score)
 

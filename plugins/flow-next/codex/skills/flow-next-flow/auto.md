@@ -115,9 +115,9 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`, and so does goal mode, whatever the config says. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`; no config call or TMPDIR ceremony remains.
+Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`, and so does goal mode, whatever the config says. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`.
 
-When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute its backlog-only setup, then continue with Phase 1**. The reference owns the backlog-only verdict extension, SELECT/TRIAGE/ASK (Phases 1.5 and 1.6), and the backlog terminals and decision log; this file keeps the autonomy export, dispatch allowlist, and never-author guards. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
+When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute Phase 0.5's backlog branch below, then continue with Phase 1**. The reference owns the backlog-only verdict extension, SELECT/TRIAGE/ASK (Phases 1.5 and 1.6), and the backlog terminals and decision log; this file keeps the autonomy export, dispatch allowlist, and never-author guards. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
 
 ## The verdict contract (read this before the phases)
 
@@ -143,7 +143,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute a pull request's merge steps inline.** Goal mode's merge of the default branch into its integration branch is not one. Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
 - Backlog mode: see backlog-mode.md §Backlog additions to the Forbidden list.
-- Touching gh anywhere except existing-PR selection, Step 2's read-only route-state PR probe, the all-done classification branch's fallback PR probe, the plan/plan-review branch row's open-PR probe, the make-pr verification probe, and the exact-target landing identity/verification reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
+- Touching gh anywhere except existing-PR selection, the make-pr verification probe, and the PR-boundary reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
 - Printing anything after the `PILOT_VERDICT` line.
 
 ## Review no-repeat terminal
@@ -186,9 +186,9 @@ else
 fi
 ```
 
-## Phase 1 - SELECT (two-pass)
+## Phase 1 - SELECT
 
-**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default) outside goal mode. In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
+**Ready mode only.** This selection runs when `PILOT_AUTONOMY=ready` (the default) outside goal mode. In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 (backlog-mode.md) when `PILOT_AUTONOMY=backlog`.
 
 **Existing-PR selection.** Before the open/ready build predicate, read the
 named spec (or closed specs in the candidate inventory) and its exact known PR
@@ -248,7 +248,7 @@ QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')
 QA_FRESH="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id)][0] // .selected) | .qa_fresh // false')"
 ```
 
-`QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not run its former shell probe.
+`QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not recompute them.
 
 ### Route (SKILL.md Step 2 runs here)
 
@@ -288,7 +288,7 @@ Done when: exactly one stage from `{plan, plan-review, work, qa, make-pr, land}`
 
 ## Phase 3 - Branch resolution matrix
 
-The run owns branch resolution and runs it before every hop. Reuse `BRANCH_NAME` from Phase 2 (resolve it here when classification never reached the all-done branch):
+The run owns branch resolution and runs it before every hop.
 
 Use `selected.branch_name` and `selected.branch_exists` from the snapshot as `BRANCH_NAME` and `BRANCH_EXISTS`.
 
@@ -536,7 +536,7 @@ If `STRIKE_COUNT` is `2` or greater, the command has unreadied the spec; keep th
 PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>; clear with: flowctl pilot strikes clear <id>"
 ```
 
-The recovery clause is part of the reason string, not a separate line: a strikeout is the one terminal a human must undo by hand, and on a repo with `tracker.readyState` armed the board cannot undo it (Phase 1 item 3), so the transcript-only driver or human reading this verdict gets the exact command. Keep it last in the reason, after `<why>`.
+The recovery clause is part of the reason string, not a separate line: a strikeout is the one terminal a human must undo by hand, and on a repo with `tracker.readyState` armed the board cannot undo it (Phase 1), so the transcript-only driver or human reading this verdict gets the exact command. Keep it last in the reason, after `<why>`.
 
 Backlog mode: see backlog-mode.md §Backlog-mode dep-wait `BLOCKED` terminal.
 
@@ -546,17 +546,15 @@ Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 ```
 
-Without current landing authority, an all-done spec with an **open** PR is *not* crash-class; it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Authorized landing and confirmed-merge reporting use `references/tail.md` instead of these default terminals. Only the closed-unmerged-with-no-merged-PR, missing-branch, and merged-with-nothing-new (branch head equals the newest merged PR head) all-done states are `NEEDS_HUMAN`; merged plus commits beyond that head classifies `make-pr` even when older closed PRs share the branch. An open all-done spec with **no** PR and no previously bound target is not terminal; `references/route-matrix.md` names what it dispatches.
+Terminal verdict when no spec was dispatched. **The two cases stay distinct**; a run that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
 
-Terminal verdict when no spec was dispatched, split by why. **The two cases stay distinct**; a run that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
-
-- **No selectable candidate at all** (none open+ready, or all skipped for unsatisfied deps / other-actor claims) yields `NO_WORK`:
+- No selectable candidate:
 
   ```text
   PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
   ```
 
-- **Every remaining candidate was deferred to land** (each all-done with an existing OPEN PR, the only reason they weren't dispatched) yields the distinct, greppable `DEFERRED_TO_LAND` verdict, naming the deferred spec so a transcript-only driver can hand it to `$flow-next-land`. A `DONE`-but-open-PR spec is real outstanding work that land owns, not absence of work.
+- Every remaining candidate was deferred to land:
 
   ```text
   PILOT_VERDICT=DEFERRED_TO_LAND spec=<id> stage=land reason="all tasks done, open PR <url> — land owns the merge"

@@ -169,7 +169,6 @@ When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design syst
 ## Output Rules (for planning)
 
 - Show signatures, not full implementations
-- Keep code snippets to <10 lines illustrating the pattern shape
 - Never output complete function bodies for the planner to copy
 - Focus on "where to look" not "what to write"
 """

@@ -499,16 +499,6 @@ Done when: the policy skip recorded its stage line and `completion_review_status
 
 ---
 
-**Why spawn a worker?**
-
-Context optimization. Each task gets fresh context:
-- No bleed from previous task implementations
-- Re-anchor info stays with implementation (not lost to compaction)
-- Review cycles stay isolated
-- Main conversation stays lean (just summaries)
-
-A run with a single task has no next task to bleed into, so phases.md Phase 3 implements it inline unless it was sent here for a worker.
-
 **Autonomous mode** (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`): forward `FLOW_AUTONOMOUS=1` to the worker when set. It suppresses questions only.
 
 **Interactive mode**: Permission prompts pass through to user. Worker runs in foreground (blocking).

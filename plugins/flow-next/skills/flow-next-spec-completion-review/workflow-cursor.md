@@ -52,9 +52,6 @@ If `VERDICT=NEEDS_WORK`:
 ## Step 4: Receipt
 
 Receipt is written automatically by `flowctl cursor completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"cursor","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","spec":"cursor:<model>","timestamp":"..."}`
-
-There is **no `effort` key** — effort is not a Cursor field. The `spec` field is the canonical round-trippable form; `model` is the resolved Cursor model string.
 
 When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
 

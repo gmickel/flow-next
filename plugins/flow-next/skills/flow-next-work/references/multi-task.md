@@ -210,7 +210,7 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. On the wave route's single-worker path only, when the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `flow-next:flow-next-impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
+**Host review routes OUTSIDE the worker — and gates BEFORE `done`.** On the wave route's single-worker path only, when the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
 
 All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
@@ -509,16 +509,6 @@ surviving findings: report them and stop. If skill outputs `RETRY: no verdict (b
 Done when: the policy skip recorded its stage line and `completion_review_status` reads `not_required` (written by this run's CAS or already excused by a prior run), or a verdict-status CAS miss fell through to the status check without a skip line, or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
 
 ---
-
-**Why spawn a worker?**
-
-Context optimization. Each task gets fresh context:
-- No bleed from previous task implementations
-- Re-anchor info stays with implementation (not lost to compaction)
-- Review cycles stay isolated
-- Main conversation stays lean (just summaries)
-
-A run with a single task has no next task to bleed into, so phases.md Phase 3 implements it inline unless it was sent here for a worker.
 
 **Autonomous mode** (`mode:autonomous` token or `FLOW_AUTONOMOUS=1`): forward `FLOW_AUTONOMOUS=1` to the worker when set. It suppresses questions only.
 

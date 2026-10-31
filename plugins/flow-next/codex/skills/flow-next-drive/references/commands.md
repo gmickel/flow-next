@@ -1,6 +1,6 @@
 # Command Reference
 
-Complete reference for all agent-browser commands. For quick start and common patterns, see SKILL.md.
+Complete reference for all agent-browser commands.
 
 ## Navigation
 

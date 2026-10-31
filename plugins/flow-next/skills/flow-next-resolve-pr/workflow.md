@@ -31,7 +31,7 @@ NO_CLUSTER=0
 AUTONOMOUS=0
 TARGET=""
 
-for arg in $ARGUMENTS; do
+for arg in $(printf '%s\n' "$ARGUMENTS"); do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --no-cluster) NO_CLUSTER=1 ;;
@@ -191,12 +191,6 @@ If gate fails **or** `NO_CLUSTER=1`: skip clustering → every new item is its o
 Only when the gate passes and `NO_CLUSTER=0`: read [cluster-analysis.md](cluster-analysis.md) for
 categorization and cluster-dispatch rules; targeted mode, `--no-cluster` and a failed gate never read it.
 
-If gate passes:
-
-- Categorize new + resolved threads into one of: `error-handling`, `validation`, `type-safety`, `naming`, `performance`, `testing`, `security`, `documentation`, `style`, `architecture`, `other`.
-- Form clusters: same category + shared file/subtree + contains ≥1 prior-resolved.
-- Synthesize cluster brief — hypothesis + prior-resolutions list.
-
 ---
 
 ## Phase 4: Plan
@@ -248,7 +242,7 @@ Pass `spec_id` (`$SPEC_ID`), `spec_path` (`$SPEC_PATH`), and `decisions` (`$DECI
 
 ## Phase 5: Dispatch
 
-This is the only backend-divergent phase in the workflow. All other phases are platform-agnostic shell + GraphQL — kept inline per the backend-split heuristic documented in `agent_docs/adding-skills.md`.
+This is the only backend-divergent phase in the workflow. All other phases are platform-agnostic shell + GraphQL.
 
 ### Platform detection
 
@@ -273,16 +267,6 @@ Default to serial when in doubt — output is identical, only throughput differs
 ### Serial dispatch (Copilot / Droid)
 
 Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append the verdict JSON to `VERDICTS`.
-
-### Confirmed bot findings: same-cycle sibling audit
-
-For feedback from an automated reviewer, follow the resolver agent's sibling
-audit after validating the finding: name the violated invariant; inspect the
-changed surface and adjacent call sites that perform the same operation, state
-transition, or shared-helper path; fix and regression-test every **confirmed**
-sibling in this cycle. Stop at evidence — no speculative search-and-replace or
-unrelated refactor. This applies in parallel and serial dispatch and complements
-Phase 3's cross-round clustering; it does not weaken the cluster gate.
 
 ### Verdict JSON per unit
 
@@ -395,12 +379,6 @@ Reply body already carries `> quoted feedback\n\n<response>` from the resolver �
 ```bash
 REMAINING=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER" | jq '.review_threads | length')
 ```
-
-`get-pr-comments` already applies the open-thread rule (`isResolved != true`),
-so `REMAINING` includes threads whose GraphQL `isResolved` value was `false` or
-`null`. If you fetch review threads manually, use
-`select(.isResolved != true)` or `select(.isResolved | not)`, never
-`select(.isResolved == false)`.
 
 If `REMAINING > 0` **and** some of those threads aren't in the `needs-human` set (which will legitimately stay open):
 

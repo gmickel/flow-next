@@ -19,4 +19,4 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 - BEFORE any other flowctl operation, or when unsure of a flag: run `$FLOWCTL usage` (CLI cheatsheet + orchestration recipes).
 - BEFORE bridging work to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking an implementation/review model: run `$FLOWCTL usage` and follow "Orchestration & model steering" exactly.
 - Creating a spec: `$FLOWCTL spec create --title "Short title" --json`, then `$FLOWCTL spec set-plan <id> --file plan.md`, then `/flow-next:plan <id>` (Cursor autocomplete may show the hyphenated form `/flow-next-plan`).
-- If `flowctl` is not found: run `/flow-next:setup`.
+- If `flowctl` is not found: update or reinstall the flow-next plugin. A repo with no `.flow/` yet: run `/flow-next:setup`.

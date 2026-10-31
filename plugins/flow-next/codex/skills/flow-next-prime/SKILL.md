@@ -106,8 +106,6 @@ for branches that will not execute.
 - **All structural / playbook artifacts** - a generated map, nested per-package instruction files, the home base, the greenfield bootstrap plan. Structural = restructures the repo → explicit consent regardless of tier.
 - **On greenfield**, `--fix-all` applies ONLY to exercised hygiene files (`.gitignore`, lockfile, `.env.example`, `.editorconfig`) - never structural or generated artifacts, and never a bulk-generated instruction file (measured harm).
 
-**Re-run reuse:** a Phase 7 re-assessment reuses the session's Phase 0.5 classification and Phase 0.6 answers; only the affected criteria/gates re-verify. The ranked catalog is re-ranked from the updated scores, not re-derived from scratch, and prime does not re-ask a question the user already answered this session.
-
 ### Scope Control
 - **Never create LICENSE files** — license choice requires explicit user decision
 - **Never offer Pillar 6-8 fixes** — production readiness is informational only

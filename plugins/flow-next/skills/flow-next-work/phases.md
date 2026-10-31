@@ -167,8 +167,7 @@ Done when: `spec chain` reported `eligible: true`, the run is on the branch the 
 and follow it as this phase. That covers a spec with more than one open task, and a single task
 when the user or config names an implementer model or tier, when the task's review mode resolves
 to `host` (the writer never dispatches its own host review), or when your context is too full to
-implement well (say which in one line). Only on that route does
-[references/judge-tier.md](references/judge-tier.md) apply.
+implement well (say which in one line).
 
 **One task (a one-task plan, a task-id run, or the direct route's implicit owner): implement it
 here, inline.** Print `Scheduling: inline (single task)`.

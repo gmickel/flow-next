@@ -83,7 +83,7 @@ fi
 
 A confirmed merge ends either mode's run, even if the tracker touchpoint failed;
 report that failure with the merge commit. Do not select another item; a goal run
-returns to its measure step instead, per its reference. An
+continues per [goal-mode.md](goal-mode.md). An
 unconfirmed `MERGED` result or `NO_WORK` cannot prove completion.
 
 `--tick` stops after one land dispatch. A long-running invocation continues only when `LAND_CONTINUE=1`. Name the wait mechanism and its bound in the report: use the soonest of land's reported remaining patience, a bounded `gh pr checks <bound-pr> --watch --interval 30` watch when checks are pending, or the caller interval (default 30 minutes). Bound the watch with the host tool timeout to the smaller of remaining patience and caller interval; on timeout re-read the exact PR. Without a remaining-time report, use the caller interval as the bound. Never tight-poll or spend repair attempts on an unchanged external wait.

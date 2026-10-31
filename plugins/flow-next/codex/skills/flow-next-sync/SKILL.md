@@ -200,21 +200,7 @@ Plan-sync: <source> -> downstream tasks (DRY RUN)
 No files modified.
 ```
 
-## Error Messages
-
-| Case | Message |
-|------|---------|
-| No ID provided | "Usage: /flow-next:sync <id> [--dry-run]" |
-| No `.flow/` | "No .flow/ found. Run `flowctl init` first." |
-| Unknown ID (does not resolve) | "Unknown ID. Use fn-N-slug (spec) / fn-N-slug.M (task), a tracker handle (wor-17), or legacy fn-N, fn-N-xxx." |
-| Task not found | "Task <id> not found. Run `flowctl list` to see available." |
-| Spec not found | "Spec <id> not found. Run `flowctl list` to see available." |
-| No source (spec mode) | "No completed or in-progress tasks to sync from. Complete a task first." |
-| No downstream | "No downstream tasks to sync (all done or none exist)." |
-
 ## Rules
 
 - **Ignores config** - `planSync.enabled` setting is for auto-trigger only; manual always runs
 - **Any source status** - source task can be todo, in_progress, done, or blocked
-- **Includes blocked** - downstream set includes both `todo` and `blocked` tasks
-- **Reuses agent** - spawns existing plan-sync agent, no duplication

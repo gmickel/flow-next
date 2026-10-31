@@ -1,6 +1,6 @@
 # Strategy Template
 
-Loaded by `SKILL.md` after each section is captured. Fill it in using the captured answers and write to `STRATEGY.md` via the `Write` tool. Per-section atomic writes mean each section lands on disk before the next interview prompt fires.
+Fill it in using the captured answers and write to `STRATEGY.md` via the `Write` tool. Per-section atomic writes mean each section lands on disk before the next interview prompt fires.
 
 ## Rules for filling in
 

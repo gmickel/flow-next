@@ -3,7 +3,7 @@
 Read this only when you need the per-backend model/effort detail: surfacing a
 backend recommendation or override hint to the user, resolving a `--spec` /
 `FLOW_REVIEW_BACKEND` value, or explaining the configured backend. The default
-review path never needs it — Phase 0 already resolved `$BACKEND`.
+review path never needs it — SKILL.md's setup already resolved `$BACKEND`.
 
 ## Backend at a glance
 
@@ -16,6 +16,22 @@ review path never needs it — Phase 0 already resolved `$BACKEND`.
 
 **Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:<model>`, `copilot:<model>:xhigh`, `cursor:<model>` (cursor takes model only — no `:effort`), `claude:<model>:<effort>`, `host` (bare only). Per-task `review` (set via `flowctl task set-backend`) overrides env.
 
-Runnable `FLOW_REVIEW_BACKEND=` / `--spec` invocation examples stay inline in
-[../workflow-common.md](../workflow-common.md) § Phase 0 (already loaded on
-every review) — this file is the descriptive layer only.
+**Spec-form examples:**
+
+```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+# Bare backend (back-compat)
+FLOW_REVIEW_BACKEND=codex $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+
+# Full spec — model + effort resolved automatically
+FLOW_REVIEW_BACKEND=codex:<model>:xhigh $FLOWCTL codex impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=copilot:<model> $FLOWCTL copilot impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
+# Cursor folds effort into the model name (no :<effort>):
+FLOW_REVIEW_BACKEND=cursor:<model> $FLOWCTL cursor impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
+# Claude takes model + effort (low|medium|high|xhigh|max); the reviewer reads the diff by path (no shell):
+FLOW_REVIEW_BACKEND=claude:<model>:high $FLOWCTL claude impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
+
+# Or pass spec directly (preferred for one-offs, avoids env pollution):
+$FLOWCTL codex impl-review "$TASK_ID" --spec "codex:<model>:xhigh" --receipt "$RECEIPT_PATH"
+```

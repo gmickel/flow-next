@@ -35,19 +35,6 @@ parses an explicit `--review` mode before configured-backend resolution,
 resolves `SPEC_ID`, and handles `ASK`, `none`, `rp` and `export`. Never invoke
 `flowctl review-backend` a second time.
 
-## Backend Selection
-
-Priority (first match wins):
-
-1. `--review=codex|copilot|cursor|claude|host|none`
-2. Per-spec `default_review`
-3. `FLOW_REVIEW_BACKEND`
-4. `.flow/config.json` `review.backend`
-5. Error — no auto-detection
-
-Configured values accept `backend[:model[:effort]]`; `cursor` takes a model but
-no effort, `claude` takes `claude[:<model>[:<effort>]]`, and `host` and `none` are bare-only.
-
 ## Common Critical Rules
 
 - The coordinator never self-declares a verdict.

@@ -64,7 +64,7 @@ These extend `auto.md`'s Forbidden list for a backlog run.
 
 ## How this extends the ready-only run
 
-The ready-mode run (`auto.md` Phase 1 SELECT) two-pass-filters on `status==open`
+The ready-mode run (`auto.md` Phase 1 SELECT) filters on `status==open`
 + the `ready` flag + `depends_on_epics` satisfaction, and emits `NO_WORK`
 when none qualify. Backlog mode reuses that wholesale and adds exactly three things,
 nothing more:
@@ -118,8 +118,7 @@ facts only** - `{id, ready, noPlan, readySignal, blockedBy, hasSpec}`:
 - `ready` - the local `ready` boolean (after 1a's projection, a
   tracker-promoted spec reads `true`).
 - `noPlan` - the spec-level `no_plan` boolean (absent-on-disk reads
-  `false`); Phase 1.6 CLASSIFY consumes it for the zero-task work row. Human-set
-  only, never tracker-projected.
+  `false`); `true` records the direct route. Never tracker-projected.
 - `readySignal ∈ {local, none}` - whether the local flag is set. flowctl stores no
   readiness provenance, so it cannot attribute a *tracker-projected* ready; that is
   fine - after the 1a pull the flag is simply `local`.
@@ -242,7 +241,7 @@ state-changing terminal (a live triage never ends on a no-op). Dep-blocked is
 
 For a **spec-backed** pick with dependencies, the flow-side dependency answer is
 `CHAIN_JSON="$($FLOWCTL spec chain "$SUBJECT_ID" --json)"` - the same predicate
-ready-mode SELECT applies (auto.md Phase 1 Pass 2 item 1; the command is the single
+ready-mode SELECT applies (auto.md Phase 1's `chain.eligible`; the command is the single
 owner of chain eligibility, never re-derived from `show <dep>`). `.eligible == true`
 means the flow deps are satisfied (every dependency done, or exactly one open
 **chain parent** with all tasks done and its branch on origin - keep `.parent` as
@@ -252,8 +251,8 @@ relations keep their existing `list-relations` read.
 
 ### 1g - Apply the ready-mode claim / collision / re-bless checks
 
-Backlog SELECT **reuses the SAME checks as ready-mode SELECT** (`auto.md` Phase 1
-Pass 2) on the picked candidate - it does not skip them. Phase 2 CLASSIFY (and its
+Backlog SELECT **reuses the SAME checks as ready-mode SELECT** (`auto.md` Phase 1)
+on the picked candidate - it does not skip them. Phase 2 CLASSIFY (and its
 stale-claim `NEEDS_HUMAN` row) **assumes other-actor `in_progress` claims were
 already skipped at SELECT**, so they must run here, before triage:
 
@@ -440,8 +439,7 @@ A **live** triage always resolves to a **state-changing** terminal - `ADVANCED`
 `BLOCKED` (dep-unsatisfied), or `NEEDS_HUMAN` (a crash-class condition). It never
 ends on a no-op `TRIAGED` line in a live run, so an item can never re-select
 forever. (`TRIAGED <id> <class>` is diagnostic / dry-run only - emitted under a
-triage-only inspection, never as a live terminal. The verdict grammar itself is
-owned by `auto.md`.)
+triage-only inspection, never as a live terminal.)
 
 The `dep-unsatisfied` → `BLOCKED` terminal is a **dep-wait surface, NOT a strike**:
 it records no strike, never unreadies the spec, and emits its own `blocked`
@@ -542,8 +540,7 @@ item with no transport has nowhere to park; that degrades to a `NEEDS_HUMAN` sur
 trackers configured - the mirror auto-lights per detected transport.
 
 The terminal for a parked item is `ASKED <id> (<n>)` - a **durable** park that set
-the `status=open` anchor so Phase 1d skips it next run (the verdict grammar +
-durable-park semantics are owned by `auto.md`).
+the `status=open` anchor so Phase 1d skips it next run.
 
 ```text
 PILOT_VERDICT=ASKED spec=<id> stage=ask reason="parked behind <n> open question(s): <one line>"

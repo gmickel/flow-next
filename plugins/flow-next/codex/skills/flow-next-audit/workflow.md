@@ -404,7 +404,7 @@ For each cluster from Phase 1.75:
 
 1. **Confirm canonical entry** (already picked in 1.75).
 2. **Extract unique content** from subsumed entries — anything the canonical doesn't already cover. Edge cases, alternative approaches, extra prevention rules.
-3. **Merge into canonical** in a natural location. Don't append blindly — integrate where it logically belongs. Combine `tags` arrays (dedupe). Preserve canonical's `module`.
+3. **Merge into canonical** in a natural location. Don't append blindly — integrate where it logically belongs. Combine `tags` arrays (dedupe). Preserve canonical's `module`, `track`, `category`.
 4. **Re-point every `related_to` that names a subsumed entry** — other entries point at canonical instead; canonical drops the id rather than naming itself. No `related_to` may name an entry this run deletes.
 5. Apply `remove:true` with `replacement:<canonical-id>` for each subsumed entry. Git history preserves them.
 

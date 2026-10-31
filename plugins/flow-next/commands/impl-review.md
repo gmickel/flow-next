@@ -1,7 +1,7 @@
 ---
 name: impl-review
 description: John Carmack-level implementation review via Codex, Copilot, Cursor, Claude or a host reviewer
-argument-hint: "[--review=codex|copilot|cursor|none] [focus areas]"
+argument-hint: "[--review=codex|copilot|cursor|claude|host|none] [focus areas]"
 disable-model-invocation: true
 ---
 

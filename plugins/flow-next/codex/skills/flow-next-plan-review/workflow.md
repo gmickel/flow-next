@@ -1,11 +1,5 @@
 # Plan Review Workflow — Common
 
-## Philosophy
-
-Resolve the mode once, keep shared orchestration here, then load only the
-selected backend workflow. Backend execution and rubric material must not leak
-into this common file.
-
 ## Phase 0: Backend Detection
 
 Run this first, exactly once.
@@ -67,10 +61,8 @@ For host, provide the current spec/task material and review focus.
 
 ## Phase 2: Select One Backend Workflow
 
-Read exactly one backend file, per SKILL.md's routing list.
-
-Do not read any other backend file. Unknown/malformed values fail closed with
-the same `ASK`/error behavior; never guess a backend.
+Unknown/malformed backend values fail closed with the same `ASK`/error
+behavior; never guess a backend.
 
 ## Common Terminal Contract
 
@@ -85,15 +77,3 @@ the same `ASK`/error behavior; never guess a backend.
   into SKILL.md's shared Fix Loop.
 - `MAJOR_RETHINK` → latest status/receipt says needs_work; continue immediately
   to SKILL.md's typed design-conflict escalation.
-- Backend unavailable/transport/no verdict → `RETRY: no verdict (backend or transport failure)` and
-  stop. Flowctl records and refunds the reserved round; never manually reset
-  the verdict counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops automatic retries.
-  Never mix or fall back to another backend.
-
-## Anti-patterns
-
-- Resolving the backend twice
-- Loading all backend files before branching
-- Letting `none` read a backend file
-- Reviewing a checkpoint instead of the current user-edited spec
-- Backgrounding a review call

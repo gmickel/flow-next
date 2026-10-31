@@ -1,6 +1,6 @@
 # Implementation Review Workflow — CLI Backends
 
-Use when `BACKEND` is `codex`, `claude`, `copilot` or `cursor`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`. Every CLI backend takes the same steps through the same flowctl commands; only the reviewer CLI behind them differs (see "Backend notes" below).
+Use when `BACKEND` is `codex`, `claude`, `copilot` or `cursor`. Prerequisite: SKILL.md's setup has resolved `BACKEND`, and [other-paths.md](other-paths.md) has set `FLOWCTL` and (optionally) `TASK_ID` / `BASE_COMMIT`. Every CLI backend takes the same steps through the same flowctl commands; only the reviewer CLI behind them differs (see "Backend notes" below).
 
 ## Critical Rules (CLI backends)
 

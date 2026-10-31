@@ -1,6 +1,6 @@
 # Strategy Interview
 
-Loaded by `SKILL.md` at the start of Phase 1 and revisited per-section in Phase 2. Every section below maps one-to-one to a section in `strategy-template.md`.
+Every section below maps one-to-one to a section in `strategy-template.md`.
 
 For each section: ask the opening question, evaluate the answer against the quality bar, push back when it falls into a named anti-pattern, and capture the final answer in the user's own language.
 

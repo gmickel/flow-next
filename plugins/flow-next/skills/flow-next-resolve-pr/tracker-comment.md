@@ -8,7 +8,7 @@
 The linked spec id comes from the PR's spec association (the same `SPEC_ID` make-pr used; resolve `flowctl show <spec-id>` from the branch as elsewhere in this skill).
 
 ```bash
-LEAF="$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — work SKILL.md)
+LEAF="$($FLOWCTL config get tracker.perEvent.resolvePr --json | jq -r '.value')"   # read the leaf ONCE (shared gating predicate — work references/tracker-touchpoints.md)
 case "$LEAF" in
   pull|push|reconcile|comment) OP="comment" ;;
   off|null)                    OP="off" ;;

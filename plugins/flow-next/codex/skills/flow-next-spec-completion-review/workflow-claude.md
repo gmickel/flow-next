@@ -52,9 +52,6 @@ If `VERDICT=NEEDS_WORK`:
 ## Step 4: Receipt
 
 Receipt is written automatically by `flowctl claude completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"claude","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"claude:<model>:<effort>","timestamp":"..."}`
-
-The `spec` field is the canonical round-trippable form; `model` + `effort` are the resolved values (`effort` is `null` when the ladder floored). `mode` plus `model` name the family — read them for the same-family advisory above.
 
 When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
 

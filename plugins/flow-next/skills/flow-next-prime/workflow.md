@@ -3,8 +3,6 @@
 Execute these phases in order. Load each reference only when its consuming
 phase says to read it; never pre-read remediation templates.
 
-**Tier guidance**: synthesis and report generation run on the session model. Scouts run per their agent frontmatter: 7 fast-scout-tier scanners (tooling, env, testing, build, observability, security, workflow); claude-md-scout and docs-gap-scout on the thinking scout tier for judgment quality.
-
 ---
 
 ## Phase 0.5: Classify (before scout dispatch)
@@ -25,8 +23,6 @@ From the emitter payload, derive the five-axis classification per [classificatio
 
 **Low-confidence confirm (interactive only).** A `low` on any axis that changes a playbook or a verdict routes to the Phase 0.6 clarification. Autonomous / `--report-only` runs never block - they state the assumption inline and list it under "Unresolved questions" (see Phase 0.6). Misclassification degrades gracefully: a monorepo misread as a single repo still gets a correct base report; only the playbook block is off.
 
-**`--classify-only` (early exit).** When `--classify-only` is set, this phase wraps the emitter plus the judgment layer, prints the classification block in the fixed schema pinned in [classification.md](classification.md) (the `--classify-only` block: one line per axis with value + confidence + evidence-count, plus a `would-ask` list in place of the Phase 0.6 clarification), and **EXITS here** - no Phase 0.6, no scouts, no verification, no report, no remediation. It must stay cheap (<~10s on a multi-M-LOC repo) - it is the portfolio-triage entry point for 100+ repos.
-
 ---
 
 ## Phase 0.6: Targeted clarification (bounded ask protocol)
@@ -37,7 +33,7 @@ Some classification facts are LOW-CONFIDENCE (probes disagree) or UNINFERABLE IN
 
 **Interactive branch.** Ask via the `AskUserQuestion` tool. Each question names the inferred value, its evidence, and the playbook/verdict that changes with the answer.
 
-**Suppression (hard).** All asks are SUPPRESSED under `--classify-only` (it never asks - Phase 0.5 already exited), `--report-only`, and autonomous markers (`FLOW_AUTONOMOUS=1` or `mode:autonomous` in the arguments). A suppressed run NEVER blocks: it states each assumption inline and emits an **"Unresolved questions"** list in the report so a human can settle them once.
+**Suppression (hard).** All asks are SUPPRESSED under `--classify-only`, `--report-only`, and autonomous markers (`FLOW_AUTONOMOUS=1` or `mode:autonomous` in the arguments). A suppressed run NEVER blocks: it states each assumption inline and emits an **"Unresolved questions"** list in the report so a human can settle them once.
 
 **Repo-context recording offer.** Answers become durable repo facts, not session trivia. On confirmation, offer to record them where the next run can INFER instead of re-asking - a short **"Repo context"** block appended to the repo's agent instruction file (e.g. "part of the acme constellation, home base `../acme`"; "CI builds via `Build.cmd` on a licensed runner"; "modules X, Y frozen"). This simultaneously closes the corresponding DC2 gap. Declined = noted in the report and re-derived next run. (The Repo-context write is an agent-file augment - it follows the same consent + never-bulk-generate rules as any agent-file edit; it is offered here, applied in Phase 6.)
 
@@ -71,8 +67,6 @@ Task flow-next:observability-scout  # logging, tracing, metrics, health → OB1-
 Task flow-next:security-scout       # branch protection, CODEOWNERS, secrets → SE1-6
 Task flow-next:workflow-scout       # CI/CD, templates, automation → WP1-6
 ```
-
-**Important**: Launch all 9 scouts in parallel for speed (~15-20 seconds total).
 
 Wait for all scouts to complete. Collect findings.
 
@@ -335,7 +329,7 @@ For each pillar (1-5):
 
 Calculate:
 - **Agent Readiness Score**: average of Pillars 1-5 scores
-- **Maturity Level**: from pillars.md — apply BOTH the score band AND the per-pillar floors (pillars.md is the single source; do not compute the level from the SKILL.md summary table)
+- **Maturity Level**: from pillars.md — apply BOTH the score band AND the per-pillar floors (pillars.md is the single source)
 
 ### Production Readiness Score (Pillars 6-8)
 
@@ -434,12 +428,7 @@ Gate on `total_terms == 0`, NEVER on `[[ -f GLOSSARY.md ]]` — `flowctl glossar
 - `GLOSSARY_TERMS > 0` → DC8 ✅. Report term coverage in Phase 4. Never rewrite, never re-propose existing terms — staleness/alias pruning belongs to `/flow-next:audit`, not prime.
 - `GLOSSARY_TERMS == 0` (file absent or husk) → DC8 ❌. Phase 5.5 offers the bootstrap.
 
-### Prioritize Recommendations
-
-Generate prioritized recommendations from **Pillars 1-5 only** (excluding informational sub-criteria DC7 and DE7):
-1. Critical first (CLAUDE.md, .env.example)
-2. High impact second (pre-commit hooks, lint commands)
-3. Medium last (build scripts, .gitignore)
+### Fix scope
 
 **Never offer fixes for Pillars 6-8** — these are informational only.
 **Never offer fixes for DC7/DE7** — informational sub-criteria; surface as suggestions in Top Recommendations only.

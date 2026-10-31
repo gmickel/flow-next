@@ -22,7 +22,4 @@ TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"; RECEIPT_PATH="$(jq -r '.rece
   The re-review resumes the reviewer's session and its verdict is terminal: report surviving
   findings, never start a second fix pass, unless working-rules.md's review loop applies (an
   unattended run, or a request to review until SHIP). In that loop, fix and re-review the same
-  way until SHIP or an `ESCALATE:` (round cap or stall). When the reviewer keeps only findings
-  you declined under working-rules.md's rule, all below Major, end the loop and print
-  `OVERRIDDEN: <n> declined findings` with each finding and both sides' reasons after
-  `VERDICT=NEEDS_WORK`; the caller completes the task on it.
+  way until SHIP or an `ESCALATE:` (round cap or stall).

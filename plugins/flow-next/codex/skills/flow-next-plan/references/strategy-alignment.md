@@ -10,22 +10,14 @@ Both sections belong in the Step 5 plan body, between the template's
 
 ```
 ## Strategy Alignment
-<!-- Include this section ONLY when STRATEGY_PRESENT=true from Step 1.
-     When STRATEGY_PRESENT=false (no STRATEGY.md or husk: sections_filled == 0),
-     skip this section entirely. -->
 
 Active tracks served by this plan:
 - **<track-name>** — <one line on how this plan advances the track>
 - **<track-name>** — <one line>
 
-<!-- If the plan serves no active strategy track, replace the bulleted list with: -->
 _No active strategy track served — review for drift._
 
 ## Strategy drift flagged for review
-<!-- Include this block ONLY when the plan scope conflicts with an active track.
-     Mirrors plan-sync's "Decision overrides flagged for review" convention
-     (agents/plan-sync.md). Read-only — the plan skill never auto-supersedes
-     STRATEGY.md; the user (or `/flow-next:strategy`) decides whether to revise. -->
 
 - **<track-name>**: <one line on how this plan diverges from the track's stated direction>. Review for revision via `/flow-next:strategy`.
 ```

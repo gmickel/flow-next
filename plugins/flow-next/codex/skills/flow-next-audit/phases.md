@@ -8,11 +8,11 @@ Memory-entry body prose authored by the Update / Replace / Harden outcomes follo
 
 | Outcome | Meaning | Default action |
 |---------|---------|----------------|
-| **Keep** | Still accurate and useful | No content edit; stamp `flowctl memory mark-fresh`; report reviewed-without-change |
-| **Update** | Solution still correct, references drifted | Agent edits in place via Write tool |
-| **Consolidate** | Two entries overlap heavily, both correct | Merge unique content into canonical, `git rm` subsumed |
+| **Keep** | Still accurate and useful | No content edit; `stamp:true` in the apply plan; report reviewed-without-change |
+| **Update** | Solution still correct, references drifted | Changed fields / body via the apply plan |
+| **Consolidate** | Two entries overlap heavily, both correct | Merge unique content into canonical, remove subsumed via the apply plan |
 | **Replace** | Old entry now misleading, successor exists / can be written | Write replacement entry, `git rm` old |
-| **Delete** | Code gone AND problem domain gone | `git rm` (preferred over stale-flag for truly obsolete) |
+| **Delete** | Code gone AND problem domain gone | `remove:true` in the apply plan (preferred over stale-flag for truly obsolete) |
 | **Harden** | Correct AND recurring AND mechanizable — the lesson should be a gate, not context | Write the gate artifact, verify it fires, then `flowctl memory mark-hardened` (file stays on disk) |
 
 For **autofix mode** ambiguity: mark as stale via `flowctl memory mark-stale` instead of guessing.
@@ -54,7 +54,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 
 **Action steps:**
 
-- No content edit; stamp `flowctl memory mark-fresh <id>` (see [workflow.md](workflow.md) §4.1).
+- No content edit; `stamp:true` in the apply plan (see [workflow.md](workflow.md) §4.1).
 - Report under "Reviewed without edits" subsection (see [workflow.md](workflow.md) §5.1).
 
 **Edge cases:**
@@ -92,8 +92,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 1. Read the file (already loaded in Phase 1).
 2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category`, plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added. The retrieval-fix variant above is the one exception, and only for the field it named as the defect: it may rewrite `title` (never an upsert identity), `tags`, `module`, `applies_when`, and — on a placement move — `category`, which is then set to the new bucket. Everything it did not name stays preserved.
 3. Mutate the body for code-ref / link / snippet fixes.
-4. Write the file back via the Write tool.
-5. **Round-trip safety:** if frontmatter has quirky YAML (anchors, nested structures, multi-line values) the agent isn't confident parsing, prefer `flowctl memory mark-stale` for stale-flagging — that helper handles round-trip correctly via existing `write_memory_entry`.
+4. Persist through the apply plan: changed fields under `set`, the revised `body` (see [workflow.md](workflow.md) §4.2).
 
 **The Update boundary:**
 
@@ -109,7 +108,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 
 ## Consolidate
 
-**Meaning:** two or more entries overlap heavily and both / all are materially correct. Merge unique content into the canonical entry, then `git rm` the subsumed ones.
+**Meaning:** two or more entries overlap heavily and both / all are materially correct. Merge unique content into the canonical entry, then remove the subsumed ones.
 
 **When to use** (apply Phase 1.75 cross-doc analysis):
 
@@ -129,16 +128,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 - Subsumed entry has unique content worth preserving → Consolidate (merge first, then delete).
 - Subsumed entry adds nothing the canonical doesn't already say → skip straight to Delete.
 
-**Action steps:**
-
-1. **Confirm canonical entry** — most recent date, broadest module scope, highest-confidence Phase 1 recommendation, cleanest body.
-2. **Extract unique content** from subsumed entries — diff against canonical body. Edge cases, alternative approaches, extra prevention rules.
-3. **Merge into canonical:**
-   - Integrate unique content where it logically belongs (don't blindly append).
-   - Combine `tags` arrays (dedupe).
-   - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
-4. **Re-point every `related_to` that names a subsumed entry** — other entries point at canonical instead; canonical drops the id rather than naming itself. No `related_to` may name an entry this run deletes; git history and the commit message record the merge.
-5. **`git rm` subsumed entries.** No archival, no redirect metadata. Git history preserves them; recovery via `git log --diff-filter=D -- .flow/memory/`.
+**Action steps:** [workflow.md](workflow.md) §4.3.
 
 **Edge cases:**
 
@@ -231,13 +221,7 @@ Process Replace candidates **one at a time, sequentially.** Each replacement may
 
 When all four hold, Delete is unambiguous and runs without asking.
 
-**Action steps:**
-
-```bash
-git rm "$REPO_ROOT/<entry-path>"
-```
-
-That's it. No archive directory, no metadata flag. Git history preserves the file. Recovery: `git log --diff-filter=D -- .flow/memory/`.
+**Action steps:** an apply-plan entry with `remove:true` ([workflow.md](workflow.md) §4.5). No archive directory, no metadata flag. Git history preserves the file. Recovery: `git log --diff-filter=D -- .flow/memory/`.
 
 **Edge cases:**
 
@@ -353,9 +337,9 @@ a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
   no  → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
-  yes → Update (write tool; preserve unknown frontmatter) — one Update per entry,
+  yes → Update (apply plan; preserve unknown frontmatter) — one Update per entry,
         carrying the retrieval-surface repair too if one was named above
-  no  → Keep (mark-fresh stamp only; report under "Reviewed without edits"), unless a retrieval
+  no  → Keep (`stamp:true` only; report under "Reviewed without edits"), unless a retrieval
         fix was named above — then it is that Update alone
 ```
 

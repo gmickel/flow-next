@@ -2,7 +2,7 @@
 
 > Loaded ONLY when the matching opt-in flag resolves true — `DEEP=true` (§Deep-Pass),
 > `VALIDATE=true` (§Validator), `INTERACTIVE=true` (§Interactive Walkthrough). All three are
-> default-OFF, so the default per-task review never loads any of this (~5.4k tokens saved/review).
+> default-OFF, so the default per-task review never loads any of this.
 
 **Contents**
 - [Phase ordering & flag-combination matrix](#phase-ordering--flag-combination-matrix)

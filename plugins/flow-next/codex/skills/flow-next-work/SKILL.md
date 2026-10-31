@@ -110,18 +110,6 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 Once the modes are resolved, read [phases.md](phases.md) and execute each phase in order.
 
-**One task is implemented inline by this conversation** (phases.md Phase 3). Several tasks, or a
-task that goes to a worker, follow [references/multi-task.md](references/multi-task.md), which owns
-scheduling (rolling or wave), workers, review ownership after integration, and the completion
-review gate.
-
-## Tracker sync (opt-in, off by default)
-
-A tracker touchpoint fires only when `flowctl sync active --json` reports `active: true` and its
-event is opted in; otherwise nothing happens and [references/tracker-touchpoints.md](references/tracker-touchpoints.md)
-is never read. A tracker key (`wor-17`, `wor-17.1`) resolves to its linked spec or task through
-`flowctl show`, never a new spec. Phase 5's `Tracker sync:` summary slot runs on every run.
-
 ## Guardrails
 
 - **The branch is chosen before the run starts.** A run that began on an unresolved branch choice has broken this.

@@ -22,7 +22,7 @@ The third tier matters: it prevents the "always recommend" failure mode that tra
 
 ## One question per turn (3.3)
 
-Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `AskUserQuestion` contract and overwhelms users (practice-scout F4.3).
+Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `AskUserQuestion` contract and overwhelms users.
 
 ## Case (a) — Ambiguous title
 

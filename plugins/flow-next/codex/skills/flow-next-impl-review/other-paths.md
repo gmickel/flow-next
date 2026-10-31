@@ -8,7 +8,7 @@ instruction about reviewer topology. `BACKEND`,
 The backend's workflow file and the Fix Loop below own the verdict handling; of SKILL.md §4
 (the CLI fast path) only its `OVERRIDDEN:` line ending an unattended loop applies here.
 
-**Workflow is backend-split. Read ONLY the file matching your active backend; [workflow-common.md](workflow-common.md) holds the philosophy and the trivial-diff triage. The opt-in `--deep`/`--validate`/`--interactive` phase detail (including the phase-ordering matrix) lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
+**Workflow is backend-split. Read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail (including the phase-ordering matrix) lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
 - `BACKEND=codex`, `claude`, `copilot` or `cursor` → [workflow-cli.md](workflow-cli.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
@@ -24,38 +24,10 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 ## Preamble
 
-SKILL.md's setup already resolved `$BACKEND` and handled ASK, `none`, `rp` and `export`; never run
-[workflow-common.md](workflow-common.md) Phase 0's `review-backend` call or ASK handling again.
-Run only its `$FLOWCTL` setup lines, then parse the flags in Step 0.
-
-## Backend Selection
-
-**Priority** (first match wins):
-1. `--review=codex|copilot|cursor|claude|host|none` argument
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`, `claude:<model>:<effort>`); `host` is bare-only (`host:<model>` is rejected)
-3. `.flow/config.json` → `review.backend` (same bare / spec forms)
-4. **Error** - no auto-detection
-
-### Parse from arguments first
-
-Check $ARGUMENTS for:
-- `--review=codex` or `--review codex` → use codex
-- `--review=copilot` or `--review copilot` → use copilot
-- `--review=cursor` or `--review cursor` → use cursor
-- `--review=claude` or `--review claude` → use claude
-- `--review=host` or `--review host` → use host
-- `--review=rp` or `--review=export` (either spelling) → removed; SKILL.md's setup already showed the removal notice and stopped
-- `--review=none` or `--review none` → skip review
-
-If found, use that backend and skip all other detection.
-
-### Otherwise: SKILL.md resolved it
-
-No `--review` flag → `$BACKEND` comes from SKILL.md's setup: the single `flowctl review-backend "$REVIEW_ID"` call with ASK handling included. Do not re-resolve here.
-
-### Backend detail (model / effort / spec grammar) — on demand
-
-The per-backend "at a glance" descriptions, the `backend[:model[:effort]]` spec grammar, and the `FLOW_REVIEW_BACKEND` spec-form examples live in [references/backend-specs.md](references/backend-specs.md). Read it only when you must surface backend guidance to the user or resolve a model/effort spec — a normal review already has `$BACKEND` and needs nothing from it.
+SKILL.md's setup already resolved `$BACKEND` and handled ASK, `none`, `rp` and `export`; never
+call `flowctl review-backend` again. Run the `$FLOWCTL` setup lines in
+[workflow-common.md](workflow-common.md) (its foreground rule binds every review command), then
+parse the flags in Step 0.
 
 ## Critical Rules
 
@@ -72,35 +44,9 @@ model family and fail closed when no cross-family pin is available.
 
 **Hard invariants:**
 - **The coordinator never authors a verdict.** A SHIP with no backend response behind it has broken this.
+- **The verdict is acted on.** The verdict tag is extracted from the backend response; a run that continues without reading it has broken this.
 - **One backend per review.** A transcript that dispatches a second backend after the first answered has broken this.
 - **Review is never skipped silently.** A `none` backend that ends the run without saying so has broken this. A caller that skips a change under the working-rules.md risk rule records a `stage:` line instead of invoking this skill; that skip needs no question.
-
-## Input
-
-Arguments: $ARGUMENTS
-Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interactive] [focus areas]`
-
-- `--base <commit>` - Compare against this commit instead of main/master (for task-scoped reviews)
-- `--validate` - After NEEDS_WORK verdict, run a validator pass that drops false-positive findings (opt-in)
-- `--deep` / `--deep=<passes>` - Run additional specialized passes (adversarial / security / performance) after primary review (opt-in)
-- `--interactive` - On NEEDS_WORK, walk through each finding with the user (Apply/Defer/Skip/Acknowledge) (opt-in)
-- Task ID - Optional, for context and receipt tracking
-- Focus areas - Optional, specific areas to examine
-
-**Scope behavior:**
-- With `--base`: Reviews only changes since that commit (task-scoped)
-- Without `--base`: Reviews entire branch vs main/master (full branch review)
-
-**Opt-in flags:**
-- `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
-  for false positives. All findings dropping upgrades verdict to SHIP.
-- `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide.
-- `--deep` — adds adversarial pass always + security/performance auto-enabled
-  per diff paths. `--deep=adversarial,security` restricts to listed passes.
-- `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide.
-- `--interactive` — per-finding walkthrough on NEEDS_WORK. **No env var form** —
-  per-invocation only.
-- Default review behavior (no flags) is unchanged.
 
 ## Workflow
 
@@ -219,17 +165,6 @@ whitelist misclassifies).
 The deterministic rule table, the SKIP receipt shape, and the `FLOW_TRIAGE_LLM=1`
 judge live in [references/triage-rules.md](references/triage-rules.md) — read it
 only when a triage result needs justifying or auditing.
-
-### Step 1: Load Backend Workflow
-
-1. `$BACKEND` was already resolved by SKILL.md's setup — do NOT re-run it.
-2. Read **only** the file for that backend, per the routing table at the top of this file.
-
-**Do not read the other workflow file.** Each is self-contained; loading both wastes context.
-
-### Step 2: Execute the backend workflow
-
-Follow the phases in the workflow file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps. Cross-backend gated phases (Deep-Pass, Validator, Interactive Walkthrough) live in [optional-phases.md](optional-phases.md) — the backend files reference them.
 
 ## Fix Loop (INTERNAL)
 

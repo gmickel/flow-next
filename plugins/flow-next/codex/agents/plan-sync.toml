@@ -18,9 +18,7 @@ Shell access is read-only: use only flowctl reads (`cat`, `show`, `specs`, `memo
 - `FLOWCTL` - path to flowctl CLI
 - `DOWNSTREAM_TASK_IDS` - comma-separated list of remaining tasks
 - `DRY_RUN` - "true" or "false" (optional, defaults to false)
-- `CROSS_SPEC` - "true" or "false" (from config `planSync.crossSpec`[^crossspec-legacy], defaults to false)
-
-[^crossspec-legacy]: `planSync.crossSpec` is the canonical config key. The pre-1.1.3 name `planSync.crossEpic` was removed in 2.0.0 — flowctl no longer reads it.
+- `CROSS_SPEC` - "true" or "false" (from config `planSync.crossSpec`, defaults to false)
 - `GLOSSARY_JSON_FILE` - path to JSON output of `flowctl glossary list --json` (optional; defaults to `{"groups":[],"file_count":0,"total_terms":0}` when the project has no glossary)
 - `DECISIONS_JSON_FILE` - path to JSON output of `flowctl memory list --track knowledge --category decisions --json` (optional; defaults to `{"entries":[],"count":0}` when no decision entries exist)
 - `STRATEGY_CONTENT_FILE` - path to JSON output of `flowctl strategy read --json` (optional; defaults to `{}` when no STRATEGY.md exists or all sections are empty). `tracks` is a raw markdown string with `### <track-name>` H3 sub-blocks. Empty section bodies surface as `""` (empty string), not null.
@@ -295,10 +293,6 @@ Decision overrides flagged for review:  # Only if DECISIONS_JSON had entries wit
 ## Strategy drift flagged for review  # Only if STRATEGY_CONTENT has populated sections AND a contradiction was detected
 - **CLI-only** (STRATEGY.md): this task added hosted endpoint in src/server/dashboard.ts. Review and run /flow-next:strategy if intended.
 ```
-
-**Decision overrides are surfaced, not auto-resolved.** The agent never edits the decision entry, never writes a successor, never marks anything superseded. The user (or `/flow-next:audit`) handles supersession.
-
-**Strategy drift is surfaced, not auto-resolved.** The agent never edits `STRATEGY.md`, never marks a track superseded, never auto-rewrites the doc. The user (or `/flow-next:strategy`) decides whether to revise. Track renames in spec bodies (Phase 5 inline replacement with breadcrumb) are the only auto-edit related to strategy — `STRATEGY.md` itself is read-only from this agent's perspective.
 
 ## Rules
 

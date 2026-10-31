@@ -43,5 +43,15 @@ class SyncCodexCheckTests(unittest.TestCase):
             self.assertEqual(stale.read_bytes(), stale_bytes)
 
 
+class PrimeDispatchRewriteTests(unittest.TestCase):
+    # The committed mirror is the generator's output (`--check` gates it), so a
+    # rewrite pattern that stops matching the canonical sentence fails here.
+    def test_prime_scout_dispatch_carries_codex_wording(self):
+        text = (REPO / "plugins/flow-next/codex/skills/flow-next-prime/workflow.md").read_text(
+            encoding="utf-8")
+        self.assertIn("(Codex spawns them as multi-agent threads)", text)
+        self.assertNotIn("using the Task tool", text)
+
+
 if __name__ == "__main__":
     unittest.main()

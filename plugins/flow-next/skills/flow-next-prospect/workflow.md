@@ -29,14 +29,6 @@ done
 
 ---
 
-## Autonomy block
-
-SKILL.md's autonomy block has already run: an autonomous run exits there and never reaches this file.
-
-**No env-var opt-in.** An autonomous run cannot decide what a repo should build next — that's a human judgement call. The block runs before `mkdir`, before any user prompt, before any scan; the artifact directory is not created and no question is surfaced.
-
----
-
 ## Phase 0: Resume check
 
 **Goal:** if the user already has an active prospect artifact <30 days old, surface it and ask whether to start fresh or open it. Corrupt artifacts must be detected and listed with `status: corrupt` so the user knows they exist, but never offered for extension or promote.
@@ -206,7 +198,7 @@ fi
 
 #### Strategy snapshot (optional, present iff STRATEGY.md has at least one populated section)
 
-Verbatim emit pattern (mirrors CE-ideate's "emit approach and active tracks verbatim"). Pulls the `name`, `target_problem`, `approach`, `tracks` (raw markdown — `### <track-name>` H3 sub-blocks; downstream prompt context handles parsing), and `last_updated` from `flowctl strategy read --json`. Husk-vs-presence gate uses `sections_filled >= 1` from `flowctl strategy status --json`, NOT `[[ -f STRATEGY.md ]]`.
+Verbatim emit pattern. Pulls the `name`, `target_problem`, `approach`, `tracks` (raw markdown — `### <track-name>` H3 sub-blocks; downstream prompt context handles parsing), and `last_updated` from `flowctl strategy read --json`. Husk-vs-presence gate uses `sections_filled >= 1` from `flowctl strategy status --json`, NOT `[[ -f STRATEGY.md ]]`.
 
 ```bash
 STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"exists":false,"sections_filled":0}')

@@ -26,24 +26,14 @@ surface, readable runtime evidence); otherwise every run ends BLOCKED.
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step.
 
+This skill runs inline on the host (not forked) so it can ask the user for undocumented facts.
+
 ## The hard rule
 
 **SHIP rests on evidence captured from the running app** (screenshots, console output, observed
 state). A SHIP reached by reading the source or the diff, from narration, or from "the code looks
 right" has broken this. With no reachable app or no driver, the outcome is BLOCKED, never a pass.
 Reading source to explain a failure you already captured is fine.
-
-## Preamble
-
-flowctl is bundled, not on `PATH`. Define it once; later blocks here and in `workflow.md` use `$FLOWCTL`:
-
-```bash
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-```
-
-This skill runs inline on the host (not forked) so it can ask the user for undocumented facts.
 
 ## Arguments
 
@@ -55,7 +45,7 @@ SPEC_ID=""; PREV=""
 # No positional parameters: the host rewrites them inside skill code blocks.
 # Quote the pasted arguments once so a URL's `&` or `;` stays data.
 RAW_ARGS="$ARGUMENTS"
-for ARG in $RAW_ARGS; do
+for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   case "$PREV" in
     --target)  QA_TARGET_URL="$ARG"; PREV=""; continue ;;
     --receipt) QA_RECEIPT_OVERRIDE="$ARG"; PREV=""; continue ;;

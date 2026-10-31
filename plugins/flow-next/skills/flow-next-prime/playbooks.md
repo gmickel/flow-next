@@ -132,7 +132,7 @@ A 2-3 repo family (a code repo + a docs site + a sister product) whose coordinat
 
 The verdict headline leads with the **top-5 ranked next-actions** drawn from this catalog (leverage order, from research). Each carries a **tier** (Critical / High / Medium / Bonus) that maps to the existing `--fix-all` semantics and mirrors the remediation.md priority order, plus a **consent boundary**.
 
-**Consent boundaries.** `--fix-all` auto-applies only in-ROOT, non-structural, non-harness fixes at Critical/High/Medium tier - the Pillars 1-5 fixes plus scored-group agent-file content where an item's consent column says so (the consent column is authoritative). Catalog item 6's `--fix-all` eligibility covers editing EXISTING CI/verify config only; creating a new workflow stays Bonus/explicit-consent. **Explicit-consent-only regardless of tier:** anything outside the repo ROOT (the home-base kit), any harness settings/hook file (deny/ask/hook scaffolds), and ALL structural/playbook artifacts (a generated map, nested instruction files, the home base, the bootstrap plan). On greenfield, `--fix-all` applies only to exercised hygiene files. **Re-run:** Phase 7 re-assessment reuses the session's Phase 0.5 classification and Phase 0.6 answers; only affected criteria/gates re-verify, so the catalog is re-ranked, not re-derived.
+**Consent boundaries.** The consent column is authoritative. Catalog item 6's `--fix-all` eligibility covers editing EXISTING CI/verify config only; creating a new workflow stays Bonus/explicit-consent. **Re-run:** Phase 7 re-assessment reuses the session's Phase 0.5 classification and Phase 0.6 answers; only affected criteria/gates re-verify, so the catalog is re-ranked, not re-derived.
 
 | # | Action | Tier | Consent |
 |---|---|---|---|

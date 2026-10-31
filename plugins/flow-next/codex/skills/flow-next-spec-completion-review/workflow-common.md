@@ -45,18 +45,6 @@ echo "Review backend: $BACKEND"
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
 
-**Then branch to the backend-specific workflow file:**
-
-| `$BACKEND` | Read |
-|------------|------|
-| `codex` | [workflow-codex.md](workflow-codex.md) |
-| `copilot` | [workflow-copilot.md](workflow-copilot.md) |
-| `cursor` | [workflow-cursor.md](workflow-cursor.md) |
-| `claude` | [workflow-claude.md](workflow-claude.md) |
-| `host` | [workflow-host.md](workflow-host.md) |
-
-Only the file for the active backend should enter context. Do not read the other backend files.
-
 **Foreground rule — review CLI calls are blocking.** Run every `flowctl <backend> …` review command as a single **foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). **Never** launch one with `run_in_background` + a monitor/poll — a background completion does not reliably resume a subagent context, and the call is bounded, so blocking is safe and simpler.
 
 ---
@@ -98,6 +86,7 @@ If the verdict is NEEDS_WORK, fix and re-review (working-rules.md, Review):
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
+   - **Claude**: Re-run `flowctl claude completion-review` (receipt enables context; must be `mode == "claude"` to resume)
    - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
      re-review path.
 5. **Stop.** Attended, the re-review's verdict is terminal: `SHIP` completes; `NEEDS_WORK`
@@ -120,10 +109,8 @@ final verdict.
 - **One backend per review.** A transcript that dispatches a second backend after the first answered has broken this.
 - **Review is never skipped silently.** A `none` backend that ends the run without informing the user and exiting cleanly has broken this.
 
-- **Reviewing yourself** - You coordinate; the backend reviews
 - **No receipt** - when `REVIEW_RECEIPT_PATH` is set, every verdict writes a receipt; a verdict reported with no receipt at that path has broken this
 - **Ignoring verdict** - the verdict tag is extracted from the backend response and acted on; a run that continues without reading it has broken this
-- **Mixing backends** - Stick to one backend for the entire review session
 - **Checking code quality** - That's impl-review's job; focus on spec compliance
 - **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)
 

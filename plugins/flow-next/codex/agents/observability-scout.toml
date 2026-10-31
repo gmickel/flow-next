@@ -117,7 +117,6 @@ find . -path '*/node_modules' -prune -o \\( -name 'alerts.yml' -o -name 'alertma
 
 ### Summary
 - Criteria passed: X/6
-- Score: X%
 ```
 
 ## Rules

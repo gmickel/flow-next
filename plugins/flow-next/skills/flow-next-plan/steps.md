@@ -54,7 +54,7 @@ When the strategy sentinel prints, read [`references/strategy-alignment.md`](ref
 
 | Scout | Runs |
 |-------|------|
-| `flow-next:repo-scout` | always; at SHORT it also carries docs-gap-scout's charter |
+| `flow-next:repo-scout` | always |
 | `flow-next:spec-scout` | always |
 | `flow-next:docs-gap-scout` | STANDARD and DEEP |
 | `flow-next:practice-scout`, `flow-next:docs-scout` | STANDARD and DEEP |

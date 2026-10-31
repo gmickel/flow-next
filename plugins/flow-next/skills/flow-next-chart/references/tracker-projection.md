@@ -5,12 +5,9 @@ Read this file only when the Phase 0.2b gate sentinel printed - bridge active AN
 Chart projection rides the lifecycle facade. Local chart
 mutations always commit first; remote projection never blocks them.
 
-Gate (both required): bridge active AND `tracker.charts` is the literal `on`.
 The perEvent vocabulary (`off | pull | push | reconcile | comment`) does not
 select chart ops - chart is always a local-first **push** of the committed
-revision when the gate is open. When the gate is closed, flowctl still
-succeeds and `tracker_projection.skipped` names the reason
-(`tracker.charts_off` / `bridge_inactive`).
+revision when the gate is open.
 
 With the gate open:
 

@@ -46,9 +46,6 @@ If `VERDICT=NEEDS_WORK`:
 ## Step 4: Receipt
 
 Receipt is written automatically by `flowctl copilot completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"copilot","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"copilot:<model>:<effort>","timestamp":"..."}`
-
-The `spec` field is the canonical round-trippable form. `model` + `effort` remain for backward compatibility.
 
 When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
 

@@ -11,18 +11,17 @@ never a Linear/GitHub/GitLab/Jira wire shape. The transport ([linear-ladder.md](
 is the firewall; this file is the merge. A transport bug stays in the rung file; a
 merge bug stays here.
 
-> **This is the host agent's judgment, not a deterministic engine.** Per CLAUDE.md
-> "Architecture: agentic vs deterministic", the host agent IS the intelligence —
-> the semantic 3-way merge (does this Linear edit *contradict* this flow edit, or
-> just touch a different part of the same section?) is exactly what the agent is
-> for. **Do NOT build a deterministic fallback merge engine** (the anti-pattern
-> list literally names it). The lifecycle facade owns the deterministic parts —
-> the tracker write, server readback, `flow:deps` handling, the paired merge-base
-> and `lastSyncedAt` writes, and the one aggregate receipt; the agent queues a
-> conflict with `sync defer`. This file owns the merge, the translation, and the
-> conflict judgment. The **deterministic pre-reduction** and the **structural
-> gate** below are the only mechanical steps — and they exist to *narrow* what
-> the agent judges, not to replace the judgment.
+> **This is the host agent's judgment, not a deterministic engine.** The host agent
+> IS the intelligence — the semantic 3-way merge (does this Linear edit *contradict*
+> this flow edit, or just touch a different part of the same section?) is exactly
+> what the agent is for. **Do NOT build a deterministic fallback merge engine.** The
+> lifecycle facade owns the deterministic parts — the tracker write, server
+> readback, `flow:deps` handling, the paired merge-base and `lastSyncedAt` writes,
+> and the one aggregate receipt; the agent queues a conflict with `sync defer`.
+> This file owns the merge, the translation, and the conflict judgment. The
+> **deterministic pre-reduction** and the **structural gate** below are the only
+> mechanical steps — and they exist to *narrow* what the agent judges, not to
+> replace the judgment.
 
 > The worked fixtures and explicit oracles below are exercisable without a live tracker.
 
@@ -78,8 +77,8 @@ before wiki conversion is unchanged when its stored body equals the base.
 | **Both changed** | flow != `mergeBaseFlow` AND tracker != `mergeBaseTracker` (not an echo) | → **Step 2** (the agent's real job). |
 
 > Pre-reduction is mechanical *comparison* only (hash/byte equality). It does NOT
-> attempt a text merge — the moment both sides diverged, the agent takes over. This
-> is the CLAUDE.md split in miniature: equality is deterministic; meaning is agentic.
+> attempt a text merge — the moment both sides diverged, the agent takes over.
+> Equality is deterministic; meaning is agentic.
 
 ## Step 2 — Agentic 3-way merge (both sides diverged)
 
@@ -354,6 +353,6 @@ re-litigated.
   file consumes the normalized `issue.body` and produces a merged body.
 - **No deterministic fallback merge engine.** The pre-reduction and the structural
   gate are the only mechanical steps — equality and invariants, not a text merge.
-  The merge itself is the host agent's judgment (CLAUDE.md agentic-vs-deterministic).
+  The merge itself is the host agent's judgment.
 - **Never invent R-IDs / source tags** on a tracker→flow fold — the bridge projects,
   it does not author requirements.

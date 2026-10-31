@@ -1,6 +1,6 @@
 # Host Backend Workflow (impl-review)
 
-Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
+Use when `BACKEND="host"`. Prerequisite: SKILL.md's setup has resolved `BACKEND`, and [other-paths.md](other-paths.md) has set `FLOWCTL` and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
 `host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere).
 
@@ -14,18 +14,9 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; the CLI backends exist for exactly that, and the user chose `host` to avoid them. Dispatch through the harness's own subagent primitive with the model named in the dispatch; an unhonored model request degrades to the session model, and then rule 5 decides — never a CLI fallback
 
 
-**Host is the documented always-inject exception.** The `codex` backend
-resumes the reviewer's own session on a re-review and therefore sends the
-shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
-keep injecting unconditionally until their resume semantics are measured the way
-codex's were (copilot's `--resume` is create-or-resume via a marker, so "resumed"
-and "created" are not separable there). `host` cannot resume at all: rule 3
-above makes each re-review a fresh subagent with `session_id: null`, so the
-reviewer holds nothing from the previous round. The prior findings must travel in
-the prompt here, and the reply grammar below is what makes them machine-readable.
-This is a deliberate exception, tested (`test_review_prompt_no_embed_ratchet`
-asserts `host` has no flowctl dispatch, and the capability set is asserted
-exactly), not an oversight to be "simplified" later.
+**Host re-reviews always carry the prior findings in the generated prompt.** Rule 3
+makes each re-review a fresh subagent with `session_id: null`, so the reviewer holds
+nothing from the previous round.
 
 Everything else on the identities side still applies: point the subagent at the
 `base..head` range and the changed-path list and let it read the diff and the
@@ -196,12 +187,6 @@ dispatches) — the contract is three independent fresh read-only contexts per
 round, and the fan-out degrades honestly to sequential where the host offers
 no one-message parallel dispatch.
 
-**Unlike the quality auditor's two axis reports — which stay verbatim because
-they feed a human-shaped judgment — these three draws MERGE**: they are k
-samples of one finding distribution feeding one fix pass (the spec's Decision
-Context records this deliberate difference in consumption contract). Same
-dispatch pattern, different consumption.
-
 **Steering (prose, no flags):** "use 1 reviewer instead of 3" collapses the
 round to a single draw (the correctness lens). "use three different model
 families for the review fan-out" names a different reviewer pin in each of the
@@ -214,7 +199,7 @@ Every re-review dispatches exactly **one** fresh read-only subagent — host
 sessions are never resumed: no context reuse, no fabricated resume
 ids. Inject the FULL merged prior-finding container from the previous round's
 receipt into its prompt (every merged ordinal present, rendered as structured
-`findings.items` per the list below) — the fresh subagent holds nothing from
+`findings.items`) — the fresh subagent holds nothing from
 the draws that authored those findings.
 
 The `REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` anchors bound in the fence above are
@@ -253,42 +238,8 @@ done
 
 Give each reviewer its generated prompt file verbatim. For a single re-review,
 render once without `--axis`; the receipt supplies the prior-finding preamble.
-The generated prompt owns the rubric, scope, paths and reply grammar below;
-do not hand-assemble a second prompt.
-
-The generated prompt contains:
-- The impl-review rubric ([references/impl-review-prompt.md](references/impl-review-prompt.md))
-- The rubric's verification-budget rail travels with it (focused suites only; the full suite belongs to the run's final gate) — carried by pointer, never restated or widened in the dispatch prompt
-- Diff scope (`--base` / branch vs main as resolved in Phase 0)
-- Task id / focus areas if any
-- Prior findings for convergence as structured `findings.items` (on re-review; render
-  ordinal, severity, classification, status, title, and file:line; use legacy
-  review prose only when the structured field is absent)
-- **The prior-finding reply grammar, stated verbatim** (on re-review). These lines are
-  machine-read, and prose resolutions are invisible to the parser — a reviewer that
-  resolves priors in prose only leaves them carried forward and the loop cannot
-  converge. Require one line per prior finding, at the start of a line, echoing the
-  ordinal it was rendered with:
-
-  ```
-  Prior finding #1: fixed
-  Prior finding #2: not-fixed
-  Prior finding #3: withdrawn
-  ```
-
-  Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
-  exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
-  every prior finding is fixed — and only then — the single line
-  `Prior findings: all fixed` may replace the per-finding lines; the two must not be
-  mixed, because any per-finding line present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID
-  coverage and does **not** vouch for prior findings.
-- **The re-review's scope** (on re-review): only the fix commits since the prior round (pass
-  their range). A new finding blocks only if it is Major or worse and the fixes introduced it;
-  anything else is FYI. A prior finding the author declined (a `Declined #<n>: <reason>` line
-  in a fix commit message) is marked `withdrawn` when the reviewer agrees it does not show the
-  change doing the wrong thing, `not-fixed` when it disagrees. If every prior finding is fixed
-  or withdrawn and nothing new blocks, the verdict is SHIP.
-- Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`
+The generated prompt owns the rubric, scope, paths, prior findings, reply grammar and verdict
+tags; do not hand-assemble a second prompt.
 
 Wait for the subagent result(s) (blocking — do not background).
 
@@ -422,7 +373,7 @@ printf '%s' "$RECORD_JSON" | jq -c '{superseded: (.superseded // false), verdict
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   # Terminal escalation: no optional phase runs, so release the lease held
-  # above before exiting (codex r46) — nothing is left fenced behind the TTL.
+  # above before exiting — nothing is left fenced behind the TTL.
   [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json >/dev/null 2>&1
   echo "ESCALATE: reviewer requested human review" >&2
   exit 4
@@ -477,6 +428,6 @@ run.
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts
 - **Three cap slots for one merged round** — one increment before the draws, one record/attach after the merge
-- **Presenting the draws verbatim instead of merging** — that is the quality-auditor's contract, not this one; the draws feed one fix pass
+- **Presenting the draws verbatim instead of merging** — the draws feed one fix pass
 - **Fanning out on round 2+** — re-reviews are one fresh subagent with the merged container injected
 - **Judging away a draw's verdict** — synthesis is mechanical worst-wins; only the empty-merged-findings wedge escalates

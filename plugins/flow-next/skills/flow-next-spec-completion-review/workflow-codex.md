@@ -39,7 +39,6 @@ If `VERDICT=NEEDS_WORK`:
 ## Step 4: Receipt
 
 Receipt is written automatically by `flowctl codex completion-review` when `--receipt` provided.
-Format: `{"type":"completion_review","id":"<spec-id>","mode":"codex","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`
 
 When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
 

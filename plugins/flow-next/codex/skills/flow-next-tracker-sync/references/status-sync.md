@@ -107,11 +107,9 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 > permits a terminal state. It also takes precedence over the broad "some task
 > done → in-progress" row (7) for PRs whose specs remain incomplete.
 
-**Terminal (`done`/`verified`) is impossible without a `MERGED` probe result.** The
-old map mapped `spec done + completion ship → verified` and `spec done,
-no review → done` with NO merge check, so a locally-completed spec auto-closed its
-tracker issue before the PR merged. The merge-evidence gate fixes that at the root,
-upstream of the who-wins ladder (which is unchanged). A `closed-unmerged` /
+**Terminal (`done`/`verified`) is impossible without a `MERGED` probe result**, so a
+locally-completed spec never closes its tracker issue before the PR merges. The
+merge-evidence gate sits upstream of the who-wins ladder. A `closed-unmerged` /
 missing-branch / ambiguous probe NEVER yields terminal — it stays `in-review` (a
 non-terminal rung) and surfaces NEEDS_HUMAN for the closed-unmerged case.
 
@@ -277,10 +275,9 @@ $FLOWCTL sync defer "$SPEC_ID" \
 
 ## Readiness projection — `tracker.readyState` → local `ready` flag
 
-**One-way, pull-side only.** When `tracker.readyState` is configured (the ceremony
-question, steps.md Phase 1 step 5), every operation that reads the issue (`pull` /
-`reconcile`) projects the configured tracker state onto the local spec `ready`
-flag — after the status normalization above, independent of the who-wins rules
+**One-way, pull-side only.** When `tracker.readyState` is configured, every
+operation that reads the issue (`pull` / `reconcile`) projects the configured
+tracker state onto the local spec `ready` flag — after the status normalization above, independent of the who-wins rules
 (readiness is **orthogonal to status**; it never feeds the status policy and never
 drives a `setStatus`). `readyState: null` (the default) ⇒ this whole section is
 skipped — no calls, no receipts, no flag writes.

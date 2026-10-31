@@ -78,7 +78,7 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 
 **Surface B note: an Electron / WebView2 app is driven through this same web ladder, over its CDP debug port.** Routing a Chromium-backed desktop app to the native rung has broken this. Attach to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url=http://127.0.0.1:<port>`). Launch the app with a dedicated debug port and a dedicated user-data-dir; treat the open debug port as a security exposure (any local app can drive that session).
 
-> **agent-browser command detail lives in the rung reference, not here.** The default-rung reference [`references/agent-browser.md`](references/agent-browser.md) is the entry point — setup/version check, the universal flow in agent-browser commands, the Chromium-desktop (Electron / WebView2) CDP driver, the `--headed` daemon-reuse gotcha, and an index into the per-topic references it folds: `commands.md`, `advanced.md` (CDP attach), `auth.md`, `snapshot-refs.md`, `session-management.md`, `proxy.md`, `debugging.md`.
+> agent-browser command detail lives in [`references/agent-browser.md`](references/agent-browser.md), which indexes the per-topic references.
 
 ## Step 4 — Native rung (surface C): Cua Driver, then Computer Use
 

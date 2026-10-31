@@ -91,13 +91,7 @@ This skill runs almost entirely on the main thread. Phase 1's "one entry per pro
 
 ## Workflow
 
-Execute the phases in [workflow.md](workflow.md) in order:
-
-0. **Detect & enumerate** — run `flowctl memory list-legacy --json`, check `_migrated/` for prior runs, apply scope hint, decide interaction path.
-1. **Classify (one entry per prompt turn)** — for each entry: read title + body + filename context, default to mechanical `(track, category)`, override only with body-driven evidence. Interactive: ask on ambiguity. Autofix: take mechanical default + log `needs-review`.
-2. **Write categorized entries** — invoke `flowctl memory add --track <t> --category <c> --title "..." --body-file <tmpfile>` per classified entry. Slug uniqueness handled by existing helper.
-3. **Verify + Report** — re-read newly created entries, print summary (legacy files processed, entries migrated, overrides, needs-review).
-4. **Optional cleanup** — interactive: ask whether to rename originals to `.flow/memory/_migrated/<filename>.bak`. Autofix: default-decline + surface as recommendation. On first cleanup, write `.flow/memory/_migrated/.gitignore` containing `*` (self-ignoring directory pattern). **Legacy originals are renamed, never deleted** — a run that removed a legacy file has broken this.
+Execute the phases in [workflow.md](workflow.md) in order. **Legacy originals are renamed, never deleted** — a run that removed a legacy file has broken this.
 
 ## Output rules
 

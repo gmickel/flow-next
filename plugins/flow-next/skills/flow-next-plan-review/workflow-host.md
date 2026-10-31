@@ -29,8 +29,6 @@ Everything else on the identities side still applies: point the subagent at the
 spec from the checkout itself. Do not paste diff hunks or spec bodies into the
 subagent prompt — it has the same repository you do.
 
-## Resolve and dispatch
-
 ## Convergence reservation fence (before every host dispatch)
 
 After composing the complete reviewer input, but immediately before spawning the
@@ -97,6 +95,7 @@ Receipt in every case: `mode: "host"`, the actual reviewer model,
 Render the dispatch file with the shared backend builder:
 
 ```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
 "$FLOWCTL" review-prompt plan "$SPEC_ID" --receipt "$RECEIPT_PATH" \
   --out "${TMPDIR:-/tmp}/flow-plan-review-${SPEC_ID}.md" --json || exit $?
 ```
@@ -108,12 +107,6 @@ It also carries the verdict tags and, on re-review, the prior findings. Add only
 areas, and wait blocking for the result.
 
 ## Receipt and status
-
-Use:
-
-```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
-```
 
 Write:
 
@@ -137,6 +130,7 @@ the captured reservation with those complete inputs, and attach from the
 journaled payload (never re-derive it after `record`):
 
 ```bash
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
 RECORD_JSON="$("$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan \
   --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
   --model "<actual reviewer slug>" \

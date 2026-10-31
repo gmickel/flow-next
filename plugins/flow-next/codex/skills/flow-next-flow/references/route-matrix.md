@@ -40,5 +40,3 @@ output too dense to read (visual), or chat prose that needs discipline (prose).
 **Host command form:** print every copy-pasteable flow-next command in the spelling this host
 invokes: the flat `/flow-next-<name>` form when the resolved plugin root carries
 `.flow-next-opencode-manifest` (an OpenCode install), otherwise exactly as spelled here.
-
-Adding or removing a skill updates these two files in the same change.

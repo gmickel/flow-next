@@ -54,7 +54,7 @@ When the strategy sentinel prints, read [`references/strategy-alignment.md`](ref
 
 | Scout | Runs |
 |-------|------|
-| the `repo_scout` agent | always; at SHORT it also carries docs-gap-scout's charter |
+| the `repo_scout` agent | always |
 | the `spec_scout` agent | always |
 | the `docs_gap_scout` agent | STANDARD and DEEP |
 | the `practice_scout` agent, the `docs_scout` agent | STANDARD and DEEP |

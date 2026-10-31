@@ -150,7 +150,7 @@ When a term has alias hits in code (whether or not the canonical term also has h
 
 ### 0.5.6 — Carry into Phase 5 report
 
-Capture the per-term outcomes into a glossary section of the report (see §5.1 below). Counts:
+Capture the per-term outcomes into a glossary section of the report (see [workflow.md](../workflow.md) §5.1). Counts:
 
 - `glossary_kept` — terms with code hits.
 - `glossary_marked_stale` — terms with zero code hits and zero alias hits, stale comment applied.

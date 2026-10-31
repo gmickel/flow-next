@@ -9,7 +9,7 @@ The leaf accepts `off | comment` (default `off`). A verdict is a report, so the 
 comment: `pull`, `push` and `reconcile` are treated as `comment`, never as a body or status
 update, and an unrecognised value posts nothing. It
 runs only when the tracker bridge is active; the gating matches the other lifecycle events
-([flow-next-work/SKILL.md](../../flow-next-work/SKILL.md) "Shared gating predicate").
+([tracker-touchpoints.md](../../flow-next-work/references/tracker-touchpoints.md#bridge-overview) "Shared gating predicate").
 
 ```bash
 case "$QA_LEAF" in

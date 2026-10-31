@@ -797,8 +797,7 @@ if [ -f "$prime_wf" ]; then
     -e 's|Task flow-next:observability-scout|Use the observability_scout agent|g' \
     -e 's|Task flow-next:security-scout|Use the security_scout agent|g' \
     -e 's|Task flow-next:workflow-scout|Use the workflow_scout agent|g' \
-    -e 's/Run all 9 scouts in parallel using the Task tool:/Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):/g' \
-    -e 's/Launch all 9 scouts in parallel for speed/Launch all 9 scout agents in parallel for speed/g' \
+    -e 's/Run all 9 scouts in parallel using the Task tool\./Run all 9 scouts in parallel (Codex spawns them as multi-agent threads)./g' \
     "$prime_wf"
   rm -f "${prime_wf}.bak"
 fi

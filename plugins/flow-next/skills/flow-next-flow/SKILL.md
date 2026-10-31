@@ -64,7 +64,7 @@ Attended flow and `flow --auto` are two drivers and are never nested. Without `-
 NEEDS_HUMAN: /flow-next:flow is attended - run /flow-next:flow --auto for unattended runs
 ```
 
-With `--auto` or `--goal` there is no marker refusal, because the unattended run sets `FLOW_AUTONOMOUS` and `mode:autonomous` for the stages it dispatches. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
+With `--auto` or `--goal` there is no marker refusal, because the unattended run passes `mode:autonomous` to every stage it dispatches, and backlog mode also exports `FLOW_AUTONOMOUS`. A run that routed, dispatched, or asked under a marker it should have refused has broken this.
 
 ## Invariants (every run)
 

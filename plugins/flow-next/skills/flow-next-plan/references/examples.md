@@ -2,17 +2,9 @@
 
 Worked good and bad shapes for specs and tasks. Read from Step 5 at STANDARD or DEEP depth, or when unsure how to shape a spec or task.
 
-## The Golden Rule in Practice
+## Good vs Bad: Specs
 
-Plans never contain implementation CODE. The spec describes WHAT to build and
-why; the task describes the concrete approach — named files, patterns,
-ordering (the HOW) — but stops short of writing the implementation itself.
-
----
-
-## Good vs Bad: Epic Specs
-
-### ❌ BAD: Epic with implementation code
+### ❌ BAD: Spec with implementation code
 
 ```markdown
 # Backend Abstraction
@@ -33,7 +25,7 @@ export function registerBackend(backend: WorkerBackend) {
 - Full registry implementation (copy-paste ready = wasted planning tokens)
 - No references to existing patterns in the codebase
 
-### ✅ GOOD: Epic without implementation code
+### ✅ GOOD: Spec without implementation code
 
 ```markdown
 # Backend Abstraction

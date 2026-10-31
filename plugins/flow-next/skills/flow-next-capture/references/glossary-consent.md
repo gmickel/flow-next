@@ -4,7 +4,7 @@
 
 ## Saved-spec summary and separate consent
 
-**Summary-payload item 6 — glossary term-add proposals** (only when §2.7 collected any) — compact one-liner of term names; full definitions live in the printed glossary proposal (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
+**Summary line — glossary term-add proposals** (only when §2.7 collected any) — compact one-liner of term names; full definitions live in the printed glossary proposal (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
 
 ```
 New glossary terms proposed: <term>, <term> (definitions above).

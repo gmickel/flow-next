@@ -27,17 +27,9 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 **The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Never invoke `flowctl review-backend` a second time in the same run.
 
-Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). An explicit `--review=rp` or `--review=export` was removed: tell the user in one line "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." and stop as for ASK.
+Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). An explicit `--review=rp` or `--review=export` was removed: tell the user in one line "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." and stop as for ASK.
 
-## Backend Selection
-
-**Priority** (first match wins):
-1. `--review=<backend>` or `--review <backend>` argument (`codex|copilot|cursor|claude|host|none`)
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`, `claude:<model>:<effort>`); `host` is bare-only (`host:<model>` is rejected)
-3. `.flow/config.json` → `review.backend` (same bare / spec forms)
-4. **Error** - no auto-detection
-
-### Backend at a glance
+## Backend at a glance
 
 The per-backend summary (models, env vars, `--spec` forms and `FLOW_REVIEW_BACKEND` spec-form examples) and the `backend[:model[:effort]]` spec grammar live in [references/backend-at-a-glance.md](references/backend-at-a-glance.md). Read it **only** when you surface backend guidance to the user (ASK branch, recommendation, override hint) — routing does not need it.
 
@@ -51,7 +43,6 @@ The review must use a fresh, tool-enforced read-only reviewer from a different
 model family and fail closed when no cross-family pin is available.
 
 **For all backends:**
-- If `REVIEW_RECEIPT_PATH` set: write receipt after SHIP verdict (codex writes automatically via `--receipt`)
 - Any failure → output `RETRY: no verdict (backend or transport failure)` and stop; when its
   `CLI message:` reports a usage, credit or spend limit, report that message instead of `RETRY:`,
   since a retry fails the same way. No-verdict
@@ -122,18 +113,7 @@ reset the verdict counter for transport health.
 use `--force`, or redispatch autonomously. A human may edit the exact artifact,
 explicitly reset, or deliberately apply `--force`.
 
-### Step 1: Load Backend Workflow
-
-1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
-2. Read **only** the file for that backend, per the routing table at the top of this file.
-
-**Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
-
-### Step 2: Execute the backend workflow
-
-Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps.
-
-### Step 3: Fix loop and terminal status
+### Step 1: Fix loop and terminal status
 
 Both are backend-agnostic and live in [workflow-common.md](workflow-common.md) — already in context from Phase 0:
 

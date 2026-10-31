@@ -235,7 +235,7 @@ The rules mirror R-IDs where they apply:
 
 ### Source tags: what you said vs what the agent inferred
 
-`/flow-next:capture` **and** `/flow-next:refine` mark the provenance of every acceptance criterion they write: `[paraphrase]` (the user's meaning, tightened), `[inferred]` (the agent's own inference), and `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. For the user's own words, capture writes no tag (it checks each untagged criterion against the quotes it collected); refine tags them `[user]` (the human answering in that session). The tag is a trailing token on the bullet:
+`/flow-next:capture` **and** `/flow-next:refine` mark the provenance of every acceptance criterion they write: `[paraphrase]` (the user's meaning, tightened), `[inferred]` (the agent's own inference), and `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The user's own words carry no tag: capture checks each untagged criterion against the quotes it collected, refine against the answers given in that session. The tag is a trailing token on the bullet:
 
 ```markdown
 - **R1:** Root marketplace manifest exists and imports cleanly.
@@ -245,7 +245,7 @@ The rules mirror R-IDs where they apply:
 Three rules matter when reading a tagged spec:
 
 - **A session tags only the criteria it authors**, and never retags an existing bullet - provenance is frozen exactly like the R-ID number. So on a spec a product owner refined and then a tech lead refined, each criterion's tag reflects the session that wrote it.
-- **Untagged is never an agent guess you cannot see.** In a captured criterion it means the user's own words; in one written by hand or before tags shipped it means unknown provenance. Either way, only a tagged line tells you the agent authored it, and `[inferred]` is the one to scrutinize.
+- **Untagged is never an agent guess you cannot see.** In a captured or refined criterion it means the user's own words; in one written by hand or before tags shipped it means unknown provenance. Either way, only a tagged line tells you the agent authored it, and `[inferred]` is the one to scrutinize.
 - **The tags distinguish source evidence from assumptions**: capture exposes the tally in its saved-spec summary and editor follow-up. Refine retains pre-write ratification and refuses to recommend `approve and write` for `[inferred]` criteria no question covered, since an answered question has already done the verifying. Both use [`read-back.md`](read-back.md); saving a capture never upgrades its source tags.
 
 They are also the cheapest review filter available, because reading them is a grep rather than a model judgment. Tally which criteria are grounded and which are guesswork:

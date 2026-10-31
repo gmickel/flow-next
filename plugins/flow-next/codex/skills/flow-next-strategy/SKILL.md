@@ -88,7 +88,7 @@ GENERATOR_MATCH=$(printf '%s' "$STATUS_JSON" | jq -r '.generator_match')
 FILE_PATH=$(printf '%s' "$STATUS_JSON" | jq -r '.file_path // empty')
 ```
 
-JSON fields (frozen by Task 1):
+JSON fields:
 
 - `exists` (bool) — file present
 - `husk` (bool) — `exists: true` AND `sections_filled == 0`
@@ -154,7 +154,7 @@ One paragraph max. No follow-up questions.
 - Does not write product requirements or implementation plans — those are `/flow-next:capture` and `/flow-next:plan`.
 - Does not compute metric values. It records *which* metrics matter and where they live, not what they read today.
 - Does not create per-subdirectory STRATEGY.md files. Strategy is repo-wide by Rumelt's definition; cascading strategies re-introduce the "is for everyone, is for no one" problem.
-- Does not migrate hand-written or CE-format STRATEGY.md files. v1 ships sentinel-based foreign-file refusal; multi-format migration is a v2 problem.
+- Does not migrate hand-written or other-format STRATEGY.md files. v1 ships sentinel-based foreign-file refusal; multi-format migration is a v2 problem.
 - Does not delete the file when all sections are removed. Last-section deletion leaves a husk (`# <name> Strategy` H1 + frontmatter) on disk — file never deleted.
 
 ## Forbidden
@@ -165,7 +165,7 @@ One paragraph max. No follow-up questions.
 - **Leaking anti-pattern names** to the user. `vanity` / `fluff` / `feature-list` / `goal-stated-as-problem` are internal labels for formulating sharper follow-ups.
 - **Auto-overwriting a foreign-file STRATEGY.md** — Phase 0.3 always asks. v1's stance is refusal; user can rename or delete to bootstrap.
 - **Writing more than 4 sentences per section** (except Tracks, where each track has its own short block). The post-write checklist in `references/strategy-template.md` catches this.
-- **Adding sections beyond the locked 5 + 2 optional**. CE's `Marketing` section is dropped on purpose; do not re-introduce it. Section order is locked.
+- **Adding sections beyond the locked 5 + 2 optional**. A `Marketing` section is dropped on purpose; do not re-introduce it. Section order is locked.
 - **Inventing flowctl subcommands** — The supported read surface is `"$FLOWCTL" strategy {status,read}` only. The skill writes the file directly via `Write`; no strategy add/list command exists.
 
 ## Output rules

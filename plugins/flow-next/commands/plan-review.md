@@ -1,7 +1,7 @@
 ---
 name: plan-review
 description: Carmack-level plan review via Codex, Copilot, Cursor, Claude or a host reviewer
-argument-hint: "<fn-N> [--review=codex|copilot|cursor|none] [focus areas]"
+argument-hint: "<fn-N> [--review=codex|copilot|cursor|claude|host|none] [focus areas]"
 disable-model-invocation: true
 ---
 

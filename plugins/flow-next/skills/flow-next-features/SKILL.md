@@ -21,7 +21,7 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 ## Preamble
 
-**CRITICAL: flowctl is BUNDLED - NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `maintain.md`) use `$FLOWCTL`:
+**CRITICAL: flowctl is BUNDLED - NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks here use `$FLOWCTL` (`maintain.md` defines its own):
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"

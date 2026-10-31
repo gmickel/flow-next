@@ -9,7 +9,7 @@ This file carries the **collection view**: for each HP criterion, how to probe i
 1. **Score the FUNCTION, not the file.** Five function classes; each harness implements a different subset. Detect ACTIVE harnesses first, grade only those, map each criterion to the active harness's native mechanism, N/A otherwise. One deep harness + an AGENTS.md bridge outscores five shallow stubs.
 2. **Zero harness config is today's normal** - the group reads as headroom, not shame. EXCEPT the two P0 findings below, which fire regardless of score.
 
-**Scored core = HP1, HP2, HP5, HP7, HP9, HP12** (per pillars.md's landed criterion-to-score map); the rest are informational at first.
+**Scored core = HP1, HP2, HP5, HP7, HP9, HP12** (per pillars.md's criterion-to-score map); the rest are informational at first.
 
 ---
 
@@ -90,7 +90,7 @@ Two findings surface as **P0 regardless of the group score** - they are safety-c
 1. **Inline secrets in MCP config (HP9).** Any inline literal secret shape in an `.mcp.json`-family value = P0. Quote the **KEY NAME only, never the value**, with "rotate it - it is already in git history".
 2. **Suspicious hook content (HP7).** A configured hook whose command strings make network calls, touch credential paths, or use obfuscation = P0 security finding. Committed hook config is an RCE vector (CVE-2025-59536 class) - it executes on teammates' machines at workspace trust. A stub hook (no real content) is a fail-with-quote, not a P0; a suspicious hook is the P0.
 
-**Read-never-execute vs exercise-what-you-scaffold (gap 27).** During ASSESSMENT prime READS hook content (bounded) and NEVER executes it - the whole point of the P0 screen is that reading a hostile hook must not run it. During REMEDIATION the distinction inverts: any hook prime OFFERS is built from verified commands, read-back gated, and EXERCISED in the same pass (per the anti-stub rule - prime never scaffolds what would pass its own checks unexercised). Assessment does not run hooks; remediation runs the one it just wrote.
+**Read-never-execute vs exercise-what-you-scaffold.** During ASSESSMENT prime READS hook content (bounded) and NEVER executes it - the whole point of the P0 screen is that reading a hostile hook must not run it. During REMEDIATION the distinction inverts: any hook prime OFFERS is built from verified commands, read-back gated, and EXERCISED in the same pass (per the anti-stub rule - prime never scaffolds what would pass its own checks unexercised). Assessment does not run hooks; remediation runs the one it just wrote.
 
 ---
 

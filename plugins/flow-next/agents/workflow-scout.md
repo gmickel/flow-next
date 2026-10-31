@@ -144,7 +144,6 @@ gh pr list --state all --limit 3 --json body 2>/dev/null | head -20
 
 ### Summary
 - Criteria passed: X/6
-- Score: X%
 ```
 
 ## Rules

@@ -50,8 +50,6 @@ Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming
 - The native `fn-` prefix is reserved for the sequential scheme; tracker-key resolution is tried only after the `fn-` path misses. Enumeration sees tracker-key specs, but native `fn-N` allocation counts `fn-*` only — a `wor-9999` never bumps the next `fn`.
 - **One tracker team / workspace per repo** — the bridge assumes a single team key so a bare `wor-17` resolves unambiguously. Cross-workspace same-key collision (two teams both keyed `WOR`) is out of scope and not disambiguated.
 
-> The id-grammar widening had to cover the FULL command surface, not just the named lifecycle commands (memory: `id-grammar-widening-must-cover-the-full`). That work is flowctl's; the scaffold relies on it being complete and only calls `flowctl <cmd> wor-17`.
-
 ## Create-first - issue exists before the local id
 
 When `tracker.specIds=tracker` and no issue exists yet, the caller cannot mint a tracker-keyed id without a key. **Create-first** (steps.md §2 Identity and linking) creates the issue first and returns `{id, identifier, url}` with **no local spec id as input**. Create-first does not write sync state itself; the mint carries the returned identity.
@@ -76,4 +74,3 @@ A retry after partial failure (remote create ok, local mint fail) finds that fil
 - **`spec set-title` on a tracker-linked spec updates the title only** — the canonical id, branch, and files are never re-slugged. A renamed id after a title change has broken this and desynced the linkage. Unlinked specs keep today's rename behavior.
 - **Surface `identifier` in sync listings** so users see both handles (the canonical flow id and the board-facing `WOR-17`).
 - **Create-first never renames and never mints.** It returns the adapter identifier as-is; the caller mints linked. A retry never creates a second issue (recovery file + retry lookup key).
-- This is **additive** — it does not require the separate `fn-NN`-deprecation id-scheme change to land first; that change, when it comes, only governs *removing* `fn-NN`, not *also accepting* the tracker key.

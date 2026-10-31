@@ -1,6 +1,6 @@
 # Spec-template discovery — 3-tier cascade + walker
 
-Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list and per-section guidance) — this reference owns only the resolution mechanics. Consumers: `flow-next-refine` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
+Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list and per-section guidance) — this reference owns only the resolution mechanics.
 
 Resolve the template via the 3-tier discovery cascade — first match wins;
 do not read later tiers once a hit is found:
@@ -10,7 +10,7 @@ do not read later tiers once a hit is found:
 3. `<plugin-root>/templates/spec.md`
                                    (bundled — canonical source of truth)
 
-Tier 3 resolves the plugin root the same way every flowctl preamble does:
+Tier 3 resolves the plugin root from
 `${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}`
 first, then — when that path has no `templates/spec.md` — the directory two
 levels above this skill's own SKILL.md file (the harness gave you that file's

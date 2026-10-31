@@ -148,7 +148,6 @@ grep -lE "trivy|grype|anchore|gitleaks|semgrep" .github/workflows/*.yml .github/
 
 ### Summary
 - Criteria passed: X/6
-- Score: X%
 ```
 
 ## Rules

@@ -189,7 +189,6 @@ Rules:
   (realpath/symlink containment, lock-guarded writes, forced excludes of
   runtime state) — never trim a guard as scope.
 - Never edit `.flow/features/`: the conductor updates the feature map at its quality phase ([feature-map-update.md](../skills/flow-next-work/references/feature-map-update.md)); when this task changes how a user reaches a mapped feature, name the changed route in the done summary. Before driving the running app (a post-change measurement, a defect route's live proof), read the map per the "Live-app stages" section of [feature-entry-contract.md](../skills/flow-next-features/references/feature-entry-contract.md).
-- Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
 - **Test mass discipline:** one focused test per AC and per enumerated error
   case — coverage comes from the enumeration, not from volume. Use table-driven
@@ -237,8 +236,6 @@ Done when: the task's work is committed with a conventional-commit subject namin
 **The risk rule in working-rules.md (Review) decides whether this change is reviewed.** A change it does not select skips to Phase 5 and records `stage: impl-review - skipped(policy: risk - <reason>)`.
 
 **Otherwise, under any other non-`none` value (`codex`, `copilot`, `cursor`, `claude`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
-
-**Attended, on the conductor's inline path** (a person is in the session): the handoff message comes first, then this review runs; `flowctl done` waits for its verdict.
 
 (The impl-review SHIP gate covers CODE QUALITY only. The Phase 5 Verify block
 still runs in every mode — it is the authoritative gate discipline (classify →
