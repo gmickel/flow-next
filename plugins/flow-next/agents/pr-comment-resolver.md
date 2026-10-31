@@ -132,7 +132,7 @@ If `cluster_brief` is present in your inputs:
 3. Decide your approach — both are valid:
    - **Holistic fix** — one change that addresses the systemic root cause (e.g. extract a shared validator).
    - **Individual fixes** — per-thread targeted edits, when the cluster turns out to be coincidental similarity rather than a real shared cause.
-4. Return one verdict per thread in the cluster, plus a `cluster_assessment` field describing what you found at the broader level (whether or not the systemic hypothesis held up).
+4. Return one verdict object per thread in the cluster, each carrying the same `cluster_assessment` describing what you found at the broader level (whether or not the systemic hypothesis held up).
 
 ## Outdated threads
 
@@ -148,10 +148,10 @@ If `isOutdated: true`:
 
 ## Return format
 
-Return a single JSON object:
+Return a JSON array with one verdict object per thread or comment you were given (one object for a single thread):
 
 ```json
-{
+[{
   "verdict": "fixed|fixed-differently|replied|not-addressing|needs-human",
   "feedback_id": "PRRT_...",
   "feedback_type": "review_thread|pr_comment|review_body",
@@ -168,14 +168,14 @@ Return a single JSON object:
     ],
     "lean": "..."
   }
-}
+}]
 ```
 
 Field rules:
 
 - `files_changed` is `[]` for verdicts that didn't touch code (`replied`, `not-addressing`, `needs-human`, and `fixed` cases where you discovered the code already does the right thing — though that should be `not-addressing` instead).
 - `decision_context` is **required only for `needs-human`** and omitted otherwise.
-- `cluster_assessment` is **present only when `cluster_brief` was supplied** and omitted otherwise.
+- `cluster_assessment` is **present on every verdict of a cluster** (only when `cluster_brief` was supplied) and omitted otherwise.
 - `reason` is one short line for the orchestrator's summary output; not shown to the reviewer.
 
 ## PR comment / review body mode

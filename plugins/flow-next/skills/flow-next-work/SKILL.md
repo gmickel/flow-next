@@ -79,7 +79,6 @@ before any branch is created.
 **Review mode**:
 - `--review=<codex|copilot|cursor|claude|host|none>`, or the same backend named in words
   ("review with codex", "host review", "skip review"); `--no-review` = `none`
-- `--review=rp` or `--review=export` → removed: say "RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host." once, never pass it as `REVIEW_MODE`, and continue as when no review backend is configured
 
 (All non-`none` review modes route through `flow-next:flow-next-impl-review`, which resolves the
 configured/overridden backend — codex, copilot, cursor, claude, or host — itself.)

@@ -31,15 +31,15 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal token `mode:autofix`. If present, strip it from the arguments — the remainder is the scope hint (a legacy filename like `pitfalls.md` to narrow the run, or empty to migrate all).
+Parse `$ARGUMENTS` for the literal token `mode:autofix`, or an unattended marker (`mode:autonomous`, `FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1`), which runs as autofix. Strip the tokens from the arguments — the remainder is the scope hint (a legacy filename like `pitfalls.md` to narrow the run, or empty to migrate all).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
 MODE="interactive"
-if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
+if [[ "$RAW_ARGS" == *"mode:autofix"* || "$RAW_ARGS" == *"mode:autonomous"* || "${FLOW_AUTONOMOUS:-}" == "1" || "${AUTONOMOUS:-}" == "1" ]]; then
   MODE="autofix"
   # Strip token, collapse whitespace, trim.
-  SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
+  SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//; s/mode:autonomous//' | tr -s ' ' | sed 's/^ //;s/ $//')
 else
   SCOPE_HINT="$RAW_ARGS"
 fi
@@ -48,7 +48,7 @@ fi
 | Mode | When | Behavior |
 |------|------|----------|
 | **Interactive** (default) | User is at the terminal | Ask via blocking-question tool when an entry's content suggests overriding the mechanical default; confirm Phase 4 cleanup; show triage summary before writes |
-| **Autofix** (`mode:autofix` in arguments) | Autonomous or batch usage | No user questions. Apply mechanical defaults for every entry. Override only when the agent has high-confidence evidence from the entry body. Mark genuinely ambiguous entries as `needs-review` in the report. Default-decline Phase 4 cleanup. Print full report |
+| **Autofix** (`mode:autofix` or an unattended marker) | Autonomous or batch usage | No user questions. Apply mechanical defaults for every entry. Override only when the agent has high-confidence evidence from the entry body. Mark genuinely ambiguous entries as `needs-review` in the report. Default-decline Phase 4 cleanup. Print full report |
 
 ### Autofix mode rules
 

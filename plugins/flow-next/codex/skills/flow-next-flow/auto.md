@@ -29,16 +29,15 @@ The first `pilot snapshot` below returns the hard guard before selection, ledger
 
 Retain an explicit request in the current user message to review the selected spec's design before work (for example, "flow --auto fn-12; review its design first") as host context for CLASSIFY. This intent is separate from argument parsing and `--review`, which selects a backend; it expires with this run.
 
-Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. Outside goal mode, `--auto` never accepts intent, a path, a branch, or free text: the ready flag is the consent boundary and there is no capture upstream of it. Goal mode (`--goal`) takes a spec id or any source and rests on the goal the person named instead ([references/goal-mode.md](references/goal-mode.md)). The shared SKILL.md parse accepts only `--until=merge` as a destination; invalid or valueless `--until` stops before these phases. Other unknown flags warn to stderr and are ignored. Defaults are `research=grep`, `depth=short`, and `review` resolved later via `$FLOWCTL review-backend`.
+Parse `$ARGUMENTS` for the scope lock, the shape, the explain switch, and passthroughs. Outside goal mode, `--auto` never accepts intent, a path, a branch, or free text: the ready flag is the consent boundary and there is no capture upstream of it. Goal mode (`--goal`) takes a spec id or any source and rests on the goal the person named instead ([references/goal-mode.md](references/goal-mode.md)). The shared SKILL.md parse accepts only `--until=merge` as a destination; invalid or valueless `--until` stops before these phases. Other unknown flags warn to stderr and are ignored. Defaults are `depth=short` and `review` resolved later via `$FLOWCTL review-backend`.
 
 Use `PREV` because host argument interpolation rewrites positional tokens inside skill code blocks.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
 PILOT_SPEC=""
-PILOT_DRY_RUN=0              # --explain (and its one-release alias --dry-run): classify, print, stop
+PILOT_DRY_RUN=0              # --explain: classify, print, stop
 PILOT_REVIEW=""
-PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
 PILOT_BACKLOG_OVERRIDE=""    # "" = use config; "1" = force backlog (--backlog)
 AUTO_TICK=0                  # 1 = one hop then stop; 0 = hop until a terminal
@@ -50,20 +49,18 @@ PREV=""
 for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   case "$PREV" in
     --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
-    --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;
     --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
   esac
   case "$ARG" in
     --until=merge) : ;;                         # validated by SKILL.md; not a build-stage argument
     --auto|--goal) : ;;                         # consumed by SKILL.md mode detection and the pre-scan above
     --tick)       AUTO_TICK=1 ;;
-    --review|--research|--depth) PREV="$ARG" ;;
-    --explain|--dry-run) PILOT_DRY_RUN=1 ;;
+    --review|--depth) PREV="$ARG" ;;
+    --explain) PILOT_DRY_RUN=1 ;;
     --backlog)
       if [ "$PILOT_GOAL_MODE" = 1 ]; then echo "--backlog does not apply with --goal (ignored)" >&2
       else PILOT_BACKLOG_OVERRIDE=1; fi ;;
     --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
-    --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
     --depth=*)    PILOT_DEPTH="${ARG#--depth=}" ;;
     -*) echo "Unknown flag: $ARG (ignored by /flow-next:flow --auto)" >&2 ;;
     *)
@@ -73,7 +70,7 @@ for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:flow --auto)" >&2
-export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK PILOT_GOAL_MODE PILOT_GOAL
+export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK PILOT_GOAL_MODE PILOT_GOAL
 ```
 
 **`PILOT_GOAL_MODE=1`: read [references/goal-mode.md](references/goal-mode.md) now and follow it in place of the phases below.** It uses the snapshot and guard fences below for its start guard. A run without `--goal` never reads it.
@@ -346,7 +343,7 @@ Append `--review=$PILOT_REVIEW` to plan, plan-review, and work only when the use
 
 Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level work the stage starts) and the passthroughs on each invocation:
 
-- `plan`: `$flow-next-plan <spec-id> mode:autonomous --research=grep --depth=<level> <REVIEW_ARG-if-nonempty>`
+- `plan`: `$flow-next-plan <spec-id> mode:autonomous --depth=<level> <REVIEW_ARG-if-nonempty>`
 - `plan-review`: `$flow-next-plan-review <spec-id> mode:autonomous <REVIEW_ARG-if-nonempty>`
 - `work`: `$flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
 - `qa`: `$flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)

@@ -28,32 +28,7 @@ auxiliary_sections:
 template_kind: static-scaffold  # no {{var}} substitution; read for structure, write via flowctl spec set-plan
 ---
 
-<!--
-To customize for your project, copy this file to `<repo-root>/SPEC.md` and edit there.
-
-Discovery cascade (first match wins):
-  1. <repo_root>/SPEC.md           (your customized scaffold — uppercase preferred)
-  2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
-  3. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
-`flowctl spec create` and `flowctl spec skeleton` render this file through the same cascade (frontmatter stripped).
-
-Customizing: adding sections and rewriting the guidance prose under any heading is
-free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
-`## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
-the features that parse them (R-ID coverage, PR "Not in this PR", the PR
-briefing's context and decision excerpts).
-
-/flow-next:capture writes the sections this file names and adds none it leaves out,
-except `## Open Questions`: a question handed to someone else is always kept.
-Auxiliary sections are named in the frontmatter `auxiliary_sections` list. Drop an
-entry (e.g. `Conversation Evidence`, which no tool reads) and captured specs stop
-carrying it. A SPEC.md with no such list gets no auxiliary sections except
-Open Questions.
-
-Full guide:
-flow-next docs, "Customizing the scaffold for your project"
-(https://flow-next.dev/guides/spec-scaffold/).
--->
+<!-- Customize this scaffold per project with a repo-root SPEC.md: https://flow-next.dev/guides/spec-scaffold/ -->
 
 <!--
 SCOPE DISCIPLINE (YAGNI — applies to the whole spec):

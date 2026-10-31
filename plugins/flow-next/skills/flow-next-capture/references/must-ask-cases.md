@@ -2,8 +2,7 @@
 
 > Loaded ONLY when at least one of the three Phase-3 must-ask conditions actually fires. A capture
 > with an unambiguous title, testable criteria, and no scope conflict never reads this file.
-> Interactive asks the cases that fired together, one prompt per round; autofix exits 2 with which
-> case fired.
+> Interactive asks (one question per turn); autofix exits 2 with which case fired.
 
 ## Interactive question shape (3.1)
 
@@ -21,13 +20,9 @@ Confidence tier rules (the full table is in [confidence-tiers.md](confidence-tie
 
 The third tier matters: it prevents the "always recommend" failure mode that trains users to defer.
 
-## One prompt per round (3.3)
+## One question per turn (3.3)
 
-When several must-ask cases fire, ask them in one prompt: one `AskUserQuestion` call with one
-question per case or per flagged criterion (at most four per call), each with its own
-recommendation and confidence tier. A question whose answer changes which other cases apply
-waits for a later round instead of being guessed: dropping an untestable criterion can remove
-the overlap behind a scope conflict, so ask (c) after (b) is answered.
+Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questions adapt based on prior answers. Multi-question violates the `AskUserQuestion` contract and overwhelms users.
 
 ## Case (a) — Ambiguous title
 

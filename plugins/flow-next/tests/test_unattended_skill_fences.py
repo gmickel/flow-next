@@ -148,6 +148,22 @@ class UnattendedSkillFences(unittest.TestCase):
                 if not allowed:
                     self.assertIn("PILOT_VERDICT=NEEDS_HUMAN", result.stdout)
 
+    def test_memory_migrate_runs_as_autofix_under_unattended_markers(self):
+        code = fence("flow-next-memory-migrate/SKILL.md", 'MODE="interactive"') + '\necho "$MODE|$SCOPE_HINT"'
+        clean = {k: v for k, v in os.environ.items() if k not in ("FLOW_AUTONOMOUS", "AUTONOMOUS")}
+        cases = (
+            ("pitfalls.md", {}, "interactive|pitfalls.md"),
+            ("mode:autofix pitfalls.md", {}, "autofix|pitfalls.md"),
+            ("mode:autonomous pitfalls.md", {}, "autofix|pitfalls.md"),
+            ("pitfalls.md", {"FLOW_AUTONOMOUS": "1"}, "autofix|pitfalls.md"),
+            ("", {"AUTONOMOUS": "1"}, "autofix|"),
+        )
+        for arguments, env, expected in cases:
+            with self.subTest(arguments=arguments, env=env):
+                result = subprocess.run(["bash", "-c", code], env={**clean, **env, "ARGUMENTS": arguments},
+                                        capture_output=True, text=True)
+                self.assertEqual(result.stdout.strip(), expected, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

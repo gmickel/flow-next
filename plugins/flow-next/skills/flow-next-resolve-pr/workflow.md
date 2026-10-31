@@ -272,17 +272,17 @@ Default to serial when in doubt — output is identical, only throughput differs
    - Claude Code → parallel `Task` calls with `subagent_type: pr-comment-resolver`.
    - Codex → parallel spawn of the `pr-comment-resolver` role via Codex's multi-agent orchestration.
    Pass the inputs documented in `agents/pr-comment-resolver.md`.
-6. Collect all verdict JSONs.
+6. Collect every resolver's verdict array into one `VERDICTS` array.
 
 ### Serial dispatch (Copilot / Droid)
 
-Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append the verdict JSON to `VERDICTS`.
+Loop over `UNITS` in cluster-first order (clusters carry higher leverage). For each unit, perform the resolver steps inline — read code, decide verdict, compose reply, apply any edits — following `agents/pr-comment-resolver.md`. Append its verdict objects to `VERDICTS`.
 
-### Verdict JSON per unit
+### Verdict JSON per thread
 
 See `agents/pr-comment-resolver.md` — fields: `verdict`, `feedback_id`, `feedback_type`, `reply_text`, `files_changed`, `reason`, optional `cluster_assessment`, optional `decision_context` (for `needs-human`).
 
-**Done when:** every unit in `UNITS` has exactly one verdict object in `VERDICTS`, each carrying one of `fixed` / `fixed-differently` / `replied` / `not-addressing` / `needs-human` plus the evidence or rationale behind it. A unit dispatched but never collected, or a unit collected with no verdict, has broken this — re-dispatch it once (Error handling) rather than proceeding with a short `VERDICTS`.
+**Done when:** every thread and comment in `UNITS` (each thread of a cluster on its own) has exactly one verdict object in `VERDICTS`, matched by `feedback_id`, each carrying one of `fixed` / `fixed-differently` / `replied` / `not-addressing` / `needs-human` plus the evidence or rationale behind it. A thread with no verdict has broken this — re-dispatch its unit once (Error handling) rather than proceeding with a short `VERDICTS`.
 
 ---
 
@@ -343,7 +343,7 @@ fi
 
 ## Phase 8: Reply + resolve
 
-Per unit:
+Per verdict, so each thread of a cluster gets its own reply and resolution:
 
 | `feedback_type` | Reply via | Resolve via |
 |---|---|---|
@@ -366,7 +366,7 @@ jq -c '.[]' <<<"$VERDICTS" | while IFS= read -r VERDICT; do
   case "$FB_TYPE" in
     review_thread)
       echo "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
-      [[ "$V" != "needs-human" ]] && bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"
+      if [[ "$V" != "needs-human" ]]; then bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"; fi
       ;;
     pr_comment|review_body)
       gh pr comment "$PR_NUMBER" --body "$REPLY"
@@ -381,7 +381,7 @@ line; `while read -r` keeps each object intact through the pipe.
 
 Reply body already carries `> quoted feedback\n\n<response>` from the resolver — the orchestrator does not rewrap.
 
-**Done when:** every verdict has produced one posted reply quoting the feedback it answers, and every `review_thread` unit except the `needs-human` ones is resolved via GraphQL. A resolved `needs-human` thread, or a thread resolved with no reply posted, has broken this.
+**Done when:** every verdict has produced one posted reply quoting the feedback it answers, and every `review_thread` except the `needs-human` ones is resolved via GraphQL. A resolved `needs-human` thread, or a thread resolved with no reply posted, has broken this.
 
 ---
 

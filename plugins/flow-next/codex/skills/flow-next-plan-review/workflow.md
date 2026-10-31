@@ -14,9 +14,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
 Accepted explicit modes: `codex`, `copilot`, `cursor`, `claude`, `host`, `none`.
-An explicit `rp` or `export` was removed: tell the user in one line
-"RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host."
-and exit 1, as for `ASK`.
+Any other explicit value fails closed as for `ASK`.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:

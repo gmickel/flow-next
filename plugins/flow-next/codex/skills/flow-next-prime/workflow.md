@@ -255,9 +255,16 @@ names / command shapes, never secret values.
 
 ### 2.8 DE1 env cross-reference (per-member scoping)
 
-Diff declared `.env.example` vars against **env reads in SOURCE** (`process.env`, `os.environ`,
-`getenv`), NOT executed - static cross-reference only (setup/migrate never run, rule 4). Scoping,
-eval-hardened:
+Take the counts from the Phase 0.5 payload's `substance.env_crossref` (`declared_count`,
+`source_read_count`, `undeclared_count`, `undeclared_vars`): the emitter already diffs every
+member's `.env.example` against env reads in tracked source, skipping tests, and filters platform
+vars. Judge on top: `>~30%` undeclared = **"stale template" ⚠️**, quoting the offending vars from
+`undeclared_vars`; downgrade to "template does not mirror documented config" when the vars are
+documented in a config doc.
+
+When that field is absent, diff declared `.env.example` vars against **env reads in SOURCE**
+(`process.env`, `os.environ`, `getenv`) yourself, NOT executed - static cross-reference only
+(setup/migrate never run, rule 4), with the same judgment on top. Scoping, eval-hardened:
 
 - **Iterate WORKSPACE MEMBER dirs, not root-only** - per-package `.env.example` is the correct
   monorepo pattern (a root-only probe false-negatived 4 real files).
@@ -265,12 +272,12 @@ eval-hardened:
   snippets/`node_modules` (two eval repos' "stale" evidence was markdown runbook snippets and
   teaching content inside a test fixture - the quote-your-evidence rule makes such hits
   self-evidently invalid).
-- **Filter well-known platform/CI vars.** `>~30%` undeclared = **"stale template" ⚠️**; downgrade
-  to "template does not mirror documented config" when the vars are documented in a config doc.
+- **Filter well-known platform/CI vars.**
 
-DE4 setup scripts are graded here too, **by content not execution** (rule 4): a setup script must
-chain real stages (install AND migrate/seed keywords found) - one that only prints instructions
-is ❌.
+DE4 setup scripts are graded here too, by you, **by content not execution** (rule 4): a setup
+script must chain real stages (install AND migrate/seed keywords found in the setup script itself)
+- one that only prints instructions is ❌. The emitter's `setup_stages` lists candidate scripts, but
+its `has_install` pools every `package.json` script, so it is not the grade.
 
 ### 2.9 Operability ladder computation (per-surface tiers → min-deployable headline)
 

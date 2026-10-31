@@ -24,7 +24,7 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 ## Preamble
 
-SKILL.md's setup already resolved `$BACKEND` and handled ASK, `none`, `rp` and `export`; never
+SKILL.md's setup already resolved `$BACKEND` and handled ASK and `none`; never
 call `flowctl review-backend` again. Run the `$FLOWCTL` setup lines in
 [workflow-common.md](workflow-common.md) (its foreground rule binds every review command), then
 parse the flags in Step 0.

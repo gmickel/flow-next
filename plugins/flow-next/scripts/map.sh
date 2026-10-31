@@ -130,7 +130,7 @@ if [[ -z "$CP_VER" ]]; then
 fi
 
 SUPPORTED_MIN="0.4.0"
-SUPPORTED_MAX_EXCL="0.5.0"
+SUPPORTED_MAX_EXCL="0.9.0"
 
 # Compare semver triples lexicographically after zero-padding each segment.
 # Tolerant: missing patch → assume .0; unparseable → skip the check.

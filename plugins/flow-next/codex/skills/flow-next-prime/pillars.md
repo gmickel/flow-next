@@ -305,7 +305,7 @@ The single source of truth for every new/upgraded criterion's scoring behavior. 
 | TS5 | Pillar 3 | scored | Pillar 3 | pillar % | fix-offered | none | emitter (threshold config) |
 | DC2 | Pillar 4 | scored | Pillar 4 | pillar % | fix-offered (augment) | **G3** | scout (quality) + host-inline (execute check) |
 | DE1 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | emitter (env cross-ref counts) |
-| DE4 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | emitter (content grep, static + cross-ref) |
+| DE4 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | host (setup-script content, static) |
 | DE5 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | emitter (config grep) |
 
 **New tier-group criteria** (group denominator, EXCLUDED from the level formula):
