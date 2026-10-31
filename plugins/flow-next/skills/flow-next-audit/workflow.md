@@ -447,8 +447,7 @@ Execute per [phases.md](phases.md) §"Mark stale (autofix ambiguous + Replace-in
 ### Done when
 
 - Every classified entry has been acted on (or skipped, in interactive mode with user consent).
-- All deletions and merges are staged in git.
-- All edits land via Write or flowctl helper.
+- Every edit, merge and deletion went through `$FLOWCTL memory apply`, with its `applied`, `errors` and `modified_paths` checked.
 
 ---
 
