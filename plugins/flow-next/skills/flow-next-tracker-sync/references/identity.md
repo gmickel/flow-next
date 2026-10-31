@@ -41,7 +41,7 @@ A spec authored in flow (capture/refine/plan) keeps its sequential `fn-NN-slug` 
 $FLOWCTL sync set-tracker-id "fn-42-foo" "$ISSUE_UUID" --identifier "WOR-99" --url "$ISSUE_URL"
 ```
 
-Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a **`flow:fn-42-foo` label** — the *primary, linkify-safe* back-reference (label text is never auto-linkified). A `[fn-42-foo]` title prefix is an optional secondary; avoid it when the flow id carries a tracker key (e.g. a tracker-first `wor-21-slug`), since the tracker auto-linkifies the key substring in the title — see the "Linkify hazard" note in [comments-sync.md](comments-sync.md). Body-embedded back-references (HTML comments) suffer the same mangle; the label is the durable form.
+Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a **`flow:fn-42-foo` label** — the *primary, linkify-safe* back-reference (label text is never auto-linkified). A `[fn-42-foo]` title prefix is an optional secondary; avoid it when the flow id carries a tracker key (e.g. a tracker-first `wor-21-slug`), since the tracker auto-linkifies the key substring in the title — see the "Linkify hazard" note in [comments-sync.md](comments-sync.md). Body-embedded back-references (HTML comments) suffer the same mangle; the label is the durable form. On GitHub the label is capped at 50 characters: the wire verb truncates a longer `flow:<id>` to its first 50 characters (the unique key prefix survives; the full id stays in the local link), so a long id is no reason to reach for the title prefix instead.
 
 ## Resolution (the scaffold calls it, never reimplements it)
 

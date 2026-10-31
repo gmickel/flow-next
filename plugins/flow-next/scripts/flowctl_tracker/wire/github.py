@@ -256,6 +256,18 @@ def comment_delete(config: dict, locator: dict, execute: Execute, *,
     return {"deleted": comment_id, "parent_identity": "not_available"}
 
 
+# GitHub rejects label names longer than 50 characters with 422
+# "name is too long (maximum is 50 characters)". Flow ids front-load their
+# unique key (`fn-42-`, `gh-12-`), so a hard cut at the cap keeps the
+# disambiguating prefix; the full id stays in the local link and marker
+# comments, and readback returns the label that actually landed.
+_LABEL_NAME_MAX = 50
+
+
+def _fit_label_name(name: str) -> str:
+    return name[:_LABEL_NAME_MAX]
+
+
 def label(config: dict, locator: dict, execute: Execute, *,
           add: list[str], remove: list[str]) -> Result:
     parent = _require_parent(config, locator, execute)
@@ -273,13 +285,19 @@ def label(config: dict, locator: dict, execute: Execute, *,
         return number
     if isinstance(repo, TrackerError):
         return repo
+    fitted_add = [_fit_label_name(name) for name in add]
+    fitted_remove = [_fit_label_name(name) for name in remove]
+    truncated = {requested: fitted for requested, fitted in zip(add, fitted_add,
+                                                                 strict=False)
+                 if fitted != requested}
     data: Any = parent
-    if add:
+    if fitted_add:
         data = _cli(execute, "github", config, "wire-label", "POST",
-                    f"repos/{repo}/issues/{number}/labels", body={"labels": add})
+                    f"repos/{repo}/issues/{number}/labels",
+                    body={"labels": fitted_add})
         if isinstance(data, TrackerError):
             return data
-    for name in remove:
+    for name in fitted_remove:
         data = _cli(execute, "github", config, "wire-label", "DELETE",
                     f"repos/{repo}/issues/{number}/labels/{quote(name, safe='')}")
         if isinstance(data, TrackerError):
@@ -288,7 +306,10 @@ def label(config: dict, locator: dict, execute: Execute, *,
     refreshed = parent_read(config, locator, execute, op="wire-label-readback")
     if isinstance(refreshed, TrackerError):
         return refreshed
-    return _issue_out(refreshed)
+    out = _issue_out(refreshed)
+    if truncated:
+        out["label_truncated"] = truncated
+    return out
 
 
 def assign(config: dict, locator: dict, execute: Execute, *,

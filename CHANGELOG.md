@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **The flow back-reference label lands on GitHub no matter how long the spec id is.** GitHub caps label names at 50 characters, so every spec id longer than 45 characters failed the back-reference with HTTP 422, and the create-first retry could never succeed - the label was still too long. The GitHub wire verb now truncates add/remove label names to their first 50 characters before the request. Flow ids front-load their unique key (`fn-N-`, `gh-N-`), so the truncated `flow:<spec-id>` stays unambiguous, the full id remains in the local link and marker comments, and the result reports each truncation under `label_truncated`. GitLab, Linear and Jira are untouched.
+
 ## [flow-next 9.4.0] - 2026-10-29
 
 `--goal` now fits the goal instead of one fixed process. A prototype can say "commit each feature straight, one review at the end" and get exactly that; a gated release keeps a pull request, review and CI per child. Either way the goal builds on its own integration branch and reaches main through one final pull request. The run also decides how to cut the goal into pieces itself: on a six-feature PRD goal with full gates it finished in 0.63x the time at 0.59x the cost of 9.3.3, and on a library port in about the same time (1.11x) at 0.81x the cost, with the same hidden-test results (one run per version per goal).

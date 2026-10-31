@@ -182,7 +182,7 @@
     },
     {
       "path": "flowctl_tracker/wire/github.py",
-      "sha256": "50f22da5abd62ea2e8a947a2f8ae5271e829b74c7f0a033a25c6db02fb78a422"
+      "sha256": "5c28f82bacf4190e3393d585db97af4f85aff2274dbcffe963a28827a463cf9b"
     },
     {
       "path": "flowctl_tracker/wire/gitlab.py",

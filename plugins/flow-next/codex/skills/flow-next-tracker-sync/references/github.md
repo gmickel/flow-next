@@ -30,6 +30,17 @@ failures. Skill prose never executes GitHub API requests directly.
 Issue bodies and comments are Markdown. Pagination is completed inside flowctl.
 Pull requests are not treated as issues in the ready lane.
 
+## Provider constraints
+
+GitHub label names are capped at 50 characters; the API rejects longer names
+with 422 `name is too long (maximum is 50 characters)`. The label verb
+truncates add/remove names to their first 50 characters before the request -
+Flow ids front-load their unique key (`fn-N-`, `gh-N-`), so the truncated
+`flow:<spec-id>` back-reference stays unambiguous - and reports every
+truncation in the result under `label_truncated`. The status-label writes
+driven by tracker `readyState` are not truncated: a configured readyState
+longer than the cap is a configuration error and surfaces GitHub's own 422.
+
 ## Capability degradation
 
 GitHub attachment upload is unsupported. GitHub issues expose parent/sub-issue

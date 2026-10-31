@@ -31,4 +31,9 @@ delete its file directly.
 
 **Back-reference:** write `flow:<spec-id>` only after the durable local link
 exists. A failed back-reference leaves the recovery record available for a
-safe retry.
+safe retry. GitHub caps label names at 50 characters, so a spec id longer
+than 45 characters cannot be written verbatim: the GitHub wire verb
+truncates the label to its first 50 characters (the unique key prefix -
+`fn-N-` / `gh-N-` - always survives the cut, and the full id stays in the
+local link and marker comments) and reports the mapping under
+`label_truncated`. Never shorten the id itself to make the label fit.

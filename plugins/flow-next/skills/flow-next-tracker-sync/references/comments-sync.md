@@ -131,7 +131,10 @@ the exact-match fence.
 > The same hazard hits the flow back-reference: write it as a **`flow:<id>` label**
 > (labels are plain text — never linkified), NOT as a body/title-embedded `[<id>]`
 > reference when `<id>` carries a tracker key. The label is the safe primary; a
-> `[<id>]` title prefix is linkify-prone and secondary at best.
+> `[<id>]` title prefix is linkify-prone and secondary at best. GitHub caps label
+> names at 50 characters — the GitHub wire verb truncates longer names to their
+> first 50 (key prefix survives) instead of failing, so the cap is never a reason
+> to move the back-reference into the body or title.
 
 ### Human-paste fold rule (agent-side)
 
