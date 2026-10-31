@@ -120,55 +120,20 @@ it is never a stub that would pass prime's own checks unexercised). This exercis
 rule applies to EVERY artifact prime creates, not just hooks. Harness settings/hook files are
 **explicit-consent-only** even under `--fix-all` (they are the harness attack surface).
 
-### Add a format/lint commit hook (JavaScript/TypeScript) - staged-scope, format+lint ONLY
+### Add a format/lint commit hook - staged-scope, format+lint ONLY
 
 **Why**: Agents get instant format/lint feedback on the staged files instead of waiting 10min for
-CI. This hook runs formatters + file-scoped linters ONLY - never the test suite (tests are the
-verify command + CI, above).
+CI. The hook runs formatters and file-scoped linters on the staged files ONLY - never the test
+suite (tests are the verify command + CI, above).
 
-**CRITICAL — the lint-staged commands MUST match the linter/formatter tooling-scout detected;
-never reference a tool that isn't in the repo.** A hardcoded `eslint --fix`/`prettier --write`
-in a Biome-only repo makes EVERY subsequent `git commit` fail with `eslint: command not found` —
-a "fix" that actively breaks agent readiness. Pick the block for the detected stack:
+Use the stack's usual hook runner (husky + lint-staged for JS/TS, pre-commit for Python) and set it
+up with its own commands so versions are current (`npx husky init`; `pre-commit autoupdate` after
+writing the config). No versions are given here; they go stale.
 
-```jsonc
-// Biome repo:      "*.{js,ts,tsx,json}": ["biome check --write --no-errors-on-unmatched"]
-// ESLint+Prettier: "*.{js,ts,tsx}": ["eslint --fix", "prettier --write"], "*.{json,md}": ["prettier --write"]
-// Ruff (Python):   "*.py": ["ruff check --fix", "ruff format"]
-```
-
-If husky not installed, add `husky` + `lint-staged` to devDependencies, then:
-```bash
-npx husky init
-# APPEND, don't truncate an existing hook:
-grep -q 'lint-staged' .husky/pre-commit 2>/dev/null || echo "npx lint-staged" >> .husky/pre-commit
-```
-
-### Add a format/lint commit hook (Python) - staged-scope, format+lint ONLY
-
-Create `.pre-commit-config.yaml` with format + lint hooks ONLY (no `pytest` hook - tests are the
-verify command + CI, per the layering rule above):
-
-```yaml
-repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.3
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
-```
-
-Exercise it once after writing (`pre-commit run --all-files` or against a sample) so the offered
-hook is verified, not a stub.
+- **Commands come from the tooling tooling-scout detected; never reference a tool that isn't in
+  the repo.** A hardcoded `eslint --fix` in a Biome-only repo makes EVERY later `git commit` fail
+  with `eslint: command not found`, a "fix" that breaks agent readiness.
+- **Append to an existing hook; never truncate it.**
 
 ### Add Linter Config (if NO linter detected)
 
@@ -180,39 +145,15 @@ Recommend based on project:
 - **oxlint** (performance-critical): very fast
 - **Ruff** (Python): very fast
 
-Example ESLint - `eslint.config.js`:
-
-```javascript
-import js from '@eslint/js';
-
-export default [
-  js.configs.recommended,
-];
-```
-
-Example Biome - `biome.json`:
-
-```json
-{
-  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
-  "linter": { "enabled": true },
-  "formatter": { "enabled": true }
-}
-```
+Create the config with the linter's own init command where it has one (`biome init`), so it
+matches the installed version; otherwise write the smallest config that enables the tool's
+recommended rules.
 
 ### Add Formatter Config (if NO formatter detected)
 
 **Important**: Only offer if NO formatter exists. Biome handles both lint + format. Prettier, Black, gofmt are all valid.
 
-Example Prettier - `.prettierrc`:
-
-```json
-{
-  "semi": true,
-  "singleQuote": true,
-  "tabWidth": 2
-}
-```
+Keep the formatter's defaults: a config file is needed only to change them.
 
 Note: If Biome is already configured, it handles formatting. Don't add Prettier.
 
@@ -264,43 +205,13 @@ node_modules/
 
 ### Add Test Config (if test framework detected but no config)
 
-Jest - create `jest.config.cjs` (use `.cjs`, not `.js` — `module.exports` fails to load in a
-`"type": "module"` package; `.cjs` is safe in both CJS and ESM repos):
+Write the smallest config the framework needs, keeping its defaults. Two traps:
 
-```javascript
-/** @type {import('jest').Config} */
-const config = {
-  testEnvironment: 'node',
-  testMatch: ['**/*.test.js', '**/*.test.ts'],
-};
-
-module.exports = config;
-```
-
-Vitest - create `vitest.config.ts`:
-
-```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
-});
-```
-
-pytest - create `pytest.ini` (set `testpaths` ONLY to the directory testing-scout actually
-found tests in — hardcoding `tests` when tests live in `src/**/test_*.py` makes pytest
-discover ZERO tests, regressing TS3/TS4 on the next run; omit the key entirely if unsure):
-
-```ini
-[pytest]
-# testpaths = <detected test dir(s)>   # omit if tests aren't in a single known dir — auto-discovery works
-python_files = test_*.py
-python_functions = test_*
-addopts = -v --tb=short
-```
+- A Jest config using `module.exports` fails to load in a `"type": "module"` package; name it
+  `jest.config.cjs`, which loads in both.
+- Set pytest's `testpaths` only to the directory testing-scout found tests in, or omit it:
+  hardcoding `tests` when tests live in `src/**/test_*.py` discovers ZERO tests, regressing
+  TS3/TS4 on the next run.
 
 ---
 
@@ -325,31 +236,9 @@ Create `.devcontainer/devcontainer.json`:
 
 **Note**: Only add if the user wants CI.
 
-Create `.github/workflows/ci.yml`:
-
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Setup [runtime]
-        uses: actions/setup-[runtime]@v4
-      - name: Install
-        run: [install command]
-      - name: Lint
-        run: [lint command]
-      - name: Test
-        run: [test command]
-```
+Create `.github/workflows/ci.yml` running on pushes and pull requests to the default branch:
+check out, set up the runtime at the version file's version, install, lint, test, using the
+commands Phase 2 verified. Use each action's current major version.
 
 ---
 
