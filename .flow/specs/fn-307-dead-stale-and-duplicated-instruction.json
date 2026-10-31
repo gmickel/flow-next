@@ -8,13 +8,69 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-307-dead-stale-and-duplicated-instruction",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-307-dead-stale-and-duplicated-instruction.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "60e154d8465785cb14ec618c31589dc1968596ac1964cf8cedcdb95047bfd4c2",
+      "backend": "codex",
+      "base_sha": "5d9ec0885c095e1b34fe97f47f7dba0caf6f036b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b36f4105eb2b3c0b0624894a5efc7175",
+            "classification": "introduced",
+            "findingId": "finding-b36f4105eb2b3c0b0624894a5efc7175",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "09253fb81fc3311db8ac75ad96568e9da3fece09",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 788,
+      "output_sha256": "1737cd430eb675f569487cb6002e92f4936a3be32ee013b89b8048bfcc7db229",
+      "reservation_id": "6b6e3b2d67ed4bb1a9498af45840c16d",
+      "round_consumed": true,
+      "scope": "impl:fn-307-dead-stale-and-duplicated-instruction.1",
+      "superseded_by": null,
+      "task": "fn-307-dead-stale-and-duplicated-instruction.1",
+      "timestamp": "2026-10-31T12:37:18.219125Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-307-dead-stale-and-duplicated-instruction.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-307-dead-stale-and-duplicated-instruction.1": 0
+  },
   "spec_path": ".flow/specs/fn-307-dead-stale-and-duplicated-instruction.md",
   "status": "open",
   "title": "Dead, stale and duplicated instruction text (audit 2026-10 wave 1)",
@@ -29,5 +85,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T11:46:21.022181Z"
+  "updated_at": "2026-10-31T12:37:18.225325Z"
 }

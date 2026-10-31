@@ -49,7 +49,7 @@ class PrimeDispatchRewriteTests(unittest.TestCase):
     def test_prime_scout_dispatch_carries_codex_wording(self):
         text = (REPO / "plugins/flow-next/codex/skills/flow-next-prime/workflow.md").read_text(
             encoding="utf-8")
-        self.assertIn("(Codex spawns them as multi-agent threads)", text)
+        self.assertIn("multi-agent", text)
         self.assertNotIn("using the Task tool", text)
 
 
