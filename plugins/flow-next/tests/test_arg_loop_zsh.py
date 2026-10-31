@@ -64,7 +64,8 @@ class ArgLoopZshTests(unittest.TestCase):
                                  {"SPEC_ID": "", "QA_TARGET_URL": "", "QA_BASE_REF": "", "NO_PROMPT": "0"})
 
     def test_resolve_pr_url_capture(self):
-        script = _fence(RESOLVE_PR, "DRY_RUN=0") + _fence(RESOLVE_PR, "MODE=full")
+        gh = "gh() { echo acme/widgets; }\n"   # the URL's repository is this checkout's
+        script = gh + _fence(RESOLVE_PR, "DRY_RUN=0") + _fence(RESOLVE_PR, "MODE=full")
         names = ["MODE", "TARGETED_TYPE", "OWNER", "REPO", "PR_NUMBER", "COMMENT_REST_ID"]
         for shell in SHELLS:
             with self.subTest(shell=shell[0]):

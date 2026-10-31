@@ -14,9 +14,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
 Accepted explicit modes: `codex`, `copilot`, `cursor`, `claude`, `host`, `none`.
-An explicit `rp` or `export` was removed: tell the user in one line
-"RepoPrompt review (rp, export) was removed in flow-next 8.0.0; review backends: claude, codex, copilot, cursor, host."
-and exit 1, as for `ASK`.
+Any other explicit value fails closed as for `ASK`, naming these accepted modes.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:
@@ -47,14 +45,15 @@ persisted spec:
 
 ```bash
 $FLOWCTL show "$SPEC_ID" --json
-$FLOWCTL cat "$SPEC_ID"
 $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
-This re-anchor is mandatory before every fix cycle, and its checkpoint is the
-cycle's only one: backend files never save another. A user-edited spec is the
-source of truth; never review or restore a stale generated/checkpoint copy
-unless recovering after context compaction.
+This checkpoint is mandatory before every dispatch, and it is the cycle's only
+one: backend files never save another. The reviewer receives the spec through
+flowctl, so read its body only in the Fix Loop, which reads the current file
+before editing it. A user-edited spec is the source of truth; never review or
+restore a stale generated/checkpoint copy unless recovering after context
+compaction.
 
 For host, provide the current spec/task material and review focus.
 

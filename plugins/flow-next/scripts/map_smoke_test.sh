@@ -171,8 +171,8 @@ SKILL_TEXT="$(cat "$SKILL_FILE")"
 # =============================================================================
 echo -e "${YELLOW}--- Case 3: SUPPORTED_CLAWPATCH version-range guard (R10) ---${NC}"
 
-# Constant declared in SKILL.md prose
-assert_grep 'SUPPORTED_CLAWPATCH=">=0.4.0 <0.5.0"' "$SKILL_TEXT" "Case 3: SUPPORTED_CLAWPATCH constant in SKILL.md"
+# The range lives in map.sh; SKILL.md points there
+assert_grep 'scripts/map.sh' "$SKILL_TEXT" "Case 3: SKILL.md points at the script that holds the range"
 
 # Replay the workflow.md ver_cmp helper for behavioral verification.
 VER_GUARD="$TEST_DIR/ver_guard.sh"
@@ -180,7 +180,7 @@ cat > "$VER_GUARD" <<'BASH'
 #!/usr/bin/env bash
 set -e
 SUPPORTED_MIN="0.4.0"
-SUPPORTED_MAX_EXCL="0.5.0"
+SUPPORTED_MAX_EXCL="0.9.0"
 CP_VER="$1"
 
 ver_cmp() {
@@ -214,11 +214,11 @@ err="$(bash "$VER_GUARD" "0.4.0" 2>&1)" || rc=$?
 assert_rc 0 "$rc" "Case 3a: 0.4.0 in-range exits 0"
 assert_no_grep "outside supported range" "$err" "Case 3a: 0.4.0 in-range emits no warning"
 
-# 3b: in-range version (0.4.7) → no warning, exit 0
+# 3b: in-range version (0.8.4) → no warning, exit 0
 rc=0
-err="$(bash "$VER_GUARD" "0.4.7" 2>&1)" || rc=$?
-assert_rc 0 "$rc" "Case 3b: 0.4.7 in-range exits 0"
-assert_no_grep "outside supported range" "$err" "Case 3b: 0.4.7 in-range emits no warning"
+err="$(bash "$VER_GUARD" "0.8.4" 2>&1)" || rc=$?
+assert_rc 0 "$rc" "Case 3b: 0.8.4 in-range exits 0"
+assert_no_grep "outside supported range" "$err" "Case 3b: 0.8.4 in-range emits no warning"
 
 # 3c: below-range version (0.3.9) → warning, exit 0 (degrades)
 rc=0
@@ -227,11 +227,11 @@ assert_rc 0 "$rc" "Case 3c: 0.3.9 below-range still exits 0 (degrades)"
 assert_grep "outside supported range" "$err" "Case 3c: 0.3.9 emits range warning"
 assert_grep "0.3.9" "$err" "Case 3c: warning names the found version"
 
-# 3d: above-range version (0.5.0) → warning, exit 0 (degrades)
+# 3d: above-range version (0.9.0) → warning, exit 0 (degrades)
 rc=0
-err="$(bash "$VER_GUARD" "0.5.0" 2>&1)" || rc=$?
-assert_rc 0 "$rc" "Case 3d: 0.5.0 above-range still exits 0 (degrades)"
-assert_grep "outside supported range" "$err" "Case 3d: 0.5.0 emits range warning"
+err="$(bash "$VER_GUARD" "0.9.0" 2>&1)" || rc=$?
+assert_rc 0 "$rc" "Case 3d: 0.9.0 above-range still exits 0 (degrades)"
+assert_grep "outside supported range" "$err" "Case 3d: 0.9.0 emits range warning"
 
 # 3e: empty version → no warning, exit 0 (defensive, parse failed elsewhere)
 rc=0

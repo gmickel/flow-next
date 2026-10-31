@@ -152,7 +152,7 @@ verify command + CI, per the layering rule above):
 ```yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -160,9 +160,9 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+    rev: v0.17.3
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 ```
@@ -194,7 +194,7 @@ Example Biome - `biome.json`:
 
 ```json
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
   "linter": { "enabled": true },
   "formatter": { "enabled": true }
 }
@@ -323,7 +323,7 @@ Create `.devcontainer/devcontainer.json`:
 
 ### Add Basic CI Workflow (Bonus)
 
-**Note**: Agents benefit more from pre-commit hooks (instant feedback) than CI (slow feedback). Only add if user wants CI.
+**Note**: Only add if the user wants CI.
 
 Create `.github/workflows/ci.yml`:
 
@@ -340,7 +340,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup [runtime]
         uses: actions/setup-[runtime]@v4
       - name: Install
