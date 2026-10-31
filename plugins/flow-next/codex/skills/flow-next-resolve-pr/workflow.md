@@ -64,6 +64,7 @@ Set `MODE=full` or `MODE=targeted` based on the match; for targeted also set `TA
 ```bash
 MODE=full
 TARGETED_TYPE=""
+if [ -n "${ZSH_VERSION:-}" ]; then setopt BASH_REMATCH KSH_ARRAYS; fi   # zsh: bash-style regex captures
 if [[ "$TARGET" =~ ^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)#discussion_r([0-9]+)$ ]]; then
   MODE=targeted; TARGETED_TYPE=review_thread
   OWNER="${BASH_REMATCH[1]}"; REPO="${BASH_REMATCH[2]}"

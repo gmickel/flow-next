@@ -41,6 +41,7 @@ if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
   RAW_ARGS="${RAW_ARGS//mode:autofix/}"
 fi
 
+if [ -n "${ZSH_VERSION:-}" ]; then setopt BASH_REMATCH KSH_ARRAYS; fi   # zsh: bash-style regex captures
 if [[ "$RAW_ARGS" =~ --rewrite[[:space:]]+([^[:space:]]+) ]]; then
   REWRITE_TARGET="${BASH_REMATCH[1]}"
   RAW_ARGS="${RAW_ARGS//--rewrite ${REWRITE_TARGET}/}"
@@ -58,7 +59,7 @@ NO_PLAN_OPT=0
 FROM_FLOW=0
 FROM_GOAL=0
 CLEANED_ARGS=""
-for TOK in $RAW_ARGS; do
+for TOK in $(printf '%s\n' "$RAW_ARGS"); do
   if [ "$TOK" = "--yes" ]; then
     COMMIT_YES=1
   elif [ "$TOK" = "--override-strategy" ]; then

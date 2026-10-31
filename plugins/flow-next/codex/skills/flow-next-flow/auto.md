@@ -45,9 +45,9 @@ AUTO_TICK=0                  # 1 = one hop then stop; 0 = hop until a terminal
 PILOT_GOAL_MODE=0            # 1 = --goal: references/goal-mode.md drives the run
 PILOT_GOAL=""                # goal mode: every positional word, a spec id or a source
 
-for ARG in $RAW_ARGS; do [ "$ARG" = "--goal" ] && PILOT_GOAL_MODE=1; done
+for ARG in $(printf '%s\n' "$RAW_ARGS"); do [ "$ARG" = "--goal" ] && PILOT_GOAL_MODE=1; done
 PREV=""
-for ARG in $RAW_ARGS; do
+for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   case "$PREV" in
     --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
     --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;

@@ -61,7 +61,7 @@ if [ ! -d ".flow/features" ]; then
   MODE="seed"
 fi
 RAW_ARGS="${ARGUMENTS:-}"
-for ARG in $RAW_ARGS; do
+for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   case "$ARG" in
     --init|init|mode:seed|--seed) MODE="seed" ;;
   esac

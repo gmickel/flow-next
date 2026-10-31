@@ -34,7 +34,7 @@ LAND_AUTHORIZED=0
 LAND_SCOPE_SPEC=""
 LAND_SCOPE_PR=""
 AUTO=0
-for ARG in $ARGUMENTS; do
+for ARG in $(printf '%s\n' "$ARGUMENTS"); do
   case "$ARG" in
     --auto|--goal) AUTO=1 ;;
     --until=merge) FLOW_UNTIL=merge ;;
