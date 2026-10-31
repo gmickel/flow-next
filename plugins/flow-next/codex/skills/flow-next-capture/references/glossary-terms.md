@@ -10,7 +10,9 @@
 Capture joins `/flow-next:refine` as a glossary writer. Gate first — same husk-aware autodetect as refine's doc-aware mode (`total_terms`, never `[[ -f ]]` — a `# Glossary` husk must not open the gate):
 
 ```bash
-GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
+# The preflight snapshot holds the glossary; a failed probe there lists it live.
+GLOSSARY_TERMS=$(jq -er '.probes.glossary | if .status == "ok" and (.value.total_terms | type) == "number" then .value.total_terms else error("glossary probe") end' "${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" 2>/dev/null) \
+  || GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
 ```
 
 - `GLOSSARY_TERMS == 0` (absent, husk, or flowctl error) → **silent skip**: `GLOSSARY_PROPOSALS` stays empty, nothing downstream changes. Bootstrap is `/flow-next:prime`'s job, never capture's.

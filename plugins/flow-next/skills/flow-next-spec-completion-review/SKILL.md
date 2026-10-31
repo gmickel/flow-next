@@ -62,10 +62,6 @@ Format: `<spec-id> [--review=codex|copilot|cursor|claude|host|none]`
 
 ## Workflow
 
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-```
-
 ### Step 0: Parse Arguments
 
 Parse $ARGUMENTS for:

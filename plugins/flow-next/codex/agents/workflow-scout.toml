@@ -94,22 +94,6 @@ grep -l "release\\|publish" .github/workflows/*.yml .github/workflows/*.yaml 2>/
 ls -la CONTRIBUTING.md .github/CONTRIBUTING.md 2>/dev/null
 ```
 
-## Additional Context
-
-### Recent CI Status
-
-```bash
-# Check recent workflow runs
-gh run list --limit 5 --json name,status,conclusion 2>/dev/null
-```
-
-### PR Activity
-
-```bash
-# Check if PRs use templates
-gh pr list --state all --limit 3 --json body 2>/dev/null | head -20
-```
-
 ## Output Format
 
 ```markdown

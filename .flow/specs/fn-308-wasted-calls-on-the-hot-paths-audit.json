@@ -1,21 +1,154 @@
 {
   "branch_name": "fn-308-wasted-calls-on-the-hot-paths-audit",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-10-31T15:08:34.968277Z",
   "created_at": "2026-10-31T10:25:33.723221Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-308-wasted-calls-on-the-hot-paths-audit",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-308-wasted-calls-on-the-hot-paths-audit.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "28a4322bb079c69a461f19e7266793b3cba298451edabb7fa36cff71191a6417",
+      "backend": "codex",
+      "base_sha": "ad77f1621633ddd3ea020d6c349a3e382223b4f1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8e1cdc585104ff279dede03e561b564c",
+            "classification": "introduced",
+            "findingId": "finding-8e1cdc585104ff279dede03e561b564c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1f06a7f817ff50d210e5a35393d48337",
+            "classification": "introduced",
+            "findingId": "finding-1f06a7f817ff50d210e5a35393d48337",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0d7f625c0f5489c7ff193013396e80ee",
+            "classification": "introduced",
+            "findingId": "finding-0d7f625c0f5489c7ff193013396e80ee",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b7d2baf8ce06c9dae5abb8a8e1e4aae2fa7d3647",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2712,
+      "output_sha256": "e078acec95ff7dd2e48c3676133e7781ae146c0cd5e835e231596caf5d55dd3c",
+      "reservation_id": "d29127d3a8624be09c68469e958030d7",
+      "round_consumed": true,
+      "scope": "impl:fn-308-wasted-calls-on-the-hot-paths-audit.1",
+      "superseded_by": null,
+      "task": "fn-308-wasted-calls-on-the-hot-paths-audit.1",
+      "timestamp": "2026-10-31T15:05:45.119680Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "c7b54b4a5708ed88bd17ce2eea3caed632bb093b7ac005fbdca32f63dd14d7e1",
+      "backend": "codex",
+      "base_sha": "ad77f1621633ddd3ea020d6c349a3e382223b4f1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8e1cdc585104ff279dede03e561b564c",
+            "classification": "introduced",
+            "findingId": "finding-8e1cdc585104ff279dede03e561b564c",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1f06a7f817ff50d210e5a35393d48337",
+            "classification": "introduced",
+            "findingId": "finding-1f06a7f817ff50d210e5a35393d48337",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-0d7f625c0f5489c7ff193013396e80ee",
+            "classification": "introduced",
+            "findingId": "finding-0d7f625c0f5489c7ff193013396e80ee",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b5305f0688054225bf0d62aabf7d0ad2b58e2362",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1442,
+      "output_sha256": "5ace6922b639f3934d71fadc65bf1ec94397727c4bbd41577e4aac07e8dc9bbc",
+      "reservation_id": "c0944c8c38ae41518d937f3dea4c53e2",
+      "round_consumed": true,
+      "scope": "impl:fn-308-wasted-calls-on-the-hot-paths-audit.1",
+      "superseded_by": null,
+      "task": "fn-308-wasted-calls-on-the-hot-paths-audit.1",
+      "timestamp": "2026-10-31T15:08:03.530892Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-308-wasted-calls-on-the-hot-paths-audit.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-308-wasted-calls-on-the-hot-paths-audit.1": 0
+  },
   "spec_path": ".flow/specs/fn-308-wasted-calls-on-the-hot-paths-audit.md",
-  "status": "open",
+  "status": "done",
   "title": "Wasted calls on the hot paths (audit 2026-10 wave 2)",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +161,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T11:40:03.682015Z"
+  "updated_at": "2026-10-31T15:10:47.720866Z"
 }

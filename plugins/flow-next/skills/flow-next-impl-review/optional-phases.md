@@ -154,30 +154,9 @@ PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
 for pass in $(printf '%s\n' $SELECTED_PASSES); do
   case "$BACKEND" in
-    codex)
-      $FLOWCTL codex deep-pass \
-        --pass "$pass" \
-        --primary-findings "$PRIMARY_FINDINGS" \
-        --receipt "$RECEIPT_PATH" \
-        --json
-      ;;
-    copilot)
-      $FLOWCTL copilot deep-pass \
-        --pass "$pass" \
-        --primary-findings "$PRIMARY_FINDINGS" \
-        --receipt "$RECEIPT_PATH" \
-        --json
-      ;;
-    cursor)
-      $FLOWCTL cursor deep-pass \
-        --pass "$pass" \
-        --primary-findings "$PRIMARY_FINDINGS" \
-        --receipt "$RECEIPT_PATH" \
-        --json
-      ;;
-    claude)
-      # Resumes the primary session from the receipt; writes no diff file.
-      $FLOWCTL claude deep-pass \
+    codex|copilot|cursor|claude)
+      # claude resumes the primary session from the receipt; writes no diff file.
+      $FLOWCTL "$BACKEND" deep-pass \
         --pass "$pass" \
         --primary-findings "$PRIMARY_FINDINGS" \
         --receipt "$RECEIPT_PATH" \
@@ -292,27 +271,9 @@ RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 
 case "$BACKEND" in
-  codex)
-    VALIDATOR_JSON="$($FLOWCTL codex validate \
-      --findings-file "$FINDINGS_FILE" \
-      --receipt "$RECEIPT_PATH" \
-      --json 2>&1)"
-    ;;
-  copilot)
-    VALIDATOR_JSON="$($FLOWCTL copilot validate \
-      --findings-file "$FINDINGS_FILE" \
-      --receipt "$RECEIPT_PATH" \
-      --json 2>&1)"
-    ;;
-  cursor)
-    VALIDATOR_JSON="$($FLOWCTL cursor validate \
-      --findings-file "$FINDINGS_FILE" \
-      --receipt "$RECEIPT_PATH" \
-      --json 2>&1)"
-    ;;
-  claude)
-    # Resumes the primary session from the receipt; writes no diff file.
-    VALIDATOR_JSON="$($FLOWCTL claude validate \
+  codex|copilot|cursor|claude)
+    # claude resumes the primary session from the receipt; writes no diff file.
+    VALIDATOR_JSON="$($FLOWCTL "$BACKEND" validate \
       --findings-file "$FINDINGS_FILE" \
       --receipt "$RECEIPT_PATH" \
       --json 2>&1)"
@@ -332,8 +293,8 @@ esac
 
 ### Step V.3: Re-compute verdict from validator result
 
-Mode split: under autonomy markers the `codex validate` and
-`copilot validate` subcommands merge the validator result into the receipt
+Mode split: under autonomy markers every CLI backend's `validate`
+subcommand merges the validator result into the receipt
 and upgrade verdict to SHIP if all findings dropped - the read-back below
 applies there. In an INTERACTIVE session the call returns raw validator
 decisions with `host_judges: true` and does NOT mutate the receipt: read the

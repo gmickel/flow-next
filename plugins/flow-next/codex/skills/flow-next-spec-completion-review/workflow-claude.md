@@ -13,14 +13,7 @@ Claude shells out to the Claude Code CLI (headless `claude -p`), billed against 
 3. Model + effort resolved via (first match wins): `--spec claude:<model>:<effort>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CLAUDE_MODEL` / `FLOW_CLAUDE_EFFORT` env vars, registry defaults. Effort set: `low|medium|high|xhigh|max` (default `high`)
 4. Parse verdict from command output
 
-## Step 1: Identify Spec
-
-```bash
-# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$SPEC_ID" --json
-```
-
-## Step 2: Execute Review
+## Step 1: Execute Review
 
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
@@ -40,16 +33,16 @@ $FLOWCTL claude completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 
 The runner invokes `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config` with `cwd=repo_root`, the prompt on stdin, and `--model` / `--effort` from the resolved spec. `Read`, `Grep`, `Glob` are the only tools that exist for the child (no Bash, no write tool, no MCP tools); the reviewed diff is materialised to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` and named in the prompt, so the reviewer reads it with `Read` instead of running git. At the ladder floor the runner omits both `--model` and `--effort` and the receipt records `"effort": null`.
 
-## Step 3: Handle Verdict
+## Step 2: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
 2. Fix code and run tests
 3. Commit fixes
-4. Re-run step 2 (receipt enables session continuity when `mode == "claude"`; the re-review resumes the session with a new diff file for the new range)
+4. Re-run step 1 (receipt enables session continuity when `mode == "claude"`; the re-review resumes the session with a new diff file for the new range)
 5. Stop or loop as workflow-common.md's Fix Loop step 5 says
 
-## Step 4: Receipt
+## Step 3: Receipt
 
 Receipt is written automatically by `flowctl claude completion-review` when `--receipt` provided.
 

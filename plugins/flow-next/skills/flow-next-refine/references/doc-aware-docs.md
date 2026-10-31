@@ -8,10 +8,13 @@ A question about a term with a canonical entry in the nearest-ancestor `GLOSSARY
 
 ### Behavior (a) — Phase-zero glossary scan
 
-Before drafting the first question batch, run a glossary scan against the user's request.
+Before drafting the first question batch, run a glossary scan against the user's request. The
+glossary comes from the interview's preflight bundle; a failed probe there lists it live.
 
 ```bash
-"$FLOWCTL" glossary list --json
+REFINE_PREFLIGHT="${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json"   # the same literal path as Setup
+jq -ce '.probes.glossary | if .status == "ok" and (.value.groups | type) == "array" then .value else error("glossary probe") end' "$REFINE_PREFLIGHT" 2>/dev/null \
+  || "$FLOWCTL" glossary list --json
 ```
 
 JSON shape:

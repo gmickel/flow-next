@@ -26,27 +26,31 @@ command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew in
 
 ## Step 1: Gather Spec Data
 
-Build a consolidated view of all specs with their dependencies — a single heavy per-spec loop for the whole skill. Steps 2 and 3 reuse the cached file (bash vars do not survive across tool calls, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the same literal path in every later block):
+Build a consolidated view of all specs with their dependencies — a single per-spec loop for the whole skill, over open specs only (a done spec needs only its status, which the specs list carries). Steps 2 and 3 reuse the cached file (bash vars do not survive across tool calls, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the same literal path in every later block):
 
 ```bash
 # ONE gather — Steps 2 and 3 read this file; never re-run the per-spec loop
 SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
-$FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
-  $FLOWCTL show "$id" --json | jq -c '{
-    id: .id,
-    title: .title,
-    status: .status,
-    plan_review: .plan_review_status,
-    deps: (.depends_on_epics // [])
-  }'
-done | jq -s '.' > "$SPECS_FILE"
+SPECS_LIST="$($FLOWCTL specs --json)"
+{
+  printf '%s' "$SPECS_LIST" | jq -c '.specs[] | select(.status == "done") | {id, title, status}'
+  printf '%s' "$SPECS_LIST" | jq -r '.specs[] | select(.status != "done") | .id' | while read -r id; do
+    $FLOWCTL show "$id" --json | jq -c '{
+      id: .id,
+      title: .title,
+      status: .status,
+      plan_review: .plan_review_status,
+      deps: (.depends_on_epics // [])
+    }'
+  done
+} | jq -s '.' > "$SPECS_FILE"
 cat "$SPECS_FILE"
 ```
 
 ### Done when
 
 - `$SPECS_FILE` exists at the composed literal path and parses as a JSON array with one object per spec returned by `flowctl specs --json`.
-- The per-spec `flowctl show` loop has run exactly once for this invocation. **Steps 2 and 3 read that file.** A second run of the gather loop has broken this.
+- The per-spec `flowctl show` loop has run exactly once for this invocation, over the open specs. **Steps 2 and 3 read that file.** A second run of the gather loop has broken this.
 
 ## Step 2: Identify Blocking Chains
 

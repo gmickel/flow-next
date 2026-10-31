@@ -11,14 +11,7 @@ Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`)
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default. **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
-## Step 1: Identify Spec
-
-```bash
-# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$SPEC_ID" --json
-```
-
-## Step 2: Execute Review
+## Step 1: Execute Review
 
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
@@ -40,16 +33,16 @@ $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 
 The runner invokes `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (`--mode ask` is read-only — the reviewer never mutates the tree).
 
-## Step 3: Handle Verdict
+## Step 2: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
 2. Fix code and run tests
 3. Commit fixes
-4. Re-run step 2 (receipt enables session continuity when `mode == "cursor"`)
+4. Re-run step 1 (receipt enables session continuity when `mode == "cursor"`)
 5. Stop or loop as workflow-common.md's Fix Loop step 5 says
 
-## Step 4: Receipt
+## Step 3: Receipt
 
 Receipt is written automatically by `flowctl cursor completion-review` when `--receipt` provided.
 
