@@ -113,7 +113,7 @@ Reproducible environment setup.
 
 | ID | Criterion | Pass Condition |
 |----|-----------|----------------|
-| DE1 | .env.example mirrors real env reads | Not existence: diff declared vars against env reads in SOURCE (`process.env`, `os.environ`, `getenv`) across WORKSPACE MEMBER dirs (per-package `.env.example` is the correct monorepo pattern - never root-only); scan only source extensions in the git index, excluding tests/fixtures/eval corpora/docs snippets/node_modules; filter well-known platform/CI vars. >~30% undeclared = "stale template" ⚠️ (quote the offending vars); downgrade to "template does not mirror documented config" when the vars are documented in a config doc. Emitter owns the cross-ref counts. |
+| DE1 | .env.example mirrors real env reads | Not existence: diff declared vars against env reads in SOURCE (`process.env`, `os.environ`, `getenv`) across WORKSPACE MEMBER dirs (per-package `.env.example` is the correct monorepo pattern - never root-only); scan only source extensions in the git index, excluding tests/fixtures/eval corpora/docs snippets/node_modules; filter well-known platform/CI vars. >~30% undeclared = "stale template" ⚠️ (quote the offending vars); downgrade to "template does not mirror documented config" when the vars are documented in a config doc. |
 | DE2 | .env gitignored | .env in .gitignore |
 | DE3 | Runtime version pinned | .nvmrc, .python-version, .tool-versions, etc. |
 | DE4 | Setup script chains real stages (static + cross-ref) | Not existence: the setup script must chain real stages - `install` AND `migrate`/`seed` keywords found in its CONTENT (static + cross-reference evidence only; setup/migrate/seed are NEVER executed during assessment per the non-mutating policy). A `setup.sh` that only prints instructions = ❌. |
@@ -304,7 +304,7 @@ The single source of truth for every new/upgraded criterion's scoring behavior. 
 | BS3 | Pillar 2 | scored | Pillar 2 | pillar % | fix-offered | none | host-inline (tier-3 boot probe) |
 | TS5 | Pillar 3 | scored | Pillar 3 | pillar % | fix-offered | none | emitter (threshold config) |
 | DC2 | Pillar 4 | scored | Pillar 4 | pillar % | fix-offered (augment) | **G3** | scout (quality) + host-inline (execute check) |
-| DE1 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | emitter (env cross-ref counts) |
+| DE1 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | host (per-member env cross-ref, static) |
 | DE4 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | host (setup-script content, static) |
 | DE5 | Pillar 5 | scored | Pillar 5 | pillar % | fix-offered | none | emitter (config grep) |
 

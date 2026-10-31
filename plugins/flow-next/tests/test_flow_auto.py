@@ -249,10 +249,16 @@ class ArgumentParseFence(unittest.TestCase):
     def test_retired_flags_warn_and_change_nothing(self) -> None:
         # --research chose a research backend that no longer exists and --dry-run was
         # --explain's alias: both are unknown flags now.
-        for flag in ("--research=grep", "--dry-run"):
-            with self.subTest(flag=flag):
-                parsed, stderr = self._parse(f"fn-9 {flag}")
-                self.assertEqual(parsed, {**self.DEFAULTS, "PILOT_SPEC": "fn-9"})
+        cases = (
+            ("fn-9 --research=grep", "--research=grep", {"PILOT_SPEC": "fn-9"}),
+            ("fn-9 --dry-run", "--dry-run", {"PILOT_SPEC": "fn-9"}),
+            ("--research grep fn-9", "--research", {"PILOT_SPEC": "fn-9"}),
+            ("--goal fn-9 --research grep", "--research", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-9"}),
+        )
+        for arguments, flag, overrides in cases:
+            with self.subTest(arguments=arguments):
+                parsed, stderr = self._parse(arguments)
+                self.assertEqual(parsed, {**self.DEFAULTS, **overrides})
                 self.assertIn(f"Unknown flag: {flag}", stderr)
 
     @_POSIX_BASH

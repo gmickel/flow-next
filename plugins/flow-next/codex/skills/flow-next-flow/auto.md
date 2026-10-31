@@ -50,12 +50,14 @@ for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   case "$PREV" in
     --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
     --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
+    --research) PREV=""; continue ;;            # a retired flag's value is dropped, never a target
   esac
   case "$ARG" in
     --until=merge) : ;;                         # validated by SKILL.md; not a build-stage argument
     --auto|--goal) : ;;                         # consumed by SKILL.md mode detection and the pre-scan above
     --tick)       AUTO_TICK=1 ;;
     --review|--depth) PREV="$ARG" ;;
+    --research)   echo "Unknown flag: $ARG (ignored by /flow-next:flow --auto)" >&2; PREV="$ARG" ;;
     --explain) PILOT_DRY_RUN=1 ;;
     --backlog)
       if [ "$PILOT_GOAL_MODE" = 1 ]; then echo "--backlog does not apply with --goal (ignored)" >&2
