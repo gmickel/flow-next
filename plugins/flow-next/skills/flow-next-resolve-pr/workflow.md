@@ -323,9 +323,9 @@ ${PRE_EXISTING_FAILURE_NOTE:-}"
 if git symbolic-ref -q HEAD >/dev/null; then
   git push
 else
-  HEAD_REPO_URL=$(gh pr view "$PR_NUMBER" --json headRepository,headRepositoryOwner \
-    -q '"https://github.com/" + .headRepositoryOwner.login + "/" + .headRepository.name + ".git"')
-  git push "$HEAD_REPO_URL" "HEAD:$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
+  read -r HEAD_REPO_URL HEAD_REF <<< "$(gh pr view "$PR_NUMBER" --json headRepository,headRepositoryOwner,headRefName \
+    -q '"https://github.com/" + .headRepositoryOwner.login + "/" + .headRepository.name + ".git " + .headRefName')"
+  git push "$HEAD_REPO_URL" "HEAD:$HEAD_REF"
 fi
 ```
 

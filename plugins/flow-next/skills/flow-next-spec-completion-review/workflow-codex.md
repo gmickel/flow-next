@@ -8,14 +8,7 @@ Use when `BACKEND="codex"`. Prerequisite: Phase 0 backend detection in [workflow
 2. Pass `--receipt` for session continuity on re-reviews
 3. Parse verdict from command output
 
-## Step 1: Identify Spec
-
-```bash
-# SPEC_ID from arguments (e.g., fn-1, fn-22-53k)
-$FLOWCTL show "$SPEC_ID" --json
-```
-
-## Step 2: Execute Review
+## Step 1: Execute Review
 
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
@@ -27,7 +20,7 @@ $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|NEEDS_HUMAN`.**
 
-## Step 3: Handle Verdict
+## Step 2: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:
 1. Parse issues from output
@@ -36,7 +29,7 @@ If `VERDICT=NEEDS_WORK`:
 4. Re-run step 2 (receipt enables session continuity)
 5. Stop or loop as workflow-common.md's Fix Loop step 5 says
 
-## Step 4: Receipt
+## Step 3: Receipt
 
 Receipt is written automatically by `flowctl codex completion-review` when `--receipt` provided.
 

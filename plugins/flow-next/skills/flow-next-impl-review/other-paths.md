@@ -50,10 +50,6 @@ model family and fail closed when no cross-family pin is available.
 
 ## Workflow
 
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-```
-
 ### Step 0: Parse Arguments
 
 Parse $ARGUMENTS for:

@@ -9,22 +9,10 @@ Use when `BACKEND` is `codex`, `claude`, `copilot` or `cursor`. Prerequisite: SK
 3. Pass `--receipt` throughout — the finalize writes the merged receipt; re-reviews resume from it
 4. Parse verdict from command output
 
-## Step 1: Identify Task and Diff Base
+## Step 1: Diff base
 
-```bash
-BRANCH="$(git branch --show-current)"
-
-# Use BASE_COMMIT from arguments if provided (task-scoped review)
-# Otherwise fall back to main/master (full branch review)
-if [[ -z "$BASE_COMMIT" ]]; then
-  DIFF_BASE="main"
-  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
-else
-  DIFF_BASE="$BASE_COMMIT"
-fi
-
-git log ${DIFF_BASE}..HEAD --oneline
-```
+`DIFF_BASE` is the value SKILL.md's setup printed (`--base` when given, else main or master);
+write it as a literal in the blocks below.
 
 ## Step 2: Fan-out dispatch (phase one — first round only)
 

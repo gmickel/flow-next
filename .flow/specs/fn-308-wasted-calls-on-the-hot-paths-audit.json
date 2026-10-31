@@ -10,6 +10,7 @@
   "id": "fn-308-wasted-calls-on-the-hot-paths-audit",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-10-31T11:40:03.682015Z"
+  "updated_at": "2026-10-31T14:49:01.874133Z"
 }

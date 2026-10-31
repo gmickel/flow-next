@@ -32,10 +32,6 @@ Format: `<id> [--dry-run]`
 
 ### Step 1: Parse Arguments
 
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-```
-
 Parse $ARGUMENTS for:
 - First positional arg = `ID`
 - `--dry-run` flag = `DRY_RUN` (true/false)
