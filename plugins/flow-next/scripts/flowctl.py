@@ -8493,7 +8493,7 @@ def run_cursor_exec(
 #   - session is RESUME-ONLY (``--resume <sid>``; the id comes from the JSON)
 #   - ``--model`` AND ``--effort`` are BOTH omitted at the ladder floor
 #   - the reviewer has no shell, so the reviewed diff is delivered BY PATH
-#     (``_claude_run_exec`` materialises it under ``.flow/tmp/claude-review/``)
+#     (``_attach_review_diff`` materialises it under ``.flow/tmp/claude-review/``)
 
 
 def require_claude() -> str:
@@ -23552,6 +23552,15 @@ def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Pat
     return [target, run]
 
 
+# gh's own answers when no remote is a GitHub host it knows (GitLab, a local
+# repo): no PR can exist there, so a PR probe saw none rather than failing (#583).
+_GH_NO_PR_FORGE_MARKERS = ("point to a known GitHub host", "no git remotes found")
+
+
+def _gh_no_pr_forge(stderr: Optional[str]) -> bool:
+    return any(marker in (stderr or "") for marker in _GH_NO_PR_FORGE_MARKERS)
+
+
 def _gh_pr_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
     """All PRs with head branch `head`, or (None, reason) when the forge cannot be read."""
     try:
@@ -24004,6 +24013,8 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
                     ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
                     cwd=repo, capture_output=True, text=True, timeout=10, check=False,
                 )
+                if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
+                    state["pr_exists"] = False
                 prs = json.loads(probe.stdout) if probe.returncode == 0 else None
                 if isinstance(prs, list) and len(prs) < 100 and all(
                     isinstance(pr, dict) and pr.get("state") in {"OPEN", "MERGED", "CLOSED"}
@@ -43639,6 +43650,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                 ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
                  "number,url,state,headRefName,headRefOid,mergedAt"],
                 cwd=repo, capture_output=True, text=True, timeout=10, check=False)
+            if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
+                return []
             listed = json.loads(probe.stdout) if probe.returncode == 0 else None
         except (OSError, ValueError, subprocess.TimeoutExpired):
             return None
@@ -44661,7 +44674,15 @@ def _copilot_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume).
+
+    The reviewer runs with ``--deny-tool shell``, so the diff is delivered by
+    path exactly as for claude (``_attach_review_diff``).
+    """
+    try:
+        prompt = _attach_review_diff(prompt, "copilot", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"copilot review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -44696,11 +44717,11 @@ def _cursor_run_exec(
     )
 
 
-class ClaudeReviewDiffError(RuntimeError):
-    """The reviewed diff could not be materialised for the claude reviewer."""
+class ReviewDiffError(RuntimeError):
+    """The reviewed diff could not be materialised for a shell-less reviewer."""
 
 
-def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
+def _review_diff_text(repo_root: Path, base: str, head: str) -> str:
     """``git diff <base>..<head>`` at ``repo_root`` for delivery by path."""
     try:
         result = subprocess.run(
@@ -44710,12 +44731,12 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
             cwd=str(repo_root),
         )
     except (subprocess.SubprocessError, OSError) as exc:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {exc}"
         ) from exc
     if result.returncode != 0:
         detail = (result.stderr or "").strip() or f"exit {result.returncode}"
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {detail}"
         )
     text = result.stdout
@@ -44724,7 +44745,7 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
     return text
 
 
-def _claude_materialise_review_diff(
+def _materialise_review_diff(
     repo_root: Path, receipt_id: str, base: str, head: str
 ) -> Path:
     """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
@@ -44745,37 +44766,65 @@ def _claude_materialise_review_diff(
         or "\\" in receipt_id
         or receipt_id in (".", "..")
     ):
-        raise ClaudeReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
+        raise ReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
     tmp_root = repo_root / ".flow" / "tmp"
     directory = tmp_root / "claude-review"
     directory.mkdir(parents=True, exist_ok=True)
     if directory.is_symlink():
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"refusing symlinked review scratch directory: {directory}"
         )
     leaf = directory / f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
     if leaf.is_symlink():
-        raise ClaudeReviewDiffError(f"refusing symlinked review diff path: {leaf}")
+        raise ReviewDiffError(f"refusing symlinked review diff path: {leaf}")
     expected_root = repo_root.resolve() / ".flow" / "tmp"
     resolved = leaf.resolve()
     if expected_root not in resolved.parents:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"review diff path escapes {expected_root}: {resolved}"
         )
-    atomic_write(leaf, _claude_review_diff_text(repo_root, base, head))
+    atomic_write(leaf, _review_diff_text(repo_root, base, head))
     return leaf
 
 
-def _claude_diff_transport_note(path: Path, base: str, head: str) -> str:
-    """Prompt tail telling the shell-less claude reviewer where the diff lives."""
+# backend -> (what the session's tools are, the tool that reads the diff file)
+_DIFF_READ_TOOLS = {
+    "claude": ("the only tools are Read, Grep and Glob", "Read"),
+    "copilot": ("shell and write tools are denied", "a file-viewing tool"),
+}
+
+
+def _diff_transport_note(path: Path, base: str, head: str, backend: str) -> str:
+    """Prompt tail telling a shell-less reviewer where the diff lives."""
+    tools, reader = _DIFF_READ_TOOLS[backend]
     return (
-        "\n\n## Diff delivery (claude backend)\n\n"
+        f"\n\n## Diff delivery ({backend} backend)\n\n"
         "This session has no shell: `git diff` and every other command are "
-        "unavailable, and the only tools are Read, Grep and Glob. The complete "
+        f"unavailable, and {tools}. The complete "
         f"diff for `{base}..{head}` has been written to `{path}` - read it with "
-        "Read instead of running git. Repository files are readable at their "
+        f"{reader} instead of running git. Repository files are readable at their "
         "normal paths.\n"
     )
+
+
+def _attach_review_diff(
+    prompt: str, backend: str, repo_root: Path, args: argparse.Namespace
+) -> str:
+    """Append the diff-by-path note on a PRIMARY dispatch; unchanged otherwise.
+
+    The discriminator is the dispatch kind, never ``session_id``:
+    ``_dispatch_backend_review`` (impl / plan / completion, resumed or not)
+    and each fan-out draw set ``args.review_range = (base, head, receipt_id)``;
+    ``_dispatch_session_pass`` (deep pass, validate) sets none, so nothing is
+    written and the resumed session keeps the primary's file. Raises
+    ``ReviewDiffError`` / ``OSError``; the caller fails BEFORE the CLI spawns.
+    """
+    review_range = getattr(args, "review_range", None)
+    if review_range is None:
+        return prompt
+    base, head, receipt_id = review_range
+    diff_path = _materialise_review_diff(repo_root, receipt_id, base, head)
+    return prompt + _diff_transport_note(diff_path, base, head, backend)
 
 
 def _claude_run_exec(
@@ -44787,26 +44836,11 @@ def _claude_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Claude spawn: resume-only, diff delivered by path on PRIMARY dispatches.
-
-    The primary-versus-optional discriminator is the DISPATCH KIND, never
-    ``session_id``: ``_dispatch_backend_review`` (impl / plan / completion,
-    resumed or not) sets ``args.claude_range = (base, head, receipt_id)`` and
-    this adapter materialises the diff and appends the transport note;
-    ``_dispatch_session_pass`` (deep pass, validate) sets no range, so nothing
-    is written and the resumed session keeps the primary's file. A failed
-    materialisation returns a non-zero tuple BEFORE the CLI is spawned.
-    """
-    review_range = getattr(args, "claude_range", None)
-    if review_range is not None:
-        base, head, receipt_id = review_range
-        try:
-            diff_path = _claude_materialise_review_diff(
-                repo_root, receipt_id, base, head
-            )
-        except (ClaudeReviewDiffError, OSError) as exc:
-            return "", (session_id or ""), 2, f"claude review diff: {exc}"
-        prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    """Claude spawn: resume-only, diff delivered by path (``_attach_review_diff``)."""
+    try:
+        prompt = _attach_review_diff(prompt, "claude", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"claude review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -45596,15 +45630,15 @@ def _dispatch_backend_review(
     )
     # fn-221: this helper IS the primary-dispatch boundary (impl / plan /
     # completion; ``_dispatch_session_pass`` never comes through here), so the
-    # reviewed range travels to the adapter on ``args`` - consumed by
-    # ``_claude_run_exec``, which delivers the diff by path; every other
-    # adapter ignores it. Never derived from the current HEAD downstream.
+    # reviewed range travels to the adapter on ``args`` - the claude and
+    # copilot adapters deliver the diff by path (``_attach_review_diff``);
+    # every other adapter ignores it. Never derived from the current HEAD downstream.
     if reviewed_base_sha and reviewed_head_sha:
         receipt_id = (
             Path(receipt_path).stem if receipt_path
             else (task_id or spec_id or "branch")
         )
-        args.claude_range = (reviewed_base_sha, reviewed_head_sha, receipt_id)
+        args.review_range = (reviewed_base_sha, reviewed_head_sha, receipt_id)
     try:
         if two_phase:
             out, sid, rc, err = reg["run_exec"](
@@ -47337,10 +47371,10 @@ def _review_fanout_run_draw(
     axis = draw["axis"]
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
-    if getattr(args, "claude_range", None):
-        # One diff file per draw: a claude reviewer may hold it open.
-        base_sha, head_sha, rid = args.claude_range
-        args.claude_range = (base_sha, head_sha, f"{rid}-{axis}")
+    if getattr(args, "review_range", None):
+        # One diff file per draw: a shell-less reviewer may hold it open.
+        base_sha, head_sha, rid = args.review_range
+        args.review_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
     backend = spec.backend
     reg = BACKEND_REGISTRY[backend]
@@ -48640,8 +48674,8 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Claude reviewers have no shell: each draw gets the reviewed diff by path.
-    args.claude_range = (reviewed_base_sha, reviewed_head_sha, rid)
+    # Shell-less reviewers (claude, copilot): each draw gets the reviewed diff by path.
+    args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:
         _review_fanout_write_meta(

@@ -9,6 +9,10 @@ if [[ "$DRY_RUN" != "1" ]]; then
   # github.com first; otherwise any logged-in host, since later gh calls pick the host from the remote (GitHub Enterprise, #532).
   if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
     echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
+  # make-pr opens GitHub pull requests only; a non-GitHub origin stops before any close or push (#583).
+  GH_REMOTE_ERR=$(gh repo set-default --view 2>&1 >/dev/null) || true
+  if [[ "$GH_REMOTE_ERR" == *"known GitHub host"* || "$GH_REMOTE_ERR" == *"no git remotes found"* ]]; then
+    echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only; origin host $(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^[^@/]*@([^:]+):.*#\1#' || echo none) is not a GitHub host gh knows. Open the merge request by hand." >&2; exit 2; fi
 fi
 # end:block
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN

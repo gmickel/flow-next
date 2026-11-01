@@ -686,7 +686,7 @@ def _diff_name(receipt_id: str, base: str, head: str) -> str:
 
 class TestClaudeAdapterBoundary(unittest.TestCase):
     """fn-221 R2: ``_claude_run_exec`` delivers the diff by path on PRIMARY
-    dispatches (``args.claude_range`` set), never on optional passes."""
+    dispatches (``args.review_range`` set), never on optional passes."""
 
     def _call(self, root, *, args, session_id=None, calls=None, inputs=None, seen=None):
         scratch = root / ".flow" / "tmp" / "claude-review"
@@ -712,7 +712,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
             seen: list = []
             # Primary, no session: the file exists BEFORE the stub runs.
             out, sid, rc, err = self._call(
-                root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")),
+                root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")),
                 calls=calls, inputs=inputs, seen=seen,
             )
             self.assertEqual(rc, 0)
@@ -730,7 +730,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
             calls, inputs = [], []
             second = scratch / _diff_name("rcpt", c0, c2)
             self._call(
-                root, args=argparse.Namespace(claude_range=(c0, c2, "rcpt")),
+                root, args=argparse.Namespace(review_range=(c0, c2, "rcpt")),
                 session_id="sid-1", calls=calls, inputs=inputs,
             )
             self.assertEqual(calls[-1][calls[-1].index("--resume") + 1], "sid-1")
@@ -743,7 +743,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
             second_bytes = second.read_bytes()
             third = scratch / _diff_name("rcpt", c1, c2)
             self._call(
-                root, args=argparse.Namespace(claude_range=(c1, c2, "rcpt")),
+                root, args=argparse.Namespace(review_range=(c1, c2, "rcpt")),
                 session_id="sid-1",
             )
             self.assertEqual(
@@ -756,7 +756,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
     def test_optional_pass_resumes_and_writes_nothing(self) -> None:
         with _git_repo() as (root, (c0, c1, c2)):
             scratch = root / ".flow" / "tmp" / "claude-review"
-            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")))
+            self._call(root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")))
             before = sorted(p.name for p in scratch.iterdir())
             # HEAD moves, then a deep pass / validate (no range field) resumes.
             subprocess.run(["git", "reset", "-q", "--hard", c2], cwd=root, check=True)
@@ -774,8 +774,8 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
     def test_two_receipt_ids_write_two_files(self) -> None:
         with _git_repo() as (root, (c0, c1, _c2)):
             scratch = root / ".flow" / "tmp" / "claude-review"
-            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "a")))
-            self._call(root, args=argparse.Namespace(claude_range=(c0, c1, "b")))
+            self._call(root, args=argparse.Namespace(review_range=(c0, c1, "a")))
+            self._call(root, args=argparse.Namespace(review_range=(c0, c1, "b")))
             self.assertEqual(
                 sorted(p.name for p in scratch.iterdir()),
                 sorted([_diff_name("a", c0, c1), _diff_name("b", c0, c1)]),
@@ -791,7 +791,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
                 scratch.symlink_to(elsewhere, target_is_directory=True)
                 calls: list = []
                 out, sid, rc, err = self._call(
-                    root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")),
+                    root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")),
                     session_id="sid-1", calls=calls,
                 )
                 self.assertEqual(rc, 2)
@@ -807,7 +807,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
                 (scratch / _diff_name("rcpt", c0, c1)).symlink_to(target)
                 calls = []
                 out, sid, rc, err = self._call(
-                    root, args=argparse.Namespace(claude_range=(c0, c1, "rcpt")), calls=calls,
+                    root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
                 )
                 self.assertEqual(rc, 2)
                 self.assertIn("symlink", err)
@@ -820,7 +820,7 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
         recorded: dict = {}
 
         def run_exec(prompt, *, session_id, repo_root, spec, resolution_out, args):
-            recorded["range"] = args.claude_range
+            recorded["range"] = args.review_range
             return "ok", "sid", 0, ""
 
         args = argparse.Namespace(json=False)
@@ -833,6 +833,66 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
             reviewed_head_sha="b" * 40, reviewed_base_sha="a" * 40,
         )
         self.assertEqual(recorded["range"], ("a" * 40, "b" * 40, "fn-9.1-impl"))
+
+
+class TestCopilotAdapterBoundary(unittest.TestCase):
+    """#529: the copilot reviewer runs with ``--deny-tool shell``, so a PRIMARY
+    dispatch gets the diff by path exactly as claude does."""
+
+    def _call(self, root, *, args, calls=None):
+        with _scripted(flowctl, dispatch_result=lambda m: ("SHIP", "", 0), calls=calls):
+            with redirect_stderr(io.StringIO()):
+                return flowctl._copilot_run_exec(
+                    "p", session_id="sess", repo_root=root,
+                    spec=BackendSpec("copilot"), resolution_out={}, args=args,
+                )
+
+    @staticmethod
+    def _prompt(argv):
+        return argv[argv.index("-p") + 1]
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX argv prompt path")
+    def test_primary_dispatch_writes_the_diff_and_names_it(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            diff = root / ".flow" / "tmp" / "claude-review" / _diff_name("rcpt", c0, c1)
+            calls: list = []
+            out, sid, rc, err = self._call(
+                root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
+            )
+            self.assertEqual(rc, 0)
+            expected = subprocess.run(
+                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True, text=True, check=True,
+            ).stdout
+            self.assertEqual(diff.read_text(encoding="utf-8"), expected)
+            prompt = self._prompt(calls[-1])
+            self.assertIn("## Diff delivery (copilot backend)", prompt)
+            self.assertIn(str(diff), prompt)
+            self.assertIn(f"{c0}..{c1}", prompt)
+            self.assertIn("instead of running git", prompt)
+            self.assertIn("shell", calls[-1][calls[-1].index("--deny-tool") + 1:])
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX argv prompt path")
+    def test_optional_pass_appends_nothing(self) -> None:
+        with _git_repo() as (root, _shas):
+            calls: list = []
+            self._call(root, args=argparse.Namespace(json=False), calls=calls)
+            self.assertEqual(self._prompt(calls[-1]), "p")
+            self.assertFalse((root / ".flow" / "tmp" / "claude-review").exists())
+
+    def test_materialisation_failure_stops_before_spawn(self) -> None:
+        with _git_repo() as (root, (c0, c1, _c2)):
+            with tempfile.TemporaryDirectory() as elsewhere:
+                scratch = root / ".flow" / "tmp" / "claude-review"
+                scratch.parent.mkdir(parents=True, exist_ok=True)
+                scratch.symlink_to(elsewhere, target_is_directory=True)
+                calls: list = []
+                out, sid, rc, err = self._call(
+                    root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
+                )
+                self.assertEqual(rc, 2)
+                self.assertIn("copilot review diff", err)
+                self.assertEqual([c for c in calls if "--version" not in c], [])
+                scratch.unlink()
 
 
 # --- R4: per-CLI-version cache ---

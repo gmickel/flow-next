@@ -256,6 +256,12 @@ def comment_delete(config: dict, locator: dict, execute: Execute, *,
     return {"deleted": comment_id, "parent_identity": "not_available"}
 
 
+# GitHub rejects label names over 50 characters (422 "name is too long").
+# Flow ids front-load their unique key (`fn-42-`, `gh-12-`), so the cut keeps
+# what tells two specs apart; the full id stays in the local link and markers.
+_LABEL_NAME_MAX = 50
+
+
 def label(config: dict, locator: dict, execute: Execute, *,
           add: list[str], remove: list[str]) -> Result:
     parent = _require_parent(config, locator, execute)
@@ -273,6 +279,8 @@ def label(config: dict, locator: dict, execute: Execute, *,
         return number
     if isinstance(repo, TrackerError):
         return repo
+    add = [name[:_LABEL_NAME_MAX] for name in add]
+    remove = [name[:_LABEL_NAME_MAX] for name in remove]
     data: Any = parent
     if add:
         data = _cli(execute, "github", config, "wire-label", "POST",
