@@ -44730,7 +44730,15 @@ def _cursor_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Cursor spawn: resume-only (session_id None omits --resume)."""
+    """Cursor spawn: resume-only (session_id None omits --resume).
+
+    Ask mode can block shell where no OS sandbox exists, so the diff is
+    delivered by path as for claude (``_attach_review_diff``).
+    """
+    try:
+        prompt = _attach_review_diff(prompt, "cursor", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"cursor review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="cursor", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -44813,20 +44821,25 @@ def _materialise_review_diff(
     return leaf
 
 
-# backend -> (what the session's tools are, the tool that reads the diff file)
-_DIFF_READ_TOOLS = {
-    "claude": ("the only tools are Read, Grep and Glob", "Read"),
-    "copilot": ("shell and write tools are denied", "a file-viewing tool"),
+# backend -> (what the session can run, the tool that reads the diff file).
+# Cursor's ask mode runs shell on Linux and macOS but blocks it, `git diff`
+# included, where no OS sandbox exists (Windows), so its note says "may".
+_DIFF_SESSION = {
+    "claude": ("This session has no shell: `git diff` and every other command are "
+               "unavailable, and the only tools are Read, Grep and Glob.", "Read"),
+    "copilot": ("This session has no shell: `git diff` and every other command are "
+                "unavailable, and shell and write tools are denied.", "a file-viewing tool"),
+    "cursor": ("Shell commands, `git diff` included, may be blocked in this session.",
+               "a file-reading tool"),
 }
 
 
 def _diff_transport_note(path: Path, base: str, head: str, backend: str) -> str:
-    """Prompt tail telling a shell-less reviewer where the diff lives."""
-    tools, reader = _DIFF_READ_TOOLS[backend]
+    """Prompt tail telling the reviewer where the reviewed diff lives."""
+    session, reader = _DIFF_SESSION[backend]
     return (
         f"\n\n## Diff delivery ({backend} backend)\n\n"
-        "This session has no shell: `git diff` and every other command are "
-        f"unavailable, and {tools}. The complete "
+        f"{session} The complete "
         f"diff for `{base}..{head}` has been written to `{path}` - read it with "
         f"{reader} instead of running git. Repository files are readable at their "
         "normal paths.\n"
@@ -45656,9 +45669,9 @@ def _dispatch_backend_review(
     )
     # fn-221: this helper IS the primary-dispatch boundary (impl / plan /
     # completion; ``_dispatch_session_pass`` never comes through here), so the
-    # reviewed range travels to the adapter on ``args`` - the claude and
-    # copilot adapters deliver the diff by path (``_attach_review_diff``);
-    # every other adapter ignores it. Never derived from the current HEAD downstream.
+    # reviewed range travels to the adapter on ``args`` - the claude, copilot
+    # and cursor adapters deliver the diff by path (``_attach_review_diff``);
+    # codex ignores it. Never derived from the current HEAD downstream.
     if reviewed_base_sha and reviewed_head_sha:
         receipt_id = (
             Path(receipt_path).stem if receipt_path
@@ -48700,7 +48713,7 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Shell-less reviewers (claude, copilot): each draw gets the reviewed diff by path.
+    # Claude, copilot and cursor reviewers: each draw gets the reviewed diff by path.
     args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:

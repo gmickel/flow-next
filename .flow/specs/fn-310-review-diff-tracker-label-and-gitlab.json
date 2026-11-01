@@ -8,13 +8,91 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-310-review-diff-tracker-label-and-gitlab",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-310-review-diff-tracker-label-and-gitlab.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "93a573efed6afbac51747294acfc4d07a1b31a98d0f79d527c78ef817b8ea79e",
+      "backend": "codex",
+      "base_sha": "ddd6eff78ca375375da02966d39de97a32182cb4",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-81c23dfe30df41d0ff6b7eaea0432049",
+            "classification": "introduced",
+            "findingId": "finding-81c23dfe30df41d0ff6b7eaea0432049",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0ecf50722ca57984cfb87d9b3884e7ed",
+            "classification": "introduced",
+            "findingId": "finding-0ecf50722ca57984cfb87d9b3884e7ed",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c489fdca1e2df4790bae8b365c6d02d8",
+            "classification": "introduced",
+            "findingId": "finding-c489fdca1e2df4790bae8b365c6d02d8",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-840248fd183c80fa5b7b385decbdf293",
+            "classification": "introduced",
+            "findingId": "finding-840248fd183c80fa5b7b385decbdf293",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "23eca0d3f4455ff9e719bfe966f59e43d7cd1395",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 3683,
+      "output_sha256": "12c8ecdfb467c0e440f032d231f0d43eadd3bd51566583876707e1a27818700e",
+      "reservation_id": "341497d3e0174c19a5edd34dd0b2a1a1",
+      "round_consumed": true,
+      "scope": "impl:fn-310-review-diff-tracker-label-and-gitlab.1",
+      "superseded_by": null,
+      "task": "fn-310-review-diff-tracker-label-and-gitlab.1",
+      "timestamp": "2026-11-01T23:11:03.559676Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-310-review-diff-tracker-label-and-gitlab.1": 0
+  },
   "spec_path": ".flow/specs/fn-310-review-diff-tracker-label-and-gitlab.md",
   "status": "open",
   "title": "Review diff, tracker label and GitLab probe fixes",
@@ -29,5 +107,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-01T22:49:17.382492Z"
+  "updated_at": "2026-11-01T23:11:03.565753Z"
 }

@@ -835,64 +835,73 @@ class TestClaudeAdapterBoundary(unittest.TestCase):
         self.assertEqual(recorded["range"], ("a" * 40, "b" * 40, "fn-9.1-impl"))
 
 
-class TestCopilotAdapterBoundary(unittest.TestCase):
-    """#529: the copilot reviewer runs with ``--deny-tool shell``, so a PRIMARY
-    dispatch gets the diff by path exactly as claude does."""
+class TestShellLessAdapterBoundary(unittest.TestCase):
+    """#529: copilot runs with ``--deny-tool shell`` and cursor's ask mode can
+    block shell, so a PRIMARY dispatch gets the diff by path as claude does."""
 
-    def _call(self, root, *, args, calls=None):
-        with _scripted(flowctl, dispatch_result=lambda m: ("SHIP", "", 0), calls=calls):
+    # backend -> (adapter, stub stdout, prompt position in argv)
+    ADAPTERS = {
+        "copilot": ("_copilot_run_exec", "SHIP", lambda argv: argv[argv.index("-p") + 1]),
+        "cursor": ("_cursor_run_exec", CURSOR_OK_STREAM, lambda argv: argv[-1]),
+    }
+
+    def _call(self, backend, root, *, args, calls=None):
+        adapter, stdout, _ = self.ADAPTERS[backend]
+        with _scripted(flowctl, dispatch_result=lambda m: (stdout, "", 0), calls=calls):
             with redirect_stderr(io.StringIO()):
-                return flowctl._copilot_run_exec(
+                return getattr(flowctl, adapter)(
                     "p", session_id="sess", repo_root=root,
-                    spec=BackendSpec("copilot"), resolution_out={}, args=args,
+                    spec=BackendSpec(backend), resolution_out={}, args=args,
                 )
 
-    @staticmethod
-    def _prompt(argv):
-        return argv[argv.index("-p") + 1]
+    def _prompt(self, backend, calls):
+        dispatches = [c for c in calls if "--version" not in c and "--list-models" not in c]
+        return self.ADAPTERS[backend][2](dispatches[-1])
 
     @unittest.skipIf(sys.platform == "win32", "POSIX argv prompt path")
     def test_primary_dispatch_writes_the_diff_and_names_it(self) -> None:
-        with _git_repo() as (root, (c0, c1, _c2)):
-            diff = root / ".flow" / "tmp" / "claude-review" / _diff_name("rcpt", c0, c1)
-            calls: list = []
-            out, sid, rc, err = self._call(
-                root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
-            )
-            self.assertEqual(rc, 0)
-            expected = subprocess.run(
-                ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True, text=True, check=True,
-            ).stdout
-            self.assertEqual(diff.read_text(encoding="utf-8"), expected)
-            prompt = self._prompt(calls[-1])
-            self.assertIn("## Diff delivery (copilot backend)", prompt)
-            self.assertIn(str(diff), prompt)
-            self.assertIn(f"{c0}..{c1}", prompt)
-            self.assertIn("instead of running git", prompt)
-            self.assertIn("shell", calls[-1][calls[-1].index("--deny-tool") + 1:])
+        for backend in self.ADAPTERS:
+            with self.subTest(backend=backend), _git_repo() as (root, (c0, c1, _c2)):
+                diff = root / ".flow" / "tmp" / "claude-review" / _diff_name("rcpt", c0, c1)
+                calls: list = []
+                out, sid, rc, err = self._call(
+                    backend, root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
+                )
+                self.assertEqual(rc, 0, err)
+                expected = subprocess.run(
+                    ["git", "diff", f"{c0}..{c1}"], cwd=root, capture_output=True, text=True, check=True,
+                ).stdout
+                self.assertEqual(diff.read_text(encoding="utf-8"), expected)
+                prompt = self._prompt(backend, calls)
+                self.assertIn(f"## Diff delivery ({backend} backend)", prompt)
+                self.assertIn(str(diff), prompt)
+                self.assertIn(f"{c0}..{c1}", prompt)
+                self.assertIn("instead of running git", prompt)
 
     @unittest.skipIf(sys.platform == "win32", "POSIX argv prompt path")
     def test_optional_pass_appends_nothing(self) -> None:
-        with _git_repo() as (root, _shas):
-            calls: list = []
-            self._call(root, args=argparse.Namespace(json=False), calls=calls)
-            self.assertEqual(self._prompt(calls[-1]), "p")
-            self.assertFalse((root / ".flow" / "tmp" / "claude-review").exists())
+        for backend in self.ADAPTERS:
+            with self.subTest(backend=backend), _git_repo() as (root, _shas):
+                calls: list = []
+                self._call(backend, root, args=argparse.Namespace(json=False), calls=calls)
+                self.assertEqual(self._prompt(backend, calls), "p")
+                self.assertFalse((root / ".flow" / "tmp" / "claude-review").exists())
 
     def test_materialisation_failure_stops_before_spawn(self) -> None:
-        with _git_repo() as (root, (c0, c1, _c2)):
-            with tempfile.TemporaryDirectory() as elsewhere:
-                scratch = root / ".flow" / "tmp" / "claude-review"
-                scratch.parent.mkdir(parents=True, exist_ok=True)
-                scratch.symlink_to(elsewhere, target_is_directory=True)
-                calls: list = []
-                out, sid, rc, err = self._call(
-                    root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
-                )
-                self.assertEqual(rc, 2)
-                self.assertIn("copilot review diff", err)
-                self.assertEqual([c for c in calls if "--version" not in c], [])
-                scratch.unlink()
+        for backend in self.ADAPTERS:
+            with self.subTest(backend=backend), _git_repo() as (root, (c0, c1, _c2)):
+                with tempfile.TemporaryDirectory() as elsewhere:
+                    scratch = root / ".flow" / "tmp" / "claude-review"
+                    scratch.parent.mkdir(parents=True, exist_ok=True)
+                    scratch.symlink_to(elsewhere, target_is_directory=True)
+                    calls: list = []
+                    out, sid, rc, err = self._call(
+                        backend, root, args=argparse.Namespace(review_range=(c0, c1, "rcpt")), calls=calls,
+                    )
+                    self.assertEqual(rc, 2)
+                    self.assertIn(f"{backend} review diff", err)
+                    self.assertEqual([c for c in calls if "--version" not in c], [])
+                    scratch.unlink()
 
 
 # --- R4: per-CLI-version cache ---

@@ -324,7 +324,7 @@ Grammar and defaults: [references/backend-specs.md](references/backend-specs.md)
   write tools are denied, so it gets the same diff-by-path delivery as claude.
 - **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
   effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
-  rejected.
+  rejected. Ask mode can block shell, so it gets the diff by path too.
 
 ---
 
