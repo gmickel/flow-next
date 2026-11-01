@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Copilot reviews see the diff they review.** The Copilot reviewer runs without a shell, so it never ran the `git diff` its prompt asked for. It saw the list of changed files and the files as they are now, never the hunks, and deleted code was invisible to it. Each primary review and each fan-out draw now gets the reviewed diff in a file under `.flow/tmp/claude-review/`, the same way Claude reviews do, and a failed write stops the review before Copilot starts. Thanks to @jcarosi for the diff delivery in #567 (#529).
+- **Long tracker-first spec ids get their GitHub back-reference label.** GitHub caps label names at 50 characters, so a spec id over 45 characters got no `flow:<spec-id>` label, and the retry failed every time. The label now holds the first 50 characters, which keep the id's unique number, and the full id stays in the local link. Thanks to @TechupBusiness for reporting it in #578 and @DreamchaserLG for the fix in #581.
+- **`flow --auto` runs on repositories hosted outside GitHub.** On a GitLab origin the pull request check failed, so every run stopped `NEEDS_HUMAN` before its first stage. A remote that gh does not know as a GitHub host now counts as having no pull requests, and the route comes from the spec's state. A real gh failure on a GitHub repository still stops the run. make-pr opens GitHub pull requests only, so on such a remote it stops `NEEDS_HUMAN`, naming the origin host, before it closes the spec or pushes. Thanks to @TechupBusiness for reporting it in #583.
+- **Claude reviews through a gateway model alias keep their verdict.** Claude Code prints `[claude-code:unrecognized_model]` for a working gateway alias. flow-next read that as an unavailable model, so it discarded a valid SHIP or moved to another model. A well-formed success result now counts whatever stderr says. Failed runs, malformed output and timeouts never supply a verdict. Thanks to @jcarosi for the fix (#546).
+- **A fallback model that failed is no longer remembered.** The model-resolution cache stored a fallback model, or the CLI default, even when that run failed, so later reviews kept using it for up to 24 hours. Only a fallback that ran successfully is cached now, and a cached choice that fails is dropped. Thanks to @jcarosi for the fix (#546).
+
 ## [flow-next 9.5.0] - 2026-10-31
 
 Agents spend less of each run re-reading what they already hold, and pull request feedback gets a complete answer. The dependency view makes 22 flowctl calls instead of 295 on this repository, work's single-task path reads the task and spec once instead of twice, and new specs start about 1.3 KB smaller. resolve-pr now replies to and resolves every thread in a cluster, and stops on a link from another repository before it fetches anything.

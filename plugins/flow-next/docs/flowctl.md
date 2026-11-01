@@ -2776,6 +2776,8 @@ flowctl copilot deep-pass --pass adversarial|security|performance \
 
 Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COPILOT_MODEL`) / config / registry. Receipt fields mirror codex: `mode: "copilot"`, `session_id` for resume.
 
+**Diff delivery by path.** The reviewer runs with `--deny-tool shell` and `--deny-tool write`, so it cannot run `git diff`. Every primary dispatch and fan-out draw gets the reviewed range at `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` and a `## Diff delivery (copilot backend)` note, with the same guards and file identity as [claude](#claude); a failed write aborts before the CLI is spawned. `deep-pass` and `validate` reuse the primary's file.
+
 ### cursor
 
 Cursor `cursor-agent` CLI wrappers - alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and reviewer models from families the other backends can't reach in one place - ask `cursor-agent --list-models` for the current set rather than copying identifiers from here.
