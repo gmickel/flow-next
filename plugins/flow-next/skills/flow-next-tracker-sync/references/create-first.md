@@ -31,4 +31,5 @@ delete its file directly.
 
 **Back-reference:** write `flow:<spec-id>` only after the durable local link
 exists. A failed back-reference leaves the recovery record available for a
-safe retry.
+safe retry. On GitHub, which caps label names at 50 characters, the wire verb
+writes the label's first 50 characters; never shorten the spec id to fit.

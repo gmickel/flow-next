@@ -15,7 +15,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest import mock
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -732,6 +732,58 @@ class ConformanceMatrix(unittest.TestCase):
 
     def test_matrix_covers_every_wire_verb(self) -> None:
         self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)
+
+
+# ---------------------------------------------------------------------------
+# GitHub label-name cap (#578, tests adapted from PR #581 by DreamchaserLG):
+# GitHub rejects label names over 50 characters with 422, so the wire verb
+# cuts add/remove names to their first 50 before the request.
+# ---------------------------------------------------------------------------
+
+GH_LONG_LABEL = "flow:gh-12-a-spec-title-that-is-long-enough-to-fail"
+
+
+class GitHubLabelNameCap(unittest.TestCase):
+    def _run_label(self, responses, **kwargs):
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            ex = fake_execute(responses)
+            payload, code = W.run(
+                flow, "label", locator=json.dumps(loc(GH_NODE, "#42")),
+                execute=ex, **kwargs)
+            return json.loads(payload), code, ex.calls
+
+    def _posted(self, name):
+        data, code, calls = self._run_label(
+            {"wire-parent-read": ok(GH_ISSUE),
+             "wire-label": ok([{"name": name[:50]}]),
+             "wire-label-readback": ok(GH_ISSUE)},
+            add=[name])
+        self.assertTrue(data["success"], data)
+        self.assertEqual(code, 0)
+        post = next(c for c in calls if c.op == "wire-label")
+        return json.loads(post.body)["labels"]
+
+    def test_add_cuts_a_51_char_name_to_50(self) -> None:
+        self.assertEqual(len(GH_LONG_LABEL), 51)
+        self.assertEqual(self._posted(GH_LONG_LABEL), [GH_LONG_LABEL[:50]])
+
+    def test_name_at_the_cap_or_shorter_is_sent_unchanged(self) -> None:
+        self.assertEqual(self._posted(GH_LONG_LABEL[:50]), [GH_LONG_LABEL[:50]])
+        self.assertEqual(self._posted("ready"), ["ready"])
+
+    def test_remove_targets_the_name_that_landed(self) -> None:
+        data, code, calls = self._run_label(
+            {"wire-parent-read": ok(GH_ISSUE),
+             "wire-label": empty(),
+             "wire-label-readback": ok(GH_ISSUE)},
+            remove=[GH_LONG_LABEL])
+        self.assertTrue(data["success"], data)
+        self.assertEqual(code, 0)
+        endpoint = cli_endpoint(next(c for c in calls if c.op == "wire-label"))
+        self.assertIn(quote(GH_LONG_LABEL[:50], safe=""), endpoint)
+        self.assertNotIn(quote(GH_LONG_LABEL, safe=""), endpoint)
 
 
 # ---------------------------------------------------------------------------

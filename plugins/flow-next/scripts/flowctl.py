@@ -3777,7 +3777,7 @@ def resolve_codex_sandbox(sandbox: str) -> str:
 # the cap once before calling the exec wrapper, and every ladder rung is the SAME
 # logical dispatch — ``enforce_and_increment_review_cap`` is NEVER called here.
 
-_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the never-fail floor
+_MODEL_CACHE_FLOOR = "__floor__"  # sentinel: resolution reached the terminal fallback
 _MODEL_CACHE_TTL_SECS = 24 * 60 * 60
 _MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 
@@ -3960,7 +3960,7 @@ def _model_cache_invalidate(
     cli_version: Optional[str],
     intent: str,
 ) -> None:
-    """Drop a stale cache entry (a cached model that just failed the signature)."""
+    """Drop a cached routing choice after its execution fails."""
     path = _model_cache_path(repo_root)
     if path is None:
         return
@@ -4021,7 +4021,7 @@ def _warn_model_resolution(
         )
         print(
             f"warning: {backend} model {tried!r} unavailable; fell back to the "
-            f"never-fail floor ({used_desc}). Cached temporarily for this CLI "
+            f"floor ({used_desc}). Cached temporarily for this CLI "
             "version and routing intent.",
             file=sys.stderr,
         )
@@ -4054,12 +4054,14 @@ def _dispatch_review_with_fallback(
     exec 4-tuple ``(out, session_id, exit_code, stderr)``. ``explicit_model`` is
     True when the model was pinned (spec string / env) — pins bypass the ladder
     and cache entirely. ``is_unavailable(out, err)`` is the backend's distinctive
-    model-unavailable signature check. ``floor_model`` is the terminal never-fail
-    model (``"auto"`` for copilot / cursor, ``None`` for codex which omits
-    ``--model``). ``version_fn`` returns the CLI version for the cache key and is
-    called LAZILY — never on the pristine happy path. ``list_available`` (cursor
-    only) returns the CLI's live model list, consulted once on the top-model
-    failure. ``resolution_out``, when given, is populated with ``{"model":
+    model-unavailable signature check. ``floor_model`` is the terminal fallback
+    (``"auto"`` for copilot / cursor, ``None`` for codex or claude, which omit
+    ``--model``). The CLI default can also fail. ``version_fn`` returns the CLI
+    version for the cache key and is called LAZILY — never on the pristine happy
+    path. Only successful fallback executions are cached; verdict validation
+    remains downstream. ``list_available`` (cursor only) returns the CLI's live
+    model list, consulted once on the top-model failure. ``resolution_out``, when
+    given, is populated with ``{"model":
     <used>, "floor": <bool>}`` so the caller can record the actually-used model
     on the receipt.
     """
@@ -4121,9 +4123,13 @@ def _dispatch_review_with_fallback(
     if cached is not None:
         if cached == _MODEL_CACHE_FLOOR:
             out, sid, rc, err = dispatch(floor_model, True)
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, floor_model, True)
         out, sid, rc, err = dispatch(cached, False)
         if rc == 0 or not is_unavailable(out, err):
+            if rc != 0:
+                _model_cache_invalidate(repo_root, backend, _ver(), cache_intent)
             return _resolved(out, sid, rc, err, cached, False)
         # A cached model that now fails the signature (org revoked it mid-version)
         # → drop it and re-resolve fresh from the ranking top. Self-healing.
@@ -4142,14 +4148,16 @@ def _dispatch_review_with_fallback(
         if best is not None:
             out, sid, rc, err = dispatch(best, False)
             if rc == 0 or not is_unavailable(out, err):
-                _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
-                _warn_model_resolution(backend, top, best, floor=False)
+                if rc == 0:
+                    _model_cache_put(repo_root, backend, _ver(), cache_intent, best)
+                    _warn_model_resolution(backend, top, best, floor=False)
                 return _resolved(out, sid, rc, err, best, False)
         out, sid, rc, err = dispatch(floor_model, True)
-        _model_cache_put(
-            repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
-        )
-        _warn_model_resolution(backend, top, floor_model, floor=True)
+        if rc == 0:
+            _model_cache_put(
+                repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR
+            )
+            _warn_model_resolution(backend, top, floor_model, floor=True)
         return _resolved(out, sid, rc, err, floor_model, True)
 
     # Codex / copilot: step DOWN the ranking, at most ``max_steps`` steps, then
@@ -4159,13 +4167,14 @@ def _dispatch_review_with_fallback(
             break
         out, sid, rc, err = dispatch(model, False)
         if rc == 0 or not is_unavailable(out, err):
-            if idx > 0:
+            if idx > 0 and rc == 0:
                 _model_cache_put(repo_root, backend, _ver(), cache_intent, model)
                 _warn_model_resolution(backend, top, model, floor=False)
             return _resolved(out, sid, rc, err, model, False)
     out, sid, rc, err = dispatch(floor_model, True)
-    _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
-    _warn_model_resolution(backend, top, floor_model, floor=True)
+    if rc == 0:
+        _model_cache_put(repo_root, backend, _ver(), cache_intent, _MODEL_CACHE_FLOOR)
+        _warn_model_resolution(backend, top, floor_model, floor=True)
     return _resolved(out, sid, rc, err, floor_model, True)
 
 
@@ -8493,7 +8502,7 @@ def run_cursor_exec(
 #   - session is RESUME-ONLY (``--resume <sid>``; the id comes from the JSON)
 #   - ``--model`` AND ``--effort`` are BOTH omitted at the ladder floor
 #   - the reviewer has no shell, so the reviewed diff is delivered BY PATH
-#     (``_claude_run_exec`` materialises it under ``.flow/tmp/claude-review/``)
+#     (``_attach_review_diff`` materialises it under ``.flow/tmp/claude-review/``)
 
 
 def require_claude() -> str:
@@ -8550,13 +8559,12 @@ def _parse_claude_result(
     """Parse ``claude -p --output-format json`` stdout.
 
     Returns ``(result_text, session_id, is_error, payload)``. STRICT: stdout
-    must be exactly one JSON object with ``type == "result"`` (what the CLI
-    emits under ``--output-format json``). Anything else - non-JSON, a
-    wrong-type or type-less object, a result followed by corruption - yields
-    ``("", None, True, None)``: a transport failure, never a verdict. Cursor's
-    lenient JSON-lines salvage is deliberately NOT shared here. ``payload`` is
-    the parsed object so the ladder's unavailable predicate can read
-    ``api_error_status`` beside the text.
+    must be exactly one JSON object with ``type == "result"``, a boolean
+    ``is_error``, and a string ``result``. Any malformed JSON, wrong envelope,
+    or missing or wrong-typed field is a transport failure, never a verdict.
+    Cursor's lenient JSON-lines salvage is deliberately NOT shared here.
+    ``payload`` is the parsed object so the ladder's unavailable predicate can
+    read ``api_error_status`` beside the text.
     """
     try:
         obj = json.loads((stdout or "").strip() or "null")
@@ -8565,12 +8573,18 @@ def _parse_claude_result(
     if not isinstance(obj, dict) or obj.get("type") != "result":
         return "", None, True, None
     result_text = obj.get("result")
-    if not isinstance(result_text, str):
-        result_text = ""
     session_id = obj.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         session_id = None
-    return result_text, session_id, bool(obj.get("is_error", False)), obj
+    is_error = obj.get("is_error")
+    if type(is_error) is not bool or not isinstance(result_text, str):
+        return (
+            result_text if isinstance(result_text, str) else "",
+            session_id,
+            True,
+            obj,
+        )
+    return result_text, session_id, is_error, obj
 
 
 def run_claude_exec(
@@ -8598,7 +8612,8 @@ def run_claude_exec(
 
     exit_code 0 = success; non-zero on ``is_error`` / the model-unavailable
     signature / CLI failure / timeout (the CLI exits 0 on a bad model, so the
-    signature is promoted to a non-zero code here). On timeout returns
+    signature is promoted to a non-zero code here). A failed process never
+    returns stdout as reviewer output. On timeout returns
     ("", session_id or "", 2, "<msg>").
     """
     review_exec_timeout = get_review_exec_timeout()
@@ -8614,8 +8629,8 @@ def run_claude_exec(
         explicit_model = spec.model_explicit
 
     # The driver's predicate contract is ``(out, err)`` strings; the claude
-    # signature lives in the parsed JSON, so the closure keeps the last payload
-    # and the predicate reads it beside stderr.
+    # signature needs the parsed JSON and the raw stdout, so each dispatch
+    # records its own verdict and the predicate reads it.
     last: dict = {}
 
     def _dispatch(model, is_floor):
@@ -8637,23 +8652,34 @@ def run_claude_exec(
                 cwd=str(repo_root),
             )
         except subprocess.TimeoutExpired:
-            last["payload"] = None
+            last["unavailable"] = False
             return "", (session_id or ""), 2, f"claude timed out ({review_exec_timeout}s)"
 
         result_text, returned_session_id, is_error, payload = _parse_claude_result(
             result.stdout
         )
-        last["payload"] = payload
         if returned_session_id is None:
             returned_session_id = session_id or ""
         exit_code = result.returncode
         stderr = result.stderr or ""
-        if is_error or _claude_model_unavailable(payload, stderr):
-            # An error envelope (or the exit-0 unavailable signature) is never
+        # A well-formed success envelope wins over the stderr tag: Claude Code
+        # emits ``[claude-code:unrecognized_model]`` as a diagnostic for a
+        # working gateway alias (#546). Unavailable needs exit 0 and either a
+        # well-formed error envelope with the 404 signature, or the stderr tag
+        # with nothing on stdout; anything else malformed is terminal.
+        healthy = payload is not None and not is_error
+        unavailable = exit_code == 0 and not healthy and (
+            (payload is not None and payload.get("is_error") is True
+             and _claude_model_unavailable(payload, None))
+            or (not (result.stdout or "").strip()
+                and _claude_model_unavailable(None, stderr))
+        )
+        last["unavailable"] = unavailable
+        if exit_code != 0 or is_error or unavailable:
+            # A failure, an error envelope or the unavailable signature is never
             # reviewer output: ``_finish_backend_exec`` parses the verdict
-            # BEFORE it looks at the exit code, so the envelope's text must not
-            # travel in the output slot. Diagnostics move to stderr; the
-            # parsed payload stays in ``last`` for the ladder predicate.
+            # BEFORE it looks at the exit code, so verdict-shaped text must not
+            # travel in the output slot. Diagnostics move to stderr.
             if result_text:
                 stderr = f"{stderr}\n{result_text}" if stderr else result_text
             result_text = ""
@@ -8661,8 +8687,8 @@ def run_claude_exec(
                 exit_code = 1
         return result_text, returned_session_id, exit_code, stderr
 
-    def _is_unavailable(out: Optional[str], err: Optional[str]) -> bool:
-        return _claude_model_unavailable(last.get("payload"), err)
+    def _is_unavailable(_out: Optional[str], _err: Optional[str]) -> bool:
+        return bool(last.get("unavailable"))
 
     return _dispatch_review_with_fallback(
         backend="claude",
@@ -23552,6 +23578,15 @@ def evidence_record_task(task_id: str, evidence: dict, summary: str) -> list[Pat
     return [target, run]
 
 
+# gh's own answers when no remote is a GitHub host it knows (GitLab, a local
+# repo): no PR can exist there, so a PR probe saw none rather than failing (#583).
+_GH_NO_PR_FORGE_MARKERS = ("point to a known GitHub host", "no git remotes found")
+
+
+def _gh_no_pr_forge(stderr: Optional[str]) -> bool:
+    return any(marker in (stderr or "") for marker in _GH_NO_PR_FORGE_MARKERS)
+
+
 def _gh_pr_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
     """All PRs with head branch `head`, or (None, reason) when the forge cannot be read."""
     try:
@@ -24004,6 +24039,8 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
                     ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
                     cwd=repo, capture_output=True, text=True, timeout=10, check=False,
                 )
+                if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
+                    state["pr_exists"] = False
                 prs = json.loads(probe.stdout) if probe.returncode == 0 else None
                 if isinstance(prs, list) and len(prs) < 100 and all(
                     isinstance(pr, dict) and pr.get("state") in {"OPEN", "MERGED", "CLOSED"}
@@ -43639,6 +43676,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                 ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
                  "number,url,state,headRefName,headRefOid,mergedAt"],
                 cwd=repo, capture_output=True, text=True, timeout=10, check=False)
+            if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
+                return []
             listed = json.loads(probe.stdout) if probe.returncode == 0 else None
         except (OSError, ValueError, subprocess.TimeoutExpired):
             return None
@@ -44661,7 +44700,15 @@ def _copilot_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume)."""
+    """Copilot spawn: session_id is always a UUID (marker-based create-or-resume).
+
+    The reviewer runs with ``--deny-tool shell``, so the diff is delivered by
+    path exactly as for claude (``_attach_review_diff``).
+    """
+    try:
+        prompt = _attach_review_diff(prompt, "copilot", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"copilot review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="copilot", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -44683,7 +44730,15 @@ def _cursor_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Cursor spawn: resume-only (session_id None omits --resume)."""
+    """Cursor spawn: resume-only (session_id None omits --resume).
+
+    Ask mode can block shell where no OS sandbox exists, so the diff is
+    delivered by path as for claude (``_attach_review_diff``).
+    """
+    try:
+        prompt = _attach_review_diff(prompt, "cursor", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"cursor review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="cursor", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -44696,11 +44751,11 @@ def _cursor_run_exec(
     )
 
 
-class ClaudeReviewDiffError(RuntimeError):
-    """The reviewed diff could not be materialised for the claude reviewer."""
+class ReviewDiffError(RuntimeError):
+    """The reviewed diff could not be materialised for a shell-less reviewer."""
 
 
-def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
+def _review_diff_text(repo_root: Path, base: str, head: str) -> str:
     """``git diff <base>..<head>`` at ``repo_root`` for delivery by path."""
     try:
         result = subprocess.run(
@@ -44710,12 +44765,12 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
             cwd=str(repo_root),
         )
     except (subprocess.SubprocessError, OSError) as exc:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {exc}"
         ) from exc
     if result.returncode != 0:
         detail = (result.stderr or "").strip() or f"exit {result.returncode}"
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"cannot read review diff for {base}..{head}: {detail}"
         )
     text = result.stdout
@@ -44724,7 +44779,7 @@ def _claude_review_diff_text(repo_root: Path, base: str, head: str) -> str:
     return text
 
 
-def _claude_materialise_review_diff(
+def _materialise_review_diff(
     repo_root: Path, receipt_id: str, base: str, head: str
 ) -> Path:
     """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
@@ -44745,37 +44800,70 @@ def _claude_materialise_review_diff(
         or "\\" in receipt_id
         or receipt_id in (".", "..")
     ):
-        raise ClaudeReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
+        raise ReviewDiffError(f"invalid review receipt id: {receipt_id!r}")
     tmp_root = repo_root / ".flow" / "tmp"
     directory = tmp_root / "claude-review"
     directory.mkdir(parents=True, exist_ok=True)
     if directory.is_symlink():
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"refusing symlinked review scratch directory: {directory}"
         )
     leaf = directory / f"{receipt_id}-{base[:7]}-{head[:7]}.diff"
     if leaf.is_symlink():
-        raise ClaudeReviewDiffError(f"refusing symlinked review diff path: {leaf}")
+        raise ReviewDiffError(f"refusing symlinked review diff path: {leaf}")
     expected_root = repo_root.resolve() / ".flow" / "tmp"
     resolved = leaf.resolve()
     if expected_root not in resolved.parents:
-        raise ClaudeReviewDiffError(
+        raise ReviewDiffError(
             f"review diff path escapes {expected_root}: {resolved}"
         )
-    atomic_write(leaf, _claude_review_diff_text(repo_root, base, head))
+    atomic_write(leaf, _review_diff_text(repo_root, base, head))
     return leaf
 
 
-def _claude_diff_transport_note(path: Path, base: str, head: str) -> str:
-    """Prompt tail telling the shell-less claude reviewer where the diff lives."""
+# backend -> (what the session can run, the tool that reads the diff file).
+# Cursor's ask mode runs shell on Linux and macOS but blocks it, `git diff`
+# included, where no OS sandbox exists (Windows), so its note says "may".
+_DIFF_SESSION = {
+    "claude": ("This session has no shell: `git diff` and every other command are "
+               "unavailable, and the only tools are Read, Grep and Glob.", "Read"),
+    "copilot": ("This session has no shell: `git diff` and every other command are "
+                "unavailable, and shell and write tools are denied.", "a file-viewing tool"),
+    "cursor": ("Shell commands, `git diff` included, may be blocked in this session.",
+               "a file-reading tool"),
+}
+
+
+def _diff_transport_note(path: Path, base: str, head: str, backend: str) -> str:
+    """Prompt tail telling the reviewer where the reviewed diff lives."""
+    session, reader = _DIFF_SESSION[backend]
     return (
-        "\n\n## Diff delivery (claude backend)\n\n"
-        "This session has no shell: `git diff` and every other command are "
-        "unavailable, and the only tools are Read, Grep and Glob. The complete "
+        f"\n\n## Diff delivery ({backend} backend)\n\n"
+        f"{session} The complete "
         f"diff for `{base}..{head}` has been written to `{path}` - read it with "
-        "Read instead of running git. Repository files are readable at their "
+        f"{reader} instead of running git. Repository files are readable at their "
         "normal paths.\n"
     )
+
+
+def _attach_review_diff(
+    prompt: str, backend: str, repo_root: Path, args: argparse.Namespace
+) -> str:
+    """Append the diff-by-path note on a PRIMARY dispatch; unchanged otherwise.
+
+    The discriminator is the dispatch kind, never ``session_id``:
+    ``_dispatch_backend_review`` (impl / plan / completion, resumed or not)
+    and each fan-out draw set ``args.review_range = (base, head, receipt_id)``;
+    ``_dispatch_session_pass`` (deep pass, validate) sets none, so nothing is
+    written and the resumed session keeps the primary's file. Raises
+    ``ReviewDiffError`` / ``OSError``; the caller fails BEFORE the CLI spawns.
+    """
+    review_range = getattr(args, "review_range", None)
+    if review_range is None:
+        return prompt
+    base, head, receipt_id = review_range
+    diff_path = _materialise_review_diff(repo_root, receipt_id, base, head)
+    return prompt + _diff_transport_note(diff_path, base, head, backend)
 
 
 def _claude_run_exec(
@@ -44787,26 +44875,11 @@ def _claude_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Claude spawn: resume-only, diff delivered by path on PRIMARY dispatches.
-
-    The primary-versus-optional discriminator is the DISPATCH KIND, never
-    ``session_id``: ``_dispatch_backend_review`` (impl / plan / completion,
-    resumed or not) sets ``args.claude_range = (base, head, receipt_id)`` and
-    this adapter materialises the diff and appends the transport note;
-    ``_dispatch_session_pass`` (deep pass, validate) sets no range, so nothing
-    is written and the resumed session keeps the primary's file. A failed
-    materialisation returns a non-zero tuple BEFORE the CLI is spawned.
-    """
-    review_range = getattr(args, "claude_range", None)
-    if review_range is not None:
-        base, head, receipt_id = review_range
-        try:
-            diff_path = _claude_materialise_review_diff(
-                repo_root, receipt_id, base, head
-            )
-        except (ClaudeReviewDiffError, OSError) as exc:
-            return "", (session_id or ""), 2, f"claude review diff: {exc}"
-        prompt = prompt + _claude_diff_transport_note(diff_path, base, head)
+    """Claude spawn: resume-only, diff delivered by path (``_attach_review_diff``)."""
+    try:
+        prompt = _attach_review_diff(prompt, "claude", repo_root, args)
+    except (ReviewDiffError, OSError) as exc:
+        return "", (session_id or ""), 2, f"claude review diff: {exc}"
     managed = _managed_review_exec(
         prompt, backend="claude", session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out, args=args,
@@ -45596,15 +45669,15 @@ def _dispatch_backend_review(
     )
     # fn-221: this helper IS the primary-dispatch boundary (impl / plan /
     # completion; ``_dispatch_session_pass`` never comes through here), so the
-    # reviewed range travels to the adapter on ``args`` - consumed by
-    # ``_claude_run_exec``, which delivers the diff by path; every other
-    # adapter ignores it. Never derived from the current HEAD downstream.
+    # reviewed range travels to the adapter on ``args`` - the claude, copilot
+    # and cursor adapters deliver the diff by path (``_attach_review_diff``);
+    # codex ignores it. Never derived from the current HEAD downstream.
     if reviewed_base_sha and reviewed_head_sha:
         receipt_id = (
             Path(receipt_path).stem if receipt_path
             else (task_id or spec_id or "branch")
         )
-        args.claude_range = (reviewed_base_sha, reviewed_head_sha, receipt_id)
+        args.review_range = (reviewed_base_sha, reviewed_head_sha, receipt_id)
     try:
         if two_phase:
             out, sid, rc, err = reg["run_exec"](
@@ -47337,10 +47410,10 @@ def _review_fanout_run_draw(
     axis = draw["axis"]
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
-    if getattr(args, "claude_range", None):
-        # One diff file per draw: a claude reviewer may hold it open.
-        base_sha, head_sha, rid = args.claude_range
-        args.claude_range = (base_sha, head_sha, f"{rid}-{axis}")
+    if getattr(args, "review_range", None):
+        # One diff file per draw: a shell-less reviewer may hold it open.
+        base_sha, head_sha, rid = args.review_range
+        args.review_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
     backend = spec.backend
     reg = BACKEND_REGISTRY[backend]
@@ -48640,8 +48713,8 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Claude reviewers have no shell: each draw gets the reviewed diff by path.
-    args.claude_range = (reviewed_base_sha, reviewed_head_sha, rid)
+    # Claude, copilot and cursor reviewers: each draw gets the reviewed diff by path.
+    args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:
         _review_fanout_write_meta(

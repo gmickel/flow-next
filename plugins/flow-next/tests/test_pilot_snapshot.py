@@ -30,14 +30,14 @@ class PilotSnapshotTests(unittest.TestCase):
         self.branch = self.spec['branch_name']
         _git(self.repo, 'branch', self.branch)
 
-    def snapshot(self, rows=None, failed=False, key=''):
+    def snapshot(self, rows=None, failed=False, key='', stderr=''):
         real_run = subprocess.run
         gh_calls = []
         def run(command, *args, **kwargs):
             if command[0] == 'gh':
                 gh_calls.append(command)
                 listed = [row for row in rows or [] if '--head' in command or row['state'] == 'OPEN']
-                return SimpleNamespace(returncode=int(failed), stdout=json.dumps(listed))
+                return SimpleNamespace(returncode=int(failed), stdout='' if stderr else json.dumps(listed), stderr=stderr)
             return real_run(command, *args, **kwargs)
         with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=key), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger), patch.object(f, 'judge_https_connection') as connect:
             result = f.pilot_snapshot(self.sid)
@@ -133,7 +133,7 @@ class PilotSnapshotTests(unittest.TestCase):
         real_run = subprocess.run
         def run(command, *args, **kwargs):
             if command[0] == 'gh':
-                return SimpleNamespace(returncode=1, stdout='')
+                return SimpleNamespace(returncode=1, stdout='', stderr='HTTP 502')
             return real_run(command, *args, **kwargs)
         with patch.object(f, 'get_repo_root', return_value=self.repo), patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'), patch.object(f.subprocess, 'run', side_effect=run), patch.dict(os.environ, TYPESAFE_API_KEY=''), patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger):
             result = f.pilot_snapshot(None)
@@ -150,6 +150,17 @@ class PilotSnapshotTests(unittest.TestCase):
         self.assertTrue(result['selected']['pr']['probe_failed'])
         self.assertTrue(result['route']['pr_probe_failed'])
         self.assertNotIn('decision', result['route'])
+
+    def test_non_github_origin_routes_from_the_lifecycle(self):
+        # #583: a GitLab origin has no PR forge; the route comes from the lifecycle.
+        for stderr in ('none of the git remotes configured for this repository point to a known GitHub host.',
+                       'no git remotes found'):
+            with self.subTest(stderr=stderr):
+                result = self.snapshot(failed=True, stderr=stderr)
+                self.assertFalse(result['pr_listing_failed'])
+                self.assertFalse(result['selected']['pr']['probe_failed'])
+                self.assertNotIn('pr_probe_failed', result['route'])
+                self.assertEqual(result['route']['decision']['value'], 'work_no_plan_default')
 
     def test_qa_freshness_peels_only_bookkeeping_commits(self):
         head = _git(self.repo, 'rev-parse', self.branch).stdout.strip()

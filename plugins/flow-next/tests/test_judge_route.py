@@ -18,6 +18,10 @@ sys.modules[spec.name] = f
 spec.loader.exec_module(f)
 
 
+NO_FORGE = ("none of the git remotes configured for this repository point to a known GitHub host. "
+            "To tell gh about a new GitHub host, please use `gh auth login`")
+
+
 class JudgeRouteTests(unittest.TestCase):
     def live(self, **overrides):
         return dict(view="live", spec_body="Build a bounded feature", ready=True,
@@ -71,18 +75,23 @@ class JudgeRouteTests(unittest.TestCase):
             body = repo / "spec.md"
             body.write_text("Implement feature", encoding="utf-8")
             spec_data = {"title": "Feature", "status": "open", "branch_name": "fn-1-feature"}
-            for status in ("OPEN", "MERGED", "CLOSED", "absent", "failed", "truncated", "ambiguous"):
+            for status in ("OPEN", "MERGED", "CLOSED", "absent", "failed", "truncated", "ambiguous", "no_forge"):
                 with self.subTest(status=status):
-                    rows = [] if status == "absent" else [{"number": 1, "state": status, "url": "https://example.test/pr/1"}]
+                    rows = [] if status in {"absent", "no_forge"} else [{"number": 1, "state": status, "url": "https://example.test/pr/1"}]
                     if status in {"truncated", "ambiguous"}:
                         rows = [{"number": i, "state": "OPEN" if status == "ambiguous" else "CLOSED", "url": f"pr/{i}"}
                                 for i in range(100 if status == "truncated" else 2)]
-                    probe = SimpleNamespace(returncode=int(status == "failed"), stdout=json.dumps(rows))
+                    # #583: gh's answer for a non-GitHub origin is "no PR", never a probe failure.
+                    probe = SimpleNamespace(returncode=int(status in {"failed", "no_forge"}),
+                                            stdout="" if status == "no_forge" else json.dumps(rows),
+                                            stderr=NO_FORGE if status == "no_forge" else "")
                     with patch.dict(f.os.environ, {"TYPESAFE_API_KEY": "test-key"}), patch.object(f, "get_config", return_value=True), patch.object(f, "get_repo_root", return_value=repo), patch.object(f, "get_flow_dir", return_value=repo), patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), patch.object(f, "load_json_or_exit", return_value=spec_data), patch.object(f, "normalize_epic", side_effect=lambda x: x), patch.object(f, "find_spec_md_path", return_value=body), patch.object(f.TaskInventory, "load", return_value=SimpleNamespace(by_spec={})), patch.object(f.subprocess, "run", return_value=probe) as run:
                         state = f.judge_route_state({}, "fn-1-feature")
                     self.assertIn("--state", run.call_args.args[0])
                     self.assertIn("all", run.call_args.args[0])
-                    self.assertEqual(state["pr_exists"], None if status in {"failed", "truncated", "ambiguous"} else status != "absent")
+                    self.assertEqual(state["pr_exists"], None if status in {"failed", "truncated", "ambiguous"} else status not in {"absent", "no_forge"})
+                    if status == "no_forge":
+                        self.assertNotIn("pr_probe_failed", f.judge_route(state))
                     if status in {"OPEN", "MERGED", "CLOSED"}:
                         self.assertEqual(state["pr_ref"]["state"], status)
                         self.assertEqual(f.judge_route_lifecycle(state)["value"], "existing_pr_tail")

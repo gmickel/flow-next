@@ -2609,7 +2609,7 @@ class TestReviewFanout(unittest.TestCase):
                     axis = _axis_of(prompt)
                     resolution_out["model"] = f"{axis}-model"
                     calls.append({"axis": axis, "backend": spec.backend,
-                                  "range": getattr(args, "claude_range", None)})
+                                  "range": getattr(args, "review_range", None)})
                     return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
 
                 receipt = self.root / f"{backend}-receipt.json"

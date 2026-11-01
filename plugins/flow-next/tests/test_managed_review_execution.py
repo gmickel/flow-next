@@ -299,11 +299,11 @@ class ManagedReviewExecutionTests(unittest.TestCase):
 
     def test_claude_diff_delivery_precedes_hook(self):
         diff_path = Path("/tmp/review.diff")
-        with mock.patch.object(flowctl, "_claude_materialise_review_diff", return_value=diff_path):
+        with mock.patch.object(flowctl, "_materialise_review_diff", return_value=diff_path):
             flowctl._claude_run_exec(
                 "review", session_id=None, repo_root=Path.cwd(),
                 spec=flowctl.BackendSpec("claude", "chosen-model", "high"), resolution_out={},
-                args=argparse.Namespace(json=True, claude_range=("base", "head", "review")),
+                args=argparse.Namespace(json=True, review_range=("base", "head", "review")),
             )
         self.assertIn(str(diff_path), self.requests[0][1]["prompt"])
 

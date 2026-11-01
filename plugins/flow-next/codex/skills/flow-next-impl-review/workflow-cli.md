@@ -320,10 +320,11 @@ Grammar and defaults: [references/backend-specs.md](references/backend-specs.md)
   ladder's floor no model or effort is sent and the receipt records `"effort": null`.
   On a Claude-family writer the review is same-family: the receipt records it and the run
   proceeds; prefer `codex` or `host` when family independence matters.
-- **copilot** — the Copilot CLI; session ids are client-minted (create-or-resume).
+- **copilot** — the Copilot CLI; session ids are client-minted (create-or-resume). Shell and
+  write tools are denied, so it gets the same diff-by-path delivery as claude.
 - **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
   effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
-  rejected.
+  rejected. Ask mode can block shell, so it gets the diff by path too.
 
 ---
 
