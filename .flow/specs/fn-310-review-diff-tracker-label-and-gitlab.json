@@ -172,7 +172,7 @@
     "impl:fn-310-review-diff-tracker-label-and-gitlab.1": 0
   },
   "spec_path": ".flow/specs/fn-310-review-diff-tracker-label-and-gitlab.md",
-  "status": "open",
+  "status": "done",
   "title": "Review diff, tracker label and GitLab probe fixes",
   "tracker": {
     "baseHashFlow": null,
@@ -185,5 +185,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-01T23:19:21.270849Z"
+  "updated_at": "2026-11-01T23:25:12.049162Z"
 }
