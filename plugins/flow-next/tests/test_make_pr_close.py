@@ -378,12 +378,37 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 self.assertFalse((self.root / "pushed").exists())
                 self.assertIn("head changed", result.stderr.lower())
 
-    def test_r2_update_does_not_close_or_commit(self):
+    def test_update_closes_once_the_work_is_complete(self):
+        # fn-312: a draft opened with open work closes on the first update after it finishes.
+        self.flow.save_task_runtime(self.task_id, {"status": "todo"})
+        before = self.git("rev-parse", "HEAD")
+        result = self.execute(update=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before, "an update with open work never closes")
+        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "open")
+
+        self.flow.save_task_runtime(self.task_id, {"status": "done"})
+        result = self.execute(update=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        head = self.git("rev-parse", "HEAD")
+        self.assertNotEqual(head, before)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), f"chore(flow): close {self.spec_id}")
+        self.assertEqual((self.root / "artifact-head").read_text(encoding="utf-8").strip(), head)
+        self.assertEqual(json.loads((self.root / "artifact-spec.json").read_text(encoding="utf-8"))["status"], "done")
+        self.assertTrue(json.loads((self.root / "context.json").read_text(encoding="utf-8"))["spec_closed"])
+
+        again = self.execute(update=True)
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD"), head, "a second update makes no new commit")
+
+    def test_update_with_a_pending_review_does_not_close(self):
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex"
+        self.set_review("unknown")
         before = self.git("rev-parse", "HEAD")
         result = self.execute(update=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
-        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "open")
+        self.assertIn("--update to close the spec", result.stderr)
 
 
 if __name__ == "__main__":

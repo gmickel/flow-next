@@ -493,8 +493,8 @@ rewritten. Tracked files left modified also produce a stderr advisory.
 
 Make-pr binds the spec's `branch_name` to the PR head branch and commits the
 close before composing its head-bound aid and opening the PR. Incomplete
-interactive draft PRs keep the spec open and cannot land. Dry-run and body-only
-updates never close. Creating or starting a task on a closed spec reopens it and reports the
+interactive draft PRs keep the spec open and cannot land until `make-pr --update`
+closes the spec once its work is complete. Dry-run never closes. Creating or starting a task on a closed spec reopens it and reports the
 rewritten spec file (`reopened_spec`, `modified_paths`) so the caller commits
 it with the task; finishing that follow-up does not close it automatically.
 

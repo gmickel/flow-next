@@ -24,7 +24,7 @@ unknown flags and missing base values. Carry these values between prompt turns:
 | `--base <ref>` or `--base=<ref>` | `BASE_REF`; default empty |
 | `--memory` | `WRITE_MEMORY=1`; default 0 |
 | `--dry-run` | `DRY_RUN=1`; default 0 |
-| `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR |
+| `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR, closing the spec once its work is complete |
 | `mode:autonomous` or `FLOW_AUTONOMOUS=1` | `AUTONOMOUS=1`; default 0 |
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.

@@ -147,7 +147,7 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
     echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
     exit 2
   else
-    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:work finishes them, run flowctl spec close $SPEC_ID, commit and push the changed .flow files, then mark the PR ready." >&2
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:work finishes them, run /flow-next:make-pr $SPEC_ID --update to close the spec, then mark the PR ready." >&2
   fi
 fi
 if [[ "$TASK_COUNT" -eq 0 ]]; then
@@ -161,7 +161,7 @@ if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPE
     echo "Error: completion review for $SPEC_ID reads $REVIEW_STATUS. Autonomous context cannot open PRs for unreviewed specs." >&2
     exit 2
   fi
-  echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:spec-completion-review $SPEC_ID passes, run flowctl spec close $SPEC_ID, commit and push the changed .flow files, then mark the PR ready." >&2
+  echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:spec-completion-review $SPEC_ID passes, run /flow-next:make-pr $SPEC_ID --update to close the spec, then mark the PR ready." >&2
 fi
 EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
@@ -209,7 +209,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
 fi
 # fence:spec-close
 SPEC_CLOSED=0
-if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIEW_PENDING" != "true" && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
+if [[ "$DRY_RUN" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIEW_PENDING" != "true" && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
   SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"
