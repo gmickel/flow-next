@@ -147,7 +147,7 @@ if [[ "$OPEN_COUNT" -gt 0 ]]; then
     echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
     exit 2
   else
-    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS); the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:work finishes them, run flowctl spec close $SPEC_ID, commit and push the changed .flow files, then mark the PR ready." >&2
   fi
 fi
 if [[ "$TASK_COUNT" -eq 0 ]]; then
