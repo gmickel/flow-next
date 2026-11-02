@@ -161,7 +161,7 @@ if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPE
     echo "Error: completion review for $SPEC_ID reads $REVIEW_STATUS. Autonomous context cannot open PRs for unreviewed specs." >&2
     exit 2
   fi
-  echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Run /flow-next:spec-completion-review $SPEC_ID, then mark the PR ready." >&2
+  echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:spec-completion-review $SPEC_ID passes, run flowctl spec close $SPEC_ID, commit and push the changed .flow files, then mark the PR ready." >&2
 fi
 EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
