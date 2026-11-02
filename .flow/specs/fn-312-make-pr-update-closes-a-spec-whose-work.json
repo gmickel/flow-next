@@ -1,20 +1,136 @@
 {
   "branch_name": "fn-312-make-pr-update-closes-a-spec-whose-work",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-02T01:17:30.476731Z",
   "created_at": "2026-11-02T00:37:53.879946Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-312-make-pr-update-closes-a-spec-whose-work",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-312-make-pr-update-closes-a-spec-whose-work.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "8101bcfdb4725cc5835a75a1a79cfc077760464a69d08934b1d09658f78714b4",
+      "backend": "codex",
+      "base_sha": "3abb76ab6fc5eb42231cff73449d8011fa4fe265",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-128193c36b0ce85839c5ecef78bdb073",
+            "classification": "introduced",
+            "findingId": "finding-128193c36b0ce85839c5ecef78bdb073",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-974e584bd6935b149e2afacbea5906b1",
+            "classification": "introduced",
+            "findingId": "finding-974e584bd6935b149e2afacbea5906b1",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "803a38e8da2d3d91905a120b04b9919bb5b5548e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1415,
+      "output_sha256": "b105d9d92a576ed23db3208537739a566323ea2f666e712c037e45cc8e17a567",
+      "reservation_id": "679e33634ef345fabbf28b32d7721008",
+      "round_consumed": true,
+      "scope": "impl:fn-312-make-pr-update-closes-a-spec-whose-work.1",
+      "superseded_by": null,
+      "task": "fn-312-make-pr-update-closes-a-spec-whose-work.1",
+      "timestamp": "2026-11-02T01:15:56.260455Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "f7437268e9b72be3ab1d920c45c1c5ad8a0eefb6cdf9373e59b0696dbac222a9",
+      "backend": "codex",
+      "base_sha": "3abb76ab6fc5eb42231cff73449d8011fa4fe265",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-128193c36b0ce85839c5ecef78bdb073",
+            "classification": "introduced",
+            "findingId": "finding-128193c36b0ce85839c5ecef78bdb073",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-974e584bd6935b149e2afacbea5906b1",
+            "classification": "introduced",
+            "findingId": "finding-974e584bd6935b149e2afacbea5906b1",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "0e6e222f93d01504e1c45b5cd4691b90a9508a5c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1335,
+      "output_sha256": "6eeb75279e1c2bb0c60c388bee88cd17dd9290d1714aa6f719bfe9dea6eabb1f",
+      "reservation_id": "ce89cc18f15349fbb4339df1e46c1b74",
+      "round_consumed": true,
+      "scope": "impl:fn-312-make-pr-update-closes-a-spec-whose-work.1",
+      "superseded_by": null,
+      "task": "fn-312-make-pr-update-closes-a-spec-whose-work.1",
+      "timestamp": "2026-11-02T01:17:12.331770Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-312-make-pr-update-closes-a-spec-whose-work.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-312-make-pr-update-closes-a-spec-whose-work.1": 0
+  },
   "spec_path": ".flow/specs/fn-312-make-pr-update-closes-a-spec-whose-work.md",
   "status": "open",
   "title": "make-pr --update closes a spec whose work finished",
@@ -29,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-02T01:08:28.986671Z"
+  "updated_at": "2026-11-02T01:17:30.476739Z"
 }
