@@ -132,7 +132,7 @@
     "impl:fn-312-make-pr-update-closes-a-spec-whose-work.1": 0
   },
   "spec_path": ".flow/specs/fn-312-make-pr-update-closes-a-spec-whose-work.md",
-  "status": "open",
+  "status": "done",
   "title": "make-pr --update closes a spec whose work finished",
   "tracker": {
     "baseHashFlow": null,
@@ -145,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-02T01:17:30.476739Z"
+  "updated_at": "2026-11-02T08:29:22.859779Z"
 }
