@@ -153,6 +153,16 @@ fi
 if [[ "$TASK_COUNT" -eq 0 ]]; then
   echo "Note: $SPEC_ID has no tasks; the spec remains open and is not closed." >&2
 fi
+# A configured completion review that has not passed keeps the spec open, so land cannot merge unreviewed work (#477).
+REVIEW_PENDING=$(printf '%s' "$SPEC_JSON" | jq -r '.completion_review_pending // false')
+if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
+  REVIEW_STATUS=$(printf '%s' "$SPEC_JSON" | jq -r '.completion_review_status // "unknown"')
+  if [[ "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: completion review for $SPEC_ID reads $REVIEW_STATUS. Autonomous context cannot open PRs for unreviewed specs." >&2
+    exit 2
+  fi
+  echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Run /flow-next:spec-completion-review $SPEC_ID, then mark the PR ready." >&2
+fi
 EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
 UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
@@ -199,7 +209,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
 fi
 # fence:spec-close
 SPEC_CLOSED=0
-if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
+if [[ "$DRY_RUN" != "1" && "${UPDATE_MODE:-0}" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIEW_PENDING" != "true" && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
   SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"

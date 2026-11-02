@@ -86,7 +86,7 @@ Scheduling: degraded to wave (host lacks non-blocking dispatch)  # dispatch meas
 
 A rolling run whose first `flowctl start` precedes this line has broken this.
 
-Before the first admission batch, run one baseline at the recorded spec base using the spec's focused Quick commands. Record the verified SHA and exact commands; a green result may be handed to every task in that first batch as `BASELINE_HANDOFF`, provided only `.flow/` paths changed between verification and dispatch. Any non-`.flow/` change invalidates that handoff; red baselines follow the worker's existing failure rule. For each green full gate in this baseline, write `$FLOWCTL gate receipt --gate <gate_id> --command "<exact command>"` so workers reuse the full gate through their existing receipt check. Lint/format still run per worker.
+Before the first admission batch, run one baseline at the recorded spec base using the spec's focused Quick commands. Record the verified SHA and exact commands; a green result may be handed to every task in that first batch as `BASELINE_HANDOFF`, provided only `.flow/` paths changed between verification and dispatch. Any non-`.flow/` change invalidates that handoff; red baselines follow the worker's existing failure rule. A command whose target this spec has not created yet, or that exits with a code the spec names as a normal result, is not red (the worker's baseline check). For each green full gate in this baseline, write `$FLOWCTL gate receipt --gate <gate_id> --command "<exact command>"` so workers reuse the full gate through their existing receipt check. Lint/format still run per worker.
 
 ## 3a Admission at Every Worker-Return Event
 

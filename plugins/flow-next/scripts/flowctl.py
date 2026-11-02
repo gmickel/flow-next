@@ -31526,6 +31526,19 @@ def cmd_show(args: argparse.Namespace) -> None:
         result["ready"] = bool(epic_data.get("ready", False))
         # fn-214 (R1): same explicit-boolean contract as ready.
         result["no_plan"] = bool(epic_data.get("no_plan", False))
+        # #477: make-pr's close fence reads this. "Configured" is the tracker
+        # status policy's own predicate, so the close and the tracker fold can
+        # never disagree; without the tracker package it reads false.
+        try:
+            from flowctl_tracker.status.verb import (  # noqa: PLC0415
+                _completion_review_configured,
+            )
+            configured = _completion_review_configured(load_flow_config(), epic_data)
+        except ImportError:
+            configured = False
+        result["completion_review_pending"] = configured and not completion_review_satisfied(
+            epic_data.get("completion_review_status")
+        )
 
         if args.json:
             json_output(result)

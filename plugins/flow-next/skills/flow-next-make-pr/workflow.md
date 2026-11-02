@@ -27,8 +27,8 @@ Under `FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1`, or `mode:autonomous`, never prompt: p
 only the named missing input and rerun.
 
 Already-closed specs stay untouched. Otherwise completed specs close on the head branch before Phase 1. Incomplete or
-task-less specs have no close commit and still compose interactively. For `OPEN_COUNT > 0`,
-autonomous hard-errors (exit 2). Dry-run and body-only updates never close. Under `--update` an
+task-less specs, and specs whose configured completion review has not passed, have no close commit and still compose
+interactively. For `OPEN_COUNT > 0` or a pending completion review, autonomous hard-errors (exit 2). Dry-run and body-only updates never close. Under `--update` an
 existing OPEN PR is REQUIRED; closed/merged PRs do not prevent a create. Preserve `PHASE0_CONTEXT.head`.
 
 ## Phase 1: Gather inputs

@@ -5,7 +5,7 @@ Use rendered `BODY_FILE` unchanged. Require
 nonempty content; above 65,000 characters stop with the retained file, never
 truncate. Clean temporary files on exit.
 
-Set `OPEN_ITEMS_COUNT` from spec open questions, completion review `needs_work`,
+Set `OPEN_ITEMS_COUNT` from spec open questions, a pending completion review (`completion_review_pending`),
 incomplete tasks, open findings on a `NEEDS_WORK` or `BLOCKED` QA receipt, a call
 the run left for the person (working-rules.md, Unattended) and other unfinished
 authored items. Otherwise the PR opens ready: `deferred_findings` and follow-ups
