@@ -378,28 +378,67 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
                 self.assertFalse((self.root / "pushed").exists())
                 self.assertIn("head changed", result.stderr.lower())
 
+    def deliver(self, *, update):
+        # Preflight (from §0.5) then the shipped delivery script, against a local bare remote.
+        fence = "# --- §0.5:" + (SCRIPTS / "make-pr-preflight.sh").read_text(encoding="utf-8").split("# --- §0.5:", 1)[1]
+        body = self.root / "body.md"
+        body.write_text("Body\n", encoding="utf-8")
+        env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], FLOWCTL=str(SCRIPTS / "flowctl"),
+                   REPO_ROOT=str(self.repo), SPEC_ID=self.spec_id, HEAD_SHA=self.git("rev-parse", "HEAD"), BASE_REF="main",
+                   COMMITS_AHEAD="1", DRY_RUN="0", UPDATE_MODE=str(int(update)), AUTONOMOUS="0", DRAFT_FORCE="",
+                   OPEN_ITEMS_COUNT="1", PR_TITLE="PR close", BODY_FILE=str(body), OBSERVATIONS=str(self.root),
+                   FLOW_PR_CREATE_CMD=f"touch {shlex.quote(str(self.root / 'pr-open'))}; echo https://example.test/o/r/pull/7; :")
+        script = "set -e\n" + fence + "\nsource " + shlex.quote(str(SCRIPTS / "make-pr-create.sh")) + "\n"
+        return subprocess.run(["bash", "-c", script], cwd=self.repo, env=env, capture_output=True, text=True)
+
     def test_update_closes_once_the_work_is_complete(self):
         # fn-312: a draft opened with open work closes on the first update after it finishes.
+        remote = self.root / "origin.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+        self.git("remote", "add", "origin", str(remote))
+        self.executable("gh", '''#!/bin/bash
+[[ "$1 $2" == "pr view" || "$1 $2" == "pr edit" ]] || exit 1
+[[ -f "$OBSERVATIONS/pr-open" ]] || exit 1
+case "$*" in
+  *"--json url,state,number"*) echo '{"url":"https://example.test/o/r/pull/7","number":7,"state":"OPEN"}' ;;
+  *"--json number,state"*) echo 7 ;;
+  *"--json url"*) echo https://example.test/o/r/pull/7 ;;
+  "pr edit 7 --body-file "*) cp "$5" "$OBSERVATIONS/edited-body" ;;
+  *) exit 1 ;;
+esac
+''')
+        def remote_head():
+            return subprocess.run(["git", "--git-dir", str(remote), "rev-parse", "refs/heads/feature"],
+                                  check=True, capture_output=True, text=True).stdout.strip()
+        def remote_spec():
+            return json.loads(subprocess.run(["git", "--git-dir", str(remote), "show", f"refs/heads/feature:{self.spec_rel}"],
+                                             check=True, capture_output=True, text=True).stdout)
+
         self.flow.save_task_runtime(self.task_id, {"status": "todo"})
-        before = self.git("rev-parse", "HEAD")
-        result = self.execute(update=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.git("rev-parse", "HEAD"), before, "an update with open work never closes")
-        self.assertEqual(json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))["status"], "open")
+        created = self.deliver(update=False)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        draft_head = self.git("rev-parse", "HEAD")
+        self.assertEqual(remote_head(), draft_head)
+        self.assertEqual(remote_spec()["status"], "open")
+        self.assertIn(f"/flow-next:make-pr {self.spec_id} --update", created.stderr)
+
+        still_open = self.deliver(update=True)
+        self.assertEqual(still_open.returncode, 0, still_open.stderr)
+        self.assertEqual(remote_head(), draft_head, "an update with open work never closes")
 
         self.flow.save_task_runtime(self.task_id, {"status": "done"})
-        result = self.execute(update=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        closed = self.deliver(update=True)
+        self.assertEqual(closed.returncode, 0, closed.stderr)
         head = self.git("rev-parse", "HEAD")
-        self.assertNotEqual(head, before)
+        self.assertNotEqual(head, draft_head)
+        self.assertEqual(remote_head(), head)
+        self.assertEqual(remote_spec()["status"], "done")
         self.assertEqual(self.git("log", "-1", "--format=%s"), f"chore(flow): close {self.spec_id}")
-        self.assertEqual((self.root / "artifact-head").read_text(encoding="utf-8").strip(), head)
-        self.assertEqual(json.loads((self.root / "artifact-spec.json").read_text(encoding="utf-8"))["status"], "done")
-        self.assertTrue(json.loads((self.root / "context.json").read_text(encoding="utf-8"))["spec_closed"])
+        self.assertTrue((self.root / "edited-body").exists())
 
-        again = self.execute(update=True)
+        again = self.deliver(update=True)
         self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertEqual(self.git("rev-parse", "HEAD"), head, "a second update makes no new commit")
+        self.assertEqual((self.git("rev-parse", "HEAD"), remote_head()), (head, head), "a second update makes no new commit")
 
     def test_update_with_a_pending_review_does_not_close(self):
         os.environ["FLOW_REVIEW_BACKEND"] = "codex"
@@ -408,7 +447,7 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         result = self.execute(update=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
-        self.assertIn("--update to close the spec", result.stderr)
+        self.assertIn(f"/flow-next:make-pr {self.spec_id} --update", result.stderr)
 
 
 if __name__ == "__main__":
