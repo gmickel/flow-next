@@ -24,7 +24,7 @@ unknown flags and missing base values. Carry these values between tool calls:
 | `--base <ref>` or `--base=<ref>` | `BASE_REF`; default empty |
 | `--memory` | `WRITE_MEMORY=1`; default 0 |
 | `--dry-run` | `DRY_RUN=1`; default 0 |
-| `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR |
+| `--update` | `UPDATE_MODE=1`; default 0; refresh an existing open PR, closing the spec once its work is complete |
 | `mode:autonomous` or `FLOW_AUTONOMOUS=1` | `AUTONOMOUS=1`; default 0 |
 
 Keep this skill inline so `AskUserQuestion` remains available. Ask only for missing information, with a

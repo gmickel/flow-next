@@ -261,7 +261,7 @@ Review focus names where to start, one to three places to look hard and why, and
 
 Shape, a fenced sketch of the new or changed public surface or a call tree, appears only when the change has one, and every name in it comes from the diff or the spec. Proof cells draw their outcomes from recorded receipts and task evidence, never from re-running tests for the body; unrecorded gates stay unverified. Open items and Tradeoffs carry findings that the spec requires to be recorded in the PR.
 
-On a real create with completed tasks, make-pr commits the spec close before composing the artifact, so the artifact describes the opening PR head. Incomplete tasks proceed as a draft without a close commit; a failed close stops creation. Dry-run and body-only updates never close.
+On a real create with completed tasks, make-pr commits the spec close before composing the artifact, so the artifact describes the opening PR head. Incomplete tasks proceed as a draft without a close commit; a failed close stops creation. Once the work is done, `make-pr --update` closes the spec on the PR branch. Dry-run never closes.
 
 *(+ optional tracker sync)* - make-pr links the PR to the linked issue unconditionally when the bridge is active (powers Linear Diffs); `tracker.perEvent.makePr` adds an extra status comment and `tracker.perEvent.resolvePr` reflects resolved-thread state. The `perEvent` leaves are on by default once the bridge is hooked up (opt-out per event).
 
