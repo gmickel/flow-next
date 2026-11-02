@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-311-baseline-close-and-duplicate-scan-gaps",
   "spec_path": ".flow/tasks/fn-311-baseline-close-and-duplicate-scan-gaps.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Baseline, close and duplicate-scan gaps",
   "updated_at": "2026-11-02T00:17:26.989477Z"
 }

@@ -132,7 +132,7 @@
     "impl:fn-311-baseline-close-and-duplicate-scan-gaps.1": 0
   },
   "spec_path": ".flow/specs/fn-311-baseline-close-and-duplicate-scan-gaps.md",
-  "status": "open",
+  "status": "done",
   "title": "Baseline, close and duplicate-scan gaps",
   "tracker": {
     "baseHashFlow": null,
@@ -145,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-02T00:31:16.597854Z"
+  "updated_at": "2026-11-02T00:38:09.292722Z"
 }
