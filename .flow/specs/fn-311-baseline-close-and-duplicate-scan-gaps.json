@@ -1,20 +1,136 @@
 {
   "branch_name": "fn-311-baseline-close-and-duplicate-scan-gaps",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-02T00:31:16.597843Z",
   "created_at": "2026-11-01T22:31:55.759122Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-311-baseline-close-and-duplicate-scan-gaps",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-311-baseline-close-and-duplicate-scan-gaps.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "7f0c4585dc5312fcabce3ffaa451518d37447f778aef51f1c615d3cad56c08e8",
+      "backend": "codex",
+      "base_sha": "ac957ddfcfe0d11e33c4cd31e951a1ca34adb76a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-9a23766632fb255cb8817084b7313f04",
+            "classification": "introduced",
+            "findingId": "finding-9a23766632fb255cb8817084b7313f04",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-01d8d0311ebbd0a1683ad8c9599cd9f9",
+            "classification": "introduced",
+            "findingId": "finding-01d8d0311ebbd0a1683ad8c9599cd9f9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6f8ee486c57c3c740da69f2f1867a1470174e4fd",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1730,
+      "output_sha256": "d94038ff2ed97fd0204576170e497e1c758e2b67dbd9d3f5b800e656764eb9b6",
+      "reservation_id": "f291bbf7f165455daec69e51a0034879",
+      "round_consumed": true,
+      "scope": "impl:fn-311-baseline-close-and-duplicate-scan-gaps.1",
+      "superseded_by": null,
+      "task": "fn-311-baseline-close-and-duplicate-scan-gaps.1",
+      "timestamp": "2026-11-02T00:29:48.686234Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e0dfeac21d3b183a5e33fb1243b1ccdfa8d4c54fd4cf55a74c72429e1d12d475",
+      "backend": "codex",
+      "base_sha": "ac957ddfcfe0d11e33c4cd31e951a1ca34adb76a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-9a23766632fb255cb8817084b7313f04",
+            "classification": "introduced",
+            "findingId": "finding-9a23766632fb255cb8817084b7313f04",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-01d8d0311ebbd0a1683ad8c9599cd9f9",
+            "classification": "introduced",
+            "findingId": "finding-01d8d0311ebbd0a1683ad8c9599cd9f9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e482810eb07dd299e58c344516b24d003a967a21",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1639,
+      "output_sha256": "f96c51fa9a933ee7f389b5238f0e355cb75241e2307c8d99af837b9214b12148",
+      "reservation_id": "93c558d3ef97483ba40b53a8f7ad165c",
+      "round_consumed": true,
+      "scope": "impl:fn-311-baseline-close-and-duplicate-scan-gaps.1",
+      "superseded_by": null,
+      "task": "fn-311-baseline-close-and-duplicate-scan-gaps.1",
+      "timestamp": "2026-11-02T00:31:00.740638Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-311-baseline-close-and-duplicate-scan-gaps.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-311-baseline-close-and-duplicate-scan-gaps.1": 0
+  },
   "spec_path": ".flow/specs/fn-311-baseline-close-and-duplicate-scan-gaps.md",
   "status": "open",
   "title": "Baseline, close and duplicate-scan gaps",
@@ -29,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-02T00:17:26.673476Z"
+  "updated_at": "2026-11-02T00:31:16.597854Z"
 }
