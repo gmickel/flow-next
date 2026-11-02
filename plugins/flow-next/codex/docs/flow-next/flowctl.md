@@ -793,7 +793,7 @@ flowctl show fn-1 [--json]     # Spec with tasks
 flowctl show fn-1.2 [--json]   # Task only
 ```
 
-Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (an absent on-disk key reads `false`, so consumers always see a stable boolean). It omits the two large ledgers, which have dedicated readers: the review-attempt ledger (`review-rounds attempts <spec> --kind ... --review-type ...`) and the tracker link state (`sync get-state <spec>`).
+Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (an absent on-disk key reads `false`, so consumers always see a stable boolean) and `"completion_review_pending": <bool>`: true when a completion review is configured for the spec (the tracker status gate's precedence: spec `default_review`, `FLOW_REVIEW_BACKEND`, config `review.backend`) and its status is not `ship` or `not_required`. make-pr leaves such a spec open. It omits the two large ledgers, which have dedicated readers: the review-attempt ledger (`review-rounds attempts <spec> --kind ... --review-type ...`) and the tracker link state (`sync get-state <spec>`).
 
 Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file - a snapshot finalized by spec close; older or still-open work can be stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only - no status semantics change, and the field is never persisted.
 

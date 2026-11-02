@@ -43,6 +43,7 @@ class MakePrCloseTests(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop("FLOW_STATE_DIR", None)
+        os.environ.pop("FLOW_REVIEW_BACKEND", None)
         self.git("init", "-q", "-b", "main")
         self.git("config", "user.email", "test@example.com")
         self.git("config", "user.name", "Test")
@@ -199,6 +200,74 @@ if [[ "$DRY_RUN" != 1 && "$UPDATE_MODE" != 1 ]]; then gh pr create; fi
         refused = self.execute(autonomous=True)
         self.assertEqual(refused.returncode, 2, refused.stderr)
         self.assertEqual(self.git("rev-parse", "HEAD"), before)
+
+    def set_review(self, review_status, **spec_fields):
+        spec = json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))
+        spec.update(completion_review_status=review_status, **spec_fields)
+        (self.repo / self.spec_rel).write_text(json.dumps(spec))
+        self.git("add", self.spec_rel)
+        self.git("commit", "-qm", f"Review {review_status}")
+
+    def test_unsatisfied_completion_review_keeps_the_spec_open(self):
+        # #477: an unreviewed spec must not close, or land would merge it.
+        os.environ["FLOW_REVIEW_BACKEND"] = "codex"
+        for status in ("unknown", "needs_work", "needs_human"):
+            with self.subTest(status=status):
+                self.set_review(status)
+                before = self.git("rev-parse", "HEAD")
+                result = self.execute()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.root / "create-head").read_text(encoding="utf-8").strip(), before)
+                self.assertEqual(json.loads((self.root / "create-spec.json").read_text(encoding="utf-8"))["status"], "open")
+                self.assertIn(f"reads {status}", result.stderr)
+                refused = self.execute(autonomous=True)
+                self.assertEqual(refused.returncode, 2, refused.stderr)
+                self.assertIn(f"reads {status}", refused.stderr)
+                self.assertEqual(self.git("rev-parse", "HEAD"), before)
+
+    def test_satisfied_or_unconfigured_review_closes_as_before(self):
+        for backend, status in (("codex", "ship"), ("codex", "not_required"), (None, "unknown")):
+            with self.subTest(backend=backend, status=status):
+                if backend:
+                    os.environ["FLOW_REVIEW_BACKEND"] = backend
+                else:
+                    os.environ.pop("FLOW_REVIEW_BACKEND", None)
+                self.set_review(status, status="open")
+                before = self.git("rev-parse", "HEAD")
+                result = self.execute()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotEqual(self.git("rev-parse", "HEAD"), before)
+                self.assertEqual(json.loads((self.root / "create-spec.json").read_text(encoding="utf-8"))["status"], "done")
+
+    def test_pending_field_agrees_with_the_tracker_fold_at_every_precedence_level(self):
+        # #477 R4: spec default_review > FLOW_REVIEW_BACKEND > config review.backend.
+        from flowctl_tracker.status.policy import flow_to_normalized
+        from flowctl_tracker.status.verb import _completion_review_configured
+        config_path = self.repo / ".flow" / "config.json"
+        base_config = json.loads(config_path.read_text(encoding="utf-8"))
+        cases = [  # (spec default_review, env, config backend)
+            (None, None, None), (None, None, "codex"), (None, None, "none"),
+            (None, "codex", None), (None, "none", "codex"),
+            ("codex", None, None), ("none", "codex", "codex"), ("rp", None, "codex"),
+        ]
+        for default_review, env, backend in cases:
+            for status in ("unknown", "ship"):
+                with self.subTest(default_review=default_review, env=env, backend=backend, status=status):
+                    spec = json.loads((self.repo / self.spec_rel).read_text(encoding="utf-8"))
+                    spec.pop("default_review", None)
+                    if default_review:
+                        spec["default_review"] = default_review
+                    spec.update(completion_review_status=status, status="done")
+                    (self.repo / self.spec_rel).write_text(json.dumps(spec))
+                    config_path.write_text(json.dumps({**base_config, "review": {"backend": backend}}))
+                    if env:
+                        os.environ["FLOW_REVIEW_BACKEND"] = env
+                    else:
+                        os.environ.pop("FLOW_REVIEW_BACKEND", None)
+                    shown = self.call("show", id=self.spec_id)
+                    configured = _completion_review_configured(json.loads(config_path.read_text(encoding="utf-8")), spec)
+                    folded = flow_to_normalized(spec, "merged", configured, tasks=[{"status": "done"}])
+                    self.assertEqual(shown["completion_review_pending"], folded == "in_review")
 
     def test_r2_dry_run_closes_nothing(self):
         before = self.git("rev-parse", "HEAD")

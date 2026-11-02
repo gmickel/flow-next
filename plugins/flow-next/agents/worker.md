@@ -72,13 +72,17 @@ Parse the spec carefully. Identify:
 #   RED baseline (a Quick command fails BEFORE you touch anything) → do NOT silently
 #     proceed: record `baseline: red (<cmd> failed pre-edit)` in the Phase-5 done evidence,
 #     then either fix the tooling if trivial, or escalate `BLOCKED: TOOLING_FAILURE`.
+#   NOT YET RUNNABLE (a command fails only because the file or tool it runs is one this spec
+#     creates and it does not exist yet) → not red: record `baseline: pending (<cmd>)`, judge the
+#     rest on its own result, and run it in the gate of the task that creates it and after.
+#   An exit code the spec's text names as a normal result counts as green, here and in every gate.
 #   No Quick commands defined → record `baseline: none` and proceed.
 # Never treat a pre-existing red baseline as your own success or your own failure.
 ```
 
 When your prompt carries `BASELINE_HANDOFF`, read [worker-baseline-reuse.md](../skills/flow-next-work/references/worker-baseline-reuse.md) before running the baseline: the handoff can replace that run.
 
-**Suite-output capture rule (Baseline and Verify):** green observation is the command exit code, not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs).
+**Suite-output capture rule (Baseline and Verify):** green observation is the command exit code (0, or one the spec names as a normal result), not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs).
 
 **Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
 ```bash
@@ -89,7 +93,7 @@ echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignore
 ```
 `BASE_COMMIT` scopes the impl-review diff (Phase 4) and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls, so a block that used the bare variable has broken this.
 
-Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
+Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `pending (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
 
 ## Phase 1b: Bridged implementer (runs only when the implementer tier reaches a model over a CLI bridge)
 
