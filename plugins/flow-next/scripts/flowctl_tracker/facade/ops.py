@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (Execute, Result, atomic_write_json,
+from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
                                  leaf_is_safe, read_config, tracker_type)
 from ..lifecycle.linkstate import complete_identifier_only, require_durable
 from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
@@ -38,6 +38,11 @@ from .helpers import (collect_degraded, comments_have_marker,
                       worst_status, write_aggregate_receipt)
 from .projections import project_readiness
 from .steps import create_if_unlinked, fail_result, ok_result, run_status
+
+
+def _spec_wins(config: dict) -> bool:
+    """tracker.specWins (fn-313): only the literal true opts in."""
+    return dict_(config.get("tracker")).get("specWins") is True
 
 
 def _relation_status(out: dict) -> str:
@@ -303,6 +308,48 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         steps["sync_body"] = body_out
         degraded = collect_degraded(body_out) or degraded
 
+    spec_wins_body = None
+    if status_only and event == "work.firstClaim" and _spec_wins(config):
+        # tracker.specWins: the first claim also makes the issue body the
+        # rendered spec (body only, no title). An explicit body turns the echo
+        # fence off, so the live body - never the recorded pair - decides
+        # whether to write. A failed write is reported, never stops status.
+        from .preparation import render_body
+        body_out = sync_body(
+            flow_dir, spec_id, flow_file_body=flow_body, direction="push",
+            tracker_body=render_body(flow_body), event=event,
+            execute=execute, write_receipt=False,
+            _observed_parent=observed_parent, _project=False,
+        )
+        if isinstance(body_out, TrackerError):
+            spec_wins_body = "failed"
+            observed_parent.clear()
+            statuses.append("errored")
+            steps["spec_wins_body"] = {
+                "kind": "failed", "class": body_out.cls.value,
+                "subtype": body_out.subtype, "message": body_out.message,
+                "completed_steps": list(
+                    (body_out.details or {}).get("completed_steps") or []),
+            }
+        else:
+            spec_wins_body = ("written" if body_out.get("side_written")
+                              == "tracker" else "unchanged")
+            completed.append("spec-wins-body")
+            statuses.append(step_status_from_sync_body(body_out))
+            steps["spec_wins_body"] = body_out
+            degraded = collect_degraded(body_out) or degraded
+
+    def _keep_body_outcome(err: TrackerError) -> TrackerError:
+        # A later failure must not drop the spec-wins body outcome.
+        if spec_wins_body is None:
+            return err
+        return TrackerError(
+            err.cls, err.message, subtype=err.subtype,
+            details={**(err.details or {}), "specWinsBody": spec_wins_body,
+                     "specWinsBodyStep": steps["spec_wins_body"]},
+            auto_retryable=err.auto_retryable,
+            retry_after_s=err.retry_after_s)
+
     status_out = run_status(
         flow_dir, spec_id, config=config, event=event, execute=execute,
         completed=completed, statuses=statuses,
@@ -312,7 +359,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         loaded_p = load_tracker(flow_dir, spec_id)
         tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
         return fail_result(
-            status_out, completed=completed, statuses=statuses,
+            _keep_body_outcome(status_out),
+            completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             tracker_id=tid, transport=provider, degraded=degraded,
         )
@@ -348,7 +396,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             tid = (loaded_p[2].get("id")
                    if not isinstance(loaded_p, TrackerError) else None)
             return fail_result(
-                comment_out, completed=completed, statuses=statuses,
+                _keep_body_outcome(comment_out),
+                completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 tracker_id=tid, transport=provider, degraded=degraded,
             )
@@ -364,6 +413,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         flow_dir, spec_id=spec_id, event=event, status=receipt_status,
         tracker_id=tracker_id, transport=provider, degraded=degraded,
         note=f"facade push ({', '.join(completed)})",
+        details=({"specWinsBody": spec_wins_body}
+                 if spec_wins_body is not None else None),
     )
     if rerr:
         return fail_result(
@@ -648,6 +699,11 @@ def _reconcile_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
     statuses: list = []
     steps: dict[str, Any] = {}
     degraded = None
+    if event == "makePr" and _spec_wins(config):
+        # tracker.specWins: make-pr's final body is the rendered spec, not
+        # the folded tracker snapshot.
+        from .preparation import render_body
+        tracker_body = render_body(flow_body)
 
     # Complete identifier_only BEFORE the sequence (single named entry point).
     loaded = load_tracker(flow_dir, spec_id)

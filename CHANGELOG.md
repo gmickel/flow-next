@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Teams that keep the spec as the only record can make the tracker issue follow it.** With `tracker.specWins: true`, the first task claim also writes the rendered spec as the issue body, and make-pr writes it again as the final body, so an edit made on the tracker does not survive either step. Each writes only when the live body differs from the spec. A failed first-claim write still moves the issue to In Progress and is recorded in the sync receipt. Off by default; every other sync event is unchanged. Thanks to @sn-furali for the request in #543.
+
 ## [flow-next 9.5.1] - 2026-11-02
 
 Fixes for papercuts users reported in review, delivery and capture.

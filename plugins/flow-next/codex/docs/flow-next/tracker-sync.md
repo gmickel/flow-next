@@ -332,6 +332,15 @@ receives status only, preserving tracker-side body and relation co-edits. An
 unlinked spec still creates, links, seeds the paired merge base, and then
 projects status.
 
+A team that treats the spec as the only record sets `tracker.specWins: true`.
+The first claim then also writes the rendered spec as the issue body (body
+only), and make-pr's reconcile sends the rendered spec as the final body, so
+tracker-side body edits do not survive those two steps. Each compares the live
+issue body with the rendered spec and writes only when they differ, then reads
+the issue back and records the pair. A failed first-claim body write still
+moves the status; the receipt records `specWinsBody` as `written`,
+`unchanged`, or `failed`. Every other event behaves as above.
+
 The same path runs on Claude Code, Codex, Cursor, Droid, and Grok Build. A
 structured conflict or external action request returns to the tracker-sync
 skill for recovery routing. Under `flow --auto`, any decision requiring a person queues

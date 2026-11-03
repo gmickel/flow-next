@@ -271,6 +271,13 @@ DESCRIPTIONS: dict[str, str] = {
         "ready flag - one-way, tracker is authoritative. null = projection "
         "off."
     ),
+    "tracker.specWins": (
+        "true | false, default false (absent). Only the literal true "
+        "activates: work's first claim also writes the rendered spec as the "
+        "issue body, and make-pr's reconcile sends the rendered spec as the "
+        "final body, so tracker-side body edits do not survive. Any other "
+        "value is off."
+    ),
     "tracker.specIds": (
         "Id scheme for new specs when a tracker bridge is active: flow "
         "(native fn-N) or tracker (tracker-keyed KEY-N-slug / synthetic gh-N "
@@ -580,6 +587,7 @@ def _build_table() -> list[tuple[str, dict]]:
             {"enum": sorted(flowctl.TRACKER_CONFLICT_TIEBREAK_VALUES)},
         ),
         ("tracker.readyState", {"type": ["string", "null"]}),
+        ("tracker.specWins", {"type": "boolean"}),
         (
             "tracker.specIds",
             {"enum": sorted(flowctl.TRACKER_SPEC_IDS_VALUES)},
