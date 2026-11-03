@@ -148,7 +148,7 @@
     "impl:fn-313-opt-in-spec-wins-issue-body-at-first.1": 0
   },
   "spec_path": ".flow/specs/fn-313-opt-in-spec-wins-issue-body-at-first.md",
-  "status": "open",
+  "status": "done",
   "title": "Opt-in spec-wins issue body at first claim and make-pr",
   "tracker": {
     "baseHashFlow": null,
@@ -161,5 +161,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-03T11:40:12.562792Z"
+  "updated_at": "2026-11-03T11:42:19.654320Z"
 }

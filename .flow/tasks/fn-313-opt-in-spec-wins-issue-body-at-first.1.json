@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-313-opt-in-spec-wins-issue-body-at-first",
   "spec_path": ".flow/tasks/fn-313-opt-in-spec-wins-issue-body-at-first.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement opt-in spec-wins issue body at first claim and make-pr",
   "updated_at": "2026-11-03T11:27:53.991948Z"
 }
