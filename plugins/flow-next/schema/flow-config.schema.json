@@ -468,6 +468,10 @@
           ],
           "default": null
         },
+        "specWins": {
+          "description": "true | false, default false (absent). Only the literal true activates: work's first claim also writes the rendered spec as the issue body, and make-pr's reconcile sends the rendered spec as the final body, so tracker-side body edits do not survive. Any other value is off.",
+          "type": "boolean"
+        },
         "specIds": {
           "description": "Id scheme for new specs when a tracker bridge is active: flow (native fn-N) or tracker (tracker-keyed KEY-N-slug / synthetic gh-N / gl-N). Strict enum on write; malformed on-disk values fail closed to flow. Not materialized at init so setup can detect never-asked via a raw null read.",
           "enum": [

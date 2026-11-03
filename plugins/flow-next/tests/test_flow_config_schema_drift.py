@@ -69,6 +69,7 @@ ALLOWLIST: dict[str, str] = {
     "evidence.persist": "opt-in, unseeded; only the literal on activates",
     "evidence.dir": "opt-in, unseeded; absent reads as .flow/evidence",
     "spec.approval": "opt-in, unseeded; absent reads as local",
+    "tracker.specWins": "opt-in, unseeded; dict-read (facade/ops.py), only true activates",
 }
 
 # Containers the schema-key walk must NOT descend into: their property

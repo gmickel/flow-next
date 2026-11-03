@@ -152,6 +152,10 @@ files intact; put authored output in separate mode-0600 files. Apply the final
 Flow body locally before the facade call and pass the full original comment
 snapshot. Pull never changes Flow task status.
 
+With `tracker.specWins: true`, make-pr's reconcile (event `makePr`) needs no
+merge: pass the unchanged Flow file with the prepared snapshots, and flowctl
+sends the rendered spec as the final tracker body.
+
 A true section conflict remains host judgment: show the section and both edits,
 then ask in attended mode. Any autonomy marker (`FLOW_AUTONOMOUS=1`, `AUTONOMOUS=1`, or
 `mode:autonomous`, including the calling stage's marker) or a fork uses
