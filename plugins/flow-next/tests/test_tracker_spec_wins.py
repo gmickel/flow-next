@@ -213,6 +213,53 @@ class FirstClaim(unittest.TestCase):
                 self.assertEqual(_saved_tracker(flow)["mergeBaseTracker"],
                                  EDITED)
 
+    def test_body_failure_survives_a_later_status_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write(flow, "github", True, base_tracker=EDITED)
+            parent = _issue("github", EDITED)
+            responses = _status_responses("github", parent)
+            responses.update({
+                "sync-body-parent-read": TF.ok(parent),
+                "wire-update": TrackerError(
+                    ErrorClass.AUTH, "forbidden", subtype="http_403"),
+                "status-set": TrackerError(
+                    ErrorClass.TRANSPORT, "bad gateway", subtype="http_502"),
+            })
+            ex = TF.fake_execute(responses)
+
+            out = _first_claim(flow, ex)
+
+            self.assertIsInstance(out, TrackerError)
+            self.assertEqual(out.cls, ErrorClass.TRANSPORT)
+            self.assertEqual(out.details["specWinsBody"], "failed")
+            self.assertEqual(out.details["specWinsBodyStep"]["class"], "auth")
+            receipt = TF._receipts(flow)[-1]
+            self.assertEqual(receipt["status"], "errored")
+            self.assertEqual(receipt["details"]["specWinsBody"], "failed")
+
+    def test_first_claim_leaves_linear_project_membership_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            TF._write_flow(
+                flow, _cfg("linear", True), spec_md=SPEC_MD,
+                tracker=_linked("linear", mergeBaseFlow=SPEC_MD,
+                                mergeBaseTracker=RENDERED,
+                                projectId="proj-1",
+                                projectMilestoneId="ms-1"),
+                tasks=[{"status": "in_progress"}])
+            parent = _issue("linear", RENDERED)
+            responses = _status_responses("linear", parent)
+            responses["sync-body-parent-read"] = TF.gql_issue(parent)
+            ex = TF.fake_execute(responses)
+
+            out = _first_claim(flow, ex)
+
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertNotIn("wire-project-set", _ops(ex))
+            self.assertNotIn("wire-update", _ops(ex))
+            self.assertIn("status-set", _ops(ex))
+
     def test_setting_off_or_not_true_stays_status_only(self) -> None:
         for provider in ("github", "linear"):
             for value in (None, False, "true", 1):

@@ -323,7 +323,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
               execute: Execute = default_execute,
               write_receipt: bool = True,
               _observed_parent: Optional[dict] = None,
-              _rendered_body: bool = False) -> Result:
+              _rendered_body: bool = False,
+              _project: bool = True) -> Result:
     """Write (optional) + readback + paired merge base. Never raises.
 
     Serialized per spec via a create-first claim taken before any tracker
@@ -385,7 +386,8 @@ def sync_body(flow_dir, spec_id: str, *, flow_file_body: str,
             refuse_tracker_divergence=refuse_tracker_divergence,
             direction=direction,
             event=event, execute=execute, write_receipt=write_receipt,
-            observed_parent=_observed_parent, rendered_body=_rendered_body)
+            observed_parent=_observed_parent, rendered_body=_rendered_body,
+            project_membership=_project)
     finally:
         _release_claim(body_claim)
         _release_claim(rec_path)
@@ -401,7 +403,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                    direction: str, event: Optional[str],
                    execute: Execute, write_receipt: bool,
                    observed_parent: Optional[dict] = None,
-                   rendered_body: bool = False) -> Result:
+                   rendered_body: bool = False,
+                   project_membership: bool = True) -> Result:
     """The claimed transaction body: spec is (re)loaded AFTER the claim so
     the echo-fence/no-op checks see the base a just-finished sibling wrote,
     never a pre-claim snapshot."""
@@ -574,7 +577,8 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
     # tracker.projectId while its body was already converged must still reach
     # its Project. Absent sidecar fields = unmanaged: zero extra requests and
     # the pre-fn-182 call sequence unchanged (R4).
-    project = spec_project_fields(tracker)
+    # project_membership=False: a body-only caller (specWins first claim).
+    project = spec_project_fields(tracker) if project_membership else {}
     if isinstance(project, TrackerError):
         return project
     project_reconciled = False

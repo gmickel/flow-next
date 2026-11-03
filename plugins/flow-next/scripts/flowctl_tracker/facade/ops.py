@@ -319,7 +319,7 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             flow_dir, spec_id, flow_file_body=flow_body, direction="push",
             tracker_body=render_body(flow_body), event=event,
             execute=execute, write_receipt=False,
-            _observed_parent=observed_parent,
+            _observed_parent=observed_parent, _project=False,
         )
         if isinstance(body_out, TrackerError):
             spec_wins_body = "failed"
@@ -339,6 +339,17 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             steps["spec_wins_body"] = body_out
             degraded = collect_degraded(body_out) or degraded
 
+    def _keep_body_outcome(err: TrackerError) -> TrackerError:
+        # A later failure must not drop the spec-wins body outcome.
+        if spec_wins_body is None:
+            return err
+        return TrackerError(
+            err.cls, err.message, subtype=err.subtype,
+            details={**(err.details or {}), "specWinsBody": spec_wins_body,
+                     "specWinsBodyStep": steps["spec_wins_body"]},
+            auto_retryable=err.auto_retryable,
+            retry_after_s=err.retry_after_s)
+
     status_out = run_status(
         flow_dir, spec_id, config=config, event=event, execute=execute,
         completed=completed, statuses=statuses,
@@ -348,7 +359,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
         loaded_p = load_tracker(flow_dir, spec_id)
         tid = loaded_p[2].get("id") if not isinstance(loaded_p, TrackerError) else None
         return fail_result(
-            status_out, completed=completed, statuses=statuses,
+            _keep_body_outcome(status_out),
+            completed=completed, statuses=statuses,
             flow_dir=flow_dir, spec_id=spec_id, event=event,
             tracker_id=tid, transport=provider, degraded=degraded,
         )
@@ -384,7 +396,8 @@ def _push_sequence(flow_dir: Path, spec_id: str, *, flow_body: str,
             tid = (loaded_p[2].get("id")
                    if not isinstance(loaded_p, TrackerError) else None)
             return fail_result(
-                comment_out, completed=completed, statuses=statuses,
+                _keep_body_outcome(comment_out),
+                completed=completed, statuses=statuses,
                 flow_dir=flow_dir, spec_id=spec_id, event=event,
                 tracker_id=tid, transport=provider, degraded=degraded,
             )
