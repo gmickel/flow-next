@@ -10,10 +10,11 @@ if [[ -n "$PR_URL" ]] && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" 
   :
 fi
 ```
-`off|pull|push|reconcile|comment` all use body-preserving `reconcile` for PR linkage and In Review;
+`off|pull|push|reconcile|comment` all use `reconcile` for PR linkage and In Review. It preserves the issue
+body unless `tracker.specWins: true`, where flowctl itself sends the rendered spec as the final body;
 `tracker.perEvent.makePr` gates only the optional breadcrumb, which Make PR synthesizes from the URL and
 opened-PR context. Create-if-unlinked first; unreachable transport is a no-op. Use provider-native links or
-URL-deduplicated fallback; never overwrite issue prose or mark Done. Failures warn without changing PR
+URL-deduplicated fallback; never edit issue prose yourself or mark Done. Failures warn without changing PR
 success.
 
 Audit `sync check "$SPEC_ID" --events makePr --since <PR-createdAt> --json` independently of dispatch. If
