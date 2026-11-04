@@ -37,10 +37,10 @@ class FakeCli:
     """subprocess.run stand-in: recorded glab, scripted origin / ssh / gh login, real git otherwise."""
 
     def __init__(self, origin=None, glab=(), gh_hosts=(), glab_hosts=("localhost:8929",),
-                 ssh=None, glab_timeout=False):
+                 ssh=None, glab_auth=None):
         self.origin, self.gh_hosts, self.glab_hosts = origin, set(gh_hosts), set(glab_hosts)
         self.recorded = {tuple(fx["argv"]): fx for fx in glab}
-        self.ssh, self.glab_timeout, self.calls = ssh or {}, glab_timeout, []
+        self.ssh, self.glab_auth, self.calls = ssh or {}, glab_auth, []
 
     def __call__(self, argv, *args, **kwargs):
         argv = list(argv)
@@ -58,9 +58,10 @@ class FakeCli:
         if argv[:3] == ["gh", "auth", "token"]:
             return done(0 if argv[4] in self.gh_hosts else 1)
         if argv[:3] == ["glab", "auth", "status"]:
-            if self.glab_timeout:
+            if self.glab_auth == "timeout":
                 raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
-            fx = fixture("auth-status-logged-in" if argv[4] in self.glab_hosts else "auth-status-unknown-host")
+            fx = fixture(self.glab_auth or ("auth-status-logged-in" if argv[4] in self.glab_hosts
+                                            else "auth-status-unknown-host"))
             return done(fx["returncode"], fx["stdout"], fx["stderr"])
         if argv[0] == "glab":
             fx = self.recorded.get(tuple(argv))
@@ -95,6 +96,8 @@ class ForgeRuleTests(ForgeTestCase):
             ("github https", "https://github.com/o/r.git", {}, (), {}, "github", "github.com"),
             ("github scp", "git@github.com:o/r.git", {}, (), {}, "github", "github.com"),
             ("ssh alias", "git@gh-work:o/r.git", {}, (), {"gh-work": "ssh.github.com"}, "github", "ssh.github.com"),
+            ("underscore alias", "git@gh_work:o/r.git", {}, (), {"gh_work": "github.com"}, "github", "github.com"),
+            ("ssh url alias", "ssh://git@gl_work/g/p.git", {}, (), {"gl_work": "gitlab.com"}, "gitlab", "gitlab.com"),
             ("gitlab.com", "https://gitlab.com/g/sub/p.git", {}, (), {}, "gitlab", "gitlab.com"),
             ("CI_SERVER_HOST", "https://git.corp.test/g/p.git", {"CI_SERVER_HOST": "git.corp.test"}, (), {}, "gitlab", "git.corp.test"),
             ("self-managed with port", GITLAB_ORIGIN, {}, (), {}, "gitlab", "localhost:8929"),
@@ -114,11 +117,14 @@ class ForgeRuleTests(ForgeTestCase):
                     # A recognisable host costs no login probe.
                     self.assertFalse([c for c in fake.calls if c[0] in {"gh", "glab"}])
 
-    def test_slow_glab_reads_unknown_never_github(self):
-        fake = FakeCli(GITLAB_ORIGIN, gh_hosts=("localhost:8929",), glab_timeout=True)
-        result = self.run_with(fake, lambda: f.repo_forge(str(self.repo)), {"GH_ENTERPRISE_TOKEN": "x"})
-        self.assertIsNone(result.forge)
-        self.assertFalse([c for c in fake.calls if c[0] == "gh"])
+    def test_slow_or_offline_glab_reads_unknown_never_github(self):
+        for answer in ("timeout", "auth-status-offline"):
+            with self.subTest(answer):
+                f.repo_forge.cache_clear()
+                fake = FakeCli(GITLAB_ORIGIN, gh_hosts=("localhost:8929",), glab_auth=answer)
+                result = self.run_with(fake, lambda: f.repo_forge(str(self.repo)), {"GH_ENTERPRISE_TOKEN": "x"})
+                self.assertIsNone(result.forge)
+                self.assertFalse([c for c in fake.calls if c[0] == "gh"])
 
     def test_registered_fake_forge_answers_the_shared_lookup(self):
         row = {"number": 9, "url": "https://forge.fake.test/o/r/pulls/9", "state": "OPEN",
@@ -174,16 +180,20 @@ class GitLabAdapterTests(ForgeTestCase):
         self.assertEqual(fake.glab_api_calls(), [fx["argv"][2] for fx in pages])
 
     def test_failed_reads_are_probe_failures(self):
-        malformed = fixture("mr-branch-all")
-        listed = json.loads(malformed["stdout"])
-        del listed[1]["iid"]
-        malformed["stdout"] = json.dumps(listed)
+        def malformed(change):
+            fx = fixture("mr-branch-all")
+            listed = json.loads(fx["stdout"])
+            change(listed[1])
+            fx["stdout"] = json.dumps(listed)
+            return fx
         cut = fixture("mr-missing-project")  # a recorded glab failure, answering page 2
         cut["argv"] = ["glab", "api", self.MRS + "state=opened&per_page=2&page=2"]
         cases = [
             ("glab fails", dict(head="fn73-fx-reused", origin="http://localhost:8929/flownext/missing.git",
                                 glab=[fixture("mr-missing-project")])),
-            ("malformed row", dict(head="fn73-fx-reused", glab=[malformed])),
+            *((f"malformed row: {name}", dict(head="fn73-fx-reused", glab=[malformed(change)])) for name, change in (
+                ("no iid", lambda mr: mr.pop("iid")), ("no sha", lambda mr: mr.pop("sha")),
+                ("no merged_at", lambda mr: mr.pop("merged_at")), ("list state", lambda mr: mr.update(state=["opened"])))),
             ("incomplete pagination", dict(state="open", limit=1000, glab=[fixture("mr-open-page-1"), cut])),
         ]
         for name, kwargs in cases:

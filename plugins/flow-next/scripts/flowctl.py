@@ -23650,12 +23650,15 @@ def _github_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
 def _gitlab_owns_host(host: str) -> Optional[bool]:
     try:
         proc = subprocess.run(["glab", "auth", "status", "--hostname", host], stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, timeout=5, check=False)
+                              stderr=subprocess.PIPE, text=True, timeout=5, check=False)
     except subprocess.TimeoutExpired:
         return None
     except OSError:
         return False
-    return proc.returncode == 0
+    if proc.returncode == 0:
+        return True
+    # Only glab's logged-out answer is a no; a failed API call (offline host) is unknown.
+    return False if "has not been authenticated" in " ".join((proc.stderr or "").split()) else None
 
 
 # GitLab caps a page at 100. A locked MR is mid-merge and still open.
@@ -23664,8 +23667,8 @@ _GITLAB_MR_STATES = {"opened": "OPEN", "locked": "OPEN", "merged": "MERGED", "cl
 
 
 def _gitlab_mr_row(mr: Any) -> Optional[dict]:
-    if not (isinstance(mr, dict) and mr.get("state") in _GITLAB_MR_STATES
-            and isinstance(mr.get("iid"), int) and isinstance(mr.get("web_url"), str)
+    if not (isinstance(mr, dict) and isinstance(mr.get("state"), str) and mr["state"] in _GITLAB_MR_STATES
+            and "sha" in mr and "merged_at" in mr and isinstance(mr.get("iid"), int) and isinstance(mr.get("web_url"), str)
             and isinstance(mr.get("source_branch"), str)
             and isinstance(mr.get("source_project_id"), int) and isinstance(mr.get("project_id"), int)
             and all(isinstance(mr.get(key), (str, type(None))) for key in ("sha", "merged_at"))):
@@ -23778,14 +23781,14 @@ def repo_forge(repo: str) -> ForgeOrigin:
             host = f"{host}:{port}"
     else:
         # scp-like `[user@]host:path`; a Windows drive path is local.
-        scp = re.fullmatch(r"(?:[^@/\s]+@)?([A-Za-z0-9.-]{2,}):(.+)", url)
+        scp = re.fullmatch(r"(?:[^@/\s]+@)?([A-Za-z0-9._-]{2,}):(.+)", url)
         if not scp:
             return ForgeOrigin(None, None, None)
         host, path, ssh = scp.group(1).lower(), scp.group(2), True
+    if ssh and host not in _FORGE_HOSTS:
+        host = _ssh_hostname(host)  # an alias may hold characters a hostname may not
     if not re.fullmatch(r"[a-z0-9.-]+(?::\d+)?", host):
         return ForgeOrigin(None, None, None)
-    if ssh and host not in _FORGE_HOSTS:
-        host = _ssh_hostname(host)
     project = path.strip("/").removesuffix(".git") or None
     ci_host = os.environ.get("CI_SERVER_HOST", "").strip().lower()
     forge = _FORGE_HOSTS.get(host) or ("gitlab" if ci_host and host.split(":")[0] == ci_host else None)
