@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-04T10:13:12.743445Z",
+  "depends_on": [],
+  "id": "fn-73-glab-git-ops-make-prresolve-prland-over.1",
+  "priority": null,
+  "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
+  "spec_path": ".flow/tasks/fn-73-glab-git-ops-make-prresolve-prland-over.1.md",
+  "status": "todo",
+  "title": "Forge rule and adapter registry for the route judge and pilot snapshot",
+  "updated_at": "2026-11-04T10:13:12.743445Z"
+}

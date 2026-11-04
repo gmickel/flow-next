@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-04T10:13:12.743576Z",
+  "depends_on": [
+    "fn-73-glab-git-ops-make-prresolve-prland-over.3"
+  ],
+  "id": "fn-73-glab-git-ops-make-prresolve-prland-over.4",
+  "priority": null,
+  "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
+  "spec_path": ".flow/tasks/fn-73-glab-git-ops-make-prresolve-prland-over.4.md",
+  "status": "todo",
+  "title": "flow --auto ends at the MR on GitLab, plus docs and the live end-to-end run",
+  "updated_at": "2026-11-04T10:13:12.743576Z"
+}

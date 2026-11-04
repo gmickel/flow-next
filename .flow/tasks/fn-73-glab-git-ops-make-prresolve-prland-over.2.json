@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-04T10:13:12.743498Z",
+  "depends_on": [
+    "fn-73-glab-git-ops-make-prresolve-prland-over.1"
+  ],
+  "id": "fn-73-glab-git-ops-make-prresolve-prland-over.2",
+  "priority": null,
+  "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
+  "spec_path": ".flow/tasks/fn-73-glab-git-ops-make-prresolve-prland-over.2.md",
+  "status": "todo",
+  "title": "make-pr forge rule in shell and GitLab reads in preflight",
+  "updated_at": "2026-11-04T10:13:12.743498Z"
+}
