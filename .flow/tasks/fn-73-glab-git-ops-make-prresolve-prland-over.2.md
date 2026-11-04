@@ -45,9 +45,38 @@ Teaches make-pr's shared preflight which forge it is on and gives its three `gh`
 - [ ] The Codex installer ships the helper, asserted by the real-installer test
 
 ## Done summary
-TBD
+make-pr's preflight now works out the forge from the origin remote in shell, using the same rule as flowctl's `repo_forge`. On GitLab it checks that glab is installed, logged in, and holds a token with api scope before any close or push. A single guard sends the three PR reads (parent lookup, existing-PR check, prior-PR count) to the new `scripts/make-pr-gitlab.sh`, which accepts the same argv as gh and answers in gh's JSON keys. A merged parent's history is fetched from `refs/merge-requests/<iid>/head`. The Codex installer ships the helper.
 
+Tier: session (jev long_running 0.49) at default effort (model: claude-opus-5-5[1m])
+
+Evidence (measured):
+- Live, against the GitLab test project (scratch clone, nothing pushed): the full preflight sourced in bash on a child of `fn73-fx-reused` set `FORGE=gitlab`, read parent MR !2 as OPEN, set the base to `origin/fn73-fx-reused`, found no existing MR, and closed the spec locally. On `fn73-fx-reused` itself it stopped with "branch already has an OPEN PR: .../merge_requests/2"; with `--update` it found PR #2. A spec depending on `fn73-fx-merged` (branch deleted, MR !3 merged) fetched the parent from `refs/merge-requests/3/head` and set the base to `origin/main`, with no rewrite because the project merges with a merge commit. The origin block also passed live under zsh against the real glab, including the login and the api-scope self-read.
+- Tests: the new `tests/test_make_pr_gitlab.py` has 14 tests. They cover helper rows, view, failed, malformed, empty and HTML reads, and api scope; GitLab login, scope and unknown-host stops; a shell-vs-Python parity test over 12 origin cases, including an enterprise token with logged-in, offline and logged-out glab; R13 open, merged and unreadable parents through the shared chain-detect fence; and existing-MR stops before close. All glab answers replay live recordings. Mutation checks: making gh answer first under an enterprise token, or dropping the fork filter, each fails 7 tests. The empty-output regressions fail before the review fix.
+- The focused suites passed: test_forge, judge_route, pilot_snapshot, make_pr_preflight_auth, make_pr_close, flow_auto, make_pr_gitlab, bundled_make_pr, chain_consumer_fixtures, codex_config_merge and make_pr_reached_path (150 tests). `make-pr_smoke_test.sh` passed 63/0. `ruff check .` and `sync-codex.sh --check` passed. fn-310's tests and the GitHub preflight tests are unmodified (R10).
+- New fixtures, recorded live: `token-self-api`, `token-self-read-api` (a scratch read_api token, revoked after recording) and `token-self-revoked`. The MR list fixtures from task .1 have the exact argv the helper uses.
+- Baseline: green, with `PYTHONPATH=plugins/flow-next/tests`. The Quick command fails to import without that path; this predates the task.
+
+Decisions:
+- The helper accepts gh's argv (`pr list --head B --state all --json K [--jq E]`, `pr view --json K`) so each read site changes only `gh` to `"${PR_READ:-gh}"`. The tests run the chain-detect, chain-rewrite and §0.5 slices without the origin block; with this form, an unset guard still means gh. The helper always returns number, url, state and baseRefName.
+- The existing-PR read keeps gh's swallowed failure, since gh's nonzero exit is its "no PR". On GitLab, a failed read stops `NEEDS_HUMAN` instead. The `refs/pull/$DEP_PR_NUMBER/head` literal stays because `test_make_pr_reached_path` pins it; the guard's `PR_HEAD_REFS` overrides it on GitLab.
+- The unknown-host message still contains fn-310's pinned text and now names both `gh auth login --hostname` and `glab auth login --hostname`. A missing or logged-out glab exits 1 with "Error:", matching the gh checks. A missing api scope, or a token self-read that fails, stops `NEEDS_HUMAN` (exit 2).
+- `GITLAB_HOST` (host:port) and `ORIGIN_PROJECT` are exported for the helper, so task .3's glab calls inherit the host.
+- Dry runs skip the origin block, as before, so a GitLab dry run reads through gh and treats a parent as open (the existing note).
+- The existing `test_bundled_make_pr` zsh check caught `$DEP_PR_HEAD:refs` (a zsh modifier); it is now braced.
+
+Follow-ups:
+- The shell `glab auth status` probe has no deadline (declined review finding). A slow host waits and then answers definitively, and never reads as GitHub. Stock macOS has no `timeout(1)`.
+- A glab login via OAuth rather than a PAT may fail the `personal_access_tokens/self` scope read and stop `NEEDS_HUMAN`. This was not tested; the test instance has no OAuth app.
+- An SSH origin on a self-managed GitLab with a non-default web port reads as unknown, as in task .1.
+
+Review: one NEEDS_WORK finding, fixed. All three lenses found that a successful glab call with empty or non-JSON stdout read as "no MR". Each page must now be exactly one JSON array. The re-review returned SHIP.
+
+Left on the live instance: nothing new. The scratch read_api token was revoked; the scratch clone is under the session scratchpad.
+
+stage: impl-review - ran [2026-11-04..2026-11-04]
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 96ac26dc9ecdb9037622eb8a98ff667bef19026d, 23c5852e80b50e1c25177709db2a6354da8e4cc9
+- Tests: PYTHONPATH=plugins/flow-next/tests python3 -m unittest test_forge test_judge_route test_pilot_snapshot test_make_pr_preflight_auth test_make_pr_close test_flow_auto test_make_pr_gitlab test_bundled_make_pr test_chain_consumer_fixtures test_codex_config_merge test_make_pr_reached_path (150 OK), bash plugins/flow-next/scripts/make-pr_smoke_test.sh (63 pass), uvx ruff check .
 - PRs:
