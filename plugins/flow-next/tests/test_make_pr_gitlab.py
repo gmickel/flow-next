@@ -483,10 +483,11 @@ esac
     def test_tracker_reference_is_the_issue_url_on_the_other_forge(self):
         cases = [("github", "gitlab", "https://github.com/o/r/issues/5", "Ref https://github.com/o/r/issues/5"),
                  ("gitlab", "github", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref http://localhost:8929/flownext/flownext/-/issues/5"),
+                 ("github", "gitlab", "", BODY.splitlines()[-1]),   # no stored URL: no reference, never #5
                  ("github", "github", "https://github.com/o/r/issues/5", "Refs #5"),
                  ("gitlab", "gitlab", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref `#5`")]
         for tracker, forge, url, ref in cases:
-            with self.subTest(tracker=tracker, forge=forge):
+            with self.subTest(tracker=tracker, forge=forge, url=url):
                 result = self.create([], FORGE=forge, PR_READ=str(HELPER) if forge == "gitlab" else "",
                                      FLOW_PR_CREATE_CMD="echo https://example.test/o/r/pull/7; :",
                                      TRK_ACTIVE="true", TRK_TYPE=tracker, TRK_URL=url)

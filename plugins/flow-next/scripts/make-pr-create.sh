@@ -73,10 +73,10 @@ if [ "$TRK_ACTIVE" = "true" ]; then
     gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;;
     jira)   REF="" ;;
   esac
-  # On the other forge a #N would link that forge's own issue N, so the issue URL stands in.
+  # On the other forge a #N would link that forge's own issue N: the issue URL stands in, or no reference.
   if [[ ( "$TRK_TYPE" == github || "$TRK_TYPE" == gitlab ) && "$TRK_TYPE" != "${FORGE:-github}" ]]; then
     TRK_URL=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.url // empty' 2>/dev/null || true)
-    [ -z "$TRK_URL" ] || REF="Ref ${TRK_URL}"
+    REF=""; [ -z "$TRK_URL" ] || REF="Ref ${TRK_URL}"
   fi
   if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
     printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
