@@ -18,7 +18,7 @@ from flowctl_test_support import FLOWCTL_CMD
 
 TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(TESTS.parent / "scripts"))
 spec = importlib.util.spec_from_file_location("flowctl_forge_test", SCRIPTS / "flowctl.py")
 f = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = f
