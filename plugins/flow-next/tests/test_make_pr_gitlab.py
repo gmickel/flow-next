@@ -247,6 +247,8 @@ class OriginBlockTests(GitLabShellCase):
             ("github https", "https://github.com/o/r.git", {}, (), (), {}, None),
             ("github scp", "git@github.com:o/r.git", {}, (), (), {}, None),
             ("ssh alias", "git@gh-work:o/r.git", {}, (), (), {"gh-work": "ssh.github.com"}, None),
+            ("ssh:// alias", "ssh://git@gl_work/g/p.git", {}, (), (), {"gl_work": "gitlab.com"}, None),
+            ("git+ssh:// alias", "git+ssh://git@gl_work/g/p.git", {}, (), (), {"gl_work": "gitlab.com"}, None),
             ("gitlab.com", "https://gitlab.com/g/sub/p.git", {}, (), (), {}, None),
             ("CI_SERVER_HOST", "https://git.corp.test/g/p.git", {"CI_SERVER_HOST": "git.corp.test"}, (), (), {}, None),
             ("self-managed with port", GITLAB_ORIGIN, {}, (), (HOST,), {}, None),

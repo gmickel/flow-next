@@ -11,7 +11,7 @@ if [[ "$DRY_RUN" != "1" ]]; then
   # An SSH host alias resolves through ssh -G, as in gh. The same rule is repo_forge in flowctl.py.
   ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || ORIGIN_URL=""
   ORIGIN_HOST=$(printf '%s' "$ORIGIN_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#')
-  if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* ]]; then
+  if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* || "$ORIGIN_URL" == git+ssh://* ]]; then
     SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
     [[ -z "$SSH_HOST" ]] || ORIGIN_HOST="$SSH_HOST"
   fi
