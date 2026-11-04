@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "auth",
+    "status",
+    "--hostname",
+    "localhost:8929"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "localhost:8929\n  \u2713 Logged in to localhost:8929 as root (keyring)\n  \u2713 Git operations for localhost:8929 configured to use http protocol.\n  \u2713 API calls for localhost:8929 are made over http protocol.\n  \u2713 REST API Endpoint: http://localhost:8929/api/v4/\n  \u2713 GraphQL Endpoint: http://localhost:8929/api/graphql/\n  \u2713 Token found in operating system keyring: **************************\n",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

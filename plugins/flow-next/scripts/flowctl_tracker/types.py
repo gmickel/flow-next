@@ -82,6 +82,7 @@ class Request:
     timeout_s: float = DEFAULT_TIMEOUT_S
     idempotent: bool = False
     credential_policy: CredentialPolicy = CredentialPolicy.PROVIDER_AUTH
+    env: Optional[dict[str, str]] = None  # CLI route: added to the child's environment
 
     def __post_init__(self) -> None:
         # An adapter that sets its own authorization header has already carried
