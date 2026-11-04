@@ -201,6 +201,12 @@ class HelperReadTests(GitLabShellCase):
         # An OAuth login is refused by the token self-read and reads its scopes from token info.
         oauth = answers(recorded("token-self-oauth"), recorded("config-api-protocol"), recorded("token-info-oauth"))
         self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=oauth).returncode, 0)
+        # glab may print a config warning before the value.
+        warning = self.tmp / "config-api-protocol-warned.json"
+        warning.write_text(json.dumps({**json.loads(recorded("config-api-protocol").read_text(encoding="utf-8")),
+                                       "stdout": "a glab config warning\nhttp\n"}), encoding="utf-8")
+        warned = answers(recorded("token-self-oauth"), warning, recorded("token-info-oauth"))
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=warned).returncode, 0)
         no_api = self.derived("token-info-oauth", lambda info: {**info, "scopes": ["read_api"], "scope": ["read_api"]})
         oauth_read_api = answers(recorded("token-self-oauth"), recorded("config-api-protocol"), no_api)
         self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=oauth_read_api).returncode, 1)

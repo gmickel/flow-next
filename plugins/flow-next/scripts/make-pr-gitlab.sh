@@ -38,7 +38,9 @@ if [[ "${1:-}" == api-scope ]]; then
   if ! TOKEN=$(glab api personal_access_tokens/self 2>&1); then
     [[ "$TOKEN" == *"requires token type to be a personal access token"* ]] \
       || fail "glab api personal_access_tokens/self failed on ${GITLAB_HOST:-?}"
+    # glab may print a config warning first; the value is the last line.
     PROTOCOL=$(glab config get api_protocol --host "${GITLAB_HOST:-}" 2>/dev/null) || PROTOCOL=""
+    PROTOCOL=${PROTOCOL##*$'\n'}
     TOKEN=$(glab_json "${PROTOCOL:-https}://${GITLAB_HOST:-}/oauth/token/info")
   fi
   printf '%s' "${TOKEN#"${TOKEN%%[[{]*}"}" | jq -e '(.scopes | type) == "array" and any(.scopes[]; . == "api")' >/dev/null \

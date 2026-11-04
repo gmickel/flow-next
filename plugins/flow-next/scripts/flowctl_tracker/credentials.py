@@ -55,8 +55,9 @@ def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
         )
         if m:
             tok = re.search(r"^\s+token:\s*(\S+)", m.group(1), re.M)
-            if tok:
-                return tok.group(1)
+            value = tok.group(1).strip("\"'") if tok else ""  # `token: ""` is empty too
+            if value:
+                return value
             # A stanza without a token keeps it in the OS keyring (glab's default store);
             # glab itself reads it back.
             return _glab_cli_get("token", want) or None

@@ -317,8 +317,10 @@ def execute(
     try:
         # urlparse raises on malformed input (e.g. "http://[::1" - unterminated
         # IPv6), and this ran outside the guarded path, so it escaped execute().
-        dest_host = (urlparse(request.url_or_argv).hostname
-                     if isinstance(request.url_or_argv, str) else None)
+        target = urlparse(request.url_or_argv) if isinstance(request.url_or_argv, str) else None
+        # glab keys a self-managed login by host:port, so the credential host keeps the port.
+        dest_host = (None if target is None
+                     else f"{target.hostname}:{target.port}" if target.port else target.hostname)
     except ValueError as exc:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             redact(f"malformed request target: {exc}"),
