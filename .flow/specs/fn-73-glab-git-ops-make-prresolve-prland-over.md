@@ -107,3 +107,14 @@ This spec targets Merge Requests rather than issues, so it is not blocked on fn-
 ## Resolved via Project Docs
 - **fn-69 and fn-139 are done** (`.flow/specs/fn-69-*.json`, `.flow/specs/fn-139-*.json`, status `done`). Their verified `glab` set covers issues only (`.flow/specs/fn-69-tracker-sync-gitlab-adapter-glab-cli.md:16`).
 - **Strategy rules.** "flowctl grows only under burden of proof" and "Agent first" (`STRATEGY.md:27-28`) argue against new public verbs and a config key.
+
+## Resolved via Contributor Research
+Jan Hommels (@janhommels) ran the merge-request side of `glab` against a live self-managed GitLab in janhommels/flow-next#1. That PR adds public `flowctl forge` verbs and branches inside make-pr's shell scripts, so its shape is not adopted; its measurements are. They are the starting point for R11's fixtures, which are still recorded against a live project.
+- **JSON writes need an explicit Content-Type.** `glab api --input` sends none, and GitLab rejects a JSON body without it. Sending the body on stdin also keeps large MR descriptions clear of Windows argv limits.
+- **A just-pushed branch can be briefly invisible.** MR create answers `{"message":{"source_branch":["does not exist"]}}`; retry on that exact answer.
+- **Open means `opened` plus `locked`.** An open-MR lookup that reads only `opened` misses locked MRs.
+- **Drafts are a title prefix.** A draft MR is created with `Draft: ` in front of the title.
+- **SSH host aliases resolve through `ssh -G`**, the same way git and gh resolve them, before the origin host is classified.
+- **`GH_ENTERPRISE_TOKEN` makes gh claim every host.** When it is set, ask `glab auth status --hostname <host>` before gh.
+- **A missing or failing `glab` is a probe failure, never "no MR".**
+- **Merged MRs behind a commit:** `projects/:id/repository/commits/<sha>/merge_requests`, keeping `state == merged` (why-scout and the defect route).
