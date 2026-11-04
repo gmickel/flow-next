@@ -21,8 +21,8 @@ As of 9.5.1, a GitLab-hosted run gets past `flow --auto`'s PR probe (#583, fn-31
 - **Shape decided 2026-11-02 (supersedes the "resolve once, env > config > ask, persisted" sketch above).**
   - **The forge is derived from the origin remote.** github.com, or a host `gh` is logged in to, means GitHub. A GitLab host (gitlab.com, a host `glab` is logged in to, or `CI_SERVER_HOST`) means GitLab. An unknown host stops with `NEEDS_HUMAN`, as make-pr's preflight does today. There is no config key and nothing is persisted, so the tracker axis and the forge axis stay independent: GitLab issues with GitHub code still works, and so does the reverse.
   - **flowctl has one internal "PRs or MRs for this branch" lookup.** Today four places run `gh pr list` themselves: spec-approval PR rows, the route judge, the pilot snapshot, and the tracker's merge evidence. They all call one function that returns number, url, state, head SHA and merged for either forge. No new public flowctl verb is added.
-  - **Each skill branches once on the forge.** The GitLab side lives in a GitLab reference per skill (make-pr, resolve-pr, land), with resolve-pr's MR discussion scripts beside the existing GitHub ones. GitHub skill paths are not edited.
-  - **A general forge layer waits for a third forge.** A normalized merge-request interface with adapters is built only when a third forge (for example Bitbucket) arrives, so it can be designed from three real implementations.
+  - **Each skill dispatches on the forge by name.** A skill checks the forge once; for any forge other than GitHub it reads that forge's reference (`forge-gitlab.md` beside make-pr, resolve-pr and land), with resolve-pr's MR discussion scripts beside the existing GitHub ones. The dispatch names no forge, so a new forge is a new reference file, not a new conditional. GitHub skill paths are not edited.
+  - **Each forge is an internal adapter behind one interface (amended 2026-11-04; replaces "a general forge layer waits for a third forge").** A forge adapter answers a fixed set of questions: does this origin host belong to me, which PRs or MRs exist for a branch (as the shared row), and the merge-evidence reads. A registry keyed by forge name holds the adapters; the forge rule and the shared lookup dispatch through it, and no caller names a forge or branches on one. Internal names are forge-neutral (no `pr_`/`mr_` in the shared code). The existing `gh` calls move behind the GitHub adapter unchanged. A later forge (Bitbucket Cloud, Bitbucket Data Center) adds one adapter and one reference per skill and changes no caller. The interface is internal: no public flowctl verb.
 
 ## API Contracts
 <!-- scope: technical -->
@@ -56,6 +56,7 @@ As of 9.5.1, a GitLab-hosted run gets past `flow --auto`'s PR probe (#583, fn-31
 - **R9:** A merged MR is merge evidence for tracker Done, under the same "never terminal without merge evidence" rule as a merged PR. [inferred]
 - **R10:** Behaviour on a GitHub origin is unchanged; the existing make-pr, land, resolve-pr, route, pilot and merge-evidence tests pass unmodified. [inferred]
 - **R11:** Each `glab` command the skills and flowctl rely on is first run against a live GitLab project and its real output saved as a test fixture. Tests with a stubbed `glab` built from those fixtures cover R4-R9 in CI. [inferred]
+- **R12:** Forge-specific code sits behind one internal adapter interface with a registry keyed by forge name, and skills load a forge's reference by name. No caller branches on a forge, and a test adapter registered in the tests is detected and answers the shared lookup without any caller changing. [paraphrase]
 
 ## Boundaries
 <!-- scope: business -->
@@ -63,7 +64,7 @@ As of 9.5.1, a GitLab-hosted run gets past `flow --auto`'s PR probe (#583, fn-31
 - **Not fn-69** — fn-69 is tracker/issue projection; this is code-hosting/MR review + ship.
 - **GitHub/Linear/Jira unaffected** — additive forge.
 - **fn-69 and fn-139 have landed.** Reuse their `glab` transport, host resolution and recorded `glab` defects; don't build a second transport.
-- No `forge.type` config key and no general forge layer (see Architecture).
+- No `forge.type` config key and no public forge verbs; the adapter interface stays internal to flowctl (see Architecture).
 - No Bitbucket, Gitea or other forges.
 - No GitLab merge trains, and no merge-when-pipeline-succeeds.
 - The full live GitLab end-to-end run (idea → merged MR) happens later, outside this spec's CI tests. The reporter of #462 offered to test a branch.
@@ -77,6 +78,7 @@ Companies hosting code on GitLab want flow-next's full pipeline, not just issue 
 ### Implementation Tradeoffs
 - **Forge from origin, not a config key.** make-pr's preflight already reads the origin host, and a key could disagree with the remote. The cost is that a repo can't route to GitLab while origin points elsewhere.
 - **Seams plus one shared lookup, not a forge layer (#462's proposal).** GitHub paths in the skills stay exactly as they are and are already proven, so the risk sits only in the new GitLab arms. The forge layer would mean about eight new flowctl verbs and rewriting land and resolve-pr's working GitHub paths, against "flowctl grows only under burden of proof" and "Agent first". A third forge later adds one branch to the shared lookup and one reference per skill. That is also the point to extract a layer, designed from three real implementations.
+- **Amended 2026-11-04: internal adapters now, not branches.** The maintainer wants a forge added later without touching callers, not an if/else that is refactored at forge three. The adapter interface and registry stay internal (no public verbs, no config key), so the cost is moving the existing `gh` lookups behind the GitHub adapter, guarded by R10's unchanged tests. The interface is designed from two forges, so a third may still widen it; that is accepted.
 - **Record before relying.** fn-69 verified `glab` for issues only. No merge-request command has been run, so fixtures come from a live project first.
 
 ## Strategy Alignment
