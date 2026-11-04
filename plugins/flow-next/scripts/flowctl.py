@@ -23668,8 +23668,9 @@ _GITLAB_MR_STATES = {"opened": "OPEN", "locked": "OPEN", "merged": "MERGED", "cl
 
 def _gitlab_mr_row(mr: Any) -> Optional[dict]:
     if not (isinstance(mr, dict) and isinstance(mr.get("state"), str) and mr["state"] in _GITLAB_MR_STATES
-            and "sha" in mr and "merged_at" in mr and isinstance(mr.get("iid"), int) and isinstance(mr.get("web_url"), str)
-            and isinstance(mr.get("source_branch"), str)
+            and "sha" in mr and "merged_at" in mr and isinstance(mr.get("iid"), int)
+            and isinstance(mr.get("web_url"), str) and mr["web_url"]
+            and isinstance(mr.get("source_branch"), str) and mr["source_branch"]
             and isinstance(mr.get("source_project_id"), int) and isinstance(mr.get("project_id"), int)
             and all(isinstance(mr.get(key), (str, type(None))) for key in ("sha", "merged_at"))):
         return None

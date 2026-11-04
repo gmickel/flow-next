@@ -33,7 +33,7 @@ glab_write() {
 
 if [[ "${1:-}" == api-scope ]]; then
   TOKEN=$(glab_json personal_access_tokens/self)
-  printf '%s' "$TOKEN" | jq -e '.scopes | index("api") != null' >/dev/null \
+  printf '%s' "$TOKEN" | jq -e '(.scopes | type) == "array" and any(.scopes[]; . == "api")' >/dev/null \
     || fail "the glab token for ${GITLAB_HOST:-?} lacks api scope"
   exit 0
 fi
@@ -107,7 +107,7 @@ done
 # A fork's merge request can share the branch name; only the origin project's count.
 # A locked merge request is mid-merge and still open.
 printf '%s' "$ROWS" | jq -c --arg read "$READ" '
-  if all(.[]; type == "object" and (.iid | type) == "number" and (.web_url | type) == "string"
+  if all(.[]; type == "object" and (.iid | type) == "number" and (.web_url | type) == "string" and .web_url != ""
          and (.state | IN("opened", "locked", "merged", "closed")) and (.target_branch | type) == "string"
          and (.source_project_id | type) == "number" and (.project_id | type) == "number")
   then [.[] | select(.source_project_id == .project_id)

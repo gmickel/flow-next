@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -328,29 +329,38 @@ class MakePrVerifyProbe(unittest.TestCase):
     @unittest.skipIf(shutil.which("jq") is None, "verify fence needs jq")
     @_POSIX_BASH
     def test_make_pr_verify_off_github_reads_the_snapshot(self) -> None:
-        # Off GitHub the verify reads the fresh snapshot's selected.pr from the
-        # persisted file, in a fresh shell: a failed probe, a missing row or a
+        # Off GitHub the verify takes its own fresh snapshot in a fresh shell, never
+        # a stale persisted one: a failed snapshot or probe, a missing row or a
         # malformed body is a failure, never a healthy no-advance.
+        stale = '{"selected":{"pr":{"probe_failed":false,"open":null}}}'
         cases = {
-            '{"selected":{"pr":{"probe_failed":false,"open":{"url":"https://gl/-/merge_requests/4"}}}}':
+            ('{"selected":{"pr":{"probe_failed":false,"open":{"url":"https://gl/-/merge_requests/4"}}}}', 0):
                 ("https://gl/-/merge_requests/4", "0"),
-            '{"selected":{"pr":{"probe_failed":false,"open":null}}}': ("", "0"),
-            '{"selected":{"pr":{"probe_failed":true,"open":null}}}': ("", "1"),
-            '{"selected":null}': ("", "1"),
-            '{not json': ("", "1"),
+            ('{"selected":{"pr":{"probe_failed":false,"open":null}}}', 0): ("", "0"),
+            ('{"selected":{"pr":{"probe_failed":true,"open":null}}}', 0): ("", "1"),
+            ('{"selected":null}', 0): ("", "1"),
+            ('{not json', 0): ("", "1"),
+            ('', 1): ("", "1"),
         }
         text = _read(AUTO_MD)
         fence = _fence_from(text[text.index("On a forge other than GitHub (the snapshot's `forge`"):],
                             "PR_VERIFY_FAILED=0\n")
         env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
-        for body, (url, failed) in cases.items():
-            with self.subTest(body=body), tempfile.TemporaryDirectory() as tmp:
+        for (body, rc), (url, failed) in cases.items():
+            with self.subTest(body=body, rc=rc), tempfile.TemporaryDirectory() as tmp:
                 subprocess.run(["git", "init", "-q", tmp], check=True)
-                (Path(tmp) / ".flow" / "tmp").mkdir(parents=True)
-                (Path(tmp) / ".flow" / "tmp" / "pilot-snapshot.json").write_text(body)
+                snap = Path(tmp) / ".flow" / "tmp" / "pilot-snapshot.json"
+                snap.parent.mkdir(parents=True)
+                snap.write_text(stale)
+                flowctl = Path(tmp) / "flowctl"
+                flowctl.write_text(f"#!/usr/bin/env bash\nprintf '%s' {shlex.quote(body)}\nexit {rc}\n")
+                flowctl.chmod(0o755)
                 out = subprocess.run(["bash", "-c", fence + "printf '%s|%s' \"$OPEN_PR_URL\" \"$PR_VERIFY_FAILED\""],
-                                     cwd=tmp, env=env, capture_output=True, text=True, check=True).stdout
+                                     cwd=tmp, env={**env, "FLOWCTL": str(flowctl), "SELECTED_SPEC": "fn-1"},
+                                     capture_output=True, text=True, check=True).stdout
                 self.assertEqual(out, f"{url}|{failed}")
+                if rc == 0:
+                    self.assertEqual(snap.read_text(), body)
 
 
 if __name__ == "__main__":

@@ -186,6 +186,7 @@ class HelperReadTests(GitLabShellCase):
             ("not a listing", self.derived("mr-branch-all", lambda rows: rows[0]), PROJECT),
             ("empty output", self.blank("mr-branch-all", ""), PROJECT),
             ("non-JSON output", self.blank("mr-branch-all", "<html>unreadable</html>\n"), PROJECT),
+            ("empty web_url", self.derived("mr-branch-all", lambda rows: [{**rows[0], "web_url": ""}]), PROJECT),
         ]
         for name, fixture, project in cases:
             with self.subTest(name):
@@ -197,6 +198,9 @@ class HelperReadTests(GitLabShellCase):
         for name, rc in (("token-self-api", 0), ("token-self-read-api", 1), ("token-self-revoked", 1)):
             with self.subTest(name):
                 self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=answers(recorded(name))).returncode, rc)
+        # Scopes as a string are malformed: "read_api" must not read as api scope.
+        string_scopes = self.derived("token-self-read-api", lambda tok: {**tok, "scopes": "read_api"})
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=answers(string_scopes)).returncode, 1)
 
 
 class OriginBlockTests(GitLabShellCase):
@@ -481,6 +485,12 @@ esac
                 self.assertEqual(self.bodies()[-1], written)
                 self.assertEqual(self.calls_of("gh"), [])
                 self.assertEqual(self.calls_of("glab api --method POST"), [])
+
+    def test_update_read_failure_is_never_no_open_merge_request(self):
+        result = self.create([self.blank("mr-branch-create", "")], UPDATE_MODE="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cannot read the open merge request", result.stderr)
+        self.assertNotIn("no open PR", result.stderr)
 
     def test_tracker_reference_is_the_issue_url_on_the_other_forge(self):
         cases = [("github", "gitlab", "https://github.com/o/r/issues/5", "Ref https://github.com/o/r/issues/5"),

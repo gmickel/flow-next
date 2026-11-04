@@ -28,7 +28,13 @@ if [[ "$PUSH_RC" -ne 0 ]]; then
 fi
 sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
-  UPDATE_PR_NUMBER=$("${PR_READ:-gh}" pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
+  if [[ -n "${PR_READ:-}" ]]; then
+    # A failed read is a failure, never "no open merge request".
+    UPDATE_PR_NUMBER=$("$PR_READ" pr view --json number,state --jq 'select(.state=="OPEN") | .number') \
+      || { echo "Error: --update: cannot read the open merge request at edit time." >&2; exit 1; }
+  else
+    UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
+  fi
   if [[ -z "$UPDATE_PR_NUMBER" ]]; then
     echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
   fi

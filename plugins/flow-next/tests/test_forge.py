@@ -193,7 +193,8 @@ class GitLabAdapterTests(ForgeTestCase):
                                 glab=[fixture("mr-missing-project")])),
             *((f"malformed row: {name}", dict(head="fn73-fx-reused", glab=[malformed(change)])) for name, change in (
                 ("no iid", lambda mr: mr.pop("iid")), ("no sha", lambda mr: mr.pop("sha")),
-                ("no merged_at", lambda mr: mr.pop("merged_at")), ("list state", lambda mr: mr.update(state=["opened"])))),
+                ("no merged_at", lambda mr: mr.pop("merged_at")), ("list state", lambda mr: mr.update(state=["opened"])),
+                ("empty source_branch", lambda mr: mr.update(source_branch="")), ("empty web_url", lambda mr: mr.update(web_url="")))),
             ("incomplete pagination", dict(state="open", limit=1000, glab=[fixture("mr-open-page-1"), cut])),
         ]
         for name, kwargs in cases:

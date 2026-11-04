@@ -450,11 +450,15 @@ OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r 'first(.[] | select(
 
 `PR_VERIFY_FAILED=1` (gh missing, unauthenticated, API error, or unparseable output) is crash-class: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="PR probe failed at make-pr verify"`, no strike. Only a clean probe with no OPEN row is the healthy-no-advance path.
 
-On a forge other than GitHub (the snapshot's `forge` is set and is not `github`), skip the gh fence. Rerun the snapshot fence with `PILOT_SPEC="$SELECTED_SPEC"`, whose failure is the same crash-class stop, and read the fresh `selected.pr` instead; `probe_failed`, a missing row or unparseable output sets `PR_VERIFY_FAILED=1` as above:
+On a forge other than GitHub (the snapshot's `forge` is set and is not `github`), skip the gh fence. This fence takes a fresh snapshot of the selected spec itself (rewriting the persisted file) and reads its `selected.pr`; a failed snapshot, `probe_failed`, a missing row or unparseable output sets `PR_VERIFY_FAILED=1` as above:
 
 ```bash
 PR_VERIFY_FAILED=0
-[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
+if PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot --spec "$SELECTED_SPEC" --json)"; then
+  printf '%s' "$PILOT_SNAPSHOT" > "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" || PR_VERIFY_FAILED=1
+else
+  PR_VERIFY_FAILED=1
+fi
 OPEN_PR_URL=$(printf '%s' "$PILOT_SNAPSHOT" | jq -er 'if .selected.pr.probe_failed == false then (.selected.pr.open.url // "") else error end' 2>/dev/null) || PR_VERIFY_FAILED=1
 ```
 
