@@ -47,9 +47,29 @@ Builds the seam: the origin-host forge rule, the internal adapter registry, the 
 - [ ] MANIFEST.json regenerated; focused tests and ruff pass
 
 ## Done summary
-TBD
+Added the forge seam to flowctl. `repo_forge` (cached per repo, reset with `repo_forge.cache_clear()`) classifies the origin remote. The internal `FORGE_ADAPTERS` registry holds a GitHub adapter (today's `gh pr list` listings and the spec-approval read) and a GitLab adapter that lists MRs through `glab api` via the tracker executor, with `GITLAB_HOST` passed through the new `Request.env`. The route judge and both pilot snapshot listings read through `forge_list_prs`. Spec-approval rows report "spec approval is unsupported on this forge (<forge>)" off GitHub. `pilot snapshot` now has a top-level `forge` field.
 
+Tier: session (jev long_running 0.44) at default effort (model: claude-opus-5-5[1m])
+
+Evidence (measured):
+- `flowctl pilot snapshot --spec <id> --json` in a scratch Flow repo whose origin is the live GitLab project returned `forge: gitlab`, open MR !2, closed !1, and route `existing_pr_tail`. A fork's MR !7 on the same branch name was excluded.
+- Focused suites passed: test_forge, test_judge_route, test_pilot_snapshot, test_evidence_and_spec_approval, make-pr preflight/close, flow_auto, tracker executor/distribution (228 tests). `ruff check .` and `sync-codex.sh --check` passed. The existing route, pilot and approval tests are unmodified (R10).
+- Fixtures under plugins/flow-next/tests/fixtures/gitlab/ are live recordings (argv, env, exit code, raw stdout/stderr) from GitLab EE 19.5.3 with glab 1.124.0.
+- Baseline: green with `PYTHONPATH=plugins/flow-next/tests`. The Quick command as written (`python3 -m unittest plugins/flow-next/tests/test_...py`) fails to import `test_pilot_strikes` without that path. This was the case before the change.
+
+Decisions:
+- The route judge's gh argv now matches the pilot snapshot's (`--head B --state all --limit 100 --json number,url,state,headRefName,headRefOid,mergedAt`), so one GitHub listing serves both. Before, the judge's argv had a different flag order and no headRefName. Behaviour and tests are unchanged.
+- A locked MR could not be produced on the test project (it is a transient mid-merge state). The opened/locked -> OPEN mapping is tested on a recorded row with only `state` changed. The open listing queries `state=opened` and `state=locked` separately, because GitLab's `opened` filter excludes locked.
+- For an SSH origin, the port is dropped because it is the SSH port, not the API port. So a self-managed GitLab reached over SSH on a non-default web port reads as unknown unless `CI_SERVER_HOST` matches. In that case the readers fall back to the GitHub adapter (fn-310's no-PR answer). Follow-up if needed.
+- Only glab's recorded logged-out answer counts as "not this host". Any other `glab auth status` failure, such as an offline host or a timeout, ends detection as unknown, so an enterprise gh token never claims a GitLab host.
+- Review: NEEDS_WORK on three findings, all fixed: malformed MR rows raised instead of failing the probe, offline glab fell through to gh, and underscore SSH aliases were rejected. The re-review returned SHIP.
+
+Left on the live test instance for later tasks: branches fn73-fx-*, MRs !1-!7 (!3 merged, !1 closed), and fork project root/flownext-fork (id 2).
+
+stage: impl-review - ran [2026-11-04..2026-11-04]
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f4de7b9e84981b6acfe393fd01348502a6a766bf, 42476807f08617508d0bf30a6a5b1ac29baefec9
+- Tests: PYTHONPATH=plugins/flow-next/tests python3 -m unittest plugins/flow-next/tests/test_forge.py plugins/flow-next/tests/test_judge_route.py plugins/flow-next/tests/test_pilot_snapshot.py plugins/flow-next/tests/test_make_pr_preflight_auth.py plugins/flow-next/tests/test_make_pr_close.py plugins/flow-next/tests/test_flow_auto.py plugins/flow-next/tests/test_evidence_and_spec_approval.py plugins/flow-next/tests/test_tracker_executor.py plugins/flow-next/tests/test_tracker_distribution.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh --check
 - PRs:
