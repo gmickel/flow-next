@@ -482,7 +482,7 @@ esac
 
     def test_tracker_reference_is_the_issue_url_on_the_other_forge(self):
         cases = [("github", "gitlab", "https://github.com/o/r/issues/5", "Ref https://github.com/o/r/issues/5"),
-                 ("gitlab", "github", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref http://localhost:8929/flownext/flownext/-/issues/5"),
+                 ("gitlab", "github", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref `#5`"),   # backticked: GitHub output unchanged
                  ("github", "gitlab", "", BODY.splitlines()[-1]),   # no stored URL: no reference, never #5
                  ("github", "github", "https://github.com/o/r/issues/5", "Refs #5"),
                  ("gitlab", "gitlab", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref `#5`")]
