@@ -47,7 +47,8 @@ BRANCH=$(jq -rn --arg v "$HEAD" '$v | @uri')
 ROWS='[]'; PAGE=1
 while :; do
   LISTED=$(glab_json "$ENDPOINT?state=all&source_branch=$BRANCH&per_page=100&page=$PAGE")
-  COUNT=$(printf '%s' "$LISTED" | jq 'if type == "array" then length else error("not a listing") end') \
+  # Exactly one JSON array: empty or other output is unreadable, never an empty listing.
+  COUNT=$(printf '%s' "$LISTED" | jq -s 'if length == 1 and (.[0] | type) == "array" then .[0] | length else error("not a listing") end') \
     || fail "unreadable merge-request listing"
   ROWS=$(printf '%s\n%s' "$ROWS" "$LISTED" | jq -cs '.[0] + .[1]')
   [[ "$COUNT" -lt 100 ]] && break

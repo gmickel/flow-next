@@ -98,6 +98,13 @@ class GitLabShellCase(unittest.TestCase):
         path.write_text(json.dumps(fx), encoding="utf-8")
         return path
 
+    def blank(self, name, stdout):
+        """A recorded success whose stdout is replaced: glab exits 0 without a listing."""
+        path = self.derived(name, lambda rows: rows)
+        fx = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**fx, "stdout": stdout}), encoding="utf-8")
+        return path
+
     def run_sh(self, argv, cwd=None, **env):
         base = {"PATH": str(self.bin), "HOME": str(self.tmp), "STUB_CALLS": str(self.calls),
                 "GITLAB_HOST": HOST, "ORIGIN_PROJECT": PROJECT}
@@ -154,6 +161,8 @@ class HelperReadTests(GitLabShellCase):
             ("row without iid", self.derived("mr-branch-all", drop_iid), PROJECT),
             ("list-valued state", self.derived("mr-branch-all", lambda rows: [{**rows[0], "state": ["opened"]}]), PROJECT),
             ("not a listing", self.derived("mr-branch-all", lambda rows: rows[0]), PROJECT),
+            ("empty output", self.blank("mr-branch-all", ""), PROJECT),
+            ("non-JSON output", self.blank("mr-branch-all", "<html>unreadable</html>\n"), PROJECT),
         ]
         for name, fixture, project in cases:
             with self.subTest(name):
@@ -290,7 +299,7 @@ class GitLabChainDetectTests(GitLabShellCase):
         parent, child, _ = self.chain("fn73-fx-reused")
         malformed = self.derived("mr-branch-all", lambda rows: [{k: v for k, v in r.items() if k != "web_url"} for r in rows])
         for name, fixture, project in (("glab fails", recorded("mr-missing-project"), "flownext/missing"),
-                                       ("malformed", malformed, PROJECT)):
+                                       ("malformed", malformed, PROJECT), ("empty output", self.blank("mr-branch-all", ""), PROJECT)):
             with self.subTest(name):
                 rc, got = self.detect(child, fixture, project)
                 self.assertEqual(rc, 2, got["_stderr"])
@@ -328,7 +337,7 @@ printf 'flowctl %s\\n' "$*" >> "$STUB_CALLS"
     def test_failed_or_malformed_read_stops_before_close(self):
         malformed = self.derived("mr-branch-all", lambda rows: [{k: v for k, v in r.items() if k != "project_id"} for r in rows])
         for name, fixture, project in (("glab fails", recorded("mr-missing-project"), "flownext/missing"),
-                                       ("malformed", malformed, PROJECT)):
+                                       ("malformed", malformed, PROJECT), ("empty output", self.blank("mr-branch-all", ""), PROJECT)):
             with self.subTest(name):
                 self.calls.write_text("", encoding="utf-8")
                 result = self.tail(fixture, project=project)
