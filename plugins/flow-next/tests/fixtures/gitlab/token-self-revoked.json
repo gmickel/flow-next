@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "personal_access_tokens/self"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929",
+    "GITLAB_TOKEN": "<the same token, revoked>"
+  },
+  "returncode": 1,
+  "stdout": "{\"error\":\"invalid_token\",\"error_description\":\"Token was revoked. You have to re-authorize from the user.\"}",
+  "stderr": "glab: HTTP 401\n",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

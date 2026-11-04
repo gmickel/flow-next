@@ -3,23 +3,63 @@
 set -e
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
+# The PR reads below run gh unless this block points them at the forge's read helper.
+FORGE=""; PR_READ=""; PR_HEAD_REFS=""
 if [[ "$DRY_RUN" != "1" ]]; then
-  # make-pr opens GitHub pull requests; an origin elsewhere (GitLab) stops before
-  # any close or push (#583). An SSH host alias resolves through ssh -G, as in gh.
+  # The origin remote's host names the forge: GitHub pull requests through gh, GitLab merge
+  # requests through glab; any other host stops before any close or push (#583).
+  # An SSH host alias resolves through ssh -G, as in gh. The same rule is repo_forge in flowctl.py.
   ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || ORIGIN_URL=""
   ORIGIN_HOST=$(printf '%s' "$ORIGIN_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#')
   if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* ]]; then
     SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
     [[ -z "$SSH_HOST" ]] || ORIGIN_HOST="$SSH_HOST"
   fi
-  if [[ "$ORIGIN_HOST" != github.com && "$ORIGIN_HOST" != ssh.github.com ]] \
-    && ! { command -v gh >/dev/null 2>&1 && gh auth token --hostname "$ORIGIN_HOST" >/dev/null 2>&1; }; then
-    echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only; origin host ${ORIGIN_HOST:-none} is not github.com or a host gh is logged in to. Open the merge request by hand, or run gh auth login --hostname ${ORIGIN_HOST:-<host>} for GitHub Enterprise." >&2; exit 2; fi
-  if ! command -v gh >/dev/null 2>&1; then
-    echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi
-  # github.com first; otherwise any logged-in host, since later gh calls pick the host from the remote (GitHub Enterprise, #532).
-  if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
-    echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
+  if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
+    FORGE=github
+  else
+    # An http(s) port is the forge's own (an SSH port is not), so it stays on the host.
+    ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE 's#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
+    ENTERPRISE_GH="${GH_ENTERPRISE_TOKEN:-}${GITHUB_ENTERPRISE_TOKEN:-}"
+    GLAB_ANSWER=no
+    if [[ ! "$ORIGIN_HOST" =~ ^[a-z0-9.-]+(:[0-9]+)?$ ]]; then
+      GLAB_ANSWER=unknown
+    elif [[ "$ORIGIN_HOST" == gitlab.com || ( -n "${CI_SERVER_HOST:-}" && "${ORIGIN_HOST%%:*}" == "$(printf '%s' "$CI_SERVER_HOST" | tr '[:upper:]' '[:lower:]')" ) ]]; then
+      FORGE=gitlab
+    elif [[ -z "$ENTERPRISE_GH" ]] && command -v gh >/dev/null 2>&1 && gh auth token --hostname "$ORIGIN_HOST" >/dev/null 2>&1; then
+      FORGE=github
+    elif command -v glab >/dev/null 2>&1; then
+      # Only glab's logged-out answer is a no; a failed answer (an offline host) leaves the
+      # host unknown. gh with an enterprise token claims every host, so glab answered first.
+      if GLAB_STATUS=$(glab auth status --hostname "$ORIGIN_HOST" 2>&1); then GLAB_ANSWER=yes; FORGE=gitlab
+      elif [[ "$(printf '%s' "$GLAB_STATUS" | tr -s '[:space:]' ' ')" != *"has not been authenticated"* ]]; then GLAB_ANSWER=unknown; fi
+    fi
+    if [[ -z "$FORGE" && -n "$ENTERPRISE_GH" && "$GLAB_ANSWER" == no ]] && command -v gh >/dev/null 2>&1 \
+      && gh auth token --hostname "$ORIGIN_HOST" >/dev/null 2>&1; then
+      FORGE=github
+    fi
+  fi
+  if [[ -z "$FORGE" ]]; then
+    echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only on github.com or a host gh is logged in to, and GitLab merge requests on gitlab.com or a host glab is logged in to; origin host ${ORIGIN_HOST:-none} is neither. Run gh auth login --hostname ${ORIGIN_HOST:-<host>} or glab auth login --hostname ${ORIGIN_HOST:-<host>}, or open the request by hand." >&2; exit 2
+  elif [[ "$FORGE" == gitlab ]]; then
+    if ! command -v glab >/dev/null 2>&1; then
+      echo "Error: glab CLI not installed. Install glab from https://gitlab.com/gitlab-org/cli then run glab auth login --hostname $ORIGIN_HOST." >&2; exit 1; fi
+    if [[ "$GLAB_ANSWER" != yes ]] && ! glab auth status --hostname "$ORIGIN_HOST" >/dev/null 2>&1; then
+      echo "Error: glab CLI not authenticated to $ORIGIN_HOST, or the host is unreachable; run glab auth login --hostname $ORIGIN_HOST." >&2; exit 1; fi
+    # The one forge guard: on GitLab the three PR reads run the merge-request helper.
+    ORIGIN_PROJECT=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PROJECT=${ORIGIN_URL#*://*/}
+    ORIGIN_PROJECT=${ORIGIN_PROJECT%/}; ORIGIN_PROJECT=${ORIGIN_PROJECT#/}; ORIGIN_PROJECT=${ORIGIN_PROJECT%.git}
+    export GITLAB_HOST="$ORIGIN_HOST" ORIGIN_PROJECT
+    PR_READ="$(dirname "$FLOWCTL")/make-pr-gitlab.sh"; PR_HEAD_REFS=refs/merge-requests
+    if ! "$PR_READ" api-scope; then
+      echo "NEEDS_HUMAN: make-pr needs a glab token with api scope on $ORIGIN_HOST to open merge requests; run glab auth login --hostname $ORIGIN_HOST with an api-scoped token." >&2; exit 2; fi
+  else
+    if ! command -v gh >/dev/null 2>&1; then
+      echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi
+    # github.com first; otherwise any logged-in host, since later gh calls pick the host from the remote (GitHub Enterprise, #532).
+    if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
+      echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
+  fi
 fi
 # end:block
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
@@ -59,7 +99,7 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     [[ -z "$DEP_BRANCH" ]] && continue
     DEP_REF=""
     if git -C "$REPO_ROOT" fetch -q origin "refs/heads/${DEP_BRANCH}:refs/remotes/origin/${DEP_BRANCH}" 2>/dev/null; then DEP_REF="refs/remotes/origin/$DEP_BRANCH"; fi
-    if DEP_PR_LIST=$(gh pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
+    if DEP_PR_LIST=$("${PR_READ:-gh}" pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
       DEP_PR_JSON=$(printf '%s' "$DEP_PR_LIST" | jq -c '(map(select(.state=="OPEN")) + map(select(.state=="MERGED")) + map(select(.state=="CLOSED"))) | .[0] // empty')
     elif [[ "$DRY_RUN" == "1" ]]; then
       echo "Note: cannot read the PR state of $DEP_BRANCH under --dry-run; treating parent $DEP as open." >&2
@@ -72,7 +112,8 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
     if [[ "$DEP_PR_STATE" == "MERGED" && "$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')" == "$(git -C "$REPO_ROOT" branch --show-current)" ]]; then continue; fi
     if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
-      if git -C "$REPO_ROOT" fetch -q origin "refs/pull/$DEP_PR_NUMBER/head:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
+      DEP_PR_HEAD="refs/pull/$DEP_PR_NUMBER/head"; [[ -z "${PR_HEAD_REFS:-}" ]] || DEP_PR_HEAD="$PR_HEAD_REFS/$DEP_PR_NUMBER/head"
+      if git -C "$REPO_ROOT" fetch -q origin "${DEP_PR_HEAD}:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
         DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
       else
         echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
@@ -163,7 +204,10 @@ if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPE
   fi
   echo "Note: completion review for $SPEC_ID reads $REVIEW_STATUS; the spec remains open and is not closed. Opening as a DRAFT. Once /flow-next:spec-completion-review $SPEC_ID passes, run /flow-next:make-pr $SPEC_ID --update to close the spec, then mark the PR ready." >&2
 fi
-EXISTING_JSON=$(gh pr view --json url,state,number 2>/dev/null | jq -c 'select(.state == "OPEN")' || true)
+# gh's failure is its "no PR on this branch"; a failed merge-request read is never "no MR".
+EXISTING_JSON=$("${PR_READ:-gh}" pr view --json url,state,number 2>/dev/null) || [[ -z "${PR_READ:-}" ]] || {
+  echo "NEEDS_HUMAN: cannot read the merge requests of this branch; nothing closed or pushed" >&2; exit 2; }
+EXISTING_JSON=$(printf '%s' "$EXISTING_JSON" | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)
 UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
@@ -180,7 +224,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "would rebase $HEAD_BRANCH onto ${REWRITE_ONTO#origin/} from $CHAIN_BOUNDARY" >&2
   elif [[ "${UPDATE_MODE:-0}" != "1" ]]; then
-    PRIOR_PRS=$(gh pr list --head "$HEAD_BRANCH" --state all --json number,state --jq '[.[] | select(.state=="OPEN" or .state=="MERGED")] | length' 2>/dev/null) || PRIOR_PRS=""
+    PRIOR_PRS=$("${PR_READ:-gh}" pr list --head "$HEAD_BRANCH" --state all --json number,state --jq '[.[] | select(.state=="OPEN" or .state=="MERGED")] | length' 2>/dev/null) || PRIOR_PRS=""
     [[ "$PRIOR_PRS" == "0" ]] || { echo "NEEDS_HUMAN: $HEAD_BRANCH already has an open or merged PR, or the probe failed; no rewrite" >&2; exit 2; }
     git -C "$REPO_ROOT" merge-base --is-ancestor "$CHAIN_BOUNDARY" HEAD 2>/dev/null || { echo "NEEDS_HUMAN: chain boundary $CHAIN_BOUNDARY is not an ancestor of HEAD" >&2; exit 2; }
     [[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ]] || { echo "NEEDS_HUMAN: working tree not clean; commit or stash before the merged-parent rewrite" >&2; exit 2; }
