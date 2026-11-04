@@ -9,6 +9,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 ### Added
 
 - **Teams that keep the spec as the only record can make the tracker issue follow it.** With `tracker.specWins: true`, the first task claim also writes the rendered spec as the issue body, and make-pr writes it again as the final body, so an edit made on the tracker does not survive either step. Each writes only when the live body differs from the spec. A failed first-claim write still moves the issue to In Progress and is recorded in the sync receipt. Off by default; every other sync event is unchanged. Thanks to @sn-furali for the request in #543.
+- **make-pr opens and updates GitLab merge requests.** On a GitLab origin, gitlab.com or self-managed, make-pr creates or updates a merge request through `glab` with the same body and spec close it uses on GitHub, instead of stopping before it closes or pushes. `--draft`, `--ready` and `--update` work on draft merge requests, and a spec built on another spec's branch targets that branch while its merge request is open. The forge comes from the origin remote, so there is no new setting; the `glab` login needs a token with the `api` scope. `flow --auto` confirms the merge request and stops there with `NEEDS_HUMAN`, because resolve-pr and land still work on GitHub pull requests only. `flowctl pilot snapshot` reports the origin's `forge`. Thanks to @janhommels for measuring how `glab` handles merge requests, and to @TechupBusiness for #462.
 
 ## [flow-next 9.5.1] - 2026-11-02
 

@@ -128,7 +128,9 @@ criterion.
   as its body, commit its URL to the log, and hand it to land as [tail.md](tail.md) says, bound by
   that URL (head `goal/<branch_name>`, base the default branch, the goal as its scoped spec).
   Without landing authority the run ends `DEFERRED_TO_LAND`. The review and opening report stage
-  `make-pr`, landing it `land`. The goal stays open for the person to accept and close.
+  `make-pr`, landing it `land`. The goal stays open for the person to accept and close. On a forge
+  other than GitHub (the snapshot's `forge` is set and is not `github`), commit the log entry and
+  stop `NEEDS_HUMAN` naming the pushed integration branch instead of opening this pull request.
 
 ## Verdicts, `--tick` and `--explain`
 

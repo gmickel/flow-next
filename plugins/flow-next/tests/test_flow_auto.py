@@ -325,6 +325,28 @@ class MakePrVerifyProbe(unittest.TestCase):
                                  capture_output=True, text=True, env=env, check=True).stdout
         self.assertEqual(out, "1")
 
+    @unittest.skipIf(shutil.which("jq") is None, "verify fence needs jq")
+    @_POSIX_BASH
+    def test_make_pr_verify_off_github_reads_the_snapshot(self) -> None:
+        # Off GitHub the verify reads the fresh snapshot's selected.pr: a
+        # failed probe, a missing row or a malformed body is a failure, never
+        # a healthy no-advance.
+        cases = {
+            '{"selected":{"pr":{"probe_failed":false,"open":{"url":"https://gl/-/merge_requests/4"}}}}':
+                ("https://gl/-/merge_requests/4", "0"),
+            '{"selected":{"pr":{"probe_failed":false,"open":null}}}': ("", "0"),
+            '{"selected":{"pr":{"probe_failed":true,"open":null}}}': ("", "1"),
+            '{"selected":null}': ("", "1"),
+            '{not json': ("", "1"),
+        }
+        line = next(l for l in _read(AUTO_MD).splitlines()
+                    if l.startswith("OPEN_PR_URL=$(printf '%s' \"$PILOT_SNAPSHOT\""))
+        for body, (url, failed) in cases.items():
+            with self.subTest(body=body):
+                script = f"PR_VERIFY_FAILED=0\nPILOT_SNAPSHOT={body!r}\n{line}\nprintf '%s|%s' \"$OPEN_PR_URL\" \"$PR_VERIFY_FAILED\""
+                out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+                self.assertEqual(out, f"{url}|{failed}")
+
 
 if __name__ == "__main__":
     unittest.main()
