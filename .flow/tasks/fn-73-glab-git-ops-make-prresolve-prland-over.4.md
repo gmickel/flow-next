@@ -41,9 +41,39 @@ Lets `flow --auto` verify the MR make-pr opened and stop there on a non-GitHub f
 - [ ] Full suite and ruff pass
 
 ## Done summary
-TBD
+`flow --auto` now confirms the merge request make-pr opened on a forge other than GitHub and stops there. On such a forge, auto.md's make-pr verify skips the gh fence: it reruns the snapshot fence, reloads the persisted snapshot, and reads `selected.pr`. A failed probe, a missing row or unparseable output is the crash-class `NEEDS_HUMAN`. tail.md stops the run after make-pr, or at an existing open PR, with the PR URL and `NEEDS_HUMAN`, whether or not landing is authorized, and never offers, defers to or dispatches land. Goal mode stops `NEEDS_HUMAN` before opening its integration-branch PR. The prerequisites and the Forbidden gh rule name the forge's CLI, and the PR probe reasons are now forge-neutral ("PR probe failed at ..."). flowctl.md documents the snapshot's `forge` field. CHANGELOG `## Unreleased` has the entry crediting @janhommels and @TechupBusiness. The Codex mirror is regenerated; the tracker manifest is unchanged because no Python changed.
 
+Tier: session (jev moderate 0.23) at default effort (model: claude-opus-5-5[1m])
+
+Evidence (measured):
+- Live end to end in a scratch Flow repo cloned from `flownext/flownext` (repo flowctl, `GITLAB_HOST=localhost:8929`). It used a throwaway spec on branch `fn73-e2e-auto` with one task done. I ran make-pr's sourced preflight, export, aid write and render, then `make-pr-create.sh`.
+  - Create, `--draft`: preflight set `FORGE=gitlab` and closed the spec. The run pushed the branch and opened !12 (`Draft: fn73 e2e greeting file`, `draft: true`, target `main`) with the rendered body.
+  - `--update`: I first set the description to a stale text. The update found MR 12, replaced the description with the rendered body, and kept the draft.
+  - `--update --ready`: the title lost `Draft: ` (`draft: false`, still `opened`).
+  - Verify: I took auto.md's snapshot fence and the new verify fence from the repo file and ran them in the clone. They gave `forge: gitlab`, route `existing_pr_tail`, `probe_failed: false`, and `OPEN_PR_URL=http://localhost:8929/flownext/flownext/-/merge_requests/12` with `PR_VERIFY_FAILED=0`. That route on a non-GitHub forge is tail.md's stop, `NEEDS_HUMAN` with the URL.
+  - Failing glab: with a glab shim that fails API reads, the same fences gave `probe_failed: true` and `PR_VERIFY_FAILED=1`.
+  - Cleanup: MR !12 and branch `fn73-e2e-auto` were deleted through the API. The project is back to MRs !1-!7 and its fixture branches.
+- Tests: one new table-driven test in `test_flow_auto.py` (`test_make_pr_verify_off_github_reads_the_snapshot`) runs the off-GitHub fence in a fresh shell with `PILOT_SNAPSHOT` unset. It checks the open URL, no open row, `probe_failed`, a missing `selected` and malformed JSON. The existing tests, including the GitHub verify-fence tests, are unmodified and pass. The gh fence is byte-for-byte unchanged (R10).
+- Focused Quick commands (test_forge, judge_route, pilot_snapshot, make_pr_preflight_auth, make_pr_close, flow_auto) passed, 78 tests. `sync-codex.sh --check` passed.
+- Full suite (`python3 scripts/run_tests_parallel.py`, log `.flow/tmp/fn73.4-full-suite.log`): 4160 ran, 1 failure, inherited and not caused by this task. `test_tracker_package_import.py` flags `test_forge.py` (added by task .1, unchanged here), because its `sys.path.insert(0, str(SCRIPTS))` does not contain the lowercase word `scripts` the static check looks for. The fix is one line in `test_forge.py` (for example `sys.path.insert(0, str(TESTS.parent / "scripts"))`). That file is outside this task's Touches, so I did not edit it.
+- `uvx ruff@0.16.0 check .` passed.
+- Baseline: green (77 focused tests, with `PYTHONPATH=plugins/flow-next/tests`, pre-existing).
+
+Decisions:
+- The non-GitHub stop is keyed on the snapshot's `forge` being set and not `github`. An unknown origin (`forge: null`) keeps today's GitHub-adapter behaviour, as R4 says for the readers.
+- On a non-GitHub forge the tail stops `NEEDS_HUMAN` even without landing authority, instead of `DEFERRED_TO_LAND`, because land cannot run there yet. auto.md's OPEN-PR bullet points at that stop first.
+- The verify reuses the existing snapshot fence instead of adding a second snapshot call shape.
+
+Review: codex, one reviewer (correctness). NEEDS_WORK on one P1: the new fence read `$PILOT_SNAPSHOT` without reloading the persisted file, so a verify run in its own tool call reported a false probe failure. Fixed in 23f63ea79, with the test changed to run in a fresh shell. The re-review returned SHIP. Memory entry captured: `bug/runtime-errors/skill-fence-read-a-shell-variable-an-2026-11-04`.
+
+Follow-ups:
+- `test_forge.py`'s scripts-path insert (above) keeps the full suite red until it is changed.
+- The rendered briefing's "Start at" link is `/<project>/blob/<sha>/<path>`, GitHub's form. GitLab's route is `/<project>/-/blob/<sha>/<path>`. I could not confirm whether GitLab redirects the legacy form, because the test project is private and the check needs a browser session. Not verified.
+
+stage: impl-review - ran [2026-11-04..2026-11-04]
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 52c6d33ee42a7a31fa611ab4346090683dd86885, 23f63ea7948853cebe890884407418003111de5d, 9d7cf647a6a4439f0aae5909b360608b0428dbf9
+- Tests: python3 -m unittest (focused Quick commands, PYTHONPATH=plugins/flow-next/tests): 78 OK, python3 scripts/run_tests_parallel.py: 4160 ran, 1 inherited failure (test_tracker_package_import flags test_forge.py from task .1), uvx ruff@0.16.0 check .: pass, live GitLab make-pr create/update/ready + auto.md verify fence: pass
 - PRs:
