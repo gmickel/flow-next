@@ -454,6 +454,7 @@ On a forge other than GitHub (the snapshot's `forge` is set and is not `github`)
 
 ```bash
 PR_VERIFY_FAILED=0
+[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
 OPEN_PR_URL=$(printf '%s' "$PILOT_SNAPSHOT" | jq -er 'if .selected.pr.probe_failed == false then (.selected.pr.open.url // "") else error end' 2>/dev/null) || PR_VERIFY_FAILED=1
 ```
 

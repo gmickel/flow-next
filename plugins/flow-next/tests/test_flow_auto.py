@@ -328,9 +328,9 @@ class MakePrVerifyProbe(unittest.TestCase):
     @unittest.skipIf(shutil.which("jq") is None, "verify fence needs jq")
     @_POSIX_BASH
     def test_make_pr_verify_off_github_reads_the_snapshot(self) -> None:
-        # Off GitHub the verify reads the fresh snapshot's selected.pr: a
-        # failed probe, a missing row or a malformed body is a failure, never
-        # a healthy no-advance.
+        # Off GitHub the verify reads the fresh snapshot's selected.pr from the
+        # persisted file, in a fresh shell: a failed probe, a missing row or a
+        # malformed body is a failure, never a healthy no-advance.
         cases = {
             '{"selected":{"pr":{"probe_failed":false,"open":{"url":"https://gl/-/merge_requests/4"}}}}':
                 ("https://gl/-/merge_requests/4", "0"),
@@ -339,12 +339,17 @@ class MakePrVerifyProbe(unittest.TestCase):
             '{"selected":null}': ("", "1"),
             '{not json': ("", "1"),
         }
-        line = next(l for l in _read(AUTO_MD).splitlines()
-                    if l.startswith("OPEN_PR_URL=$(printf '%s' \"$PILOT_SNAPSHOT\""))
+        text = _read(AUTO_MD)
+        fence = _fence_from(text[text.index("On a forge other than GitHub (the snapshot's `forge`"):],
+                            "PR_VERIFY_FAILED=0\n")
+        env = {k: v for k, v in os.environ.items() if k != "PILOT_SNAPSHOT"}
         for body, (url, failed) in cases.items():
-            with self.subTest(body=body):
-                script = f"PR_VERIFY_FAILED=0\nPILOT_SNAPSHOT={body!r}\n{line}\nprintf '%s|%s' \"$OPEN_PR_URL\" \"$PR_VERIFY_FAILED\""
-                out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as tmp:
+                subprocess.run(["git", "init", "-q", tmp], check=True)
+                (Path(tmp) / ".flow" / "tmp").mkdir(parents=True)
+                (Path(tmp) / ".flow" / "tmp" / "pilot-snapshot.json").write_text(body)
+                out = subprocess.run(["bash", "-c", fence + "printf '%s|%s' \"$OPEN_PR_URL\" \"$PR_VERIFY_FAILED\""],
+                                     cwd=tmp, env=env, capture_output=True, text=True, check=True).stdout
                 self.assertEqual(out, f"{url}|{failed}")
 
 
