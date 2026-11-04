@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
   "spec_path": ".flow/tasks/fn-73-glab-git-ops-make-prresolve-prland-over.4.md",
-  "status": "todo",
+  "status": "done",
   "title": "flow --auto ends at the MR on GitLab, plus docs and the live end-to-end run",
   "updated_at": "2026-11-04T10:13:12.743576Z"
 }

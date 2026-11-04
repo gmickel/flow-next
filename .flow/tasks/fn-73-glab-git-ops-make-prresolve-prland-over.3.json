@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-73-glab-git-ops-make-prresolve-prland-over",
   "spec_path": ".flow/tasks/fn-73-glab-git-ops-make-prresolve-prland-over.3.md",
-  "status": "todo",
+  "status": "done",
   "title": "make-pr creates and updates GitLab merge requests",
   "updated_at": "2026-11-04T10:13:12.743537Z"
 }
