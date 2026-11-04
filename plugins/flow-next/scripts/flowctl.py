@@ -10,6 +10,7 @@ import argparse
 import copy
 import csv
 import errno
+import functools
 import hashlib
 import heapq
 import io
@@ -34,7 +35,7 @@ from contextlib import ExitStack, contextmanager, nullcontext, redirect_stdout, 
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, NamedTuple, Optional, Sequence
 
 
 # Cross-process locks use platform-native kernel locks. The kernel releases
@@ -23612,6 +23613,221 @@ def _gh_pr_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
     return rows, ""
 
 
+# --- Forge adapters: which code host the origin remote is, and its PR/MR reads. ---
+# A listing answers in gh's row keys (number, url, state OPEN/MERGED/CLOSED,
+# headRefName, headRefOid, mergedAt), or None when the read failed: None is never
+# "no PR". A listing of `limit` rows or more may be truncated; callers reject it.
+_FORGE_PROBE_TIMEOUT_S = 10
+
+
+def _github_owns_host(host: str) -> Optional[bool]:
+    try:
+        # The token goes to /dev/null: only the exit code says whether gh knows the host.
+        proc = subprocess.run(["gh", "auth", "token", "--hostname", host], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, timeout=5, check=False)
+    except subprocess.TimeoutExpired:
+        return None
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def _github_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
+                     state: str, limit: int) -> Optional[list]:
+    selector = ["--head", head] if head else []
+    try:
+        probe = subprocess.run(
+            ["gh", "pr", "list", *selector, "--state", state, "--limit", str(limit), "--json",
+             "number,url,state,headRefName,headRefOid,mergedAt"],
+            cwd=repo, capture_output=True, text=True, timeout=_FORGE_PROBE_TIMEOUT_S, check=False)
+        if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
+            return []
+        return json.loads(probe.stdout) if probe.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def _gitlab_owns_host(host: str) -> Optional[bool]:
+    try:
+        proc = subprocess.run(["glab", "auth", "status", "--hostname", host], stdout=subprocess.DEVNULL,
+                              stderr=subprocess.PIPE, text=True, timeout=5, check=False)
+    except subprocess.TimeoutExpired:
+        return None
+    except OSError:
+        return False
+    if proc.returncode == 0:
+        return True
+    # Only glab's logged-out answer is a no; a failed API call (offline host) is unknown.
+    return False if "has not been authenticated" in " ".join((proc.stderr or "").split()) else None
+
+
+# GitLab caps a page at 100. A locked MR is mid-merge and still open.
+_GITLAB_PER_PAGE = 100
+_GITLAB_MR_STATES = {"opened": "OPEN", "locked": "OPEN", "merged": "MERGED", "closed": "CLOSED"}
+
+
+def _gitlab_mr_row(mr: Any) -> Optional[dict]:
+    if not (isinstance(mr, dict) and isinstance(mr.get("state"), str) and mr["state"] in _GITLAB_MR_STATES
+            and "sha" in mr and "merged_at" in mr and isinstance(mr.get("iid"), int)
+            and isinstance(mr.get("web_url"), str) and mr["web_url"]
+            and isinstance(mr.get("source_branch"), str) and mr["source_branch"]
+            and isinstance(mr.get("source_project_id"), int) and isinstance(mr.get("project_id"), int)
+            and all(isinstance(mr.get(key), (str, type(None))) for key in ("sha", "merged_at"))):
+        return None
+    return {"number": mr["iid"], "url": mr["web_url"], "state": _GITLAB_MR_STATES[mr["state"]],
+            "headRefName": mr["source_branch"], "headRefOid": mr["sha"], "mergedAt": mr["merged_at"]}
+
+
+def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
+                     state: str, limit: int) -> Optional[list]:
+    """MRs opened from the origin project itself (a fork's MR may share the branch name)."""
+    try:
+        from flowctl_tracker.executor import execute  # noqa: PLC0415
+        from flowctl_tracker.types import Request, Response  # noqa: PLC0415
+    except ImportError:
+        here = Path(__file__).resolve().parent
+        if (here / "flowctl_tracker").is_dir():
+            sys.path.insert(0, str(here))
+        try:
+            from flowctl_tracker.executor import execute  # noqa: PLC0415
+            from flowctl_tracker.types import Request, Response  # noqa: PLC0415
+        except ImportError:
+            return None
+    if not origin.project:
+        return None
+    endpoint = f"projects/{urllib.parse.quote(origin.project, safe='')}/merge_requests"
+    branch = f"&source_branch={urllib.parse.quote(head, safe='')}" if head else ""
+    deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
+    rows = []
+    for mr_state in ["all"] if state == "all" else ["opened", "locked"]:
+        page = 1
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            # GITLAB_HOST carries host:port, which `glab api --hostname` rejects.
+            result = execute(Request(
+                provider="gitlab", op="forge-mr-list", method="GET", idempotent=True,
+                url_or_argv=["glab", "api", f"{endpoint}?state={mr_state}{branch}"
+                             f"&per_page={_GITLAB_PER_PAGE}&page={page}"],
+                timeout_s=remaining, env={"GITLAB_HOST": origin.host}), max_retries=0)
+            if not isinstance(result, Response):
+                return None
+            try:
+                listed = json.loads(result.body)
+            except ValueError:
+                return None
+            if not isinstance(listed, list):
+                return None
+            for mr in listed:
+                row = _gitlab_mr_row(mr)
+                if row is None:
+                    return None
+                if mr["source_project_id"] == mr["project_id"]:
+                    rows.append(row)
+            if len(listed) < _GITLAB_PER_PAGE:
+                break
+            if len(rows) >= limit:
+                return rows
+            page += 1
+    return rows
+
+
+# Forge name -> its reads. A forge claims an origin host through `owns_host`;
+# an adapter may lack a read, and its callers then report that read as
+# unsupported on this forge.
+FORGE_ADAPTERS: dict[str, dict[str, Any]] = {
+    "github": {"owns_host": _github_owns_host, "list_prs": _github_list_prs,
+               "approval_rows": _gh_pr_rows},
+    "gitlab": {"owns_host": _gitlab_owns_host, "list_prs": _gitlab_list_prs},
+}
+_FORGE_HOSTS = {"github.com": "github", "ssh.github.com": "github", "gitlab.com": "gitlab"}
+
+
+class ForgeOrigin(NamedTuple):
+    forge: Optional[str]    # FORGE_ADAPTERS key, or None when no adapter claims the origin
+    host: Optional[str]     # API host; an http(s) port is kept, an SSH port is not the forge's
+    project: Optional[str]  # owner/repo path on that host
+
+
+def _ssh_hostname(alias: str) -> str:
+    try:
+        proc = subprocess.run(["ssh", "-G", alias], stdin=subprocess.DEVNULL, capture_output=True,
+                              text=True, timeout=5, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return alias
+    found = re.search(r"^hostname (\S+)$", proc.stdout if proc.returncode == 0 else "", re.M)
+    return found.group(1).lower() if found else alias
+
+
+@functools.lru_cache(maxsize=None)
+def repo_forge(repo: str) -> ForgeOrigin:
+    """The forge of `repo`'s origin remote; tests reset it with `repo_forge.cache_clear()`."""
+    try:
+        proc = subprocess.run(["git", "remote", "get-url", "origin"], cwd=repo, capture_output=True,
+                              text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ForgeOrigin(None, None, None)
+    url = proc.stdout.strip() if proc.returncode == 0 else ""
+    if "://" in url:
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            port = parsed.port
+        except ValueError:
+            return ForgeOrigin(None, None, None)
+        if parsed.scheme not in {"http", "https", "ssh", "git+ssh"} or not parsed.hostname:
+            return ForgeOrigin(None, None, None)
+        host, path, ssh = parsed.hostname.lower(), parsed.path, parsed.scheme.endswith("ssh")
+        if port and not ssh:
+            host = f"{host}:{port}"
+    else:
+        # scp-like `[user@]host:path`; a Windows drive path is local.
+        scp = re.fullmatch(r"(?:[^@/\s]+@)?([A-Za-z0-9._-]{2,}):(.+)", url)
+        if not scp:
+            return ForgeOrigin(None, None, None)
+        host, path, ssh = scp.group(1).lower(), scp.group(2), True
+    if ssh and host not in _FORGE_HOSTS:
+        host = _ssh_hostname(host)  # an alias may hold characters a hostname may not
+    if not re.fullmatch(r"[a-z0-9.-]+(?::\d+)?", host):
+        return ForgeOrigin(None, None, None)
+    project = path.strip("/").removesuffix(".git") or None
+    ci_host = os.environ.get("CI_SERVER_HOST", "").strip().lower()
+    forge = _FORGE_HOSTS.get(host) or ("gitlab" if ci_host and host.split(":")[0] == ci_host else None)
+    if forge is None:
+        names = list(FORGE_ADAPTERS)
+        if os.environ.get("GH_ENTERPRISE_TOKEN") or os.environ.get("GITHUB_ENTERPRISE_TOKEN"):
+            # gh then claims every host, so every other forge answers first.
+            names.sort(key=lambda name: name == "github")
+        for name in names:
+            owns = FORGE_ADAPTERS[name].get("owns_host")
+            claim = owns(host) if owns else False
+            if claim is None:
+                break  # An offline or slow answer is unknown, never the next forge's.
+            if claim:
+                forge = name
+                break
+    return ForgeOrigin(forge, host, project)
+
+
+def _forge_read(repo: Path, read: str) -> tuple[Optional[Any], str, ForgeOrigin]:
+    """The origin forge's `read`, or None when its adapter lacks it. An origin no
+    adapter claims reads through the GitHub adapter, whose no-forge answer is "no PR"."""
+    origin = repo_forge(str(repo))
+    forge = origin.forge or "github"
+    return FORGE_ADAPTERS.get(forge, {}).get(read), forge, origin
+
+
+def forge_list_prs(repo: Path, head: Optional[str] = None, *, state: str, limit: int) -> Optional[list]:
+    """PRs or MRs with head branch `head` (every open one when None); None is a probe failure."""
+    read, _, origin = _forge_read(repo, "list_prs")
+    return read(repo, origin, head, state=state, limit=limit) if read else None
+
+
+def forge_approval_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
+    read, forge, _ = _forge_read(repo, "approval_rows")
+    return read(head, repo) if read else (None, f"spec approval is unsupported on this forge ({forge})")
+
+
 def _pr_approval(row: dict) -> dict:
     """Approvers and merge identity of one PR row, as the forge reports them."""
     approvers = [
@@ -23652,7 +23868,7 @@ def spec_approval_status(flow_dir: Path, spec: dict) -> dict:
             return {"approved": True, "reason": "spec PR approved and merged"}
         return {"approved": False, "reason": "marked not ready after its spec PR merged"}
     head = SPEC_APPROVAL_BRANCH_PREFIX + spec_id
-    rows, failure = _gh_pr_rows(head, get_repo_root())
+    rows, failure = forge_approval_rows(head, get_repo_root())
     if rows is None:
         return {"approved": False, "reason": failure}
     # After `spec unready` withdrew an approval, only a later merge approves the revision.
@@ -23916,7 +24132,7 @@ def trace_spec(spec_id: str) -> dict:
         spec_approval = _trace_approval_text(recorded)
     elif spec_approval_mode() == "pr":
         # Read-only: report the spec PR as the forge sees it; recording happens elsewhere.
-        rows, failure = _gh_pr_rows(SPEC_APPROVAL_BRANCH_PREFIX + spec_id, get_repo_root())
+        rows, failure = forge_approval_rows(SPEC_APPROVAL_BRANCH_PREFIX + spec_id, get_repo_root())
         if rows is None:
             spec_approval = "unknown"
             warnings.append(f"spec approval unknown: {failure}")
@@ -23929,7 +24145,7 @@ def trace_spec(spec_id: str) -> dict:
     branch = spec.get("branch_name")
     impl_approval = "no implementation branch"
     if branch:
-        rows, failure = _gh_pr_rows(branch, get_repo_root())
+        rows, failure = forge_approval_rows(branch, get_repo_root())
         if rows is None:
             impl_approval = "unknown"
             warnings.append(f"implementation approval unknown: {failure}")
@@ -24034,26 +24250,18 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
             # No branch means nothing to probe: absence is observed, not a probe failure.
             state["pr_exists"] = False
         else:
-            try:
-                probe = subprocess.run(
-                    ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,headRefOid,mergedAt", "--limit", "100"],
-                    cwd=repo, capture_output=True, text=True, timeout=10, check=False,
-                )
-                if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
-                    state["pr_exists"] = False
-                prs = json.loads(probe.stdout) if probe.returncode == 0 else None
-                if isinstance(prs, list) and len(prs) < 100 and all(
-                    isinstance(pr, dict) and pr.get("state") in {"OPEN", "MERGED", "CLOSED"}
-                    and isinstance(pr.get("number"), int) and isinstance(pr.get("url"), str)
-                    for pr in prs
-                ) and sum(pr["state"] == "OPEN" for pr in prs) <= 1:
-                    # Prefer an open PR if a branch was reused; retain closed/merged observations.
-                    prs.sort(key=lambda pr: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[pr["state"]],
-                                             pr.get("mergedAt") or "", pr["number"]), reverse=True)
-                    state["pr_exists"] = bool(prs)
-                    state["pr_ref"] = prs[0] if prs else None
-            except (OSError, subprocess.TimeoutExpired, ValueError):
-                pass  # Unknown remains unknown; never manufacture absence.
+            prs = forge_list_prs(repo, branch, state="all", limit=100)
+            # A failed or unreadable listing leaves pr_exists unknown; never manufacture absence.
+            if isinstance(prs, list) and len(prs) < 100 and all(
+                isinstance(pr, dict) and pr.get("state") in {"OPEN", "MERGED", "CLOSED"}
+                and isinstance(pr.get("number"), int) and isinstance(pr.get("url"), str)
+                for pr in prs
+            ) and sum(pr["state"] == "OPEN" for pr in prs) <= 1:
+                # Prefer an open PR if a branch was reused; retain closed/merged observations.
+                prs.sort(key=lambda pr: ({"OPEN": 2, "MERGED": 1, "CLOSED": 0}[pr["state"]],
+                                         pr.get("mergedAt") or "", pr["number"]), reverse=True)
+                state["pr_exists"] = bool(prs)
+                state["pr_ref"] = prs[0] if prs else None
     state["startable_target_fact"] = judge_startable_target(repo, state.get("spec_body", ""))
     return state
 
@@ -43683,17 +43891,8 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     path = _pilot_strikes_ledger_path()
     strikes = _pilot_strikes_read(path, use_json=True) if path else {}
     actor = get_actor()
-    def list_prs(*selector: str, limit: int) -> Optional[list]:
-        try:
-            probe = subprocess.run(
-                ["gh", "pr", "list", *selector, "--limit", str(limit), "--json",
-                 "number,url,state,headRefName,headRefOid,mergedAt"],
-                cwd=repo, capture_output=True, text=True, timeout=10, check=False)
-            if probe.returncode != 0 and _gh_no_pr_forge(probe.stderr):
-                return []
-            listed = json.loads(probe.stdout) if probe.returncode == 0 else None
-        except (OSError, ValueError, subprocess.TimeoutExpired):
-            return None
+    def list_prs(head: Optional[str] = None, *, state: str, limit: int) -> Optional[list]:
+        listed = forge_list_prs(repo, head, state=state, limit=limit)
         valid = isinstance(listed, list) and len(listed) < limit and all(
             isinstance(row, dict) and row.get("state") in {"OPEN", "MERGED", "CLOSED"}
             and isinstance(row.get("number"), int) and isinstance(row.get("url"), str)
@@ -43713,7 +43912,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
 
     # Selection joins open PRs from one listing; only the selected branch gets
     # the full-history probe, so the listing never truncates on large repos.
-    rows = list_prs("--state", "open", limit=1000) if specs else None
+    rows = list_prs(state="open", limit=1000) if specs else None
     open_branches = {row["headRefName"] for row in rows or [] if row["state"] == "OPEN"}
     # A done spec matters to an unscoped run only while its branch has an open
     # PR (the landing path); listing every done spec made the snapshot huge.
@@ -43766,7 +43965,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                        "qa_fresh": fresh})
     selected = next((row for row in result if spec_id or row["pr"]["open"] or row["eligible"]), None)
     if selected and selected["branch_name"]:
-        selected["pr"] = observe(list_prs("--head", selected["branch_name"], "--state", "all", limit=100),
+        selected["pr"] = observe(list_prs(selected["branch_name"], state="all", limit=100),
                                  selected["branch_name"], history=True)
     for candidate in result:
         out, err = _anchor_capture(cmd_review_backend,
@@ -43797,6 +43996,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
                              capture_output=True, text=True, check=True).stdout.strip()
     current_prs = [row for row in rows or [] if row["headRefName"] == current]
     return {"guards": {"dirty": dirty}, "config": config, "actor": actor, "strikes": strikes,
+            "forge": repo_forge(str(repo)).forge,
             "counts": {"total": len(specs), "open": sum(s["status"] == "open" for s in specs),
                        "ready": sum(s.get("ready") is True for s in specs)},
             "candidates": result, "selected": selected, "review_backend": selected["review_backend"] if selected else None,

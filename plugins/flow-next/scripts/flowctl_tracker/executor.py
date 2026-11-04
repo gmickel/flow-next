@@ -12,6 +12,7 @@ explosion into a `TrackerError`.
 from __future__ import annotations
 
 import http.client
+import os
 import re
 import subprocess
 import threading
@@ -244,6 +245,7 @@ def _cli(req: Request, verify_tls: bool) -> Result:
         proc = subprocess.run(  # noqa: S603 - argv list, shell=False
             list(req.url_or_argv), input=req.body, capture_output=True,
             timeout=req.timeout_s, check=False,
+            env={**os.environ, **req.env} if req.env else None,
         )
     except subprocess.TimeoutExpired:
         return TrackerError(ErrorClass.TRANSPORT, "CLI process deadline exceeded",

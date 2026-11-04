@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "--method",
+    "POST",
+    "-H",
+    "Content-Type: application/json",
+    "--input",
+    "-",
+    "projects/flownext%2Fflownext/merge_requests"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "{\"id\":10,\"iid\":10,\"project_id\":1,\"title\":\"fn73 ready create probe\",\"description\":\"## Review focus\\n\\nQuotes \\\"x\\\", `ticks`, $HOME, back\\\\slash, \u00fcmlaut.\",\"state\":\"opened\",\"created_at\":\"2026-11-04T11:26:00.277Z\",\"updated_at\":\"2026-11-04T11:26:00.277Z\",\"merged_by\":null,\"merge_user\":null,\"merged_at\":null,\"closed_by\":null,\"closed_at\":null,\"target_branch\":\"main\",\"source_branch\":\"fn73-fx-create-ready\",\"user_notes_count\":0,\"upvotes\":0,\"downvotes\":0,\"author\":{\"id\":1,\"username\":\"root\",\"public_email\":null,\"name\":\"Gordon Mickel\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/8cbe1510ef151b0ee00b2a5161bb53f186dacac9f8dd4f9c38555f8487a77ba1?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/root\",\"bot\":false},\"assignees\":[],\"assignee\":null,\"reviewers\":[],\"source_project_id\":1,\"target_project_id\":1,\"labels\":[],\"draft\":false,\"imported\":false,\"imported_from\":\"none\",\"work_in_progress\":false,\"milestone\":null,\"merge_when_pipeline_succeeds\":false,\"merge_status\":\"checking\",\"detailed_merge_status\":\"preparing\",\"merge_after\":null,\"sha\":\"f5aba5947581f759d689809ea1b5b2f277324a42\",\"merge_commit_sha\":null,\"squash_commit_sha\":null,\"discussion_locked\":null,\"should_remove_source_branch\":null,\"force_remove_source_branch\":true,\"prepared_at\":null,\"reference\":\"!10\",\"references\":{\"short\":\"!10\",\"relative\":\"!10\",\"full\":\"flownext/flownext!10\"},\"web_url\":\"http://localhost:8929/flownext/flownext/-/merge_requests/10\",\"time_stats\":{\"time_estimate\":0,\"total_time_spent\":0,\"human_time_estimate\":null,\"human_total_time_spent\":null},\"squash\":false,\"squash_on_merge\":false,\"task_completion_status\":{\"count\":0,\"completed_count\":0},\"has_conflicts\":false,\"blocking_discussions_resolved\":true,\"approvals_before_merge\":null,\"subscribed\":true,\"changes_count\":null,\"latest_build_started_at\":null,\"latest_build_finished_at\":null,\"first_deployed_to_production_at\":null,\"pipeline\":null,\"head_pipeline\":null,\"diff_refs\":null,\"merge_error\":null,\"user\":{\"can_merge\":true}}",
+  "stderr": "",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)",
+  "stdin": "{\n  \"source_branch\": \"fn73-fx-create-ready\",\n  \"target_branch\": \"main\",\n  \"title\": \"fn73 ready create probe\",\n  \"description\": \"## Review focus\\n\\nQuotes \\\"x\\\", `ticks`, $HOME, back\\\\slash, \u00fcmlaut.\\n\"\n}\n"
+}

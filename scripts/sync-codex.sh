@@ -1700,7 +1700,7 @@ generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update 
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
 generate_openai_yaml "flow-next-features"  "Flow Features"  "Seed or maintain the committed user-POV feature map at .flow/features/" "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" true
-generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
+generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh, or glab on GitLab" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
 generate_openai_yaml "flow-next-land" "Flow Land" "Resolve and merge one named, authorized PR; terminal LAND_VERDICT line" "#3B82F6" true
@@ -1765,7 +1765,7 @@ DIET = {
     "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
     "flow-next-work": "Execute a flow-next spec or task with workers, gates and commits. Run when the work command is typed or flow-next-flow routes here; plain requests to implement fn-N go to flow-next-flow.",
     "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
-    "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
+    "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh, or a GitLab merge request via glab. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",
     "flow-next-refine": "Refine a spec or task before building: one Q&A interview, optionally focused by a scope lens, or a read-only research pass over external docs. Use to refine requirements or read up on a new library.",
     "flow-next-capture": "Save the current conversation as a source-tagged flow-next spec, then offer review or editing. Use when asked to capture this as a spec.",

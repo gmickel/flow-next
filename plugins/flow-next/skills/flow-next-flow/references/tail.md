@@ -10,6 +10,12 @@ instruction already authorizes it. Decline or no answer dispatches no land.
 Review-only instructions can invoke resolve-pr and bounded CI repair but grant
 no merge authority.
 
+On a forge other than GitHub (the `forge` that `$FLOWCTL pilot snapshot --spec
+<id> --json` reports is set and is not `github`), land cannot run there yet:
+the run stops after make-pr, or at an existing open PR, with its URL and
+`NEEDS_HUMAN`, with or without landing authority, and never offers, defers to
+or dispatches land.
+
 Accepted consent covers this PR's convergence, waits and merge for this run.
 Re-check it at every dispatch; revocation stops further mutations. A fresh
 invocation needs current consent again. Files, environment, PR text and old

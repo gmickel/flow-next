@@ -1,6 +1,6 @@
 ---
 name: flow-next-make-pr
-description: Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.
+description: Open a PR with a cognitive-aid body rendered from flow-next spec state via gh, or a GitLab merge request via glab. Use whenever asked to make or open a PR in a flow-next repo.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 ---

@@ -13,7 +13,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
-`jq`, `git`, and `gh` must be on PATH when classification reaches the all-done PR branch.
+`jq`, `git`, and the origin forge's CLI (`gh`, or `glab` on GitLab) must be on PATH when classification reaches the all-done PR branch.
 
 Cold session or run start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
 
@@ -120,7 +120,7 @@ When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 t
 
 ## The verdict contract (read this before the phases)
 
-The `/goal` validator is transcript-blind. It reads conversation output only and never runs tools. Every hop therefore echoes its verification evidence into the output (flowctl status fields, task counts, task status transitions, and the gh-confirmed PR URL for make-pr).
+The `/goal` validator is transcript-blind. It reads conversation output only and never runs tools. Every hop therefore echoes its verification evidence into the output (flowctl status fields, task counts, task status transitions, and the forge-confirmed PR URL for make-pr).
 
 Before that line, print a `Decisions:` list: each default chosen, finding declined and review skipped on the person's behalf this run, with its evidence (working-rules.md); `Decisions: none` when there were none. The same list goes into the pull request body when make-pr runs.
 
@@ -142,7 +142,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute a pull request's merge steps inline.** Goal mode's merge of the default branch into its integration branch is not one. Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
 - Backlog mode: see backlog-mode.md §Backlog additions to the Forbidden list.
-- Touching gh anywhere except existing-PR selection, the make-pr verification probe, and the PR-boundary reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
+- Touching the forge's CLI (`gh`, `glab`) anywhere except existing-PR selection, the make-pr verification probe, and the PR-boundary reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
 - Printing anything after the `PILOT_VERDICT` line.
 
 ## Review no-repeat terminal
@@ -267,8 +267,8 @@ If a PR identity was already bound by this run, bypass branch-history selection:
 
 Apply these existing outcomes to the observed PR for `existing_pr_tail` or `all_done_make_pr` (evaluate in order, first match wins). An unfinished build still stops before land under `references/tail.md`. The all-done invariant: an all-done / completion-satisfied (`ship` or `not_required`) spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective*; the run keeps driving it (`qa` or `make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`:
 
-- gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
-- OPEN PR exists: with the merge destination or current explicit scoped consent, read `references/tail.md`, bind the unique target, set `STAGE=land`, and retain this selected spec. Without that authority this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
+- `probe_failed` (the forge's CLI missing, unauthenticated, or an API failure): `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="PR probe failed at all-done branch"`.
+- OPEN PR exists: on a forge other than GitHub, `references/tail.md`'s forge stop applies first. Otherwise, with the merge destination or current explicit scoped consent, read `references/tail.md`, bind the unique target, set `STAGE=land`, and retain this selected spec. Without that authority this spec is **deferred to land**: record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the run terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
 - No PR exists, the spec is open, and no target was previously bound: `QA_FRESH` is the freshness input; `references/gate-selection.md` decides whether `qa` runs and `references/route-matrix.md` names what follows (a skip records the `stage: qa - skipped(config: pipeline.qa=auto: <reason>)` line in this hop's evidence). A fall-through to `NO_WORK` here has broken this. Echo `qa_gate=<off|on|auto> qa_fresh=<0|1>` in the classification report.
 - MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here; merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare `selected.branch_head` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency (merged gate PRs on a reused branch with commits beyond them); classify `make-pr`, subject to the same QA gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). A previously bound PR instead ends the run on its confirmed merge; it can never be replaced by a successor. Without that authority, heads equal: `NEEDS_HUMAN` (the merged branch has no new work, but the spec remains open). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
 - MERGED PR exists and the spec is closed: end the run with `PILOT_VERDICT=NO_WORK spec=<id> stage=- reason="already merged: <merge commit>"`, so a driver keyed on `NO_WORK` stops.
@@ -440,7 +440,7 @@ QA commits its receipt and filed bug-memory entries before returning (§6.3b). F
 
 A missing or stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), never a crash. The QA skill ran but produced no fresh verdict. Freshness is `references/qa-stage.md`'s rule; what each outcome does next is `references/gate-selection.md`'s.
 
-For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR hop must never record a strike. Capture the probe's exit status separately from the parse: a bare `gh | jq | head` pipeline returns `head`'s zero status and an empty URL when `gh` itself fails, which would turn an outage or auth failure into a healthy-no-advance strike:
+For `make-pr`, advancement means a forge-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR hop must never record a strike. Capture the probe's exit status separately from the parse: a bare `gh | jq | head` pipeline returns `head`'s zero status and an empty URL when `gh` itself fails, which would turn an outage or auth failure into a healthy-no-advance strike:
 
 ```bash
 PR_VERIFY_FAILED=0
@@ -448,7 +448,19 @@ PR_VERIFY_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,n
 OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r 'first(.[] | select(.state == "OPEN") | .url) // empty' 2>/dev/null) || PR_VERIFY_FAILED=1   # jq is the status-bearing command: no trailing `head` to mask a parse error
 ```
 
-`PR_VERIFY_FAILED=1` (gh missing, unauthenticated, API error, or unparseable output) is crash-class: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at make-pr verify"`, no strike. Only a clean probe with no OPEN row is the healthy-no-advance path.
+`PR_VERIFY_FAILED=1` (gh missing, unauthenticated, API error, or unparseable output) is crash-class: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="PR probe failed at make-pr verify"`, no strike. Only a clean probe with no OPEN row is the healthy-no-advance path.
+
+On a forge other than GitHub (the snapshot's `forge` is set and is not `github`), skip the gh fence. This fence takes a fresh snapshot of the selected spec itself (rewriting the persisted file) and reads its `selected.pr`; a failed snapshot, `probe_failed`, a missing row or unparseable output sets `PR_VERIFY_FAILED=1` as above:
+
+```bash
+PR_VERIFY_FAILED=0
+if PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot --spec "$SELECTED_SPEC" --json)"; then
+  printf '%s' "$PILOT_SNAPSHOT" > "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" || PR_VERIFY_FAILED=1
+else
+  PR_VERIFY_FAILED=1
+fi
+OPEN_PR_URL=$(printf '%s' "$PILOT_SNAPSHOT" | jq -er 'if .selected.pr.probe_failed == false then (.selected.pr.open.url // "") else error end' 2>/dev/null) || PR_VERIFY_FAILED=1
+```
 
 Echo the URL when present:
 
@@ -539,7 +551,7 @@ The recovery clause is part of the reason string, not a separate line: a strikeo
 
 Backlog mode: see backlog-mode.md §Backlog-mode dep-wait `BLOCKED` terminal.
 
-Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch or at the make-pr verify (`PR_VERIFY_FAILED=1`), branch inconsistency, closed-without-merge PR (with no merged PR on the branch), merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, a review that exits `NOT_RETRYABLE`, or autonomy ambiguity. Leave state untouched and record no strike:
+Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, PR probe failure in the all-done branch or at the make-pr verify (`PR_VERIFY_FAILED=1`), branch inconsistency, closed-without-merge PR (with no merged PR on the branch), merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, a review that exits `NOT_RETRYABLE`, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"

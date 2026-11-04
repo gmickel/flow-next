@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "glab",
+    "auth",
+    "status",
+    "--hostname",
+    "127.0.0.1:9"
+  ],
+  "env": {
+    "GLAB_CONFIG_DIR": "<config logging 127.0.0.1:9 in with a dummy token; nothing listens there>"
+  },
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "127.0.0.1:9\n  x 127.0.0.1:9: API call failed: Get \"http://127.0.0.1:9/api/v4/user\": dial tcp 127.0.0.1:9: connect: connection refused\n  \u2713 Git operations for 127.0.0.1:9 configured to use http protocol.\n  \u2713 API calls for 127.0.0.1:9 are made over http protocol.\n  \u2713 REST API Endpoint: http://127.0.0.1:9/api/v4/\n  \u2713 GraphQL Endpoint: http://127.0.0.1:9/api/graphql/\n  \u2713 Token found in configuration file (plaintext): **************************\n  ! To store this token more securely, run glab auth login --hostname 127.0.0.1:9 to move it into the operating system keyring.\n          \n   ERROR  \n          \n                                                                                                                      \n  X could not authenticate to one or more of the configured GitLab instances.                                         \n\n",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "none (connection refused)"
+}

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/flownext%2Fflownext/merge_requests?state=locked&per_page=100&page=1"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "[]",
+  "stderr": "",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}
