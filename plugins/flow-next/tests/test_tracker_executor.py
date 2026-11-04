@@ -668,7 +668,29 @@ class GitlabTokenIsHostScoped(unittest.TestCase):
 
     def test_fails_closed_on_unknown_host(self) -> None:
         """Returning the first token would send one host's secret to another."""
-        self.assertIsNone(self._token("gitlab.someone-else.com"))
+        with mock.patch.object(CR, "_glab_cli_get", side_effect=AssertionError("no glab probe")):
+            self.assertIsNone(self._token("gitlab.someone-else.com"))
+
+    def test_keyring_stanza_reads_the_token_through_glab(self) -> None:
+        """glab keeps a new login in the OS keyring: the stanza is there, its token is not."""
+        cfg = self.CFG + '    localhost:8929:\n        use_keyring: "true"\n        token:\n        api_protocol: http\n'
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as fh:
+            fh.write(cfg)
+        with mock.patch.object(CR.os.path, "expanduser", return_value=fh.name), \
+             mock.patch.object(CR, "_glab_cli_get", return_value="glpat-keyring") as get:
+            self.assertEqual(CR._glab_config_token("localhost:8929"), "glpat-keyring")
+        get.assert_called_once_with("token", "localhost:8929")
+
+    def test_oauth_login_goes_as_a_bearer_token(self) -> None:
+        """GitLab refuses an OAuth token in PRIVATE-TOKEN (measured: 401) and takes it as Bearer."""
+        for oauth, header, value in (("true", "Authorization", "Bearer oauth-tok"), ("", "PRIVATE-TOKEN", "oauth-tok")):
+            with self.subTest(oauth=oauth), mock.patch.dict(os.environ, {}, clear=True), \
+                 mock.patch.object(CR, "_glab_config_token", return_value="oauth-tok"), \
+                 mock.patch.object(CR, "_glab_cli_get", return_value=oauth):
+                h = {}
+                CR.resolve("gitlab", host="localhost:8929").attach(h)
+                self.assertEqual(h, {header: value})
 
 
 class NeverRaisesHoles(unittest.TestCase):

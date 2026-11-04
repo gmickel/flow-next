@@ -4,11 +4,19 @@ set -e
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 # The PR reads below run gh unless this block points them at the forge's read helper.
-FORGE=""; PR_READ=""; PR_HEAD_REFS=""
-if [[ "$DRY_RUN" != "1" ]]; then
+FORGE=""; PR_READ=""; PR_HEAD_REFS=""; GLAB_ANSWER=no
+# On GitLab the three PR reads run the merge-request helper.
+gitlab_reads() {
+  ORIGIN_PROJECT=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PROJECT=${ORIGIN_URL#*://*/}
+  ORIGIN_PROJECT=${ORIGIN_PROJECT%/}; ORIGIN_PROJECT=${ORIGIN_PROJECT#/}; ORIGIN_PROJECT=${ORIGIN_PROJECT%.git}
+  export GITLAB_HOST="$ORIGIN_HOST" ORIGIN_PROJECT
+  PR_READ="$(dirname "$FLOWCTL")/make-pr-gitlab.sh"; PR_HEAD_REFS=refs/merge-requests
+}
+{
   # The origin remote's host names the forge: GitHub pull requests through gh, GitLab merge
   # requests through glab; any other host stops before any close or push (#583).
   # An SSH host alias resolves through ssh -G, as in gh. The same rule is repo_forge in flowctl.py.
+  # A dry run names the forge too, so its reads match a real run; it skips the stops and checks.
   ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || ORIGIN_URL=""
   ORIGIN_HOST=$(printf '%s' "$ORIGIN_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#')
   if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* || "$ORIGIN_URL" == git+ssh://* ]]; then
@@ -20,8 +28,12 @@ if [[ "$DRY_RUN" != "1" ]]; then
   else
     # An http(s) port is the forge's own (an SSH port is not), so it stays on the host.
     ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE 's#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
+    # An SSH origin names no web port; glab's own GITLAB_HOST does when it names the same host.
+    GL_HOST=$(printf '%s' "${GITLAB_HOST:-}" | tr '[:upper:]' '[:lower:]' | sed -E 's#^https?://##; s#/+$##')
+    if [[ "$ORIGIN_URL" != http://* && "$ORIGIN_URL" != https://* && "$ORIGIN_HOST" != gitlab.com && -n "$GL_HOST" && "${GL_HOST%%:*}" == "$ORIGIN_HOST" ]]; then
+      ORIGIN_HOST="$GL_HOST"
+    fi
     ENTERPRISE_GH="${GH_ENTERPRISE_TOKEN:-}${GITHUB_ENTERPRISE_TOKEN:-}"
-    GLAB_ANSWER=no
     if [[ ! "$ORIGIN_HOST" =~ ^[a-z0-9.-]+(:[0-9]+)?$ ]]; then
       GLAB_ANSWER=unknown
     elif [[ "$ORIGIN_HOST" == gitlab.com || ( -n "${CI_SERVER_HOST:-}" && "${ORIGIN_HOST%%:*}" == "$(printf '%s' "$CI_SERVER_HOST" | tr '[:upper:]' '[:lower:]')" ) ]]; then
@@ -39,18 +51,21 @@ if [[ "$DRY_RUN" != "1" ]]; then
       FORGE=github
     fi
   fi
-  if [[ -z "$FORGE" ]]; then
-    echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only on github.com or a host gh is logged in to, and GitLab merge requests on gitlab.com or a host glab is logged in to; origin host ${ORIGIN_HOST:-none} is neither. Run gh auth login --hostname ${ORIGIN_HOST:-<host>} or glab auth login --hostname ${ORIGIN_HOST:-<host>}, or open the request by hand." >&2; exit 2
+  if [[ "$DRY_RUN" == "1" ]]; then
+    # A preview reads merge requests when glab can answer, and otherwise previews through gh as before.
+    if [[ "$FORGE" == gitlab ]] && command -v glab >/dev/null 2>&1 \
+      && { [[ "$GLAB_ANSWER" == yes ]] || glab auth status --hostname "$ORIGIN_HOST" >/dev/null 2>&1; }; then
+      gitlab_reads
+    fi
+  elif [[ -z "$FORGE" ]]; then
+    echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only on github.com or a host gh is logged in to, and GitLab merge requests on gitlab.com or a host glab is logged in to; origin host ${ORIGIN_HOST:-none} is neither. Run gh auth login --hostname ${ORIGIN_HOST:-<host>} or glab auth login --hostname ${ORIGIN_HOST:-<host>} (with an SSH origin whose GitLab web port differs, set GITLAB_HOST=<host>:<port>), or open the request by hand." >&2; exit 2
   elif [[ "$FORGE" == gitlab ]]; then
     if ! command -v glab >/dev/null 2>&1; then
       echo "Error: glab CLI not installed. Install glab from https://gitlab.com/gitlab-org/cli then run glab auth login --hostname $ORIGIN_HOST." >&2; exit 1; fi
     if [[ "$GLAB_ANSWER" != yes ]] && ! glab auth status --hostname "$ORIGIN_HOST" >/dev/null 2>&1; then
       echo "Error: glab CLI not authenticated to $ORIGIN_HOST, or the host is unreachable; run glab auth login --hostname $ORIGIN_HOST." >&2; exit 1; fi
     # The one forge guard: on GitLab the three PR reads run the merge-request helper.
-    ORIGIN_PROJECT=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PROJECT=${ORIGIN_URL#*://*/}
-    ORIGIN_PROJECT=${ORIGIN_PROJECT%/}; ORIGIN_PROJECT=${ORIGIN_PROJECT#/}; ORIGIN_PROJECT=${ORIGIN_PROJECT%.git}
-    export GITLAB_HOST="$ORIGIN_HOST" ORIGIN_PROJECT
-    PR_READ="$(dirname "$FLOWCTL")/make-pr-gitlab.sh"; PR_HEAD_REFS=refs/merge-requests
+    gitlab_reads
     if ! "$PR_READ" api-scope; then
       echo "NEEDS_HUMAN: make-pr needs a glab token with api scope on $ORIGIN_HOST to open merge requests; run glab auth login --hostname $ORIGIN_HOST with an api-scoped token." >&2; exit 2; fi
   else
@@ -60,7 +75,7 @@ if [[ "$DRY_RUN" != "1" ]]; then
     if ! gh auth status --hostname github.com >/dev/null 2>&1 && ! gh auth status >/dev/null 2>&1; then
       echo "Error: gh CLI not authenticated; run gh auth status to see which host needs gh auth login." >&2; exit 1; fi
   fi
-fi
+}
 # end:block
 # fence:chain-detect — inputs: REPO_ROOT, FLOWCTL, SPEC_ID, BASE_REF, DRY_RUN
 # A dry run may preview against a commit SHA; a live PR base must be a branch.
@@ -84,6 +99,8 @@ if [[ -z "$SPEC_ID" ]]; then
   CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
   if [[ -z "$SPEC_ID" ]]; then
+    # The exit ends this shell; the no-spec path needs the forge's values from this line.
+    [[ -z "$PR_READ" ]] || printf 'FORGE=%q PR_READ=%q GITLAB_HOST=%q ORIGIN_PROJECT=%q\n' "$FORGE" "$PR_READ" "$GITLAB_HOST" "$ORIGIN_PROJECT"
     echo "NO_SPEC"; exit 4
   fi
 fi
@@ -206,6 +223,7 @@ if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPE
 fi
 # gh's failure is its "no PR on this branch"; a failed merge-request read is never "no MR".
 EXISTING_JSON=$("${PR_READ:-gh}" pr view --json url,state,number 2>/dev/null) || [[ -z "${PR_READ:-}" ]] || {
+  [[ "$DRY_RUN" == "1" ]] && echo "Note: cannot read the merge requests of this branch under --dry-run; previewing as if none is open." >&2; } || {
   echo "NEEDS_HUMAN: cannot read the merge requests of this branch; nothing closed or pushed" >&2; exit 2; }
 EXISTING_JSON=$(printf '%s' "$EXISTING_JSON" | jq -c 'select(.state == "OPEN")' || true)
 EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || true)

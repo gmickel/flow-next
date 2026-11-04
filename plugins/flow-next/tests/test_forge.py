@@ -106,6 +106,10 @@ class ForgeRuleTests(ForgeTestCase):
             # gh with an enterprise token claims every host, so glab answers first.
             ("enterprise token", GITLAB_ORIGIN, {"GH_ENTERPRISE_TOKEN": "x"}, ("localhost:8929",), {}, "gitlab", "localhost:8929"),
             ("no origin", None, {}, (), {}, None, None),
+            # An SSH origin names no web port: unknown, unless GITLAB_HOST names the same host's port.
+            ("ssh origin, web port elsewhere", "ssh://git@localhost:2224/flownext/flownext.git", {"GITLAB_HOST": ""}, (), {}, None, "localhost"),
+            ("ssh origin, GITLAB_HOST port", "ssh://git@localhost:2224/flownext/flownext.git", {"GITLAB_HOST": "localhost:8929"}, (), {}, "gitlab", "localhost:8929"),
+            ("scp origin, GITLAB_HOST url", "git@localhost:flownext/flownext.git", {"GITLAB_HOST": "http://localhost:8929/"}, (), {}, "gitlab", "localhost:8929"),
         ]
         for name, origin, env, gh_hosts, ssh, forge, host in cases:
             with self.subTest(name):

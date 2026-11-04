@@ -23788,6 +23788,10 @@ def repo_forge(repo: str) -> ForgeOrigin:
         host, path, ssh = scp.group(1).lower(), scp.group(2), True
     if ssh and host not in _FORGE_HOSTS:
         host = _ssh_hostname(host)  # an alias may hold characters a hostname may not
+    # An SSH origin names no web port; glab's own GITLAB_HOST does when it names the same host.
+    gitlab_host = re.sub(r"^https?://", "", os.environ.get("GITLAB_HOST", "").strip().lower()).rstrip("/")
+    if ssh and host not in _FORGE_HOSTS and gitlab_host and gitlab_host.split(":")[0] == host:
+        host = gitlab_host
     if not re.fullmatch(r"[a-z0-9.-]+(?::\d+)?", host):
         return ForgeOrigin(None, None, None)
     project = path.strip("/").removesuffix(".git") or None

@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "http://localhost:8929/oauth/token/info"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929",
+    "GLAB_CONFIG": "<an OAuth login (is_oauth2) with api scope>"
+  },
+  "returncode": 0,
+  "stdout": "{\"resource_owner_id\":3,\"scope\":[\"api\"],\"expires_in\":7120,\"application\":{\"uid\":\"f38f71802d7f436731b36eae8a20fd47cd31c41f31104b32ae32ecc48149d8e0\"},\"created_at\":1793819098,\"scopes\":[\"api\"],\"expires_in_seconds\":7120}",
+  "stderr": "",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

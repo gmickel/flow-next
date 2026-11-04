@@ -32,8 +32,16 @@ glab_write() {
 }
 
 if [[ "${1:-}" == api-scope ]]; then
-  TOKEN=$(glab_json personal_access_tokens/self)
-  printf '%s' "$TOKEN" | jq -e '(.scopes | type) == "array" and any(.scopes[]; . == "api")' >/dev/null \
+  # A personal access token reads its own scopes. An OAuth login (glab auth login --web) is
+  # refused there with GitLab's "requires token type to be a personal access token" answer
+  # and reads them from the OAuth token info, which lives outside /api/v4.
+  if ! TOKEN=$(glab api personal_access_tokens/self 2>&1); then
+    [[ "$TOKEN" == *"requires token type to be a personal access token"* ]] \
+      || fail "glab api personal_access_tokens/self failed on ${GITLAB_HOST:-?}"
+    PROTOCOL=$(glab config get api_protocol --host "${GITLAB_HOST:-}" 2>/dev/null) || PROTOCOL=""
+    TOKEN=$(glab_json "${PROTOCOL:-https}://${GITLAB_HOST:-}/oauth/token/info")
+  fi
+  printf '%s' "${TOKEN#"${TOKEN%%[[{]*}"}" | jq -e '(.scopes | type) == "array" and any(.scopes[]; . == "api")' >/dev/null \
     || fail "the glab token for ${GITLAB_HOST:-?} lacks api scope"
   exit 0
 fi
