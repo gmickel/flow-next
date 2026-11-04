@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "--method",
+    "POST",
+    "-H",
+    "Content-Type: application/json",
+    "--input",
+    "-",
+    "projects/flownext%2Fflownext/merge_requests"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 1,
+  "stdout": "{\"message\":{\"source_branch\":[\"does not exist\"]}}",
+  "stderr": "glab: map[message:map[source_branch:[does not exist]]]\n",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)",
+  "stdin": "{\n  \"source_branch\": \"fn73-fx-not-pushed\",\n  \"target_branch\": \"main\",\n  \"title\": \"fn73 missing branch\",\n  \"description\": \"## Review focus\\n\\nQuotes \\\"x\\\", `ticks`, $HOME, back\\\\slash, \u00fcmlaut.\\n\"\n}\n"
+}

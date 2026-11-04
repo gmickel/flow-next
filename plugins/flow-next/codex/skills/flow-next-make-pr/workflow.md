@@ -19,6 +19,8 @@ unset when the rules need a value you cannot find, such as a work-item id; the d
 source "$(dirname "$FLOWCTL")/make-pr-preflight.sh"
 ```
 
+Preflight sets `FORGE` from the origin remote. On a forge other than GitHub, read `forge-<FORGE>.md`
+beside this file and follow it for the rest of the run.
 Exit 1 is failure; exit 2 needs human intervention; exit 3 carries `NEED_INPUT:`; exit 4 (`NO_SPEC`)
 means the branch carries no spec: take the no-spec path in [no-spec-path.md](no-spec-path.md) and skip
 every later phase. A repo

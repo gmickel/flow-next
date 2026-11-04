@@ -22,14 +22,20 @@ TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parent / "scripts"
 PREFLIGHT = SCRIPTS / "make-pr-preflight.sh"
 HELPER = SCRIPTS / "make-pr-gitlab.sh"
+CREATE = SCRIPTS / "make-pr-create.sh"
 FIXTURES = TESTS / "fixtures" / "gitlab"
 HOST, PROJECT = "localhost:8929", "flownext/flownext"   # the recorded project
+BODY = '## Review focus\n\nQuotes "x", `ticks`, $HOME, back\\slash, \u00fcmlaut.\n'   # the recorded create body
+MR_URL = "http://localhost:8929/flownext/flownext/-/merge_requests/"
 
 GLAB_STUB = f'''#!{sys.executable}
 import json, os, sys
 argv = ["glab", *sys.argv[1:]]
 with open(os.environ["STUB_CALLS"], "a") as log:
     log.write(" ".join(argv) + "\\n")
+if "--input" in argv:   # the request body, one JSON document per write
+    with open(os.environ["STUB_CALLS"] + ".bodies", "a") as log:
+        log.write(json.dumps(json.load(sys.stdin)) + "\\n")
 def replay(path):
     fx = json.load(open(path, encoding="utf-8"))
     if "GITLAB_HOST" in fx["env"] and os.environ.get("GITLAB_HOST") != fx["env"]["GITLAB_HOST"]:
@@ -39,9 +45,16 @@ if argv[1:3] == ["auth", "status"]:
     name = ("auth-status-logged-in" if argv[4] in os.environ.get("GLAB_HOSTS", "").split()
             else os.environ.get("GLAB_AUTH") or "auth-status-unknown-host")
     replay(os.path.join({str(FIXTURES)!r}, name + ".json"))
-for path in os.environ.get("GLAB_ANSWERS", "").split(os.pathsep):
-    if path and json.load(open(path, encoding="utf-8"))["argv"] == argv:
-        replay(path)
+# Answers for the same argv replay in order; the last one repeats.
+matching = [p for p in os.environ.get("GLAB_ANSWERS", "").split(os.pathsep)
+            if p and json.load(open(p, encoding="utf-8"))["argv"] == argv]
+if matching:
+    used_log = os.environ["STUB_CALLS"] + ".used"
+    used = open(used_log, encoding="utf-8").read().splitlines() if os.path.exists(used_log) else []
+    path = next((p for p in matching if p not in used), matching[-1])
+    with open(used_log, "a", encoding="utf-8") as log:
+        log.write(path + "\\n")
+    replay(path)
 sys.exit("stub: no recorded glab answer for " + repr(argv))
 '''
 GH_STUB = '''#!/usr/bin/env bash
@@ -103,6 +116,16 @@ class GitLabShellCase(unittest.TestCase):
         path = self.derived(name, lambda rows: rows)
         fx = json.loads(path.read_text(encoding="utf-8"))
         path.write_text(json.dumps({**fx, "stdout": stdout}), encoding="utf-8")
+        return path
+
+    def bodies(self):
+        """The JSON request bodies glab received, in order."""
+        path = Path(f"{self.calls}.bodies")
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+    def body_file(self, text=BODY):
+        path = self.tmp / "body.md"
+        path.write_text(text, encoding="utf-8")
         return path
 
     def run_sh(self, argv, cwd=None, **env):
@@ -344,6 +367,131 @@ printf 'flowctl %s\\n' "$*" >> "$STUB_CALLS"
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("NEEDS_HUMAN: cannot read the merge requests of this branch", result.stderr)
                 self.assertEqual(self.flowctl_calls(), ["flowctl show fn-1 --json"])
+
+
+class HelperWriteTests(GitLabShellCase):
+    """`pr create` and `pr edit`: the request body glab receives on stdin, and the URL printed."""
+
+    def test_create_sends_the_body_as_json_and_prints_the_url(self):
+        body = self.body_file()
+        for draft, name, branch, title, iid in ((True, "mr-create-draft", "fn73-fx-create", "Draft: fn73 create probe", 9),
+                                                (False, "mr-create-ready", "fn73-fx-create-ready", "fn73 ready create probe", 10)):
+            with self.subTest(name):
+                result = self.run_sh([str(HELPER), "pr", "create", "--title", title.removeprefix("Draft: "), "--body-file", str(body),
+                                      *(["--draft"] if draft else []), "--base", "main", "--head", branch],
+                                     GLAB_ANSWERS=answers(recorded(name)))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"{MR_URL}{iid}\n")
+                self.assertEqual(self.bodies()[-1], {"source_branch": branch, "target_branch": "main", "title": title, "description": BODY})
+
+    def test_edit_replaces_the_description_and_keeps_the_draft_state_unless_ready(self):
+        body = self.body_file()
+        plain = self.run_sh([str(HELPER), "pr", "edit", "9", "--body-file", str(body)], GLAB_ANSWERS=answers(recorded("mr-edit")))
+        self.assertEqual((plain.returncode, plain.stdout), (0, f"{MR_URL}9\n"), plain.stderr)
+        self.assertEqual(self.bodies(), [{"description": BODY}])   # no title written: the draft state stays
+        for title in ("Draft: fn73 create probe", "[Draft] fn73 create probe", "(draft) Draft: fn73 create probe"):
+            with self.subTest(title):
+                view = self.derived("mr-view-draft", lambda mr, title=title: {**mr, "title": title})
+                ready = self.run_sh([str(HELPER), "pr", "edit", "9", "--body-file", str(body), "--ready"],
+                                    GLAB_ANSWERS=answers(view, recorded("mr-edit-ready")))
+                self.assertEqual((ready.returncode, ready.stdout), (0, f"{MR_URL}9\n"), ready.stderr)
+                self.assertEqual(self.bodies()[-1], {"description": BODY, "title": "fn73 create probe"})
+
+    def test_refused_create_prints_gitlabs_answer(self):
+        result = self.run_sh([str(HELPER), "pr", "create", "--title", "t", "--body-file", str(self.body_file()),
+                              "--base", "main", "--head", "fn73-fx-not-pushed"], GLAB_ANSWERS=answers(recorded("mr-create-no-branch")))
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn('{"message":{"source_branch":["does not exist"]}}', result.stderr)
+
+
+class CreateScriptTests(GitLabShellCase):
+    """make-pr-create.sh on GitLab: push, then create or update through the helper, never gh."""
+
+    GIT = """#!/usr/bin/env bash
+case "$1" in
+  branch) echo "$BRANCH" ;;
+  rev-parse) echo abc ;;
+  push) echo "git push" >> "$STUB_CALLS" ;;
+  *) exit 1 ;;
+esac
+"""
+    FLOWCTL = """#!/usr/bin/env bash
+case "$1 $2" in
+  "sync active") printf '{"active": %s}\\n' "${TRK_ACTIVE:-false}" ;;
+  "config get") printf '{"value": "%s"}\\n' "$TRK_TYPE" ;;
+  "sync get-state") printf '{"tracker": {"identifier": "#5", "url": "%s"}}\\n' "$TRK_URL" ;;
+esac
+"""
+
+    def setUp(self):
+        super().setUp()
+        for tool in ("sh", "grep", "tail"):
+            (self.bin / tool).symlink_to(shutil.which(tool))
+        (self.bin / "git").unlink()   # a symlink to the real git; never write through it
+        self.stub("git", self.GIT)
+        self.stub("flowctl", self.FLOWCTL)
+        self.stub("sleep", "#!/usr/bin/env bash\n")
+
+    def create(self, fixtures, branch="fn73-fx-create", **env):
+        base = {"BRANCH": branch, "FLOWCTL": str(self.bin / "flowctl"), "PR_READ": str(HELPER), "FORGE": "gitlab",
+                "OPEN_ITEMS_COUNT": "0", "DRAFT_FORCE": "auto", "UPDATE_MODE": "0", "BODY_FILE": str(self.body_file()),
+                "BASE_REF": "origin/main", "PR_TITLE": "fn73 create probe", "REPO_ROOT": str(self.tmp),
+                "PHASE0_CONTEXT": "{}", "SPEC_ID": "fn-1", "SCRIPT": str(CREATE), "GLAB_ANSWERS": answers(*fixtures)}
+        return self.run_sh(["bash", "-c", 'set -e; source "$SCRIPT"; printf "RESULT=%s" "$PR_URL"'], **{**base, **env})
+
+    def calls_of(self, prefix):
+        return [line for line in self.calls.read_text(encoding="utf-8").splitlines() if line.startswith(prefix)]
+
+    def test_create_pushes_then_opens_the_merge_request(self):
+        for name, open_items, title, iid, branch in (("draft", "1", "Draft: fn73 create probe", 9, "fn73-fx-create"),
+                                                     ("ready", "0", "fn73 create probe", 10, "fn73-fx-create-ready")):
+            with self.subTest(name):
+                self.calls.write_text("", encoding="utf-8")
+                result = self.create([recorded(f"mr-create-{name}")], branch=branch, OPEN_ITEMS_COUNT=open_items)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"RESULT={MR_URL}{iid}")
+                self.assertEqual(self.bodies()[-1]["title"], title)
+                calls = self.calls.read_text(encoding="utf-8").splitlines()
+                self.assertEqual([c.split()[0] for c in calls], ["git", "glab"])   # push first; no gh
+                self.assertIn("--method POST", calls[1])
+
+    def test_create_retries_only_gitlabs_missing_branch_answer(self):
+        retried = self.create([recorded("mr-create-no-branch"), recorded("mr-create-ready")])
+        self.assertEqual(retried.returncode, 0, retried.stderr)
+        self.assertEqual(retried.stdout, f"RESULT={MR_URL}10")
+        self.assertEqual(len(self.calls_of("glab api --method POST")), 2)
+        self.calls.write_text("", encoding="utf-8")
+        refused = self.blank("mr-create-no-branch", '{"message":{"target_branch":["does not exist"]}}')
+        stopped = self.create([refused, recorded("mr-create-ready")])
+        self.assertEqual(stopped.returncode, 1)
+        self.assertIn("Error: PR create failed", stopped.stderr)
+        self.assertEqual(len(self.calls_of("glab api --method POST")), 1)
+
+    def test_update_replaces_the_description_and_ready_drops_the_draft(self):
+        fixtures = [recorded("mr-branch-create"), recorded("mr-edit"), recorded("mr-view-draft"), recorded("mr-edit-ready")]
+        for force, written in (("auto", {"description": BODY}), ("draft", {"description": BODY}),
+                               ("ready", {"description": BODY, "title": "fn73 create probe"})):
+            with self.subTest(force):
+                self.calls.write_text("", encoding="utf-8")
+                result = self.create(fixtures, UPDATE_MODE="1", DRAFT_FORCE=force, OPEN_ITEMS_COUNT="1")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"RESULT={MR_URL}9")
+                self.assertEqual(self.bodies()[-1], written)
+                self.assertEqual(self.calls_of("gh"), [])
+                self.assertEqual(self.calls_of("glab api --method POST"), [])
+
+    def test_tracker_reference_is_the_issue_url_on_the_other_forge(self):
+        cases = [("github", "gitlab", "https://github.com/o/r/issues/5", "Ref https://github.com/o/r/issues/5"),
+                 ("gitlab", "github", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref http://localhost:8929/flownext/flownext/-/issues/5"),
+                 ("github", "github", "https://github.com/o/r/issues/5", "Refs #5"),
+                 ("gitlab", "gitlab", "http://localhost:8929/flownext/flownext/-/issues/5", "Ref `#5`")]
+        for tracker, forge, url, ref in cases:
+            with self.subTest(tracker=tracker, forge=forge):
+                result = self.create([], FORGE=forge, PR_READ=str(HELPER) if forge == "gitlab" else "",
+                                     FLOW_PR_CREATE_CMD="echo https://example.test/o/r/pull/7; :",
+                                     TRK_ACTIVE="true", TRK_TYPE=tracker, TRK_URL=url)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((self.tmp / "body.md").read_text(encoding="utf-8").splitlines()[-1], ref)
 
 
 if __name__ == "__main__":

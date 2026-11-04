@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Source after authoring the body and draft inputs; preserves PR_URL for finalize.
+# On GitLab, preflight's PR_READ names the merge-request helper: create and update run it, not gh.
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 # fence:draft-matrix — inputs: OPEN_ITEMS_COUNT, DRAFT_FORCE, CHAIN_PARENT (from PHASE0_CONTEXT.chain_parent; empty when not chained)
@@ -27,14 +28,14 @@ if [[ "$PUSH_RC" -ne 0 ]]; then
 fi
 sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
-  UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
+  UPDATE_PR_NUMBER=$("${PR_READ:-gh}" pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
   if [[ -z "$UPDATE_PR_NUMBER" ]]; then
     echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
   fi
 fi
 # end:block
 # fence:stack-line-refresh — inputs: UPDATE_MODE, UPDATE_PR_NUMBER, BODY_FILE; gh on PATH
-if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+if [[ "${UPDATE_MODE:-0}" == "1" && -z "${PR_READ:-}" ]]; then
   STACK_OBJ=$(gh api "repos/{owner}/{repo}/pulls/$UPDATE_PR_NUMBER" --jq '.stack // empty' 2>/dev/null) || STACK_OBJ=""
   if [[ -n "$STACK_OBJ" ]] && ! grep -q '^> \*\*Stack:\*\*' "$BODY_FILE"; then
     STACK_LINE=$(printf '%s' "$STACK_OBJ" | jq -r '"**Stack:** #\(.number), layer \(.position) of \(.size)"')
@@ -43,7 +44,13 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
 fi
 # end:block
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
-  if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
+  if [[ -n "${PR_READ:-}" ]]; then
+    # One write replaces the description; --ready also drops the title's draft markers.
+    READY_ARG=""; if [[ "${DRAFT_FORCE:-}" == "ready" ]]; then READY_ARG="--ready"; fi
+    PR_URL=$("$PR_READ" pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE" $READY_ARG) || {
+      echo "Error: updating merge request !$UPDATE_PR_NUMBER failed." >&2; exit 1; }
+    echo "Updated MR !$UPDATE_PR_NUMBER description (refreshed against the current diff)." >&2
+  elif gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
     PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
   else
@@ -66,11 +73,17 @@ if [ "$TRK_ACTIVE" = "true" ]; then
     gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;;
     jira)   REF="" ;;
   esac
+  # On the other forge a #N would link that forge's own issue N, so the issue URL stands in.
+  if [[ ( "$TRK_TYPE" == github || "$TRK_TYPE" == gitlab ) && "$TRK_TYPE" != "${FORGE:-github}" ]]; then
+    TRK_URL=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.url // empty' 2>/dev/null || true)
+    [ -z "$TRK_URL" ] || REF="Ref ${TRK_URL}"
+  fi
   if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
     printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
   fi
 fi
 PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"
+[[ -z "${PR_READ:-}" || -n "${FLOW_PR_CREATE_CMD:-}" ]] || PR_CREATE_CMD="\"$PR_READ\" pr create"
 PR_URL=""
 for attempt in 1 2 3; do
   if CREATE_OUT=$(sh -c "$PR_CREATE_CMD \"\$@\"" flow-pr-create \
@@ -80,15 +93,16 @@ for attempt in 1 2 3; do
     --base "$BASE_BRANCH" \
     --head "$HEAD_BRANCH" 2>&1); then
     PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/(pull|pull-requests)/[0-9]+' | tail -n1 || true)
+    [[ -n "$PR_URL" ]] || PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https?://[^[:space:]]+/-/merge_requests/[0-9]+' | tail -n1 || true)
     if [[ -z "$PR_URL" ]]; then
-      echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> or .../pull-requests/<n> URL)." >&2
+      echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n>, .../pull-requests/<n> or .../-/merge_requests/<n> URL)." >&2
       echo "$CREATE_OUT" >&2
       exit 1
     fi
     break
   fi
   case "$CREATE_OUT" in
-    *"Head sha can't be blank"*|*"No commits between"*)
+    *"Head sha can't be blank"*|*"No commits between"*|*'{"message":{"source_branch":["does not exist"]}}'*)
       sleep $((attempt * 2))   # 2s, 4s, 6s — total worst-case 12s before bailing
       continue
       ;;
@@ -133,7 +147,7 @@ if [[ -n "${CHAIN_PARENT:-}" && -n "${PARENT_PR:-}" && "${PARENT_PR_STATE:-}" ==
   fi
 fi
 # end:block
-if [ "$TRK_ACTIVE" = "true" ] && [ -n "$REF" ]; then
+if [ "$TRK_ACTIVE" = "true" ] && [ -n "$REF" ] && [ -z "${PR_READ:-}" ]; then
   if grep -qixF "$REF" "$BODY_FILE" 2>/dev/null; then
     :
   else

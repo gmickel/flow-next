@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# make-pr's pull-request reads on a GitLab origin. make-pr-preflight.sh runs this in
+# make-pr's merge requests on a GitLab origin. make-pr-preflight.sh runs this in
 # place of gh for the same argv (`pr list --head <branch> --state all --json <keys>
 # [--jq <expr>]`, `pr view --json <keys>`) and gets gh's JSON keys back: number,
 # url, state (OPEN, MERGED, CLOSED) and baseRefName, whatever --json names.
+# make-pr-create.sh runs `pr create` with gh's argv (`--title --body-file [--draft]
+# --base --head`) and `pr edit <number> --body-file <file> [--ready]`; both print
+# the merge request's URL.
 # `api-scope` exits 0 when glab's token for the host has api scope.
 # Environment: GITLAB_HOST (origin host[:port]) and ORIGIN_PROJECT (origin path).
 # Exit 0 is a complete answer; a failed, partial or malformed read exits nonzero,
@@ -19,6 +22,15 @@ glab_json() {
   printf '%s' "${out#"${out%%[[{]*}"}"
 }
 
+# A JSON body on stdin, built by jq; GitLab rejects a JSON body without its Content-Type.
+# A refused write prints GitLab's answer, so the caller can match it.
+glab_write() {
+  local out
+  out=$(glab api --method "$1" -H 'Content-Type: application/json' --input - "$2") \
+    || { printf '%s\n' "$out" >&2; fail "glab api --method $1 $2 failed on ${GITLAB_HOST:-?}"; }
+  printf '%s' "${out#"${out%%[[{]*}"}" | jq -er '.web_url' || fail "no merge request URL in GitLab's answer"
+}
+
 if [[ "${1:-}" == api-scope ]]; then
   TOKEN=$(glab_json personal_access_tokens/self)
   printf '%s' "$TOKEN" | jq -e '.scopes | index("api") != null' >/dev/null \
@@ -26,7 +38,47 @@ if [[ "${1:-}" == api-scope ]]; then
   exit 0
 fi
 
-[[ "${1:-} ${2:-}" == "pr list" || "${1:-} ${2:-}" == "pr view" ]] || { echo "usage: make-pr-gitlab.sh pr list|view ... | api-scope" >&2; exit 2; }
+[[ "${1:-}" == pr && "${2:-}" =~ ^(list|view|create|edit)$ ]] || { echo "usage: make-pr-gitlab.sh pr list|view|create|edit ... | api-scope" >&2; exit 2; }
+[[ -n "${ORIGIN_PROJECT:-}" ]] || fail "no origin project"
+ENDPOINT="projects/$(jq -rn --arg v "$ORIGIN_PROJECT" '$v | @uri')/merge_requests"
+
+if [[ "$2" == create ]]; then
+  shift 2; TITLE=""; BODY_FILE=""; BASE=""; HEAD=""; DRAFT=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --title) TITLE=$2 ;; --body-file) BODY_FILE=$2 ;; --base) BASE=$2 ;; --head) HEAD=$2 ;;
+      --draft) DRAFT="Draft: "; shift; continue ;;   # GitLab's draft is a title prefix
+      *) echo "make-pr-gitlab.sh: unsupported argument $1" >&2; exit 2 ;;
+    esac
+    shift 2
+  done
+  [[ -n "$TITLE" && -f "$BODY_FILE" && -n "$BASE" && -n "$HEAD" ]] || fail "pr create needs --title, --body-file, --base and --head"
+  jq -n --rawfile d "$BODY_FILE" --arg t "$DRAFT$TITLE" --arg s "$HEAD" --arg b "$BASE" \
+    '{source_branch: $s, target_branch: $b, title: $t, description: $d}' | glab_write POST "$ENDPOINT"
+  exit 0
+fi
+
+if [[ "$2" == edit ]]; then
+  NUMBER=${3:-}; shift 3; BODY_FILE=""; READY=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --body-file) BODY_FILE=$2; shift ;;
+      --ready) READY=1 ;;
+      *) echo "make-pr-gitlab.sh: unsupported argument $1" >&2; exit 2 ;;
+    esac
+    shift
+  done
+  [[ "$NUMBER" =~ ^[0-9]+$ && -f "$BODY_FILE" ]] || fail "pr edit needs a merge request number and --body-file"
+  FIELDS=$(jq -n --rawfile d "$BODY_FILE" '{description: $d}')
+  # The draft state stays as it is unless --ready, which drops every draft marker GitLab reads.
+  if [[ -n "$READY" ]]; then
+    TITLE=$(glab_json "$ENDPOINT/$NUMBER" | jq -er '.title') || fail "unreadable merge request !$NUMBER"
+    FIELDS=$(printf '%s' "$FIELDS" | jq -c --arg t "$TITLE" '. + {title: ($t | sub("^(\\s*(\\[draft\\]|\\(draft\\)|draft:))+\\s*"; ""; "i"))}')
+  fi
+  printf '%s' "$FIELDS" | glab_write PUT "$ENDPOINT/$NUMBER"
+  exit 0
+fi
+
 READ=$2; shift 2
 HEAD=""; FILTER="."
 while [[ $# -gt 0 ]]; do
@@ -40,9 +92,7 @@ while [[ $# -gt 0 ]]; do
   shift 2
 done
 [[ "$READ" == list ]] || HEAD=$(git branch --show-current)
-[[ -n "$HEAD" && -n "${ORIGIN_PROJECT:-}" ]] || fail "no branch or origin project to read"
-
-ENDPOINT="projects/$(jq -rn --arg v "$ORIGIN_PROJECT" '$v | @uri')/merge_requests"
+[[ -n "$HEAD" ]] || fail "no branch to read"
 BRANCH=$(jq -rn --arg v "$HEAD" '$v | @uri')
 ROWS='[]'; PAGE=1
 while :; do
