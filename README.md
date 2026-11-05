@@ -123,7 +123,7 @@ Use installation commands in your terminal or the host's plugin interface as sho
 2. Tell it what you have: `/flow-next:flow <anything>`. A pasted error, an idea, a spec id, a branch or a ticket all work. Flow picks the smallest route that does the job, runs it, and stops at the next decision that's yours. For an idea too big to write down in one go, the optional `/flow-next:chart` stage comes first.
 3. Read what it hands back. The stage lines say what ran and what was skipped and why. Say "open the PR" when you want one; its body maps each change to the acceptance criterion it satisfies.
 
-[Your first 30 minutes](https://flow-next.dev/first-30-minutes/) walks through the same three steps on a two-file Python example, review setup and all. You need your agent, Python 3.11+ and the project's own tools; review and PR steps also use `jq` and `gh`.
+[Your first 30 minutes](https://flow-next.dev/first-30-minutes/) walks through the same three steps on a two-file Python example, review setup and all. You need your agent, Python 3.11+ and the project's own tools; review and PR steps also use `jq` and `gh` (`glab` for GitLab merge requests).
 
 ## If you're an agent
 
