@@ -20,12 +20,12 @@ MOVED = "fb633aff58843b154b078ff30eb6cc6df040deeb"  # a head the branch no longe
 
 
 class LandReferenceTests(GitLabShellCase):
-    RECORDINGS = ("land-mr-open", "land-mr-merged", "land-mr-children", "land-failed-jobs", "land-job-trace",
-                  "land-merge-moved-head", "land-merge")
+    RECORDINGS = ("land-mr-open", "land-mr-merged", "land-mr-children", "land-mr-children-stacked",
+                  "land-failed-jobs", "land-job-trace", "land-merge-moved-head", "land-merge")
 
-    def run_command(self, command, head=HEAD):
+    def run_command(self, command, head=HEAD, branch="fn317-fail"):
         return self.run_sh(["bash", "-c", f"set -o pipefail; {command}"], MR="14", HEAD_SHA=head,
-                           BRANCH="fn317-ready", PIPELINE_ID="16", JOB_ID="17",
+                           BRANCH=branch, PIPELINE_ID="16", JOB_ID="17",
                            GLAB_ANSWERS=answers(*map(recorded, self.RECORDINGS)))
 
     def command(self, prefix):
@@ -45,8 +45,12 @@ class LandReferenceTests(GitLabShellCase):
         read = self.command('glab api "projects/:id/merge_requests/$MR"')
         opened = json.loads(self.run_command(read).stdout)
         self.assertEqual((opened["state"], opened["sha"], opened["source_branch"]), ("opened", HEAD, "fn317-ready"))
-        self.assertEqual(json.loads(self.run_command(self.command(
-            'glab api "projects/:id/merge_requests?state=opened&target_branch=')).stdout), [], "no stacked child")
+        children = self.command('glab api -X GET "projects/:id/merge_requests"')
+        self.assertEqual(json.loads(self.run_command(children).stdout), [], "no stacked child")
+        # The branch goes as a field, so glab encodes it: `+` in the URL would read as a space
+        # and miss the child (measured: 0 rows from the URL form, !20 from the field).
+        stacked = json.loads(self.run_command(children, branch="fn317-stack+a").stdout)
+        self.assertEqual([(mr["iid"], mr["target_branch"]) for mr in stacked], [(20, "fn317-stack+a")])
         jobs = json.loads(self.run_command(self.command('glab api "projects/:id/pipelines/')).stdout)
         self.assertEqual([(j["id"], j["status"]) for j in jobs], [(17, "failed")])
         self.assertIn("exit 1", self.run_command(self.command('glab api "projects/:id/jobs/')).stdout)

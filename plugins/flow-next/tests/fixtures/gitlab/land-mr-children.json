@@ -2,7 +2,13 @@
   "argv": [
     "glab",
     "api",
-    "projects/:id/merge_requests?state=opened&target_branch=fn317-ready"
+    "-X",
+    "GET",
+    "projects/:id/merge_requests",
+    "-f",
+    "state=opened",
+    "-f",
+    "target_branch=fn317-fail"
   ],
   "env": {},
   "returncode": 0,

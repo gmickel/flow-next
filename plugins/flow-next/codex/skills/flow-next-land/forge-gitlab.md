@@ -18,9 +18,10 @@ Run glab inside the checkout, where `projects/:id` resolves from the origin remo
   head moved: read again. Read `.flow/specs/*.json` and `.flow/tasks/` with `git ls-tree` and
   `git show "$HEAD_SHA:<path>"`, and the base from `origin/<target_branch>`, in place of the trees
   API. The selection rules are unchanged.
-- **Readiness.** For the selected spec, `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` gives
-  `.selected.pr.open`: its `url` must be this merge request's `web_url` and `readiness.head_sha`
-  the head you read, else read again (`RESOLVING` if the head keeps moving). `readiness` holds
+- **Readiness.** For the selected spec, run `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` in
+  a detached worktree at `$HEAD_SHA` (the one repairs use), so the spec and its `branch_name` are
+  the head's. Its `.selected.pr.open` `url` must be this merge request's `web_url` and
+  `readiness.head_sha` the head you read, else read again (`RESOLVING` if the head keeps moving). `readiness` holds
   `merge_status` (GitLab's detailed merge status), `pipeline` (the head pipeline's status for this
   head, null when none), `approval` (`approved`, `required` or `unknown`), `squash_allowed`, `green`
   and `ready`. A merge request without a spec has no readiness read: stop `NEEDS_HUMAN`.
@@ -40,7 +41,8 @@ Run glab inside the checkout, where `projects/:id` resolves from the origin remo
 - **Patience.** The last authored push is the head pipeline's `created_at`, else the head commit's
   committer date.
 - **Merge one layer.** An open merge request targeting `$BRANCH`
-  (`glab api "projects/:id/merge_requests?state=opened&target_branch=$BRANCH"`) or a draft stops
+  (`glab api -X GET "projects/:id/merge_requests" -f state=opened -f "target_branch=$BRANCH"`, a
+  field so glab encodes the branch name) or a draft stops
   `NEEDS_HUMAN`; `squash_allowed: false` (the project forbids squash) stops `NEEDS_HUMAN` too, and
   land never picks another merge method. With a fresh `ready: true` for `$HEAD_SHA`:
   `glab api -X PUT "projects/:id/merge_requests/$MR/merge" -F squash=true -F should_remove_source_branch=true -f "sha=$HEAD_SHA"`.

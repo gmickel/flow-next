@@ -273,6 +273,7 @@ class GitLabReadinessTests(ForgeTestCase):
         for name, change in (
             ("earlier head", lambda mr: mr["head_pipeline"].update(sha="0" * 40)),
             ("no pipeline", lambda mr: mr.update(head_pipeline=None)),
+            ("pipelines hidden from the caller", lambda mr: mr.pop("head_pipeline")),
         ):
             with self.subTest(name):
                 got = self.readiness(as_read("mr-readiness-green", "/merge_requests/14", change))

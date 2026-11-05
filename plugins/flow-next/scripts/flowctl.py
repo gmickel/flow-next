@@ -23768,7 +23768,8 @@ def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
             and isinstance(project, dict) and isinstance(project.get("squash_option"), str)):
         return unread
     head, status = mr["sha"], mr["detailed_merge_status"]
-    pipeline = mr["head_pipeline"] or {}
+    # GitLab leaves `head_pipeline` out when the caller cannot see pipelines.
+    pipeline = mr.get("head_pipeline") or {}
     # A pipeline for an earlier head says nothing about this one.
     ran = pipeline.get("status") if pipeline.get("sha") == head else None
     ran = ran if isinstance(ran, str) else None
