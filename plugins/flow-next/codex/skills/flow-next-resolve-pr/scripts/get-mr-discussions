@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
+jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
+
+MR_IID="${1:?Usage: $0 MR_IID}"
+
+# get-pr-comments for a GitLab merge request: the same JSON keys, read through glab.
+# Run inside the checkout: glab takes the host and project (`:id`) from the origin remote, and
+# GITLAB_HOST names the host when it differs (an SSH origin whose web port is not the default).
+# A failed or malformed read exits nonzero, never an empty answer.
+#
+# Resolvable discussions are the review threads; individual notes (never resolvable) are the
+# top-level comments. System notes ("added 1 commit", "changed this line") are not feedback.
+# GitLab has no review bodies. --paginate prints one JSON array per page; `add` joins them.
+
+mr="$(glab api "projects/:id/merge_requests/$MR_IID")"
+discussions="$(glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" | jq -s 'add // []')"
+
+jq -n \
+  --argjson mr "$mr" \
+  --argjson discussions "$discussions" \
+  '
+  def comments: [.notes[] | select(.system != true)
+                 | {id, author: {login: .author.username}, body, createdAt: .created_at}];
+  def place: (.notes[0].position // {}) as $p
+    | {path: ($p.new_path // $p.old_path), line: ($p.new_line // $p.old_line)};
+  [$discussions[] | select(.individual_note != true and .notes[0].resolvable == true)] as $threads
+  | {
+    pr_number: $mr.iid,
+    review_threads: [
+      $threads[] | select(.notes[0].resolved != true)
+      | place as $at
+      | {id,
+         # A position on an older head may have moved: the resolver re-locates it by content.
+         isOutdated: ((.notes[0].position.head_sha // $mr.diff_refs.head_sha) != $mr.diff_refs.head_sha),
+         path: $at.path, line: $at.line, originalLine: $at.line, startLine: null, originalStartLine: null,
+         comments: comments}
+    ],
+    pr_comments: [
+      $discussions[] | select(.individual_note == true) | .notes[]
+      | select(.system != true and .author.username != $mr.author.username)
+      | select(.body != null and .body != "")
+      | {id, author: .author.username, body, createdAt: .created_at}
+    ],
+    review_bodies: [],
+    cross_invocation: {
+      signal: ([$threads[] | select(.notes[0].resolved == true)] | length > 0),
+      resolved_threads: [$threads[] | select(.notes[0].resolved == true) | place as $at | {id, path: $at.path, line: $at.line}]
+    }
+  }'

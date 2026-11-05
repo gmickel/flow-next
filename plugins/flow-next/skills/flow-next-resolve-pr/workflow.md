@@ -11,7 +11,13 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SCRIPTS="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-resolve-pr/scripts"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# The origin remote names the forge (flowctl's one forge rule); anything unread stays on GitHub.
+FORGE="$("$FLOWCTL" pilot snapshot --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null)" || true
+FORGE="${FORGE:-github}"
 ```
+
+On a forge other than GitHub, read `forge-<FORGE>.md` beside this file and follow it for the rest
+of the run.
 
 Confirm `gh` auth up-front:
 

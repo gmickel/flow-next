@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "-X",
+    "POST",
+    "projects/:id/merge_requests/13/notes",
+    "-f",
+    "body=> Could the README mention what app.py is for?\n\nNot in this branch: the README describes the fixture project, not its files."
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"id\":21,\"type\":null,\"body\":\"\\u003e Could the README mention what app.py is for?\\n\\nNot in this branch: the README describes the fixture project, not its files.\",\"author\":{\"id\":1,\"username\":\"root\",\"public_email\":null,\"name\":\"Gordon Mickel\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/8cbe1510ef151b0ee00b2a5161bb53f186dacac9f8dd4f9c38555f8487a77ba1?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/root\"},\"created_at\":\"2026-11-05T00:13:55.798Z\",\"updated_at\":\"2026-11-05T00:13:55.798Z\",\"system\":false,\"noteable_id\":13,\"noteable_type\":\"MergeRequest\",\"project_id\":1,\"resolvable\":false,\"confidential\":false,\"internal\":false,\"imported\":false,\"imported_from\":\"none\",\"noteable_iid\":13,\"commands_changes\":{}}",
+  "stderr": "",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

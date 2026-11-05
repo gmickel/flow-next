@@ -16,8 +16,6 @@ An explicit `FLOW_PR_CREATE_CMD` still wins over the helper for creation.
 - There is no stack link: while a parent's merge request is open, the child targets its branch.
 - Tracker finalize: the merge request's `created_at` is the `<PR-createdAt>`:
   `glab api "projects/$(jq -rn --arg v "$ORIGIN_PROJECT" '$v | @uri')/merge_requests/${PR_URL##*/}" | jq -r .created_at`.
-- Finalize prints the merge request URL and the body-inspection line. Leave out the reviewer-feedback
-  line: resolve-pr reads GitHub pull requests only.
 - No-spec path: follow no-spec-path.md with `"$PR_READ" pr create --title <title> --body-file <file>
   [--draft] --base <branch> --head <branch>` in place of `gh pr create`. `--base` is required; without
   `--base`, use the default branch (`git symbolic-ref --short refs/remotes/origin/HEAD` minus

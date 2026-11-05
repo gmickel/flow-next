@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MR_IID="${1:?Usage: echo REPLY_TEXT | $0 MR_IID DISCUSSION_ID}"
+DISCUSSION_ID="${2:?Usage: echo REPLY_TEXT | $0 MR_IID DISCUSSION_ID}"
+REPLY_TEXT=$(cat)
+
+if [ -z "$REPLY_TEXT" ]; then
+  echo "Empty reply text on stdin; aborting" >&2
+  exit 1
+fi
+
+glab api -X POST "projects/:id/merge_requests/$MR_IID/discussions/$DISCUSSION_ID/notes" -f "body=$REPLY_TEXT"

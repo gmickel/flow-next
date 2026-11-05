@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/:id/merge_requests/9999"
+  ],
+  "env": {},
+  "returncode": 1,
+  "stdout": "{\"message\":\"404 Not found\"}",
+  "stderr": "glab: 404 Not found (HTTP 404)\n",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}
