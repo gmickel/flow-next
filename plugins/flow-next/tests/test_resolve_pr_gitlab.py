@@ -113,16 +113,41 @@ class ReplyAndResolveTests(MrDiscussionCase):
                               GLAB_ANSWERS=answers(recorded("mr-discussion-resolve")))
         self.assertNotEqual(resolve.returncode, 0)
 
-    def test_top_level_comment_reply_is_a_new_note(self):
-        """forge-gitlab.md's PR-comment command is the one recorded; a reply inside the note's own
-        discussion would turn it into an unresolved thread (measured)."""
-        line = next(l for l in (SKILL / "forge-gitlab.md").read_text(encoding="utf-8").splitlines()
-                    if "/notes" in l and "glab api" in l)
-        command = re.search(r"`(glab api [^`]+)`", line).group(1)
-        result = self.run_sh(["bash", "-c", command], PR_NUMBER="13", REPLY=self.recorded_body("mr-note-create"),
-                             GLAB_ANSWERS=answers(recorded("mr-note-create")))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["resolvable"], False)
+
+class ReferenceCommandTests(MrDiscussionCase):
+    """Every glab command forge-gitlab.md gives the agent replays a live recording."""
+
+    REFERENCE = re.sub(r"\s*\n\s*", " ", (SKILL / "forge-gitlab.md").read_text(encoding="utf-8"))
+    RECORDINGS = ("mr-view-branch", "project-read", "mr-review-read", "fork-project-read", "mr-note-create")
+
+    def run_command(self, command):
+        body = json.loads(recorded("mr-note-create").read_text(encoding="utf-8"))["argv"][-1].removeprefix("body=")
+        return self.run_sh(["bash", "-c", f"set -o pipefail; {command}"], PR_NUMBER="13", SOURCE_PROJECT_ID="2",
+                           REPLY=body, GLAB_ANSWERS=answers(*map(recorded, self.RECORDINGS)))
+
+    def test_every_glab_command_is_recorded(self):
+        commands = re.findall(r"`(glab (?:api|mr) [^`]+)`", self.REFERENCE)
+        self.assertEqual(len(commands), 5, commands)
+        for command in commands:
+            with self.subTest(command):
+                result = self.run_command(command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(result.stdout.strip())
+
+    def test_the_answers_the_reference_reads(self):
+        reads = {c: self.run_command(c).stdout.strip() for c in re.findall(r"`(glab (?:api|mr) [^`]+)`", self.REFERENCE)}
+        self.assertEqual(reads['glab mr view --output json | jq -r .iid'], "13")
+        self.assertEqual(reads['glab api "projects/$SOURCE_PROJECT_ID" | jq -r .http_url_to_repo'],
+                         "http://localhost:8929/root/flownext-fork.git")
+        # The merge request URL check: this project's own URL matches, another project's does not.
+        web_url = reads['glab api "projects/:id" | jq -r .web_url']
+        mr_url = json.loads(json.loads(recorded("mr-review-read").read_text(encoding="utf-8"))["stdout"])["web_url"]
+        self.assertEqual(mr_url.split("/-/merge_requests/")[0].lower(), web_url.lower())
+        self.assertNotEqual("http://localhost:8929/root/flownext-fork", web_url.lower())
+        # A top-level reply is a new note, never a reply inside the note's discussion, which
+        # turns the note into an unresolved thread (measured).
+        note = reads['glab api -X POST "projects/:id/merge_requests/$PR_NUMBER/notes" -f "body=$REPLY"']
+        self.assertIs(json.loads(note)["resolvable"], False)
 
 
 class ForgePickTests(MrDiscussionCase):

@@ -10,13 +10,99 @@
     "fn-73-glab-git-ops-make-prresolve-prland-over"
   ],
   "id": "fn-316-resolve-pr-over-gitlab-merge-request",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-316-resolve-pr-over-gitlab-merge-request.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "56f44c3ccd0b561d1699a0d06173dbf2ab309925f13472e64e6577b41fe50d30",
+      "backend": "codex",
+      "base_sha": "d4f0d99edc36868c5a000c2d425912c539bfe9b2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b4a5818aa4f5e1f15ec54d3ba229bf3c",
+            "classification": "introduced",
+            "findingId": "finding-b4a5818aa4f5e1f15ec54d3ba229bf3c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d36af930cb1ad8d4ff79a2028842ab14",
+            "classification": "introduced",
+            "findingId": "finding-d36af930cb1ad8d4ff79a2028842ab14",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b21fab88e8d23bb177ae0591e9e6fe21",
+            "classification": "introduced",
+            "findingId": "finding-b21fab88e8d23bb177ae0591e9e6fe21",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8d76f51fb68b6f389f3ebc32cdd72c35",
+            "classification": "introduced",
+            "findingId": "finding-8d76f51fb68b6f389f3ebc32cdd72c35",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e89f6d3f582a6dca9a12fbfe36c1961d",
+            "classification": "introduced",
+            "findingId": "finding-e89f6d3f582a6dca9a12fbfe36c1961d",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "74c5c928d85e87dd3be2f686de8397c556026dce",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 4016,
+      "output_sha256": "3dbdee76a4d89b33427e60b0a0d27a43329c83033ec18bb6b71be976e172d5e8",
+      "reservation_id": "58ecc8bf83cb4e439ff9fa14f309081b",
+      "round_consumed": true,
+      "scope": "impl:fn-316-resolve-pr-over-gitlab-merge-request.1",
+      "superseded_by": null,
+      "task": "fn-316-resolve-pr-over-gitlab-merge-request.1",
+      "timestamp": "2026-11-05T00:24:24.779561Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-316-resolve-pr-over-gitlab-merge-request.1": 0
+  },
   "spec_path": ".flow/specs/fn-316-resolve-pr-over-gitlab-merge-request.md",
   "status": "open",
   "title": "resolve-pr over GitLab merge request discussions",
@@ -31,5 +117,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-05T00:06:57.549010Z"
+  "updated_at": "2026-11-05T00:25:47.715769Z"
 }
