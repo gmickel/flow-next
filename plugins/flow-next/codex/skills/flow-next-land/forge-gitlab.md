@@ -21,9 +21,11 @@ Run glab inside the checkout, where `projects/:id` resolves from the origin remo
 - **Readiness.** For the selected spec, run `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` in
   a detached worktree at `$HEAD_SHA` (the one repairs use), so the spec and its `branch_name` are
   the head's. Its `.selected.pr.open` `url` must be this merge request's `web_url` and
-  `readiness.head_sha` the head you read, else read again (`RESOLVING` if the head keeps moving). `readiness` holds
+  `readiness.head_sha` the head you read. A moved head means read again (`RESOLVING` if it keeps
+  moving); at an unchanged head with no match (a fork's merge request, which the snapshot does not
+  list, or a spec whose `branch_name` names another branch) stop `NEEDS_HUMAN`. `readiness` holds
   `merge_status` (GitLab's detailed merge status), `pipeline` (the head pipeline's status for this
-  head, null when none), `approval` (`approved`, `required` or `unknown`), `squash_allowed`, `green`
+  head, including a merged-results pipeline on GitLab's merge commit of it, null when none), `approval` (`approved`, `required` or `unknown`), `squash_allowed`, `green`
   and `ready`. A merge request without a spec has no readiness read: stop `NEEDS_HUMAN`.
 - **Conflicts and catch-up.** `merge_status: conflict` stops `BLOCKED` naming the branch. GitLab
   merges a branch that is behind its base, so there is no catch-up; `need_rebase` (the project

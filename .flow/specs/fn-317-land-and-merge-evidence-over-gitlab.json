@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-317-land-and-merge-evidence-over-gitlab",
   "completion_review_status": "not_required",
-  "completion_reviewed_at": "2026-11-05T10:18:04.543423Z",
+  "completion_reviewed_at": "2026-11-05T13:17:55.617588Z",
   "created_at": "2026-11-04T09:36:26.888526Z",
   "default_impl": null,
   "default_review": null,
@@ -180,5 +180,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-05T10:18:38.866791Z"
+  "updated_at": "2026-11-05T13:17:55.617596Z"
 }

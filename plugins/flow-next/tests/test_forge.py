@@ -279,6 +279,26 @@ class GitLabReadinessTests(ForgeTestCase):
                 got = self.readiness(as_read("mr-readiness-green", "/merge_requests/14", change))
                 self.assertEqual((got["pipeline"], got["green"], got["ready"]), (None, False, False))
 
+    def merged_result(self, commit):
+        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture("mr-readiness-merged-result"), commit,
+                                            fixture("project-squash-default")])
+        return self.run_with(fake, lambda: f.forge_readiness(self.repo, 21))
+
+    def test_a_merged_results_pipeline_counts_for_its_head(self):
+        got = self.merged_result(fixture("commit-merged-result"))
+        self.assertEqual((got["pipeline"], got["green"], got["ready"]), ("success", True, True))
+
+    def test_a_merged_results_pipeline_of_another_head_or_unread_is_not_green(self):
+        argv_tail = "/repository/commits/200b0dee9c049b7f82f7795a8e9c370c35e17079"
+        for name, commit in (
+            ("another head", as_read("commit-merged-result", argv_tail,
+                                     lambda c: c.update(parent_ids=[c["parent_ids"][0], "0" * 40]))),
+            ("commit unreadable", {**fixture("commit-merged-result"), "returncode": 1, "stdout": ""}),
+        ):
+            with self.subTest(name):
+                got = self.merged_result(commit)
+                self.assertEqual((got["pipeline"], got["green"], got["ready"]), (None, False, False))
+
     def test_unreadable_is_not_green_not_approved(self):
         unread = {"head_sha": None, "pipeline": None, "merge_status": None, "approval": "unknown",
                   "squash_allowed": None, "green": False, "ready": False}

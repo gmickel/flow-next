@@ -23772,6 +23772,14 @@ def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
     pipeline = mr.get("head_pipeline") or {}
     # A pipeline for an earlier head says nothing about this one.
     ran = pipeline.get("status") if pipeline.get("sha") == head else None
+    if (ran is None and isinstance(pipeline.get("sha"), str)
+            and pipeline.get("ref") == f"refs/merge-requests/{number}/merge"):
+        # A merged-results pipeline runs on GitLab's merge commit of this head into the target.
+        commit = _glab_get(origin, f"{_gitlab_project(origin)}/repository/commits/"
+                                   f"{urllib.parse.quote(pipeline['sha'], safe='')}", deadline)
+        if (isinstance(commit, dict) and isinstance(commit.get("parent_ids"), list)
+                and head in commit["parent_ids"]):
+            ran = pipeline.get("status")
     ran = ran if isinstance(ran, str) else None
     approval = ("approved" if status == "mergeable"
                 else "required" if status in _GITLAB_APPROVAL_PENDING else "unknown")
