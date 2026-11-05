@@ -31,7 +31,7 @@ On a GitLab origin, make-pr opens a merge request (fn-73), but review feedback o
 <!-- scope: both -->
 
 - **R1:** On a GitLab origin, resolve-pr fetches every unresolved MR discussion and every non-resolvable MR note in one pass, with pagination. [inferred]
-- **R2:** For each discussion it fixes, resolve-pr replies citing the fix and resolves the discussion only after the fix is pushed and verified; discussions it declines or cannot fix get a reply and stay open. [inferred]
+- **R2:** For each discussion it fixes, resolve-pr replies citing the fix and resolves the discussion only after the fix is pushed and verified; a discussion it answers or declines with evidence gets that reply and is resolved, as on GitHub; one it cannot settle (`needs-human`) gets a reply and stays open. [inferred]
 - **R3:** The GitLab commands live in resolve-pr's `forge-gitlab.md`, loaded by forge name; resolve-pr's GitHub path and its tests are unchanged. [paraphrase]
 - **R4:** Each `glab` command this spec relies on is first run against a live GitLab project and its real output saved as a test fixture; tests with a stubbed `glab` built from those fixtures cover R1–R2 in CI. [inferred]
 
@@ -50,3 +50,5 @@ Review feedback is the second step of the ship loop. With make-pr working on Git
 
 ### Implementation Tradeoffs
 - **Reference file, not a flowctl adapter read.** Thread handling is agent action, not a deterministic decision, so it stays in skill prose per fn-73's "reads in flowctl, actions in skills" rule.
+- **Amended 2026-11-05 during work: R2 follows GitHub's resolve rule.** R2 first said declined discussions stay open. That contradicted "Same rules, GitLab commands" above: on GitHub, resolve-pr resolves every thread after its reply except `needs-human` ones (resolve-pr workflow Phase 8). Leaving declined discussions open would also block a merge on projects that require every thread resolved, and land's zero-unresolved-threads gate. Only `needs-human` stays open, on both forges.
+- **The forge comes from `flowctl pilot snapshot`'s `forge` field.** That is fn-73's one forge rule, already read the same way by flow's landing tail, and it needs no new verb. It works in a checkout without `.flow/` (measured: `gitlab`, 0.5 s, nothing written), and an unreadable answer stays on GitHub.
