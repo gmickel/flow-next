@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-317-land-and-merge-evidence-over-gitlab",
   "spec_path": ".flow/tasks/fn-317-land-and-merge-evidence-over-gitlab.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement land and merge evidence over GitLab merge requests",
   "updated_at": "2026-11-05T09:50:09.875206Z"
 }

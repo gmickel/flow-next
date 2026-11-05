@@ -167,7 +167,7 @@
     "impl:fn-317-land-and-merge-evidence-over-gitlab.1": 0
   },
   "spec_path": ".flow/specs/fn-317-land-and-merge-evidence-over-gitlab.md",
-  "status": "open",
+  "status": "done",
   "title": "land and merge evidence over GitLab merge requests",
   "tracker": {
     "baseHashFlow": null,
@@ -180,5 +180,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-05T10:18:04.543431Z"
+  "updated_at": "2026-11-05T10:18:38.866791Z"
 }
