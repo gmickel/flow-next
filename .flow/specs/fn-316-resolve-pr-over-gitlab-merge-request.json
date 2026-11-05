@@ -182,7 +182,7 @@
     "impl:fn-316-resolve-pr-over-gitlab-merge-request.1": 0
   },
   "spec_path": ".flow/specs/fn-316-resolve-pr-over-gitlab-merge-request.md",
-  "status": "open",
+  "status": "done",
   "title": "resolve-pr over GitLab merge request discussions",
   "tracker": {
     "baseHashFlow": null,
@@ -195,5 +195,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-05T00:27:54.022152Z"
+  "updated_at": "2026-11-05T00:29:03.468319Z"
 }
