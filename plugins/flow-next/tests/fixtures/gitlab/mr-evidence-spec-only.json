@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/flownext%2Fflownext/merge_requests?state=all&source_branch=fn317-spec-only&per_page=100&page=1"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "[{\"id\":19,\"iid\":19,\"project_id\":1,\"title\":\"fn-317 fixture: fn317-spec-only\",\"description\":null,\"state\":\"merged\",\"created_at\":\"2026-11-05T09:56:14.333Z\",\"updated_at\":\"2026-11-05T09:58:15.340Z\",\"merged_by\":{\"id\":1,\"username\":\"root\",\"public_email\":null,\"name\":\"Gordon Mickel\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/8cbe1510ef151b0ee00b2a5161bb53f186dacac9f8dd4f9c38555f8487a77ba1?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/root\"},\"merge_user\":{\"id\":1,\"username\":\"root\",\"public_email\":null,\"name\":\"Gordon Mickel\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/8cbe1510ef151b0ee00b2a5161bb53f186dacac9f8dd4f9c38555f8487a77ba1?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/root\"},\"merged_at\":\"2026-11-05T09:58:15.354Z\",\"closed_by\":null,\"closed_at\":null,\"target_branch\":\"main\",\"source_branch\":\"fn317-spec-only\",\"user_notes_count\":0,\"upvotes\":0,\"downvotes\":0,\"author\":{\"id\":1,\"username\":\"root\",\"public_email\":null,\"name\":\"Gordon Mickel\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/8cbe1510ef151b0ee00b2a5161bb53f186dacac9f8dd4f9c38555f8487a77ba1?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/root\",\"bot\":false},\"assignees\":[],\"assignee\":null,\"reviewers\":[{\"id\":5,\"username\":\"fx-reviewer\",\"public_email\":null,\"name\":\"Fixture Reviewer\",\"state\":\"active\",\"locked\":false,\"avatar_url\":\"https://www.gravatar.com/avatar/2a0ee87de69b1f45853821179b1a985feb532cb8768a9bacee63d7fe3561716b?s=80\\u0026d=identicon\",\"web_url\":\"http://localhost:8929/fx-reviewer\"}],\"source_project_id\":1,\"target_project_id\":1,\"labels\":[],\"draft\":false,\"imported\":false,\"imported_from\":\"none\",\"work_in_progress\":false,\"milestone\":null,\"merge_when_pipeline_succeeds\":false,\"merge_status\":\"can_be_merged\",\"detailed_merge_status\":\"not_open\",\"merge_after\":null,\"sha\":\"6b8acd68cea4e2eff4dc475e04797a95e040f09d\",\"merge_commit_sha\":\"4a7a5f148410410d7534e649ebb4aca9ee88ea78\",\"squash_commit_sha\":\"4019014427bf63224c7ecd422fd315583ca80107\",\"discussion_locked\":null,\"should_remove_source_branch\":null,\"force_remove_source_branch\":true,\"prepared_at\":\"2026-11-05T09:56:16.254Z\",\"reference\":\"!19\",\"references\":{\"short\":\"!19\",\"relative\":\"!19\",\"full\":\"flownext/flownext!19\"},\"web_url\":\"http://localhost:8929/flownext/flownext/-/merge_requests/19\",\"time_stats\":{\"time_estimate\":0,\"total_time_spent\":0,\"human_time_estimate\":null,\"human_total_time_spent\":null},\"squash\":true,\"squash_on_merge\":true,\"task_completion_status\":{\"count\":0,\"completed_count\":0},\"has_conflicts\":false,\"blocking_discussions_resolved\":true,\"approvals_before_merge\":null}]",
+  "stderr": "",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

@@ -1,14 +1,23 @@
 {
   "branch_name": "fn-317-land-and-merge-evidence-over-gitlab",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-11-04T09:36:26.888526Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-73-glab-git-ops-make-prresolve-prland-over",
     "fn-316-resolve-pr-over-gitlab-merge-request"
   ],
   "id": "fn-317-land-and-merge-evidence-over-gitlab",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-317-land-and-merge-evidence-over-gitlab.md",
   "status": "open",
   "title": "land and merge evidence over GitLab merge requests",
@@ -23,5 +32,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-04T09:36:31.698167Z"
+  "updated_at": "2026-11-05T10:04:58.362277Z"
 }

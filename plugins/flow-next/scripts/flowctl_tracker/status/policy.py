@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from ..types import ErrorClass, Request, Response, TrackerError
 from ..lifecycle.helpers import Execute
@@ -120,6 +120,12 @@ def validate_conflict_tiebreak(config: dict) -> str | TrackerError:
 # merge evidence (gh pr list — probes the REPO, not the tracker type)
 # ---------------------------------------------------------------------------
 
+# flowctl installs its forge adapter's merge read here: branch -> (rows in gh's
+# shape, {merged number: changed paths}), None when the read failed, or
+# NotImplemented on GitHub. Unset (this package used on its own), gh reads it.
+forge_merge_read: Optional[Callable[[str], Any]] = None
+
+
 def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
     """Probe `gh pr list --head <branch>` via the executor CLI route.
 
@@ -128,11 +134,20 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
     Each MERGED row is then probed for its changed files (`gh pr view`);
     a row touching only `.flow/specs/` / `.flow/tasks/` is not evidence
     (#391), and a failed file probe is probe-error for the whole result.
+    Another forge's merge requests read through `forge_merge_read`.
     """
     branch = spec_data.get("branch_name")
     if not isinstance(branch, str) or not branch.strip():
         return "probe-error"
     branch = branch.strip()
+    forge_read = forge_merge_read(branch) if forge_merge_read else NotImplemented
+    if forge_read is not NotImplemented:
+        if forge_read is None:
+            return "probe-error"
+        rows, files = forge_read
+        return _classify_pr_rows(rows, frozenset(
+            number for number, paths in files.items()
+            if all(path.startswith(SPEC_TEXT_PREFIXES) for path in paths)))
     # Run in the current Git checkout and let gh resolve THAT repository.
     # tracker.perTracker.repo may intentionally point at an out-of-tree issue
     # repository; PR merge evidence belongs to the code repository instead.

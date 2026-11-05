@@ -163,7 +163,7 @@ class GitLabAdapterTests(ForgeTestCase):
         self.assertEqual(rows[0], {
             "number": 2, "url": "http://localhost:8929/flownext/flownext/-/merge_requests/2",
             "state": "OPEN", "headRefName": "fn73-fx-reused",
-            "headRefOid": "567560351a74b8fc2bb56832769eb26eb081259c", "mergedAt": None})
+            "headRefOid": "567560351a74b8fc2bb56832769eb26eb081259c", "mergedAt": None, "isDraft": True})
         merged, _ = self.listing("fn73-fx-merged", glab=[fixture("mr-branch-merged")])
         self.assertEqual([(r["state"], r["mergedAt"], r["headRefOid"]) for r in merged],
                          [("MERGED", "2026-11-04T10:24:33.246Z", "070c9c88e67e17a840b6080790b35f375e8335e5")])
@@ -221,6 +221,129 @@ class GitLabAdapterTests(ForgeTestCase):
         self.assertEqual(status, {"approved": False, "reason": "spec approval is unsupported on this forge (gitlab)"})
 
 
+def as_read(name: str, argv_tail: str, change=None) -> dict:
+    """A recorded answer under the adapter's argv; `change` edits its parsed body, for
+    shapes the live project cannot produce on demand."""
+    fx = fixture(name)
+    fx["argv"] = ["glab", "api", f"projects/flownext%2Fflownext{argv_tail}"]
+    fx["env"] = {"GITLAB_HOST": "localhost:8929"}
+    if change:
+        body = json.loads(fx["stdout"])
+        change(body)
+        fx["stdout"] = json.dumps(body)
+    return fx
+
+
+class GitLabReadinessTests(ForgeTestCase):
+    def readiness(self, mr, project="project-squash-default", number=14):
+        fake = FakeCli(GITLAB_ORIGIN, glab=[mr, fixture(project)] if isinstance(project, str) else [mr, project])
+        return self.run_with(fake, lambda: f.forge_readiness(self.repo, number))
+
+    def test_recorded_states(self):
+        cases = [
+            # (recording, pipeline, merge_status, approval, ready)
+            ("mr-readiness-green", "success", "mergeable", "approved", True),
+            ("mr-readiness-not-approved", "success", "not_approved", "required", False),
+            ("mr-readiness-approved", "success", "mergeable", "approved", True),
+            ("mr-readiness-failed", "failed", "mergeable", "approved", False),
+            ("mr-readiness-manual", "manual", "mergeable", "approved", False),
+            ("mr-readiness-running", "running", "mergeable", "approved", False),
+            ("mr-readiness-skipped", "skipped", "mergeable", "approved", False),
+        ]
+        for name, pipeline, status, approval, ready in cases:
+            with self.subTest(name):
+                fx = fixture(name)
+                number = json.loads(fx["stdout"])["iid"]
+                got = self.readiness(fx, number=number)
+                self.assertEqual((got["pipeline"], got["merge_status"], got["approval"], got["ready"]),
+                                 (pipeline, status, approval, ready))
+                self.assertEqual(got["green"], pipeline == "success")
+                self.assertEqual(got["head_sha"], json.loads(fx["stdout"])["sha"])
+
+    def test_free_tier_merge_request(self):
+        """Recorded before the Ultimate trial: GitLab's merge check works on every tier."""
+        got = self.readiness(as_read("mr-review-read", "/merge_requests/13"), number=13)
+        self.assertEqual((got["pipeline"], got["approval"], got["ready"]), ("success", "approved", True))
+
+    def test_squash_forbidden_is_never_ready(self):
+        got = self.readiness(fixture("mr-readiness-green"), "project-squash-never")
+        self.assertEqual((got["squash_allowed"], got["green"], got["ready"]), (False, True, False))
+
+    def test_a_pipeline_for_another_head_or_none_is_not_green(self):
+        for name, change in (
+            ("earlier head", lambda mr: mr["head_pipeline"].update(sha="0" * 40)),
+            ("no pipeline", lambda mr: mr.update(head_pipeline=None)),
+        ):
+            with self.subTest(name):
+                got = self.readiness(as_read("mr-readiness-green", "/merge_requests/14", change))
+                self.assertEqual((got["pipeline"], got["green"], got["ready"]), (None, False, False))
+
+    def test_unreadable_is_not_green_not_approved(self):
+        unread = {"head_sha": None, "pipeline": None, "merge_status": None, "approval": "unknown",
+                  "squash_allowed": None, "green": False, "ready": False}
+        missing = fixture("mr-missing-read")  # a recorded 404, under the adapter's argv
+        missing.update(argv=["glab", "api", "projects/flownext%2Fflownext/merge_requests/14"],
+                       env={"GITLAB_HOST": "localhost:8929"})
+        cases = [
+            ("merge request missing", missing, "project-squash-default"),
+            ("not JSON", {**as_read("mr-readiness-green", "/merge_requests/14"), "stdout": "<html>"}, "project-squash-default"),
+            ("no merge status", as_read("mr-readiness-green", "/merge_requests/14",
+                                        lambda mr: mr.pop("detailed_merge_status")), "project-squash-default"),
+            ("project unreadable", fixture("mr-readiness-green"),
+             {**fixture("project-squash-default"), "returncode": 1, "stdout": ""}),
+        ]
+        for name, mr, project in cases:
+            with self.subTest(name):
+                self.assertEqual(self.readiness(mr, project), unread)
+
+    def test_github_has_no_readiness_read(self):
+        fake = FakeCli("https://github.com/o/r.git")
+        self.assertIsNone(self.run_with(fake, lambda: f.forge_readiness(self.repo, 1)))
+
+
+class GitLabMergeEvidenceTests(ForgeTestCase):
+    def merge_read(self, *glab, origin=GITLAB_ORIGIN, branch="fn317-ready"):
+        fake = FakeCli(origin, glab=glab)
+        with patch.object(f, "get_repo_root", return_value=self.repo):
+            return self.run_with(fake, lambda: f._forge_merge_read(branch))
+
+    def test_merged_rows_carry_their_changed_files(self):
+        rows, files = self.merge_read(fixture("mr-evidence-merged"), fixture("mr-evidence-merged-diffs"))
+        self.assertEqual([(r["number"], r["state"], r["isDraft"]) for r in rows], [(14, "MERGED", False)])
+        self.assertEqual(files, {14: ["fn317/ready.txt"]})
+        rows, files = self.merge_read(fixture("mr-evidence-spec-only"), fixture("mr-evidence-spec-only-diffs"),
+                                      branch="fn317-spec-only")
+        self.assertEqual(files, {19: [".flow/specs/fn-317-fixture.md"]})
+
+    def test_a_failed_file_read_fails_the_whole_read(self):
+        missing = fixture("mr-evidence-missing-diffs")
+        missing["argv"] = fixture("mr-evidence-merged-diffs")["argv"]
+        self.assertIsNone(self.merge_read(fixture("mr-evidence-merged"), missing))
+
+    def test_github_reads_through_the_tracker_own_gh_probe(self):
+        self.assertIs(self.merge_read(origin="https://github.com/o/r.git"), NotImplemented)
+
+    def test_tracker_classifies_the_forge_read(self):
+        from flowctl_tracker.status import policy
+        self.addCleanup(setattr, policy, "forge_merge_read", policy.forge_merge_read)
+        self.assertIs(f._import_tracker_status().policy.forge_merge_read, f._forge_merge_read)
+        cases = [
+            ("merged", "fn317-ready", ("mr-evidence-merged", "mr-evidence-merged-diffs")),
+            ("none", "fn317-spec-only", ("mr-evidence-spec-only", "mr-evidence-spec-only-diffs")),
+            ("probe-error", "fn317-ready", ("mr-evidence-merged", "mr-evidence-missing-diffs")),
+        ]
+        for want, branch, names in cases:
+            with self.subTest(want):
+                f.repo_forge.cache_clear()
+                answers = [fixture(n) for n in names]
+                if want == "probe-error":   # the recorded 404, answering MR !14's file read
+                    answers[1]["argv"] = fixture("mr-evidence-merged-diffs")["argv"]
+                fake = FakeCli(GITLAB_ORIGIN, glab=answers)
+                with patch.object(f, "get_repo_root", return_value=self.repo):
+                    got = self.run_with(fake, lambda b=branch: policy.merge_evidence({}, {"branch_name": b}, None))
+                self.assertEqual(got, want)
+
+
 class PilotSnapshotForgeTests(ForgeTestCase):
     def test_snapshot_reads_merge_requests_and_names_the_forge(self):
         def flow(*args):
@@ -232,13 +355,19 @@ class PilotSnapshotForgeTests(ForgeTestCase):
         sid = json.loads(flow("spec", "create", "--title", "MR fixture", "--json"))["id"]
         flow("spec", "set-branch", sid, "--branch", "fn73-fx-reused", "--json")
         flow("spec", "ready", sid)
-        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture(n) for n in ("mr-open", "mr-locked", "mr-branch-all")])
+        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture(n) for n in ("mr-open", "mr-locked", "mr-branch-all",
+                                                                  "mr-readiness-draft", "project-squash-default")])
         with patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo / ".flow"), patch.object(f, "_pilot_strikes_ledger_path", return_value=None):
             result = self.run_with(fake, lambda: f.pilot_snapshot(sid))
         self.assertEqual(result["forge"], "gitlab")
         self.assertFalse(result["pr_listing_failed"])
         pr = result["selected"]["pr"]
         self.assertEqual((pr["open"]["number"], [r["number"] for r in pr["closed"]]), (2, [1]))
+        # GitLab has not checked the draft MR !2 since: approval unknown, never ready.
+        self.assertEqual(pr["open"]["readiness"], {
+            "head_sha": "567560351a74b8fc2bb56832769eb26eb081259c", "pipeline": "success",
+            "merge_status": "unchecked", "approval": "unknown", "squash_allowed": True,
+            "green": True, "ready": False})
         self.assertEqual(result["route"]["decision"]["value"], "existing_pr_tail")
 
 
