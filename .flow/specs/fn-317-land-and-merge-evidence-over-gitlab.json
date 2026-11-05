@@ -1,16 +1,173 @@
 {
   "branch_name": "fn-317-land-and-merge-evidence-over-gitlab",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-05T13:17:55.617588Z",
   "created_at": "2026-11-04T09:36:26.888526Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-73-glab-git-ops-make-prresolve-prland-over",
     "fn-316-resolve-pr-over-gitlab-merge-request"
   ],
   "id": "fn-317-land-and-merge-evidence-over-gitlab",
+  "impl_review_rounds": {
+    "fn-317-land-and-merge-evidence-over-gitlab.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "1201c64cb69aedcfd038fb329ec4bf1243f796dc350a3f0f264f0c1860682a20",
+      "backend": "codex",
+      "base_sha": "58e042b47b577e95cfeaf6b834bccecb1709cbaa",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-155cf5df6eb6be8886b8db8fd6f25be9",
+            "classification": "introduced",
+            "findingId": "finding-155cf5df6eb6be8886b8db8fd6f25be9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-78aa6eb01fb0518e7a25ca74c939ec59",
+            "classification": "introduced",
+            "findingId": "finding-78aa6eb01fb0518e7a25ca74c939ec59",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0b6927cbd812e4f902582c1692485f5e",
+            "classification": "introduced",
+            "findingId": "finding-0b6927cbd812e4f902582c1692485f5e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-127a97b36987ef90075a6c1e98ce235b",
+            "classification": "introduced",
+            "findingId": "finding-127a97b36987ef90075a6c1e98ce235b",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f5c947edc9979fabe2fd14b1739bb1f59966b892",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 3108,
+      "output_sha256": "4f039b4f2fcb13fb5f4d5b857e26893bb67447ba1f7bf11418dd14a2c9416336",
+      "reservation_id": "2ba5b18081974f80b071e1dd28e6278e",
+      "round_consumed": true,
+      "scope": "impl:fn-317-land-and-merge-evidence-over-gitlab.1",
+      "superseded_by": null,
+      "task": "fn-317-land-and-merge-evidence-over-gitlab.1",
+      "timestamp": "2026-11-05T10:14:56.698758Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "f2af74d400c5506769a97a22ee696d46790d96bb28f082a2e821b3eedf2a8f88",
+      "backend": "codex",
+      "base_sha": "58e042b47b577e95cfeaf6b834bccecb1709cbaa",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-155cf5df6eb6be8886b8db8fd6f25be9",
+            "classification": "introduced",
+            "findingId": "finding-155cf5df6eb6be8886b8db8fd6f25be9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-78aa6eb01fb0518e7a25ca74c939ec59",
+            "classification": "introduced",
+            "findingId": "finding-78aa6eb01fb0518e7a25ca74c939ec59",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-0b6927cbd812e4f902582c1692485f5e",
+            "classification": "introduced",
+            "findingId": "finding-0b6927cbd812e4f902582c1692485f5e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-127a97b36987ef90075a6c1e98ce235b",
+            "classification": "introduced",
+            "findingId": "finding-127a97b36987ef90075a6c1e98ce235b",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a0373f39674a8bfa5e51c5d2c825338ebe21f778",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1701,
+      "output_sha256": "13b96264c84d6e8ce02a5c3c39ed569008a7ec081313ee47ccf172d3f51ba816",
+      "reservation_id": "785318b652674805a3f0272f4bde1cdb",
+      "round_consumed": true,
+      "scope": "impl:fn-317-land-and-merge-evidence-over-gitlab.1",
+      "superseded_by": null,
+      "task": "fn-317-land-and-merge-evidence-over-gitlab.1",
+      "timestamp": "2026-11-05T10:17:47.391635Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-317-land-and-merge-evidence-over-gitlab.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-317-land-and-merge-evidence-over-gitlab.1": 0
+  },
   "spec_path": ".flow/specs/fn-317-land-and-merge-evidence-over-gitlab.md",
-  "status": "open",
+  "status": "done",
   "title": "land and merge evidence over GitLab merge requests",
   "tracker": {
     "baseHashFlow": null,
@@ -23,5 +180,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-04T09:36:31.698167Z"
+  "updated_at": "2026-11-05T13:17:55.617596Z"
 }

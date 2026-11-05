@@ -23675,12 +23675,12 @@ def _gitlab_mr_row(mr: Any) -> Optional[dict]:
             and all(isinstance(mr.get(key), (str, type(None))) for key in ("sha", "merged_at"))):
         return None
     return {"number": mr["iid"], "url": mr["web_url"], "state": _GITLAB_MR_STATES[mr["state"]],
-            "headRefName": mr["source_branch"], "headRefOid": mr["sha"], "mergedAt": mr["merged_at"]}
+            "headRefName": mr["source_branch"], "headRefOid": mr["sha"], "mergedAt": mr["merged_at"],
+            "isDraft": mr.get("draft") is True}
 
 
-def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
-                     state: str, limit: int) -> Optional[list]:
-    """MRs opened from the origin project itself (a fork's MR may share the branch name)."""
+def _glab_get(origin: "ForgeOrigin", endpoint: str, deadline: float) -> Optional[Any]:
+    """One `glab api` GET on the origin project's host, parsed; None when it failed."""
     try:
         from flowctl_tracker.executor import execute  # noqa: PLC0415
         from flowctl_tracker.types import Request, Response  # noqa: PLC0415
@@ -23693,30 +23693,40 @@ def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
             from flowctl_tracker.types import Request, Response  # noqa: PLC0415
         except ImportError:
             return None
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None
+    # GITLAB_HOST carries host:port, which `glab api --hostname` rejects.
+    result = execute(Request(
+        provider="gitlab", op="forge-read", method="GET", idempotent=True,
+        url_or_argv=["glab", "api", endpoint], timeout_s=remaining,
+        env={"GITLAB_HOST": origin.host}), max_retries=0)
+    if not isinstance(result, Response):
+        return None
+    try:
+        return json.loads(result.body)
+    except ValueError:
+        return None
+
+
+def _gitlab_project(origin: "ForgeOrigin") -> str:
+    return f"projects/{urllib.parse.quote(origin.project or '', safe='')}"
+
+
+def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
+                     state: str, limit: int) -> Optional[list]:
+    """MRs opened from the origin project itself (a fork's MR may share the branch name)."""
     if not origin.project:
         return None
-    endpoint = f"projects/{urllib.parse.quote(origin.project, safe='')}/merge_requests"
+    endpoint = f"{_gitlab_project(origin)}/merge_requests"
     branch = f"&source_branch={urllib.parse.quote(head, safe='')}" if head else ""
     deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
     rows = []
     for mr_state in ["all"] if state == "all" else ["opened", "locked"]:
         page = 1
         while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return None
-            # GITLAB_HOST carries host:port, which `glab api --hostname` rejects.
-            result = execute(Request(
-                provider="gitlab", op="forge-mr-list", method="GET", idempotent=True,
-                url_or_argv=["glab", "api", f"{endpoint}?state={mr_state}{branch}"
-                             f"&per_page={_GITLAB_PER_PAGE}&page={page}"],
-                timeout_s=remaining, env={"GITLAB_HOST": origin.host}), max_retries=0)
-            if not isinstance(result, Response):
-                return None
-            try:
-                listed = json.loads(result.body)
-            except ValueError:
-                return None
+            listed = _glab_get(origin, f"{endpoint}?state={mr_state}{branch}"
+                                       f"&per_page={_GITLAB_PER_PAGE}&page={page}", deadline)
             if not isinstance(listed, list):
                 return None
             for mr in listed:
@@ -23733,13 +23743,87 @@ def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
     return rows
 
 
+# detailed_merge_status values that wait on approvals. GitLab reports one blocking
+# check at a time, so any other value but `mergeable` leaves approval unknown.
+_GITLAB_APPROVAL_PENDING = {"not_approved", "approvals_syncing", "requested_changes"}
+
+
+def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    """Whether merge request `number` can merge now, in GitLab's own terms.
+
+    `pipeline` is the head pipeline's status for the current head only, and
+    `approval` is approved, required or unknown. Anything unreadable is not
+    green, not approved and not ready.
+    """
+    unread = {"head_sha": None, "pipeline": None, "merge_status": None, "approval": "unknown",
+              "squash_allowed": None, "green": False, "ready": False}
+    if not origin.project:
+        return unread
+    deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
+    mr = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{number}", deadline)
+    project = _glab_get(origin, _gitlab_project(origin), deadline)
+    if not (isinstance(mr, dict) and isinstance(mr.get("sha"), str) and mr["sha"]
+            and isinstance(mr.get("detailed_merge_status"), str)
+            and isinstance(mr.get("head_pipeline"), (dict, type(None)))
+            and isinstance(project, dict) and isinstance(project.get("squash_option"), str)):
+        return unread
+    head, status = mr["sha"], mr["detailed_merge_status"]
+    # GitLab leaves `head_pipeline` out when the caller cannot see pipelines.
+    pipeline = mr.get("head_pipeline") or {}
+    # A pipeline for an earlier head says nothing about this one.
+    ran = pipeline.get("status") if pipeline.get("sha") == head else None
+    if (ran is None and isinstance(pipeline.get("sha"), str)
+            and pipeline.get("ref") == f"refs/merge-requests/{number}/merge"):
+        # A merged-results pipeline runs on GitLab's merge commit of this head into the target.
+        commit = _glab_get(origin, f"{_gitlab_project(origin)}/repository/commits/"
+                                   f"{urllib.parse.quote(pipeline['sha'], safe='')}", deadline)
+        if (isinstance(commit, dict) and isinstance(commit.get("parent_ids"), list)
+                and head in commit["parent_ids"]):
+            ran = pipeline.get("status")
+    ran = ran if isinstance(ran, str) else None
+    approval = ("approved" if status == "mergeable"
+                else "required" if status in _GITLAB_APPROVAL_PENDING else "unknown")
+    squash = project["squash_option"] != "never"
+    return {"head_sha": head, "pipeline": ran, "merge_status": status, "approval": approval,
+            "squash_allowed": squash, "green": ran == "success",
+            "ready": ran == "success" and status == "mergeable" and squash}
+
+
+def _gitlab_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Optional[tuple]:
+    """Merge evidence: the branch's merge requests, and each merged one's changed paths
+    (old and new, so a move out of a directory counts there too). None when a read failed."""
+    rows = _gitlab_list_prs(repo, origin, branch, state="all", limit=100)
+    if rows is None or len(rows) >= 100:
+        return None
+    deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
+    files = {}
+    for row in rows:
+        if row["state"] != "MERGED":
+            continue
+        paths, page = [], 1
+        while True:
+            diffs = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{row['number']}/diffs"
+                                      f"?per_page={_GITLAB_PER_PAGE}&page={page}", deadline)
+            if not isinstance(diffs, list) or not all(
+                    isinstance(d, dict) and isinstance(d.get("old_path"), str)
+                    and isinstance(d.get("new_path"), str) for d in diffs):
+                return None
+            paths += [path for d in diffs for path in dict.fromkeys((d["old_path"], d["new_path"]))]
+            if len(diffs) < _GITLAB_PER_PAGE:
+                break
+            page += 1
+        files[row["number"]] = paths
+    return rows, files
+
+
 # Forge name -> its reads. A forge claims an origin host through `owns_host`;
 # an adapter may lack a read, and its callers then report that read as
 # unsupported on this forge.
 FORGE_ADAPTERS: dict[str, dict[str, Any]] = {
     "github": {"owns_host": _github_owns_host, "list_prs": _github_list_prs,
                "approval_rows": _gh_pr_rows},
-    "gitlab": {"owns_host": _gitlab_owns_host, "list_prs": _gitlab_list_prs},
+    "gitlab": {"owns_host": _gitlab_owns_host, "list_prs": _gitlab_list_prs,
+               "readiness": _gitlab_readiness, "merge_rows": _gitlab_merge_rows},
 }
 _FORGE_HOSTS = {"github.com": "github", "ssh.github.com": "github", "gitlab.com": "gitlab"}
 
@@ -23825,6 +23909,22 @@ def forge_list_prs(repo: Path, head: Optional[str] = None, *, state: str, limit:
     """PRs or MRs with head branch `head` (every open one when None); None is a probe failure."""
     read, _, origin = _forge_read(repo, "list_prs")
     return read(repo, origin, head, state=state, limit=limit) if read else None
+
+
+def forge_readiness(repo: Path, number: int) -> Optional[dict]:
+    """Whether open PR/MR `number` can merge now; None when the forge has no such read."""
+    read, _, origin = _forge_read(repo, "readiness")
+    return read(repo, origin, number) if read else None
+
+
+def _forge_merge_read(branch: str) -> Any:
+    """The tracker's merge-evidence read (flowctl_tracker.status.policy.forge_merge_read).
+    NotImplemented on GitHub, which the tracker reads through gh itself."""
+    repo = get_repo_root()
+    read, forge, origin = _forge_read(repo, "merge_rows")
+    if forge == "github":
+        return NotImplemented
+    return read(repo, origin, branch) if read else None
 
 
 def forge_approval_rows(head: str, repo: Path) -> tuple[Optional[list], str]:
@@ -43171,18 +43271,27 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _with_forge_merge_read(module):
+    """Point the tracker's merge evidence at this origin's forge adapter (the
+    tracker package never imports flowctl)."""
+    if module is not None:
+        from flowctl_tracker.status import policy  # noqa: PLC0415
+        policy.forge_merge_read = _forge_merge_read
+    return module
+
+
 def _import_tracker_status():
     """Guarded import matching cmd_tracker_lifecycle / cmd_tracker_wire."""
     try:
         from flowctl_tracker import status as tracker_status  # noqa: PLC0415
-        return tracker_status
+        return _with_forge_merge_read(tracker_status)
     except ImportError:
         here = Path(__file__).resolve().parent
         if (here / "flowctl_tracker").is_dir():
             sys.path.insert(0, str(here))
         try:
             from flowctl_tracker import status as tracker_status  # noqa: PLC0415
-            return tracker_status
+            return _with_forge_merge_read(tracker_status)
         except ImportError:
             return None
 
@@ -43301,14 +43410,14 @@ def _import_tracker_facade():
     """Guarded import matching cmd_tracker_syncbody / cmd_tracker_wire."""
     try:
         from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
-        return tracker_facade
+        return _with_forge_merge_read(tracker_facade)
     except ImportError:
         here = Path(__file__).resolve().parent
         if (here / "flowctl_tracker").is_dir():
             sys.path.insert(0, str(here))
         try:
             from flowctl_tracker import facade as tracker_facade  # noqa: PLC0415
-            return tracker_facade
+            return _with_forge_merge_read(tracker_facade)
         except ImportError:
             return None
 
@@ -43971,6 +44080,10 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
     if selected and selected["branch_name"]:
         selected["pr"] = observe(list_prs(selected["branch_name"], state="all", limit=100),
                                  selected["branch_name"], history=True)
+        open_pr = selected["pr"]["open"]
+        readiness = forge_readiness(repo, open_pr["number"]) if open_pr else None
+        if readiness is not None:
+            open_pr["readiness"] = readiness
     for candidate in result:
         out, err = _anchor_capture(cmd_review_backend,
                                    argparse.Namespace(id=candidate["id"], json=True))

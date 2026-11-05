@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "-X",
+    "PUT",
+    "projects/:id/merge_requests/14/merge",
+    "-F",
+    "squash=true",
+    "-F",
+    "should_remove_source_branch=true",
+    "-f",
+    "sha=fb633aff58843b154b078ff30eb6cc6df040deeb"
+  ],
+  "env": {},
+  "returncode": 1,
+  "stdout": "{\"message\":\"SHA does not match HEAD of source branch: d8b76161301680f873478db85eff419251735916\"}",
+  "stderr": "glab: SHA does not match HEAD of source branch: d8b76161301680f873478db85eff419251735916 (HTTP 409)\n",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

@@ -7,6 +7,16 @@ Only `land.mergeVerdictCommand` and `land.patienceMinutes` are used (defaults:
 unset and 10). Existing configs may contain other `land.*` keys: print one
 notice naming all ignored keys and continue; do not rewrite the config.
 
+The origin remote names the forge (flowctl's one forge rule); anything unread stays on GitHub:
+
+```bash
+FORGE="$("$FLOWCTL" pilot snapshot --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true
+FORGE="${FORGE:-github}"
+```
+
+On a forge other than GitHub, read `forge-<FORGE>.md` beside this file: it replaces the GitHub
+reads and calls below.
+
 With no pull request, stop `NEEDS_HUMAN`, reason `no pull request`.
 Resolve the exact PR with `gh pr view <PR> --repo <owner/repo>`; read its URL,
 state, `headRefOid`, `headRefName`, head repository, base, and merge commit.
