@@ -55,9 +55,26 @@ def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
         )
         if m:
             tok = re.search(r"^\s+token:\s*(\S+)", m.group(1), re.M)
-            if tok:
-                return tok.group(1)
+            value = tok.group(1).strip("\"'") if tok else ""  # `token: ""` is empty too
+            if value:
+                return value
+            # A stanza without a token keeps it in the OS keyring (glab's default store);
+            # glab itself reads it back.
+            return _glab_cli_get("token", want) or None
     return None
+
+
+def _glab_cli_get(key: str, host: str) -> str:
+    """`glab config get <key> --host <host>`, or "" when glab is absent or fails."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(["glab", "config", "get", key, "--host", host], capture_output=True,
+                              text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    lines = proc.stdout.strip().splitlines() if proc.returncode == 0 else []
+    return lines[-1].strip() if lines else ""  # glab may print a config warning first
 
 
 def _basic(user: str, token: str) -> str:
@@ -83,8 +100,16 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
         # Ordinary calls go through `glab`, which authenticates itself - but the
         # upload route MUST use HTTP, and returning None there would send it
         # unauthenticated. So fall back to glab's own stored token.
-        tok = _remember(os.environ.get("GITLAB_TOKEN") or _glab_config_token(host))
-        return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok)) if tok else None
+        tok = _remember(os.environ.get("GITLAB_TOKEN"))
+        if tok:
+            return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok))
+        tok = _remember(_glab_config_token(host))
+        if not tok:
+            return None
+        # An OAuth login (glab auth login --web) is refused as PRIVATE-TOKEN; it goes as a bearer token.
+        if _glab_cli_get("is_oauth2", (host or "gitlab.com").lower()) == "true":
+            return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}"))
+        return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok))
 
     if provider == "linear":
         key = _remember(os.environ.get("LINEAR_API_KEY"))

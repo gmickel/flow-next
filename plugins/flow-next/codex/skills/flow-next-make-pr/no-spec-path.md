@@ -1,6 +1,7 @@
 # No-spec path (gated reference)
 
-> Read from workflow.md only when preflight exits 4 (`NO_SPEC`) or the repo has no `.flow/`.
+> Read from workflow.md only when preflight exits 4 (`NO_SPEC`). After a `FORGE=` line, the forge's
+> reference (`forge-<FORGE>.md`) gives the commands that replace `gh pr create` and `gh pr edit` here.
 
 Never create a spec to open a pull request. Under `--dry-run`, write the body below, print it and
 stop, with no branch, commit or push. Otherwise, on the default branch, first create a branch

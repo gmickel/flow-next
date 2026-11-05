@@ -198,6 +198,18 @@ class HelperReadTests(GitLabShellCase):
         for name, rc in (("token-self-api", 0), ("token-self-read-api", 1), ("token-self-revoked", 1)):
             with self.subTest(name):
                 self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=answers(recorded(name))).returncode, rc)
+        # An OAuth login is refused by the token self-read and reads its scopes from token info.
+        oauth = answers(recorded("token-self-oauth"), recorded("config-api-protocol"), recorded("token-info-oauth"))
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=oauth).returncode, 0)
+        # glab may print a config warning before the value.
+        warning = self.tmp / "config-api-protocol-warned.json"
+        warning.write_text(json.dumps({**json.loads(recorded("config-api-protocol").read_text(encoding="utf-8")),
+                                       "stdout": "a glab config warning\nhttp\n"}), encoding="utf-8")
+        warned = answers(recorded("token-self-oauth"), warning, recorded("token-info-oauth"))
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=warned).returncode, 0)
+        no_api = self.derived("token-info-oauth", lambda info: {**info, "scopes": ["read_api"], "scope": ["read_api"]})
+        oauth_read_api = answers(recorded("token-self-oauth"), recorded("config-api-protocol"), no_api)
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=oauth_read_api).returncode, 1)
         # Scopes as a string are malformed: "read_api" must not read as api scope.
         string_scopes = self.derived("token-self-read-api", lambda tok: {**tok, "scopes": "read_api"})
         self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=answers(string_scopes)).returncode, 1)
@@ -245,6 +257,22 @@ class OriginBlockTests(GitLabShellCase):
         for login in ("gh auth login --hostname gitlab.unknown.example", "glab auth login --hostname gitlab.unknown.example"):
             self.assertIn(login, result.stderr)
 
+    def test_dry_run_names_the_forge_without_stops_or_checks(self):
+        # A preview reads merge requests when glab can answer; it never stops or checks the token scope.
+        script = self.BLOCK + self.REPORT
+        for name, origin, glab_hosts, expect in (
+                ("logged-in GitLab", GITLAB_ORIGIN, HOST, f"FORGE=gitlab PR_READ={SCRIPTS / 'make-pr-gitlab.sh'}"),
+                ("logged-out GitLab", GITLAB_ORIGIN, "", "FORGE= PR_READ= "),
+                ("unknown host", "https://gitlab.unknown.example/g/p.git", "", "FORGE= PR_READ= ")):
+            with self.subTest(name):
+                self.calls.write_text("", encoding="utf-8")
+                repo = self.repo_on("main", origin)
+                result = self.run_sh(["bash", "-c", script], cwd=repo, REPO_ROOT=str(repo), DRY_RUN="1",
+                                     FLOWCTL=str(SCRIPTS / "flowctl"), GITLAB_HOST="", ORIGIN_PROJECT="", GLAB_HOSTS=glab_hosts)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(result.stdout.startswith(expect), result.stdout)
+                self.assertNotIn("personal_access_tokens", self.calls.read_text(encoding="utf-8"))
+
     def test_shell_and_python_forge_rules_agree(self):
         # (name, origin, env, gh hosts, glab hosts, ssh aliases, glab auth answer)
         cases = [
@@ -263,8 +291,13 @@ class OriginBlockTests(GitLabShellCase):
             ("enterprise token, offline glab", GITLAB_ORIGIN, {"GH_ENTERPRISE_TOKEN": "x"}, (HOST,), (), {}, "auth-status-offline"),
             ("enterprise token, logged-out glab", "https://ghe.corp.test/o/r.git", {"GITHUB_ENTERPRISE_TOKEN": "x"}, ("ghe.corp.test",), (), {}, None),
             ("no origin", None, {}, (), (), {}, None),
+            # An SSH origin names no web port; GITLAB_HOST names it when it names the same host.
+            ("ssh origin, GITLAB_HOST port", "ssh://git@localhost:2224/flownext/flownext.git", {"GITLAB_HOST": HOST}, (), (HOST,), {}, None),
+            ("scp origin, GITLAB_HOST url", "git@localhost:flownext/flownext.git", {"GITLAB_HOST": f"http://{HOST}/"}, (), (HOST,), {}, None),
+            ("ssh origin, GITLAB_HOST elsewhere", "ssh://git@localhost:2224/g/p.git", {"GITLAB_HOST": "gitlab.other.test:9"}, (), (HOST,), {}, None),
+            ("https origin keeps its own port", GITLAB_ORIGIN, {"GITLAB_HOST": "localhost:1"}, (), (HOST,), {}, None),
         ]
-        clean = {key: "" for key in ("CI_SERVER_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN")}
+        clean = {key: "" for key in ("CI_SERVER_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GITLAB_HOST")}
         trap = "trap 'printf \"FORGE=%s HOST=%s\" \"$FORGE\" \"$ORIGIN_HOST\" > \"$OUT\"' EXIT\n"
         for name, origin, env, gh_hosts, glab_hosts, ssh, glab_auth in cases:
             with self.subTest(name):
@@ -363,6 +396,17 @@ printf 'flowctl %s\\n' "$*" >> "$STUB_CALLS"
         self.assertEqual(updated.returncode, 0, updated.stderr)
         self.assertEqual(updated.stdout, "UPDATE=2")
 
+    def test_dry_run_previews_past_an_unreadable_listing(self):
+        self.stub("flowctl", self.FLOWCTL)
+        repo = self.repo_on("fn73-fx-reused")
+        result = self.run_sh(["bash", "-c", self.TAIL + '\nprintf "EXISTING=%s" "$EXISTING"'], cwd=repo,
+                             REPO_ROOT=str(repo), FLOWCTL=str(self.bin / "flowctl"), SPEC_ID="fn-1", SPEC_STATUS="open",
+                             DRY_RUN="1", UPDATE_MODE="0", AUTONOMOUS="0", HEAD_SHA="x", COMMITS_AHEAD="1",
+                             PR_READ=str(HELPER), ORIGIN_PROJECT="flownext/missing", GLAB_ANSWERS=answers(recorded("mr-missing-project")))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("cannot read the merge requests of this branch under --dry-run", result.stderr)
+        self.assertEqual(result.stdout, "EXISTING=")
+
     def test_failed_or_malformed_read_stops_before_close(self):
         malformed = self.derived("mr-branch-all", lambda rows: [{k: v for k, v in r.items() if k != "project_id"} for r in rows])
         for name, fixture, project in (("glab fails", recorded("mr-missing-project"), "flownext/missing"),
@@ -373,6 +417,27 @@ printf 'flowctl %s\\n' "$*" >> "$STUB_CALLS"
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("NEEDS_HUMAN: cannot read the merge requests of this branch", result.stderr)
                 self.assertEqual(self.flowctl_calls(), ["flowctl show fn-1 --json"])
+
+
+class NoSpecTests(GitLabShellCase):
+    """A branch without a spec, or a repo without .flow/, ends preflight with NO_SPEC (exit 4)."""
+
+    def test_no_spec_exit_prints_the_forge_values_the_no_spec_path_needs(self):
+        self.stub("flowctl", '#!/usr/bin/env bash\nprintf \'{"success":true,"spec_ids":[]}\\n\'\n')
+        (self.bin / "make-pr-gitlab.sh").symlink_to(HELPER)
+        for name, origin, glab_hosts, first in (
+                ("GitLab", GITLAB_ORIGIN, HOST,
+                 f"FORGE=gitlab PR_READ={self.bin / 'make-pr-gitlab.sh'} GITLAB_HOST={HOST} ORIGIN_PROJECT={PROJECT}"),
+                ("GitHub", "https://github.com/o/r.git", "", "NO_SPEC")):
+            with self.subTest(name):
+                repo = self.repo_on("main", origin)
+                result = self.run_sh(["bash", "-c", 'source "$SCRIPT"'], cwd=repo, SCRIPT=str(PREFLIGHT), REPO_ROOT=str(repo),
+                                     DRY_RUN="0", FLOWCTL=str(self.bin / "flowctl"), SPEC_ID="", BASE_REF="", UPDATE_MODE="0",
+                                     AUTONOMOUS="1", GITLAB_HOST="", ORIGIN_PROJECT="", GLAB_HOSTS=glab_hosts,
+                                     GLAB_ANSWERS=answers(recorded("token-self-api")))
+                self.assertEqual(result.returncode, 4, result.stderr)
+                self.assertEqual(result.stdout.splitlines()[0], first)
+                self.assertEqual(result.stdout.splitlines()[-1], "NO_SPEC")
 
 
 class HelperWriteTests(GitLabShellCase):
