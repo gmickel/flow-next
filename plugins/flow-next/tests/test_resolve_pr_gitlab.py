@@ -63,6 +63,19 @@ class FetchTests(MrDiscussionCase):
         self.assertEqual(out["cross_invocation"],
                          {"signal": True, "resolved_threads": [{"id": FIXED, "path": "app.py", "line": 2}]})
 
+    def test_a_listing_past_the_argument_limit(self):
+        """Linux caps one argument at 128 KiB, so the listing reaches jq on stdin."""
+        stdout, pages, at = json.loads(recorded("mr-discussions-paged").read_text(encoding="utf-8"))["stdout"], [], 0
+        while stdout[at:].strip():
+            page, at = json.JSONDecoder().raw_decode(stdout, at)
+            pages.append(page)
+        copies = [{**d, "id": f"{n:02d}{d['id'][2:]}"} for n in range(14) for page in pages for d in page]
+        listing = json.dumps(copies)
+        self.assertGreater(len(listing), 140_000)
+        result = self.fetch(recorded("mr-review-read"), self.listing(stdout=listing))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(json.loads(result.stdout)["review_threads"]), 14 * 4)
+
     def test_failed_or_malformed_reads_exit_nonzero(self):
         cases = [
             ("missing merge request", (recorded("mr-missing-read"),)),
@@ -175,6 +188,13 @@ class ForgePickTests(MrDiscussionCase):
         ):
             with self.subTest(name):
                 self.assertEqual(self.pick(body), forge)
+
+    def test_crlf_jq_output(self):
+        """Windows jq.exe ends its output with CRLF; the CR never reaches FORGE."""
+        jq = subprocess.run(["sh", "-c", "command -v jq"], capture_output=True, text=True, check=True).stdout.strip()
+        (self.bin / "jq").unlink()
+        self.stub("jq", f"#!/bin/sh\n{jq} \"$@\" | sed 's/$/\\r/'\n")
+        self.assertEqual(self.pick("echo '{\"forge\": \"gitlab\"}'"), "gitlab")
 
 
 if __name__ == "__main__":

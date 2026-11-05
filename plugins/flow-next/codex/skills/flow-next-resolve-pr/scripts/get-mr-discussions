@@ -17,15 +17,14 @@ MR_IID="${1:?Usage: $0 MR_IID}"
 mr="$(glab api "projects/:id/merge_requests/$MR_IID")"
 discussions="$(glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" | jq -s 'add // []')"
 
-jq -n \
-  --argjson mr "$mr" \
-  --argjson discussions "$discussions" \
-  '
+# Both reach jq on stdin: Linux caps one argument at 128 KiB, which a long review's listing passes.
+{ printf '%s\n' "$mr"; printf '%s\n' "$discussions"; } | jq -n '
   def comments: [.notes[] | select(.system != true)
                  | {id, author: {login: .author.username}, body, createdAt: .created_at}];
   def place: (.notes[0].position // {}) as $p
     | {path: ($p.new_path // $p.old_path), line: ($p.new_line // $p.old_line)};
-  [$discussions[] | select(.individual_note != true and .notes[0].resolvable == true)] as $threads
+  input as $mr | input as $discussions
+  | [$discussions[] | select(.individual_note != true and .notes[0].resolvable == true)] as $threads
   | {
     pr_number: $mr.iid,
     review_threads: [
