@@ -134,6 +134,27 @@ class SpecDepCycleTestCase(unittest.TestCase):
         self.assertEqual(text.returncode, 1)
         self.assertIn(f"Spec dependency cycle: {' -> '.join(self._path('d', 'e', 'd'))}", text.stdout)
 
+    def test_validate_all_lists_overlapping_cycles(self) -> None:
+        self._write_deps("a", "b", "c")
+        self._write_deps("b", "a")
+        self._write_deps("c", "b")
+        out = json.loads(self._run("validate", "--all", "--json").stdout)
+        self.assertEqual(
+            sorted(out["spec_cycles"]),
+            sorted([self._path("a", "b", "a"), self._path("a", "c", "b", "a")]),
+        )
+
+    def test_malformed_dependency_list_is_skipped_by_the_cycle_walk(self) -> None:
+        self._write_deps("b", "a")
+        path = self.tmpdir / ".flow" / "specs" / f"{self.ids['a']}.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["depends_on_epics"] = [self.ids["b"], 42]
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        out = json.loads(self._run("validate", "--all", "--json").stdout)
+        self.assertEqual(out["spec_cycles"], [])
+        errors = next(s["errors"] for s in out["specs"] if s["spec"] == self.ids["a"])
+        self.assertTrue(any("invalid depends_on_epics entry" in e for e in errors), errors)
+
     def test_validate_all_without_cycles_reports_none(self) -> None:
         self._add("a", "b")
         out = json.loads(self._run("validate", "--all", "--json").stdout)

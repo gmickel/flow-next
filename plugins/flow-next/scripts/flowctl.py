@@ -33886,8 +33886,9 @@ def _spec_dep_graph(flow_dir: Path) -> dict[str, list[str]]:
             deps = load_json(path).get("depends_on_epics") or []
         except (OSError, ValueError, AttributeError):
             continue
-        if isinstance(deps, list):
-            graph[path.stem] = [d for d in deps if isinstance(d, str)]
+        # A malformed list keeps its validate error and stays out of the walk.
+        if isinstance(deps, list) and all(isinstance(d, str) and is_spec_id(d) for d in deps):
+            graph[path.stem] = list(dict.fromkeys(deps))
     return graph
 
 
@@ -33910,30 +33911,22 @@ def _spec_dep_path(graph: dict[str, list[str]], start: str, goal: str) -> Option
 
 
 def _spec_dep_cycles(graph: dict[str, list[str]]) -> list[list[str]]:
-    """One closed path per back edge, each cycle once, rotated to its smallest id."""
-    cycles: dict[tuple[str, ...], list[str]] = {}
-    state: dict[str, int] = {}  # 1 = on the DFS stack, 2 = finished
-    for root in graph:
-        if root in state:
-            continue
-        state[root] = 1
-        stack = [root]
-        iters = [iter(graph.get(root, []))]
-        while iters:
-            nxt = next(iters[-1], None)
+    """Every simple cycle once, as a closed path starting at its smallest id."""
+    cycles: list[list[str]] = []
+    for start in sorted(graph):
+        # Walk only ids above `start`, so each cycle is found from its smallest id.
+        stack = [(start, iter(graph[start]))]
+        on_path = {start}
+        while stack:
+            nxt = next(stack[-1][1], None)
             if nxt is None:
-                state[stack.pop()] = 2
-                iters.pop()
-            elif state.get(nxt) == 1:
-                ring = stack[stack.index(nxt):]
-                low = ring.index(min(ring))
-                ring = ring[low:] + ring[:low]
-                cycles.setdefault(tuple(ring), ring + [ring[0]])
-            elif nxt not in state:
-                state[nxt] = 1
-                stack.append(nxt)
-                iters.append(iter(graph.get(nxt, [])))
-    return list(cycles.values())
+                on_path.discard(stack.pop()[0])
+            elif nxt == start:
+                cycles.append([node for node, _ in stack] + [start])
+            elif nxt > start and nxt not in on_path and nxt in graph:
+                on_path.add(nxt)
+                stack.append((nxt, iter(graph[nxt])))
+    return cycles
 
 
 def cmd_spec_add_dep(args: argparse.Namespace) -> None:
@@ -33976,7 +33969,11 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
     if not dep_path.exists():
         error_exit(f"Spec {dep_id} not found", use_json=args.json)
 
-    with _review_sidecar_lock(flow_dir, spec_id):
+    # The repo-wide lock makes the cycle check and the write one step, so two
+    # concurrent add-deps cannot each pass the check and close a cycle together.
+    with _review_sidecar_lock(flow_dir, spec_id), cross_process_lock(
+        flow_dir / "locks" / "spec-deps.lock"
+    ):
         spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
         deps = spec_data.get("depends_on_epics", [])
 
