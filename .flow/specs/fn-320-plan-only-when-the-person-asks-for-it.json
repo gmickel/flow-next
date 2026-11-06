@@ -223,7 +223,7 @@
     "impl:fn-320-plan-only-when-the-person-asks-for-it.1": 0
   },
   "spec_path": ".flow/specs/fn-320-plan-only-when-the-person-asks-for-it.md",
-  "status": "open",
+  "status": "done",
   "title": "Plan only when the person asks for it",
   "tracker": {
     "baseHashFlow": null,
@@ -236,5 +236,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-06T11:11:03.996695Z"
+  "updated_at": "2026-11-06T14:26:10.597075Z"
 }
