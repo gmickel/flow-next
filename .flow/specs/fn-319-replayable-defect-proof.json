@@ -10,9 +10,11 @@
   "id": "fn-319-replayable-defect-proof",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-319-replayable-defect-proof.md",
   "status": "open",
   "title": "Replayable defect proof",
@@ -27,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-06T08:41:31.075913Z"
+  "updated_at": "2026-11-06T15:56:36.545096Z"
 }

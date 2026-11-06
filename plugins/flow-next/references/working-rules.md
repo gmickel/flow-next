@@ -51,7 +51,12 @@ question, it was underspecified: reframe it and re-run, never average or pick on
   timeout long enough for it (a long check needs the tool's maximum, not its default); if it does
   go to the background, wait on it before you reply. Only the review runs in the background.
 - A failing test written before the fix, then passing after it, is the proof. Where that test is
-  cheap, write it first. No separate lint, typecheck or commit round for it.
+  cheap, write it first, so that as written it fails by assertion on the unchanged code rather
+  than failing to load: reach the behaviour through code that already exists (a literal in place
+  of a constant the fix adds, the existing entry point rather than a helper the fix adds). On a
+  defect fix, commit that test alone (test files only), then the fix, on the local branch,
+  attended or not. No separate lint or typecheck round for it. If a hook or repository rule
+  refuses that commit, commit test and fix together without bypassing it.
 - A test must be able to fail for a defect: it calls the code the way a user does and checks the
   observed result. One that would still pass if the code returned nothing is rewritten or dropped.
 - Before handing back, when the change has a way a user meets it (the command, the request, the
@@ -61,6 +66,9 @@ question, it was underspecified: reframe it and re-run, never average or pick on
   bad value or the missing key the way a user would and read the message they would get.
 - When a change defers, batches or caches work that used to happen at once, try the case where
   the process stops before the deferred work runs, and check every stated guarantee still holds.
+  When it throttles, coalesces or defers persisted writes, the value a caller reads in the same
+  process stays exact and only the write waits; a test reads the live value straight after the
+  event.
 - Save a slow run's full output to a file (never only through `tail` or `grep`) and read it
   from there; never re-run a suite only to read its output again.
 
@@ -70,7 +78,8 @@ question, it was underspecified: reframe it and re-run, never average or pick on
   answer, and put related questions in one prompt rather than one per turn; settle anything
   observable by running it. Do not ask where a sensible default exists (a branch, a readiness
   flag): take it and say so in one line. Commit on a local branch only when review needs it (review
-  reads commits) or a spec build commits its task; never push or open a pull request unless asked.
+  reads commits), a spec build commits its task, or a defect fix commits its failing test and then
+  the fix (Tests); never push or open a pull request unless asked.
   When the change is ready for one, end the handoff with one line saying so ("Say 'open the PR'
   when you want it"), not a question. List discoveries in the handoff as follow-ups ("found X, not part of this");
   the person decides what to pick up.
@@ -122,4 +131,9 @@ anything left open. No stage-by-stage narration.
   read) or a guess.
 - Name the run done the way a user would (the command, the request, the page) and what it
   showed, or `not run: <reason>`.
+- Every reply that hands back a fix, including the one after a follow-up and the note when a
+  background review lands, states its base and head observations, short and verbatim from runs
+  already made: the failing assertion on base, the passing run on head, and before/after numbers
+  when they were measured. Never point back to an earlier message for them, and never re-run
+  anything to produce them.
 - Never hand the person a check you could have run yourself.

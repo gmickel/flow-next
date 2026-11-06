@@ -192,7 +192,7 @@ here, inline.** Print `Scheduling: inline (single task)`.
    you changed. Never weaken a test, gate or assertion to make the change pass; a gate you believe
    is wrong is `BLOCKED: TOOLING_FAILURE`. Do not edit `.flow/features/`.
 4. **Commit** with `git add -- <files you changed> .flow/` and a conventional message ending
-   `Task: <task-id>`. On a defect, a commit with the failing test before the fix is preferred.
+   `Task: <task-id>`. On a defect, the failing test is its own commit before the fix (working-rules.md Tests).
 5. **Review, by the risk rule in working-rules.md.** Selected, and the review mode is not `none`:
    attended, hand the result back first, then run
    `$flow-next-impl-review <task-id> --base <base_commit> --review=<mode>` in the
