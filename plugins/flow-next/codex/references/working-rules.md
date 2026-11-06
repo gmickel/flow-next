@@ -132,8 +132,8 @@ anything left open. No stage-by-stage narration.
   read) or a guess.
 - Name the run done the way a user would (the command, the request, the page) and what it
   showed, or `not run: <reason>`.
-- Name the tests you ran (the changed code and which callers) and, when you did not run the full
-  suite, say so in one line.
+- Name the tests you ran (the changed code and which callers) and any caller that has no tests,
+  and, when you did not run the full suite, say so in one line.
 - Every reply that hands back a fix, including the one after a follow-up and the note when a
   background review lands, states its base and head observations, short and verbatim from runs
   already made: the failing assertion on base, the passing run on head, and before/after numbers
