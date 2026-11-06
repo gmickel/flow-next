@@ -1,6 +1,6 @@
 ---
 name: flow-next
-description: Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for planning or executing (use the plan and work skills).
+description: Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for building or planning work (use flow-next-flow).
 ---
 
 # Flow-Next Task Management
