@@ -33876,6 +33876,66 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
+def _spec_dep_graph(flow_dir: Path) -> dict[str, list[str]]:
+    """Every spec's depends_on_epics edges, read from the spec JSON files only."""
+    graph: dict[str, list[str]] = {}
+    for path in iter_spec_json_files(flow_dir):
+        if not is_spec_id(path.stem):
+            continue
+        try:
+            deps = load_json(path).get("depends_on_epics") or []
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(deps, list):
+            graph[path.stem] = [d for d in deps if isinstance(d, str)]
+    return graph
+
+
+def _spec_dep_path(graph: dict[str, list[str]], start: str, goal: str) -> Optional[list[str]]:
+    """A dependency path start -> ... -> goal, or None."""
+    parents: dict[str, Optional[str]] = {start: None}
+    stack = [start]
+    while stack:
+        node = stack.pop()
+        if node == goal:
+            path = [node]
+            while parents[path[-1]] is not None:
+                path.append(parents[path[-1]])
+            return path[::-1]
+        for nxt in graph.get(node, []):
+            if nxt not in parents:
+                parents[nxt] = node
+                stack.append(nxt)
+    return None
+
+
+def _spec_dep_cycles(graph: dict[str, list[str]]) -> list[list[str]]:
+    """One closed path per back edge, each cycle once, rotated to its smallest id."""
+    cycles: dict[tuple[str, ...], list[str]] = {}
+    state: dict[str, int] = {}  # 1 = on the DFS stack, 2 = finished
+    for root in graph:
+        if root in state:
+            continue
+        state[root] = 1
+        stack = [root]
+        iters = [iter(graph.get(root, []))]
+        while iters:
+            nxt = next(iters[-1], None)
+            if nxt is None:
+                state[stack.pop()] = 2
+                iters.pop()
+            elif state.get(nxt) == 1:
+                ring = stack[stack.index(nxt):]
+                low = ring.index(min(ring))
+                ring = ring[low:] + ring[:low]
+                cycles.setdefault(tuple(ring), ring + [ring[0]])
+            elif nxt not in state:
+                state[nxt] = 1
+                stack.append(nxt)
+                iters.append(iter(graph.get(nxt, [])))
+    return list(cycles.values())
+
+
 def cmd_spec_add_dep(args: argparse.Namespace) -> None:
     """Add spec-level dependency."""
     if not ensure_flow_exists():
@@ -33907,8 +33967,6 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
     # (`spec add-dep wor-17 fn-53`) and depends_on_epics persists canonical ids.
     spec_id = expand_bare_spec_id(flow_dir, spec_id, use_json=args.json)
     dep_id = expand_bare_spec_id(flow_dir, dep_id, use_json=args.json)
-    if spec_id == dep_id:
-        error_exit("Spec cannot depend on itself", use_json=args.json)
 
     spec_path = find_spec_json_path(flow_dir, spec_id)
     dep_path = find_spec_json_path(flow_dir, dep_id)
@@ -33936,6 +33994,20 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
             else:
                 print(f"{dep_id} already in {spec_id} dependencies")
             return
+
+        # An edge that closes a cycle leaves every spec on it never ready.
+        back = _spec_dep_path(_spec_dep_graph(flow_dir), dep_id, spec_id)
+        if back is not None:
+            cycle = [spec_id] + back
+            message = f"Dependency cycle: {' -> '.join(cycle)}"
+            if args.json:
+                json_output(
+                    {"error": message, "code": "dependency_cycle", "cycle": cycle},
+                    success=False,
+                )
+            else:
+                print(f"Error: {message}", file=sys.stderr)
+            sys.exit(1)
 
         deps.append(dep_id)
         spec_data["depends_on_epics"] = deps
@@ -52160,6 +52232,11 @@ def cmd_validate(args: argparse.Namespace) -> None:
                     f"Spec ID collision: fn-{num} used by multiple specs: {', '.join(sorted(ids))}"
                 )
 
+        spec_cycles = _spec_dep_cycles(_spec_dep_graph(flow_dir))
+        root_errors.extend(
+            f"Spec dependency cycle: {' -> '.join(cycle)}" for cycle in spec_cycles
+        )
+
         # One combined inventory drives validity, totals, and text rendering.
         all_errors = list(root_errors)
         all_warnings = list(root_warnings)
@@ -52226,6 +52303,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
                     "valid": valid,
                     "root_errors": root_errors,
                     "root_warnings": root_warnings,
+                    "spec_cycles": spec_cycles,
                     "specs": epic_results,
                     "total_specs": len(epic_ids),
                     "total_epics": len(epic_ids),

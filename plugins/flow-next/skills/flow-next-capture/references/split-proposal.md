@@ -22,7 +22,7 @@ Read [`spec-count.md`](../../flow-next-flow/references/spec-count.md) and apply 
 
 ## Phase 4 — split option at read-back
 
-Print the allocation in full (per-spec titles, criteria, dependency edges), then use `AskUserQuestion` for the substantive choice once: `split-as-proposed`, `keep-one-spec`, or `abort`. Recommend the proposed split on its independent outcomes, not on inferred content. A cohesive single spec needs no question. This choice occurs before any spec is allocated; abort leaves the temporary draft only.
+Before offering the split, check the proposed edges, including any the user added or changed, for a cycle. A cycle means none of its specs could ever start, so print it as a path (`B -> C -> B`) and settle the edges with the user first; never write a split whose edges loop. Print the allocation in full (per-spec titles, criteria, dependency edges), then use `AskUserQuestion` for the substantive choice once: `split-as-proposed`, `keep-one-spec`, or `abort`. Recommend the proposed split on its independent outcomes, not on inferred content. A cohesive single spec needs no question. This choice occurs before any spec is allocated; abort leaves the temporary draft only.
 
 ## 5.2b — Split branch (interactive `split-as-proposed` only)
 

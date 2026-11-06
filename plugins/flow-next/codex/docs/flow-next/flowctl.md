@@ -559,6 +559,14 @@ flowctl spec add-dep fn-2 fn-1 [--json]   # fn-2 now depends on fn-1
 flowctl spec rm-dep  fn-2 fn-1 [--json]   # remove the dependency
 ```
 
+`add-dep` refuses an edge that would close a dependency cycle, a self-dependency included,
+because no spec on a cycle can ever become ready. It writes nothing and exits 1, naming the
+path in dependency order:
+
+```json
+{"success": false, "error": "Dependency cycle: fn-3 -> fn-1 -> fn-2 -> fn-3", "code": "dependency_cycle", "cycle": ["fn-3", "fn-1", "fn-2", "fn-3"]}
+```
+
 ### spec set-backend
 
 Set default backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
@@ -1135,6 +1143,10 @@ Validate spec structure (specs, deps, cycles).
 flowctl validate --spec fn-1 [--json]
 flowctl validate --all [--json]
 ```
+
+`validate --all` also checks the dependency graph between specs. Each cycle already on disk
+(written by hand or before `add-dep` refused them) is reported once, as a
+`Spec dependency cycle: <path>` root error and as a path in `spec_cycles`, and fails the run.
 
 The **epic/task status mismatch** finding ("Epic marked done but task X is
 ...") is durability-aware. Closing persists final task

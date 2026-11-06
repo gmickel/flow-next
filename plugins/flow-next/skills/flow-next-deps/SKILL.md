@@ -93,6 +93,7 @@ Group specs into parallel execution phases:
 # Reuse the Step 1 gather — same literal path, NO re-fetch (one heavy loop total)
 SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
 
+# fence:deps-phases
 # Phase assignment algorithm (run in jq for reliability)
 jq '
   # Build status lookup
@@ -101,12 +102,10 @@ jq '
   # Filter to non-done specs
   [.[] | select(.status != "done")] as $open |
 
-  # Assign phases iteratively
-  reduce range(10) as $phase (
-    {assigned: [], result: [], open: $open};
-
+  # Assign phases until a round places nothing, so a chain of any depth is phased
+  {assigned: [], result: [], open: $open, stalled: false} |
+  until(.stalled;
     .assigned as $assigned |
-    .open as $remaining |
 
     # Find specs not yet assigned whose deps are all done or in earlier phases
     ([.open[] | select(
@@ -115,25 +114,45 @@ jq '
     )] | map(.id)) as $ready |
 
     if ($ready | length) > 0 then
-      .result += [{phase: ($phase + 1), specs: [.open[] | select(.id | IN($ready[]))]}] |
+      .result += [{phase: ((.result | length) + 1), specs: [.open[] | select(.id | IN($ready[]))]}] |
       .assigned += $ready
-    else . end
+    else .stalled = true end
   ) |
-  # Emit the phases AND the residue: any open spec never assigned is UNRESOLVABLE — a
-  # dependency cycle (A→B→A), a dep on a missing/closed spec, or a chain deeper than 10.
+  # Emit the phases AND the residue: any open spec never assigned can never start.
   # Dropping it silently is the one way /deps gives a WRONG answer (the graph it exists to
-  # expose hides the deadlock). Surface it, with the offending deps for diagnosis.
+  # expose hides the deadlock). Surface it with its unresolved deps and its cause: on a
+  # dependency cycle (with the path), a dep that is not among the specs, or blocked only
+  # by another deadlocked spec.
   .assigned as $asg |
+  ([ $open[] | select(.id as $i | ($asg | index($i)) | not)
+     | {key: .id, value: [ (.deps // [])[] | select(. as $d | ($asg | index($d)) or ($status[$d] == "done") | not) ]} ]
+   | from_entries) as $unres |
+  # Breadth-first walk over unresolved deps back to $id; the path, or null
+  def cycle_of($id):
+    {queue: [$id], parent: {}, last: null} |
+    until((.queue | length) == 0 or .last != null;
+      .queue[0] as $n | .queue |= .[1:] |
+      reduce $unres[$n][] as $d (.;
+        if .last != null then .
+        elif $d == $id then .last = $n
+        elif .parent[$d] != null or $unres[$d] == null then .
+        else .parent[$d] = $n | .queue += [$d] end)) |
+    .parent as $p |
+    if .last == null then null
+    else [ .last | recurse(if . == $id then empty else $p[.] end) ] | reverse + [$id] end;
   { phases: .result,
-    deadlocked: [ $open[] | select(.id as $i | ($asg | index($i)) | not)
-                  | { id, status,
-                      unresolved_deps: [ (.deps // [])[] | select(. as $d | ($asg | index($d)) or ($status[$d] == "done") | not) ] } ] }
+    deadlocked: [ $open[] | select($unres[.id] != null) | .id as $i | cycle_of($i) as $cycle
+                  | { id, status, unresolved_deps: $unres[$i],
+                      cause: (if $cycle != null then "cycle"
+                              elif any($unres[$i][]; $status[.] == null) then "missing"
+                              else "blocked" end) }
+                  + (if $cycle != null then {cycle: $cycle} else {} end) ] }
 ' "$SPECS_FILE"
 ```
 
 ### Done when
 
-- The jq result carries both `.phases` and `.deadlocked`, and every open spec appears in exactly one of them.
+- The jq result carries both `.phases` and `.deadlocked`, every open spec appears in exactly one of them, and every `.deadlocked` entry carries a `cause`.
 - **The report is rendered from `.phases` and `.deadlocked`.** Phases narrated from a reading of the spec titles have broken this.
 
 ## Output Format
@@ -165,17 +184,18 @@ Render from the jq result's `.phases`:
 
 **This section renders exactly when `.deadlocked` is non-empty** — and when it does, it is the
 most important part of the report. Each entry is an open spec that could not be placed in
-any phase: a dependency **cycle**, a dep on a **missing/closed** spec, or a chain deeper
-than 10. These are invisible to `ready`/`flow --auto` (they just never become ready) — this is the
+any phase. These are invisible to `ready`/`flow --auto` (they just never become ready) — this is the
 one place the graph surfaces them.
 
-| Spec | Status | Unresolved deps | Likely cause |
-|------|--------|-----------------|--------------|
-| fn-7-x | blocked | fn-9-y | fn-9-y not found / closed, or a cycle fn-7↔fn-9 |
+| Spec | Status | Unresolved deps | Cause |
+|------|--------|-----------------|-------|
+| fn-7-x | open | fn-9-y | cycle: fn-7-x → fn-9-y → fn-7-x |
+| fn-8-z | open | fn-99-gone | missing dependency |
+| fn-10-w | open | fn-7-x | blocked by a deadlocked spec |
 
-For each, state the likely cause: if two deadlocked specs list each other → **cycle** (fix
-with `flowctl spec rm-dep`); if an unresolved dep isn't among the open specs → **missing or
-closed dependency**. **Every entry of `.deadlocked` reaches the report.** A report that lists phases while silently dropping an open spec has broken this.
+The Cause column renders each entry's `cause` (and `cycle` path); it is never guessed. A cycle is
+broken with `flowctl spec rm-dep` on one of its edges; a missing dependency was deleted or never
+existed. **Every entry of `.deadlocked` reaches the report.** A report that lists phases while silently dropping an open spec has broken this.
 
 ### Critical Path
 
