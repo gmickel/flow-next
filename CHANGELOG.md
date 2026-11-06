@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.7.0] - 2026-11-06
+
+Specs that depend on each other in a loop are now caught when the loop is closed. Before, they just never became ready. Teams that cut an epic into one spec per story see the full path the moment a dependency closes a circle, a split whose dependencies loop is shown before anything is written, and `/flow-next:deps` says why each stuck spec can never start. Nothing to configure.
+
 ### Added
 
 - **A circular dependency between specs is caught when the edge is added.** Specs on a cycle never become ready, so `flow --auto` and `ready` used to skip them without saying why. `flowctl spec add-dep` now refuses an edge that would close a cycle, a self-dependency included, writes nothing, and names the path (`fn-3 -> fn-1 -> fn-2 -> fn-3`) with the error code `dependency_cycle`. Every skill that records edges goes through it, and capture checks a proposed split's edges before it creates any spec, so an epic cut into stories that depend on each other in a loop is shown to you instead of half written. `flowctl validate --all` lists cycles already on disk in `spec_cycles` and fails on them.
