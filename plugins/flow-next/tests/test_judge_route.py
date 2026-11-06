@@ -37,17 +37,19 @@ class JudgeRouteTests(unittest.TestCase):
             ({"tasks_total": 1, "no_plan": True}, "work_planned"),
             ({}, "work_no_plan_default"),
             ({"no_plan": False}, "work_no_plan_default"),
-            ({"no_plan": True, "spec_body": "task plan"}, "work_no_plan_default"),
+            ({"no_plan": True, "spec_body": "Please plan this out"}, "work_no_plan_default"),
+            # Plan only on an affirmative request for a plan or task breakdown.
             ({"spec_body": "Please plan this out"}, "plan"),
-            ({"spec_body": "Separate owners implement each part"}, "plan"),
-            ({"spec_body": "Ship in two PRs"}, "plan"),
-            ({"spec_body": "Split this into stacked PRs, one per layer."}, "plan"),
-            ({"spec_body": "Delivery is staged across several PRs."}, "plan"),
-            ({"spec_body": "Deliver two PRs: database changes first, then the API."}, "plan"),
             ({"spec_body": "Please decompose this into tasks"}, "plan"),
-            # PRs as the spec's subject, not its delivery, are not a plan signal.
-            ({"spec_body": "A stacked PR whose base is its parent's branch keeps today's behaviour."}, "work_no_plan_default"),
-            ({"spec_body": "Land merges two PRs a day; separate PRs from forks need the same gates."}, "work_no_plan_default"),
+            ({"spec_body": "The requester asked for a task plan before the build starts."}, "plan"),
+            ({"spec_body": "Product wants a task breakdown first."}, "plan"),
+            # Owners, PR counts and plans described in passing are not plan signals.
+            ({"spec_body": "Separate owners implement each part"}, "work_no_plan_default"),
+            ({"spec_body": "The backend team owns the API and the frontend team owns the page."}, "work_no_plan_default"),
+            ({"spec_body": "Ship in two PRs"}, "work_no_plan_default"),
+            ({"spec_body": "Delivery is staged across several PRs."}, "work_no_plan_default"),
+            ({"spec_body": "An earlier attempt used a 4-task plan and was too heavy."}, "work_no_plan_default"),
+            ({"spec_body": "The 6-task plan passed plan review before the reshape."}, "work_no_plan_default"),
             # Isolated vocabulary and negated requests are not plan signals.
             ({"spec_body": "Implement a decompose() helper for matrix factorization."}, "work_no_plan_default"),
             ({"spec_body": "Do not decompose this into tasks; deliver one PR."}, "work_no_plan_default"),

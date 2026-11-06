@@ -40,7 +40,7 @@ An empty or scaffold-only repo does NOT get the 48-criterion scorecard - a score
 5. **A verify loop before feature 1** - one test command + one smoke command, documented in the agent file. The closed verify loop is the single highest-leverage artifact; it comes before the first feature, not after.
 6. **The smallest real CI** - install + lint + test, gated on `pull_request` / default-branch `push` (trigger correctness matters even on day one - see FH3 in pillars.md).
 7. **Secrets deny-rules baseline** - the one harness artifact safe to scaffold on an empty repo (deny/ask only; see the safety rules in [harness.md](harness.md)).
-8. **First spec = the first vertical slice** with explicit non-goals (`/flow-next:plan`). No big-bang scaffolding; no heavyweight spec ceremony on an empty repo.
+8. **First spec = the first vertical slice** with explicit non-goals (`/flow-next:flow`). No big-bang scaffolding; no heavyweight spec ceremony on an empty repo.
 9. **Recorded-deferral N/A lines** for every premature pillar (observability, security scanning, containers, E2E), each naming the trigger that un-defers it.
 
 **Anti-pattern rules (hard).** Prime NEVER emits a stub artifact that would pass its own checks unexercised - anything scaffolded in the bootstrap plan is exercised in the same pass (the command runs, the hook fires) or is explicitly marked unverified. No big-bang scaffolding, no full generated instruction file. Under `--fix-all`, greenfield remediation applies ONLY to exercised hygiene files - never structural or generated artifacts.

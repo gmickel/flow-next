@@ -445,7 +445,7 @@ bulk-generated instruction file; every scaffolded artifact is exercised in the s
 5. [ ] Verify loop BEFORE feature 1 - one test command + one smoke command, in the agent file.
 6. [ ] Smallest real CI - install + lint + test, gated on pull_request / default-branch push (FH3).
 7. [ ] Secrets deny-rules baseline (above) - the one harness artifact safe to scaffold on an empty repo.
-8. [ ] First spec = first vertical slice with explicit non-goals (`/flow-next:plan`).
+8. [ ] First spec = first vertical slice with explicit non-goals (`/flow-next:flow`).
 9. [ ] Recorded-deferral N/A lines for premature pillars (observability, security scan, container,
        E2E) - each naming the trigger that un-defers it. A documented deferral beats a stub.
 ```

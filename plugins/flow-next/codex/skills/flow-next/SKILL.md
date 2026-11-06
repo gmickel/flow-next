@@ -5,7 +5,7 @@ description: Manage .flow/ tasks and specs. Use for show or list tasks, task sta
 
 # Flow-Next Task Management
 
-Quick task operations in `.flow/`. For planning features use `/flow-next:plan`, for executing use `/flow-next:work`.
+Quick task operations in `.flow/`. To build or plan a feature use `/flow-next:flow`; it picks the route.
 
 ## Preamble
 
@@ -140,7 +140,7 @@ $FLOWCTL cat fn-1-add-oauth.2           # Full spec
 
 (Legacy `fn-1.2` / `fn-1-xxx.2` still works.)
 
-### Create new spec (rare - usually via /flow-next:plan)
+### Create new spec (rare - usually via /flow-next:flow or /flow-next:capture)
 
 ```bash
 $FLOWCTL spec create --title "Spec title" --json
@@ -173,4 +173,4 @@ Legacy formats `fn-N` and `fn-N-xxx` (random 3-char suffix) are still supported.
 - **Every write goes through a flowctl subcommand**, except the `.flow/memory/declined/*.md` file above, which has no flowctl verb. A session that edits `.flow/` JSON or task markdown by hand has broken this.
 - **Every read comes from `.flow/` state**, via `--json` (`detect`, `list`, `specs`, `tasks`, `show`, `ready`) or `cat` for markdown. An answer assembled from files skimmed by hand has broken this.
 - **A task marked complete is closed with `flowctl done` carrying both `--summary-file` and `--evidence-json`.** A bare status flip has broken this.
-- **Requests that need real planning or execution are handed off**, to `$flow-next-plan` and `$flow-next-work`. Improvising them here has broken this.
+- **Requests that need real planning or execution are handed off** to `$flow-next-flow`, which picks the route. Improvising them here has broken this.

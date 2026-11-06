@@ -25,8 +25,8 @@ if its schema isn't loaded) — question "This spec has no tasks. How should thi
 proceed?" plus the recommendation line, with these two options — and wait for the
 answer. Fall back to numbered options in plain text only if the tool is unreachable or errors. Never silently skip the question.
 
-- **Plan first** — stop; run /flow-next:plan (reviewed task breakdown, parallelizable waves, per-task review)
-- **Flow-Next work --no-plan** — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
+- **Flow-Next work --no-plan (Recommended)** — build the whole spec now as one task, with the same review and QA gates
+- **Plan first** — stop; run /flow-next:plan to break the spec into tasks first, then re-run work
 
 A run that continued before the answer arrived has broken this.
 

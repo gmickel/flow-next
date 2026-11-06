@@ -193,7 +193,7 @@ Run `/flow-next:plan-review <spec-id>` before handover. A different model (Codex
 
 ### [4] Implementation plan: Handover #3
 
-Use this optional handover on a positive plan signal, where a plan was asked for, separate people implement, or delivery is staged across several PRs. Dependencies, execution constraints, size, and risk alone do not trigger planning. Otherwise, recommend `/flow-next:work <spec-id> --no-plan` for a ready cohesive spec and a capable coding agent. A requested spec/design review can run before any task files exist.
+Use this optional handover when a plan or task breakdown is asked for, for example so separate people can split the tasks. Dependencies, execution constraints, size, risk and delivery over several PRs do not trigger planning on their own. Otherwise, recommend `/flow-next:work <spec-id> --no-plan` for a ready cohesive spec and a capable coding agent. A requested spec/design review can run before any task files exist.
 
 `/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies. Its summary shows the resulting execution waves so the parallel candidates are visible before work starts.
 

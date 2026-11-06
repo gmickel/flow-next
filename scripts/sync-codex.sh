@@ -508,7 +508,7 @@ for nf in \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
     -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
-    -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
+    -e 's|stop; run /flow-next:plan to break the spec|stop; run $flow-next-plan to break the spec|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
     -e 's|`/flow-next:refine` — never mint an empty task|`$flow-next-refine` — never mint an empty task|g' \
@@ -2385,7 +2385,7 @@ flow-next-flow/references/route-matrix.md	then `/flow-next:make-pr <spec-id>`	th
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:work <spec-id> --no-plan	Recommended next: $flow-next-work <spec-id> --no-plan
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:plan <spec-id>	Recommended next: $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-ask.md	spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>	spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>
-flow-next-work/references/no-plan-ask.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
+flow-next-work/references/no-plan-ask.md	stop; run /flow-next:plan to break the spec	stop; run $flow-next-plan to break the spec
 flow-next-work/references/no-plan-ask.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
 flow-next-work/references/no-plan-route.md	`/flow-next:refine` — never mint an empty task	`$flow-next-refine` — never mint an empty task

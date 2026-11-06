@@ -24404,17 +24404,15 @@ def judge_route_lifecycle(state: dict) -> dict:
         return decision("work_no_plan_default", "recorded no_plan")
     if not state["ready"]:
         return decision("host", "spec not ready")
-    text = state["spec_body"]
-    patterns = {
-        # Affirmative requests only: a negated request or a code identifier is not a plan signal.
-        "asks_for_plan": r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\b(?:break|split|decompose) (this|it) (down )?into tasks\b|\btask plan\b)",
-        "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
-        # Delivery phrasing only ("ship in two PRs", "split into stacked PRs"): PRs as the spec's subject are not a signal.
-        "staged_prs": r"\b(?:in|into|across|over|as|ship|deliver|open|split)\s+(?:two|three|four|several|multiple|separate|stacked)\s+(?:stacked\s+)?prs?\b",
-    }
-    for signal, pattern in patterns.items():
-        if re.search(pattern, text, re.I):
-            return decision("plan", signal)
+    # Plan only on an affirmative request for a plan or task breakdown: owners, PR counts,
+    # a negated request, a code identifier or a plan described in passing are not one.
+    asks_for_plan = (
+        r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b"
+        r"|\b(?:break|split|decompose) (this|it) (down )?into tasks\b"
+        r"|\b(?:asks?|asked|requests?|requested|wants?|wanted) (?:for )?a (?:task plan|task breakdown|plan)\b)"
+    )
+    if re.search(asks_for_plan, state["spec_body"], re.I):
+        return decision("plan", "asks_for_plan")
     return decision("work_no_plan_default", "no positive plan signal")
 
 

@@ -162,8 +162,8 @@ For a live spec, code reads lifecycle facts in this order:
 3. An intentional plan with tasks, or one implicit owner under `no_plan: true`,
    continues work on the recorded route, preserving resume admission.
 4. A ready spec with no tasks uses a recorded `no_plan: true` directly.
-   Otherwise the positive plan signals (`asks_for_plan`, `separate_owners`,
-   `staged_prs`) select plan; absent signals select direct work. False or missing
+   Otherwise an affirmative request for a plan or task breakdown in the spec body
+   (`asks_for_plan`) selects plan; anything else selects direct work. False or missing
    `no_plan` is not a recorded plan choice. Whether to read before work is the
    host's, by the route matrix's read-first rule.
 5. A spec that is not ready stays with the host for refinement, plan review,
