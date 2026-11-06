@@ -43,6 +43,17 @@ class JudgeRouteTests(unittest.TestCase):
             ({"spec_body": "Please decompose this into tasks"}, "plan"),
             ({"spec_body": "The requester asked for a task plan before the build starts."}, "plan"),
             ({"spec_body": "Product wants a task breakdown first."}, "plan"),
+            ({"spec_body": "Please create a task plan before implementation."}, "plan"),
+            ({"spec_body": "Please give me a task plan."}, "plan"),
+            ({"spec_body": "Write a task plan first."}, "plan"),
+            ({"spec_body": "The user asked for a plan."}, "plan"),
+            ({"spec_body": "This is not trivial, so please write a task plan first."}, "plan"),
+            # Product nouns and negated subjects are not asks.
+            ({"spec_body": "A checkout form that asks for a plan ID."}, "work_no_plan_default"),
+            ({"spec_body": "When a customer requests a plan upgrade, bill the difference."}, "work_no_plan_default"),
+            ({"spec_body": "The endpoint accepts requests for a plan by ID."}, "work_no_plan_default"),
+            ({"spec_body": "No one asked for a plan; implement the feature directly."}, "work_no_plan_default"),
+            ({"spec_body": "Nobody wants a task breakdown here."}, "work_no_plan_default"),
             # Owners, PR counts and plans described in passing are not plan signals.
             ({"spec_body": "Separate owners implement each part"}, "work_no_plan_default"),
             ({"spec_body": "The backend team owns the API and the frontend team owns the page."}, "work_no_plan_default"),

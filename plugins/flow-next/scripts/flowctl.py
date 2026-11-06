@@ -24405,14 +24405,21 @@ def judge_route_lifecycle(state: dict) -> dict:
     if not state["ready"]:
         return decision("host", "spec not ready")
     # Plan only on an affirmative request for a plan or task breakdown: owners, PR counts,
-    # a negated request, a code identifier or a plan described in passing are not one.
-    asks_for_plan = (
-        r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b"
-        r"|\b(?:break|split|decompose) (this|it) (down )?into tasks\b"
-        r"|\b(?:asks?|asked|requests?|requested|wants?|wanted) (?:for )?a (?:task plan|task breakdown|plan)\b)"
+    # a product "plan", a code identifier or a plan described in passing are not one, and
+    # a negation in the three words before the request ("no one asked", "don't") cancels it.
+    asks_for_plan = re.compile(
+        r"\bplan (?:this|it) out\b|\bplan (?:it |this )?(?:into|as) tasks\b"
+        r"|\b(?:break|split|decompose) (?:this|it) (?:down )?into tasks\b"
+        r"|\b(?:asks?|asked|requests?|requested|wants?|wanted|needs?|create|write|make|draft|give (?:me|us))"
+        r"(?: for)? an? (?:task plan|task breakdown)\b|\basked for a plan\b(?! id\b)",
+        re.I,
     )
-    if re.search(asks_for_plan, state["spec_body"], re.I):
-        return decision("plan", "asks_for_plan")
+    negation = re.compile(r"\b(?:not|no|never|nobody|one|without)\b|n't\b", re.I)
+    body = state["spec_body"]
+    for m in asks_for_plan.finditer(body):
+        sentence = re.split(r"[.!?;\n]", body[: m.start()])[-1]
+        if not negation.search(" ".join(sentence.split()[-3:])):
+            return decision("plan", "asks_for_plan")
     return decision("work_no_plan_default", "no positive plan signal")
 
 
