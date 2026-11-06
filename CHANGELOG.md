@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **Flow plans only when you ask for a plan.** A spec now goes to task planning only when you ask for a plan or a task breakdown, in your request or in the spec. Before, flow also planned when a spec named separate owning teams or expected several PRs, and its code route matched plans that a spec only mentioned in passing ("the 4-task plan"). Those specs now run directly, and the one task can still ship several PRs. On a pre-registered routing test on one model (Opus 5.5, three runs per case), 9.7.0 sent a two-repo change, a three-PR change and a two-team change to planning every time; this release builds all three directly and still plans every time someone asks. An ask made only in your `/flow-next:flow` request now reaches planning for a ready spec. When `/flow-next:work` meets a spec with no tasks, it lists the direct route first as the recommended option.
+
 ## [flow-next 9.7.0] - 2026-11-06
 
 Specs that depend on each other in a loop are now caught when the loop is closed. Before, they just never became ready. Teams that cut an epic into one spec per story see the full path the moment a dependency closes a circle, a split whose dependencies loop is shown before anything is written, and `/flow-next:deps` says why each stuck spec can never start. Nothing to configure.

@@ -188,7 +188,7 @@ class JudgeTests(unittest.TestCase):
                 "startable_target_fact": "npm run dev"}
         cases = [({"pr_exists": True}, "existing_pr_tail"), ({"tasks_total": 2}, "work_planned"),
                  ({"ready": False}, "host"), ({"tasks_total": 2, "tasks_done": 2}, "all_done_make_pr"),
-                 ({}, "work_no_plan_default"), ({"spec_body": "Ship in two PRs"}, "plan")]
+                 ({}, "work_no_plan_default"), ({"spec_body": "Please plan this out"}, "plan")]
         for overrides, value in cases:
             with self.subTest(value=value):
                 result = f.judge_route({**live, **overrides})
