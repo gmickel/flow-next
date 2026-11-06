@@ -223,7 +223,7 @@
     "impl:fn-318-spec-dependency-cycle-detection.1": 0
   },
   "spec_path": ".flow/specs/fn-318-spec-dependency-cycle-detection.md",
-  "status": "open",
+  "status": "done",
   "title": "Spec dependency cycle detection",
   "tracker": {
     "baseHashFlow": null,
@@ -236,5 +236,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-06T08:40:26.776746Z"
+  "updated_at": "2026-11-06T08:45:32.090766Z"
 }
