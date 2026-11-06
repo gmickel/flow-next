@@ -6,6 +6,14 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **A circular dependency between specs is caught when the edge is added.** Specs on a cycle never become ready, so `flow --auto` and `ready` used to skip them without saying why. `flowctl spec add-dep` now refuses an edge that would close a cycle, a self-dependency included, writes nothing, and names the path (`fn-3 -> fn-1 -> fn-2 -> fn-3`) with the error code `dependency_cycle`. Every skill that records edges goes through it, and capture checks a proposed split's edges before it creates any spec, so an epic cut into stories that depend on each other in a loop is shown to you instead of half written. `flowctl validate --all` lists cycles already on disk in `spec_cycles` and fails on them.
+
+### Fixed
+
+- **`/flow-next:deps` says why a spec can never start.** Each deadlocked spec now names its cause: a cycle (with its path), a dependency that no longer exists, or being blocked by another deadlocked spec. Chains deeper than ten specs are placed in phases instead of being reported as deadlocked.
+
 ## [flow-next 9.6.0] - 2026-11-05
 
 GitLab teams can now take a spec all the way to a merged merge request. make-pr opens or updates the merge request, resolve-pr works through its review discussions, and land squash-merges it once the pipeline for its current head has passed and GitLab's own merge check allows it, so `flow --auto --until=merge` runs the whole loop on gitlab.com or a self-managed instance. A merged merge request moves the tracker issue to Done the way a merged pull request does. Teams that keep the spec as the only record can also make the tracker issue body follow the spec.

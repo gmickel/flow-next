@@ -1,0 +1,240 @@
+{
+  "branch_name": "fn-318-spec-dependency-cycle-detection",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-06T08:40:26.776738Z",
+  "created_at": "2026-11-06T07:51:25.419081Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-318-spec-dependency-cycle-detection",
+  "impl_review_rounds": {
+    "fn-318-spec-dependency-cycle-detection.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "30343af7e75460cfd276910555b67d7ba8552b26911150d9b53be6591616572e",
+      "backend": "codex",
+      "base_sha": "b58ea2bd49619e472c24ccb5988791a1f8f8cb88",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "classification": "introduced",
+            "findingId": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "classification": "introduced",
+            "findingId": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-41e595508b4f35f8851b049bded92f5e",
+            "classification": "introduced",
+            "findingId": "finding-41e595508b4f35f8851b049bded92f5e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a9d75d230c584cd59c0475f35c257143e3cecb4c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2089,
+      "output_sha256": "739a75423de87c9b0032407385d63396ac332948bcbb3e364b2c477160a387db",
+      "reservation_id": "f5382147e69c447fb81aec257de59a5f",
+      "round_consumed": true,
+      "scope": "impl:fn-318-spec-dependency-cycle-detection.1",
+      "superseded_by": null,
+      "task": "fn-318-spec-dependency-cycle-detection.1",
+      "timestamp": "2026-11-06T08:03:48.786712Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "7fa86e05d33adf80dc16c5eddc9248d16a5d9ba01eb72cc1b71927a8cbd55efe",
+      "backend": "codex",
+      "base_sha": "b58ea2bd49619e472c24ccb5988791a1f8f8cb88",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "classification": "introduced",
+            "findingId": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-6393fe62a30cff16dd488b1c12f1a9bc",
+            "classification": "introduced",
+            "findingId": "finding-6393fe62a30cff16dd488b1c12f1a9bc",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "classification": "introduced",
+            "findingId": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-41e595508b4f35f8851b049bded92f5e",
+            "classification": "introduced",
+            "findingId": "finding-41e595508b4f35f8851b049bded92f5e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "203eeae3ccfe5a7e98f66ad18f5fb1a51d79dd94",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2332,
+      "output_sha256": "0fdda782c557166b8c23c55130ad5d7bd7a1d587db0bb85ef436801c1bb611cf",
+      "reservation_id": "49f09a0f978f4a7685669a4df460ce87",
+      "round_consumed": true,
+      "scope": "impl:fn-318-spec-dependency-cycle-detection.1",
+      "superseded_by": null,
+      "task": "fn-318-spec-dependency-cycle-detection.1",
+      "timestamp": "2026-11-06T08:08:58.414197Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "67e07339a9860b8f3e58b1a29e924cdde430f3f9af6f57e0ce4ab47de721c0f9",
+      "backend": "codex",
+      "base_sha": "b58ea2bd49619e472c24ccb5988791a1f8f8cb88",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "classification": "introduced",
+            "findingId": "finding-b4a4574ec4277a04f30515b67d5d87d8",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-6393fe62a30cff16dd488b1c12f1a9bc",
+            "classification": "introduced",
+            "findingId": "finding-6393fe62a30cff16dd488b1c12f1a9bc",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "classification": "introduced",
+            "findingId": "finding-10f20d0f98f9a56b019cdcdf263a0c8c",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-41e595508b4f35f8851b049bded92f5e",
+            "classification": "introduced",
+            "findingId": "finding-41e595508b4f35f8851b049bded92f5e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "47974a5dc09d72503693d93e368ae54e402d4912",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1329,
+      "output_sha256": "c67869eedcfb2920b88cd21ad4de8442a2255c1e9fbdc16f0c6c710336c60606",
+      "reservation_id": "8b2ea172a71a4b86a73f9165ac4de268",
+      "round_consumed": true,
+      "scope": "impl:fn-318-spec-dependency-cycle-detection.1",
+      "superseded_by": null,
+      "task": "fn-318-spec-dependency-cycle-detection.1",
+      "timestamp": "2026-11-06T08:38:14.552742Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-318-spec-dependency-cycle-detection.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-318-spec-dependency-cycle-detection.1": 0
+  },
+  "spec_path": ".flow/specs/fn-318-spec-dependency-cycle-detection.md",
+  "status": "done",
+  "title": "Spec dependency cycle detection",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-06T08:45:32.090766Z"
+}
