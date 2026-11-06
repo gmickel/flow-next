@@ -33658,183 +33658,187 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     # side-effect of a rename; the user opted into alias-mode).
     spec_json_parent = old_spec_path.parent
 
-    with ExitStack() as locks:
-        locks.enter_context(_review_sidecar_lock(flow_dir, old_id))
-        spec_data = normalize_epic(
-            load_json_or_exit(old_spec_path, f"Spec {old_id}", use_json=args.json)
-        )
+    # The repo-wide spec-deps lock, taken first as add-dep takes it, covers the
+    # move and the rewrite of other specs' references, so an add-dep cannot
+    # close a cycle through an id that is half renamed.
+    with cross_process_lock(flow_dir / "locks" / "spec-deps.lock"):
+        with ExitStack() as locks:
+            locks.enter_context(_review_sidecar_lock(flow_dir, old_id))
+            spec_data = normalize_epic(
+                load_json_or_exit(old_spec_path, f"Spec {old_id}", use_json=args.json)
+            )
 
-        # fn-52.10 (R16) — NO-RENAME for tracker-linked specs. A spec is linked if
-        # its canonical id is a tracker key (`wor-*`) OR it carries a stored
-        # `tracker.identifier`. Renaming the slug would desync the tracker linkage /
-        # branch / back-reference, so set-title updates the TITLE (and body H1)
-        # ONLY — never the canonical id, branch, or filenames. Unlinked `fn-*`
-        # specs keep today's rename behavior (the code below).
-        parsed_old = parse_any_id(old_id)
-        is_tracker_id = parsed_old is not None and parsed_old[0] == "tracker"
-        tracker_block = spec_data.get("tracker") or {}
-        has_tracker_identifier = bool(tracker_block.get("identifier"))
-        if is_tracker_id or has_tracker_identifier:
-            spec_data["title"] = args.title
-            spec_data["updated_at"] = now_iso()
-            atomic_write_json(old_spec_path, spec_data)
-            # Update only the body H1 (`# <id> <title>`), preserving the id.
-            spec_md_path = flow_dir / SPECS_DIR / f"{old_id}.md"
-            if spec_md_path.exists():
-                try:
-                    lines = spec_md_path.read_text(encoding="utf-8").splitlines(
-                        keepends=True
+            # fn-52.10 (R16) — NO-RENAME for tracker-linked specs. A spec is linked if
+            # its canonical id is a tracker key (`wor-*`) OR it carries a stored
+            # `tracker.identifier`. Renaming the slug would desync the tracker linkage /
+            # branch / back-reference, so set-title updates the TITLE (and body H1)
+            # ONLY — never the canonical id, branch, or filenames. Unlinked `fn-*`
+            # specs keep today's rename behavior (the code below).
+            parsed_old = parse_any_id(old_id)
+            is_tracker_id = parsed_old is not None and parsed_old[0] == "tracker"
+            tracker_block = spec_data.get("tracker") or {}
+            has_tracker_identifier = bool(tracker_block.get("identifier"))
+            if is_tracker_id or has_tracker_identifier:
+                spec_data["title"] = args.title
+                spec_data["updated_at"] = now_iso()
+                atomic_write_json(old_spec_path, spec_data)
+                # Update only the body H1 (`# <id> <title>`), preserving the id.
+                spec_md_path = flow_dir / SPECS_DIR / f"{old_id}.md"
+                if spec_md_path.exists():
+                    try:
+                        lines = spec_md_path.read_text(encoding="utf-8").splitlines(
+                            keepends=True
+                        )
+                        for i, line in enumerate(lines):
+                            if line.startswith("# "):
+                                newline = "\n" if line.endswith("\n") else ""
+                                lines[i] = f"# {old_id} {args.title}{newline}"
+                                break
+                        atomic_write(spec_md_path, "".join(lines))
+                    except OSError:
+                        pass  # Non-critical — JSON title is the source of truth.
+                result = {
+                    "id": old_id,
+                    "title": args.title,
+                    "renamed": False,
+                    "message": (
+                        f"Spec {old_id} title updated (tracker-linked — id/branch "
+                        "not renamed)"
+                    ),
+                }
+                if args.json:
+                    json_output(result)
+                else:
+                    print(result["message"])
+                return
+
+            # Extract spec number from old ID
+            spec_num, _ = parse_id(old_id)
+            if spec_num is None:
+                error_exit(f"Could not parse spec number from {old_id}", use_json=args.json)
+
+            # Generate new ID with slugified title
+            new_slug = slugify(args.title)
+            new_suffix = new_slug if new_slug else generate_epic_suffix()
+            new_id = f"fn-{spec_num}-{new_suffix}"
+
+            if new_id != old_id:
+                locks.enter_context(_review_sidecar_lock(flow_dir, new_id))
+
+            # Check if new ID already exists (and isn't same as old) — probe both layouts.
+            if new_id != old_id:
+                new_canonical = flow_dir / SPECS_JSON_DIR / f"{new_id}.json"
+                new_legacy = flow_dir / EPICS_DIR / f"{new_id}.json"
+                if new_canonical.exists() or new_legacy.exists():
+                    error_exit(
+                        f"Spec {new_id} already exists. Choose a different title.",
+                        use_json=args.json,
                     )
-                    for i, line in enumerate(lines):
-                        if line.startswith("# "):
-                            newline = "\n" if line.endswith("\n") else ""
-                            lines[i] = f"# {old_id} {args.title}{newline}"
-                            break
-                    atomic_write(spec_md_path, "".join(lines))
-                except OSError:
-                    pass  # Non-critical — JSON title is the source of truth.
-            result = {
-                "id": old_id,
-                "title": args.title,
-                "renamed": False,
-                "message": (
-                    f"Spec {old_id} title updated (tracker-linked — id/branch "
-                    "not renamed)"
-                ),
-            }
-            if args.json:
-                json_output(result)
-            else:
-                print(result["message"])
-            return
 
-        # Extract spec number from old ID
-        spec_num, _ = parse_id(old_id)
-        if spec_num is None:
-            error_exit(f"Could not parse spec number from {old_id}", use_json=args.json)
+            # Collect files to rename
+            renames: list[tuple[Path, Path]] = []
+            specs_dir = flow_dir / SPECS_DIR
+            tasks_dir = flow_dir / TASKS_DIR
 
-        # Generate new ID with slugified title
-        new_slug = slugify(args.title)
-        new_suffix = new_slug if new_slug else generate_epic_suffix()
-        new_id = f"fn-{spec_num}-{new_suffix}"
+            # Spec JSON — rename in place (same parent dir).
+            renames.append((old_spec_path, spec_json_parent / f"{new_id}.json"))
 
-        if new_id != old_id:
-            locks.enter_context(_review_sidecar_lock(flow_dir, new_id))
+            # Spec markdown
+            old_spec_md = specs_dir / f"{old_id}.md"
+            if old_spec_md.exists():
+                renames.append((old_spec_md, specs_dir / f"{new_id}.md"))
 
-        # Check if new ID already exists (and isn't same as old) — probe both layouts.
-        if new_id != old_id:
-            new_canonical = flow_dir / SPECS_JSON_DIR / f"{new_id}.json"
-            new_legacy = flow_dir / EPICS_DIR / f"{new_id}.json"
-            if new_canonical.exists() or new_legacy.exists():
+            # Task files (JSON and MD)
+            task_files: list[tuple[str, str]] = []  # (old_task_id, new_task_id)
+            if tasks_dir.exists():
+                for task_file in tasks_dir.glob(f"{old_id}.*.json"):
+                    task_id = task_file.stem
+                    if not is_task_id(task_id):
+                        continue
+                    # Extract task number
+                    _, task_num = parse_id(task_id)
+                    if task_num is not None:
+                        new_task_id = f"{new_id}.{task_num}"
+                        task_files.append((task_id, new_task_id))
+                        # JSON file
+                        renames.append((task_file, tasks_dir / f"{new_task_id}.json"))
+                        # MD file
+                        old_task_md = tasks_dir / f"{task_id}.md"
+                        if old_task_md.exists():
+                            renames.append((old_task_md, tasks_dir / f"{new_task_id}.md"))
+
+            # Checkpoint file
+            old_checkpoint = flow_dir / f".checkpoint-{old_id}.json"
+            if old_checkpoint.exists():
+                renames.append((old_checkpoint, flow_dir / f".checkpoint-{new_id}.json"))
+
+            # Perform renames (collect errors but continue)
+            rename_errors: list[str] = []
+            for old_path, new_path in renames:
+                try:
+                    old_path.rename(new_path)
+                except OSError as e:
+                    rename_errors.append(f"{old_path.name} -> {new_path.name}: {e}")
+
+            if rename_errors:
                 error_exit(
-                    f"Spec {new_id} already exists. Choose a different title.",
+                    f"Failed to rename some files: {'; '.join(rename_errors)}",
                     use_json=args.json,
                 )
 
-        # Collect files to rename
-        renames: list[tuple[Path, Path]] = []
-        specs_dir = flow_dir / SPECS_DIR
-        tasks_dir = flow_dir / TASKS_DIR
+            # Update spec JSON content
+            spec_data["id"] = new_id
+            spec_data["title"] = args.title
+            spec_data["spec_path"] = f"{FLOW_DIR}/{SPECS_DIR}/{new_id}.md"
+            # branch_name defaults to the spec id at create time; a rename that left
+            # it at the old slug silently broke land's PR discovery and autonomous
+            # work's branch naming (observed on fn-218). Re-derive it ONLY when it
+            # still equals the old spec id (its create-time default); any other
+            # value - whatever set it - is kept.
+            branch_rederived = spec_data.get("branch_name") == old_id
+            if branch_rederived:
+                spec_data["branch_name"] = new_id
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_parent / f"{new_id}.json", spec_data)
 
-        # Spec JSON — rename in place (same parent dir).
-        renames.append((old_spec_path, spec_json_parent / f"{new_id}.json"))
-
-        # Spec markdown
-        old_spec_md = specs_dir / f"{old_id}.md"
-        if old_spec_md.exists():
-            renames.append((old_spec_md, specs_dir / f"{new_id}.md"))
-
-        # Task files (JSON and MD)
-        task_files: list[tuple[str, str]] = []  # (old_task_id, new_task_id)
-        if tasks_dir.exists():
-            for task_file in tasks_dir.glob(f"{old_id}.*.json"):
-                task_id = task_file.stem
-                if not is_task_id(task_id):
-                    continue
-                # Extract task number
-                _, task_num = parse_id(task_id)
-                if task_num is not None:
-                    new_task_id = f"{new_id}.{task_num}"
-                    task_files.append((task_id, new_task_id))
-                    # JSON file
-                    renames.append((task_file, tasks_dir / f"{new_task_id}.json"))
-                    # MD file
-                    old_task_md = tasks_dir / f"{task_id}.md"
-                    if old_task_md.exists():
-                        renames.append((old_task_md, tasks_dir / f"{new_task_id}.md"))
-
-        # Checkpoint file
-        old_checkpoint = flow_dir / f".checkpoint-{old_id}.json"
-        if old_checkpoint.exists():
-            renames.append((old_checkpoint, flow_dir / f".checkpoint-{new_id}.json"))
-
-        # Perform renames (collect errors but continue)
-        rename_errors: list[str] = []
-        for old_path, new_path in renames:
-            try:
-                old_path.rename(new_path)
-            except OSError as e:
-                rename_errors.append(f"{old_path.name} -> {new_path.name}: {e}")
-
-        if rename_errors:
-            error_exit(
-                f"Failed to rename some files: {'; '.join(rename_errors)}",
-                use_json=args.json,
-            )
-
-        # Update spec JSON content
-        spec_data["id"] = new_id
-        spec_data["title"] = args.title
-        spec_data["spec_path"] = f"{FLOW_DIR}/{SPECS_DIR}/{new_id}.md"
-        # branch_name defaults to the spec id at create time; a rename that left
-        # it at the old slug silently broke land's PR discovery and autonomous
-        # work's branch naming (observed on fn-218). Re-derive it ONLY when it
-        # still equals the old spec id (its create-time default); any other
-        # value - whatever set it - is kept.
-        branch_rederived = spec_data.get("branch_name") == old_id
-        if branch_rederived:
-            spec_data["branch_name"] = new_id
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(spec_json_parent / f"{new_id}.json", spec_data)
-
-    # Update task JSON content
-    task_id_map = dict(task_files)  # old_task_id -> new_task_id
-    for _old_task_id, new_task_id in task_files:
-        task_path = tasks_dir / f"{new_task_id}.json"
-        if task_path.exists():
-            task_data = normalize_task(load_json(task_path))
-            task_data["id"] = new_task_id
-            # fn-43.2: write canonical "spec" key; canonicalize_task_for_write
-            # below strips any residual "epic" key from the loaded JSON.
-            task_data["spec"] = new_id
-            task_data["spec_path"] = f"{FLOW_DIR}/{TASKS_DIR}/{new_task_id}.md"
-            # Update depends_on references within same spec
-            if task_data.get("depends_on"):
-                task_data["depends_on"] = [
-                    task_id_map.get(dep, dep) for dep in task_data["depends_on"]
-                ]
-            task_data["updated_at"] = now_iso()
-            canonicalize_task_for_write(task_data)
-            atomic_write_json(task_path, task_data)
-
-    # Update depends_on_epics in other specs that reference this one — walk both layouts.
-    updated_deps_in: list[str] = []
-    for other_spec_file in iter_spec_json_files(flow_dir):
-        if other_spec_file.stem == new_id:
-            continue  # Skip self
-        try:
-            with _review_sidecar_lock(flow_dir, other_spec_file.stem):
-                other_data = load_json(other_spec_file)
-                deps = other_data.get("depends_on_epics", [])
-                if old_id in deps:
-                    other_data["depends_on_epics"] = [
-                        new_id if d == old_id else d for d in deps
+        # Update task JSON content
+        task_id_map = dict(task_files)  # old_task_id -> new_task_id
+        for _old_task_id, new_task_id in task_files:
+            task_path = tasks_dir / f"{new_task_id}.json"
+            if task_path.exists():
+                task_data = normalize_task(load_json(task_path))
+                task_data["id"] = new_task_id
+                # fn-43.2: write canonical "spec" key; canonicalize_task_for_write
+                # below strips any residual "epic" key from the loaded JSON.
+                task_data["spec"] = new_id
+                task_data["spec_path"] = f"{FLOW_DIR}/{TASKS_DIR}/{new_task_id}.md"
+                # Update depends_on references within same spec
+                if task_data.get("depends_on"):
+                    task_data["depends_on"] = [
+                        task_id_map.get(dep, dep) for dep in task_data["depends_on"]
                     ]
-                    other_data["updated_at"] = now_iso()
-                    atomic_write_json(other_spec_file, other_data)
-                    updated_deps_in.append(other_data.get("id", other_spec_file.stem))
-        except (json.JSONDecodeError, OSError):
-            pass  # Skip files that can't be parsed
+                task_data["updated_at"] = now_iso()
+                canonicalize_task_for_write(task_data)
+                atomic_write_json(task_path, task_data)
+
+        # Update depends_on_epics in other specs that reference this one — walk both layouts.
+        updated_deps_in: list[str] = []
+        for other_spec_file in iter_spec_json_files(flow_dir):
+            if other_spec_file.stem == new_id:
+                continue  # Skip self
+            try:
+                with _review_sidecar_lock(flow_dir, other_spec_file.stem):
+                    other_data = load_json(other_spec_file)
+                    deps = other_data.get("depends_on_epics", [])
+                    if old_id in deps:
+                        other_data["depends_on_epics"] = [
+                            new_id if d == old_id else d for d in deps
+                        ]
+                        other_data["updated_at"] = now_iso()
+                        atomic_write_json(other_spec_file, other_data)
+                        updated_deps_in.append(other_data.get("id", other_spec_file.stem))
+            except (json.JSONDecodeError, OSError):
+                pass  # Skip files that can't be parsed
 
     # Update state files if they exist
     state_store = get_state_store()
@@ -33983,9 +33987,10 @@ def cmd_spec_add_dep(args: argparse.Namespace) -> None:
 
     # The repo-wide lock makes the cycle check and the write one step, so two
     # concurrent add-deps cannot each pass the check and close a cycle together.
-    with _review_sidecar_lock(flow_dir, spec_id), cross_process_lock(
+    # It is taken before the sidecar lock, the same order as spec set-title.
+    with cross_process_lock(
         flow_dir / "locks" / "spec-deps.lock"
-    ):
+    ), _review_sidecar_lock(flow_dir, spec_id):
         spec_data = load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
         deps = spec_data.get("depends_on_epics", [])
 

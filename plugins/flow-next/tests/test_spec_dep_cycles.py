@@ -161,6 +161,47 @@ class SpecDepCycleTestCase(unittest.TestCase):
         self.assertEqual(out["spec_cycles"], [])
         self.assertFalse([e for e in out["root_errors"] if "cycle" in e])
 
+    # ---- a rename holds the add-dep lock until other specs point at the new id ----
+    def test_rename_waits_for_the_spec_deps_lock(self) -> None:
+        import contextlib
+        import importlib.util
+        import io
+        from unittest import mock
+
+        scripts = Path(__file__).resolve().parents[1] / "scripts"
+        sys.path.insert(0, str(scripts))
+        spec = importlib.util.spec_from_file_location("flowctl_dep_rename_under_test", scripts / "flowctl.py")
+        flowctl = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = flowctl
+        spec.loader.exec_module(flowctl)
+
+        self.assertEqual(self._add("a", "b").returncode, 0)
+        rename = ["flowctl", "spec", "set-title", self.ids["b"], "--title", "b renamed", "--json"]
+        previous_cwd = Path.cwd()
+        output = io.StringIO()
+        try:
+            os.chdir(self.tmpdir)
+            # Held by an add-dep, the lock makes the rename wait instead of moving
+            # files a cycle check could miss (patched to time out at once).
+            lock = self.tmpdir / ".flow" / "locks" / "spec-deps.lock"
+            with flowctl.cross_process_lock(lock), mock.patch.object(
+                flowctl, "CROSS_PROCESS_LOCK_WAIT_SECS", 0.0
+            ), mock.patch.object(sys, "argv", rename), contextlib.redirect_stdout(output):
+                with self.assertRaises(SystemExit) as raised:
+                    flowctl.main()
+        finally:
+            os.chdir(previous_cwd)
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn("spec-deps.lock", json.loads(output.getvalue())["error"])
+        self.assertTrue((self.tmpdir / ".flow" / "specs" / f"{self.ids['b']}.json").exists())
+        self.assertEqual(self._deps("a"), [self.ids["b"]])
+
+        res = self._run(*rename[1:])
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.ids["b"] = json.loads(res.stdout)["new_id"]
+        self.assertEqual(self._deps("a"), [self.ids["b"]])
+        self.assertCycleRefused(self._add("b", "a"), self._path("b", "a", "b"))
+
 
 class SpecDepCycleWalkTestCase(unittest.TestCase):
     """The whole-graph walk stays linear on wide acyclic graphs."""
