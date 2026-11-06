@@ -1,20 +1,67 @@
 {
   "branch_name": "fn-319-replayable-defect-proof",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-06T16:04:15.218494Z",
   "created_at": "2026-11-06T08:38:35.105326Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-319-replayable-defect-proof",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-319-replayable-defect-proof.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d4321dc2363ac6a4b30ca946f2bf8d8fdd0909219cd884334763495574c6112a",
+      "backend": "codex",
+      "base_sha": "cecda6f80f764474d39164b7e46d8d94b85a3f93",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e1b3c7c3d922b4a4fb51c0d9ee6b4f94557ed2ce",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "25af1561ac76412e892e3a8db97ff4eb",
+      "round_consumed": true,
+      "scope": "impl:fn-319-replayable-defect-proof.1",
+      "superseded_by": null,
+      "task": "fn-319-replayable-defect-proof.1",
+      "timestamp": "2026-11-06T16:03:45.645349Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-319-replayable-defect-proof.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-319-replayable-defect-proof.1": 0
+  },
   "spec_path": ".flow/specs/fn-319-replayable-defect-proof.md",
   "status": "open",
   "title": "Replayable defect proof",
@@ -29,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-06T15:56:36.545096Z"
+  "updated_at": "2026-11-06T16:04:15.218502Z"
 }
