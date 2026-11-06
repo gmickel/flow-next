@@ -42,7 +42,8 @@ question, it was underspecified: reframe it and re-run, never average or pick on
 
 ## Tests
 
-- Run the tests for the code you changed. Do not run the full suite unless the repository's
+- Run the tests for the code you changed and for the code that calls it, including callers
+  outside the folder you changed. Do not run the full suite unless the repository's
   instructions or the user ask for it; then run it once, at the end, not again after later fixes
   (re-check those with focused tests). CI owns regressions.
 - A check the person asks for by name (the full suite, a command, a scenario) is run as asked,
@@ -131,6 +132,8 @@ anything left open. No stage-by-stage narration.
   read) or a guess.
 - Name the run done the way a user would (the command, the request, the page) and what it
   showed, or `not run: <reason>`.
+- Name the tests you ran (the changed code and which callers) and, when you did not run the full
+  suite, say so in one line.
 - Every reply that hands back a fix, including the one after a follow-up and the note when a
   background review lands, states its base and head observations, short and verbatim from runs
   already made: the failing assertion on base, the passing run on head, and before/after numbers

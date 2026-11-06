@@ -47,12 +47,13 @@ Generated mirrors for other hosts follow from the canonical text through the exi
   - hidden-test pass rate not lower than 9.8.0's.
 
   A regression set (a small feature and a large feature, 3 runs each against 9.8.0) stays within 9.8.0's ranges on judge, hidden tests and wall time. Errors: a harness fault discards and re-runs the draw, logged.
+- **R7:** The tests run for a change cover the changed code and the code that calls it, including callers outside the changed folder, without the full suite unless the repository or the person asks for it. The hand-back names which tests ran and, when the full suite did not, says so in one line. Errors: no error surface beyond a caller that has no tests, which the hand-back names. [inferred]
 
 ## Boundaries
 
 - No change to the eval harness is part of this spec. The grader's red/green rules were updated separately (rules 2, 2026-11-06: a red that fails only on a missing new constant is re-run with the constants stubbed, and a test commit that adds only those constants counts as test-first); the A/B is scored with them. [inferred]
 - No push or pull request in attended runs; R2's commit is local. [inferred]
-- No change to feature routes beyond the shared Tests sentence R1 adds. [inferred]
+- No change to feature routes beyond the shared Tests and Handoff sentences R1 and R7 add. [inferred]
 - No new structure: no fields, labels, verbs, checks or stops (repo agent-first rule). [inferred]
 
 ## Decision Context
