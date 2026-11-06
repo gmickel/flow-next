@@ -162,6 +162,32 @@ class SpecDepCycleTestCase(unittest.TestCase):
         self.assertFalse([e for e in out["root_errors"] if "cycle" in e])
 
 
+class SpecDepCycleWalkTestCase(unittest.TestCase):
+    """The whole-graph walk stays linear on wide acyclic graphs."""
+
+    def test_diamond_chain_without_cycles_is_fast(self) -> None:
+        import importlib.util
+
+        scripts = Path(__file__).resolve().parents[1] / "scripts"
+        sys.path.insert(0, str(scripts))
+        spec = importlib.util.spec_from_file_location("flowctl_dep_cycles_under_test", scripts / "flowctl.py")
+        flowctl = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = flowctl
+        spec.loader.exec_module(flowctl)
+
+        # 30 diamonds in a row: over a billion paths, no cycle.
+        graph: dict[str, list[str]] = {"fn-0": []}
+        for i in range(30):
+            top, left, right = f"fn-{3 * i + 3}", f"fn-{3 * i + 1}", f"fn-{3 * i + 2}"
+            base = f"fn-{3 * i}"
+            graph[left] = [base]
+            graph[right] = [base]
+            graph[top] = [left, right]
+        self.assertEqual(flowctl._spec_dep_cycles(graph), [])
+        graph["fn-1"] = ["fn-0", "fn-3"]  # one short cycle inside the chain
+        self.assertEqual(flowctl._spec_dep_cycles(graph), [["fn-1", "fn-3", "fn-1"]])
+
+
 @unittest.skipIf(os.name == "nt" or not shutil.which("bash") or not shutil.which("jq"),
                  "needs bash and jq")
 class DepsPhaseFenceTestCase(unittest.TestCase):

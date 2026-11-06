@@ -33912,9 +33912,21 @@ def _spec_dep_path(graph: dict[str, list[str]], start: str, goal: str) -> Option
 
 def _spec_dep_cycles(graph: dict[str, list[str]]) -> list[list[str]]:
     """Every simple cycle once, as a closed path starting at its smallest id."""
+    dependents: dict[str, list[str]] = {}
+    for node, deps in graph.items():
+        for dep in deps:
+            dependents.setdefault(dep, []).append(node)
     cycles: list[list[str]] = []
     for start in sorted(graph):
-        # Walk only ids above `start`, so each cycle is found from its smallest id.
+        # Only ids above `start` that lead back to it can be on a cycle found from
+        # its smallest id; an acyclic graph has none, so the walk stays linear.
+        back = {start}
+        todo = [start]
+        while todo:
+            for node in dependents.get(todo.pop(), []):
+                if node > start and node not in back:
+                    back.add(node)
+                    todo.append(node)
         stack = [(start, iter(graph[start]))]
         on_path = {start}
         while stack:
@@ -33923,7 +33935,7 @@ def _spec_dep_cycles(graph: dict[str, list[str]]) -> list[list[str]]:
                 on_path.discard(stack.pop()[0])
             elif nxt == start:
                 cycles.append([node for node, _ in stack] + [start])
-            elif nxt > start and nxt not in on_path and nxt in graph:
+            elif nxt in back and nxt not in on_path:
                 on_path.add(nxt)
                 stack.append((nxt, iter(graph[nxt])))
     return cycles
