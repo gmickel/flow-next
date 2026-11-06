@@ -508,7 +508,7 @@ for nf in \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
     -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
-    -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
+    -e 's|stop; run /flow-next:plan to break the spec|stop; run $flow-next-plan to break the spec|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
     -e 's|`/flow-next:refine` — never mint an empty task|`$flow-next-refine` — never mint an empty task|g' \
@@ -1762,7 +1762,7 @@ python3 - "$CODEX_DIR" <<'PYEOF'
 import sys, pathlib
 codex_dir = pathlib.Path(sys.argv[1])
 DIET = {
-    "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
+    "flow-next-plan": "Break a flow-next spec into reviewed tasks. Run only when asked for a plan or task breakdown, or routed by flow-next-flow; other build requests go to flow-next-flow.",
     "flow-next-work": "Execute a flow-next spec or task with workers, gates and commits. Run when the work command is typed or flow-next-flow routes here; plain requests to implement fn-N go to flow-next-flow.",
     "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh, or a GitLab merge request via glab. Use whenever asked to make or open a PR in a flow-next repo.",
@@ -1784,7 +1784,7 @@ DIET = {
     "flow-next-impl-review": "Carmack-level implementation review of changes via the configured backend. Use when asked to review code or a diff in a flow-next repo.",
     "flow-next-plan-review": "Carmack-level review of a flow-next spec or plan via the configured backend. Use when asked to review a plan or spec.",
     "flow-next-spec-completion-review": "Verify that a spec's completed tasks fully implement the spec requirements. Use at spec completion before close.",
-    "flow-next": "Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for planning or executing (use the plan and work skills).",
+    "flow-next": "Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for building or planning work (use flow-next-flow).",
     "flow-next-prose": "Use while drafting a substantial reply, report, or summary for the user - read the prose contract before writing and draft under its rules. Not for short turns or file/PR output.",
 }
 failed = 0
@@ -2385,7 +2385,7 @@ flow-next-flow/references/route-matrix.md	then `/flow-next:make-pr <spec-id>`	th
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:work <spec-id> --no-plan	Recommended next: $flow-next-work <spec-id> --no-plan
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:plan <spec-id>	Recommended next: $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-ask.md	spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>	spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>
-flow-next-work/references/no-plan-ask.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
+flow-next-work/references/no-plan-ask.md	stop; run /flow-next:plan to break the spec	stop; run $flow-next-plan to break the spec
 flow-next-work/references/no-plan-ask.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
 flow-next-work/references/no-plan-route.md	`/flow-next:refine` — never mint an empty task	`$flow-next-refine` — never mint an empty task

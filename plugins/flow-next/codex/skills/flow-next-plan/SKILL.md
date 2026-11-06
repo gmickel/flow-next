@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan
-description: Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).
+description: Break a flow-next spec into reviewed tasks. Run only when asked for a plan or task breakdown, or routed by flow-next-flow; other build requests go to flow-next-flow.
 user-invocable: false
 ---
 

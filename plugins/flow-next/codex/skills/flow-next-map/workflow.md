@@ -15,5 +15,5 @@ or opt up the source automatically. The script never writes review receipts.
 
 Summarize the reported feature count and timestamp. For zero heuristic features,
 explain the optional `--source=auto|agent` route and provider cost; leave that
-choice to the user. Point to `flowctl repo-map list`, `/flow-next:plan` and
+choice to the user. Point to `flowctl repo-map list`, `/flow-next:flow` and
 `/flow-next:capture`. Missing output after a successful map stays a warning.

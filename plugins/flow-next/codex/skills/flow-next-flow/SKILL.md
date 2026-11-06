@@ -100,7 +100,7 @@ gets the route call, which decides its lifecycle in code and never asks the judg
 
 For a spec, code applies lifecycle order: an observed PR goes to landing, a closed spec without a
 PR to you, all tasks done to QA and make-pr, a `stale` plan review to plan-review, tasks to the
-recorded work route, a ready zero-task spec to direct or plan. When `decision.met` is true, use `decision.value`, unless the person asked to be interviewed on the spec or passed a refine lens with it (`--biz`, `--tech`, `--scope=<lens>`): that routes to refine (`references/plan-vs-no-plan.md`). Intake without a spec
+recorded work route, a ready zero-task spec to direct. When `decision.met` is true, use `decision.value`, unless the person asked to be interviewed on the spec or passed a refine lens with it (`--biz`, `--tech`, `--scope=<lens>`): that routes to refine. A ready zero-task spec routes to plan when the person asked for a plan or task breakdown, in this request or in the spec; code never reads that ask (`references/plan-vs-no-plan.md`). Intake without a spec
 is yours: decide from the matrix. Print one line per hop: `Route: <route> (code)` or
 `Route: <route> (host)`.
 

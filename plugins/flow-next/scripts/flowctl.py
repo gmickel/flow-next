@@ -24404,17 +24404,8 @@ def judge_route_lifecycle(state: dict) -> dict:
         return decision("work_no_plan_default", "recorded no_plan")
     if not state["ready"]:
         return decision("host", "spec not ready")
-    text = state["spec_body"]
-    patterns = {
-        # Affirmative requests only: a negated request or a code identifier is not a plan signal.
-        "asks_for_plan": r"(?<!\bnot )(?<!n't )(?<!\bnever )(?:\bplan (this|it) out\b|\bplan (it |this )?(into|as) tasks\b|\b(?:break|split|decompose) (this|it) (down )?into tasks\b|\btask plan\b)",
-        "separate_owners": r"\b(\w+'s team|team [ab]|another team|other team|the backend team|the frontend team|goes to \w+ and .* to (?:mine|me)|owned by different|separate owners|two teams|each team)\b",
-        # Delivery phrasing only ("ship in two PRs", "split into stacked PRs"): PRs as the spec's subject are not a signal.
-        "staged_prs": r"\b(?:in|into|across|over|as|ship|deliver|open|split)\s+(?:two|three|four|several|multiple|separate|stacked)\s+(?:stacked\s+)?prs?\b",
-    }
-    for signal, pattern in patterns.items():
-        if re.search(pattern, text, re.I):
-            return decision("plan", signal)
+    # Plan only when the person asks for it. Whether a request or a spec asks for a plan is
+    # the host's reading (flow Step 2), never a word match on the spec body here.
     return decision("work_no_plan_default", "no positive plan signal")
 
 

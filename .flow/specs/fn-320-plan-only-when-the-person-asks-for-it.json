@@ -1,0 +1,240 @@
+{
+  "branch_name": "fn-320-plan-only-when-the-person-asks-for-it",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-06T11:11:03.996675Z",
+  "created_at": "2026-11-06T10:43:40.546067Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-320-plan-only-when-the-person-asks-for-it",
+  "impl_review_rounds": {
+    "fn-320-plan-only-when-the-person-asks-for-it.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "4ab587a4db21fefe4f01e2609f29f7c4c5caf269bb4d295590636d19ef534140",
+      "backend": "codex",
+      "base_sha": "082062e12a03e06914bf1c5bd6d3f8b06b5870d1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "classification": "introduced",
+            "findingId": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "classification": "introduced",
+            "findingId": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "classification": "introduced",
+            "findingId": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9813042d8617593482a0500fc86db8959d12b930",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2509,
+      "output_sha256": "a1e6c08d374fac271d56df1785533812e2439f40a25bccbc011f1f700effd92a",
+      "reservation_id": "a346522f3c2246b8882e307906c5cfef",
+      "round_consumed": true,
+      "scope": "impl:fn-320-plan-only-when-the-person-asks-for-it.1",
+      "superseded_by": null,
+      "task": "fn-320-plan-only-when-the-person-asks-for-it.1",
+      "timestamp": "2026-11-06T10:59:16.842885Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "61776814455e9d71e4755b9c24583b1aa380b711f58504d15d6747f94d4d9839",
+      "backend": "codex",
+      "base_sha": "082062e12a03e06914bf1c5bd6d3f8b06b5870d1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "classification": "introduced",
+            "findingId": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-5073934909799e3c3ff31df0f9d8d30a",
+            "classification": "introduced",
+            "findingId": "finding-5073934909799e3c3ff31df0f9d8d30a",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "classification": "introduced",
+            "findingId": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "classification": "introduced",
+            "findingId": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "eb521651e3446782a4b8b504678cc27a10904ee2",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1751,
+      "output_sha256": "9a6cf5fa763a2a031b98a7248c6cf27660cd6f84ce47d39542cf1a4ed980fc24",
+      "reservation_id": "38e651bb95f44a5ea932edfe5f4ebfaf",
+      "round_consumed": true,
+      "scope": "impl:fn-320-plan-only-when-the-person-asks-for-it.1",
+      "superseded_by": null,
+      "task": "fn-320-plan-only-when-the-person-asks-for-it.1",
+      "timestamp": "2026-11-06T11:02:33.475877Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "b3ebc21a379127b2a5d30cbd7ac0b9f0d3fd2f6926af5c085f033f067c3b7f54",
+      "backend": "codex",
+      "base_sha": "082062e12a03e06914bf1c5bd6d3f8b06b5870d1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "classification": "introduced",
+            "findingId": "finding-fd07ae42d4ebc89c761874ceec54ad34",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-5073934909799e3c3ff31df0f9d8d30a",
+            "classification": "introduced",
+            "findingId": "finding-5073934909799e3c3ff31df0f9d8d30a",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "classification": "introduced",
+            "findingId": "finding-5057fa3f43a72ecf2ac741fd304a8f6f",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "classification": "introduced",
+            "findingId": "finding-107ef5c45bd0bae731773d5489b7c401",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a8926b90055e0ad8ea385bd4c9826defe39d2fd4",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1357,
+      "output_sha256": "35ee623fc667ae22b1746c24f4693d8e6af0b1dcc3f033c8e180968a7c2d9d0a",
+      "reservation_id": "4a0436772801435dbeeb662d00dff39a",
+      "round_consumed": true,
+      "scope": "impl:fn-320-plan-only-when-the-person-asks-for-it.1",
+      "superseded_by": null,
+      "task": "fn-320-plan-only-when-the-person-asks-for-it.1",
+      "timestamp": "2026-11-06T11:07:07.888851Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-320-plan-only-when-the-person-asks-for-it.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-320-plan-only-when-the-person-asks-for-it.1": 0
+  },
+  "spec_path": ".flow/specs/fn-320-plan-only-when-the-person-asks-for-it.md",
+  "status": "done",
+  "title": "Plan only when the person asks for it",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-06T14:26:10.597075Z"
+}

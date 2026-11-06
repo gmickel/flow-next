@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan
-description: Create structured build plans from feature requests or Flow IDs. Use when planning features or designing implementation. Triggers on /flow-next:plan with text descriptions or Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2).
+description: Break a spec or idea into reviewed tasks. Run only when the person asks for a plan or task breakdown, by /flow-next:plan, or when flow-next-flow routes here; any other request to design, build or implement a spec or idea goes to flow-next-flow. Triggers on /flow-next:plan with text descriptions or Flow IDs (fn-1-add-oauth, fn-1-add-oauth.2, or legacy fn-1, fn-1.2, fn-1-xxx, fn-1-xxx.2).
 user-invocable: false
 ---
 
