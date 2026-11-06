@@ -6,9 +6,18 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.8.0] - 2026-11-06
+
+Flow now builds a ready spec directly unless you ask for a plan. A spec that spans two repositories, is expected to ship in several PRs or names separate owning teams runs as one task with the same review and QA gates, and that task can still open several PRs. On a pre-registered routing test (Opus 5.5, three runs per case), 9.7.0 sent a two-repo, a three-PR and a two-team spec to planning every time; 9.8.0 sent none of them, and every explicit ask still reached planning.
+
+**What changes when you upgrade.** A spec that used to be split into tasks because it named separate owners or several PRs now runs as one task. To get the breakdown, ask for a plan or a task breakdown in your `/flow-next:flow` request or in the spec, or run `/flow-next:plan`. Specs that already have tasks keep them.
+
 ### Changed
 
-- **Flow plans only when you ask for a plan.** A spec now goes to task planning only when you ask for a plan or a task breakdown, in your request or in the spec. Before, flow also planned when a spec named separate owning teams or expected several PRs, and its code route matched plans that a spec only mentioned in passing ("the 4-task plan"). Those specs now run directly, and the one task can still ship several PRs. On a pre-registered routing test on one model (Opus 5.5, three runs per case), 9.7.0 sent a two-repo change, a three-PR change and a two-team change to planning every time; this release builds all three directly and still plans every time someone asks. Flow reads the ask itself, in your `/flow-next:flow` request or in the spec, instead of matching words in the spec, so an ask made only in your request now reaches planning too. When `/flow-next:work` meets a spec with no tasks, it lists the direct route first as the recommended option.
+- **Planning runs when you ask for it.** A request for a plan or a task breakdown, in your request or in the spec, is the one thing that sends a ready spec to planning. Size, risk, file count, several repositories, an order between parts, separate owners and delivery over several PRs all stay on the direct route. Flow's agent reads the ask, so an ask made only in your `/flow-next:flow` request reaches planning, and a plan the spec mentions in passing ("the 4-task plan") does not.
+- **Work recommends building a spec with no tasks directly.** When `/flow-next:work` meets a spec with no tasks and you did not name a route, its question lists the direct route first as the recommended option, with planning first one pick away.
+- **Skills that used to point you at `/flow-next:plan` now point at `/flow-next:flow`**, which picks the route: the task-manager skill, prime, prospect, strategy and map.
+- **Under the hood.** For a ready spec with no tasks and no recorded route, `flowctl judge --preset route` returns `work_no_plan_default`; it no longer reads the spec body for plan signals. The flow skill applies the ask, attended and under `--auto`.
 
 ## [flow-next 9.7.0] - 2026-11-06
 
