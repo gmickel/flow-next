@@ -6,6 +6,19 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.9.0] - 2026-11-07
+
+Bug fixes now come with proof a reviewer can replay. The test is written first, fails on unchanged code and is committed on its own before the fix. The pull request history shows red, then green, and every reply restates what failed before and what passes now. In a pre-registered test against 9.8.0 (Claude Code, Opus 5.5, six runs per arm), the blind-judged result rose from 18.3 to 20.0 of 20 on a hard bug and from 16.9 to 18.9 on a simple bug. The test went in on its own first in 12 of 12 bug runs against 4 of 12. The hard bug's first report arrived at the same time; the simple bug's arrived about 1.5 minutes later, spent testing the nearby cases.
+
+### Changed
+
+- **Reviewers can see a bug's test fail before the fix.** The test reaches the behaviour through code that already exists. It loads successfully and fails by assertion on unchanged code. It is committed alone, with test files only, before the fix, on the local branch, attended or not. If a hook or repository rule refuses that commit, both go in one commit; the rule is never bypassed. A feature whose test was written first commits it the same way.
+- **Tests cover callers of your change and nearby bug cases.** Work runs the tests for the changed code and its callers, including callers outside the changed folder. For a bug fix, tests also cover cases that reach the same broken code: the same request forced or flagged, the sibling scheme or type, and a real failure beside the fixed case. The full suite still runs only when the repository or you ask for it.
+- **Every hand-back carries its proof.** The reply names the tests that ran and any caller with no tests. It states the base and head observations verbatim: the failing assertion before, the passing run after, and before/after numbers when measured. This also applies to replies after follow-ups and notes when a background review lands.
+- **Each symptom in a bug report gets its own before and after.** When a report names several symptoms or surfaces, each is reproduced on unchanged code and checked after the fix. A symptom that does not reproduce is recorded as such, and the fix does not claim it.
+- **Deferred writes keep the live value exact.** When a change throttles, coalesces or defers persisted writes, a caller in the same process still reads the exact value. Only the write waits, and a test reads the value straight after the event.
+- **Under the hood.** The rules live in the shared working rules (Tests, Attended and Handoff), which every route reads. The defect route, work's commit step and the worker point at them. Regression set against 9.8.0: a small feature 19.5 vs 19.0 and a large feature 19.3 vs 19.3 of 20, hidden tests passing throughout.
+
 ## [flow-next 9.8.0] - 2026-11-06
 
 Flow now builds a ready spec directly unless you ask for a plan. A spec that spans two repositories, is expected to ship in several PRs or names separate owning teams runs as one task with the same review and QA gates, and that task can still open several PRs. On a pre-registered routing test (Opus 5.5, three runs per case), 9.7.0 sent a two-repo, a three-PR and a two-team spec to planning every time; 9.8.0 sent none of them, and every explicit ask still reached planning.
