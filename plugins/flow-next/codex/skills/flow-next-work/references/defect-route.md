@@ -45,9 +45,9 @@ skip this step and record `introduced by: skipped: no known-good revision`.
 
 ## 4. Prove on base and head
 
-Both observations run through the surface the report came from: the command for a CLI report, the request for an API report, the call for a library report, the app for a UI report. A passing unit test of the changed branch supports the fix and is never the only proof when the report named another surface. A report that names no surface uses the one a user meets first, and the record says which.
+Both observations run through the surface the report came from: the command for a CLI report, the request for an API report, the call for a library report, the app for a UI report. A passing unit test of the changed branch supports the fix and is never the only proof when the report named another surface. A report that names no surface uses the one a user meets first, and the record says which. When the report names more than one symptom or surface, each gets its own base and head observation, by test or by driving that surface; one that does not reproduce on base is recorded as not reproduced, and the fix does not claim it.
 
-When the reproduction is a cheap test, write it before the fix and run it: seeing it fail on the unchanged code is the base observation, and seeing it pass after the fix is the head observation. No temporary worktree, separate commit, or lint round is needed for that. Commit the failing test on its own only when the change is being committed anyway. A reproduction that is expensive or needs a whole integration stack stays preferred rather than required (worker Phase 3). Otherwise, run the same reproduction on the base and on the head:
+When the reproduction is a cheap test, write it before the fix and run it: seeing it fail on the unchanged code is the base observation, and seeing it pass after the fix is the head observation. Write and commit it as [working-rules.md](../../../references/working-rules.md) Tests says; no temporary worktree is needed. When no test can fail by assertion on the unchanged code, the base observation is the reproduction run there instead, and the hand-back says which was used. A reproduction that is expensive or needs a whole integration stack stays preferred rather than required (worker Phase 3). Otherwise, run the same reproduction on the base and on the head:
 
 - It must fail on base and pass on head.
 - **It passes on base:** it does not capture this defect. Record that, do not claim the fix, and return to step 2 for a reproduction that does.
@@ -63,6 +63,6 @@ Defect route:
 - prior fixes: <what each source found>; unchecked: <source> (<reason>) | none
 - diagnosis: eliminated <cause> (<evidence>); ...; confirmed <mechanism> (<evidence>)
 - introduced by: <sha> <subject> (<PR>) | skipped: <reason>
-- base: <observation at base sha, through <surface>> | head: <observation at head sha>
+- base: <observation at base sha, through <surface>> | head: <observation at head sha>   (one line per named symptom)
 - live: <head observation on the app> | not run: <reason> | no live surface
 ```

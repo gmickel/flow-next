@@ -223,11 +223,10 @@ Task: <TASK_ID>"
 
 Use conventional commits. Scope from task context.
 
-**Bug-shaped tasks:** a commit carrying the failing reproduction BEFORE the fix
-commit is allowed and preferred — it pins the defect the fix
-claims to close, so the fix's evidence is a red-to-green transition rather than
-a green run that may never have been red. It is required on the defect route
-when the reproduction is a cheap test (defect-route.md step 4).
+**Bug-shaped tasks:** commit the failing reproduction alone before the fix
+(working-rules.md Tests). It pins the defect the fix claims to close, so the
+fix's evidence is a red-to-green transition rather than a green run that may
+never have been red.
 
 Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`.
 
