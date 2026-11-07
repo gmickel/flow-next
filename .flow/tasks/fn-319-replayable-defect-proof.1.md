@@ -1,5 +1,5 @@
 ---
-satisfies: [R1, R2, R3, R4, R5, R6]
+satisfies: [R1, R2, R3, R4, R5, R6, R7, R8]
 ---
 # fn-319-replayable-defect-proof.1 Implement Replayable defect proof
 
@@ -21,8 +21,14 @@ Guidance-only change for replayable defect proof (R1-R5); R6 is the post-impleme
 
 stage: impl-review - ran [cecda6f80..e1b3c7c3d] SHIP, 0 findings (model: gpt-6.1-sol high, codex)
 
+Follow-up rounds after the first A/B (maintainer: "fold it in"):
+- working-rules Tests: targeted tests cover the changed code and its callers, including callers outside the changed folder; full suite only when asked. Handoff names the tests run and any caller with no tests. (R7; d0fd9ed5b, dd054fd2d, 9e3805edc)
+- working-rules Tests: the test-only commit applies whenever a test is written first, features included; on a defect fix the tests also cover nearby cases reaching the same broken code. (R2, R8; 6f815d2bb)
+
+stage: impl-review - ran [9e3805edc..6f815d2bb] SHIP, 0 findings (model: gpt-6.1-sol high, codex)
+
 stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits: e1b3c7c3d922b4a4fb51c0d9ee6b4f94557ed2ce
+- Commits: e1b3c7c3d922b4a4fb51c0d9ee6b4f94557ed2ce, d0fd9ed5b, dd054fd2d, 9e3805edc, 6f815d2bb
 - Tests: python3 scripts/run_tests_parallel.py (4209 ran, 0 failures); uvx ruff@0.16.0 check . (clean); ./scripts/sync-codex.sh --check (fresh)
 - PRs:
