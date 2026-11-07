@@ -98,7 +98,7 @@
     "impl:fn-319-replayable-defect-proof.1": 0
   },
   "spec_path": ".flow/specs/fn-319-replayable-defect-proof.md",
-  "status": "open",
+  "status": "done",
   "title": "Replayable defect proof",
   "tracker": {
     "baseHashFlow": null,
@@ -111,5 +111,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-07T10:03:47.066146Z"
+  "updated_at": "2026-11-07T12:31:53.903071Z"
 }

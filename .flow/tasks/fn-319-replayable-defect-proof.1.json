@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-319-replayable-defect-proof",
   "spec_path": ".flow/tasks/fn-319-replayable-defect-proof.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Replayable defect proof",
   "updated_at": "2026-11-06T15:56:55.197862Z"
 }
