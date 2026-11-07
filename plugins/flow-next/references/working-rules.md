@@ -55,8 +55,9 @@ question, it was underspecified: reframe it and re-run, never average or pick on
   cheap, write it first, so that as written it fails by assertion on the unchanged code rather
   than failing to load: reach the behaviour through code that already exists (a literal in place
   of a constant the fix adds, the existing entry point rather than a helper the fix adds). Commit
-  that test alone (test files only), then the change, on the local branch, attended or not. No separate lint or typecheck round for it. If a hook or repository rule
-  refuses that commit, commit test and fix together without bypassing it.
+  that test alone (test files only), then the change, on the local branch, attended or not,
+  unless you are told not to commit. No separate lint or typecheck round for it. If a hook or
+  repository rule refuses that commit, commit test and fix together without bypassing it.
 - A test must be able to fail for a defect: it calls the code the way a user does and checks the
   observed result. One that would still pass if the code returned nothing is rewritten or dropped.
 - Before handing back, when the change has a way a user meets it (the command, the request, the
@@ -137,7 +138,7 @@ anything left open. No stage-by-stage narration.
 - Name the tests you ran (the changed code and which callers) and any caller that has no tests.
 - Every reply that hands back a fix, including the one after a follow-up and the note when a
   background review lands, states its base and head observations, short and verbatim from runs
-  already made: the failing assertion on base, the passing run on head, and before/after numbers
-  when they were measured. Never point back to an earlier message for them, and never re-run
-  anything to produce them.
+  already made: the failing assertion or reproduction on base, the passing run on head, and
+  before/after numbers when they were measured; one never made reads `not run: <reason>`. Never
+  point back to an earlier message for them, and never re-run anything to produce them.
 - Never hand the person a check you could have run yourself.
