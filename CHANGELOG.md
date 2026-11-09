@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **A self-managed GitLab origin with a web port is recognised when glab's login names no port.** An origin such as `https://gitlab.example.com:8443/...` was checked only as `gitlab.example.com:8443`. glab stores a login made without the port under the bare hostname, so it answered "not authenticated", so make-pr stopped as if the host were neither GitHub nor GitLab, and flowctl read the origin as GitHub and found no merge requests. flowctl and make-pr now ask glab for the bare hostname when the `host:port` check says logged out, and read merge requests through that login. An origin that spells out the default port (`https://gitlab.com:443/...`, `https://github.com:443/...`) is now treated as the plain host.
+
 ## [flow-next 9.9.0] - 2026-11-07
 
 Bug fixes now come with proof a reviewer can replay. The test is written first, fails on unchanged code and is committed on its own before the fix. The pull request history shows red, then green, and every reply restates what failed before and what passes now. In a pre-registered test against 9.8.0 (Claude Code, Opus 5.5, six runs per arm), the blind-judged result rose from 18.3 to 20.0 of 20 on a hard bug and from 16.9 to 18.9 on a simple bug. The test went in on its own first in 12 of 12 bug runs against 4 of 12. The hard bug's first report arrived at the same time; the simple bug's arrived about 1.5 minutes later, spent testing the nearby cases.

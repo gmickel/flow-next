@@ -23830,7 +23830,7 @@ _FORGE_HOSTS = {"github.com": "github", "ssh.github.com": "github", "gitlab.com"
 
 class ForgeOrigin(NamedTuple):
     forge: Optional[str]    # FORGE_ADAPTERS key, or None when no adapter claims the origin
-    host: Optional[str]     # API host; an http(s) port is kept, an SSH port is not the forge's
+    host: Optional[str]     # API host; an http(s) port is kept unless glab's login names none
     project: Optional[str]  # owner/repo path on that host
 
 
@@ -23862,7 +23862,7 @@ def repo_forge(repo: str) -> ForgeOrigin:
         if parsed.scheme not in {"http", "https", "ssh", "git+ssh"} or not parsed.hostname:
             return ForgeOrigin(None, None, None)
         host, path, ssh = parsed.hostname.lower(), parsed.path, parsed.scheme.endswith("ssh")
-        if port and not ssh:
+        if port and not ssh and port != {"http": 80, "https": 443}[parsed.scheme]:
             host = f"{host}:{port}"
     else:
         # scp-like `[user@]host:path`; a Windows drive path is local.
@@ -23889,6 +23889,11 @@ def repo_forge(repo: str) -> ForgeOrigin:
         for name in names:
             owns = FORGE_ADAPTERS[name].get("owns_host")
             claim = owns(host) if owns else False
+            if claim is False and name == "gitlab" and ":" in host:
+                # glab keys a login made without the web port by the bare hostname.
+                claim = owns(host.split(":")[0])
+                if claim:
+                    host = host.split(":")[0]
             if claim is None:
                 break  # An offline or slow answer is unknown, never the next forge's.
             if claim:
