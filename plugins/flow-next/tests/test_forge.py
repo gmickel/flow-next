@@ -121,6 +121,26 @@ class ForgeRuleTests(ForgeTestCase):
                     # A recognisable host costs no login probe.
                     self.assertFalse([c for c in fake.calls if c[0] in {"gh", "glab"}])
 
+    def test_origin_port(self):
+        # A default port is no port; glab keys a login made without the web port by the bare hostname.
+        cases = [
+            ("gitlab.com:443", "https://gitlab.com:443/g/p.git", (), "gitlab", "gitlab.com"),
+            ("github.com:443", "https://github.com:443/o/r.git", (), "github", "github.com"),
+            ("glab login by hostname", "https://gitlab.example.com:8443/g/p.git", ("gitlab.example.com",),
+             "gitlab", "gitlab.example.com"),
+            ("glab login by host:port", "https://gitlab.example.com:8443/g/p.git", ("gitlab.example.com:8443",),
+             "gitlab", "gitlab.example.com:8443"),
+            ("logged out", "https://gitlab.example.com:8443/g/p.git", (), None, "gitlab.example.com:8443"),
+        ]
+        for name, origin, glab_hosts, forge, host in cases:
+            with self.subTest(name):
+                f.repo_forge.cache_clear()
+                fake = FakeCli(origin, glab_hosts=glab_hosts)
+                result = self.run_with(fake, lambda: f.repo_forge(str(self.repo)))
+                self.assertEqual((result.forge, result.host), (forge, host))
+                if "example" not in origin:
+                    self.assertFalse([c for c in fake.calls if c[0] in {"gh", "glab"}])
+
     def test_slow_or_offline_glab_reads_unknown_never_github(self):
         for answer in ("timeout", "auth-status-offline"):
             with self.subTest(answer):

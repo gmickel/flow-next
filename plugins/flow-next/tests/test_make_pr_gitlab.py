@@ -296,6 +296,11 @@ class OriginBlockTests(GitLabShellCase):
             ("scp origin, GITLAB_HOST url", "git@localhost:flownext/flownext.git", {"GITLAB_HOST": f"http://{HOST}/"}, (), (HOST,), {}, None),
             ("ssh origin, GITLAB_HOST elsewhere", "ssh://git@localhost:2224/g/p.git", {"GITLAB_HOST": "gitlab.other.test:9"}, (), (HOST,), {}, None),
             ("https origin keeps its own port", GITLAB_ORIGIN, {"GITLAB_HOST": "localhost:1"}, (), (HOST,), {}, None),
+            # A default port is no port; glab keys a login made without the web port by the bare hostname.
+            ("gitlab.com:443", "https://gitlab.com:443/g/p.git", {}, (), (), {}, None),
+            ("github.com:443", "https://github.com:443/o/r.git", {}, (), (), {}, None),
+            ("glab login by hostname", "https://gitlab.example.com:8443/g/p.git", {}, (), ("gitlab.example.com",), {}, None),
+            ("glab login by host:port", "https://gitlab.example.com:8443/g/p.git", {}, (), ("gitlab.example.com:8443",), {}, None),
         ]
         clean = {key: "" for key in ("CI_SERVER_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GITLAB_HOST")}
         trap = "trap 'printf \"FORGE=%s HOST=%s\" \"$FORGE\" \"$ORIGIN_HOST\" > \"$OUT\"' EXIT\n"
