@@ -26,8 +26,8 @@ gitlab_reads() {
   if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
     FORGE=github
   else
-    # An http(s) port is the forge's own (an SSH port is not), so it stays on the host.
-    ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE 's#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
+    # An http(s) port is the forge's own (an SSH port is not), so it stays on the host; a default port is none.
+    ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE '/^https:\/\/([^@\/]*@)?[^\/:]+:443(\/|$)/d; /^http:\/\/([^@\/]*@)?[^\/:]+:80(\/|$)/d; s#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
     # An SSH origin names no web port; glab's own GITLAB_HOST does when it names the same host.
     GL_HOST=$(printf '%s' "${GITLAB_HOST:-}" | tr '[:upper:]' '[:lower:]' | sed -E 's#^https?://##; s#/+$##')
     if [[ "$ORIGIN_URL" != http://* && "$ORIGIN_URL" != https://* && "$ORIGIN_HOST" != gitlab.com && -n "$GL_HOST" && "${GL_HOST%%:*}" == "$ORIGIN_HOST" ]]; then
@@ -44,7 +44,13 @@ gitlab_reads() {
       # Only glab's logged-out answer is a no; a failed answer (an offline host) leaves the
       # host unknown. gh with an enterprise token claims every host, so glab answered first.
       if GLAB_STATUS=$(glab auth status --hostname "$ORIGIN_HOST" 2>&1); then GLAB_ANSWER=yes; FORGE=gitlab
-      elif [[ "$(printf '%s' "$GLAB_STATUS" | tr -s '[:space:]' ' ')" != *"has not been authenticated"* ]]; then GLAB_ANSWER=unknown; fi
+      elif [[ "$(printf '%s' "$GLAB_STATUS" | tr -s '[:space:]' ' ')" != *"has not been authenticated"* ]]; then GLAB_ANSWER=unknown
+      # glab keys a login made without the web port by the bare hostname.
+      elif [[ "$ORIGIN_HOST" == *:* ]] && GLAB_STATUS=$(glab auth status --hostname "${ORIGIN_HOST%%:*}" 2>&1); then
+        GLAB_ANSWER=yes; FORGE=gitlab; ORIGIN_HOST=${ORIGIN_HOST%%:*}
+      elif [[ "$ORIGIN_HOST" == *:* && "$(printf '%s' "$GLAB_STATUS" | tr -s '[:space:]' ' ')" != *"has not been authenticated"* ]]; then
+        GLAB_ANSWER=unknown
+      fi
     fi
     if [[ -z "$FORGE" && -n "$ENTERPRISE_GH" && "$GLAB_ANSWER" == no ]] && command -v gh >/dev/null 2>&1 \
       && gh auth token --hostname "$ORIGIN_HOST" >/dev/null 2>&1; then

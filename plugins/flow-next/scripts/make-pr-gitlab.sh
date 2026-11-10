@@ -41,7 +41,10 @@ if [[ "${1:-}" == api-scope ]]; then
     # glab may print a config warning first; the value is the last line.
     PROTOCOL=$(glab config get api_protocol --host "${GITLAB_HOST:-}" 2>/dev/null) || PROTOCOL=""
     PROTOCOL=${PROTOCOL##*$'\n'}
-    TOKEN=$(glab_json "${PROTOCOL:-https}://${GITLAB_HOST:-}/oauth/token/info")
+    # A login keyed by the bare hostname keeps the web port in its api_host.
+    API_HOST=$(glab config get api_host --host "${GITLAB_HOST:-}" 2>/dev/null) || API_HOST=""
+    API_HOST=${API_HOST##*$'\n'}
+    TOKEN=$(glab_json "${PROTOCOL:-https}://${API_HOST:-${GITLAB_HOST:-}}/oauth/token/info")
   fi
   printf '%s' "${TOKEN#"${TOKEN%%[[{]*}"}" | jq -e '(.scopes | type) == "array" and any(.scopes[]; . == "api")' >/dev/null \
     || fail "the glab token for ${GITLAB_HOST:-?} lacks api scope"
