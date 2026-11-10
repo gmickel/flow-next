@@ -6,9 +6,11 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.9.1] - 2026-11-10
+
 ### Fixed
 
-- **A self-managed GitLab origin with a web port is recognised when glab's login names no port.** An origin such as `https://gitlab.example.com:8443/...` was checked only as `gitlab.example.com:8443`. glab stores a login made without the port under the bare hostname, so it answered "not authenticated", so make-pr stopped as if the host were neither GitHub nor GitLab, and flowctl read the origin as GitHub and found no merge requests. flowctl and make-pr now ask glab for the bare hostname when the `host:port` check says logged out, and read merge requests through that login. An origin that spells out the default port (`https://gitlab.com:443/...`, `https://github.com:443/...`) is now treated as the plain host.
+- **make-pr, flow and land work on a self-managed GitLab with a web port when your glab login names no port.** An origin such as `https://gitlab.example.com:8443/...` was checked only as `gitlab.example.com:8443`. glab stores a login made without the port under the bare hostname and answered "not authenticated". make-pr stopped as if the host were neither GitHub nor GitLab, and flowctl read the origin as GitHub and found no merge requests. flowctl and make-pr now ask glab for the bare hostname when the `host:port` check says logged out, read merge requests through that login, and check an OAuth login's api scope on the web port glab stores for it. An origin that spells out the default port (`https://gitlab.com:443/...`, `https://github.com:443/...`) is now treated as the plain host.
 
 ## [flow-next 9.9.0] - 2026-11-07
 
