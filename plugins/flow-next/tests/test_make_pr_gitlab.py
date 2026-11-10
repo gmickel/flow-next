@@ -207,6 +207,18 @@ class HelperReadTests(GitLabShellCase):
                                        "stdout": "a glab config warning\nhttp\n"}), encoding="utf-8")
         warned = answers(recorded("token-self-oauth"), warning, recorded("token-info-oauth"))
         self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=warned).returncode, 0)
+        # A login keyed by the bare hostname reads token info on the web port its api_host names.
+        def bare(name, argv, stdout=None):
+            fx = json.loads(recorded(name).read_text(encoding="utf-8"))
+            path = self.tmp / f"bare-{len(list(self.tmp.glob('bare-*')))}.json"
+            path.write_text(json.dumps({**fx, "argv": argv, "env": {**fx["env"], "GITLAB_HOST": "localhost"},
+                                        "stdout": fx["stdout"] if stdout is None else stdout}), encoding="utf-8")
+            return path
+        bare_host = answers(bare("token-self-oauth", ["glab", "api", "personal_access_tokens/self"]),
+                            bare("config-api-protocol", ["glab", "config", "get", "api_protocol", "--host", "localhost"]),
+                            bare("config-api-protocol", ["glab", "config", "get", "api_host", "--host", "localhost"], f"{HOST}\n"),
+                            bare("token-info-oauth", ["glab", "api", f"http://{HOST}/oauth/token/info"]))
+        self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=bare_host, GITLAB_HOST="localhost").returncode, 0)
         no_api = self.derived("token-info-oauth", lambda info: {**info, "scopes": ["read_api"], "scope": ["read_api"]})
         oauth_read_api = answers(recorded("token-self-oauth"), recorded("config-api-protocol"), no_api)
         self.assertEqual(self.run_sh([str(HELPER), "api-scope"], GLAB_ANSWERS=oauth_read_api).returncode, 1)

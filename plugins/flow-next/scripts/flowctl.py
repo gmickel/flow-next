@@ -23696,7 +23696,7 @@ def _glab_get(origin: "ForgeOrigin", endpoint: str, deadline: float) -> Optional
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         return None
-    # GITLAB_HOST carries host:port, which `glab api --hostname` rejects.
+    # GITLAB_HOST may carry host:port, which `glab api --hostname` rejects.
     result = execute(Request(
         provider="gitlab", op="forge-read", method="GET", idempotent=True,
         url_or_argv=["glab", "api", endpoint], timeout_s=remaining,
