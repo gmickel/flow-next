@@ -25,7 +25,7 @@ comments=$(bb_get "$BB_REPO/pullrequests/$PR_ID/comments?pagelen=100")
   input as $pr | input as $all
   | if ($pr | type) != "object" or ($pr.id | type) != "number" or ($pr.source.commit.hash | type) != "string"
        or (($all | all(type == "object" and (.id | type) == "number" and (.deleted | type) == "boolean"
-                       and ((.parent // {}) | type) == "object" and (.content.raw | type) == "string"
+                       and (.parent == null or (.parent.id | type) == "number") and (.content.raw | type) == "string"
                        and (.user | type) == "object" and (.created_on | type) == "string")) | not)
     then error("malformed pull request or comment") else . end
   | ($all | map({key: (.id | tostring), value: .}) | from_entries) as $by_id

@@ -101,7 +101,8 @@ class FetchTests(BitbucketCommentCase):
             ("listing changed while read", (recorded("pr-view-review"), self.derived("comments-list", lambda p: p.update(size=9))), {}),
             ("next page elsewhere", (recorded("pr-view-review"), self.derived("comments-list", lambda p: p.update(next="https://example.test/2"))), {}),
             ("reply without its parent", (recorded("pr-view-review"), self.derived("comments-list", orphan)), {}),
-            ("comment without content", (recorded("pr-view-review"), self.derived("comments-list", lambda p: p["values"][1].pop("content"))), {}),
+            ("comment without content", (recorded("pr-view-review"), self.derived("comments-list", lambda p: [p["values"][1].pop("content"), None][1])), {}),
+            ("unreadable parent", (recorded("pr-view-review"), self.derived("comments-list", lambda p: p["values"][2].update(parent={}))), {}),
             ("no Cloud context", (recorded("pr-view-review"), recorded("comments-list")), {"BKT_CONTEXTS": "context-list-none"}),
         ]
         for name, fixtures, env in cases:
@@ -120,6 +121,14 @@ class CurrentPullRequestTests(BitbucketCommentCase):
         self.assertEqual(self.script("get-bb-current-pr", BKT_ANSWERS=answers(none)).stdout, "")
         fork = self.derived("pr-branch-review", lambda page: page["values"][0]["source"]["repository"].update(full_name="flownextnew/flownext-fork"))
         self.assertEqual(self.script("get-bb-current-pr", BKT_ANSWERS=answers(fork)).stdout, "")
+        deleted_fork = self.derived("pr-branch-review", lambda page: page["values"][0]["source"].update(repository=None))
+        self.assertEqual(self.script("get-bb-current-pr", BKT_ANSWERS=answers(deleted_fork)).stdout, "")
+        for name, change in (("no source", lambda page: [page["values"][0].pop("source"), None][1]),
+                             ("no source repository", lambda page: [page["values"][0]["source"].pop("repository"), None][1]),
+                             ("unreadable source repository", lambda page: page["values"][0]["source"].update(repository={}))):
+            with self.subTest(name):
+                result = self.script("get-bb-current-pr", BKT_ANSWERS=answers(self.derived("pr-branch-review", change)))
+                self.assertEqual((result.returncode, result.stdout), (1, ""))
         failed = self.derived("comments-missing-pr", argv=json.loads(recorded("pr-branch-review").read_text(encoding="utf-8"))["argv"])
         result = self.script("get-bb-current-pr", BKT_ANSWERS=answers(failed))
         self.assertEqual((result.returncode, result.stdout), (1, ""))
