@@ -1,6 +1,6 @@
 # Conduct checklist — /flow-next:resolve-pr
 
-A correct run fetches unresolved PR feedback, triages it, dispatches a resolver per thread or cluster, validates and commits the fixes, then replies and resolves (GraphQL on GitHub, glab on a GitLab merge request) and reports the outcome grouped by verdict.
+A correct run fetches unresolved PR feedback, triages it, dispatches a resolver per thread or cluster, validates and commits the fixes, then replies and resolves (GraphQL on GitHub, glab on a GitLab merge request, bkt on a Bitbucket Cloud pull request) and reports the outcome grouped by verdict.
 
 - [ ] The fetch reports counts across all three surfaces — `review_threads`, `pr_comments`, `review_bodies` — before triage, and open threads are selected by `isResolved != true`. Concluding "no actionable feedback" from a boilerplate review body while inline threads sit open has broken this. A PR or comment URL for another repository stops before any fetch, naming both repositories.
 - [ ] Every processed thread, each thread of a cluster on its own, ends with one resolver verdict (`fixed`, `fixed-differently`, `replied`, `not-addressing`, `needs-human`) and gets its own reply; each reply quotes the feedback it answers and cites the evidence or rationale behind that verdict. A cluster answered with one reply or one resolution has broken this.

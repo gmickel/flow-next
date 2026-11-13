@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Sourced by the Bitbucket Cloud scripts beside it. Sets BKT_CONTEXT (a bkt context on
+# Bitbucket Cloud, the active one first: bkt finds its host only through a context) and
+# BB_REPO (`/repositories/<workspace>/<repository>` of the checkout's origin remote), and
+# defines bb_get, which reads a listing across every page or fails.
+# Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
+jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
+bb_fail() { echo "${0##*/}: $*" >&2; exit 1; }
+
+BKT_CONTEXT=$(bkt context list --json 2>/dev/null | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")]
+  | sort_by(.active != true) | .[0].name // empty') || BKT_CONTEXT=""
+[[ -n "$BKT_CONTEXT" ]] || bb_fail "bkt has no Bitbucket Cloud context; run bkt auth login https://bitbucket.org --kind cloud --username <Atlassian email> --web-token, then bkt context create bitbucket --host https://api.bitbucket.org/2.0 --workspace <workspace>"
+ORIGIN_URL=$(git remote get-url origin 2>/dev/null) || bb_fail "no origin remote"
+ORIGIN_PATH=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PATH=${ORIGIN_URL#*://*/}
+ORIGIN_PATH=${ORIGIN_PATH#/}; ORIGIN_PATH=${ORIGIN_PATH%/}; ORIGIN_PATH=${ORIGIN_PATH%.git}
+[[ "$ORIGIN_PATH" =~ ^[^/[:space:]?#%]+/[^/[:space:]?#%]+$ ]] || bb_fail "origin $ORIGIN_URL names no <workspace>/<repository>"
+BB_REPO="/repositories/$ORIGIN_PATH"
+
+bb_api() { bkt --context "$BKT_CONTEXT" api "$@"; }
+
+# Every value of a paged listing, following `next`, as one JSON array; a listing that
+# cannot prove it is complete fails.
+bb_get() {
+  local next=$1 page values='[]'
+  while [[ -n "$next" ]]; do
+    page=$(bb_api "$next") || bb_fail "bkt api $next failed"
+    values=$(printf '%s\n%s' "$values" "$page" | jq -cs 'if length == 2 and (.[1] | type) == "object" and (.[1].values | type) == "array"
+      then .[0] + .[1].values else error("not a listing") end') || bb_fail "unreadable listing at $next"
+    next=$(printf '%s' "$page" | jq -r 'if .next == null then ""
+      elif (.next | type) == "string" and (.next | startswith("https://api.bitbucket.org/2.0/")) then .next[29:]
+      else error("unexpected next page") end') || bb_fail "unreadable listing at $next"
+    if [[ -z "$next" ]] && ! printf '%s\n%s' "$page" "$values" | jq -se '(.[0].size | type) != "number" or .[0].size == (.[1] | length)' >/dev/null; then
+      bb_fail "the listing changed while it was read"
+    fi
+  done
+  printf '%s' "$values"
+}

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_ID="${1:?Usage: echo REPLY_TEXT | $0 PR_ID COMMENT_ID}"
+COMMENT_ID="${2:?Usage: echo REPLY_TEXT | $0 PR_ID COMMENT_ID}"
+[[ "$PR_ID" =~ ^[0-9]+$ && "$COMMENT_ID" =~ ^[0-9]+$ ]] || { echo "${0##*/}: ids must be numbers" >&2; exit 1; }
+REPLY_TEXT=$(cat)
+
+if [ -z "$REPLY_TEXT" ]; then
+  echo "Empty reply text on stdin; aborting" >&2
+  exit 1
+fi
+
+# A reply under the thread's top-level comment.
+# shellcheck source=bb-target
+source "$(dirname "$0")/bb-target"
+bb_api "$BB_REPO/pullrequests/$PR_ID/comments" -X POST \
+  -d "$(jq -cn --arg raw "$REPLY_TEXT" --argjson parent "$COMMENT_ID" '{content: {raw: $raw}, parent: {id: $parent}}')"
