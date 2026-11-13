@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The id of the current branch's open Bitbucket Cloud pull request from the origin repository
+# (a fork's may share the branch name); empty output when there is none. A failed read exits
+# nonzero, never an empty answer.
+# shellcheck source=bb-target
+source "$(dirname "$0")/bb-target"
+
+BRANCH=$(git branch --show-current)
+[[ -n "$BRANCH" ]] || bb_fail "no branch to read"
+# A branch name may hold a double quote; Bitbucket's query language escapes it with a backslash.
+Q=$(jq -rn --arg v "$BRANCH" '"source.branch.name=\"" + ($v | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) + "\"" | @uri')
+bb_get "$BB_REPO/pullrequests?state=OPEN&q=$Q&pagelen=50" | jq -r '
+  if all(.[]; type == "object" and (.id | type) == "number" and (.destination.repository.full_name | type) == "string")
+  then [.[] | select(((.source.repository.full_name // "") | ascii_downcase) == (.destination.repository.full_name | ascii_downcase))
+        | .id][0] // empty
+  else error("malformed pull request row") end' || bb_fail "malformed pull request listing"

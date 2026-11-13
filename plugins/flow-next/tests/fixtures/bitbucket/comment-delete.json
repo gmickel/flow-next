@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests/9/comments/901784168",
+    "-X",
+    "DELETE"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

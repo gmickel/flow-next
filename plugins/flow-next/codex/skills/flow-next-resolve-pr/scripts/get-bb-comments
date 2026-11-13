@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_ID="${1:?Usage: $0 PR_ID}"
+[[ "$PR_ID" =~ ^[0-9]+$ ]] || { echo "${0##*/}: pull request id must be a number" >&2; exit 1; }
+
+# get-pr-comments for a Bitbucket Cloud pull request: the same JSON keys, read through bkt.
+# Run inside the checkout: the workspace and repository come from the origin remote.
+# A failed, partial or malformed read exits nonzero, never an empty answer.
+#
+# Every top-level comment, inline or general, can be resolved: each unresolved one is a
+# review thread holding its replies (a reply names only its direct parent, so replies are
+# grouped under their top-level comment). Deleted comments are left out. Bitbucket has no
+# review bodies and no plain comments apart from threads. An inline comment is outdated when
+# Bitbucket kept it on an earlier head because its line changed (its `links.code` names that
+# head); a comment on an unchanged line moves to the current head.
+# shellcheck source=bb-target
+source "$(dirname "$0")/bb-target"
+
+pr=$(bb_api "$BB_REPO/pullrequests/$PR_ID") || bb_fail "bkt api $BB_REPO/pullrequests/$PR_ID failed"
+comments=$(bb_get "$BB_REPO/pullrequests/$PR_ID/comments?pagelen=100")
+
+# Both reach jq on stdin: Linux caps one argument at 128 KiB, which a long review's listing passes.
+{ printf '%s\n' "$pr"; printf '%s\n' "$comments"; } | jq -n '
+  input as $pr | input as $all
+  | if ($pr | type) != "object" or ($pr.id | type) != "number" or ($pr.source.commit.hash | type) != "string"
+       or (($all | all(type == "object" and (.id | type) == "number" and (.deleted | type) == "boolean"
+                       and ((.parent // {}) | type) == "object" and (.content.raw | type) == "string"
+                       and (.user | type) == "object" and (.created_on | type) == "string")) | not)
+    then error("malformed pull request or comment") else . end
+  | ($all | map({key: (.id | tostring), value: .}) | from_entries) as $by_id
+  | def root: if .parent.id == null then .id else ($by_id[(.parent.id | tostring)] // error("orphan reply")) | root end;
+    def comment: {id, author: {login: (.user.nickname // .user.display_name)}, body: .content.raw, createdAt: .created_on};
+    def place: {path: .inline.path, line: (.inline.to // .inline.from)};
+    def held_on: (.links.code.href // "" | capture("[^/]+/[^/]+:(?<head>[0-9a-f]+)\\.\\.") // {head: null}).head;
+  [$all[] | select(.parent == null and .deleted == false)] as $tops
+  | ($all | group_by(root) | map({key: (.[0] | root | tostring), value: [.[] | select(.deleted == false)] | sort_by(.created_on)})
+     | from_entries) as $threads
+  | {
+    pr_number: $pr.id,
+    review_threads: [
+      $tops[] | select(has("resolution") | not)
+      | place as $at
+      | {id,
+         isOutdated: (.inline != null and (held_on as $h | $h != null and ($pr.source.commit.hash | startswith($h) | not)
+                                               and ($h | startswith($pr.source.commit.hash) | not))),
+         path: $at.path, line: $at.line, originalLine: $at.line, startLine: null, originalStartLine: null,
+         comments: [$threads[(.id | tostring)][] | comment]}
+    ],
+    pr_comments: [],
+    review_bodies: [],
+    cross_invocation: {
+      signal: ([$tops[] | select(has("resolution"))] | length > 0),
+      resolved_threads: [$tops[] | select(has("resolution")) | place as $at | {id, path: $at.path, line: $at.line}]
+    }
+  }'

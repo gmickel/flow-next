@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_ID="${1:?Usage: $0 PR_ID COMMENT_ID}"
+COMMENT_ID="${2:?Usage: $0 PR_ID COMMENT_ID}"
+[[ "$PR_ID" =~ ^[0-9]+$ && "$COMMENT_ID" =~ ^[0-9]+$ ]] || { echo "${0##*/}: ids must be numbers" >&2; exit 1; }
+
+# shellcheck source=bb-target
+source "$(dirname "$0")/bb-target"
+# Bitbucket refuses to resolve a resolved comment again (409); that comment is already settled.
+if ! out=$(bb_api "$BB_REPO/pullrequests/$PR_ID/comments/$COMMENT_ID/resolve" -X POST 2>&1); then
+  [[ "$out" == *"409 Conflict: Comment has already been resolved."* ]] && exit 0
+  printf '%s\n' "$out" >&2
+  exit 1
+fi
+printf '%s\n' "$out"

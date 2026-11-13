@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_ID="${1:?Usage: $0 PR_ID}"
+[[ "$PR_ID" =~ ^[0-9]+$ ]] || { echo "${0##*/}: pull request id must be a number" >&2; exit 1; }
+
+# Where a Bitbucket Cloud pull request's fixes go: its source and destination branches and
+# repositories. `source_repository` differs from `destination_repository` on a fork's pull request.
+# shellcheck source=bb-target
+source "$(dirname "$0")/bb-target"
+bb_api "$BB_REPO/pullrequests/$PR_ID" | jq -e '{id, state, source_branch: .source.branch.name, destination_branch: .destination.branch.name,
+  source_repository: .source.repository.full_name, destination_repository: .destination.repository.full_name, html_url: .links.html.href}
+  | if (.source_branch | type) == "string" and (.destination_branch | type) == "string" and (.destination_repository | type) == "string"
+    then . else error("malformed pull request") end' || bb_fail "unreadable pull request $PR_ID"

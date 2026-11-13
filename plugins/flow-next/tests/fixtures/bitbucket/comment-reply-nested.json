@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests/9/comments",
+    "-X",
+    "POST",
+    "-d",
+    "{\"content\":{\"raw\":\"Nested: a reply to the reply.\"},\"parent\":{\"id\":901784129}}"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"id\": 901785214, \"created_on\": \"2026-11-13T12:12:56.178392+00:00\", \"updated_on\": \"2026-11-13T12:12:56.199443+00:00\", \"content\": {\"type\": \"rendered\", \"raw\": \"Nested: a reply to the reply.\", \"markup\": \"markdown\", \"html\": \"<p>Nested: a reply to the reply.</p>\"}, \"user\": {\"display_name\": \"Gordon Mickel\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/users/%7B5764bbe4-d54c-4258-8d5f-dcddb3380e3b%7D\"}, \"avatar\": {\"href\": \"https://secure.gravatar.com/avatar/8fdf67dd7f5b90d9629a006ede0cc7c6?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FGM-2.png\"}, \"html\": {\"href\": \"https://bitbucket.org/%7B5764bbe4-d54c-4258-8d5f-dcddb3380e3b%7D/\"}}, \"type\": \"user\", \"uuid\": \"{5764bbe4-d54c-4258-8d5f-dcddb3380e3b}\", \"account_id\": \"712020:06783318-e627-445c-becb-fba1150fba81\", \"nickname\": \"Gordon Mickel\"}, \"deleted\": false, \"parent\": {\"id\": 901784129, \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/pullrequests/9/comments/901784129\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/pull-requests/9/_/diff#comment-901784129\"}}}, \"inline\": {\"from\": null, \"to\": 2, \"path\": \"review.txt\", \"start_from\": null, \"start_to\": null, \"outdated\": true, \"context_lines\": \"\", \"src_rev\": \"947fed933771\", \"dest_rev\": \"5e5890f27376\", \"base_rev\": null}, \"pending\": false, \"type\": \"pullrequest_comment\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/pullrequests/9/comments/901785214\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/pull-requests/9/_/diff#comment-901785214\"}, \"code\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/diff/flownextnew/flownext:947fed933771..5e5890f27376?path=review.txt\"}}, \"pullrequest\": {\"type\": \"pullrequest\", \"id\": 9, \"title\": \"Fixture review PR\", \"draft\": false, \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/pullrequests/9\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/pull-requests/9\"}}, \"queued\": false}}",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}
