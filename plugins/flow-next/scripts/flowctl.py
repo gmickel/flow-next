@@ -23946,7 +23946,9 @@ def _bitbucket_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], 
         if row is None:
             return None
         source = (pr["source"].get("repository") or {}).get("full_name")
-        if isinstance(source, str) and source.lower() == pr["destination"]["repository"]["full_name"].lower():
+        # Beside `q`, Bitbucket ignores the `state` parameters and lists every state (measured).
+        if (isinstance(source, str) and source.lower() == pr["destination"]["repository"]["full_name"].lower()
+                and pr["state"] in states):
             rows.append(row)
     if not head or len(rows) >= limit:
         return rows
@@ -23962,6 +23964,92 @@ def _bitbucket_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], 
     return rows
 
 
+# A head's build statuses, worst first; Bitbucket keeps one status per key, the latest.
+_BITBUCKET_BUILD_ORDER = ("FAILED", "STOPPED", "INPROGRESS", "SUCCESSFUL")
+
+
+def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    """Whether pull request `number` can merge now, in Bitbucket's own terms.
+
+    `build` is the worst build status reported on the current head (null when none is),
+    `approval` is approved, changes_requested, none or unknown, and `merge_status` is clean
+    or the first of Bitbucket's own merge checks that fails. Anything unreadable is not
+    green, not approved and not ready; requested changes, a draft or a merge strategy list
+    without squash are never ready.
+    """
+    unread = {"head_sha": None, "build": None, "merge_status": None, "approval": "unknown",
+              "squash_allowed": None, "green": False, "ready": False}
+    if not (origin.project and re.fullmatch(r"[^/\s?#%]+/[^/\s?#%]+", origin.project)):
+        return unread
+    deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
+    context = _bkt_context(deadline)
+    if context is None:
+        return unread
+    pulls = f"/repositories/{origin.project}/pullrequests/{number}"
+    pr = _bkt(["--context", context, "api", f"{pulls}?fields=%2Bdestination.branch.merge_strategies"], deadline)
+    strategies = (((pr.get("destination") or {}).get("branch") or {}).get("merge_strategies")
+                  if isinstance(pr, dict) else None)
+    if not (isinstance(pr, dict) and pr.get("state") == "OPEN" and isinstance(pr.get("draft"), bool)
+            and isinstance(pr.get("participants"), list) and isinstance(strategies, list)
+            and all(isinstance(s, str) for s in strategies)
+            and re.fullmatch(r"[0-9a-f]{7,40}", str(((pr.get("source") or {}).get("commit") or {}).get("hash")))):
+        return unread
+    short = pr["source"]["commit"]["hash"]
+    full = _bitbucket_full_shas(repo, context, origin, {short}, deadline)
+    if full is None:
+        return unread
+    head = full[short]
+    statuses = _bkt_pages(context, f"/repositories/{origin.project}/commit/{head}/statuses?pagelen=100", deadline)
+    checks = _bkt(["--context", context, "api", f"{pulls}/mergeability/checks"], deadline)
+    checks = checks.get("values") if isinstance(checks, dict) else None
+    if statuses is None or not isinstance(checks, list) or not all(
+            isinstance(s, dict) and ((s.get("commit") or {}).get("hash")) == head
+            and s.get("state") in _BITBUCKET_BUILD_ORDER for s in statuses) or not all(
+            isinstance(c, dict) and isinstance(c.get("status"), str) and isinstance(c.get("blocking"), bool)
+            for c in checks):
+        return {**unread, "head_sha": head}
+    build = next((state for state in _BITBUCKET_BUILD_ORDER if any(s["state"] == state for s in statuses)), None)
+    failing = next((c for c in checks if c["blocking"] or c["status"] != "PASSED"), None)
+    merge_status = "clean" if failing is None else str(failing.get("reason") or failing.get("type") or "blocked")
+    people = pr["participants"]
+    if not all(isinstance(p, dict) and p.get("state") in {"approved", "changes_requested", None}
+               and isinstance(p.get("approved"), bool) for p in people):
+        approval = "unknown"
+    elif any(p["state"] == "changes_requested" for p in people):
+        approval = "changes_requested"
+    else:
+        approval = "approved" if any(p["approved"] for p in people) else "none"
+    squash = "squash" in strategies
+    green = build == "SUCCESSFUL"
+    return {"head_sha": head, "build": build, "merge_status": merge_status, "approval": approval,
+            "squash_allowed": squash, "green": green,
+            "ready": green and merge_status == "clean" and squash and not pr["draft"]
+                     and approval in {"approved", "none"}}
+
+
+def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Optional[tuple]:
+    """Merge evidence: the branch's pull requests, and each merged one's changed paths
+    (old and new, so a move out of a directory counts there too). None when a read failed."""
+    rows = _bitbucket_list_prs(repo, origin, branch, state="all", limit=100)
+    if rows is None or len(rows) >= 100:
+        return None
+    deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
+    context = _bkt_context(deadline)
+    files = {}
+    for row in rows:
+        if row["state"] != "MERGED":
+            continue
+        diffstat = _bkt_pages(context, f"/repositories/{origin.project}/pullrequests/{row['number']}"
+                                       f"/diffstat?pagelen=100", deadline) if context else None
+        sides = [[(d.get(side) or {}).get("path") for side in ("old", "new")] for d in diffstat or [] if isinstance(d, dict)]
+        if diffstat is None or len(sides) != len(diffstat) or not all(
+                any(isinstance(path, str) for path in pair)
+                and all(path is None or isinstance(path, str) for path in pair) for pair in sides):
+            return None
+        files[row["number"]] = [path for pair in sides for path in dict.fromkeys(pair) if path is not None]
+    return rows, files
+
+
 # Forge name -> its reads. A forge claims an origin host through `owns_host`;
 # an adapter may lack a read, and its callers then report that read as
 # unsupported on this forge.
@@ -23970,7 +24058,8 @@ FORGE_ADAPTERS: dict[str, dict[str, Any]] = {
                "approval_rows": _gh_pr_rows},
     "gitlab": {"owns_host": _gitlab_owns_host, "list_prs": _gitlab_list_prs,
                "readiness": _gitlab_readiness, "merge_rows": _gitlab_merge_rows},
-    "bitbucket": {"list_prs": _bitbucket_list_prs},
+    "bitbucket": {"list_prs": _bitbucket_list_prs, "readiness": _bitbucket_readiness,
+                  "merge_rows": _bitbucket_merge_rows},
 }
 _FORGE_HOSTS = {"github.com": "github", "ssh.github.com": "github", "gitlab.com": "gitlab",
                 "bitbucket.org": "bitbucket", "ssh.bitbucket.org": "bitbucket", "altssh.bitbucket.org": "bitbucket"}

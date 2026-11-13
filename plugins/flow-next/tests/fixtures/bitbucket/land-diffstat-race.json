@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests/12/diffstat?pagelen=100"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"values\":[{\"type\":\"diffstat\",\"lines_added\":2,\"lines_removed\":0,\"status\":\"added\",\"old\":null,\"new\":{\"path\":\"fx-race.txt\",\"type\":\"commit_file\",\"escaped_path\":\"fx-race.txt\",\"links\":{\"self\":{\"href\":\"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/src/25d4026aa8e65b009864e9c75a6b54629613445f/fx-race.txt\"}}}}],\"pagelen\":100,\"size\":1,\"page\":1}",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}
