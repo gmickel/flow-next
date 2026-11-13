@@ -72,6 +72,14 @@ class FetchTests(BitbucketCommentCase):
         self.assertEqual({i: t["isOutdated"] for i, t in threads.items()}, {GENERAL: False, OPEN_THREAD: True, SETTLED: False})
         self.assertEqual((threads[GENERAL]["path"], threads[GENERAL]["line"]), (None, None))   # a general comment
 
+    def test_an_inline_comment_naming_no_head_is_current(self):
+        for name, links in [("no code link", {}), ("unmatched link", {"code": {"href": "https://example.test/other"}})]:
+            def relink(page, links=links):
+                next(c for c in page["values"] if c["id"] == OPEN_THREAD)["links"] = links
+            with self.subTest(name):
+                threads = self.threads(self.fetch(recorded("pr-view-review"), self.derived("comments-list", relink)))
+                self.assertFalse(threads[OPEN_THREAD]["isOutdated"])
+
     def test_every_page(self):
         first = self.derived("comments-page-1", argv=api(f"{PULLS}/9/comments?pagelen=100"))
         paged = self.fetch(recorded("pr-view-review"), first, recorded("comments-page-2"), recorded("comments-page-3"))
