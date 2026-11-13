@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-323-land-and-merge-evidence-over-bitbucket",
   "spec_path": ".flow/tasks/fn-323-land-and-merge-evidence-over-bitbucket.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement land and merge evidence over Bitbucket pull requests",
   "updated_at": "2026-11-13T13:27:39.771863Z"
 }

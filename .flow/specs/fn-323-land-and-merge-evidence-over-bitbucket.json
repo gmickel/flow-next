@@ -197,7 +197,7 @@
     "impl:fn-323-land-and-merge-evidence-over-bitbucket.1": 0
   },
   "spec_path": ".flow/specs/fn-323-land-and-merge-evidence-over-bitbucket.md",
-  "status": "open",
+  "status": "done",
   "title": "land and merge evidence over Bitbucket pull requests",
   "tracker": {
     "baseHashFlow": null,
@@ -210,5 +210,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-13T13:54:22.694282Z"
+  "updated_at": "2026-11-13T13:54:33.537885Z"
 }
