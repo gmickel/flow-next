@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-323-land-and-merge-evidence-over-bitbucket",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-13T13:54:22.694274Z",
   "created_at": "2026-11-13T09:27:55.861740Z",
   "default_impl": null,
   "default_review": null,
@@ -11,7 +11,7 @@
   ],
   "id": "fn-323-land-and-merge-evidence-over-bitbucket",
   "impl_review_rounds": {
-    "fn-323-land-and-merge-evidence-over-bitbucket.1": 1
+    "fn-323-land-and-merge-evidence-over-bitbucket.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -102,9 +102,95 @@
       "task": "fn-323-land-and-merge-evidence-over-bitbucket.1",
       "timestamp": "2026-11-13T13:49:23.512803Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "66377585cbd7e4a036bf3821e1201fcae77fd0de3b135c4b8376df8f6d904d73",
+      "backend": "codex",
+      "base_sha": "8ab625e649ff56a63801dd91fc3bbe09c23a0611",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-deb8ed0744c6fd2d054777a5b89ce34d",
+            "classification": "introduced",
+            "findingId": "finding-deb8ed0744c6fd2d054777a5b89ce34d",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-25a36df50d80c5c3f068c6e12938b2b9",
+            "classification": "introduced",
+            "findingId": "finding-25a36df50d80c5c3f068c6e12938b2b9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1bfda28a4272923648ef5969cb7bf616",
+            "classification": "introduced",
+            "findingId": "finding-1bfda28a4272923648ef5969cb7bf616",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-68c14fec81a00293e6872eb5088a1bd7",
+            "classification": "introduced",
+            "findingId": "finding-68c14fec81a00293e6872eb5088a1bd7",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-79b39741f220f9c11123361c97620f69",
+            "classification": "introduced",
+            "findingId": "finding-79b39741f220f9c11123361c97620f69",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-81961ea144e5e3ce9378e624f58279b0",
+            "classification": "introduced",
+            "findingId": "finding-81961ea144e5e3ce9378e624f58279b0",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2fa38fd91de8135a578025df9797858d7193cb02",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1641,
+      "output_sha256": "e1350b90fe8859f53cfcd38bb29b344e3055ff0d395e7d90c2956bfd5e5dcda3",
+      "reservation_id": "ca32b23d9f6242f693b019f5e7a16b09",
+      "round_consumed": true,
+      "scope": "impl:fn-323-land-and-merge-evidence-over-bitbucket.1",
+      "superseded_by": null,
+      "task": "fn-323-land-and-merge-evidence-over-bitbucket.1",
+      "timestamp": "2026-11-13T13:53:17.144673Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-323-land-and-merge-evidence-over-bitbucket.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -124,5 +210,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-13T13:49:23.516055Z"
+  "updated_at": "2026-11-13T13:54:22.694282Z"
 }
