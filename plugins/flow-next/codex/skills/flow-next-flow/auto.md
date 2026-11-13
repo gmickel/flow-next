@@ -13,7 +13,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
-`jq`, `git`, and the origin forge's CLI (`gh`, or `glab` on GitLab) must be on PATH when classification reaches the all-done PR branch.
+`jq`, `git`, and the origin forge's CLI (`gh`, `glab` on GitLab, or `bkt` on Bitbucket Cloud) must be on PATH when classification reaches the all-done PR branch.
 
 Cold session or run start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
 
@@ -142,7 +142,7 @@ Goal mode adds `GOAL_MET` and prefixes every reason with its goal ([references/g
 - Re-implementing sub-skill logic. This file owns selection, classification glue, dispatch, verification, verdicts, and the strikes ledger only.
 - **Never execute a pull request's merge steps inline.** Goal mode's merge of the default branch into its integration branch is not one. Without current landing authority, either mode ends at the PR (ready unless make-pr found open items). The only driver-composition exception is the scoped land stage under `references/tail.md`. Never dispatch another flow, pilot, or host loop.
 - Backlog mode: see backlog-mode.md §Backlog additions to the Forbidden list.
-- Touching the forge's CLI (`gh`, `glab`) anywhere except existing-PR selection, the make-pr verification probe, and the PR-boundary reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
+- Touching the forge's CLI (`gh`, `glab`, `bkt`) anywhere except existing-PR selection, the make-pr verification probe, and the PR-boundary reads in `references/tail.md`; goal mode may also read a tracker issue it was handed as its source, and use gh for its integration branch as its reference says.
 - Printing anything after the `PILOT_VERDICT` line.
 
 ## Review no-repeat terminal

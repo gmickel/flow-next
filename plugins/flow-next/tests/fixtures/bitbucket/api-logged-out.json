@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests?state=OPEN&state=MERGED&state=DECLINED&state=SUPERSEDED&q=source.branch.name%3D%22fx-open%22&pagelen=50"
+  ],
+  "env": {
+    "XDG_CONFIG_HOME": "<config without contexts>"
+  },
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: 401 Unauthorized: Token is invalid, expired, or not supported for this endpoint. Hint: for Bitbucket Cloud API tokens, set BKT_USERNAME to your Atlassian account email and include the read:user:bitbucket scope.\n",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

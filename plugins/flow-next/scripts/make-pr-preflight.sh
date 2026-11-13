@@ -12,9 +12,17 @@ gitlab_reads() {
   export GITLAB_HOST="$ORIGIN_HOST" ORIGIN_PROJECT
   PR_READ="$(dirname "$FLOWCTL")/make-pr-gitlab.sh"; PR_HEAD_REFS=refs/merge-requests
 }
+# On Bitbucket Cloud the three PR reads run the pull-request helper.
+bitbucket_reads() {
+  ORIGIN_PROJECT=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PROJECT=${ORIGIN_URL#*://*/}
+  ORIGIN_PROJECT=${ORIGIN_PROJECT%/}; ORIGIN_PROJECT=${ORIGIN_PROJECT#/}; ORIGIN_PROJECT=${ORIGIN_PROJECT%.git}
+  export ORIGIN_PROJECT
+  PR_READ="$(dirname "$FLOWCTL")/make-pr-bitbucket.sh"
+}
 {
   # The origin remote's host names the forge: GitHub pull requests through gh, GitLab merge
-  # requests through glab; any other host stops before any close or push (#583).
+  # requests through glab, Bitbucket Cloud pull requests through bkt; any other host stops
+  # before any close or push (#583).
   # An SSH host alias resolves through ssh -G, as in gh. The same rule is repo_forge in flowctl.py.
   # A dry run names the forge too, so its reads match a real run; it skips the stops and checks.
   ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || ORIGIN_URL=""
@@ -23,8 +31,12 @@ gitlab_reads() {
     SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
     [[ -z "$SSH_HOST" ]] || ORIGIN_HOST="$SSH_HOST"
   fi
+  # A hostname is case-insensitive, as in the Python rule.
+  ORIGIN_HOST=$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')
   if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
     FORGE=github
+  elif [[ "$ORIGIN_HOST" == bitbucket.org || "$ORIGIN_HOST" == ssh.bitbucket.org || "$ORIGIN_HOST" == altssh.bitbucket.org ]]; then
+    FORGE=bitbucket
   else
     # An http(s) port is the forge's own (an SSH port is not), so it stays on the host; a default port is none.
     ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE '/^https:\/\/([^@\/]*@)?[^\/:]+:443(\/|$)/d; /^http:\/\/([^@\/]*@)?[^\/:]+:80(\/|$)/d; s#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
@@ -62,6 +74,8 @@ gitlab_reads() {
     if [[ "$FORGE" == gitlab ]] && command -v glab >/dev/null 2>&1 \
       && { [[ "$GLAB_ANSWER" == yes ]] || glab auth status --hostname "$ORIGIN_HOST" >/dev/null 2>&1; }; then
       gitlab_reads
+    elif [[ "$FORGE" == bitbucket ]] && command -v bkt >/dev/null 2>&1; then
+      bitbucket_reads
     fi
   elif [[ -z "$FORGE" ]]; then
     echo "NEEDS_HUMAN: make-pr opens GitHub pull requests only on github.com or a host gh is logged in to, and GitLab merge requests on gitlab.com or a host glab is logged in to; origin host ${ORIGIN_HOST:-none} is neither. Run gh auth login --hostname ${ORIGIN_HOST:-<host>} or glab auth login --hostname ${ORIGIN_HOST:-<host>} (with an SSH origin whose GitLab web port differs, set GITLAB_HOST=<host>:<port>), or open the request by hand." >&2; exit 2
@@ -74,6 +88,13 @@ gitlab_reads() {
     gitlab_reads
     if ! "$PR_READ" api-scope; then
       echo "NEEDS_HUMAN: make-pr needs a glab token with api scope on $ORIGIN_HOST to open merge requests; run glab auth login --hostname $ORIGIN_HOST with an api-scoped token." >&2; exit 2; fi
+  elif [[ "$FORGE" == bitbucket ]]; then
+    BKT_LOGIN="bkt auth login https://bitbucket.org --kind cloud --username <Atlassian email> --web-token, then bkt context create bitbucket --host https://api.bitbucket.org/2.0 --workspace <workspace>"
+    if ! command -v bkt >/dev/null 2>&1; then
+      echo "Error: bkt CLI not installed. Install bkt from https://github.com/avivsinai/bitbucket-cli then run $BKT_LOGIN." >&2; exit 1; fi
+    bitbucket_reads
+    if ! "$PR_READ" login; then
+      echo "Error: bkt cannot read $ORIGIN_PROJECT on Bitbucket Cloud (no Bitbucket Cloud context, logged out, or no access); run $BKT_LOGIN." >&2; exit 1; fi
   else
     if ! command -v gh >/dev/null 2>&1; then
       echo "Error: gh CLI not installed. Install gh from https://cli.github.com then run gh auth login." >&2; exit 1; fi
@@ -134,7 +155,17 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     DEP_PR_STATE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.state // empty')
     DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
     if [[ "$DEP_PR_STATE" == "MERGED" && "$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')" == "$(git -C "$REPO_ROOT" branch --show-current)" ]]; then continue; fi
-    if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
+    if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" && "${FORGE:-}" == bitbucket ]]; then
+      # Bitbucket keeps no pull request refs: the merged parent's head is found in this branch's own history.
+      DEP_HEAD=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$(printf '%s' "$DEP_PR_JSON" | jq -r '.headRefOid // empty')^{commit}" 2>/dev/null) || DEP_HEAD=""
+      if [[ -n "$DEP_HEAD" ]] && git -C "$REPO_ROOT" merge-base --is-ancestor "$DEP_HEAD" HEAD 2>/dev/null \
+        && git -C "$REPO_ROOT" update-ref "refs/flow-next/parent/$DEP_BRANCH" "$DEP_HEAD" 2>/dev/null; then
+        DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
+      else
+        echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
+        exit 2
+      fi
+    elif [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
       DEP_PR_HEAD="refs/pull/$DEP_PR_NUMBER/head"; [[ -z "${PR_HEAD_REFS:-}" ]] || DEP_PR_HEAD="$PR_HEAD_REFS/$DEP_PR_NUMBER/head"
       if git -C "$REPO_ROOT" fetch -q origin "${DEP_PR_HEAD}:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
         DEP_REF="refs/flow-next/parent/$DEP_BRANCH"

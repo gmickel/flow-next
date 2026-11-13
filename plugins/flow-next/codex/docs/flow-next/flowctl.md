@@ -945,9 +945,9 @@ facts, selected spec, review backend, lifecycle and PR observation, branch
 existence, QA freshness and the before-dispatch task list. One PR listing joins
 branches to open, merged and closed observations. Probe failure stays explicit;
 the caller ends the hop rather than reconstructing lifecycle state. `forge` names
-the origin remote's forge (`github`, `gitlab`, or `null` when neither claims the
-host); GitLab merge requests are listed through `glab` in the same row shape as
-GitHub pull requests.
+the origin remote's forge (`github`, `gitlab`, `bitbucket`, or `null` when none claims
+the host); GitLab merge requests are listed through `glab`, and Bitbucket Cloud pull
+requests through `bkt`, in the same row shape as GitHub pull requests.
 
 `preflight` carries the config snapshot as `value` plus independent `probes`
 for config, strategy, glossary, decision entries, tracker, review backend and

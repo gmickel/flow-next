@@ -1,0 +1,180 @@
+{
+  "branch_name": "fn-321-bitbucket-cloud-forge-adapter-and-make",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-13T11:10:37.777411Z",
+  "created_at": "2026-11-13T09:27:50.925163Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-321-bitbucket-cloud-forge-adapter-and-make",
+  "impl_review_rounds": {
+    "fn-321-bitbucket-cloud-forge-adapter-and-make.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "f434e8067c70feb480b51deed10b86520856e1fba42bad6150bd5f59e8cfbaaa",
+      "backend": "codex",
+      "base_sha": "2cfc64394ebd0d6b16c2b04b37fc7fe888cfdaf2",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8700959ea99e3347844b52b15c7bf5c7",
+            "classification": "introduced",
+            "findingId": "finding-8700959ea99e3347844b52b15c7bf5c7",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e3ad0c9e851c70b81aa7e5de6805d107",
+            "classification": "introduced",
+            "findingId": "finding-e3ad0c9e851c70b81aa7e5de6805d107",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-2edab51203443d0be2617fdb2345d570",
+            "classification": "introduced",
+            "findingId": "finding-2edab51203443d0be2617fdb2345d570",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-292103eb50f6719dff7ef827ee91c0ea",
+            "classification": "introduced",
+            "findingId": "finding-292103eb50f6719dff7ef827ee91c0ea",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b7e61736c79e59ca5c9154f468236eaa0a29372d",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 3531,
+      "output_sha256": "f260bdf46705ee62cadf5a8cc6f2eeeb2db2abe196fc61bc1a59644256e99cd8",
+      "reservation_id": "816008fd67a5470896c2983a0a56121d",
+      "round_consumed": true,
+      "scope": "impl:fn-321-bitbucket-cloud-forge-adapter-and-make.1",
+      "superseded_by": null,
+      "task": "fn-321-bitbucket-cloud-forge-adapter-and-make.1",
+      "timestamp": "2026-11-13T11:01:27.312287Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "7c514a445b91c293a5c3fddae3916c1c0a7112265caae86fdf037ca79c91d364",
+      "backend": "codex",
+      "base_sha": "b7e61736c79e59ca5c9154f468236eaa0a29372d",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8700959ea99e3347844b52b15c7bf5c7",
+            "classification": "introduced",
+            "findingId": "finding-8700959ea99e3347844b52b15c7bf5c7",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-e3ad0c9e851c70b81aa7e5de6805d107",
+            "classification": "introduced",
+            "findingId": "finding-e3ad0c9e851c70b81aa7e5de6805d107",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-2edab51203443d0be2617fdb2345d570",
+            "classification": "introduced",
+            "findingId": "finding-2edab51203443d0be2617fdb2345d570",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-292103eb50f6719dff7ef827ee91c0ea",
+            "classification": "introduced",
+            "findingId": "finding-292103eb50f6719dff7ef827ee91c0ea",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3276daf0afad2b629698ea11a7dc2ff082d1a855",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1750,
+      "output_sha256": "f929f0581b420d136fbb1225b8d09e7f478026b13d38ebabfbce579dc772ba94",
+      "reservation_id": "abbbb68d21a847438627024827bcad26",
+      "round_consumed": true,
+      "scope": "impl:fn-321-bitbucket-cloud-forge-adapter-and-make.1",
+      "superseded_by": null,
+      "task": "fn-321-bitbucket-cloud-forge-adapter-and-make.1",
+      "timestamp": "2026-11-13T11:10:09.947731Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-321-bitbucket-cloud-forge-adapter-and-make.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-321-bitbucket-cloud-forge-adapter-and-make.1": 0
+  },
+  "spec_path": ".flow/specs/fn-321-bitbucket-cloud-forge-adapter-and-make.md",
+  "status": "done",
+  "title": "Bitbucket Cloud forge adapter and make-pr over Bitbucket pull requests",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-13T11:17:58.845951Z"
+}

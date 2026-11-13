@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests",
+    "-X",
+    "POST",
+    "-d",
+    "{\"title\":\"Fixture missing branch\",\"description\":\"x\",\"source\":{\"branch\":{\"name\":\"fx-not-pushed\"}},\"destination\":{\"branch\":{\"name\":\"main\"}}}"
+  ],
+  "env": {},
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: 400 Bad Request: source: branch not found: fx-not-pushed\n",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

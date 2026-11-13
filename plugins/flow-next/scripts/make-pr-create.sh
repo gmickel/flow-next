@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Source after authoring the body and draft inputs; preserves PR_URL for finalize.
-# On GitLab, preflight's PR_READ names the merge-request helper: create and update run it, not gh.
+# Off GitHub, preflight's PR_READ names the forge's helper: create and update run it, not gh.
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 # fence:draft-matrix — inputs: OPEN_ITEMS_COUNT, DRAFT_FORCE, CHAIN_PARENT (from PHASE0_CONTEXT.chain_parent; empty when not chained)
@@ -29,9 +29,10 @@ fi
 sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -n "${PR_READ:-}" ]]; then
-    # A failed read is a failure, never "no open merge request".
+    # A failed read is a failure, never "no open pull request".
+    PR_NOUN="pull request"; [[ "${FORGE:-}" != gitlab ]] || PR_NOUN="merge request"
     UPDATE_PR_NUMBER=$("$PR_READ" pr view --json number,state --jq 'select(.state=="OPEN") | .number') \
-      || { echo "Error: --update: cannot read the open merge request at edit time." >&2; exit 1; }
+      || { echo "Error: --update: cannot read the open $PR_NOUN at edit time." >&2; exit 1; }
   else
     UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
   fi
@@ -53,9 +54,10 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -n "${PR_READ:-}" ]]; then
     # One write replaces the description; --ready also drops the title's draft markers.
     READY_ARG=""; if [[ "${DRAFT_FORCE:-}" == "ready" ]]; then READY_ARG="--ready"; fi
+    PR_LABEL="PR #$UPDATE_PR_NUMBER"; [[ "${FORGE:-}" != gitlab ]] || PR_LABEL="MR !$UPDATE_PR_NUMBER"
     PR_URL=$("$PR_READ" pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE" $READY_ARG) || {
-      echo "Error: updating merge request !$UPDATE_PR_NUMBER failed." >&2; exit 1; }
-    echo "Updated MR !$UPDATE_PR_NUMBER description (refreshed against the current diff)." >&2
+      echo "Error: updating $PR_LABEL failed." >&2; exit 1; }
+    echo "Updated $PR_LABEL description (refreshed against the current diff)." >&2
   elif gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
     PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
@@ -108,7 +110,7 @@ for attempt in 1 2 3; do
     break
   fi
   case "$CREATE_OUT" in
-    *"Head sha can't be blank"*|*"No commits between"*|*'{"message":{"source_branch":["does not exist"]}}'*)
+    *"Head sha can't be blank"*|*"No commits between"*|*'{"message":{"source_branch":["does not exist"]}}'*|*"400 Bad Request: source: branch not found: $HEAD_BRANCH"*)
       sleep $((attempt * 2))   # 2s, 4s, 6s — total worst-case 12s before bailing
       continue
       ;;
