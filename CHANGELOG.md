@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.10.0] - 2026-11-13
+
+Teams on Bitbucket Cloud can now take a spec all the way to a merged pull request. On a repository cloned from `bitbucket.org`, make-pr opens the pull request, resolve-pr answers its review comments, and land squash-merges it once every build on the current head has passed, so `flow --auto --until=merge` runs the whole loop unattended. Before, such a repository stopped on the first step, because flow-next read it as GitHub. It needs `bkt` with a Bitbucket Cloud login and context; GitHub and GitLab runs are unchanged. One difference to know: Bitbucket cannot pin a merge to a head commit, so land checks the head again right before it merges and names both heads when a push slipped in between.
+
 ### Added
 
 - **make-pr opens and updates Bitbucket Cloud pull requests, and `flow --auto` runs on a Bitbucket Cloud repository.** A repository cloned from `bitbucket.org` used to stop on its first tick, because flow-next read it as GitHub and could not list its pull requests. The forge now comes from the origin's host (`bitbucket.org`, `ssh.bitbucket.org` or `altssh.bitbucket.org`), with no setting and no login probe. make-pr creates or updates the pull request through `bkt` with the same body and spec close it uses on GitHub. `--draft`, `--ready` and `--update` work, and a spec built on another spec's branch targets that branch while its pull request is open. `bkt` needs a Bitbucket Cloud login and a context: `bkt auth login https://bitbucket.org --kind cloud --username <Atlassian email> --web-token`, then `bkt context create bitbucket --host https://api.bitbucket.org/2.0 --workspace <workspace>`. Pull requests from forks are left out even when they share the branch name. Self-hosted Bitbucket Data Center is not recognised. `flowctl pilot snapshot` reports `forge: "bitbucket"`. Thanks to @benjamin-benz-42 for #602 and its measurements.
