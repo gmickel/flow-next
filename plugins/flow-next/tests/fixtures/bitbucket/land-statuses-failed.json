@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6/statuses?pagelen=100"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"values\": [{\"key\": \"fixture-ci\", \"type\": \"build\", \"state\": \"SUCCESSFUL\", \"name\": \"fixture CI\", \"refname\": null, \"commit\": {\"hash\": \"32568a47f92cfe6173017b8a11628b2e3c3791b6\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/commits/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}}, \"type\": \"commit\"}, \"url\": \"https://example.test/ci/2\", \"repository\": {\"type\": \"repository\", \"full_name\": \"flownextnew/flownext\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext\"}, \"avatar\": {\"href\": \"https://bytebucket.org/ravatar/%7B76200a41-2732-4216-b998-173d37224d40%7D?ts=default\"}}, \"name\": \"flownext\", \"uuid\": \"{76200a41-2732-4216-b998-173d37224d40}\"}, \"description\": \"passed\", \"created_on\": \"2026-11-13T13:29:52.856784+00:00\", \"updated_on\": \"2026-11-13T13:29:52.856799+00:00\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6/statuses/build/fixture-ci\"}, \"commit\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}}}, {\"key\": \"fixture-lint\", \"type\": \"build\", \"state\": \"FAILED\", \"name\": \"fixture lint\", \"refname\": null, \"commit\": {\"hash\": \"32568a47f92cfe6173017b8a11628b2e3c3791b6\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/commits/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}}, \"type\": \"commit\"}, \"url\": \"https://example.test/lint/2\", \"repository\": {\"type\": \"repository\", \"full_name\": \"flownextnew/flownext\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext\"}, \"avatar\": {\"href\": \"https://bytebucket.org/ravatar/%7B76200a41-2732-4216-b998-173d37224d40%7D?ts=default\"}}, \"name\": \"flownext\", \"uuid\": \"{76200a41-2732-4216-b998-173d37224d40}\"}, \"description\": \"lint failed\", \"created_on\": \"2026-11-13T13:29:53.274112+00:00\", \"updated_on\": \"2026-11-13T13:29:53.274126+00:00\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6/statuses/build/fixture-lint\"}, \"commit\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/32568a47f92cfe6173017b8a11628b2e3c3791b6\"}}}], \"pagelen\": 100, \"size\": 2, \"page\": 1}",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

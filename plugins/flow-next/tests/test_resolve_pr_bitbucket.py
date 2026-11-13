@@ -125,6 +125,12 @@ class CurrentPullRequestTests(BitbucketCommentCase):
     def test_the_branch_open_pull_request(self):
         found = self.script("get-bb-current-pr", BKT_ANSWERS=answers(recorded("pr-branch-review")))
         self.assertEqual((found.returncode, found.stdout.strip()), (0, "9"), found.stderr)
+        # Bitbucket ignores a state parameter beside `q` and lists closed pull requests too (measured),
+        # so the open state rides in the query and a closed row is never the branch's open one.
+        merged = self.derived("pr-branch-review", lambda page: page["values"][0].update(state="MERGED"))
+        self.assertEqual(self.script("get-bb-current-pr", BKT_ANSWERS=answers(merged)).stdout, "")
+        self.assertIn("state%3D%22OPEN%22%20AND%20source.branch.name", " ".join(
+            json.loads(recorded("pr-branch-review").read_text(encoding="utf-8"))["argv"]))
         none = self.derived("pr-branch-review", lambda page: page.update(values=[], size=0))
         self.assertEqual(self.script("get-bb-current-pr", BKT_ANSWERS=answers(none)).stdout, "")
         fork = self.derived("pr-branch-review", lambda page: page["values"][0]["source"]["repository"].update(full_name="flownextnew/flownext-fork"))

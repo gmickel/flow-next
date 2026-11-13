@@ -122,6 +122,12 @@ class BitbucketAdapterTests(ForgeTestCase):
         none, _ = self.listing("fx-nothing", bkt=[fixture("pr-branch-none")])
         self.assertEqual(none, [])
 
+    def test_an_open_read_of_a_branch_keeps_only_open_rows(self):
+        # Beside `q`, Bitbucket ignores the state parameters and lists every state (measured).
+        argv = ["bkt", "--context", "flownextnew", "api", f"{PULLS}?state=OPEN&q=source.branch.name%3D%22fx-reused%22&pagelen=50&page=1"]
+        rows, _ = self.listing("fx-reused", state="open", bkt=[{**fixture("pr-branch-reused"), "argv": argv}, fixture("commit-reused")])
+        self.assertEqual([(r["number"], r["state"]) for r in rows], [(4, "OPEN")])
+
     def test_a_merged_pull_request_carries_its_merge_time_from_activity(self):
         # Bitbucket's own read of the merged PR #5 carries no closed_on.
         self.assertIsNone(json.loads(fixture("pr-view-merged")["stdout"]).get("closed_on"))
@@ -197,13 +203,10 @@ class BitbucketAdapterTests(ForgeTestCase):
                 f.repo_forge.cache_clear()
                 self.assertIsNone(self.listing(**kwargs)[0])
 
-    def test_other_reads_are_unsupported_here(self):
+    def test_spec_approval_is_unsupported(self):
         fake = BktCli()
-        with patch.object(f, "get_repo_root", return_value=self.repo):
-            self.assertIsNone(self.run_with(fake, lambda: f.forge_readiness(self.repo, 1)))
-            self.assertIsNone(self.run_with(fake, lambda: f._forge_merge_read("fx-merged")))
-            self.assertEqual(self.run_with(fake, lambda: f.forge_approval_rows("fx-merged", self.repo)),
-                             (None, "spec approval is unsupported on this forge (bitbucket)"))
+        self.assertEqual(self.run_with(fake, lambda: f.forge_approval_rows("fx-merged", self.repo)),
+                         (None, "spec approval is unsupported on this forge (bitbucket)"))
         self.assertFalse([c for c in fake.calls if c[0] == "bkt"])
 
 
@@ -224,14 +227,18 @@ class BitbucketRouteTests(ForgeTestCase):
 
     def test_snapshot_reads_pull_requests_and_names_the_forge(self):
         sid = self.spec_on("fx-reused")
-        fake = BktCli(bkt=[fixture("pr-open"), fixture("pr-branch-reused"), fixture("commit-reused")])
+        fake = BktCli(bkt=[fixture("pr-open"), fixture("pr-branch-reused"), fixture("commit-reused"),
+                           fixture("land-pr-reused-fields"), fixture("land-statuses-reused"), fixture("land-checks-reused")])
         with patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo / ".flow"), patch.object(f, "_pilot_strikes_ledger_path", return_value=None):
             result = self.run_with(fake, lambda: f.pilot_snapshot(sid))
         self.assertEqual(result["forge"], "bitbucket")
         self.assertFalse(result["pr_listing_failed"])
         pr = result["selected"]["pr"]
         self.assertEqual((pr["open"]["number"], [r["number"] for r in pr["closed"]], pr["probe_failed"]), (4, [3], False))
-        self.assertNotIn("readiness", pr["open"])   # no readiness read on Bitbucket yet
+        # PR 4 has no build reported on its head: not green, never ready.
+        self.assertEqual(pr["open"]["readiness"], {
+            "head_sha": "ef14a8697d98cb0eb95e9e706fa763f10977b16a", "build": None, "merge_status": "clean",
+            "approval": "none", "squash_allowed": True, "green": False, "ready": False})
         self.assertEqual(result["route"]["decision"]["value"], "existing_pr_tail")
 
     def test_route_judge_reads_the_branch_pull_requests(self):

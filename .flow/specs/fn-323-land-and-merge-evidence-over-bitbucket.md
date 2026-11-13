@@ -45,7 +45,9 @@ With make-pr and resolve-pr working on Bitbucket, the last manual step is mergin
 
 ## Parked unknowns
 
-- **Head binding on merge.** GitHub (`--match-head-commit`) and GitLab (`sha`) refuse a merge when the head moved. Whether Bitbucket Cloud's merge call can be bound to an expected head is unknown until it is recorded live; if it cannot, the plan must say how R2's "never merges a head other than the one it judged ready" is met (for example, re-reading the head immediately before the merge and checking the merge commit's parent after it), or the maintainer accepts a narrower guarantee. [inferred]
+- **Head binding on merge (answered 2026-11-13, measured).** Bitbucket Cloud's merge call cannot be bound to an expected head: sent a `sha` with the head it was judged at, it ignored it and squash-merged the branch's moved head, and the merged pull request then reports that moved head as its source commit. R2 is met as narrowly as Bitbucket allows: land reads the pull request and its readiness again immediately before the merge call and merges only when both still name the judged head, then compares the merged pull request's source commit with that head and, when they differ, reports the merge with both heads named so a person checks the commits between them. [inferred]
+- Beside a `q` query, Bitbucket ignores the `state` parameters and lists every state (measured 2026-11-13: a declined pull request came back under `state=OPEN`). An open-only read puts the state inside `q` (`state="OPEN" AND ...`), and rows are checked for their state; this also corrects resolve-pr's current-branch lookup from fn-322. [inferred]
+- On the free plan Bitbucket did not block the merge of a pull request whose build was `STOPPED` (measured 2026-11-13); land's readiness gate, not Bitbucket's, is what holds a merge back. [inferred]
 
 ## Strategy Alignment
 
