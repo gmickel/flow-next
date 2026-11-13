@@ -163,7 +163,7 @@
     "impl:fn-321-bitbucket-cloud-forge-adapter-and-make.1": 0
   },
   "spec_path": ".flow/specs/fn-321-bitbucket-cloud-forge-adapter-and-make.md",
-  "status": "open",
+  "status": "done",
   "title": "Bitbucket Cloud forge adapter and make-pr over Bitbucket pull requests",
   "tracker": {
     "baseHashFlow": null,
@@ -176,5 +176,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-13T11:10:37.777418Z"
+  "updated_at": "2026-11-13T11:17:58.845951Z"
 }
