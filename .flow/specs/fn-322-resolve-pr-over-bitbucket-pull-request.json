@@ -133,7 +133,7 @@
     "impl:fn-322-resolve-pr-over-bitbucket-pull-request.1": 0
   },
   "spec_path": ".flow/specs/fn-322-resolve-pr-over-bitbucket-pull-request.md",
-  "status": "open",
+  "status": "done",
   "title": "resolve-pr over Bitbucket pull request comments",
   "tracker": {
     "baseHashFlow": null,
@@ -146,5 +146,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-13T12:26:45.941911Z"
+  "updated_at": "2026-11-13T12:26:57.785374Z"
 }
