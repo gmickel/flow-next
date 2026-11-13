@@ -94,6 +94,20 @@ class BitbucketReadinessTests(ForgeTestCase):
                 self.assertEqual(self.ready_pr(statuses=statuses, checks=checks), {**unread, "head_sha": READY})
         odd = self.ready_pr(derived("land-pr-approved-fields", lambda pr: pr["participants"][0].update(state="reviewing")))
         self.assertEqual((odd["approval"], odd["ready"]), ("unknown", False))
+        no_state = self.ready_pr(derived("land-pr-approved-fields", lambda pr: [pr["participants"][0].pop("state"), None][1]))
+        self.assertEqual((no_state["approval"], no_state["ready"]), ("unknown", False))
+        self.assertEqual(self.ready_pr(derived("land-pr-approved-fields", lambda pr: pr.update(source="fx-ready"))), unread)
+
+    def test_an_incomplete_merge_check_answer_is_unread(self):
+        unread = {"head_sha": READY, "build": None, "merge_status": None, "approval": "unknown",
+                  "squash_allowed": None, "green": False, "ready": False}
+        for name, change in (
+            ("truncated", lambda page: page.update(values=page["values"][:2])),
+            ("empty", lambda page: page.update(values=[])),
+            ("no git mergeability answer", lambda page: page.update(values=page["values"][:2], size=2)),
+        ):
+            with self.subTest(name):
+                self.assertEqual(self.ready_pr(checks=derived("land-checks-clean", change)), unread)
 
 
 class BitbucketMergeEvidenceTests(ForgeTestCase):
@@ -116,7 +130,10 @@ class BitbucketMergeEvidenceTests(ForgeTestCase):
     def test_a_failed_or_malformed_file_read_fails_the_whole_read(self):
         argv = fixture("land-diffstat-race")["argv"]
         for name, diffstat in (("fails", under("pr-branch-missing-repo", argv)),
-                               ("no paths", derived("land-diffstat-race", lambda page: page["values"][0].update(old=None, new=None)))):
+                               ("no paths", derived("land-diffstat-race", lambda page: page["values"][0].update(old=None, new=None))),
+                               ("a side that is not an object", derived("land-diffstat-race", lambda page: page["values"][0].update(new="fx-race.txt"))),
+                               ("an empty path", derived("land-diffstat-race", lambda page: page["values"][0].update(new={"path": ""}))),
+                               ("an entry that is not an object", derived("land-diffstat-race", lambda page: page.update(values=["fx-race.txt"])))):
             with self.subTest(name):
                 self.assertIsNone(self.merge_read(*map(fixture, self.EVIDENCE[:3]), diffstat))
 
@@ -186,6 +203,15 @@ class LandReferenceTests(BitbucketShellCase):
         self.assertEqual((after["state"], after["source"]["commit"]["hash"]), ("MERGED", MERGED_HEAD[:12]))
         self.assertFalse(MERGED_HEAD.startswith(JUDGED), "the merged head is not the one that was read")
         self.assertTrue(after["merge_commit"]["hash"])
+
+    def test_windows_jq_output_leaves_no_carriage_return(self):
+        setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)
+        jq = (self.bin / "jq").resolve()
+        (self.bin / "jq").unlink()
+        self.stub("jq", f"#!/bin/sh\n{jq} \"$@\" | sed 's/$/\\r/'\n")
+        repo = self.repo_on("main", "git@ssh.bitbucket.org:flownextnew/flownext.git")
+        result = self.run_sh(["bash", "-c", f'{setup}\nprintf "%s|%s" "$BKT_CONTEXT" "$REPO"'], cwd=repo)
+        self.assertEqual(result.stdout, "flownextnew|flownextnew/flownext")
 
     def test_no_cloud_context_leaves_the_context_empty(self):
         setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)

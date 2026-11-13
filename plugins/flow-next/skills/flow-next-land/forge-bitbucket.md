@@ -8,8 +8,8 @@ Run bkt inside the checkout. bkt finds its host only through a context, so name 
 one on every call, and take the repository from the origin remote:
 
 ```bash
-BKT_CONTEXT=$(bkt context list --json | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")] | sort_by(.active != true) | .[0].name // empty')
-REPO=$(git remote get-url origin | sed -E 's#^[a-z+]+://[^/]+/##; s#^[^@/]*@?[^:/]+:##; s#\.git$##')
+BKT_CONTEXT=$(bkt context list --json | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")] | sort_by(.active != true) | .[0].name // empty' | tr -d '\r')
+REPO=$(git remote get-url origin | sed -E 's#^[a-z+]+://[^/]+/##; s#^[^@/]*@?[^:/]+:##; s#\.git$##' | tr -d '\r')
 ```
 
 No context stops `NEEDS_HUMAN` naming `bkt context create`. Below, `$PR` is the id, `$HEAD_SHA` the
@@ -24,7 +24,9 @@ full head SHA and `$BRANCH` the source branch.
   and check that `FETCH_HEAD` starts with the short head; its full SHA is `$HEAD_SHA`, else the head
   moved: read again. Read `.flow/specs/*.json` and `.flow/tasks/` with `git ls-tree` and
   `git show "$HEAD_SHA:<path>"`, and the base from `origin/<destination>`, in place of the trees
-  API. The selection rules are unchanged.
+  API. The selection rules are unchanged. On a merged replay the branch may be gone (the merge closes
+  it): read the specs from the merged pull request's `merge_commit.hash` instead, after
+  `git fetch origin "refs/heads/<destination>"`; a squash merge commit carries the head's changes.
 - **Readiness.** For the selected spec, run `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` in a
   detached worktree at `$HEAD_SHA` (the one repairs use), so the spec and its `branch_name` are the
   head's. Its `.selected.pr.open` `url` must be this pull request's `links.html.href` and

@@ -23823,6 +23823,15 @@ _BITBUCKET_PAGELEN = 50   # Bitbucket's cap for pull request listings
 _BITBUCKET_PR_STATES = {"OPEN": "OPEN", "MERGED": "MERGED", "DECLINED": "CLOSED", "SUPERSEDED": "CLOSED"}
 
 
+def _field(value: Any, *keys: str) -> Any:
+    """A nested value of a parsed Bitbucket answer, or None when any level is not an object."""
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
 def _bkt(argv: list, deadline: float) -> Optional[Any]:
     """One bkt call, its stdout parsed as JSON; None when it failed."""
     remaining = deadline - time.monotonic()
@@ -23987,12 +23996,12 @@ def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict
         return unread
     pulls = f"/repositories/{origin.project}/pullrequests/{number}"
     pr = _bkt(["--context", context, "api", f"{pulls}?fields=%2Bdestination.branch.merge_strategies"], deadline)
-    strategies = (((pr.get("destination") or {}).get("branch") or {}).get("merge_strategies")
-                  if isinstance(pr, dict) else None)
-    if not (isinstance(pr, dict) and pr.get("state") == "OPEN" and isinstance(pr.get("draft"), bool)
-            and isinstance(pr.get("participants"), list) and isinstance(strategies, list)
-            and all(isinstance(s, str) for s in strategies)
-            and re.fullmatch(r"[0-9a-f]{7,40}", str(((pr.get("source") or {}).get("commit") or {}).get("hash")))):
+    strategies = _field(pr, "destination", "branch", "merge_strategies")
+    people = _field(pr, "participants")
+    if not (_field(pr, "state") == "OPEN" and isinstance(_field(pr, "draft"), bool)
+            and isinstance(strategies, list) and all(isinstance(s, str) for s in strategies)
+            and isinstance(people, list) and all(isinstance(p, dict) for p in people)
+            and re.fullmatch(r"[0-9a-f]{7,40}", str(_field(pr, "source", "commit", "hash")))):
         return unread
     short = pr["source"]["commit"]["hash"]
     full = _bitbucket_full_shas(repo, context, origin, {short}, deadline)
@@ -24000,19 +24009,17 @@ def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict
         return unread
     head = full[short]
     statuses = _bkt_pages(context, f"/repositories/{origin.project}/commit/{head}/statuses?pagelen=100", deadline)
-    checks = _bkt(["--context", context, "api", f"{pulls}/mergeability/checks"], deadline)
-    checks = checks.get("values") if isinstance(checks, dict) else None
-    if statuses is None or not isinstance(checks, list) or not all(
-            isinstance(s, dict) and ((s.get("commit") or {}).get("hash")) == head
-            and s.get("state") in _BITBUCKET_BUILD_ORDER for s in statuses) or not all(
-            isinstance(c, dict) and isinstance(c.get("status"), str) and isinstance(c.get("blocking"), bool)
-            for c in checks):
+    # A complete listing that holds Bitbucket's git mergeability answer; anything less is unread.
+    checks = _bkt_pages(context, f"{pulls}/mergeability/checks", deadline)
+    if statuses is None or checks is None or not all(
+            _field(s, "commit", "hash") == head and _field(s, "state") in _BITBUCKET_BUILD_ORDER for s in statuses) or not all(
+            isinstance(_field(c, "status"), str) and isinstance(_field(c, "blocking"), bool) for c in checks) or not any(
+            c["type"] == "git_mergeability_check" for c in checks if isinstance(c.get("type"), str)):
         return {**unread, "head_sha": head}
     build = next((state for state in _BITBUCKET_BUILD_ORDER if any(s["state"] == state for s in statuses)), None)
     failing = next((c for c in checks if c["blocking"] or c["status"] != "PASSED"), None)
     merge_status = "clean" if failing is None else str(failing.get("reason") or failing.get("type") or "blocked")
-    people = pr["participants"]
-    if not all(isinstance(p, dict) and p.get("state") in {"approved", "changes_requested", None}
+    if not all("state" in p and p["state"] in {"approved", "changes_requested", None}
                and isinstance(p.get("approved"), bool) for p in people):
         approval = "unknown"
     elif any(p["state"] == "changes_requested" for p in people):
@@ -24041,12 +24048,18 @@ def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Opt
             continue
         diffstat = _bkt_pages(context, f"/repositories/{origin.project}/pullrequests/{row['number']}"
                                        f"/diffstat?pagelen=100", deadline) if context else None
-        sides = [[(d.get(side) or {}).get("path") for side in ("old", "new")] for d in diffstat or [] if isinstance(d, dict)]
-        if diffstat is None or len(sides) != len(diffstat) or not all(
-                any(isinstance(path, str) for path in pair)
-                and all(path is None or isinstance(path, str) for path in pair) for pair in sides):
+        if diffstat is None:
             return None
-        files[row["number"]] = [path for pair in sides for path in dict.fromkeys(pair) if path is not None]
+        paths = []
+        for entry in diffstat:
+            # Each side is an object naming a path, or null (added or deleted); anything else is unreadable.
+            sides = [_field(entry, side) for side in ("old", "new")]
+            named = [_field(side, "path") for side in sides if side is not None]
+            if not isinstance(entry, dict) or not all(side is None or isinstance(side, dict) for side in sides) \
+                    or not named or not all(isinstance(path, str) and path for path in named):
+                return None
+            paths += list(dict.fromkeys(named))
+        files[row["number"]] = paths
     return rows, files
 
 

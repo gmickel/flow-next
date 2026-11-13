@@ -10,12 +10,106 @@
     "fn-322-resolve-pr-over-bitbucket-pull-request"
   ],
   "id": "fn-323-land-and-merge-evidence-over-bitbucket",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-323-land-and-merge-evidence-over-bitbucket.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "871c8357555c5a65c80f8f7e4a0202f74f044fc82fc1cd564ae97b0051bad64a",
+      "backend": "codex",
+      "base_sha": "97a642146434f18032f84d6a254bb81f41ac7f3a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-deb8ed0744c6fd2d054777a5b89ce34d",
+            "classification": "introduced",
+            "findingId": "finding-deb8ed0744c6fd2d054777a5b89ce34d",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-25a36df50d80c5c3f068c6e12938b2b9",
+            "classification": "introduced",
+            "findingId": "finding-25a36df50d80c5c3f068c6e12938b2b9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1bfda28a4272923648ef5969cb7bf616",
+            "classification": "introduced",
+            "findingId": "finding-1bfda28a4272923648ef5969cb7bf616",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-68c14fec81a00293e6872eb5088a1bd7",
+            "classification": "introduced",
+            "findingId": "finding-68c14fec81a00293e6872eb5088a1bd7",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-79b39741f220f9c11123361c97620f69",
+            "classification": "introduced",
+            "findingId": "finding-79b39741f220f9c11123361c97620f69",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-81961ea144e5e3ce9378e624f58279b0",
+            "classification": "introduced",
+            "findingId": "finding-81961ea144e5e3ce9378e624f58279b0",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8ab625e649ff56a63801dd91fc3bbe09c23a0611",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 4470,
+      "output_sha256": "32c246a8a5b61db35f1f36f738c220f7cd3aba3c5a3d5b7cbdf37f8e45201f11",
+      "reservation_id": "72bdba908c344651bf163fc88611dd99",
+      "round_consumed": true,
+      "scope": "impl:fn-323-land-and-merge-evidence-over-bitbucket.1",
+      "superseded_by": null,
+      "task": "fn-323-land-and-merge-evidence-over-bitbucket.1",
+      "timestamp": "2026-11-13T13:49:23.512803Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-323-land-and-merge-evidence-over-bitbucket.1": 0
+  },
   "spec_path": ".flow/specs/fn-323-land-and-merge-evidence-over-bitbucket.md",
   "status": "open",
   "title": "land and merge evidence over Bitbucket pull requests",
@@ -30,5 +124,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-13T09:28:00.664966Z"
+  "updated_at": "2026-11-13T13:49:23.516055Z"
 }
