@@ -1,6 +1,6 @@
 ---
 name: flow-next-make-pr
-description: Render a briefing from the aid artifact and open or update a PR via gh, or a GitLab merge request via glab. Auto-detects the spec from the branch. Supports --draft, --ready, --base, --memory, --dry-run, --update, and mode:autonomous.
+description: Render a briefing from the aid artifact and open or update a PR via gh, a GitLab merge request via glab, or a Bitbucket Cloud pull request via bkt. Auto-detects the spec from the branch. Supports --draft, --ready, --base, --memory, --dry-run, --update, and mode:autonomous.
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---

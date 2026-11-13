@@ -195,11 +195,12 @@ class ConfigMergeTests(unittest.TestCase):
                     self.assertEqual(p.read_bytes(), first)
                 first = p.read_bytes()
             self.assertTrue((dest / 'agents/agents-md-scout.toml').exists())
-            for script in ('make-pr-preflight.sh', 'make-pr-create.sh', 'make-pr-gitlab.sh', 'map.sh'):
+            for script in ('make-pr-preflight.sh', 'make-pr-create.sh', 'make-pr-gitlab.sh', 'make-pr-bitbucket.sh', 'map.sh'):
                 self.assertEqual((dest / 'scripts' / script).read_bytes(),
                                  (ROOT / 'plugins/flow-next/scripts' / script).read_bytes())
-            # make-pr's preflight runs the merge-request helper directly.
+            # make-pr's preflight runs the forge helpers directly.
             self.assertTrue(os.access(dest / 'scripts' / 'make-pr-gitlab.sh', os.X_OK))
+            self.assertTrue(os.access(dest / 'scripts' / 'make-pr-bitbucket.sh', os.X_OK))
 
 
 

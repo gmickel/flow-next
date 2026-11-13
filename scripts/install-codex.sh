@@ -294,7 +294,7 @@ if [ -f "$PLUGIN_DIR/scripts/flowctl.py" ]; then
 fi
 # Skills invoke these bundled workflow blocks alongside flowctl. Missing source
 # is a corrupt install, never a reason to ship a skill with an absent command.
-for workflow_script in make-pr-preflight.sh make-pr-create.sh make-pr-gitlab.sh map.sh; do
+for workflow_script in make-pr-preflight.sh make-pr-create.sh make-pr-gitlab.sh make-pr-bitbucket.sh map.sh; do
     cp "$PLUGIN_DIR/scripts/$workflow_script" "$CODEX_DIR/scripts/"
 done
 # fn-139.5: the flowctl_tracker package ships alongside flowctl.py (the

@@ -1700,7 +1700,7 @@ generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update 
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
 generate_openai_yaml "flow-next-features"  "Flow Features"  "Seed or maintain the committed user-POV feature map at .flow/features/" "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" true
-generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh, or glab on GitLab" "#3B82F6" true
+generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh, glab on GitLab, or bkt on Bitbucket Cloud" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
 generate_openai_yaml "flow-next-land" "Flow Land" "Resolve and merge one named, authorized PR; terminal LAND_VERDICT line" "#3B82F6" true
