@@ -51,7 +51,7 @@ full head SHA and `$BRANCH` the source branch.
 - **Patience.** The last authored push is the head commit's `date` from
   `bkt --context "$BKT_CONTEXT" api "/repositories/$REPO/commit/$HEAD_SHA"`.
 - **Merge one layer.** An open pull request targeting `$BRANCH`
-  (`bkt --context "$BKT_CONTEXT" api "/repositories/$REPO/pullrequests?q=$(jq -rn --arg b "$BRANCH" '"state=\"OPEN\" AND destination.branch.name=\"" + $b + "\"" | @uri')&pagelen=50"`;
+  (`bkt --context "$BKT_CONTEXT" api "/repositories/$REPO/pullrequests?q=$(jq -rn --arg b "$BRANCH" '"state=\"OPEN\" AND destination.branch.name=\"" + ($b | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) + "\"" | @uri')&pagelen=50"`;
   the state goes in the query, since Bitbucket ignores a `state` parameter beside `q`)
   or a draft stops `NEEDS_HUMAN`; `squash_allowed: false` (the branch forbids squash) stops
   `NEEDS_HUMAN` too, and land never picks another merge strategy. Bitbucket cannot pin a merge to a

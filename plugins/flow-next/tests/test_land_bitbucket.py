@@ -204,6 +204,13 @@ class LandReferenceTests(BitbucketShellCase):
         self.assertFalse(MERGED_HEAD.startswith(JUDGED), "the merged head is not the one that was read")
         self.assertTrue(after["merge_commit"]["hash"])
 
+    def test_the_child_query_escapes_the_branch_name(self):
+        # A branch name may hold a double quote; Bitbucket's query language escapes it with a backslash.
+        jq = re.search(r"\$\(jq -rn --arg b \"\$BRANCH\" ('.*?')\)&pagelen", self.command("destination.branch.name")).group(1)
+        result = self.run_sh(["bash", "-c", f'jq -rn --arg b "$BRANCH" {jq}'], BRANCH='fx-"q\\x')
+        from urllib.parse import unquote
+        self.assertEqual(unquote(result.stdout.strip()), 'state="OPEN" AND destination.branch.name="fx-\\"q\\\\x"')
+
     def test_windows_jq_output_leaves_no_carriage_return(self):
         setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)
         jq = (self.bin / "jq").resolve()
