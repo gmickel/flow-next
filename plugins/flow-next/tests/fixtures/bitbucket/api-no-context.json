@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests?state=OPEN&state=MERGED&state=DECLINED&state=SUPERSEDED&q=source.branch.name%3D%22fx-open%22&pagelen=50"
+  ],
+  "env": {
+    "XDG_CONFIG_HOME": "<config without contexts>"
+  },
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: no active context; run `bkt context use <name>`\n",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/missing/pullrequests?state=OPEN&state=MERGED&state=DECLINED&state=SUPERSEDED&q=source.branch.name%3D%22fx-open%22&pagelen=50&page=1"
+  ],
+  "env": {},
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: 404 Not Found: You may not have access to this repository or it no longer exists in this workspace. If you think this repository exists and you have access, make sure you are authenticated.\n",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

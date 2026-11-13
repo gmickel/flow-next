@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "bkt",
+    "context",
+    "list",
+    "--json"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\n  \"active_context\": \"flownextnew\",\n  \"contexts\": [\n    {\n      \"name\": \"flownextnew\",\n      \"host\": \"api.bitbucket.org\",\n      \"workspace\": \"flownextnew\",\n      \"active\": true\n    }\n  ]\n}\n",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

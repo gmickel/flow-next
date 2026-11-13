@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "bkt",
+    "context",
+    "list",
+    "--json"
+  ],
+  "env": {
+    "XDG_CONFIG_HOME": "<config without contexts>"
+  },
+  "returncode": 0,
+  "stdout": "{\n  \"contexts\": null\n}\n",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}
