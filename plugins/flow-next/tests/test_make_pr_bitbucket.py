@@ -292,6 +292,8 @@ class OriginBlockTests(BitbucketShellCase):
             ("ssh alias", "git@bb-work:flownextnew/flownext.git", {"bb-work": "ssh.bitbucket.org"}),
             ("self-hosted Bitbucket", "https://bitbucket.corp.test/scm/proj/repo.git", {}),
             ("github", "https://github.com/o/r.git", {}),
+            ("upper-case github host", "https://GitHub.com/o/r.git", {}),
+            ("upper-case gitlab host", "https://GitLab.com/g/p.git", {}),
         ]
         clean = {key: "" for key in ("CI_SERVER_HOST", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GITLAB_HOST")}
         trap = "trap 'printf \"FORGE=%s HOST=%s\" \"$FORGE\" \"$ORIGIN_HOST\" > \"$OUT\"' EXIT\n"
@@ -553,7 +555,7 @@ esac
     def test_update_read_failure_is_never_no_open_pull_request(self):
         result = self.create([self.derived("pr-branch-edit", stdout="")], branch="fx-edit", UPDATE_MODE="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("cannot read the open merge request", result.stderr)
+        self.assertIn("cannot read the open pull request", result.stderr)
         self.assertNotIn("no open PR", result.stderr)
 
 

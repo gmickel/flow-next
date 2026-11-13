@@ -10,6 +10,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 - **make-pr opens and updates Bitbucket Cloud pull requests, and `flow --auto` runs on a Bitbucket Cloud repository.** A repository cloned from `bitbucket.org` used to stop on its first tick, because flow-next read it as GitHub and could not list its pull requests. The forge now comes from the origin's host (`bitbucket.org`, `ssh.bitbucket.org` or `altssh.bitbucket.org`), with no setting and no login probe. make-pr creates or updates the pull request through `bkt` with the same body and spec close it uses on GitHub. `--draft`, `--ready` and `--update` work, and a spec built on another spec's branch targets that branch while its pull request is open. `bkt` needs a Bitbucket Cloud login and a context: `bkt auth login https://bitbucket.org --kind cloud --username <Atlassian email> --web-token`, then `bkt context create bitbucket --host https://api.bitbucket.org/2.0 --workspace <workspace>`. Pull requests from forks are left out even when they share the branch name. resolve-pr and land do not run on Bitbucket yet; they stop with `NEEDS_HUMAN` and the pull request's URL, and `flow --auto --until=merge` stops there too. Self-hosted Bitbucket Data Center is not recognised. `flowctl pilot snapshot` reports `forge: "bitbucket"`. Thanks to @benjamin-benz-42 for #602 and its measurements.
 
+### Fixed
+
+- **make-pr recognises an origin whose host is written in capitals.** `https://GitHub.com/...` or `https://GitLab.com/...` was compared case-sensitively and stopped make-pr as an unknown host, while flowctl already read it as GitHub or GitLab. Hostnames now compare case-insensitively in both.
+
 ## [flow-next 9.9.1] - 2026-11-10
 
 ### Fixed

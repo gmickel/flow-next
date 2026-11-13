@@ -29,9 +29,10 @@ fi
 sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -n "${PR_READ:-}" ]]; then
-    # A failed read is a failure, never "no open merge request".
+    # A failed read is a failure, never "no open pull request".
+    PR_NOUN="pull request"; [[ "${FORGE:-}" != gitlab ]] || PR_NOUN="merge request"
     UPDATE_PR_NUMBER=$("$PR_READ" pr view --json number,state --jq 'select(.state=="OPEN") | .number') \
-      || { echo "Error: --update: cannot read the open merge request at edit time." >&2; exit 1; }
+      || { echo "Error: --update: cannot read the open $PR_NOUN at edit time." >&2; exit 1; }
   else
     UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
   fi

@@ -31,10 +31,12 @@ bitbucket_reads() {
     SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
     [[ -z "$SSH_HOST" ]] || ORIGIN_HOST="$SSH_HOST"
   fi
+  # A hostname is case-insensitive, as in the Python rule.
+  ORIGIN_HOST=$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')
   if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
     FORGE=github
-  elif [[ "$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')" =~ ^(bitbucket\.org|ssh\.bitbucket\.org|altssh\.bitbucket\.org)$ ]]; then
-    FORGE=bitbucket; ORIGIN_HOST=$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')
+  elif [[ "$ORIGIN_HOST" == bitbucket.org || "$ORIGIN_HOST" == ssh.bitbucket.org || "$ORIGIN_HOST" == altssh.bitbucket.org ]]; then
+    FORGE=bitbucket
   else
     # An http(s) port is the forge's own (an SSH port is not), so it stays on the host; a default port is none.
     ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE '/^https:\/\/([^@\/]*@)?[^\/:]+:443(\/|$)/d; /^http:\/\/([^@\/]*@)?[^\/:]+:80(\/|$)/d; s#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
