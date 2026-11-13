@@ -23872,7 +23872,10 @@ def _bitbucket_pr_row(pr: Any) -> Optional[dict]:
             and isinstance(pr["source"]["branch"].get("name"), str) and pr["source"]["branch"]["name"]
             and isinstance(pr["source"].get("commit"), dict)
             and re.fullmatch(r"[0-9a-f]{7,40}", str(pr["source"]["commit"].get("hash")))
-            and isinstance(pr["source"].get("repository"), (dict, type(None)))
+            # A deleted fork leaves `repository` null; any other unreadable identity is malformed.
+            and "repository" in pr["source"] and (pr["source"]["repository"] is None or (
+                isinstance(pr["source"]["repository"], dict)
+                and isinstance(pr["source"]["repository"].get("full_name"), str)))
             and isinstance(pr.get("destination"), dict) and isinstance(pr["destination"].get("repository"), dict)
             and isinstance(pr["destination"]["repository"].get("full_name"), str)):
         return None

@@ -133,6 +133,11 @@ class BitbucketAdapterTests(ForgeTestCase):
     def test_a_fork_pull_request_sharing_the_branch_name_is_not_the_origin_repositorys(self):
         rows, _ = self.listing("fx-open", bkt=[fixture("pr-branch-fork"), fixture("commit-open")])
         self.assertEqual([r["number"] for r in rows], [1])   # PR #7 comes from flownextnew/flownext-fork
+        # A deleted fork leaves its pull request without a source repository: still not the origin's.
+        def deleted_fork(page):
+            next(pr for pr in page["values"] if pr["id"] == 7)["source"]["repository"] = None
+        rows, _ = self.listing("fx-open", bkt=[derived("pr-branch-fork", deleted_fork), fixture("commit-open")])
+        self.assertEqual([r["number"] for r in rows], [1])
 
     def test_open_listing_follows_next_and_carries_short_heads(self):
         pages = [fixture(f"pr-open-page-{n}") for n in (1, 2, 3)]
@@ -157,7 +162,9 @@ class BitbucketAdapterTests(ForgeTestCase):
 
     def test_failed_reads_are_probe_failures(self):
         def row(change):
-            return derived("pr-branch-reused", lambda page: change(page["values"][1]))
+            def edit(page):
+                change(page["values"][1])   # edits the row in place; the page stays the body
+            return derived("pr-branch-reused", edit)
         reused = branch_argv("fx-reused")
         page_two = ["bkt", "--context", "flownextnew", "api", f"{PULLS}?state=OPEN&pagelen=2&page=2"]
         cases = [
@@ -169,7 +176,9 @@ class BitbucketAdapterTests(ForgeTestCase):
             *((f"malformed row: {name}", dict(head="fx-reused", bkt=[row(change), fixture("commit-reused")])) for name, change in (
                 ("no id", lambda pr: pr.pop("id")), ("unknown state", lambda pr: pr.update(state="WITHDRAWN")),
                 ("empty link", lambda pr: pr["links"]["html"].update(href="")), ("no hash", lambda pr: pr["source"]["commit"].pop("hash")),
-                ("empty branch", lambda pr: pr["source"]["branch"].update(name="")), ("list draft", lambda pr: pr.update(draft=[True])))),
+                ("empty branch", lambda pr: pr["source"]["branch"].update(name="")), ("list draft", lambda pr: pr.update(draft=[True])),
+                ("unreadable source repository", lambda pr: pr["source"].update(repository={})),
+                ("no source repository", lambda pr: pr["source"].pop("repository")))),
             ("not a listing", dict(head="fx-reused", bkt=[derived("pr-branch-reused", lambda page: page["values"])])),
             ("empty output", dict(head="fx-reused", bkt=[{**fixture("pr-branch-reused"), "stdout": ""}])),
             ("size disagrees", dict(head="fx-reused", bkt=[derived("pr-branch-reused", lambda page: page.update(size=3)),

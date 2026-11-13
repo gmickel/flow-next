@@ -33,8 +33,8 @@ bitbucket_reads() {
   fi
   if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
     FORGE=github
-  elif [[ "$ORIGIN_HOST" == bitbucket.org || "$ORIGIN_HOST" == ssh.bitbucket.org || "$ORIGIN_HOST" == altssh.bitbucket.org ]]; then
-    FORGE=bitbucket
+  elif [[ "$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')" =~ ^(bitbucket\.org|ssh\.bitbucket\.org|altssh\.bitbucket\.org)$ ]]; then
+    FORGE=bitbucket; ORIGIN_HOST=$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')
   else
     # An http(s) port is the forge's own (an SSH port is not), so it stays on the host; a default port is none.
     ORIGIN_HOST="$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')$(printf '%s' "$ORIGIN_URL" | sed -nE '/^https:\/\/([^@\/]*@)?[^\/:]+:443(\/|$)/d; /^http:\/\/([^@\/]*@)?[^\/:]+:80(\/|$)/d; s#^https?://([^@/]*@)?[^/:]+(:[0-9]+)(/.*)?$#\2#p')"
@@ -153,7 +153,17 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     DEP_PR_STATE=$(printf '%s' "$DEP_PR_JSON" | jq -r '.state // empty')
     DEP_PR_NUMBER=$(printf '%s' "$DEP_PR_JSON" | jq -r '.number // empty')
     if [[ "$DEP_PR_STATE" == "MERGED" && "$(printf '%s' "$DEP_PR_JSON" | jq -r '.baseRefName // empty')" == "$(git -C "$REPO_ROOT" branch --show-current)" ]]; then continue; fi
-    if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
+    if [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" && "${FORGE:-}" == bitbucket ]]; then
+      # Bitbucket keeps no pull request refs: the merged parent's head is found in this branch's own history.
+      DEP_HEAD=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$(printf '%s' "$DEP_PR_JSON" | jq -r '.headRefOid // empty')^{commit}" 2>/dev/null) || DEP_HEAD=""
+      if [[ -n "$DEP_HEAD" ]] && git -C "$REPO_ROOT" merge-base --is-ancestor "$DEP_HEAD" HEAD 2>/dev/null \
+        && git -C "$REPO_ROOT" update-ref "refs/flow-next/parent/$DEP_BRANCH" "$DEP_HEAD" 2>/dev/null; then
+        DEP_REF="refs/flow-next/parent/$DEP_BRANCH"
+      else
+        echo "NEEDS_HUMAN: cannot establish the chain boundary for $DEP; parent history unreachable" >&2
+        exit 2
+      fi
+    elif [[ -z "$DEP_REF" && "$DEP_PR_STATE" == "MERGED" ]]; then
       DEP_PR_HEAD="refs/pull/$DEP_PR_NUMBER/head"; [[ -z "${PR_HEAD_REFS:-}" ]] || DEP_PR_HEAD="$PR_HEAD_REFS/$DEP_PR_NUMBER/head"
       if git -C "$REPO_ROOT" fetch -q origin "${DEP_PR_HEAD}:refs/flow-next/parent/$DEP_BRANCH" 2>/dev/null; then
         DEP_REF="refs/flow-next/parent/$DEP_BRANCH"

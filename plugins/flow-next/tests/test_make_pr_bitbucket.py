@@ -158,8 +158,10 @@ class HelperReadTests(BitbucketShellCase):
         listed = self.run_sh([*self.LIST, "fx-reused"], BKT_ANSWERS=answers(recorded("pr-branch-reused")))
         self.assertEqual(listed.returncode, 0, listed.stderr)
         self.assertEqual(json.loads(listed.stdout), [
-            {"number": 4, "url": f"{PR_URL}4", "baseRefName": "main", "createdAt": "2026-11-13T10:37:47.056362+00:00", "state": "OPEN"},
-            {"number": 3, "url": f"{PR_URL}3", "baseRefName": "main", "createdAt": "2026-11-13T10:37:44.899774+00:00", "state": "CLOSED"}])
+            {"number": 4, "url": f"{PR_URL}4", "baseRefName": "main", "createdAt": "2026-11-13T10:37:47.056362+00:00",
+             "headRefOid": "ef14a8697d98", "state": "OPEN"},
+            {"number": 3, "url": f"{PR_URL}3", "baseRefName": "main", "createdAt": "2026-11-13T10:37:44.899774+00:00",
+             "headRefOid": "ef14a8697d98", "state": "CLOSED"}])
         # PR #7 shares the branch name from flownextnew/flownext-fork.
         fork = self.run_sh([*self.LIST, "fx-open"], BKT_ANSWERS=answers(recorded("pr-branch-fork")))
         self.assertEqual([r["number"] for r in json.loads(fork.stdout)], [1])
@@ -200,7 +202,9 @@ class HelperReadTests(BitbucketShellCase):
     def test_failed_or_malformed_reads_exit_nonzero(self):
         reused = branch_argv("fx-reused")
         def drop(key):
-            return lambda page: page["values"][1].pop(key)
+            def edit(page):
+                page["values"][1].pop(key)   # edits the row in place; the page stays the body
+            return edit
         cases = [
             ("bkt fails", self.derived("pr-branch-missing-repo", argv=reused), {}),
             ("no credentials", self.derived("api-no-credentials", argv=reused), {}),
@@ -213,6 +217,7 @@ class HelperReadTests(BitbucketShellCase):
             ("non-JSON output", self.derived("pr-branch-reused", stdout="<html>unreadable</html>\n"), {}),
             ("size disagrees", self.derived("pr-branch-reused", lambda page: page.update(size=3)), {}),
             ("next page elsewhere", self.derived("pr-branch-reused", lambda page: page.update(next="https://example.test/2")), {}),
+            ("unreadable source repository", self.derived("pr-branch-reused", lambda page: page["values"][0]["source"].update(repository={})), {}),
         ]
         for name, fixture, env in cases:
             with self.subTest(name):
@@ -282,6 +287,7 @@ class OriginBlockTests(BitbucketShellCase):
             ("https with user", "https://flownextnew-admin@bitbucket.org/flownextnew/flownext.git", {}),
             ("scp clone link", ORIGIN, {}),
             ("scp on bitbucket.org", "git@bitbucket.org:flownextnew/flownext.git", {}),
+            ("upper-case host", "https://BITBUCKET.ORG/flownextnew/flownext.git", {}),
             ("ssh over 443", "ssh://git@altssh.bitbucket.org:443/flownextnew/flownext.git", {}),
             ("ssh alias", "git@bb-work:flownextnew/flownext.git", {"bb-work": "ssh.bitbucket.org"}),
             ("self-hosted Bitbucket", "https://bitbucket.corp.test/scm/proj/repo.git", {}),
@@ -342,6 +348,25 @@ class BitbucketChainDetectTests(BitbucketShellCase):
         self.assertEqual(rc, 0, got["_stderr"])
         self.assertEqual((got["BASE_REF"], got["CHAIN_BOUNDARY"], got["CHAIN_REWRITE"], got["PARENT_PR"], got["PARENT_PR_STATE"]),
                          ("origin/main", a_tip, "1", "5", "MERGED"))
+
+    def test_merged_parent_with_its_branch_deleted_targets_the_default_branch(self):
+        # Bitbucket keeps no pull request refs; the parent's head comes from the child's own history.
+        parent, child, a_tip = self.chain("fx-merged")
+        self.w.squash_merge("fx-merged")
+        git(self.w.tmp, "--git-dir", str(self.w.origin), "update-ref", "-d", "refs/heads/fx-merged")
+        git(self.w.work, "update-ref", "-d", "refs/remotes/origin/fx-merged")
+        git(self.w.work, "checkout", "-q", "B")
+        def head(sha):
+            return lambda page: page["values"][0]["source"]["commit"].update(hash=sha[:12])
+        rc, got = self.detect(child, self.derived("pr-branch-merged", head(a_tip)))
+        self.assertEqual(rc, 0, got["_stderr"])
+        self.assertEqual((got["BASE_REF"], got["CHAIN_BOUNDARY"], got["CHAIN_REWRITE"], got["PARENT_PR"], got["PARENT_PR_STATE"]),
+                         ("origin/main", a_tip, "1", "5", "MERGED"))
+        # A head this branch does not hold leaves the boundary unknown.
+        rc, got = self.detect(child, self.derived("pr-branch-merged", head("0123456789ab")))
+        self.assertEqual(rc, 2, got["_stderr"])
+        self.assertIn(f"NEEDS_HUMAN: cannot establish the chain boundary for {parent}", got["_stderr"])
+        self.assertNotIn("refs/pull/", self.calls.read_text(encoding="utf-8"))
 
     def test_unreadable_parent_pull_request_stops_needs_human(self):
         parent, child, _ = self.chain("fx-reused")
@@ -406,13 +431,17 @@ class NoSpecTests(BitbucketShellCase):
 class HelperWriteTests(BitbucketShellCase):
     """`pr create` and `pr edit`: the request body bkt sends, and the URL printed."""
 
+    def none_on(self, branch):
+        """The recorded empty listing, answering `branch`'s read."""
+        return self.derived("pr-branch-none", argv=branch_argv(branch))
+
     def test_create_sends_the_body_and_prints_the_url(self):
         body = self.body_file()
         for draft, name, branch, number in ((True, "pr-create-draft", "fx-draft", 2), (False, "pr-create-ready", "fx-open", 1)):
             with self.subTest(name):
                 result = self.run_sh([str(HELPER), "pr", "create", "--title", "t", "--body-file", str(body),
                                       *(["--draft"] if draft else []), "--base", "main", "--head", branch],
-                                     BKT_ANSWERS=answers(recorded(name)))
+                                     BKT_ANSWERS=answers(self.none_on(branch), recorded(name)))
                 self.assertEqual((result.returncode, result.stdout), (0, f"{PR_URL}{number}\n"), result.stderr)
                 self.assertEqual(self.bodies()[-1], {"title": "t", "description": BODY, **({"draft": True} if draft else {}),
                                                      "source": {"branch": {"name": branch}}, "destination": {"branch": {"name": "main"}}})
@@ -426,9 +455,23 @@ class HelperWriteTests(BitbucketShellCase):
         self.assertEqual((ready.returncode, ready.stdout), (0, f"{PR_URL}6\n"), ready.stderr)
         self.assertEqual(self.bodies()[-1], {"description": BODY, "draft": False})
 
+    def test_create_refuses_a_branch_with_an_open_pull_request(self):
+        # Bitbucket would answer this create with PR #1, its title and description overwritten.
+        argv = [str(HELPER), "pr", "create", "--title", "t", "--body-file", str(self.body_file()), "--base", "main", "--head", "fx-open"]
+        for name, listing, message in (("open PR", recorded("pr-branch-fork"), f"already has an OPEN pull request: {PR_URL}1"),
+                                       ("unreadable", self.derived("pr-branch-missing-repo", argv=branch_argv("fx-open")),
+                                        "cannot read the pull requests of fx-open")):
+            with self.subTest(name):
+                self.calls.write_text("", encoding="utf-8")
+                result = self.run_sh(argv, BKT_ANSWERS=answers(listing, recorded("pr-create-existing")))
+                self.assertEqual((result.returncode, result.stdout), (1, ""))
+                self.assertIn(message, result.stderr)
+                self.assertEqual([c for c in self.calls_of("bkt") if "-X POST" in c], [])
+
     def test_refused_create_prints_bitbuckets_answer(self):
         result = self.run_sh([str(HELPER), "pr", "create", "--title", "t", "--body-file", str(self.body_file()),
-                              "--base", "main", "--head", "fx-not-pushed"], BKT_ANSWERS=answers(recorded("pr-create-no-branch")))
+                              "--base", "main", "--head", "fx-not-pushed"],
+                             BKT_ANSWERS=answers(self.none_on("fx-not-pushed"), recorded("pr-create-no-branch")))
         self.assertEqual((result.returncode, result.stdout), (1, ""))
         self.assertIn("source: branch not found: fx-not-pushed", result.stderr)
 
@@ -470,22 +513,25 @@ esac
         for name, open_items, number, branch in (("draft", "1", 2, "fx-draft"), ("ready", "0", 1, "fx-open")):
             with self.subTest(name):
                 self.calls.write_text("", encoding="utf-8")
-                result = self.create([recorded(f"pr-create-{name}")], branch=branch, OPEN_ITEMS_COUNT=open_items)
+                none = self.derived("pr-branch-none", argv=branch_argv(branch))
+                result = self.create([none, recorded(f"pr-create-{name}")], branch=branch, OPEN_ITEMS_COUNT=open_items)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, f"RESULT={PR_URL}{number}")
                 self.assertEqual(self.bodies()[-1].get("draft"), True if name == "draft" else None)
                 calls = [c for c in self.calls.read_text(encoding="utf-8").splitlines() if not c.startswith("bkt context")]
-                self.assertEqual([c.split()[0] for c in calls], ["git", "bkt"])   # push first; no gh
-                self.assertIn("-X POST", calls[1])
+                self.assertEqual([c.split()[0] for c in calls], ["git", "bkt", "bkt"])   # push first, then read and create; no gh
+                self.assertIn("-X POST", calls[-1])
 
     def test_create_retries_only_bitbuckets_missing_branch_answer(self):
-        retried = self.create([recorded("pr-create-no-branch"), recorded("pr-create-ready")], branch="fx-not-pushed")
+        none = self.derived("pr-branch-none", argv=branch_argv("fx-not-pushed"))
+        retried = self.create([none, recorded("pr-create-no-branch"), recorded("pr-create-ready")], branch="fx-not-pushed")
         self.assertEqual(retried.returncode, 0, retried.stderr)
         self.assertEqual(retried.stdout, f"RESULT={PR_URL}1")
         self.assertEqual(len(self.calls_of("bkt --context flownextnew api /repositories/flownextnew/flownext/pullrequests -X POST")), 2)
         self.calls.write_text("", encoding="utf-8")
         other = self.derived("pr-create-no-branch", stderr="Error: 400 Bad Request: destination: branch not found: main\n")
-        stopped = self.create([other, recorded("pr-create-ready")], branch="fx-not-pushed")
+        Path(f"{self.calls}.used").unlink(missing_ok=True)
+        stopped = self.create([none, other, recorded("pr-create-ready")], branch="fx-not-pushed")
         self.assertEqual(stopped.returncode, 1)
         self.assertIn("Error: PR create failed", stopped.stderr)
         self.assertEqual(len(self.calls_of("bkt --context flownextnew api /repositories/flownextnew/flownext/pullrequests -X POST")), 1)

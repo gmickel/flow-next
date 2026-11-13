@@ -2,10 +2,12 @@
 # make-pr's pull requests on a Bitbucket Cloud origin. make-pr-preflight.sh runs this in
 # place of gh for the same argv (`pr list --head <branch> --state all --json <keys>
 # [--jq <expr>]`, `pr view --json <keys> [--jq <expr>]`) and gets gh's JSON keys back:
-# number, url, state (OPEN, MERGED, CLOSED), baseRefName and createdAt, whatever --json names.
+# number, url, state (OPEN, MERGED, CLOSED), baseRefName, createdAt and headRefOid (Bitbucket's
+# short hash), whatever --json names.
 # make-pr-create.sh runs `pr create` with gh's argv (`--title --body-file [--draft]
 # --base --head`) and `pr edit <number> --body-file <file> [--ready]`; both print
-# the pull request's URL.
+# the pull request's URL. `pr create` refuses a branch that already has an open pull
+# request: Bitbucket would answer that create with the open one, overwritten.
 # `login` exits 0 when bkt holds a Bitbucket Cloud login that reads the origin repository.
 # Environment: ORIGIN_PROJECT (origin path, <workspace>/<repository>).
 # Exit 0 is a complete answer; a failed, partial or malformed read exits nonzero,
@@ -42,7 +44,7 @@ fi
 [[ "${1:-}" == pr && "${2:-}" =~ ^(list|view|create|edit)$ ]] || { echo "usage: make-pr-bitbucket.sh pr list|view|create|edit ... | login" >&2; exit 2; }
 
 if [[ "$2" == create ]]; then
-  shift 2; TITLE=""; BODY_FILE=""; BASE=""; HEAD=""; DRAFT=false
+  SELF=$0; shift 2; TITLE=""; BODY_FILE=""; BASE=""; HEAD=""; DRAFT=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --title) TITLE=$2 ;; --body-file) BODY_FILE=$2 ;; --base) BASE=$2 ;; --head) HEAD=$2 ;;
@@ -52,6 +54,9 @@ if [[ "$2" == create ]]; then
     shift 2
   done
   [[ -n "$TITLE" && -f "$BODY_FILE" && -n "$BASE" && -n "$HEAD" ]] || fail "pr create needs --title, --body-file, --base and --head"
+  OPEN=$("$SELF" pr list --head "$HEAD" --state all --json url --jq 'map(select(.state == "OPEN"))[0].url // empty') \
+    || fail "cannot read the pull requests of $HEAD; nothing created"
+  [[ -z "$OPEN" ]] || fail "branch $HEAD already has an OPEN pull request: $OPEN; use --update"
   bkt_write POST "$REPO/pullrequests" "$(jq -cn --rawfile d "$BODY_FILE" --arg t "$TITLE" --arg s "$HEAD" --arg b "$BASE" \
     --argjson draft "$DRAFT" '{title: $t, description: $d} + (if $draft then {draft: true} else {} end)
       + {source: {branch: {name: $s}}, destination: {branch: {name: $b}}}')"
@@ -110,9 +115,11 @@ printf '%s' "$ROWS" | jq -c --arg read "$READ" '
   if all(.[]; type == "object" and (.id | type) == "number" and (.links.html.href | type) == "string" and .links.html.href != ""
          and (.state | IN("OPEN", "MERGED", "DECLINED", "SUPERSEDED")) and (.destination.branch.name | type) == "string"
          and (.destination.repository.full_name | type) == "string" and (.created_on | type) == "string"
-         and ((.source.repository // {}) | type) == "object")
+         and (.source.commit.hash | type) == "string"
+         and (.source | has("repository")) and (.source.repository == null or (.source.repository.full_name | type) == "string"))
   then [.[] | select(((.source.repository.full_name // "") | ascii_downcase) == (.destination.repository.full_name | ascii_downcase))
         | {number: .id, url: .links.html.href, baseRefName: .destination.branch.name, createdAt: .created_on,
+           headRefOid: .source.commit.hash,
            state: {OPEN: "OPEN", MERGED: "MERGED", DECLINED: "CLOSED", SUPERSEDED: "CLOSED"}[.state]}]
        | if $read == "view" then map(select(.state == "OPEN"))[0] // empty else . end
   else error("malformed pull request row") end' | jq -rc "$FILTER" \
