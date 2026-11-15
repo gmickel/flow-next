@@ -115,7 +115,7 @@
     "impl:fn-328-bitbucket-and-jira-field-report-follow.1": 0
   },
   "spec_path": ".flow/specs/fn-328-bitbucket-and-jira-field-report-follow.md",
-  "status": "open",
+  "status": "done",
   "title": "Bitbucket and Jira field-report follow-ups (#602, #611)",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T23:12:07.954059Z"
+  "updated_at": "2026-11-15T23:21:42.944387Z"
 }

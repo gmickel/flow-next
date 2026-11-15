@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-328-bitbucket-and-jira-field-report-follow",
   "spec_path": ".flow/tasks/fn-328-bitbucket-and-jira-field-report-follow.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Bitbucket and Jira field-report follow-ups (#602, #611)",
   "updated_at": "2026-11-15T22:43:15.310553Z"
 }
