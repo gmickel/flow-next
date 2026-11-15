@@ -1935,8 +1935,8 @@ flowctl tracker wire list-states    [--json]
 flowctl tracker wire unready        --locator "$LOCATOR" [--json]
 # Moves an issue out of tracker.readyState: Linear and Jira to the resolved
 # backlog state, GitHub and GitLab by dropping the ready label. Returns
-# {"issue":{"id","identifier"},"from","to","changed"}; from/to are state names
-# (null for a label tracker). Not ready already: changed false, no write.
+# {"issue":{"id","identifier"},"from","to","changed"}; from/to are state names,
+# or on a label tracker the removed label and null. Not ready: changed false.
 flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
 flowctl tracker wire question       --locator "$LOCATOR" \
   --subject-id ID --blocked-stage STAGE --reason-code CODE \
