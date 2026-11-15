@@ -659,5 +659,59 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 )
 
 
+
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class MakePrPushesTrackerSyncState(unittest.TestCase):
+    """R13 (fn-326): make-pr's tracker call writes the spec JSON after the PR
+    push; that write is committed alone and pushed to the PR branch."""
+
+    FENCE = "# fence:make-pr-sync-state"
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t",
+                               "-c", "commit.gpgsign=false", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    def _run(self, change: bool) -> tuple[Path, Path, subprocess.CompletedProcess]:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        origin, co = tmp / "origin.git", tmp / "co"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(co)], check=True, capture_output=True)
+        sidecar = co / ".flow" / "specs" / "fn-1-add.json"
+        sidecar.parent.mkdir(parents=True)
+        sidecar.write_text('{"tracker": {"id": null}}\n', encoding="utf-8")
+        (co / "a.txt").write_text("a\n", encoding="utf-8")
+        self._git(co, "add", "-A")
+        self._git(co, "commit", "-q", "-m", "spec")
+        self._git(co, "switch", "-q", "-c", "fn-1-add")
+        self._git(co, "push", "-q", "-u", "origin", "fn-1-add")
+        if change:  # the link make-pr's create-if-unlinked wrote after the push
+            sidecar.write_text('{"tracker": {"id": "issue-uuid"}}\n', encoding="utf-8")
+        (co / "a.txt").write_text("unrelated\n", encoding="utf-8")
+        text = (SKILLS / "flow-next-make-pr/tracker-finalize.md").read_text(encoding="utf-8")
+        self.assertIn(self.FENCE, text)
+        start = text.index(self.FENCE)
+        fence = text[start:text.index("```", start)]
+        env = {**os.environ, "SPEC_ID": "fn-1-add", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+               "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
+        result = subprocess.run(["bash", "-c", fence], cwd=co, env=env, capture_output=True, text=True)
+        return origin, co, result
+
+    def test_changed_sync_state_is_committed_alone_and_pushed(self) -> None:
+        origin, co, result = self._run(change=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._git(origin, "show", "fn-1-add:.flow/specs/fn-1-add.json"),
+                         '{"tracker": {"id": "issue-uuid"}}')
+        self.assertEqual(self._git(co, "show", "--name-only", "--format=", "HEAD"), ".flow/specs/fn-1-add.json")
+        self.assertEqual(self._git(co, "status", "--porcelain"), "M a.txt")
+
+    def test_unchanged_sync_state_makes_no_commit(self) -> None:
+        origin, co, result = self._run(change=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._git(co, "log", "--format=%s", "-1"), "spec")
+
+
 if __name__ == "__main__":
     unittest.main()
