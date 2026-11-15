@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -660,6 +661,8 @@ class TrackerCallerExecutionTests(unittest.TestCase):
 
 
 
+@unittest.skipIf(sys.platform == "win32" or shutil.which("bash") is None,
+                 "executable fence tests need a POSIX bash")
 @unittest.skipUnless(shutil.which("git"), "requires git")
 class MakePrPushesTrackerSyncState(unittest.TestCase):
     """R13 (fn-326): make-pr's tracker call writes the spec JSON after the PR

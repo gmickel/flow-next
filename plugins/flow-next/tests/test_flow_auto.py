@@ -565,18 +565,22 @@ class PostMergeCheckout(unittest.TestCase):
         self._git(merger, "merge", "-q", "--squash", "origin/fn-1-add")
         self._git(merger, "commit", "-q", "-m", "fn-1-add (#1)")
         self._git(merger, "push", "-q", "origin", "main")
+        self.merge_commit = self._git(merger, "rev-parse", "HEAD")
         self._git(merger, "push", "-q", "origin", "--delete", "fn-1-add")
         (co / ".flow" / "tmp").mkdir()
         (co / ".flow" / "tmp" / "pilot-snapshot.json").write_text(
             json.dumps({"selected": {"id": "fn-1-add", "branch_name": "fn-1-add"}}), encoding="utf-8")
         return co
 
-    def _run_fence(self, co: Path, subdir: str = "") -> subprocess.CompletedProcess:
+    def _run_fence(self, co: Path, subdir: str = "", merged: bool = True) -> subprocess.CompletedProcess:
         text = _read(AUTO_MD)
         self.assertIn(self.FENCE, text)
         env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
                "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
+        env.pop("MERGE_COMMIT", None)
+        if merged:  # the merge commit land confirmed this run
+            env["MERGE_COMMIT"] = self.merge_commit
         cwd = co / subdir
         cwd.mkdir(parents=True, exist_ok=True)
         return subprocess.run(["bash", "-c", _fence_from(text, self.FENCE)], cwd=cwd, env=env,
@@ -591,6 +595,15 @@ class PostMergeCheckout(unittest.TestCase):
             self.assertEqual(self._git(co, "rev-parse", "HEAD"), self._git(co, "rev-parse", "origin/main"))
             self.assertEqual(self._git(co, "status", "--porcelain"), "")
             self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
+
+    def test_a_hop_without_a_confirmed_merge_leaves_everything(self) -> None:
+        # Phase 6 runs after every hop; only a confirmed merge may move the checkout.
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co, merged=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertEqual(self._git(co, "status", "--porcelain"), "M .flow/specs/fn-1-add.json")
 
     def test_a_run_from_a_subdirectory_still_commits_the_sync_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
