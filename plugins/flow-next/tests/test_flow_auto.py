@@ -596,6 +596,7 @@ class PostMergeCheckout(unittest.TestCase):
             co = self._merged_checkout(Path(tmp))
             self._git(co, "commit", "-q", "--only", "-m", "sync", "--", ".flow/specs/fn-1-add.json")
             self._git(co, "switch", "-q", "main")
+            (co / ".flow" / "specs").mkdir(exist_ok=True)
             (co / ".flow" / "specs" / "fn-2-next.json").write_text("{}\n", encoding="utf-8")
             self._git(co, "add", "-A")
             self._git(co, "commit", "-q", "-m", "plan fn-2-next")
