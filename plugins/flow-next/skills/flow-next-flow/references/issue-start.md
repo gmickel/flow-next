@@ -21,7 +21,9 @@ run). Then, before any write:
 
 - `"$FLOWCTL" sync active --json` reads `active: true`, and `tracker.readyState` is set.
 - `"$FLOWCTL" tracker wire list-open --json` lists the issue: match its `identifier` or `url`
-  against the key or URL given (a Jira row has no `url`; match the key a URL ends with). That row
+  against the key or URL given. A Jira row has no `url`: a Jira URL counts only when its host is
+  the host of `tracker.perTracker.baseUrl`, and then its key is matched; a URL from another site
+  stops `NEEDS_HUMAN` with `issue URL is not on <baseUrl>`. That row
   is the consent read (the exact ready lane) and supplies
   the locator, `{"durable": <id>, "display": <identifier>}`. A truncated listing never counts as
   absent.
@@ -34,26 +36,34 @@ write; an issue not in the ready lane is `issue <key> is not in <readyState>`.
 
 ## 2. Resolve an existing spec
 
-`git fetch origin` (a failure stops `NEEDS_HUMAN`, never a capture). A spec is linked when its
-JSON's `tracker.id` is the issue's durable id. Look in three places, deduplicating by spec id: the
-checkout's `.flow/specs/*.json`, the fetched default branch
-(`git show origin/<default>:.flow/specs/<id>.json`), and, for each spec
-`"$FLOWCTL" specs --refs --json` lists in `summary.branch_only`, its JSON at its first live ref.
+A spec is linked when its JSON's `tracker.id` is the issue's durable id.
+`"$FLOWCTL" specs --refs --fetch --tracker-id "<durable id>" --json` fetches origin and lists every
+linked spec with where its link is: `checkout: true` for the checkout's `.flow/specs/*.json`,
+committed or not, and `refs` for each local or remote-tracking branch whose JSON carries it (a spec
+already on the default branch and a link added by a JSON-only change count). A `fetch_error` stops
+`NEEDS_HUMAN`, never a capture.
 
 - Two or more linked specs stop `NEEDS_HUMAN` naming them. None: continue below.
-- One: bring it into the checkout. On the default branch only, fast-forward
-  (`git merge --ff-only origin/<default>`); a checkout on another branch that lacks it stops
-  `NEEDS_HUMAN`. Only on its branch: check that branch out. Then set `PILOT_SPEC` and continue with
-  auto.md exactly as `flow --auto <spec-id>` would, capturing nothing.
-- A spec an issue start captured (its spec file's latest commit is step 5's capture commit) is
-  finished first: when its branch is not on origin yet, push it as step 5 does, and it keeps step
-  5's design review. Any other linked spec runs exactly as a person left it.
+- One: bring it into the checkout. The checkout holds the link: stay. `origin/<default>` holds it:
+  on the default branch fast-forward (`git merge --ff-only origin/<default>`); a checkout on
+  another branch stops `NEEDS_HUMAN`. Otherwise check out the branch it lists. Then set
+  `PILOT_SPEC` and continue with auto.md exactly as `flow --auto <spec-id>` would, capturing
+  nothing.
+- A spec an issue start captured is finished first. When its spec file has no commit yet
+  (`git log -1 -- .flow/specs/<spec-id>.md` prints nothing), its capture was interrupted, whoever
+  wrote it: finish step 5 from where it stopped (its checks, `spec ready`, the branch, the capture
+  commit and the push). When its spec file's latest commit is step 5's capture commit and its
+  branch is not on origin yet, push it as step 5 does. Either way it keeps step 5's design review
+  before any work hop. Any other linked spec runs exactly as a person left it.
 
 ## 3. Read the source
 
 The source is the issue body and its comments. When a comment carries a `flow-next:question`
-marker from an earlier run, the person moving the issue back into the ready state is the answer:
-use the body plus every comment after the latest such marker, and treat that question as settled.
+marker from an earlier run, the person moving the issue back into the ready state, with a comment
+after that marker, is the answer: use the body plus every comment after the latest such marker,
+and treat that question as settled. With no comment after it the question is still open (a run
+stopped before it moved the issue out, or the answer is an edit to the body): the source is the
+body.
 
 ## 4. Route and the bar
 
@@ -104,6 +114,12 @@ still `unknown` gets the same review. Only a sentence in the repository's AGENTS
 captured skips it; record that skip with the sentence. A run that dispatched work on such a spec
 without the review or that sentence has broken this.
 
+**Implementation review on every work hop.** Nobody wrote the spec and nobody reads the code before
+an unattended merge, so every work hop of an issue start, on a spec step 2 resolved or step 5
+captured, runs implementation review on the configured backend: the working rules' risk rule never
+skips it here. auto.md's work dispatch says so to work. With no backend configured, work's skip and
+its note stand.
+
 ## 6. Refuse: ask on the issue
 
 Write the questions to a mode `0600` file: each one names what is unclear, the options when they
@@ -114,11 +130,14 @@ move it back to <readyState>." For a non-build issue, say which route fits and h
 "$FLOWCTL" tracker wire question --locator "$LOCATOR" \
   --subject-id "<durable id>" --blocked-stage capture \
   --reason-code "<not-buildable | not-a-build>" --question-slug "<short topic slug>" \
-  --body-file "<file>" --json
+  --reply-settles --body-file "<file>" --json
 "$FLOWCTL" tracker wire unready --locator "$LOCATOR" --json
 ```
 
-The slug names the topic, so the same question asked again dedupes and a new one posts. No spec is
+The slug names the topic, so the same question asked again dedupes and a new one posts.
+`--reply-settles` makes a comment after the latest matching question settle that round, as step 3
+reads it: a follow-up on the same topic after a plain reply posts a new round, and a rerun of a
+round nobody replied to dedupes. No spec is
 written. A failed post stops `NEEDS_HUMAN`. A failed `unready` (for example `backlog_slot`) leaves
 the posted question standing; name the failure in the reason.
 

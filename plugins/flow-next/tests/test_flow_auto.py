@@ -390,5 +390,120 @@ class MakePrVerifyProbe(unittest.TestCase):
                     self.assertEqual(snap.read_text(), body)
 
 
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+class IssueStartContract(unittest.TestCase):
+    """--from-issue rules that live in prose (fn-326 R1, R4, R5)."""
+
+    def test_interrupted_capture_is_finished_before_work(self) -> None:
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        self.assertIn("When its spec file has no commit yet (`git log -1 -- .flow/specs/<spec-id>.md` "
+                      "prints nothing), its capture was interrupted", text)
+        self.assertIn("Either way it keeps step 5's design review before any work hop.", text)
+
+    def test_jira_url_from_another_site_stops_before_writes(self) -> None:
+        self.assertIn("a Jira URL counts only when its host is the host of `tracker.perTracker.baseUrl`",
+                      _flat(_read(FLOW_REFERENCES / "issue-start.md")))
+
+    def test_every_work_hop_runs_implementation_review(self) -> None:
+        self.assertIn("the working rules' risk rule never skips it here",
+                      _flat(_read(FLOW_REFERENCES / "issue-start.md")))
+        self.assertIn("Under `--from-issue`, append the dispatch context `issue start: run implementation "
+                      "review on every task; the risk rule does not skip it`", _read(AUTO_MD))
+
+
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
+    """R2: a link only a remote branch's JSON carries is found before capture."""
+
+    def _git(self, repo: Path, *args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t",
+                        "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
+
+    def test_json_only_link_on_a_remote_branch_is_found(self) -> None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flowctl_test_support import FLOWCTL_CMD  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            origin, author, runner = Path(tmp) / "origin.git", Path(tmp) / "author", Path(tmp) / "runner"
+            subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+            subprocess.run(["git", "clone", "-q", str(origin), str(author)], check=True, capture_output=True)
+            specs = author / ".flow" / "specs"
+            specs.mkdir(parents=True)
+            (specs / "fn-1-login.md").write_text("# Login\n", encoding="utf-8")
+            sidecar = {"id": "fn-1-login", "title": "Login", "status": "open"}
+            (specs / "fn-1-login.json").write_text(json.dumps(sidecar), encoding="utf-8")
+            self._git(author, "add", "-A")
+            self._git(author, "commit", "-q", "-m", "spec on main")
+            self._git(author, "push", "-q", "origin", "HEAD:main")
+            subprocess.run(["git", "clone", "-q", str(origin), str(runner)], check=True, capture_output=True)
+            # The link lands on a branch by a JSON-only change; the body stays as on main.
+            self._git(author, "switch", "-q", "-c", "fn-1-login")
+            linked = {**sidecar, "tracker": {"id": "issue-uuid-7", "identifier": "SCF-7"}}
+            (specs / "fn-1-login.json").write_text(json.dumps(linked), encoding="utf-8")
+            self._git(author, "commit", "-q", "-am", "link")
+            self._git(author, "push", "-q", "origin", "fn-1-login")
+
+            result = subprocess.run([*FLOWCTL_CMD, "specs", "--refs", "--fetch", "--tracker-id", "issue-uuid-7",
+                                     "--json"], cwd=runner, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            found = json.loads(result.stdout)
+            self.assertIsNone(found["fetch_error"])
+            self.assertEqual(found["linked"], [
+                {"id": "fn-1-login", "checkout": False, "refs": ["refs/remotes/origin/fn-1-login"]},
+            ])
+
+
+class IssueStartQuestionRounds(unittest.TestCase):
+    """R3: refusal, plain reply, re-promotion, follow-up posts once."""
+
+    def test_plain_reply_settles_the_round_and_a_rerun_dedupes(self) -> None:
+        sys.path.insert(0, str(PLUGIN / "scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flowctl_tracker import wire  # noqa: PLC0415
+        from test_tracker_wire import LN_ISSUE, LN_UUID, fake_execute, gql_issue, ln_cfg, loc, ok  # noqa: PLC0415
+
+        def comment(number: int, body: str, at: str) -> dict:
+            return {"id": str(number), "body": body, "createdAt": at, "url": f"https://linear.test/c/{number}"}
+
+        def ask(comments: list, *, reply_settles: bool = True):
+            added = comment(99, "posted", "2026-11-15T12:00:00Z")
+            ex = fake_execute({
+                "wire-comment-list": ok({"data": {"issue": {"id": LN_UUID, "comments": {
+                    "nodes": comments, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}}),
+                "wire-parent-read": gql_issue(LN_ISSUE),
+                "wire-comment-add": ok({"data": {"commentCreate": {
+                    "success": True, "comment": {**added, "issue": {"id": LN_UUID}}}}}),
+            })
+            with tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                flow.mkdir()
+                out = wire.dispatch(
+                    "question", ln_cfg(), locator=loc(LN_UUID, "WOR-17"), subject_id=LN_UUID,
+                    blocked_stage="capture", reason_code="not-buildable", question_slug="login-scope",
+                    reply_settles=reply_settles, body="Which login?", flow_dir=flow, execute=ex)
+            self.assertIsInstance(out, dict, out)
+            posts = sum(call.op == "wire-comment-add" for call in ex.calls)
+            self.assertEqual(posts, 1 if out["posted"] else 0)
+            return out
+
+        first = ask([])
+        self.assertTrue(first["posted"])
+        marker = f"<!-- flow-next:question id={first['question_id']} status=open -->\n\nWhich login?"
+        refused = comment(1, marker, "2026-11-15T08:00:00Z")
+        reply = comment(2, "Email login only.", "2026-11-15T09:00:00Z")
+
+        follow_up = ask([refused, reply])
+        self.assertTrue(follow_up["posted"])
+        self.assertTrue(follow_up["reopened"])
+        # Without the flag the answer-marker protocol (backlog mode) still dedupes.
+        self.assertFalse(ask([refused, reply], reply_settles=False)["posted"])
+        # A rerun of the follow-up round, nobody having replied, posts nothing.
+        rerun = ask([refused, reply, comment(3, marker, "2026-11-15T10:00:00Z")])
+        self.assertFalse(rerun["posted"])
+
+
 if __name__ == "__main__":
     unittest.main()

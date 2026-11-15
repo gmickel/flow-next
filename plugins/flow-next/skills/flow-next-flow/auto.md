@@ -362,7 +362,7 @@ Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level
 
 - `plan`: `flow-next:flow-next-plan <spec-id> mode:autonomous --depth=<level> <REVIEW_ARG-if-nonempty>`
 - `plan-review`: `flow-next:flow-next-plan-review <spec-id> mode:autonomous <REVIEW_ARG-if-nonempty>`
-- `work`: `flow-next:flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
+- `work`: `flow-next:flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`. Under `--from-issue`, append the dispatch context `issue start: run implementation review on every task; the risk rule does not skip it` ([references/issue-start.md](references/issue-start.md)).
 - `qa`: `flow-next:flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
 - `make-pr`: `flow-next:flow-next-make-pr <spec-id> mode:autonomous`
 - `land`: `flow-next:flow-next-land` for one run, with the ordinary PR and current authorization arguments from `references/tail.md`; land's own guards and gates remain authoritative.

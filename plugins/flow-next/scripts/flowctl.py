@@ -32211,6 +32211,66 @@ def _spec_ref_merge(tmp: Path, ours: bytes, base: bytes, theirs: bytes) -> tuple
     return result.stdout, (result.returncode if result.returncode <= 127 else -1)
 
 
+def _spec_ref_fetch(repo_root: Path) -> tuple[bool, Optional[str]]:
+    """Prune-fetch origin: (fetched, error)."""
+    result = _spec_ref_git(repo_root, "fetch", "--prune", "--quiet", "origin", lazy_fetch=True)
+    if result.returncode == 0:
+        return True, None
+    return False, (result.stderr or "").strip() or f"git fetch exit {result.returncode}"
+
+
+def find_linked_specs(repo_root: Path, tracker_id: str, *, fetch: bool) -> dict:
+    """Specs whose sidecar's tracker.id is ``tracker_id``, in the checkout and on every ref.
+
+    Reads each ref's spec JSON rather than its body, so a link that only a
+    JSON change on a branch carries is found, and a spec already on the base
+    branch is not skipped. The checkout's sidecars count committed or not.
+    """
+    if _spec_ref_git(repo_root, "rev-parse", "--git-dir").returncode != 0:
+        raise SpecRefIndexError(f"not a git repository: {repo_root}")
+    fetched, fetch_error = _spec_ref_fetch(repo_root) if fetch else (False, None)
+
+    linked: dict = {}
+    flow_dir = repo_root / FLOW_DIR
+    if flow_dir.is_dir():
+        for spec_id, state in _iter_tracker_states(flow_dir):
+            if state.get("id") == tracker_id:
+                linked[spec_id] = {"id": spec_id, "checkout": True, "refs": []}
+
+    listing = _spec_ref_git(
+        repo_root, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)",
+        "refs/heads", "refs/remotes",
+    )
+    trees: dict = {}
+    ref_oids = []  # (ref, spec_id, json oid)
+    for line in listing.stdout.splitlines():
+        name, sha, symref = line.split("\x00")
+        if symref:
+            continue
+        for spec_id, blobs in _spec_ref_tree(repo_root, sha, trees).items():
+            if blobs.get("json"):
+                ref_oids.append((name, spec_id, blobs["json"]))
+    contents = _spec_ref_blobs(repo_root, {oid for _, _, oid in ref_oids})
+    linked_oids: dict = {}
+    for oid, raw in contents.items():
+        try:
+            meta = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            continue
+        tracker = meta.get("tracker") if isinstance(meta, dict) else None
+        linked_oids[oid] = isinstance(tracker, dict) and tracker.get("id") == tracker_id
+    for name, spec_id, oid in sorted(ref_oids):
+        if linked_oids.get(oid):
+            linked.setdefault(spec_id, {"id": spec_id, "checkout": False, "refs": []})["refs"].append(name)
+
+    return {
+        "tracker_id": tracker_id,
+        "fetched": fetched,
+        "fetch_error": fetch_error,
+        "linked": [linked[spec_id] for spec_id in sorted(linked, key=lambda i: (id_sort_key(i), i))],
+    }
+
+
 def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
     """Index every spec across base, local branches and remote-tracking refs.
 
@@ -32221,12 +32281,7 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
     if _spec_ref_git(repo_root, "rev-parse", "--git-dir").returncode != 0:
         raise SpecRefIndexError(f"not a git repository: {repo_root}")
 
-    fetched, fetch_error = False, None
-    if fetch:
-        fetch_result = _spec_ref_git(repo_root, "fetch", "--prune", "--quiet", "origin", lazy_fetch=True)
-        fetched = fetch_result.returncode == 0
-        if not fetched:
-            fetch_error = (fetch_result.stderr or "").strip() or f"git fetch exit {fetch_result.returncode}"
+    fetched, fetch_error = _spec_ref_fetch(repo_root) if fetch else (False, None)
 
     candidates = _default_branch_candidates(repo_root)
     base_ref = base_sha = None
@@ -32360,6 +32415,22 @@ def build_spec_ref_index(repo_root: Path, *, fetch: bool) -> dict:
 
 def cmd_specs_refs(args: argparse.Namespace) -> None:
     """`specs --refs`: the cross-branch spec index."""
+    if args.tracker_id is not None:
+        try:
+            found = find_linked_specs(get_repo_root(), args.tracker_id, fetch=args.fetch)
+        except SpecRefIndexError as exc:
+            error_exit(str(exc), use_json=args.json)
+        if args.json:
+            json_output(found)
+            return
+        if found["fetch_error"]:
+            print(f"Fetch failed (searched local refs): {found['fetch_error']}")
+        for spec in found["linked"]:
+            places = (["checkout"] if spec["checkout"] else []) + spec["refs"]
+            print(f"{spec['id']}: {', '.join(places)}")
+        if not found["linked"]:
+            print(f"No spec is linked to {args.tracker_id}")
+        return
     try:
         index = build_spec_ref_index(get_repo_root(), fetch=args.fetch)
     except SpecRefIndexError as exc:
@@ -32400,6 +32471,8 @@ def cmd_specs(args: argparse.Namespace) -> None:
         )
     if getattr(args, "fetch", False):
         error_exit("--fetch requires --refs", use_json=args.json)
+    if getattr(args, "tracker_id", None) is not None:
+        error_exit("--tracker-id requires --refs", use_json=args.json)
 
     flow_dir = get_flow_dir()
     spec_data_list = []
@@ -43544,6 +43617,7 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         blocked_stage=getattr(args, "blocked_stage", None),
         reason_code=getattr(args, "reason_code", None),
         question_slug=getattr(args, "question_slug", None),
+        reply_settles=getattr(args, "reply_settles", False),
         add=getattr(args, "add", None),
         remove=getattr(args, "remove", None),
         file_path=getattr(args, "file", None),
@@ -56525,6 +56599,9 @@ def main() -> None:
     p_wire_question.add_argument("--blocked-stage", required=True)
     p_wire_question.add_argument("--reason-code", required=True)
     p_wire_question.add_argument("--question-slug", required=True)
+    p_wire_question.add_argument(
+        "--reply-settles", action="store_true",
+        help="A comment after the latest matching question settles that round (no answer marker needed)")
     p_wire_question.add_argument("--body-file", required=True)
     _wire_json(p_wire_question)
     p_wire_question.set_defaults(func=cmd_tracker_wire)
@@ -58833,6 +58910,10 @@ def main() -> None:
         help="Index specs across local branches and remote-tracking refs (read-only, no network)",
     )
     p_specs.add_argument("--fetch", action="store_true", help="With --refs: prune-fetch origin first")
+    p_specs.add_argument(
+        "--tracker-id",
+        help="With --refs: list only specs whose JSON links this durable tracker id, in the checkout and on any ref",
+    )
     p_specs.set_defaults(func=cmd_specs)
 
     p_tasks = subparsers.add_parser("tasks", help="List tasks")
