@@ -214,7 +214,7 @@
     "impl:fn-325-unattended-start-from-a-tracker-issue.1": 0
   },
   "spec_path": ".flow/specs/fn-325-unattended-start-from-a-tracker-issue.md",
-  "status": "open",
+  "status": "done",
   "title": "Unattended start from a tracker issue: flow --from-issue",
   "tracker": {
     "baseHashFlow": null,
@@ -227,5 +227,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T14:02:48.140729Z"
+  "updated_at": "2026-11-15T14:03:03.249817Z"
 }

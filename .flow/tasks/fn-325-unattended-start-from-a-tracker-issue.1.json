@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-325-unattended-start-from-a-tracker-issue",
   "spec_path": ".flow/tasks/fn-325-unattended-start-from-a-tracker-issue.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Unattended start from a tracker issue: flow --from-issue",
   "updated_at": "2026-11-15T12:51:20.254588Z"
 }
