@@ -18,7 +18,7 @@ from test_pr_cognitive_aid import (
 class SparseInputTests(unittest.TestCase):
     def setUp(self):
         remote = mock.patch.object(
-            flowctl, "_export_run_git", return_value=(0, "git@example.test:acme/repo.git", "")
+            flowctl, "_export_run_git", return_value=(0, "git@github.com:acme/repo.git", "")
         )
         remote.start()
         self.addCleanup(remote.stop)
