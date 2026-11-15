@@ -16,9 +16,31 @@ Touches: plugins/flow-next/skills/flow-next-capture/references/tracker-integrati
 R6, R7, R8 and R10 of the parent spec hold, plus the two docs follow-ups, with the tests and the live GitLab recording they name.
 
 ## Done summary
-TBD
+Fixed R6, R7, R8 and R10 in the tracker package and added both docs follow-ups. A capture push against an issue in the ready lane is now a status no-op. `sync set-merge-base` stores the tracker half as `trackerBodyForMerge`. Linear's default `list-open` query is 9.10.0's again. A GitLab host on a non-default port reaches glab through `GITLAB_HOST`.
 
+- **R6** (`status/policy.py`): the early-agreement check now covers todo and backlog in either order, so `decide('backlog', None, 'backlog', 'todo', 'none')` returns a noop at the tracker's slot. Requests for in_progress or done against that pair still return a conflict. The readyState projection does not use `decide()`, and reconcile and backlog mode call it through `run_status`, so neither changes. The only effect there is that a capture push no longer conflicts and no longer moves the issue out of Todo. Test: `test_tracker_status_policy.py`. Live on Linear FLOW, measured: on base, FLOW-124 failed with `status conflict (unmapped): flow='backlog' tracker='todo'`. On head, FLOW-123's status step was a `noop`, the body was pushed and the issue stayed in Todo. Both issues are now Canceled, along with FLOW-122, which was cancelled after a script error.
+- **R7** (`flowctl.py` `cmd_sync_set_merge_base`): the tracker half goes through `trackerBodyForMerge` (lazy import, skipped in a standalone copy that has no tracker package). This is the form push compares against, and it matches `_commit_paired_base`. The capture prose did not need to change, because the command it prescribes is now correct. Test: `CaptureLinkSeed` now seeds through the real `flowctl sync set-merge-base` CLI, using an issue body with a trailing newline and a `flow:deps` region, and pushes with `refuse_tracker_divergence=True`. On base it failed with `tracker_diverged`; on head it is green. Linear strips a trailing newline when it stores a body, so the live run did not exercise this path.
+- **R8** (`wire/linear.py`, `wire/__init__.py`): `list_open(..., labels=False)` selects labels only when the compact dispatch asks (`--any-lane` or `--unlinked`). Tests: the default query matches a fixed 9.10.0 string, and both compact flags select labels.
+- **R10** (`types.py` `gitlab_cli_host`, `providers/gitlab.py`, `wire/__init__.py`): this deviates from the spec's wording. glab 1.124 rejects every `--hostname` value that has a port, with "invalid hostname" (measured for `localhost:8929` and `http://localhost:8929`). So a host on a non-default port goes through `Request.env` as `GITLAB_HOST=<host>:<port>`, which is what `flowctl.py`'s forge `_glab_get` and `make-pr-gitlab.sh` already do. Any other host keeps the bare `--hostname`. Live against http://localhost:8929, flownext/flownext, measured: on base, `tracker resolve` returned `rejected (400)`. On head, resolve returned projectId 1 and namespace 2, and `list-open --any-lane` listed scratch issue #8 (now closed). The result was the same with a gitlab.com origin remote, so `GITLAB_HOST` takes precedence over the remote.
+- **Docs**: `docs/flowctl.md` now documents `specs --refs --tracker-id`, including that it fails closed on a spec JSON it cannot read, and the form `set-merge-base` stores the tracker half in. `docs/tracker-sync.md` now documents `wire question --reply-settles` and the GitLab host route. The Codex mirror and MANIFEST were regenerated, and `codex/agents` has 21 entries.
+
+Needs the conductor's attention:
+- **Shape-A glab logins on a ported host stop working.** A login keyed by a bare host with `api_host` set (the shape the 2026-07-28 pin measured) is reached only through a bare `--hostname`. A `host:port` key, which current `glab auth login` writes, is reached only through `GITLAB_HOST`. I measured both in a throwaway glab config, and glab ignores `GITLAB_HOST` when `--hostname` is also set. The fix follows the spec's intent, current glab and the repo's existing forge and upload-credential code. A shape-A user on a ported host has to log in again with `glab auth login --hostname <host>:<port>`.
+- **One file outside the declared Touches changed.** In `plugins/flow-next/tests/test_tracker_wire.py`, `GitlabSelfHostedHostname` pinned the old bare-hostname behaviour for ported hosts. I replaced it with a table-driven test that covers both glab call sites.
+
+baseline: green via handoff (22e4a0ca: test_tracker_list_open_intake, test_tracker_syncbody, test_tracker_conformance, test_tracker_wire)
+Gates: `test_tracker_*.py` (1055 tests), the gitlab suites (82), the codex suites (53), create_first, land_tracker_api and ruff all pass. `gate classify` returned FULL, because the codex/ prefix forces it.
+Tier: session (jev long_running 0.49) at default effort (model: claude-opus-5-5)
+
+stage: impl-review - skipped(policy: parallel-wave - conductor owns review after integration)
+
+Conductor change after integration (R10): the worker's GITLAB_HOST route dropped the older bare-hostname glab login that 9.9.1 supports for the forge. gitlab_cli_host now probes glab auth status for host:port once per process and falls back to the bare hostname on glab's logged-out answer (c71061e48 test, c229430f8 fix). Live: resolve + list-open --any-lane against http://localhost:8929 with GITLAB_HOST unset, both success (base: rejected (400)). The bare-login fallback is covered by a patched-probe test only (no such login on this machine).
+Touches note: the worker edited plugins/flow-next/tests/test_tracker_wire.py (outside declared Touches) to replace a test pinning the old dropped-port behaviour.
+
+stage: impl-review - ran codex three lenses SHIP, no findings (model: gpt-6.1-sol)
+stage: plan-sync - skipped(config: planSync.enabled=false)
+Tier: session (jev long_running 0.49) at default effort (model: claude-opus-5-5)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a0448b044ea0dd83479a1eaeb743fef36b92ad1e, 1d1b3526fa3805a831803419298979bf11d6cdef, c71061e489ac50311789379d974e4414f2899631, c229430f864e99a9c8b0b5a88998f9d8a010ce67
+- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_tracker_wire.py' (+ tracker_conformance, syncbody, status_policy, list_open_intake, distribution, executor, unready, flow_auto, create_first_sequence, land_tracker_api, *_gitlab); live Linear FLOW-123/124 capture push, live GitLab localhost:8929
 - PRs:
