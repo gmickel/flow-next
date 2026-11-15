@@ -150,7 +150,7 @@
     "impl:fn-314-intake-for-open-tracker-issues-that-no.1": 0
   },
   "spec_path": ".flow/specs/fn-314-intake-for-open-tracker-issues-that-no.md",
-  "status": "open",
+  "status": "done",
   "title": "Intake for open tracker issues that no spec covers",
   "tracker": {
     "baseHashFlow": null,
@@ -163,5 +163,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T13:17:29.102289Z"
+  "updated_at": "2026-11-15T13:19:50.879478Z"
 }

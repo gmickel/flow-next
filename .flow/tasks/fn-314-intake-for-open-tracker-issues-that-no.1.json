@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-314-intake-for-open-tracker-issues-that-no",
   "spec_path": ".flow/tasks/fn-314-intake-for-open-tracker-issues-that-no.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Intake for open tracker issues that no spec covers",
   "updated_at": "2026-11-15T12:51:31.673018Z"
 }
