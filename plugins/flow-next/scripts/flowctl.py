@@ -24102,7 +24102,11 @@ def repo_forge(repo: str) -> ForgeOrigin:
                               text=True, timeout=10, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return ForgeOrigin(None, None, None)
-    url = proc.stdout.strip() if proc.returncode == 0 else ""
+    return _origin_forge(proc.stdout.strip() if proc.returncode == 0 else "")
+
+
+def _origin_forge(url: str) -> ForgeOrigin:
+    """The forge, host and project an origin remote URL names."""
     if "://" in url:
         try:
             parsed = urllib.parse.urlsplit(url)
@@ -30028,20 +30032,23 @@ def _pr_aid_pattern_attention(repo_path: str) -> Optional[str]:
 
 
 def _pr_aid_blob_prefix(head_sha: Any) -> Optional[str]:
-    """Resolve a head-bound repository-relative link using the local origin."""
+    """Resolve a head-bound, host-relative file link in the origin forge's own path shape."""
     if not isinstance(head_sha, str) or not _PR_COGNITIVE_AID_SHA_RE.fullmatch(head_sha):
         return None
     rc, remote, _ = _export_run_git(["remote", "get-url", "origin"])
     if rc:
         return None
-    match = re.fullmatch(
-        r"(?:https?://[^/]+/|ssh://[^/]+/|[^/@:]+@[^/:]+:)"
-        r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
-        remote.strip(),
-    )
-    if not match or any(part in (".", "..") for part in match.groups()):
+    origin = _origin_forge(remote.strip())
+    parts = (origin.project or "").split("/")
+    if not origin.project or any(part in (".", "..") or not re.fullmatch(r"[A-Za-z0-9_.-]+", part)
+                                 for part in parts):
         return None
-    return f"/{match[1]}/{match[2]}/blob/{head_sha}/"
+    if origin.forge == "gitlab":
+        return f"/{origin.project}/-/blob/{head_sha}/"  # a namespace may nest groups
+    if len(parts) != 2:
+        return None
+    # An origin no adapter claims reads as GitHub, as everywhere else in flowctl.
+    return f"/{origin.project}/{'src' if origin.forge == 'bitbucket' else 'blob'}/{head_sha}/"
 
 
 def _expand_pr_cognitive_aid_input(
