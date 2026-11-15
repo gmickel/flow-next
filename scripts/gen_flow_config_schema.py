@@ -249,6 +249,11 @@ DESCRIPTIONS: dict[str, str] = {
         "for a self-hosted internal-CA / self-signed cert (JIRA_SSL_VERIFY "
         "env overrides)."
     ),
+    "tracker.perTracker.tokenCommand": (
+        "Argv list (no shell) that prints the Linear API key, Jira API token "
+        "or Jira PAT. Runs once per flowctl process, only when the env var "
+        "is unset; 10 s timeout; its output is never written anywhere."
+    ),
     "tracker.perTracker.statusMap": (
         "Legacy normalized-status to Jira status map ({name}/{id}; id "
         "preferred - names are project-renamable). Live entries migrate into "
@@ -580,6 +585,10 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perTracker.preferredTransport", {"type": ["string", "null"]}),
         ("tracker.perTracker.transport", {"type": ["string", "null"]}),
         ("tracker.perTracker.sslVerify", {"type": "boolean"}),
+        (
+            "tracker.perTracker.tokenCommand",
+            {"type": ["array", "null"], "items": {"type": "string"}, "minItems": 1},
+        ),
         ("tracker.perTracker.statusMap", _status_map_fragment()),
         ("tracker.staleAfterHours", {"type": "integer"}),
         (

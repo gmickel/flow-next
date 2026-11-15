@@ -259,6 +259,8 @@ def on_mcp_rung(config: dict) -> bool:
             return True
         if low in ("graphql", "http", "api", "linear-graphql"):
             return False
+    if per.get("tokenCommand"):
+        return False
     return not bool(os.environ.get("LINEAR_API_KEY", "").strip())
 
 

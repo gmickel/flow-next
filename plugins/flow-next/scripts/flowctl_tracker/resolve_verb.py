@@ -83,6 +83,7 @@ def bound_executor(config: dict, execute: Callable,
     transport = _dict(tracker.get("transport"))
 
     auth_scheme = per.get("authScheme")
+    token_command = per.get("tokenCommand")
     verify_tls = per.get("sslVerify")
     verify_tls = True if verify_tls is None else bool(verify_tls)
     env_ssl = os.environ.get("JIRA_SSL_VERIFY")
@@ -105,7 +106,7 @@ def bound_executor(config: dict, execute: Callable,
         if timeout_s is not None and request.timeout_s == type(request).__dataclass_fields__["timeout_s"].default:
             import dataclasses
             request = dataclasses.replace(request, timeout_s=timeout_s)
-        return default_execute(request, auth_scheme=auth_scheme,
+        return default_execute(request, auth_scheme=auth_scheme, token_command=token_command,
                                verify_tls=verify_tls, on_event=on_event,
                                max_retries=retries, backoff_cap_s=backoff_cap,
                                concurrency=concurrency)

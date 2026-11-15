@@ -298,6 +298,7 @@ def execute(
     request: Request,
     *,
     auth_scheme: Optional[str] = None,
+    token_command: Optional[list] = None,
     verify_tls: bool = True,
     on_event: Optional[Callable[[str], None]] = None,
     max_retries: Optional[int] = None,
@@ -333,7 +334,8 @@ def execute(
         try:
             # A corrupt glab config or an unreadable credential source must not
             # escape either - this sits outside every other guard.
-            cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host)
+            cred = resolve(request.provider, auth_scheme=auth_scheme, host=dest_host,
+                           token_command=token_command)
         except Exception as exc:  # noqa: BLE001 - boundary: nothing may escape execute()
             return TrackerError(ErrorClass.AUTH, redact(f"credential resolution failed: {exc}"),
                                 subtype="resolve")

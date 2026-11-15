@@ -424,6 +424,17 @@
               "type": "boolean",
               "default": true
             },
+            "tokenCommand": {
+              "description": "Argv list (no shell) that prints the Linear API key, Jira API token or Jira PAT. Runs once per flowctl process, only when the env var is unset; 10 s timeout; its output is never written anywhere.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
             "statusMap": {
               "description": "Legacy normalized-status to Jira status map ({name}/{id}; id preferred - names are project-renamable). Live entries migrate into tracker.resolved.destination.statusIds; dead entries are dropped with a warning.",
               "type": "object",
