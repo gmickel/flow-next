@@ -549,10 +549,9 @@ class ConformanceMatrix(unittest.TestCase):
                         {"name": {"eqIgnoreCase": "Ready"}},
                     )
                 else:
-                    params = parse_qs(urlparse(str(request.url_or_argv)).query)
                     self.assertEqual(
-                        params["jql"],
-                        ['project = SCRUM AND status = "Ready for Work"'],
+                        json.loads(request.body)["jql"],
+                        'project = SCRUM AND status = "Ready for Work"',
                     )
 
     def test_list_open_unset_ready_lane_is_noop_except_linear(self) -> None:
@@ -1638,6 +1637,7 @@ class JiraDcCustomKey(unittest.TestCase):
 
     def test_list_open_jql_accepts_dc_project_key(self) -> None:
         cfg = jr_cfg(project_key=DC_PROJECT)
+        cfg["tracker"]["perTracker"]["authScheme"] = "bearer-pat"
         ex = fake_execute({"wire-list-open": ok({"issues": [DC_ISSUE]})})
         out = W.dispatch("list-open", cfg, execute=ex)
         self.assertNotIsInstance(out, TrackerError)

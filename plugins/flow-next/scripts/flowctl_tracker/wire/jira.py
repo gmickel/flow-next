@@ -477,7 +477,11 @@ def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Resu
     collected: list = []
     truncated = False
     fields = ["summary", "description", "status", "priority", "labels", "updated"]
-    if str(dest.get("apiVersion")) == "3":
+    version = "3" if str(dest.get("apiVersion")) == "3" else "2"
+    scheme = _dict(_dict(config.get("tracker")).get("perTracker")).get("authScheme")
+    # Cloud answers 410 Gone on GET /rest/api/2/search (measured 2026-11-15);
+    # its cursor search serves v2 and v3. Data Center keeps the classic search.
+    if version == "3" or scheme != "bearer-pat":
         next_page = None
         seen = set()
         for _ in range(_MAX_PAGES):
@@ -485,7 +489,7 @@ def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Resu
             if next_page is not None:
                 body["nextPageToken"] = next_page
             data = _jira(execute, "wire-list-open", "POST",
-                         f"{base}/rest/api/3/search/jql", body=body,
+                         f"{base}/rest/api/{version}/search/jql", body=body,
                          idempotent=True)
             if isinstance(data, TrackerError):
                 return data

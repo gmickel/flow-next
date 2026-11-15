@@ -1986,8 +1986,9 @@ truncated one: Linear returns the first page (100 states) and reports `complete:
 when `hasNextPage` is set (partial `states`, exit 0 - the caller decides to
 refuse); Jira's `/rest/api/2/project/<key>/statuses` endpoint is unpaginated,
 so a well-formed response is `complete: true`. The Jira endpoint is hardcoded
-to v2 (stable on Cloud and Data Center; only `list-open` forks to a v3
-search), and an invalid-format `projectKey` returns `INVALID_INPUT`, matching
+to v2 (stable on Cloud and Data Center; only `list-open` forks: Cloud uses the
+cursor search `/rest/api/<version>/search/jql`, since Cloud retired
+`GET /rest/api/2/search`, and Data Center keeps the classic search), and an invalid-format `projectKey` returns `INVALID_INPUT`, matching
 `list-open`'s taxonomy. A malformed or id-less state node is a typed
 `transport`/`malformed_body` error on both providers - never a silently
 shrunken list flagged `complete: true`. No code path writes `.flow/config.json`
