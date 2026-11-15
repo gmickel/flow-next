@@ -290,6 +290,23 @@ class ArgumentParseFence(unittest.TestCase):
         self.assertIn("--backlog", stderr)
 
     @_POSIX_BASH
+    def test_from_issue_without_an_issue_or_beside_another_start_stops(self) -> None:
+        # An empty --from-issue must never fall back to unscoped selection.
+        cases = (
+            ("--from-issue", "--from-issue needs an issue key or URL"),
+            ("--from-issue= --until=merge", "--from-issue needs an issue key or URL"),
+            ("fn-1 --from-issue SCF-12", "--from-issue takes no other starting point"),
+            ("--goal fn-40 --from-issue SCF-12", "--from-issue takes no other starting point"),
+            ("--from-issue SCF-12 --backlog", "--from-issue takes no other starting point"),
+        )
+        for arguments, reason in cases:
+            with self.subTest(arguments=arguments):
+                res = subprocess.run(["bash", "-c", self._fence()], capture_output=True, text=True,
+                                     env={**os.environ, "ARGUMENTS": arguments})
+                self.assertEqual(res.returncode, 1, res.stderr)
+                self.assertIn(f'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="{reason}"', res.stdout)
+
+    @_POSIX_BASH
     def test_second_positional_id_does_not_double_assign(self) -> None:
         parsed, stderr = self._parse("fn-9 fn-10")
         self.assertEqual(parsed["PILOT_SPEC"], "fn-9")

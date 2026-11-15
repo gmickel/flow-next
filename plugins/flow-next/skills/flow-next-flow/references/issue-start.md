@@ -10,9 +10,9 @@ unattended. When it is not, the run asks on the issue and moves it out of the re
 person answers there and moves it back, which starts the next run. One run per issue at a time is
 the driver's responsibility.
 
-`--from-issue` with a spec id, `--goal` or `--backlog` stops `NEEDS_HUMAN`, reason
-`--from-issue takes no other starting point`. `--explain` runs the reads below (consent, resolve,
-route, bar) and prints what the run would do; it posts, captures, commits and moves nothing.
+auto.md's parse has already refused a missing issue and `--from-issue` combined with a spec id,
+`--goal` or `--backlog`. `--explain` runs the reads below (consent, resolve, route, bar) and prints
+what the run would do; it posts, captures, commits and moves nothing.
 
 ## 1. Start guard and consent
 
@@ -26,7 +26,8 @@ run). Then, before any write:
   the locator, `{"durable": <id>, "display": <identifier>}`. A truncated listing never counts as
   absent.
 - `"$FLOWCTL" tracker wire read --locator "$LOCATOR" --json` and
-  `"$FLOWCTL" tracker wire comment-list --locator "$LOCATOR" --json` give the body and comments.
+  `"$FLOWCTL" tracker wire comment-list --locator "$LOCATOR" --json` give the body and comments;
+  a comment listing with `truncated: true` counts as a failed read.
 
 Any of these false or failing stops `NEEDS_HUMAN` with the reason or transport error, before any
 write; an issue not in the ready lane is `issue <key> is not in <readyState>`.
@@ -34,12 +35,19 @@ write; an issue not in the ready lane is `issue <key> is not in <readyState>`.
 ## 2. Resolve an existing spec
 
 `git fetch origin` (a failure stops `NEEDS_HUMAN`, never a capture). A spec is linked when its
-JSON's `tracker.id` is the issue's durable id: check `.flow/specs/*.json` in the checkout, and for
-each spec `"$FLOWCTL" specs --refs --json` lists in `summary.branch_only`, its JSON at its first
-live ref (`git show <ref>:.flow/specs/<id>.json`). Exactly one: if it lives only on its branch,
-check that branch out; set `PILOT_SPEC` to it and continue with auto.md as
-`flow --auto <spec-id>` would, capturing nothing (step 5's design review still applies to it). Two or more stop `NEEDS_HUMAN` naming them.
-None: continue below.
+JSON's `tracker.id` is the issue's durable id. Look in three places, deduplicating by spec id: the
+checkout's `.flow/specs/*.json`, the fetched default branch
+(`git show origin/<default>:.flow/specs/<id>.json`), and, for each spec
+`"$FLOWCTL" specs --refs --json` lists in `summary.branch_only`, its JSON at its first live ref.
+
+- Two or more linked specs stop `NEEDS_HUMAN` naming them. None: continue below.
+- One: bring it into the checkout. On the default branch only, fast-forward
+  (`git merge --ff-only origin/<default>`); a checkout on another branch that lacks it stops
+  `NEEDS_HUMAN`. Only on its branch: check that branch out. Then set `PILOT_SPEC` and continue with
+  auto.md exactly as `flow --auto <spec-id>` would, capturing nothing.
+- A spec an issue start captured (its spec file's latest commit is step 5's capture commit) is
+  finished first: when its branch is not on origin yet, push it as step 5 does, and it keeps step
+  5's design review. Any other linked spec runs exactly as a person left it.
 
 ## 3. Read the source
 
@@ -81,17 +89,18 @@ After a successful capture:
 - `"$FLOWCTL" spec ready <spec-id> --json`, recorded in the run's `Decisions:` list as readiness
   taken from the board move.
 - Create the spec's `branch_name` from the default branch's remote head, commit only the spec's
-  `.flow/` files, and `git push -u origin <branch_name>`. A failed push stops `NEEDS_HUMAN`; no
-  work is dispatched. The spec then reaches the default branch with the pull request that builds it.
+  `.flow/` files as `chore(flow): capture <spec-id> from <identifier>`, and
+  `git push -u origin <branch_name>`. A failed push stops `NEEDS_HUMAN`; no work is dispatched. The
+  spec then reaches the default branch with the pull request that builds it.
 
 Set `PILOT_SPEC` and rerun auto.md's snapshot fence for it, then continue with auto.md's phases.
 Under `--tick` the capture is the hop: end `ADVANCED`, `stage=capture`.
 
 **Design review before work.** The captured spec gets a design review against the issue before any
 work hop: it counts as an explicit request to review the spec's design (auto.md Arguments), so
-CLASSIFY routes to `plan-review` first, and the review is told to check that the spec says what the
-issue says. A spec step 2 resolves with no tasks and a plan review still `unknown` gets the same
-review. Only a sentence in the repository's AGENTS.md turning this review off for specs a run
+CLASSIFY routes to `plan-review` first, with the focus that the spec must say what the issue it
+quotes says. A spec an issue start captured that step 2 resolves with no tasks and a plan review
+still `unknown` gets the same review. Only a sentence in the repository's AGENTS.md turning this review off for specs a run
 captured skips it; record that skip with the sentence. A run that dispatched work on such a spec
 without the review or that sentence has broken this.
 

@@ -10,13 +10,115 @@
     "fn-324-unready-a-tracker-issue-and-link-named"
   ],
   "id": "fn-325-unattended-start-from-a-tracker-issue",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-325-unattended-start-from-a-tracker-issue.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "cff488e55c495ec476d7f602984d08ff9ebc9e45ca34a9590265c2325b8eaeca",
+      "backend": "codex",
+      "base_sha": "2298a8e5497f331ba6f37056af7bf0d332ce5729",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-0956c1d635b80826766ea36ee47ac3c8",
+            "classification": "introduced",
+            "findingId": "finding-0956c1d635b80826766ea36ee47ac3c8",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-201a978ef6623439840461fdc97509cf",
+            "classification": "introduced",
+            "findingId": "finding-201a978ef6623439840461fdc97509cf",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4a953169ca49ae271ed3af3d4e2f615d",
+            "classification": "introduced",
+            "findingId": "finding-4a953169ca49ae271ed3af3d4e2f615d",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8d1be65a2fd2016b83ac52ec92f80e31",
+            "classification": "introduced",
+            "findingId": "finding-8d1be65a2fd2016b83ac52ec92f80e31",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d3a960ec96c8091ae75530e1836b39fd",
+            "classification": "introduced",
+            "findingId": "finding-d3a960ec96c8091ae75530e1836b39fd",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-abd2a09f943b2f34c4eb39ae29da0367",
+            "classification": "introduced",
+            "findingId": "finding-abd2a09f943b2f34c4eb39ae29da0367",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ebac54aea22d8fadb13e3c629d44204c",
+            "classification": "introduced",
+            "findingId": "finding-ebac54aea22d8fadb13e3c629d44204c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "af25fa47dd9cb34042273908ccb4a585753fc9e0",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 6040,
+      "output_sha256": "fb799acc9e898ca8fb2f5b49d06bcaaf0c1ff0349c1dabb8809e6ed6999f657f",
+      "reservation_id": "7ec64ea6f52747ed9d88506bdc9ef066",
+      "round_consumed": true,
+      "scope": "impl:fn-325-unattended-start-from-a-tracker-issue.1",
+      "superseded_by": null,
+      "task": "fn-325-unattended-start-from-a-tracker-issue.1",
+      "timestamp": "2026-11-15T13:37:25.886139Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-325-unattended-start-from-a-tracker-issue.1": 0
+  },
   "spec_path": ".flow/specs/fn-325-unattended-start-from-a-tracker-issue.md",
   "status": "open",
   "title": "Unattended start from a tracker issue: flow --from-issue",
@@ -31,5 +133,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T10:07:18.143094Z"
+  "updated_at": "2026-11-15T13:37:25.889447Z"
 }

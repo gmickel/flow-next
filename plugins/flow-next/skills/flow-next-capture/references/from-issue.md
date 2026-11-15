@@ -13,6 +13,9 @@ route it chose (feature, defect, refactor, slowness, tiny). Wherever workflow.md
 turns, read that source. A line is untagged only when it is the issue's own words; the compaction
 check (§0.4) does not run.
 
+`## Goal & Context` opens with the issue's own text quoted verbatim (its body, and on re-entry the
+answering comments), so the design review that follows compares the spec with the issue itself.
+
 Every acceptance criterion is the issue's words or `[paraphrase]` of them, shaped by the route:
 a defect's R-ID is that the reported behaviour stops happening, checked by a failing test; a
 refactor's is a pinned characterization of current behaviour; a slowness's is the measured

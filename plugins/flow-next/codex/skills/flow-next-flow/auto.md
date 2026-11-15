@@ -44,6 +44,7 @@ AUTO_TICK=0                  # 1 = one hop then stop; 0 = hop until a terminal
 PILOT_GOAL_MODE=0            # 1 = --goal: references/goal-mode.md drives the run
 PILOT_GOAL=""                # goal mode: every positional word, a spec id or a source
 PILOT_FROM_ISSUE=""          # --from-issue: the tracker issue key or URL to start from
+FROM_ISSUE_GIVEN=0
 
 for ARG in $(printf '%s\n' "$RAW_ARGS"); do [ "$ARG" = "--goal" ] && PILOT_GOAL_MODE=1; done
 PREV=""
@@ -52,14 +53,14 @@ for ARG in $(printf '%s\n' "$RAW_ARGS"); do
     --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
     --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
     --research) PREV=""; continue ;;            # a retired flag's value is dropped, never a target
-    --from-issue) PILOT_FROM_ISSUE="$ARG"; PREV=""; continue ;;
+    --from-issue) PILOT_FROM_ISSUE="$ARG"; FROM_ISSUE_GIVEN=1; PREV=""; continue ;;
   esac
   case "$ARG" in
     --until=merge) : ;;                         # validated by SKILL.md; not a build-stage argument
     --auto|--goal) : ;;                         # consumed by SKILL.md mode detection and the pre-scan above
     --tick)       AUTO_TICK=1 ;;
     --review|--depth|--from-issue) PREV="$ARG" ;;
-    --from-issue=*) PILOT_FROM_ISSUE="${ARG#--from-issue=}" ;;
+    --from-issue=*) PILOT_FROM_ISSUE="${ARG#--from-issue=}"; FROM_ISSUE_GIVEN=1 ;;
     --research)   echo "Unknown flag: $ARG (ignored by /flow-next:flow --auto)" >&2; PREV="$ARG" ;;
     --explain) PILOT_DRY_RUN=1 ;;
     --backlog)
@@ -75,6 +76,15 @@ for ARG in $(printf '%s\n' "$RAW_ARGS"); do
   esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:flow --auto)" >&2
+[ "$PREV" = "--from-issue" ] && FROM_ISSUE_GIVEN=1
+if [ "$FROM_ISSUE_GIVEN" = 1 ]; then
+  if [ -z "$PILOT_FROM_ISSUE" ]; then
+    echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="--from-issue needs an issue key or URL"'; exit 1
+  fi
+  if [ "$PILOT_GOAL_MODE" = 1 ] || [ -n "$PILOT_SPEC" ] || [ -n "$PILOT_BACKLOG_OVERRIDE" ]; then
+    echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="--from-issue takes no other starting point"'; exit 1
+  fi
+fi
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_DEPTH PILOT_BACKLOG_OVERRIDE AUTO_TICK PILOT_GOAL_MODE PILOT_GOAL PILOT_FROM_ISSUE
 ```
 
