@@ -362,9 +362,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return _issue_out(data)
 
 
-def list_open(config: dict, execute: Execute) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
     ready_state = _ready_state(config)
-    if ready_state is None:
+    if ready_state is None and not any_lane:
         return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
@@ -373,11 +373,10 @@ def list_open(config: dict, execute: Execute) -> Result:
     if isinstance(pid, TrackerError):
         return pid
     # GitLab states are opened/closed (not open/closed).
-    qs = urlencode({
-        "state": "opened",
-        "labels": ready_state,
-        "per_page": _PAGE_SIZE,
-    })
+    query = {"state": "opened", "per_page": _PAGE_SIZE}
+    if not any_lane:
+        query["labels"] = ready_state
+    qs = urlencode(query)
     drained = _rest_drain(lambda page: _cli(
         execute, "gitlab", config, "wire-list-open", "GET",
         f"projects/{pid}/issues?{qs}&page={page}",

@@ -1926,11 +1926,17 @@ flowctl tracker wire comment-update --locator "$LOCATOR" <comment-id> --body-fil
 flowctl tracker wire comment-delete --locator "$LOCATOR" <comment-id> [--json]
 flowctl tracker wire label          --locator "$LOCATOR" [--add LABEL]... [--remove LABEL]... [--json]
 flowctl tracker wire assign         --locator "$LOCATOR" [--add USER]... [--remove USER]... [--json]
-flowctl tracker wire list-open      [--json]
+flowctl tracker wire list-open      [--any-lane] [--unlinked] [--json]
 # Linear with tracker.readyState unset: explicit `unresolved`/`ready_state` error
 # naming the key (exit 4), never a silent empty; a refusal means
 # "no ready lane configured", not "board empty". GitHub/GitLab/Jira: transport-free
 # empty as before. Leaving readyState unset stays a valid configuration.
+# --any-lane: every open issue in the destination, whatever tracker.readyState
+# (Linear: any state type but completed/canceled/duplicate; Jira: statusCategory != Done).
+# --unlinked: drops issues a spec in this checkout links, from local sync state
+# with no tracker call. Either flag returns compact rows
+# {id, identifier, title, url, labels, excerpt} (excerpt: first 500 characters
+# of the body, no `raw`); `issues` and `truncated` stay.
 flowctl tracker wire list-states    [--json]
 # Read-only workflow-state enumeration (linear/jira; no locator). Returns the
 # exhaustive shape {"states":[{"id","name","type"}], "complete": bool}; never
@@ -1983,8 +1989,9 @@ truncated one: Linear returns the first page (100 states) and reports `complete:
 when `hasNextPage` is set (partial `states`, exit 0 - the caller decides to
 refuse); Jira's `/rest/api/2/project/<key>/statuses` endpoint is unpaginated,
 so a well-formed response is `complete: true`. The Jira endpoint is hardcoded
-to v2 (stable on Cloud and Data Center; only `list-open` forks to a v3
-search), and an invalid-format `projectKey` returns `INVALID_INPUT`, matching
+to v2 (stable on Cloud and Data Center; only `list-open` forks: Cloud uses the
+cursor search `/rest/api/<version>/search/jql`, since Cloud retired
+`GET /rest/api/2/search`, and Data Center keeps the classic search), and an invalid-format `projectKey` returns `INVALID_INPUT`, matching
 `list-open`'s taxonomy. A malformed or id-less state node is a typed
 `transport`/`malformed_body` error on both providers - never a silently
 shrunken list flagged `complete: true`. No code path writes `.flow/config.json`

@@ -539,8 +539,10 @@ class ListOpen(unittest.TestCase):
         self.assertNotIn("type", variables["filter"]["state"])
 
     def test_jira_list_open(self) -> None:
+        cfg = jr_cfg()
+        cfg["tracker"]["perTracker"]["authScheme"] = "bearer-pat"  # DC classic search
         ex = fake_execute({"wire-list-open": ok({"issues": [JR_ISSUE]})})
-        out = W.dispatch("list-open", jr_cfg(), execute=ex)
+        out = W.dispatch("list-open", cfg, execute=ex)
         self.assertEqual(out["issues"][0]["id"], JR_ID)
         request = ex.calls[0]
         self.assertEqual(request.method, "GET")
@@ -553,6 +555,7 @@ class ListOpen(unittest.TestCase):
 
     def test_jira_jql_escapes_ready_state_and_rejects_invalid_project(self) -> None:
         cfg = jr_cfg()
+        cfg["tracker"]["perTracker"]["authScheme"] = "bearer-pat"  # DC classic search
         cfg["tracker"]["readyState"] = 'Ready \\\\ "Now"'
         ex = fake_execute({"wire-list-open": ok({"issues": []})})
         W.dispatch("list-open", cfg, execute=ex)
@@ -1508,8 +1511,10 @@ class PaginationIsDrainedNeverSilentlyCapped(unittest.TestCase):
         batch1 = {"total": W._PAGE_SIZE + 1,
                   "issues": [dict(JR_ISSUE, id=str(i)) for i in range(W._PAGE_SIZE)]}
         batch2 = {"total": W._PAGE_SIZE + 1, "issues": [dict(JR_ISSUE, id="last")]}
+        cfg = jr_cfg()
+        cfg["tracker"]["perTracker"]["authScheme"] = "bearer-pat"  # DC classic search
         ex = fake_execute({"wire-list-open": [ok(batch1), ok(batch2)]})
-        out = W.dispatch("list-open", jr_cfg(), execute=ex)
+        out = W.dispatch("list-open", cfg, execute=ex)
         self.assertNotIsInstance(out, TrackerError)
         self.assertEqual(len(out["issues"]), W._PAGE_SIZE + 1)
         self.assertFalse(out["truncated"])

@@ -43549,6 +43549,8 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         file_path=getattr(args, "file", None),
         attachment_id=getattr(args, "attachment_id", None),
         out_path=getattr(args, "out", None),
+        any_lane=getattr(args, "any_lane", False),
+        unlinked=getattr(args, "unlinked", False),
     )
     print(payload)
     sys.exit(code)
@@ -56487,6 +56489,13 @@ def main() -> None:
 
     p_wire_list = wire_sub.add_parser("list-open",
                                      help="List open issues (no locator)")
+    p_wire_list.add_argument(
+        "--any-lane", action="store_true",
+        help="Every open issue in the destination, not only tracker.readyState "
+             "(compact rows)")
+    p_wire_list.add_argument(
+        "--unlinked", action="store_true",
+        help="Drop issues a spec in this checkout links (local check; compact rows)")
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
 

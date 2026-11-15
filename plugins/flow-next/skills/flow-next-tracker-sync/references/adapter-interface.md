@@ -71,7 +71,7 @@ normalization, and deduplication.
 | `comment-delete` | locator, comment id | deletion result | none |
 | `label` | locator, add/remove names | normalized labels | none |
 | `assign` | locator, add/remove ids | normalized assignees | none |
-| `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board) |
+| `list-open` | resolved ready lane; `--any-lane` every open issue; `--unlinked` drops issues a local spec links | normalized issue list (compact rows under either flag) | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board) |
 | `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` (Jira: scoped to the resolved `issueTypeId`, matching `statusIds`) | none (read-only; linear/jira; never local state) |
 | `unready` | locator | `{issue, from, to, changed}` | `tracker.readyState` unset: `unresolved`/`ready_state` before any call; no resolved backlog state: `unresolved`/`backlog_slot`; Jira with no transition to it: `unresolved`/`transition_unreachable` |
 | `attach` | locator, file | attachment metadata | none |

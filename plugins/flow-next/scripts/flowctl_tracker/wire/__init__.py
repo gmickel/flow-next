@@ -693,6 +693,56 @@ def _dispatch_question(*, mod: Any, provider: str, config: dict,
 
 
 # ---------------------------------------------------------------------------
+# list-open --any-lane / --unlinked (fn-314)
+# ---------------------------------------------------------------------------
+
+_EXCERPT_CHARS = 500
+
+
+def _list_open(provider: str, mod: Any, config: dict, execute: Execute, *,
+               any_lane: bool, unlinked: bool,
+               flow_dir: Optional[Path]) -> Result:
+    """Either flag returns compact rows; without one, today's output."""
+    if not (any_lane or unlinked):
+        return mod.list_open(config, execute)
+    if unlinked and flow_dir is None:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            "list-open --unlinked requires the .flow directory",
+                            subtype="flow_dir")
+    out = mod.list_open(config, execute, any_lane=any_lane)
+    if isinstance(out, TrackerError):
+        return out
+    rows = out["issues"]
+    if unlinked:
+        # Local sync state only: no tracker call decides "linked".
+        from ..lifecycle.helpers import iter_tracker_states  # noqa: PLC0415
+        linked = {str(state["id"]) for _, state in iter_tracker_states(flow_dir)
+                  if state.get("id")}
+        rows = [row for row in rows if str(row.get("id")) not in linked]
+    browse = None
+    if provider == "jira":
+        dest = _destination(config)
+        base = None if isinstance(dest, TrackerError) else _jira_base(config, dest)
+        if isinstance(base, str):
+            browse = f"{base}/browse/"
+    compact = []
+    for row in rows:
+        body = row.get("body")
+        url = row.get("url")
+        if url is None and browse and row.get("identifier"):
+            url = f"{browse}{row['identifier']}"
+        compact.append({
+            "id": row.get("id"),
+            "identifier": row.get("identifier"),
+            "title": row.get("title"),
+            "url": url,
+            "labels": row.get("labels") or [],
+            "excerpt": body[:_EXCERPT_CHARS] if isinstance(body, str) else "",
+        })
+    return {"issues": compact, "truncated": out["truncated"]}
+
+
+# ---------------------------------------------------------------------------
 # Dispatch + CLI entry
 # ---------------------------------------------------------------------------
 
@@ -707,6 +757,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
              out_path: Optional[str] = None,
+             any_lane: bool = False, unlinked: bool = False,
              flow_dir: Optional[Path] = None,
              execute: Execute = default_execute,
              _parent: Optional[dict] = None) -> Result:
@@ -778,7 +829,8 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
     if verb == "unready":
         return _unready(provider, mod, config, parsed, execute)  # type: ignore[arg-type]
     if verb == "list-open":
-        return mod.list_open(config, execute)
+        return _list_open(provider, mod, config, execute, any_lane=any_lane,
+                          unlinked=unlinked, flow_dir=flow_dir)
     if verb == "list-states":
         if not hasattr(mod, "list_states"):
             return TrackerError(
@@ -854,6 +906,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
         add: Optional[list] = None, remove: Optional[list] = None,
         file_path: Optional[str] = None, attachment_id: Optional[str] = None,
         out_path: Optional[str] = None,
+        any_lane: bool = False, unlinked: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
     """CLI entry: return (stdout payload, exit code) — the single result envelope."""
     config = _read_config(flow_dir)
@@ -902,7 +955,8 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
                            reason_code=reason_code, question_slug=question_slug,
                            add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
-                           out_path=out_path, flow_dir=Path(flow_dir),
+                           out_path=out_path, any_lane=any_lane,
+                           unlinked=unlinked, flow_dir=Path(flow_dir),
                            execute=ex)
         except Exception as exc:  # noqa: BLE001 - envelope boundary
             out = TrackerError(

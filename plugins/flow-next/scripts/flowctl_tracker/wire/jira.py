@@ -448,9 +448,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return out
 
 
-def list_open(config: dict, execute: Execute) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
     ready_state = _ready_state(config)
-    if ready_state is None:
+    if ready_state is None and not any_lane:
         return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
@@ -468,13 +468,20 @@ def list_open(config: dict, execute: Execute) -> Result:
     key = _jira_project_key(str(raw_key))
     if isinstance(key, TrackerError):
         return key
-    escaped_state = ready_state.replace("\\", "\\\\").replace('"', '\\"')
-    jql = f'project = {key} AND status = "{escaped_state}"'
+    if any_lane:
+        jql = f"project = {key} AND statusCategory != Done"
+    else:
+        escaped_state = ready_state.replace("\\", "\\\\").replace('"', '\\"')
+        jql = f'project = {key} AND status = "{escaped_state}"'
 
     collected: list = []
     truncated = False
     fields = ["summary", "description", "status", "priority", "labels", "updated"]
-    if str(dest.get("apiVersion")) == "3":
+    version = "3" if str(dest.get("apiVersion")) == "3" else "2"
+    scheme = _dict(_dict(config.get("tracker")).get("perTracker")).get("authScheme")
+    # Cloud answers 410 Gone on GET /rest/api/2/search (measured 2026-11-15);
+    # its cursor search serves v2 and v3. Data Center keeps the classic search.
+    if version == "3" or scheme != "bearer-pat":
         next_page = None
         seen = set()
         for _ in range(_MAX_PAGES):
@@ -482,7 +489,7 @@ def list_open(config: dict, execute: Execute) -> Result:
             if next_page is not None:
                 body["nextPageToken"] = next_page
             data = _jira(execute, "wire-list-open", "POST",
-                         f"{base}/rest/api/3/search/jql", body=body,
+                         f"{base}/rest/api/{version}/search/jql", body=body,
                          idempotent=True)
             if isinstance(data, TrackerError):
                 return data
