@@ -182,7 +182,7 @@ class HelperReadTests(BitbucketShellCase):
                          {"number": 4, "state": "OPEN", "isDraft": False, "body": "second", "url": f"{PR_URL}4"})
         drafted = self.derived("pr-branch-reused", lambda page: [row.update(draft=True, description=None)
                                                                  for row in page["values"]] and None)
-        listed = self.run_sh([*self.LIST[:5], "isDraft,body,number", "--head", "fx-reused"],
+        listed = self.run_sh([*self.LIST[:6], "isDraft,body,number", "--head", "fx-reused"],
                              BKT_ANSWERS=answers(drafted))
         self.assertEqual(json.loads(listed.stdout), [{"isDraft": True, "body": "", "number": 4},
                                                      {"isDraft": True, "body": "", "number": 3}])

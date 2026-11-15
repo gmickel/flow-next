@@ -151,8 +151,8 @@ class HelperReadTests(GitLabShellCase):
         self.assertEqual(listed.returncode, 0, listed.stderr)
         # The fork's MR !7 shares the branch name and is not the origin project's.
         self.assertEqual(json.loads(listed.stdout), [
-            {"number": 2, "url": "http://localhost:8929/flownext/flownext/-/merge_requests/2", "baseRefName": "main", "state": "OPEN"},
-            {"number": 1, "url": "http://localhost:8929/flownext/flownext/-/merge_requests/1", "baseRefName": "main", "state": "CLOSED"}])
+            {"number": 2, "baseRefName": "main", "state": "OPEN"},
+            {"number": 1, "baseRefName": "main", "state": "CLOSED"}])
         merged = self.run_sh([*self.LIST, "fn73-fx-merged"], GLAB_ANSWERS=answers(recorded("mr-branch-merged")))
         self.assertEqual([(r["number"], r["state"], r["baseRefName"]) for r in json.loads(merged.stdout)], [(3, "MERGED", "main")])
         none = self.run_sh([*self.LIST, "fn73-fx-absent"], GLAB_ANSWERS=answers(recorded("mr-branch-none")))
@@ -168,7 +168,7 @@ class HelperReadTests(GitLabShellCase):
         self.assertEqual(view.returncode, 0, view.stderr)
         self.assertEqual(json.loads(view.stdout), {"number": 2, "isDraft": True, "body": ""})
         described = self.derived("mr-branch-all", lambda rows: [r.update(description="why") or r for r in rows])
-        listed = self.run_sh([*self.LIST[:5], "body,number", "--head", "fn73-fx-reused"],
+        listed = self.run_sh([*self.LIST[:6], "body,number", "--head", "fn73-fx-reused"],
                              GLAB_ANSWERS=answers(described))
         self.assertEqual(json.loads(listed.stdout), [{"body": "why", "number": 2}, {"body": "why", "number": 1}])
 
