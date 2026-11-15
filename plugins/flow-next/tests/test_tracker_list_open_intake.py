@@ -77,6 +77,8 @@ def _lane_filter(provider: str, request) -> object:
         return params.get("labels"), params["state"]
     if provider == "linear":
         return json.loads(request.body)["variables"]["filter"]["state"]
+    if request.method == "POST":
+        return [json.loads(request.body)["jql"]]
     return parse_qs(urlparse(str(request.url_or_argv)).query)["jql"]
 
 
@@ -126,6 +128,28 @@ class AnyLaneTests(unittest.TestCase):
         out = W.dispatch("list-open", jr_cfg(), execute=ex, any_lane=True)
         self.assertEqual(out["issues"][0]["url"],
                          "https://ex.atlassian.net/browse/SCRUM-1")
+
+    def test_jira_cloud_v2_lists_through_search_jql(self) -> None:
+        # Cloud answers 410 Gone on GET /rest/api/2/search (measured 2026-11-15).
+        for flags in ({}, {"any_lane": True}):
+            with self.subTest(flags=flags):
+                ex = fake_execute({"wire-list-open": ok(
+                    {"issues": [JR_ISSUE], "isLast": True})})
+                out = W.dispatch("list-open", jr_cfg(), execute=ex, **flags)
+                self.assertNotIsInstance(out, TrackerError, out)
+                self.assertEqual(out["issues"][0]["id"], JR_ID)
+                request = ex.calls[0]
+                self.assertEqual(request.method, "POST")
+                self.assertTrue(str(request.url_or_argv).endswith(
+                    "/rest/api/2/search/jql"))
+
+    def test_jira_data_center_keeps_classic_search(self) -> None:
+        cfg = jr_cfg()
+        cfg["tracker"]["perTracker"]["authScheme"] = "bearer-pat"
+        ex = fake_execute({"wire-list-open": ok({"issues": [JR_ISSUE], "total": 1})})
+        W.dispatch("list-open", cfg, execute=ex, any_lane=True)
+        self.assertEqual(ex.calls[0].method, "GET")
+        self.assertIn("/rest/api/2/search?", str(ex.calls[0].url_or_argv))
 
     def test_page_cap_reports_truncated(self) -> None:
         full_page = [_second(GH_ISSUE, node_id=f"I_n{i}", number=i)
