@@ -478,6 +478,16 @@ class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
                     with mock.patch.object(flowctl, "_spec_ref_blobs", read):
                         with self.assertRaises(flowctl.SpecRefIndexError):
                             flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
+            # A tree-filtered partial clone can lack a ref's tree, or the ref listing can fail.
+            real = flowctl._spec_ref_git
+            for verb in ("ls-tree", "for-each-ref"):
+                def failing(root, *args, _verb=verb, **kwargs):
+                    if args and args[0] == _verb:
+                        return subprocess.CompletedProcess(args, 128, "", "fatal: missing tree")
+                    return real(root, *args, **kwargs)
+                with self.subTest(unreadable=verb), mock.patch.object(flowctl, "_spec_ref_git", failing):
+                    with self.assertRaises(flowctl.SpecRefIndexError):
+                        flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
 
 
 class IssueStartQuestionRounds(unittest.TestCase):
