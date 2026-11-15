@@ -30045,9 +30045,8 @@ def _pr_aid_blob_prefix(head_sha: Any) -> Optional[str]:
         return None
     if origin.forge == "gitlab":
         return f"/{origin.project}/-/blob/{head_sha}/"  # a namespace may nest groups
-    if len(parts) != 2:
-        return None
-    # An origin no adapter claims reads as GitHub, as everywhere else in flowctl.
+    if origin.forge not in ("github", "bitbucket") or len(parts) != 2:
+        return None  # an unclaimed host could be any forge: plain paths, never a guessed link
     return f"/{origin.project}/{'src' if origin.forge == 'bitbucket' else 'blob'}/{head_sha}/"
 
 
