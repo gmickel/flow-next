@@ -102,6 +102,8 @@ Best-effort — a tracker failure never blocks the capture. The skill emits its 
 
 ## Phase 6 — sync check
 
+When §5.2's named issue could not be read or linked this run, skip this check and its retro-fire: the line reads `Tracker sync: skipped (named issue not linked: <reason>)`, because a retro-fired push on the unlinked spec creates the second issue §5.2 refused.
+
 **Tracker-sync check first** (read-only, independent of §5.7, so a skipped touchpoint is still caught):
 
 ```bash

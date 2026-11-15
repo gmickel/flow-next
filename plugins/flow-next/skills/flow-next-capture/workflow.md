@@ -291,7 +291,7 @@ Then print:
 
 ```text
 Spec captured at .flow/specs/<SPEC_ID>.md.
-Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (retro-fire failed: <reason>)>
+Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (retro-fire failed: <reason>) | skipped (named issue not linked: <reason>)>
 Recommended next: <the §2.8 judgment, in plan-vs-no-plan.md's shape>
 ```
 
