@@ -29,9 +29,10 @@ full head SHA and `$BRANCH` the source branch.
   `git fetch origin "refs/heads/<destination>"`; a squash merge commit carries the head's changes.
 - **Readiness.** For the selected spec, run `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` in a
   detached worktree at `$HEAD_SHA` (the one repairs use), so the spec and its `branch_name` are the
-  head's. Its `.selected.pr.open` `url` must be this pull request's `links.html.href` and
-  `readiness.head_sha` the head you read; a moved head means read again (`RESOLVING` if it keeps
-  moving), and no match at an unchanged head stops `NEEDS_HUMAN`. `readiness` holds `build` (the
+  head's. Its `.selected.pr.open.url` must be this pull request's `links.html.href` and
+  `.selected.pr.open.readiness.head_sha` the head you read; a moved head means read again
+  (`RESOLVING` if it keeps moving), and no match at an unchanged head stops `NEEDS_HUMAN`.
+  `.selected.pr.open.readiness` holds `build` (the
   worst build status on this head: `FAILED`, `STOPPED`, `INPROGRESS` or `SUCCESSFUL`, null when none
   is reported), `merge_status` (`clean`, or the reason of the first of Bitbucket's own merge checks
   that fails), `approval` (`approved`, `changes_requested`, `none` or `unknown`), `squash_allowed`,

@@ -3,6 +3,8 @@
 After close and export, the host authors one v1 object from `EXPORT_PAYLOAD` and evidence; no extra model call.
 Use `diff_summary.merge_base_sha` / `diff_summary.head_sha` as `MERGE_BASE` / `HEAD_SHA`.
 Per-task evidence is under `specs[].tasks[]` (or the host's `tasks`), not `tasks_summary`.
+A task summary records what that task did at its commit; the diff at `HEAD_SHA` is what the code does
+now, and where they disagree the briefing follows the head.
 
 ## Resolve, compose, validate
 

@@ -20,8 +20,8 @@ Run glab inside the checkout, where `projects/:id` resolves from the origin remo
   API. The selection rules are unchanged.
 - **Readiness.** For the selected spec, run `"$FLOWCTL" pilot snapshot --spec <spec-id> --json` in
   a detached worktree at `$HEAD_SHA` (the one repairs use), so the spec and its `branch_name` are
-  the head's. Its `.selected.pr.open` `url` must be this merge request's `web_url` and
-  `readiness.head_sha` the head you read. A moved head means read again (`RESOLVING` if it keeps
+  the head's. Its `.selected.pr.open.url` must be this merge request's `web_url` and
+  `.selected.pr.open.readiness.head_sha` the head you read. A moved head means read again (`RESOLVING` if it keeps
   moving); at an unchanged head with no match (a fork's merge request, which the snapshot does not
   list, or a spec whose `branch_name` names another branch) stop `NEEDS_HUMAN`. `readiness` holds
   `merge_status` (GitLab's detailed merge status), `pipeline` (the head pipeline's status for this
