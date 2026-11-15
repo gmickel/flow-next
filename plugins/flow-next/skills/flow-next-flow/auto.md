@@ -129,7 +129,7 @@ There is no `--no-plan` flag. The accepted choice is the spec's `no_plan` field,
 
 ### Autonomy mode resolution - gate the wide backlog behavior
 
-Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`, and so does goal mode, whatever the config says. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`.
+Resolve `PILOT_AUTONOMY` from `PILOT_SNAPSHOT.config.pilot.autonomy`: only the literal string `backlog` or the per-run `--backlog` override enables backlog. All other values mean `ready`, and so do goal mode and `--from-issue`, whatever the config says. The same snapshot supplies `pipeline.qa` and `pilot.gateClasses`.
 
 When `PILOT_AUTONOMY=ready` (the default), the run behaves exactly as Phases 1 to 6 below describe; no backlog-mode code path runs and `references/backlog-mode.md` is not loaded. When `PILOT_AUTONOMY=backlog`, **read [references/backlog-mode.md](references/backlog-mode.md) top to bottom, execute Phase 0.5's backlog branch below, then continue with Phase 1**. The reference owns the backlog-only verdict extension, SELECT/TRIAGE/ASK (Phases 1.5 and 1.6), and the backlog terminals and decision log; this file keeps the autonomy export, dispatch allowlist, and never-author guards. In long-horizon mode a backlog run drives its one selected item to a terminal, then stops; the next invocation selects the next item.
 

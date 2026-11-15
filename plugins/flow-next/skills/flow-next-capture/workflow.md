@@ -117,7 +117,7 @@ Each criterion must let a reviewer point at behavior and say met or not. One tha
 
 ### 2.5 — Spec-count gate
 
-At 8+ criteria, or criteria serving more than one independently shippable outcome: GATE ACTIVE — STOP. Read [references/split-proposal.md](references/split-proposal.md) and decide 1 vs N specs (it owns the Phase 4 `split-as-proposed` choice, §5.2b, and the split close). Capture never auto-splits. Under `from:goal`, [references/from-goal.md](references/from-goal.md) decides instead.
+At 8+ criteria, or criteria serving more than one independently shippable outcome: GATE ACTIVE — STOP. Read [references/split-proposal.md](references/split-proposal.md) and decide 1 vs N specs (it owns the Phase 4 `split-as-proposed` choice, §5.2b, and the split close). Capture never auto-splits. Under `from:goal` or `from:issue`, [references/from-goal.md](references/from-goal.md) or [references/from-issue.md](references/from-issue.md) decides instead.
 
 ### 2.6 — Business context
 
