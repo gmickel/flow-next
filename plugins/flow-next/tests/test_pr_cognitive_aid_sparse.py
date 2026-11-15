@@ -144,13 +144,14 @@ class SparseInputTests(unittest.TestCase):
             with self.subTest(remote=remote):
                 self.assertEqual(self.derived_link(remote, "src/a #()[].py"), want)
 
-    def test_origin_no_adapter_claims_links_as_github(self):
-        # flowctl reads such an origin (a GitHub Enterprise host, say) as GitHub everywhere.
+    def test_origin_no_forge_claims_gets_no_link(self):
+        # A host neither gh nor glab knows could be any forge; a guessed path shape would 404.
         no_claim = {name: {**adapter, "owns_host": lambda _host: False}
                     for name, adapter in flowctl.FORGE_ADAPTERS.items()}
         with mock.patch.dict(flowctl.FORGE_ADAPTERS, no_claim):
-            self.assertEqual(self.derived_link("https://example.test/acme/repo.git", "src/a.py"),
-                             f"/acme/repo/blob/{HEAD_SHA}/src/a.py")
+            for remote in ("https://gitea.example.test/acme/repo.git", "unknown.example:team/repo.git"):
+                with self.subTest(remote=remote):
+                    self.assertIsNone(self.derived_link(remote, "src/a.py"))
 
     def test_unrecognized_origin_paths_get_no_link(self):
         for remote in (None, "file:///srv/repo.git", "https://github.com/grp/sub/repo.git",
