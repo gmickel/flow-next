@@ -207,7 +207,12 @@ done
 # Agents (pre-built .toml)
 # ====================
 # Clean old auto-generated agents
-grep -rl "Auto-generated.*sync-codex\|Auto-generated from.*\.md.*do not edit" "$CODEX_DIR/agents/"*.toml 2>/dev/null | xargs rm -f 2>/dev/null || true
+for agent_file in "$CODEX_DIR/agents/"*.toml; do
+    [ -f "$agent_file" ] || continue
+    if grep -q "Auto-generated.*sync-codex\|Auto-generated from.*\.md.*do not edit" "$agent_file" 2>/dev/null; then
+        rm -f "$agent_file"
+    fi
+done
 
 AGENT_COUNT=0
 for toml_file in "$CODEX_SRC/agents/"*.toml; do
