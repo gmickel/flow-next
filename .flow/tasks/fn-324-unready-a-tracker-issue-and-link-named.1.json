@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-324-unready-a-tracker-issue-and-link-named",
   "spec_path": ".flow/tasks/fn-324-unready-a-tracker-issue-and-link-named.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Unready a tracker issue and link named issues in any id mode",
   "updated_at": "2026-11-15T10:45:07.959049Z"
 }

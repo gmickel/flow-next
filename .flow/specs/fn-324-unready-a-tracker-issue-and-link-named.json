@@ -148,7 +148,7 @@
     "impl:fn-324-unready-a-tracker-issue-and-link-named.1": 0
   },
   "spec_path": ".flow/specs/fn-324-unready-a-tracker-issue-and-link-named.md",
-  "status": "open",
+  "status": "done",
   "title": "Unready a tracker issue and link named issues in any id mode",
   "tracker": {
     "baseHashFlow": null,
@@ -161,5 +161,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T12:16:37.045690Z"
+  "updated_at": "2026-11-15T12:19:50.931009Z"
 }
