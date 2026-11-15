@@ -530,9 +530,14 @@ if [ -n "$MERGED_SPEC" ] && [ -n "$MERGED_BRANCH" ] && [ "$(git branch --show-cu
   SYNC_JSON=".flow/specs/$MERGED_SPEC.json"
   git diff --quiet -- "$SYNC_JSON" \
     || git commit -q --only -m "chore(flow): tracker sync state for $MERGED_SPEC after merge" -- "$SYNC_JSON"
-  if [ -z "$(git status --porcelain)" ] && git fetch -q origin "${DEFAULT_REF#origin/}" \
-    && git checkout -q "${DEFAULT_REF#origin/}" && git merge -q --ff-only "$DEFAULT_REF"; then
-    echo "Post-merge checkout: ${DEFAULT_REF#origin/} at $(git rev-parse --short HEAD)"
+  # Switch only when the local default branch is absent or fast-forwards to the remote head
+  # (work keeps planning commits there; a diverged or ahead branch keeps this checkout).
+  DEFAULT_LOCAL="${DEFAULT_REF#origin/}"
+  if [ -z "$(git status --porcelain)" ] && git fetch -q origin "$DEFAULT_LOCAL" \
+    && { ! git show-ref --verify --quiet "refs/heads/$DEFAULT_LOCAL" \
+         || git merge-base --is-ancestor "refs/heads/$DEFAULT_LOCAL" "$DEFAULT_REF"; } \
+    && git checkout -q "$DEFAULT_LOCAL" && git merge -q --ff-only "$DEFAULT_REF"; then
+    echo "Post-merge checkout: $DEFAULT_LOCAL at $(git rev-parse --short HEAD)"
   else
     echo "Post-merge checkout left on $(git branch --show-current): $(git status --porcelain | tr '\n' ' ')"
   fi
