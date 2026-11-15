@@ -85,7 +85,7 @@ class AnyLaneTests(unittest.TestCase):
         expected_lane = {
             "github": (None, ["open"]),
             "gitlab": (None, ["opened"]),
-            "linear": {"type": {"nin": ["completed", "canceled"]}},
+            "linear": {"type": {"nin": ["completed", "canceled", "duplicate"]}},
             "jira": ["project = SCRUM AND statusCategory != Done"],
         }
         for provider, cfg_fn, response, first, second in CASES:

@@ -1932,7 +1932,7 @@ flowctl tracker wire list-open      [--any-lane] [--unlinked] [--json]
 # "no ready lane configured", not "board empty". GitHub/GitLab/Jira: transport-free
 # empty as before. Leaving readyState unset stays a valid configuration.
 # --any-lane: every open issue in the destination, whatever tracker.readyState
-# (Linear: any state type but completed/canceled; Jira: statusCategory != Done).
+# (Linear: any state type but completed/canceled/duplicate; Jira: statusCategory != Done).
 # --unlinked: drops issues a spec in this checkout links, from local sync state
 # with no tracker call. Either flag returns compact rows
 # {id, identifier, title, url, labels, excerpt} (excerpt: first 500 characters

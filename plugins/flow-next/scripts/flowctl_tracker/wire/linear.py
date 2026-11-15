@@ -632,8 +632,8 @@ def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Resu
     if isinstance(dest, TrackerError):
         return dest
     team_id = dest.get("teamId")
-    # Open = any state type but completed / canceled (a duplicate is canceled).
-    filt: dict = {"state": ({"type": {"nin": ["completed", "canceled"]}}
+    # Open = any state type but the closed ones; Linear gives duplicates their own type.
+    filt: dict = {"state": ({"type": {"nin": ["completed", "canceled", "duplicate"]}}
                             if any_lane else
                             {"name": {"eqIgnoreCase": ready_state}})}
     if team_id:
