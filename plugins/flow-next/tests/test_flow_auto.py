@@ -455,6 +455,30 @@ class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
                 {"id": "fn-1-login", "checkout": False, "refs": ["refs/remotes/origin/fn-1-login"]},
             ])
 
+    def test_an_unreadable_spec_json_stops_the_lookup(self) -> None:
+        # A partial clone can lack a ref's spec JSON blob; that is never "no link".
+        sys.path.insert(0, str(PLUGIN / "scripts"))
+        import flowctl  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+            specs = repo / ".flow" / "specs"
+            specs.mkdir(parents=True)
+            (specs / "fn-1-login.md").write_text("# Login\n", encoding="utf-8")
+            (specs / "fn-1-login.json").write_text(json.dumps({"id": "fn-1-login"}), encoding="utf-8")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-q", "-m", "spec")
+            (specs / "fn-1-login.json").unlink()  # only the committed copy remains
+            for blobs in ({}, None):
+                with self.subTest(blobs="missing" if blobs == {} else "unparseable"):
+                    read = (lambda _root, _oids: {}) if blobs == {} else (
+                        lambda _root, oids: {oid: b"{not json" for oid in oids})
+                    with mock.patch.object(flowctl, "_spec_ref_blobs", read):
+                        with self.assertRaises(flowctl.SpecRefIndexError):
+                            flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
+
 
 class IssueStartQuestionRounds(unittest.TestCase):
     """R3: refusal, plain reply, re-promotion, follow-up posts once."""
