@@ -132,30 +132,39 @@ class SparseInputTests(unittest.TestCase):
     def test_derived_link_uses_the_hosting_forge_path_and_binds_head(self):
         encoded = "src/a%20%23%28%29%5B%5D.py"
         cases = (
-            (("github", "github.com", "acme/repo"), f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
-            # No adapter claims the host: flowctl reads such an origin as GitHub.
-            ((None, "example.test", "acme/repo"), f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
-            (("gitlab", "gitlab.com", "acme/repo"), f"/acme/repo/-/blob/{HEAD_SHA}/{encoded}"),
-            (("gitlab", "gitlab.example.test:8929", "grp/sub/team/repo"),
+            ("https://github.com/acme/repo.git", f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
+            ("ssh://git@github.com/acme/repo.git", f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
+            ("git@gitlab.com:acme/repo.git", f"/acme/repo/-/blob/{HEAD_SHA}/{encoded}"),
+            ("https://gitlab.com/grp/sub/team/repo.git",
              f"/grp/sub/team/repo/-/blob/{HEAD_SHA}/{encoded}"),
-            (("bitbucket", "bitbucket.org", "acme/repo"), f"/acme/repo/src/{HEAD_SHA}/{encoded}"),
+            ("https://bitbucket.org/acme/repo.git", f"/acme/repo/src/{HEAD_SHA}/{encoded}"),
+            ("git@bitbucket.org:acme/repo.git", f"/acme/repo/src/{HEAD_SHA}/{encoded}"),
         )
-        for origin, want in cases:
-            with self.subTest(origin=origin):
-                self.assertEqual(self.derived_link(origin, "src/a #()[].py"), want)
+        for remote, want in cases:
+            with self.subTest(remote=remote):
+                self.assertEqual(self.derived_link(remote, "src/a #()[].py"), want)
+
+    def test_origin_no_adapter_claims_links_as_github(self):
+        # flowctl reads such an origin (a GitHub Enterprise host, say) as GitHub everywhere.
+        no_claim = {name: {**adapter, "owns_host": lambda _host: False}
+                    for name, adapter in flowctl.FORGE_ADAPTERS.items()}
+        with mock.patch.dict(flowctl.FORGE_ADAPTERS, no_claim):
+            self.assertEqual(self.derived_link("https://example.test/acme/repo.git", "src/a.py"),
+                             f"/acme/repo/blob/{HEAD_SHA}/src/a.py")
 
     def test_unrecognized_origin_paths_get_no_link(self):
-        for origin in ((None, None, None), ("github", "github.com", "grp/sub/repo"),
-                       ("bitbucket", "bitbucket.org", "acme"), ("gitlab", "gitlab.com", "grp/../repo")):
-            with self.subTest(origin=origin):
-                self.assertIsNone(self.derived_link(origin, "src/a.py"))
+        for remote in (None, "file:///srv/repo.git", "https://github.com/grp/sub/repo.git",
+                       "https://bitbucket.org/acme", "https://gitlab.com/grp/../repo.git"):
+            with self.subTest(remote=remote):
+                self.assertIsNone(self.derived_link(remote, "src/a.py"))
 
-    def derived_link(self, origin, path):
+    def derived_link(self, remote, path):
         value = self.complete()
         row = value["changeWalkthrough"]["groups"][2]["files"][0]
         row["path"] = path
         del row["diffUrl"]
-        with mock.patch.object(flowctl, "repo_forge", return_value=flowctl.ForgeOrigin(*origin)):
+        answer = (1, "", "no origin") if remote is None else (0, remote + "\n", "")
+        with mock.patch.object(flowctl, "_export_run_git", return_value=answer):
             result = self.validate_input(value, artifact_diff_files(value))
         return result["changeWalkthrough"]["groups"][2]["files"][0].get("diffUrl")
 
