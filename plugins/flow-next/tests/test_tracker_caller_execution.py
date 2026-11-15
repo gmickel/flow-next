@@ -672,7 +672,7 @@ class MakePrPushesTrackerSyncState(unittest.TestCase):
                                "-c", "commit.gpgsign=false", *args],
                               check=True, capture_output=True, text=True).stdout.strip()
 
-    def _run(self, change: bool) -> tuple[Path, Path, subprocess.CompletedProcess]:
+    def _run(self, change: bool, subdir: str = "") -> tuple[Path, Path, subprocess.CompletedProcess]:
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         origin, co = tmp / "origin.git", tmp / "co"
@@ -696,7 +696,9 @@ class MakePrPushesTrackerSyncState(unittest.TestCase):
         env = {**os.environ, "SPEC_ID": "fn-1-add", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
                "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
-        result = subprocess.run(["bash", "-c", fence], cwd=co, env=env, capture_output=True, text=True)
+        cwd = co / subdir
+        cwd.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(["bash", "-c", fence], cwd=cwd, env=env, capture_output=True, text=True)
         return origin, co, result
 
     def test_changed_sync_state_is_committed_alone_and_pushed(self) -> None:
@@ -706,6 +708,12 @@ class MakePrPushesTrackerSyncState(unittest.TestCase):
                          '{"tracker": {"id": "issue-uuid"}}')
         self.assertEqual(self._git(co, "show", "--name-only", "--format=", "HEAD"), ".flow/specs/fn-1-add.json")
         self.assertEqual(self._git(co, "status", "--porcelain"), "M a.txt")
+
+    def test_a_run_from_a_subdirectory_still_commits_and_pushes(self) -> None:
+        origin, co, result = self._run(change=True, subdir="src")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._git(origin, "show", "fn-1-add:.flow/specs/fn-1-add.json"),
+                         '{"tracker": {"id": "issue-uuid"}}')
 
     def test_unchanged_sync_state_makes_no_commit(self) -> None:
         origin, co, result = self._run(change=False)
