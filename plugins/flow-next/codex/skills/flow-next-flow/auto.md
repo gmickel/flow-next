@@ -362,7 +362,7 @@ Pass `mode:autonomous` (with `FLOW_AUTONOMOUS=1` semantics for any process-level
 
 - `plan`: `$flow-next-plan <spec-id> mode:autonomous --depth=<level> <REVIEW_ARG-if-nonempty>`
 - `plan-review`: `$flow-next-plan-review <spec-id> mode:autonomous <REVIEW_ARG-if-nonempty>`
-- `work`: `$flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`.
+- `work`: `$flow-next-work <spec-id> mode:autonomous --branch=<current|new> <REVIEW_ARG-if-nonempty>`; when classification took the direct route for a zero-task spec, append `--no-plan`. For an admitted direct-owner resume, append the owner ID and prior-run-ended evidence reference as dispatch context, retaining the spec target and `SPEC_MODE`. Under `--from-issue`, append the dispatch context `issue start: run implementation review on every task; the risk rule does not skip it` ([references/issue-start.md](references/issue-start.md)).
 - `qa`: `$flow-next-qa <spec-id> mode:autonomous` (the token suppresses the QA skill's prompts so the loop cannot hang on a question)
 - `make-pr`: `$flow-next-make-pr <spec-id> mode:autonomous`
 - `land`: `$flow-next-land` for one run, with the ordinary PR and current authorization arguments from `references/tail.md`; land's own guards and gates remain authoritative.
@@ -517,6 +517,35 @@ Backlog mode: post and park per backlog-mode.md §Phase 3, ending `ASKED`.
 ## Phase 6 - REPORT + strikes ledger
 
 A `land` stage uses `references/tail.md`'s verdict mapping and cadence, never the healthy-no-advance strike path below. Keep the pilot ledger untouched on a landing wait or blocker; a verified advance may clear it. A confirmed merge ends the run with `ADVANCED`, including when the tracker touchpoint failed.
+
+Before the terminal line of a run that confirmed a merge, leave the checkout for the next run: run this fence with `MERGE_COMMIT` set to the merge commit land confirmed. Without one (any other hop) it does nothing. Land deleted the spec branch on origin, and make-pr's tracker write after its push left the spec's JSON changed; staying there, the next run's commits stage that JSON into another spec's pull request. Commit it on the local spec branch (kept, never pushed), then move to the default branch at its remote head. Any other change or a failed step leaves the checkout as it is, named in the reason; the merge verdict stands.
+
+```bash
+# fence:post-merge-checkout — reads the persisted snapshot of the merged spec
+# MERGE_COMMIT: the merge commit land confirmed this run; unset on every other hop.
+SNAP_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
+MERGED_SPEC="$(jq -r '.selected.id // empty' "$SNAP_FILE" 2>/dev/null)"
+MERGED_BRANCH="$(jq -r '.selected.branch_name // empty' "$SNAP_FILE" 2>/dev/null)"
+DEFAULT_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+DEFAULT_LOCAL="${DEFAULT_REF#origin/}"
+if [ -n "${MERGE_COMMIT:-}" ] && [ -n "$MERGED_SPEC" ] && [ -n "$MERGED_BRANCH" ] \
+  && [ "$(git branch --show-current)" = "$MERGED_BRANCH" ] && git fetch -q origin "$DEFAULT_LOCAL" \
+  && git merge-base --is-ancestor "$MERGE_COMMIT" "$DEFAULT_REF"; then
+  SYNC_JSON="$(git rev-parse --show-toplevel)/.flow/specs/$MERGED_SPEC.json"
+  git diff --quiet -- "$SYNC_JSON" \
+    || git commit -q --only -m "chore(flow): tracker sync state for $MERGED_SPEC after merge" -- "$SYNC_JSON"
+  # Switch only when the local default branch is absent or fast-forwards to the remote head
+  # (work keeps planning commits there; a diverged or ahead branch keeps this checkout).
+  if [ -z "$(git status --porcelain)" ] \
+    && { ! git show-ref --verify --quiet "refs/heads/$DEFAULT_LOCAL" \
+         || git merge-base --is-ancestor "refs/heads/$DEFAULT_LOCAL" "$DEFAULT_REF"; } \
+    && git checkout -q "$DEFAULT_LOCAL" && git merge -q --ff-only "$DEFAULT_REF"; then
+    echo "Post-merge checkout: $DEFAULT_LOCAL at $(git rev-parse --short HEAD)"
+  else
+    echo "Post-merge checkout left on $(git branch --show-current): $(git status --porcelain | tr '\n' ' ')"
+  fi
+fi
+```
 
 On `ADVANCED`, if the snapshot has a strike for the selected spec, clear it with `$FLOWCTL pilot strikes clear "$SELECTED_SPEC" --json`. Do not clear an absent entry.
 

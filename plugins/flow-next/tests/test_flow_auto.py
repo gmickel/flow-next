@@ -390,5 +390,255 @@ class MakePrVerifyProbe(unittest.TestCase):
                     self.assertEqual(snap.read_text(), body)
 
 
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+class IssueStartContract(unittest.TestCase):
+    """--from-issue rules that live in prose (fn-326 R1, R4, R5)."""
+
+    def test_interrupted_capture_is_finished_before_work(self) -> None:
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        for token in ("`git log -1 -- .flow/specs/<spec-id>.md`", "interrupted", "design review"):
+            self.assertIn(token, text)
+
+    def test_jira_url_from_another_site_stops_before_writes(self) -> None:
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        for token in ("Jira URL", "`tracker.perTracker.baseUrl`"):
+            self.assertIn(token, text)
+
+    def test_every_work_hop_runs_implementation_review(self) -> None:
+        self.assertIn("risk rule", _flat(_read(FLOW_REFERENCES / "issue-start.md")))
+        # The literal context work receives under --from-issue.
+        self.assertIn("`issue start: run implementation review on every task; the risk rule does not skip it`",
+                      _read(AUTO_MD))
+
+
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
+    """R2: a link only a remote branch's JSON carries is found before capture."""
+
+    def _git(self, repo: Path, *args: str) -> None:
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t",
+                        "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
+
+    def test_json_only_link_on_a_remote_branch_is_found(self) -> None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flowctl_test_support import FLOWCTL_CMD  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            origin, author, runner = Path(tmp) / "origin.git", Path(tmp) / "author", Path(tmp) / "runner"
+            subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+            subprocess.run(["git", "clone", "-q", str(origin), str(author)], check=True, capture_output=True)
+            specs = author / ".flow" / "specs"
+            specs.mkdir(parents=True)
+            (specs / "fn-1-login.md").write_text("# Login\n", encoding="utf-8")
+            sidecar = {"id": "fn-1-login", "title": "Login", "status": "open"}
+            (specs / "fn-1-login.json").write_text(json.dumps(sidecar), encoding="utf-8")
+            self._git(author, "add", "-A")
+            self._git(author, "commit", "-q", "-m", "spec on main")
+            self._git(author, "push", "-q", "origin", "HEAD:main")
+            subprocess.run(["git", "clone", "-q", str(origin), str(runner)], check=True, capture_output=True)
+            # The link lands on a branch by a JSON-only change; the body stays as on main.
+            self._git(author, "switch", "-q", "-c", "fn-1-login")
+            linked = {**sidecar, "tracker": {"id": "issue-uuid-7", "identifier": "SCF-7"}}
+            (specs / "fn-1-login.json").write_text(json.dumps(linked), encoding="utf-8")
+            self._git(author, "commit", "-q", "-am", "link")
+            self._git(author, "push", "-q", "origin", "fn-1-login")
+
+            result = subprocess.run([*FLOWCTL_CMD, "specs", "--refs", "--fetch", "--tracker-id", "issue-uuid-7",
+                                     "--json"], cwd=runner, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            found = json.loads(result.stdout)
+            self.assertIsNone(found["fetch_error"])
+            self.assertEqual(found["linked"], [
+                {"id": "fn-1-login", "checkout": False, "refs": ["refs/remotes/origin/fn-1-login"]},
+            ])
+
+    def test_an_unreadable_spec_json_stops_the_lookup(self) -> None:
+        # A partial clone can lack a ref's spec JSON blob; that is never "no link".
+        sys.path.insert(0, str(PLUGIN / "scripts"))
+        import flowctl  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+            specs = repo / ".flow" / "specs"
+            specs.mkdir(parents=True)
+            (specs / "fn-1-login.md").write_text("# Login\n", encoding="utf-8")
+            (specs / "fn-1-login.json").write_text(json.dumps({"id": "fn-1-login"}), encoding="utf-8")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-q", "-m", "spec")
+            (specs / "fn-1-login.json").unlink()  # only the committed copy remains
+            for blobs in ({}, None):
+                with self.subTest(blobs="missing" if blobs == {} else "unparseable"):
+                    read = (lambda _root, _oids: {}) if blobs == {} else (
+                        lambda _root, oids: {oid: b"{not json" for oid in oids})
+                    with mock.patch.object(flowctl, "_spec_ref_blobs", read):
+                        with self.assertRaises(flowctl.SpecRefIndexError):
+                            flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
+
+
+class IssueStartQuestionRounds(unittest.TestCase):
+    """R3: refusal, plain reply, re-promotion, follow-up posts once."""
+
+    def test_plain_reply_settles_the_round_and_a_rerun_dedupes(self) -> None:
+        sys.path.insert(0, str(PLUGIN / "scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flowctl_tracker import wire  # noqa: PLC0415
+        from test_tracker_wire import LN_ISSUE, LN_UUID, fake_execute, gql_issue, ln_cfg, loc, ok  # noqa: PLC0415
+
+        def comment(number: int, body: str, at: str) -> dict:
+            return {"id": str(number), "body": body, "createdAt": at, "url": f"https://linear.test/c/{number}"}
+
+        def ask(comments: list, *, reply_settles: bool = True):
+            added = comment(99, "posted", "2026-11-15T12:00:00Z")
+            ex = fake_execute({
+                "wire-comment-list": ok({"data": {"issue": {"id": LN_UUID, "comments": {
+                    "nodes": comments, "pageInfo": {"hasNextPage": False, "endCursor": None}}}}}),
+                "wire-parent-read": gql_issue(LN_ISSUE),
+                "wire-comment-add": ok({"data": {"commentCreate": {
+                    "success": True, "comment": {**added, "issue": {"id": LN_UUID}}}}}),
+            })
+            with tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                flow.mkdir()
+                out = wire.dispatch(
+                    "question", ln_cfg(), locator=loc(LN_UUID, "WOR-17"), subject_id=LN_UUID,
+                    blocked_stage="capture", reason_code="not-buildable", question_slug="login-scope",
+                    reply_settles=reply_settles, body="Which login?", flow_dir=flow, execute=ex)
+            self.assertIsInstance(out, dict, out)
+            posts = sum(call.op == "wire-comment-add" for call in ex.calls)
+            self.assertEqual(posts, 1 if out["posted"] else 0)
+            return out
+
+        first = ask([])
+        self.assertTrue(first["posted"])
+        marker = f"<!-- flow-next:question id={first['question_id']} status=open -->\n\nWhich login?"
+        refused = comment(1, marker, "2026-11-15T08:00:00Z")
+        reply = comment(2, "Email login only.", "2026-11-15T09:00:00Z")
+
+        follow_up = ask([refused, reply])
+        self.assertTrue(follow_up["posted"])
+        self.assertTrue(follow_up["reopened"])
+        # Without the flag the answer-marker protocol (backlog mode) still dedupes.
+        self.assertFalse(ask([refused, reply], reply_settles=False)["posted"])
+        # A rerun of the follow-up round, nobody having replied, posts nothing.
+        rerun = ask([refused, reply, comment(3, marker, "2026-11-15T10:00:00Z")])
+        self.assertFalse(rerun["posted"])
+
+
+@_POSIX_BASH
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class PostMergeCheckout(unittest.TestCase):
+    """R11: after land merged and deleted the spec branch, the next run starts on the default branch."""
+
+    FENCE = "# fence:post-merge-checkout"
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t",
+                               "-c", "commit.gpgsign=false", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    def _merged_checkout(self, tmp: Path) -> Path:
+        """The state a run leaves: on the squash-merged, remote-deleted branch, make-pr's sync write uncommitted."""
+        origin, co, merger = tmp / "origin.git", tmp / "co", tmp / "merger"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(co)], check=True, capture_output=True)
+        (co / ".flow" / "specs").mkdir(parents=True)
+        (co / ".flow" / ".gitignore").write_text("tmp/\n", encoding="utf-8")
+        (co / "a.txt").write_text("base\n", encoding="utf-8")
+        self._git(co, "add", "-A")
+        self._git(co, "commit", "-q", "-m", "base")
+        self._git(co, "push", "-q", "origin", "main")
+        self._git(co, "remote", "set-head", "origin", "main")
+        self._git(co, "switch", "-q", "-c", "fn-1-add")
+        sidecar = co / ".flow" / "specs" / "fn-1-add.json"
+        sidecar.write_text('{"tracker": {"lastSyncedAt": "capture"}}\n', encoding="utf-8")
+        (co / "a.txt").write_text("base\nadd\n", encoding="utf-8")
+        self._git(co, "add", "-A")
+        self._git(co, "commit", "-q", "-m", "fn-1-add")
+        self._git(co, "push", "-q", "-u", "origin", "fn-1-add")
+        sidecar.write_text('{"tracker": {"lastSyncedAt": "make-pr"}}\n', encoding="utf-8")
+        subprocess.run(["git", "clone", "-q", str(origin), str(merger)], check=True, capture_output=True)
+        self._git(merger, "merge", "-q", "--squash", "origin/fn-1-add")
+        self._git(merger, "commit", "-q", "-m", "fn-1-add (#1)")
+        self._git(merger, "push", "-q", "origin", "main")
+        self.merge_commit = self._git(merger, "rev-parse", "HEAD")
+        self._git(merger, "push", "-q", "origin", "--delete", "fn-1-add")
+        (co / ".flow" / "tmp").mkdir()
+        (co / ".flow" / "tmp" / "pilot-snapshot.json").write_text(
+            json.dumps({"selected": {"id": "fn-1-add", "branch_name": "fn-1-add"}}), encoding="utf-8")
+        return co
+
+    def _run_fence(self, co: Path, subdir: str = "", merged: bool = True) -> subprocess.CompletedProcess:
+        text = _read(AUTO_MD)
+        self.assertIn(self.FENCE, text)
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+               "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
+        env.pop("MERGE_COMMIT", None)
+        if merged:  # the merge commit land confirmed this run
+            env["MERGE_COMMIT"] = self.merge_commit
+        cwd = co / subdir
+        cwd.mkdir(parents=True, exist_ok=True)
+        return subprocess.run(["bash", "-c", _fence_from(text, self.FENCE)], cwd=cwd, env=env,
+                              capture_output=True, text=True)
+
+    def test_returns_to_the_default_branch_keeping_the_sync_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "main")
+            self.assertEqual(self._git(co, "rev-parse", "HEAD"), self._git(co, "rev-parse", "origin/main"))
+            self.assertEqual(self._git(co, "status", "--porcelain"), "")
+            self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
+
+    def test_a_hop_without_a_confirmed_merge_leaves_everything(self) -> None:
+        # Phase 6 runs after every hop; only a confirmed merge may move the checkout.
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co, merged=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertEqual(self._git(co, "status", "--porcelain"), "M .flow/specs/fn-1-add.json")
+
+    def test_a_run_from_a_subdirectory_still_commits_the_sync_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co, subdir="src")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "main")
+            self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
+
+    def test_a_local_default_branch_that_cannot_fast_forward_keeps_the_checkout(self) -> None:
+        # Work keeps planning commits on local main; after the squash merge that main has diverged.
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            self._git(co, "commit", "-q", "--only", "-m", "sync", "--", ".flow/specs/fn-1-add.json")
+            self._git(co, "switch", "-q", "main")
+            (co / ".flow" / "specs").mkdir(exist_ok=True)
+            (co / ".flow" / "specs" / "fn-2-next.json").write_text("{}\n", encoding="utf-8")
+            self._git(co, "add", "-A")
+            self._git(co, "commit", "-q", "-m", "plan fn-2-next")
+            self._git(co, "switch", "-q", "fn-1-add")
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertIn("left on fn-1-add", result.stdout)
+
+    def test_another_change_keeps_the_checkout_where_it_is(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            (co / "a.txt").write_text("someone's edit\n", encoding="utf-8")
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertEqual((co / "a.txt").read_text(encoding="utf-8"), "someone's edit\n")
+            self.assertIn("a.txt", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

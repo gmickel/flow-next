@@ -53,7 +53,7 @@ from ..question_claim import (
     release_question_claim,
 )
 from ..types import (ErrorClass, Request, Response, TrackerError,
-                     gitlab_cli_hostname)
+                     gitlab_cli_host)
 
 #: Jira project / issue-key grammars from jira.md (listOpenIssues JQL safety).
 #: Underscores and keys longer than Cloud's 10-char alnum cap are intentional:
@@ -215,14 +215,17 @@ def _json_loads(resp: Response, *, what: str) -> Union[Any, TrackerError]:
 
 
 def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
-              *, body: Optional[bytes] = None) -> list:
+              *, body: Optional[bytes] = None
+              ) -> tuple[list, Optional[dict[str, str]]]:
+    env = None
     if provider == "github":
         argv = ["gh", "api"]
     else:
         argv = ["glab", "api"]
         host = _dict(_dict(config.get("tracker")).get("perTracker")).get("host")
         if host:
-            argv += ["--hostname", gitlab_cli_hostname(str(host))]
+            flags, env = gitlab_cli_host(str(host))
+            argv += flags
     if method.upper() != "GET":
         argv += ["--method", method.upper()]
     argv.append(endpoint)
@@ -233,17 +236,17 @@ def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
             # on every JSON mutation); gh api defaults to JSON already.
             argv += ["-H", "Content-Type: application/json"]
         argv += ["--input", "-"]
-    return argv
+    return argv, env
 
 
 def _cli(execute: Execute, provider: str, config: dict, op: str, method: str,
          endpoint: str, *, body: Optional[dict] = None,
          idempotent: bool = False) -> Union[Any, TrackerError]:
     raw = None if body is None else json.dumps(body).encode()
+    argv, env = _cli_argv(provider, config, method, endpoint, body=raw)
     result = execute(Request(
-        provider=provider, op=op, method=method.upper(),
-        url_or_argv=_cli_argv(provider, config, method, endpoint, body=raw),
-        body=raw, idempotent=idempotent,
+        provider=provider, op=op, method=method.upper(), url_or_argv=argv,
+        body=raw, idempotent=idempotent, env=env,
     ))
     if isinstance(result, TrackerError):
         return result
@@ -605,10 +608,17 @@ def _unready(provider: str, mod: Any, config: dict, locator: dict,
             "changed": True}
 
 
+_ANY_QUESTION = re.compile(r"<!--\s*flow-next:question\s")
+
+
 def _dispatch_question(*, mod: Any, provider: str, config: dict,
                        locator: dict, execute: Execute, body: str,
-                       question_id: str) -> Result:
-    """Read the current semantic round and post only when no round is open."""
+                       question_id: str, reply_settles: bool = False) -> Result:
+    """Read the current semantic round and post only when no round is open.
+
+    A round closes on a matching answer marker; with ``reply_settles`` any
+    later comment that is not itself a flow-next question closes it too.
+    """
     marker = f"<!-- flow-next:question id={question_id} status=open -->"
     listed = mod.comment_list(config, locator, execute)
     if isinstance(listed, TrackerError):
@@ -637,7 +647,8 @@ def _dispatch_question(*, mod: Any, provider: str, config: dict,
             continue
         if question_pattern.search(comment_body):
             questions.append(comment)
-        if answer_pattern.search(comment_body):
+        if answer_pattern.search(comment_body) or (
+                reply_settles and not _ANY_QUESTION.search(comment_body)):
             answers.append(comment)
 
     current_question = questions[-1] if questions else None
@@ -709,7 +720,9 @@ def _list_open(provider: str, mod: Any, config: dict, execute: Execute, *,
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "list-open --unlinked requires the .flow directory",
                             subtype="flow_dir")
-    out = mod.list_open(config, execute, any_lane=any_lane)
+    # Only Linear's query must ask for labels; the REST rows carry them.
+    extra = {"labels": True} if provider == "linear" else {}
+    out = mod.list_open(config, execute, any_lane=any_lane, **extra)
     if isinstance(out, TrackerError):
         return out
     rows = out["issues"]
@@ -753,6 +766,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              blocked_stage: Optional[str] = None,
              reason_code: Optional[str] = None,
              question_slug: Optional[str] = None,
+             reply_settles: bool = False,
              add: Optional[list] = None, remove: Optional[list] = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
@@ -887,7 +901,8 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         try:
             return _dispatch_question(
                 mod=mod, provider=provider, config=config, locator=parsed,
-                execute=execute, body=body, question_id=question_id)
+                execute=execute, body=body, question_id=question_id,
+                reply_settles=reply_settles)
         finally:
             release_question_claim(rec_path)
     return TrackerError(ErrorClass.INVALID_INPUT, f"unhandled verb {verb!r}", subtype="verb")
@@ -903,6 +918,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
         body_file: Optional[str] = None, comment_id: Optional[str] = None,
         subject_id: Optional[str] = None, blocked_stage: Optional[str] = None,
         reason_code: Optional[str] = None, question_slug: Optional[str] = None,
+        reply_settles: bool = False,
         add: Optional[list] = None, remove: Optional[list] = None,
         file_path: Optional[str] = None, attachment_id: Optional[str] = None,
         out_path: Optional[str] = None,
@@ -953,6 +969,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
                            comment_id=comment_id, subject_id=subject_id,
                            blocked_stage=blocked_stage,
                            reason_code=reason_code, question_slug=question_slug,
+                           reply_settles=reply_settles,
                            add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
                            out_path=out_path, any_lane=any_lane,

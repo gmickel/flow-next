@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,6 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+
+from flowctl_test_support import FLOWCTL_CMD  # noqa: E402
 
 from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
@@ -720,27 +723,40 @@ class FlowDepsCarryAndStrip(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class CaptureLinkSeed(unittest.TestCase):
-    """fn-324 R2: capture links a named issue in flow-id mode, then pushes."""
+    """fn-324 R2: capture links a named issue in flow-id mode, seeds the
+    merge base with the prescribed `sync set-merge-base` command, then pushes
+    with the facade's tracker-divergence refusal."""
 
-    ISSUE = "Original issue body."
+    # An unchanged issue whose body ends in a newline and carries a deps region.
+    ISSUE = f"Original issue body.\n\n{DEPS_BLOCK}\n"
     CAPTURED = "## Goal\nCaptured spec.\n"
 
     def _push(self, flow_base: str):
         with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp)
-            tracker_base = SB.trackerBodyForMerge(self.ISSUE)
+            repo = Path(tmp)
+            flow = repo / ".flow"
             _write_flow(flow, gh_cfg(), tracker={
                 "id": GH_NODE, "identifier": "#42", "url": "u",
-                "linkState": "linked",
-                "mergeBaseFlow": flow_base, "mergeBaseTracker": tracker_base,
-                "baseHashFlow": sha(flow_base), "baseHashTracker": sha(tracker_base)})
+                "linkState": "linked"})
+            (repo / "flow-base.md").write_text(flow_base, encoding="utf-8")
+            (repo / "issue.md").write_text(self.ISSUE, encoding="utf-8")
+            seeded = subprocess.run(
+                [*FLOWCTL_CMD, "sync", "set-merge-base", "fn-1-demo",
+                 "--flow-file", "flow-base.md", "--tracker-file", "issue.md",
+                 "--json"],
+                cwd=repo, capture_output=True, text=True, check=False)
+            self.assertEqual(seeded.returncode, 0, seeded.stdout + seeded.stderr)
+            pushed = f"{self.CAPTURED.rstrip()}\n\n{DEPS_BLOCK}"
             ex = fake_execute({
                 "sync-body-parent-read": ok(_gh_issue(self.ISSUE)),
                 "wire-parent-read": ok(_gh_issue(self.ISSUE)),
-                "wire-update": ok(_gh_issue(self.CAPTURED)),
-                "wire-read": ok(_gh_issue(self.CAPTURED))})
+                "wire-update": ok(_gh_issue(pushed)),
+                "wire-read": ok(_gh_issue(pushed))})
             out = SB.sync_body(flow, "fn-1-demo", flow_file_body=self.CAPTURED,
-                               direction="push", event="capture", execute=ex)
+                               direction="push", event="capture",
+                               refuse_tracker_divergence=True, execute=ex)
+            self.assertNotIsInstance(out, TrackerError,
+                                     getattr(out, "subtype", None))
             return out, [c.op for c in ex.calls]
 
     def test_seeding_both_halves_from_the_issue_pushes_the_capture(self) -> None:

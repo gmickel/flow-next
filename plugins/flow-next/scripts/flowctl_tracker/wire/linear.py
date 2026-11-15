@@ -609,7 +609,10 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return out
 
 
-def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False,
+              labels: bool = False) -> Result:
+    """`labels` selects issue labels for the compact rows; the default
+    query stays the one 9.10.0 sent."""
     ready_state = _ready_state(config)
     if ready_state is None and not any_lane:
         # #311: an empty list here was indistinguishable from a genuinely empty
@@ -647,11 +650,14 @@ def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Resu
                                 subtype="malformed_body")
         return conn
 
+    fields = "id identifier title description url"
+    if labels:
+        fields += " labels { nodes { name } }"
     drained = _gql_connection_drain(
         execute, "wire-list-open",
         "query($filter: IssueFilter!, $after: String) { "
         f"issues(first: {_PAGE_SIZE}, filter: $filter, after: $after) "
-        "{ nodes { id identifier title description url labels { nodes { name } } } "
+        f"{{ nodes {{ {fields} }} "
         "pageInfo { hasNextPage endCursor } } }",
         {"filter": filt}, pluck)
     if isinstance(drained, TrackerError):

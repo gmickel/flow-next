@@ -1731,30 +1731,61 @@ class GitlabCliJsonContentType(unittest.TestCase):
 
 
 class GitlabSelfHostedHostname(unittest.TestCase):
-    """Measured live 2026-07-28 on a self-hosted EE instance at
-    http://gitlab.localhost:8929: glab's --hostname wants its bare-hostname
-    config key (a scheme-prefixed value is rejected 400), while the HTTP
-    attach route needs the scheme-prefixed origin to derive its API base.
-    perTracker.host stores the origin; the CLI argv builders normalize."""
+    """perTracker.host stores the origin (the HTTP attach route derives its API
+    base from it). glab keys a host on a non-default port as `host:port`, the
+    form `glab auth login --hostname localhost:8929` stores, yet `glab api
+    --hostname` rejects any value carrying a port (measured live 2026-11-15,
+    glab 1.124: "invalid hostname"). Such a host reaches glab as GITLAB_HOST;
+    any other host stays a bare --hostname."""
 
-    def test_scheme_prefixed_host_normalized_for_glab(self) -> None:
-        from flowctl_tracker.types import gitlab_cli_hostname
-        self.assertEqual(gitlab_cli_hostname("http://gitlab.localhost:8929"),
-                         "gitlab.localhost")
-        self.assertEqual(gitlab_cli_hostname("https://gl.corp/sub"), "gl.corp")
-        self.assertEqual(gitlab_cli_hostname("gitlab.example.com"),
-                         "gitlab.example.com")
-        self.assertEqual(gitlab_cli_hostname("gitlab.localhost:8929"),
-                         "gitlab.localhost")
+    CASES = [
+        ("http://localhost:8929", [], {"GITLAB_HOST": "localhost:8929"}),
+        ("localhost:8929", [], {"GITLAB_HOST": "localhost:8929"}),
+        ("https://gl.corp:443/sub", ["--hostname", "gl.corp"], None),
+        ("https://gl.corp/sub", ["--hostname", "gl.corp"], None),
+        ("gitlab.example.com", ["--hostname", "gitlab.example.com"], None),
+    ]
 
-    def test_wire_argv_carries_bare_hostname(self) -> None:
-        cfg = gl_cfg()
-        cfg["tracker"]["perTracker"]["host"] = "http://gitlab.localhost:8929"
-        ex = fake_execute({"wire-read": ok(GL_ISSUE)})
-        W.dispatch("read", cfg, locator=loc(str(GL_ID), "g/p#12"), execute=ex)
-        argv = list(ex.calls[0].url_or_argv)
-        i = argv.index("--hostname")
-        self.assertEqual(argv[i + 1], "gitlab.localhost")
+    @staticmethod
+    def _seen(request) -> tuple:
+        argv = list(request.url_or_argv)
+        flags = argv[argv.index("--hostname"):argv.index("--hostname") + 2] \
+            if "--hostname" in argv else []
+        return flags, request.env
+
+    def test_a_login_under_the_bare_hostname_still_reaches_a_ported_host(self) -> None:
+        # 9.9.1's rule for the forge: glab keys a login made without the web
+        # port by the bare hostname; glab's logged-out answer for host:port
+        # sends the call there instead.
+        from unittest import mock
+        from flowctl_tracker import types as T
+        for logged_in, env in ((True, {"GITLAB_HOST": "localhost:8929"}),
+                               (False, {"GITLAB_HOST": "localhost"}),
+                               (None, {"GITLAB_HOST": "localhost:8929"})):
+            with self.subTest(logged_in=logged_in), \
+                    mock.patch.object(T, "glab_logged_in", return_value=logged_in):
+                self.assertEqual(T.gitlab_cli_host("http://localhost:8929"), ([], env))
+
+    def test_wire_and_resolve_point_glab_at_the_host(self) -> None:
+        from unittest import mock
+        from flowctl_tracker import types as T
+        from flowctl_tracker.providers import gitlab as GP
+        patcher = mock.patch.object(T, "glab_logged_in", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for host, flags, env in self.CASES:
+            with self.subTest(host=host):
+                cfg = gl_cfg()
+                cfg["tracker"]["perTracker"]["host"] = host
+                ex = fake_execute({"wire-read": ok(GL_ISSUE)})
+                W.dispatch("read", cfg, locator=loc(str(GL_ID), "g/p#12"),
+                           execute=ex)
+                self.assertEqual(self._seen(ex.calls[0]), (flags, env))
+                ex = fake_execute({"resolve-destination": ok(
+                    {"id": 1, "namespace": {"id": 9, "full_path": "g"},
+                     "web_url": "https://x/g/p"})})
+                GP.resolve_destination(cfg, ex)
+                self.assertEqual(self._seen(ex.calls[0]), (flags, env))
 
 
 class DispatchEnvelopeBoundary(unittest.TestCase):
