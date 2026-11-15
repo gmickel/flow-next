@@ -12,9 +12,10 @@ refusal has already stopped the run.
 
 Each row is `{id, identifier, title, url, labels, excerpt}`: an open issue no spec in this
 checkout links. When the envelope is not a success (the bridge is inactive, the tracker is
-unreachable), report its reason and stop with no table. When `issues` is empty, say there is
-nothing to triage and stop. When `truncated` is true, say the list was cut and how many issues
-the table covers.
+unreachable), report its reason and stop with no table. When `truncated` is true, say the list
+was cut and how many issues the table covers, even when that is none: the cap counts linked
+issues too. When `issues` is empty and the list was not cut, say there is nothing to triage and
+stop.
 
 Read the open specs (`"$FLOWCTL" specs --json`, then `"$FLOWCTL" cat <spec-id>` where a title
 alone does not settle it) so each issue can be matched. Which spec an issue belongs to is your
