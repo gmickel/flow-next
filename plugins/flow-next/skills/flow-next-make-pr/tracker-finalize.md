@@ -20,3 +20,15 @@ success.
 Audit `sync check "$SPEC_ID" --events makePr --since <PR-createdAt> --json` independently of dispatch. If
 MISSING, record a UTC start, Retro-fire the same wrapper once with explicit `--pr-url`, then recheck since
 that start. Never loop.
+
+The tracker call writes sync state, and the link for a spec it just linked, into the spec's JSON after the
+pull request was pushed. Commit that file alone and push it to the pull request branch, so it reaches the
+default branch with the merge:
+```bash
+# fence:make-pr-sync-state
+SYNC_JSON=".flow/specs/$SPEC_ID.json"
+if [ -f "$SYNC_JSON" ] && ! git diff --quiet -- "$SYNC_JSON"; then
+  git commit -q --only -m "chore(flow): tracker sync state for $SPEC_ID" -- "$SYNC_JSON" \
+    && { git push -q origin HEAD || echo "Warning: tracker sync state for $SPEC_ID not pushed" >&2; }
+fi
+```

@@ -43,6 +43,7 @@ Two of the defects let an unattended `flow --auto --from-issue` run build the wr
 - **R10:** With `tracker.perTracker.host` set to `http://localhost:8929`, `tracker resolve` and `list-open` reach the self-managed GitLab instance; recorded live. [inferred]
 - **R11:** The `--auto` post-merge checkout state is either fixed so the next `--auto` run starts cleanly, or shown harmless by a recorded next run; the finding states which. [inferred]
 - **R12:** Before release, a headless `flow --auto --from-issue <key> --until=merge` run on the final code passes on gmickel/flow-next-e2e-scratch for a clear issue (implementation review runs) and for refused → plain answer → follow-up question → answer → build. [user]
+- **R13:** After make-pr's tracker call, a change it wrote to the spec's JSON (sync state, or the link it created for an unlinked spec) is committed alone and pushed to the pull request branch, so it reaches the PR and the default branch; a failed push warns and leaves the PR as it is. Found by task 4. [inferred]
 
 ## Boundaries
 
