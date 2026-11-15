@@ -129,11 +129,16 @@ class AnyLaneTests(unittest.TestCase):
         self.assertEqual(out["issues"][0]["url"],
                          "https://ex.atlassian.net/browse/SCRUM-1")
 
-    def test_linear_listing_selects_labels(self) -> None:
+    def test_linear_compact_listing_selects_labels(self) -> None:
         # A fixture returns whatever it holds; the query must ask for labels.
-        ex = fake_execute({"wire-list-open": ok({"data": {"issues": {"nodes": [LN_ISSUE]}}})})
-        W.dispatch("list-open", _unset_ready(ln_cfg()), execute=ex, any_lane=True)
-        self.assertIn("labels { nodes { name } }", json.loads(ex.calls[0].body)["query"])
+        for flags in ({"any_lane": True}, {"unlinked": True}):
+            with self.subTest(**flags), tempfile.TemporaryDirectory() as tmp:
+                ex = fake_execute({"wire-list-open": ok(
+                    {"data": {"issues": {"nodes": [LN_ISSUE]}}})})
+                W.dispatch("list-open", ln_cfg(), execute=ex,
+                           flow_dir=_flow_with_link(tmp, "none"), **flags)
+                self.assertIn("labels { nodes { name } }",
+                              json.loads(ex.calls[0].body)["query"])
 
     def test_jira_cloud_v2_lists_through_search_jql(self) -> None:
         # Cloud answers 410 Gone on GET /rest/api/2/search (measured 2026-11-15).
@@ -249,6 +254,17 @@ class DefaultOutputTests(unittest.TestCase):
                 self.assertIn("raw", out["issues"][0])
                 self.assertIn("body", out["issues"][0])
                 self.assertNotIn("excerpt", out["issues"][0])
+
+    def test_linear_default_query_is_the_9_10_0_query(self) -> None:
+        ex = fake_execute({"wire-list-open": ok(
+            {"data": {"issues": {"nodes": LN_TWO}}})})
+        W.dispatch("list-open", ln_cfg(), execute=ex)
+        self.assertEqual(
+            json.loads(ex.calls[0].body)["query"],
+            "query($filter: IssueFilter!, $after: String) { "
+            "issues(first: 100, filter: $filter, after: $after) "
+            "{ nodes { id identifier title description url } "
+            "pageInfo { hasNextPage endCursor } } }")
 
 
 class BacklogTrackerOnlySetTests(unittest.TestCase):
