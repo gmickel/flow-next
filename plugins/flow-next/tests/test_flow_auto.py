@@ -414,6 +414,25 @@ class IssueStartContract(unittest.TestCase):
                       _read(AUTO_MD))
 
 
+class IssueStartFinalAuditContract(unittest.TestCase):
+    """fn-327 R2-R4: tokens the issue-start, capture and working-rules contracts carry."""
+
+    def test_a_remote_only_link_fast_forwards_the_local_branch(self) -> None:
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        for token in ("`git merge --ff-only origin/<name>`", "`tracker.id`"):
+            self.assertIn(token, text)
+
+    def test_every_task_review_lives_in_the_spec_and_the_working_rules(self) -> None:
+        self.assertIn("Every task gets implementation review",
+                      _read(PLUGIN / "skills/flow-next-capture/references/from-issue.md"))
+        self.assertIn("every task gets implementation review", _flat(_read(PLUGIN / "references/working-rules.md")))
+
+    def test_question_slug_carries_the_issue_body_digest(self) -> None:
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        for token in ("SHA-256", "issue body", "--question-slug"):
+            self.assertIn(token, text)
+
+
 @unittest.skipUnless(shutil.which("git"), "requires git")
 class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
     """R2: a link only a remote branch's JSON carries is found before capture."""
@@ -478,6 +497,16 @@ class IssueStartLinkedSpecAcrossRefs(unittest.TestCase):
                     with mock.patch.object(flowctl, "_spec_ref_blobs", read):
                         with self.assertRaises(flowctl.SpecRefIndexError):
                             flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
+            # A tree-filtered partial clone can lack a ref's tree, or the ref listing can fail.
+            real = flowctl._spec_ref_git
+            for verb in ("ls-tree", "for-each-ref"):
+                def failing(root, *args, _verb=verb, **kwargs):
+                    if args and args[0] == _verb:
+                        return subprocess.CompletedProcess(args, 128, "", "fatal: missing tree")
+                    return real(root, *args, **kwargs)
+                with self.subTest(unreadable=verb), mock.patch.object(flowctl, "_spec_ref_git", failing):
+                    with self.assertRaises(flowctl.SpecRefIndexError):
+                        flowctl.find_linked_specs(repo, "issue-uuid-7", fetch=False)
 
 
 class IssueStartQuestionRounds(unittest.TestCase):

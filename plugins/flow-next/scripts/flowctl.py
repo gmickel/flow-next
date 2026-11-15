@@ -32159,11 +32159,17 @@ def _spec_ref_git(repo_root: Path, *args: str, lazy_fetch: bool = False) -> subp
     )
 
 
-def _spec_ref_tree(repo_root: Path, commit: str, cache: dict) -> dict:
-    """{spec_id: {"md": oid, "json": oid}} under .flow/specs at commit (cached)."""
+def _spec_ref_tree(repo_root: Path, commit: str, cache: dict, *, strict: bool = False) -> dict:
+    """{spec_id: {"md": oid, "json": oid}} under .flow/specs at commit (cached).
+
+    ``strict`` raises when the tree cannot be read (a partial clone's missing
+    tree) instead of reading it as holding no specs.
+    """
     if commit not in cache:
         found: dict = {}
         listing = _spec_ref_git(repo_root, "ls-tree", commit, f"{FLOW_DIR}/{SPECS_DIR}/")
+        if strict and listing.returncode != 0:
+            raise SpecRefIndexError(f"cannot read the tree of {commit}: {(listing.stderr or '').strip()}")
         for line in listing.stdout.splitlines() if listing.returncode == 0 else []:
             meta, _, path = line.partition("\t")
             parts = meta.split()
@@ -32241,13 +32247,15 @@ def find_linked_specs(repo_root: Path, tracker_id: str, *, fetch: bool) -> dict:
         repo_root, "for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)",
         "refs/heads", "refs/remotes",
     )
+    if listing.returncode != 0:
+        raise SpecRefIndexError(f"cannot list refs: {(listing.stderr or '').strip()}")
     trees: dict = {}
     ref_oids = []  # (ref, spec_id, json oid)
     for line in listing.stdout.splitlines():
         name, sha, symref = line.split("\x00")
         if symref:
             continue
-        for spec_id, blobs in _spec_ref_tree(repo_root, sha, trees).items():
+        for spec_id, blobs in _spec_ref_tree(repo_root, sha, trees, strict=True).items():
             if blobs.get("json"):
                 ref_oids.append((name, spec_id, blobs["json"]))
     contents = _spec_ref_blobs(repo_root, {oid for _, _, oid in ref_oids})

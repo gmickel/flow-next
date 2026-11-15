@@ -95,7 +95,8 @@ question, it was underspecified: reframe it and re-run, never average or pick on
 When a review backend is configured, review by risk, not by size. Review every change that
 touches persisted or shared state, concurrency, security, data layout or migrations, and every
 multi-file feature. A small local fix to output, wording or display is not reviewed; record the
-skip and its reason. Read the configuration rather than assuming it, use the configured backend,
+skip and its reason. A spec that says every task gets implementation review is reviewed whatever
+the change's size. Read the configuration rather than assuming it, use the configured backend,
 and if it cannot run, say so instead of substituting another reviewer. Review is never deferred
 to a pull request.
 
