@@ -46,7 +46,8 @@ Read [pr-cognitive-aid.md](pr-cognitive-aid.md) and execute it on every entry pa
 update, before body delivery.
 ## Phase 2: Deliver the briefing
 
-Use rendered `BODY_FILE` unchanged, before `Ref` / Stack lines.
+Use rendered `BODY_FILE` unchanged, before `Ref` / Stack lines. The one addition allowed: trailer
+lines the repository's own instructions require on every pull request, appended before `Ref`.
 The authored `shape` block and the renderer's numbered groups supply the structural sketch.
 
 For dry-run, print `BODY_FILE` and stop. Otherwise read [create-and-finalize.md](create-and-finalize.md) and

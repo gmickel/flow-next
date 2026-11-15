@@ -66,7 +66,9 @@ commits since the newest head with green CI are catch-ups (`web-flow` base merge
 naming the base move, with no rerun or repair. Red CI in this PR's own code gets one focused fix in an
 isolated checkout (the same detached worktree), verification, and a push to the PR branch. A flaky check
 gets one `gh run rerun <run-id> --failed`; inspect prior attempts on this head first. An identical second
-failure is not a flake and gets no second rerun. If the fix does not turn CI green, stop `BLOCKED` naming
+failure is not a flake and gets no second rerun. When the cause is found but the only change that would
+turn CI green removes or weakens what the PR is for (deleting its failing test, say), make no commit and
+stop `BLOCKED` naming the check and that reason. If the fix does not turn CI green, stop `BLOCKED` naming
 the failing check; if the new run is pending, report `FIXING_CI` and return to the caller. External
 failures needing intervention stop `NEEDS_HUMAN` with their evidence. Re-read all gates after a repair;
 never spend a second fix on the same failure on a later invocation (see the PR's commits and checks).

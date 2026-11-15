@@ -85,13 +85,65 @@ def _basic(user: str, token: str) -> str:
     return "Basic " + encoded
 
 
+#: A secret store that would prompt in an unattended run must fail, not hang.
+TOKEN_COMMAND_TIMEOUT_S = 10
+
+#: One run per flowctl process: a sync makes many requests, the store is read once.
+_COMMAND_RESULTS: dict[tuple[str, ...], "str | TokenCommandError"] = {}
+
+
+class TokenCommandError(RuntimeError):
+    """The configured token command gave no credential. Never carries its output."""
+
+
+def _command_token(argv) -> str:
+    """Run `tracker.perTracker.tokenCommand` (argv, no shell) and return its trimmed stdout."""
+    import subprocess
+
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise TokenCommandError("token command must be a non-empty list of strings")
+    key = tuple(argv)
+    if key not in _COMMAND_RESULTS:
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True, check=False,
+                                  stdin=subprocess.DEVNULL, timeout=TOKEN_COMMAND_TIMEOUT_S)
+            token = proc.stdout.strip()
+            if proc.returncode != 0:
+                outcome = TokenCommandError(f"token command exited {proc.returncode}")
+            elif not token:
+                outcome = TokenCommandError("token command printed an empty token")
+            elif "\n" in token:
+                outcome = TokenCommandError("token command printed more than one line")
+            else:
+                outcome = token
+        except FileNotFoundError:
+            outcome = TokenCommandError(f"token command not found: {argv[0]}")
+        except subprocess.TimeoutExpired:
+            outcome = TokenCommandError(
+                f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
+        except OSError as exc:
+            outcome = TokenCommandError(f"token command could not run: {exc.strerror}")
+        _COMMAND_RESULTS[key] = outcome
+    outcome = _COMMAND_RESULTS[key]
+    if isinstance(outcome, TokenCommandError):
+        raise outcome
+    return outcome
+
+
 def resolve(provider: str, *, auth_scheme: Optional[str] = None,
-            host: Optional[str] = None) -> Optional[Credential]:
+            host: Optional[str] = None, token_command=None) -> Optional[Credential]:
     """Return a Credential, or None when the transport authenticates itself.
 
     GitHub and GitLab ordinarily go through their CLI, which carries its own
-    auth - so None there is correct, not a failure.
+    auth - so None there is correct, not a failure. Linear and Jira fall back
+    to `token_command` only when their environment variable is unset.
     """
+    def env_or_command(name: str) -> Optional[str]:
+        value = os.environ.get(name)
+        if not value and token_command is not None:
+            value = _command_token(token_command)
+        return _remember(value)
+
     if provider == "github":
         tok = _remember(os.environ.get("GH_TOKEN"))
         return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}")) if tok else None
@@ -112,7 +164,7 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
         return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok))
 
     if provider == "linear":
-        key = _remember(os.environ.get("LINEAR_API_KEY"))
+        key = env_or_command("LINEAR_API_KEY")
         return Credential(lambda h: h.__setitem__("Authorization", key)) if key else None
 
     if provider == "jira":
@@ -121,9 +173,10 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
         # between invocations. Racing them would also make "which credential
         # failed" unanswerable when both are present.
         if auth_scheme == "bearer-pat":
-            pat = _remember(os.environ.get("JIRA_PAT"))
+            pat = env_or_command("JIRA_PAT")
             return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {pat}")) if pat else None
-        email, tok = os.environ.get("JIRA_EMAIL"), _remember(os.environ.get("JIRA_API_TOKEN"))
+        email = os.environ.get("JIRA_EMAIL")
+        tok = env_or_command("JIRA_API_TOKEN") if email else None
         if email and tok:
             return Credential(lambda h: h.__setitem__("Authorization", _basic(email, tok)))
         return None

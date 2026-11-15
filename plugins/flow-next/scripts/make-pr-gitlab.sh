@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # make-pr's merge requests on a GitLab origin. make-pr-preflight.sh runs this in
 # place of gh for the same argv (`pr list --head <branch> --state all --json <keys>
-# [--jq <expr>]`, `pr view --json <keys>`) and gets gh's JSON keys back: number,
-# url, state (OPEN, MERGED, CLOSED) and baseRefName, whatever --json names.
+# [--jq <expr>]`, `pr view --json <keys>`) and gets exactly the gh keys --json names, from
+# number, url, state (OPEN, MERGED, CLOSED), baseRefName, headRefOid, isDraft and body; any other key
+# exits nonzero naming it.
 # make-pr-create.sh runs `pr create` with gh's argv (`--title --body-file [--draft]
 # --base --head`) and `pr edit <number> --body-file <file> [--ready]`; both print
 # the merge request's URL.
@@ -93,16 +94,19 @@ if [[ "$2" == edit ]]; then
 fi
 
 READ=$2; shift 2
-HEAD=""; FILTER="."
+HEAD=""; FILTER="."; KEYS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --head) HEAD=$2 ;;
     --state) [[ "$2" == all ]] || fail "only --state all is supported" ;;
-    --json) ;;   # every read answers the same keys
+    --json) KEYS=$2 ;;
     --jq) FILTER=$2 ;;
     *) echo "make-pr-gitlab.sh: unsupported argument $1" >&2; exit 2 ;;
   esac
   shift 2
+done
+for KEY in ${KEYS//,/ }; do
+  [[ " number url state baseRefName headRefOid isDraft body " == *" $KEY "* ]] || fail "unsupported --json key: $KEY"
 done
 [[ "$READ" == list ]] || HEAD=$(git branch --show-current)
 [[ -n "$HEAD" ]] || fail "no branch to read"
@@ -119,13 +123,15 @@ while :; do
 done
 # A fork's merge request can share the branch name; only the origin project's count.
 # A locked merge request is mid-merge and still open.
-printf '%s' "$ROWS" | jq -c --arg read "$READ" '
+printf '%s' "$ROWS" | jq -c --arg read "$READ" --arg keys "$KEYS" '
+  def pick: if $keys == "" then . else with_entries(select(.key | IN($keys | split(",")[]))) end;
   if all(.[]; type == "object" and (.iid | type) == "number" and (.web_url | type) == "string" and .web_url != ""
          and (.state | IN("opened", "locked", "merged", "closed")) and (.target_branch | type) == "string"
          and (.source_project_id | type) == "number" and (.project_id | type) == "number")
   then [.[] | select(.source_project_id == .project_id)
         | {number: .iid, url: .web_url, baseRefName: .target_branch,
+           headRefOid: .sha, isDraft: ((.draft // .work_in_progress) == true), body: (.description // ""),
            state: {opened: "OPEN", locked: "OPEN", merged: "MERGED", closed: "CLOSED"}[.state]}]
-       | if $read == "view" then map(select(.state == "OPEN"))[0] // empty else . end
+       | if $read == "view" then (map(select(.state == "OPEN"))[0] // empty) | pick else map(pick) end
   else error("malformed merge-request row") end' | jq -rc "$FILTER" \
   || fail "malformed merge-request listing"

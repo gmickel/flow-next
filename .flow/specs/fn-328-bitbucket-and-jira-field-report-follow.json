@@ -1,13 +1,121 @@
 {
   "branch_name": "fn-328-bitbucket-and-jira-field-report-follow",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-15T23:12:07.954051Z",
   "created_at": "2026-11-15T21:42:12.120099Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-328-bitbucket-and-jira-field-report-follow",
+  "impl_review_rounds": {
+    "fn-328-bitbucket-and-jira-field-report-follow.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "bf160f76644bbe8ff8d7de9230de5278efaac0c6c57c1fd59554ce8386b01b5f",
+      "backend": "codex",
+      "base_sha": "85dec72a2520731042c94fb3f510e3f3d8ab8455",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-385263b1239022879d0bbfcdfe5edd52",
+            "classification": "introduced",
+            "findingId": "finding-385263b1239022879d0bbfcdfe5edd52",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d97f96851422766c0565fc217d40510ac7a28aef",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 852,
+      "output_sha256": "0ad489cce81e99ccf2142ce15833a2833e55f42889ae3a0d7b9b2570cc9e2bbd",
+      "reservation_id": "134ceadf755640b8bd44c346fac78c8b",
+      "round_consumed": true,
+      "scope": "impl:fn-328-bitbucket-and-jira-field-report-follow.1",
+      "superseded_by": null,
+      "task": "fn-328-bitbucket-and-jira-field-report-follow.1",
+      "timestamp": "2026-11-15T23:08:02.840024Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "a0b238e29e56e0b4d9e71aadd1638279273c14952770b52208af346b8d5f0fdf",
+      "backend": "codex",
+      "base_sha": "85dec72a2520731042c94fb3f510e3f3d8ab8455",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-385263b1239022879d0bbfcdfe5edd52",
+            "classification": "introduced",
+            "findingId": "finding-385263b1239022879d0bbfcdfe5edd52",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a84707cad163fefea8335936eb25dbb09b732d1c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1003,
+      "output_sha256": "7d6ba258f576ec036ca8278466e772b27c662d05b958c7d28bae753d527fe3a2",
+      "reservation_id": "1eeac734fdd74af2865278dc89a3c5be",
+      "round_consumed": true,
+      "scope": "impl:fn-328-bitbucket-and-jira-field-report-follow.1",
+      "superseded_by": null,
+      "task": "fn-328-bitbucket-and-jira-field-report-follow.1",
+      "timestamp": "2026-11-15T23:11:38.087824Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-328-bitbucket-and-jira-field-report-follow.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-328-bitbucket-and-jira-field-report-follow.1": 0
+  },
   "spec_path": ".flow/specs/fn-328-bitbucket-and-jira-field-report-follow.md",
-  "status": "open",
+  "status": "done",
   "title": "Bitbucket and Jira field-report follow-ups (#602, #611)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T22:08:24.869002Z"
+  "updated_at": "2026-11-15T23:21:42.944387Z"
 }

@@ -151,8 +151,8 @@ class HelperReadTests(GitLabShellCase):
         self.assertEqual(listed.returncode, 0, listed.stderr)
         # The fork's MR !7 shares the branch name and is not the origin project's.
         self.assertEqual(json.loads(listed.stdout), [
-            {"number": 2, "url": "http://localhost:8929/flownext/flownext/-/merge_requests/2", "baseRefName": "main", "state": "OPEN"},
-            {"number": 1, "url": "http://localhost:8929/flownext/flownext/-/merge_requests/1", "baseRefName": "main", "state": "CLOSED"}])
+            {"number": 2, "baseRefName": "main", "state": "OPEN"},
+            {"number": 1, "baseRefName": "main", "state": "CLOSED"}])
         merged = self.run_sh([*self.LIST, "fn73-fx-merged"], GLAB_ANSWERS=answers(recorded("mr-branch-merged")))
         self.assertEqual([(r["number"], r["state"], r["baseRefName"]) for r in json.loads(merged.stdout)], [(3, "MERGED", "main")])
         none = self.run_sh([*self.LIST, "fn73-fx-absent"], GLAB_ANSWERS=answers(recorded("mr-branch-none")))
@@ -160,6 +160,25 @@ class HelperReadTests(GitLabShellCase):
         count = self.run_sh([*self.LIST, "fn73-fx-reused", "--jq", '[.[] | select(.state=="OPEN" or .state=="MERGED")] | length'],
                             GLAB_ANSWERS=answers(recorded("mr-branch-all")))
         self.assertEqual(count.stdout.strip(), "1")
+
+    def test_reads_answer_exactly_the_requested_keys(self):
+        repo = self.repo_on("fn73-fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,isDraft,body"], cwd=repo,
+                           GLAB_ANSWERS=answers(recorded("mr-branch-all")))
+        self.assertEqual(view.returncode, 0, view.stderr)
+        self.assertEqual(json.loads(view.stdout), {"number": 2, "isDraft": True, "body": ""})
+        described = self.derived("mr-branch-all", lambda rows: [r.update(description="why") or r for r in rows])
+        listed = self.run_sh([*self.LIST[:6], "body,number", "--head", "fn73-fx-reused"],
+                             GLAB_ANSWERS=answers(described))
+        self.assertEqual(json.loads(listed.stdout), [{"body": "why", "number": 2}, {"body": "why", "number": 1}])
+
+    def test_a_key_the_helper_cannot_answer_exits_nonzero_naming_it(self):
+        repo = self.repo_on("fn73-fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,mergeable"], cwd=repo,
+                           GLAB_ANSWERS=answers(recorded("mr-branch-all")))
+        self.assertNotEqual(view.returncode, 0)
+        self.assertIn("mergeable", view.stderr)
+        self.assertEqual(view.stdout, "")
 
     def test_view_answers_the_branch_open_or_locked_merge_request(self):
         def lock(rows):

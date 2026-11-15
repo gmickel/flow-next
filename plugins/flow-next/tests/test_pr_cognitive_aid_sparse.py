@@ -18,7 +18,7 @@ from test_pr_cognitive_aid import (
 class SparseInputTests(unittest.TestCase):
     def setUp(self):
         remote = mock.patch.object(
-            flowctl, "_export_run_git", return_value=(0, "git@example.test:acme/repo.git", "")
+            flowctl, "_export_run_git", return_value=(0, "git@github.com:acme/repo.git", "")
         )
         remote.start()
         self.addCleanup(remote.stop)
@@ -129,19 +129,45 @@ class SparseInputTests(unittest.TestCase):
                 self.assertNotIn("diffUrl", expanded["changeWalkthrough"]["groups"][2]["files"][0])
                 self.assertEqual(expanded, value)
 
-    def test_derived_link_encodes_path_and_binds_head_for_remote_forms(self):
-        for remote in ("https://example.test/acme/repo.git",
-                       "ssh://git@example.test/acme/repo.git",
-                       "git@example.test:acme/repo.git"):
+    def test_derived_link_uses_the_hosting_forge_path_and_binds_head(self):
+        encoded = "src/a%20%23%28%29%5B%5D.py"
+        cases = (
+            ("https://github.com/acme/repo.git", f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
+            ("ssh://git@github.com/acme/repo.git", f"/acme/repo/blob/{HEAD_SHA}/{encoded}"),
+            ("git@gitlab.com:acme/repo.git", f"/acme/repo/-/blob/{HEAD_SHA}/{encoded}"),
+            ("https://gitlab.com/grp/sub/team/repo.git",
+             f"/grp/sub/team/repo/-/blob/{HEAD_SHA}/{encoded}"),
+            ("https://bitbucket.org/acme/repo.git", f"/acme/repo/src/{HEAD_SHA}/{encoded}"),
+            ("git@bitbucket.org:acme/repo.git", f"/acme/repo/src/{HEAD_SHA}/{encoded}"),
+        )
+        for remote, want in cases:
             with self.subTest(remote=remote):
-                value = self.complete()
-                row = value["changeWalkthrough"]["groups"][2]["files"][0]
-                row["path"] = "src/a #()[].py"
-                del row["diffUrl"]
-                with mock.patch.object(flowctl, "_export_run_git", return_value=(0, remote, "")):
-                    result = self.validate_input(value, artifact_diff_files(value))
-                self.assertEqual(result["changeWalkthrough"]["groups"][2]["files"][0]["diffUrl"],
-                                 f"/acme/repo/blob/{HEAD_SHA}/src/a%20%23%28%29%5B%5D.py")
+                self.assertEqual(self.derived_link(remote, "src/a #()[].py"), want)
+
+    def test_origin_no_forge_claims_gets_no_link(self):
+        # A host neither gh nor glab knows could be any forge; a guessed path shape would 404.
+        no_claim = {name: {**adapter, "owns_host": lambda _host: False}
+                    for name, adapter in flowctl.FORGE_ADAPTERS.items()}
+        with mock.patch.dict(flowctl.FORGE_ADAPTERS, no_claim):
+            for remote in ("https://gitea.example.test/acme/repo.git", "unknown.example:team/repo.git"):
+                with self.subTest(remote=remote):
+                    self.assertIsNone(self.derived_link(remote, "src/a.py"))
+
+    def test_unrecognized_origin_paths_get_no_link(self):
+        for remote in (None, "file:///srv/repo.git", "https://github.com/grp/sub/repo.git",
+                       "https://bitbucket.org/acme", "https://gitlab.com/grp/../repo.git"):
+            with self.subTest(remote=remote):
+                self.assertIsNone(self.derived_link(remote, "src/a.py"))
+
+    def derived_link(self, remote, path):
+        value = self.complete()
+        row = value["changeWalkthrough"]["groups"][2]["files"][0]
+        row["path"] = path
+        del row["diffUrl"]
+        answer = (1, "", "no origin") if remote is None else (0, remote + "\n", "")
+        with mock.patch.object(flowctl, "_export_run_git", return_value=answer):
+            result = self.validate_input(value, artifact_diff_files(value))
+        return result["changeWalkthrough"]["groups"][2]["files"][0].get("diffUrl")
 
     def test_empty_summary_round_trips_without_semantic_grounding(self):
         value = self.complete()

@@ -143,7 +143,7 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
     [[ -z "$DEP_BRANCH" ]] && continue
     DEP_REF=""
     if git -C "$REPO_ROOT" fetch -q origin "refs/heads/${DEP_BRANCH}:refs/remotes/origin/${DEP_BRANCH}" 2>/dev/null; then DEP_REF="refs/remotes/origin/$DEP_BRANCH"; fi
-    if DEP_PR_LIST=$("${PR_READ:-gh}" pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName 2>/dev/null); then
+    if DEP_PR_LIST=$("${PR_READ:-gh}" pr list --head "$DEP_BRANCH" --state all --json number,state,baseRefName,headRefOid 2>/dev/null); then
       DEP_PR_JSON=$(printf '%s' "$DEP_PR_LIST" | jq -c '(map(select(.state=="OPEN")) + map(select(.state=="MERGED")) + map(select(.state=="CLOSED"))) | .[0] // empty')
     elif [[ "$DRY_RUN" == "1" ]]; then
       echo "Note: cannot read the PR state of $DEP_BRANCH under --dry-run; treating parent $DEP as open." >&2

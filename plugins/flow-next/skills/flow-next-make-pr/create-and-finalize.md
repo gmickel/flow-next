@@ -1,7 +1,7 @@
 # Create and finalize
 
 Real create/update only. With several specs, set `PR_TITLE` to a combined-change title of at most 72 characters; otherwise use the spec title verbatim up to 72 characters, or the first goal/context sentence up to 70 plus ellipsis, or spec ID if empty.
-Use rendered `BODY_FILE` unchanged. Require
+Use rendered `BODY_FILE` unchanged, plus only the repository-required trailer lines workflow.md allows. Require
 nonempty content; above 65,000 characters stop with the retained file, never
 truncate. Clean temporary files on exit.
 

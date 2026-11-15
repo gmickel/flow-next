@@ -34,6 +34,9 @@ ALLOWLIST: dict[str, str] = {
     "tracker.perTracker.repo": (
         "machine-written GitHub linkage (discovery ceremony); not seeded"
     ),
+    "tracker.perTracker.tokenCommand": (
+        "user-set credential source read by the tracker transport; not seeded"
+    ),
     "tracker.resolved.destination.statusIds": (
         "machine-written by flowctl tracker resolve"
     ),

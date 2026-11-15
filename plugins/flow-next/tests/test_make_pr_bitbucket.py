@@ -158,10 +158,8 @@ class HelperReadTests(BitbucketShellCase):
         listed = self.run_sh([*self.LIST, "fx-reused"], BKT_ANSWERS=answers(recorded("pr-branch-reused")))
         self.assertEqual(listed.returncode, 0, listed.stderr)
         self.assertEqual(json.loads(listed.stdout), [
-            {"number": 4, "url": f"{PR_URL}4", "baseRefName": "main", "createdAt": "2026-11-13T10:37:47.056362+00:00",
-             "headRefOid": "ef14a8697d98", "state": "OPEN"},
-            {"number": 3, "url": f"{PR_URL}3", "baseRefName": "main", "createdAt": "2026-11-13T10:37:44.899774+00:00",
-             "headRefOid": "ef14a8697d98", "state": "CLOSED"}])
+            {"number": 4, "state": "OPEN", "baseRefName": "main"},
+            {"number": 3, "state": "CLOSED", "baseRefName": "main"}])
         # PR #7 shares the branch name from flownextnew/flownext-fork.
         fork = self.run_sh([*self.LIST, "fx-open"], BKT_ANSWERS=answers(recorded("pr-branch-fork")))
         self.assertEqual([r["number"] for r in json.loads(fork.stdout)], [1])
@@ -174,6 +172,28 @@ class HelperReadTests(BitbucketShellCase):
         self.assertEqual(count.stdout.strip(), "1")
         # The context named on the call is the Cloud one bkt lists.
         self.assertEqual({c.split()[1:3] == ["--context", "flownextnew"] for c in self.calls_of("bkt --")}, {True})
+
+    def test_reads_answer_exactly_the_requested_keys(self):
+        repo = self.repo_on("fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,state,isDraft,body,url"], cwd=repo,
+                           BKT_ANSWERS=answers(recorded("pr-branch-reused")))
+        self.assertEqual(view.returncode, 0, view.stderr)
+        self.assertEqual(json.loads(view.stdout),
+                         {"number": 4, "state": "OPEN", "isDraft": False, "body": "second", "url": f"{PR_URL}4"})
+        drafted = self.derived("pr-branch-reused", lambda page: [row.update(draft=True, description=None)
+                                                                 for row in page["values"]] and None)
+        listed = self.run_sh([*self.LIST[:6], "isDraft,body,number", "--head", "fx-reused"],
+                             BKT_ANSWERS=answers(drafted))
+        self.assertEqual(json.loads(listed.stdout), [{"isDraft": True, "body": "", "number": 4},
+                                                     {"isDraft": True, "body": "", "number": 3}])
+
+    def test_a_key_the_helper_cannot_answer_exits_nonzero_naming_it(self):
+        repo = self.repo_on("fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,mergeable"], cwd=repo,
+                           BKT_ANSWERS=answers(recorded("pr-branch-reused")))
+        self.assertNotEqual(view.returncode, 0)
+        self.assertIn("mergeable", view.stderr)
+        self.assertEqual(view.stdout, "")
 
     def test_listing_follows_the_next_page(self):
         first = self.derived("pr-branch-reused", lambda page: page.update(
