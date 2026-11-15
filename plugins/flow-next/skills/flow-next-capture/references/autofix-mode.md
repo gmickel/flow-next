@@ -1,6 +1,6 @@
 # capture — autofix mode (loaded on demand)
 
-> Loaded ONLY when `$ARGUMENTS` carried the literal token `mode:autofix`, or `from:goal`, which implies it. The default
+> Loaded ONLY when `$ARGUMENTS` carried the literal token `mode:autofix`, or `from:goal` or `from:issue`, which imply it. The default
 > interactive run never reads this file.
 
 ## Autofix mode rules
@@ -21,7 +21,7 @@ Autofix has no ask (no user to answer it). The §4.1 Write materializes the draf
 
 Autofix never offers `edit` — there's no user to ask. The existing Write + `--yes` gate stays confined to autofix; interactive capture needs no generic write approval.
 
-**Autofix + split proposal:** under `from:goal`, [from-goal.md](from-goal.md) decides instead. Otherwise autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:refine <id> or manual spec create + add-dep.`
+**Autofix + split proposal:** under `from:goal` or `from:issue`, [from-goal.md](from-goal.md) or [from-issue.md](from-issue.md) decides instead. Otherwise autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:refine <id> or manual spec create + add-dep.`
 
 **Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 

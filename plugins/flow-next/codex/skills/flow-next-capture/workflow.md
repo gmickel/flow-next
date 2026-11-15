@@ -2,7 +2,7 @@
 
 Execute these phases in order; stop on a user-blocking error rather than continuing with bad state.
 
-Under `from:goal`, the source named in [references/from-goal.md](references/from-goal.md) stands in for the conversation wherever this file reads the user's turns.
+Under `from:goal` or `from:issue`, the source named in [references/from-goal.md](references/from-goal.md) or [references/from-issue.md](references/from-issue.md) stands in for the conversation wherever this file reads the user's turns.
 
 This file is the spine every run walks. Path-specific machinery (autofix, `--rewrite`, chart briefings, strategy, splits, glossary, readiness, tracker, must-ask detail) sits in `references/*.md` behind gates. When a gate sentinel prints, STOP and Read the named reference before the next step; when it is silent, read nothing.
 
@@ -59,7 +59,7 @@ On the sentinel, read [references/strategy-alignment.md](references/strategy-ali
 ### 0.4 — Compaction detection
 
 Look for compaction signals: `[compacted]` markers, truncated tool output, system-summary blocks, or later turns relying on a result that is not visible. Only when one is present: read [references/compaction.md](references/compaction.md) and decide
-whether to proceed or refuse as it says. Under `from:goal` this check does not run: the source is read from disk or the invocation.
+whether to proceed or refuse as it says. Under `from:goal` or `from:issue` this check does not run: the source is read from disk, the tracker or the invocation.
 
 ### 0.5 — Duplicate branch
 
