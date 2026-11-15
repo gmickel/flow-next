@@ -161,6 +161,25 @@ class HelperReadTests(GitLabShellCase):
                             GLAB_ANSWERS=answers(recorded("mr-branch-all")))
         self.assertEqual(count.stdout.strip(), "1")
 
+    def test_reads_answer_exactly_the_requested_keys(self):
+        repo = self.repo_on("fn73-fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,isDraft,body"], cwd=repo,
+                           GLAB_ANSWERS=answers(recorded("mr-branch-all")))
+        self.assertEqual(view.returncode, 0, view.stderr)
+        self.assertEqual(json.loads(view.stdout), {"number": 2, "isDraft": True, "body": ""})
+        described = self.derived("mr-branch-all", lambda rows: [r.update(description="why") or r for r in rows])
+        listed = self.run_sh([*self.LIST[:5], "body,number", "--head", "fn73-fx-reused"],
+                             GLAB_ANSWERS=answers(described))
+        self.assertEqual(json.loads(listed.stdout), [{"body": "why", "number": 2}, {"body": "why", "number": 1}])
+
+    def test_a_key_the_helper_cannot_answer_exits_nonzero_naming_it(self):
+        repo = self.repo_on("fn73-fx-reused")
+        view = self.run_sh([str(HELPER), "pr", "view", "--json", "number,mergeable"], cwd=repo,
+                           GLAB_ANSWERS=answers(recorded("mr-branch-all")))
+        self.assertNotEqual(view.returncode, 0)
+        self.assertIn("mergeable", view.stderr)
+        self.assertEqual(view.stdout, "")
+
     def test_view_answers_the_branch_open_or_locked_merge_request(self):
         def lock(rows):
             next(r for r in rows if r["iid"] == 2)["state"] = "locked"   # mid-merge, still open
