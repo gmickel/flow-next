@@ -44,7 +44,8 @@ to change or skip. Do not ask per row.
 The excerpt only proposes. Before acting on a picked row, read the whole issue:
 `"$FLOWCTL" tracker wire read --locator '{"durable":"<id>","display":"<identifier>"}' --json`
 and `"$FLOWCTL" tracker wire comment-list` with the same locator. That body and those comments are
-the source a capture receives and what a fold adds to the spec.
+the source a capture receives and what a fold adds to the spec. A failed read or a comment list
+with `truncated: true` stops that row with the reason; never act on part of an issue.
 
 Run the existing stages only, one picked row at a time:
 
