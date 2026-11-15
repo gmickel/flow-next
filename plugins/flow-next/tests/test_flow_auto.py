@@ -529,5 +529,77 @@ class IssueStartQuestionRounds(unittest.TestCase):
         self.assertFalse(rerun["posted"])
 
 
+@_POSIX_BASH
+@unittest.skipUnless(shutil.which("git"), "requires git")
+class PostMergeCheckout(unittest.TestCase):
+    """R11: after land merged and deleted the spec branch, the next run starts on the default branch."""
+
+    FENCE = "# fence:post-merge-checkout"
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t",
+                               "-c", "commit.gpgsign=false", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    def _merged_checkout(self, tmp: Path) -> Path:
+        """The state a run leaves: on the squash-merged, remote-deleted branch, make-pr's sync write uncommitted."""
+        origin, co, merger = tmp / "origin.git", tmp / "co", tmp / "merger"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(co)], check=True, capture_output=True)
+        (co / ".flow" / "specs").mkdir(parents=True)
+        (co / ".flow" / ".gitignore").write_text("tmp/\n", encoding="utf-8")
+        (co / "a.txt").write_text("base\n", encoding="utf-8")
+        self._git(co, "add", "-A")
+        self._git(co, "commit", "-q", "-m", "base")
+        self._git(co, "push", "-q", "origin", "main")
+        self._git(co, "remote", "set-head", "origin", "main")
+        self._git(co, "switch", "-q", "-c", "fn-1-add")
+        sidecar = co / ".flow" / "specs" / "fn-1-add.json"
+        sidecar.write_text('{"tracker": {"lastSyncedAt": "capture"}}\n', encoding="utf-8")
+        (co / "a.txt").write_text("base\nadd\n", encoding="utf-8")
+        self._git(co, "add", "-A")
+        self._git(co, "commit", "-q", "-m", "fn-1-add")
+        self._git(co, "push", "-q", "-u", "origin", "fn-1-add")
+        sidecar.write_text('{"tracker": {"lastSyncedAt": "make-pr"}}\n', encoding="utf-8")
+        subprocess.run(["git", "clone", "-q", str(origin), str(merger)], check=True, capture_output=True)
+        self._git(merger, "merge", "-q", "--squash", "origin/fn-1-add")
+        self._git(merger, "commit", "-q", "-m", "fn-1-add (#1)")
+        self._git(merger, "push", "-q", "origin", "main")
+        self._git(merger, "push", "-q", "origin", "--delete", "fn-1-add")
+        (co / ".flow" / "tmp").mkdir()
+        (co / ".flow" / "tmp" / "pilot-snapshot.json").write_text(
+            json.dumps({"selected": {"id": "fn-1-add", "branch_name": "fn-1-add"}}), encoding="utf-8")
+        return co
+
+    def _run_fence(self, co: Path) -> subprocess.CompletedProcess:
+        text = _read(AUTO_MD)
+        self.assertIn(self.FENCE, text)
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+               "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
+        return subprocess.run(["bash", "-c", _fence_from(text, self.FENCE)], cwd=co, env=env,
+                              capture_output=True, text=True)
+
+    def test_returns_to_the_default_branch_keeping_the_sync_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "main")
+            self.assertEqual(self._git(co, "rev-parse", "HEAD"), self._git(co, "rev-parse", "origin/main"))
+            self.assertEqual(self._git(co, "status", "--porcelain"), "")
+            self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
+
+    def test_another_change_keeps_the_checkout_where_it_is(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            (co / "a.txt").write_text("someone's edit\n", encoding="utf-8")
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertEqual((co / "a.txt").read_text(encoding="utf-8"), "someone's edit\n")
+            self.assertIn("a.txt", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
