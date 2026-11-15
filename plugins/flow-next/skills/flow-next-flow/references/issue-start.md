@@ -40,8 +40,8 @@ A spec is linked when its JSON's `tracker.id` is the issue's durable id.
 `"$FLOWCTL" specs --refs --fetch --tracker-id "<durable id>" --json` fetches origin and lists every
 linked spec with where its link is: `checkout: true` for the checkout's `.flow/specs/*.json`,
 committed or not, and `refs` for each local or remote-tracking branch whose JSON carries it (a spec
-already on the default branch and a link added by a JSON-only change count). A `fetch_error` stops
-`NEEDS_HUMAN`, never a capture.
+already on the default branch and a link added by a JSON-only change count). A `fetch_error`, or the
+command failing (a spec JSON it cannot read), stops `NEEDS_HUMAN`, never a capture.
 
 - Two or more linked specs stop `NEEDS_HUMAN` naming them. None: continue below.
 - One: bring it into the checkout. The checkout holds the link: stay. `origin/<default>` holds it:

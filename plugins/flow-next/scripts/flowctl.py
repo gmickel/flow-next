@@ -32252,11 +32252,12 @@ def find_linked_specs(repo_root: Path, tracker_id: str, *, fetch: bool) -> dict:
                 ref_oids.append((name, spec_id, blobs["json"]))
     contents = _spec_ref_blobs(repo_root, {oid for _, _, oid in ref_oids})
     linked_oids: dict = {}
-    for oid, raw in contents.items():
+    for name, spec_id, oid in ref_oids:
+        # An unread or unparseable copy (a partial clone's missing blob) is never "no link".
         try:
-            meta = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
-            continue
+            meta = json.loads(contents[oid].decode("utf-8"))
+        except (KeyError, UnicodeDecodeError, ValueError):
+            raise SpecRefIndexError(f"cannot read {spec_id}'s spec JSON on {name}") from None
         tracker = meta.get("tracker") if isinstance(meta, dict) else None
         linked_oids[oid] = isinstance(tracker, dict) and tracker.get("id") == tracker_id
     for name, spec_id, oid in sorted(ref_oids):

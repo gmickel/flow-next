@@ -9,6 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-326-9110-pre-release-fixes-for-issue-start",
   "impl_review_rounds": {
+    "fn-326-9110-pre-release-fixes-for-issue-start.1": 1,
     "fn-326-9110-pre-release-fixes-for-issue-start.3": 0
   },
   "next_task": 1,
@@ -51,6 +52,50 @@
       "task": "fn-326-9110-pre-release-fixes-for-issue-start.3",
       "timestamp": "2026-11-15T15:12:07.549116Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "3684d279c2bee0d77f80fda779e5896ee47a0f0a49dd153a2f0f6acbecf28351",
+      "backend": "codex",
+      "base_sha": "bccd4546e11f8946ad3d5b910fa21738a66ad2fe",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-f4fcc1c295b812aec098d1ffde5c3526",
+            "classification": "introduced",
+            "findingId": "finding-f4fcc1c295b812aec098d1ffde5c3526",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c060b21f755ec5ba4f280842a9798ddb25879fd8",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1109,
+      "output_sha256": "68d9d3bf61041e493d39f6dee23120b17a24286ffa39644c23dc23e761158ac4",
+      "reservation_id": "e3a108a630a040a39fd59868b201a58c",
+      "round_consumed": true,
+      "scope": "impl:fn-326-9110-pre-release-fixes-for-issue-start.1",
+      "superseded_by": null,
+      "task": "fn-326-9110-pre-release-fixes-for-issue-start.1",
+      "timestamp": "2026-11-15T15:24:04.984313Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -59,6 +104,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-326-9110-pre-release-fixes-for-issue-start.1": 0,
     "impl:fn-326-9110-pre-release-fixes-for-issue-start.3": 0
   },
   "spec_path": ".flow/specs/fn-326-9110-pre-release-fixes-for-issue-start.md",
@@ -75,5 +121,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T15:12:07.551000Z"
+  "updated_at": "2026-11-15T15:24:04.986989Z"
 }
