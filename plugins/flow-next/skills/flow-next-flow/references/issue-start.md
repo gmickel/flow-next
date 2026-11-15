@@ -38,7 +38,7 @@ JSON's `tracker.id` is the issue's durable id: check `.flow/specs/*.json` in the
 each spec `"$FLOWCTL" specs --refs --json` lists in `summary.branch_only`, its JSON at its first
 live ref (`git show <ref>:.flow/specs/<id>.json`). Exactly one: if it lives only on its branch,
 check that branch out; set `PILOT_SPEC` to it and continue with auto.md as
-`flow --auto <spec-id>` would, capturing nothing. Two or more stop `NEEDS_HUMAN` naming them.
+`flow --auto <spec-id>` would, capturing nothing (step 5's design review still applies to it). Two or more stop `NEEDS_HUMAN` naming them.
 None: continue below.
 
 ## 3. Read the source
@@ -84,11 +84,16 @@ After a successful capture:
   `.flow/` files, and `git push -u origin <branch_name>`. A failed push stops `NEEDS_HUMAN`; no
   work is dispatched. The spec then reaches the default branch with the pull request that builds it.
 
-Set `PILOT_SPEC` and rerun auto.md's snapshot fence for it. Carry an explicit request to review the
-spec's design before work into CLASSIFY (auto.md Arguments), naming the issue as what the spec must
-match, unless the repository's AGENTS.md turns that review off for specs a run captured. Then
-continue with auto.md's phases. Under `--tick` the capture is the hop: end `ADVANCED`,
-`stage=capture`.
+Set `PILOT_SPEC` and rerun auto.md's snapshot fence for it, then continue with auto.md's phases.
+Under `--tick` the capture is the hop: end `ADVANCED`, `stage=capture`.
+
+**Design review before work.** The captured spec gets a design review against the issue before any
+work hop: it counts as an explicit request to review the spec's design (auto.md Arguments), so
+CLASSIFY routes to `plan-review` first, and the review is told to check that the spec says what the
+issue says. A spec step 2 resolves with no tasks and a plan review still `unknown` gets the same
+review. Only a sentence in the repository's AGENTS.md turning this review off for specs a run
+captured skips it; record that skip with the sentence. A run that dispatched work on such a spec
+without the review or that sentence has broken this.
 
 ## 6. Refuse: ask on the issue
 
