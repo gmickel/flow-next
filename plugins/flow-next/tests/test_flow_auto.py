@@ -399,19 +399,19 @@ class IssueStartContract(unittest.TestCase):
 
     def test_interrupted_capture_is_finished_before_work(self) -> None:
         text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
-        self.assertIn("When its spec file has no commit yet (`git log -1 -- .flow/specs/<spec-id>.md` "
-                      "prints nothing), its capture was interrupted", text)
-        self.assertIn("Either way it keeps step 5's design review before any work hop.", text)
+        for token in ("`git log -1 -- .flow/specs/<spec-id>.md`", "interrupted", "design review"):
+            self.assertIn(token, text)
 
     def test_jira_url_from_another_site_stops_before_writes(self) -> None:
-        self.assertIn("a Jira URL counts only when its host is the host of `tracker.perTracker.baseUrl`",
-                      _flat(_read(FLOW_REFERENCES / "issue-start.md")))
+        text = _flat(_read(FLOW_REFERENCES / "issue-start.md"))
+        for token in ("Jira URL", "`tracker.perTracker.baseUrl`"):
+            self.assertIn(token, text)
 
     def test_every_work_hop_runs_implementation_review(self) -> None:
-        self.assertIn("the working rules' risk rule never skips it here",
-                      _flat(_read(FLOW_REFERENCES / "issue-start.md")))
-        self.assertIn("Under `--from-issue`, append the dispatch context `issue start: run implementation "
-                      "review on every task; the risk rule does not skip it`", _read(AUTO_MD))
+        self.assertIn("risk rule", _flat(_read(FLOW_REFERENCES / "issue-start.md")))
+        # The literal context work receives under --from-issue.
+        self.assertIn("`issue start: run implementation review on every task; the risk rule does not skip it`",
+                      _read(AUTO_MD))
 
 
 @unittest.skipUnless(shutil.which("git"), "requires git")

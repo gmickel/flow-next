@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-326-9110-pre-release-fixes-for-issue-start",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "needs_work",
+  "completion_reviewed_at": "2026-11-15T16:55:45.749131Z",
   "created_at": "2026-11-15T15:06:01.085297Z",
   "default_impl": null,
   "default_review": null,
@@ -16,7 +16,7 @@
     "fn-326-9110-pre-release-fixes-for-issue-start.6": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
@@ -354,6 +354,59 @@
       "task": "fn-326-9110-pre-release-fixes-for-issue-start.6",
       "timestamp": "2026-11-15T16:09:27.132233Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "1928c841d9955d67eb1f372f3d73b78e6bda4d4def163fe38af91a43a0c74368",
+      "backend": "codex",
+      "base_sha": "877858005027af826016b4bfea565f0882df3d70",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-b46a734b342b5e9c0e6bb7812c9aa26e",
+            "classification": "introduced",
+            "findingId": "finding-b46a734b342b5e9c0e6bb7812c9aa26e",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-edc696eacf30e191eaf5942d5112fc80",
+            "classification": "introduced",
+            "findingId": "finding-edc696eacf30e191eaf5942d5112fc80",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "113ebb13854ebd1a0689e7f10d66c4a1085a323d",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 363950,
+      "output_sha256": "a6c58a0ec4860a0260a151725ab91fd33e4070c359ac244484f683efa15643a2",
+      "reservation_id": "49cf5ab6aad64b5ab35c9f401814b99e",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-11-15T16:55:45.738961Z",
+      "tool_calls": 16,
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -366,6 +419,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-326-9110-pre-release-fixes-for-issue-start.1": 0,
     "impl:fn-326-9110-pre-release-fixes-for-issue-start.2": 0,
     "impl:fn-326-9110-pre-release-fixes-for-issue-start.3": 0,
@@ -386,5 +440,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T16:09:27.134845Z"
+  "updated_at": "2026-11-15T16:55:45.755698Z"
 }

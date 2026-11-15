@@ -527,7 +527,7 @@ MERGED_SPEC="$(jq -r '.selected.id // empty' "$SNAP_FILE" 2>/dev/null)"
 MERGED_BRANCH="$(jq -r '.selected.branch_name // empty' "$SNAP_FILE" 2>/dev/null)"
 DEFAULT_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
 if [ -n "$MERGED_SPEC" ] && [ -n "$MERGED_BRANCH" ] && [ "$(git branch --show-current)" = "$MERGED_BRANCH" ]; then
-  SYNC_JSON=".flow/specs/$MERGED_SPEC.json"
+  SYNC_JSON="$(git rev-parse --show-toplevel)/.flow/specs/$MERGED_SPEC.json"
   git diff --quiet -- "$SYNC_JSON" \
     || git commit -q --only -m "chore(flow): tracker sync state for $MERGED_SPEC after merge" -- "$SYNC_JSON"
   # Switch only when the local default branch is absent or fast-forwards to the remote head
