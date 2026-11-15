@@ -21,7 +21,8 @@ run). Then, before any write:
 
 - `"$FLOWCTL" sync active --json` reads `active: true`, and `tracker.readyState` is set.
 - `"$FLOWCTL" tracker wire list-open --json` lists the issue: match its `identifier` or `url`
-  against the key or URL given. That row is the consent read (the exact ready lane) and supplies
+  against the key or URL given (a Jira row has no `url`; match the key a URL ends with). That row
+  is the consent read (the exact ready lane) and supplies
   the locator, `{"durable": <id>, "display": <identifier>}`. A truncated listing never counts as
   absent.
 - `"$FLOWCTL" tracker wire read --locator "$LOCATOR" --json` and
