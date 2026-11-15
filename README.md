@@ -27,6 +27,7 @@ It's also fast now. On the same model, the working change comes back in about th
 | "Work ticket WOR-17" | Reads the issue with the access you already have and routes on what it says. |
 | "Why does the parser reject empty headers?" | Answers from git history and the project's decision memory, with citations. Writes nothing. |
 | `/flow-next:flow --auto` | The same thing with nobody watching. It never stops to ask, keeps fixing until the reviewer signs off, and writes every call it made on your behalf into the PR. Add `--until=merge` and it also watches CI and review threads and merges the PR when your checks allow it. |
+| `/flow-next:flow --auto --from-issue WOR-17 --until=merge` | Builds an issue someone moved into your ready state, with no spec written first: captures the spec from the issue's own words, reviews it against the issue, reviews every task and merges. An issue that isn't clear enough gets its questions on the issue and leaves the ready state until someone answers and moves it back. |
 
 Every stage prints `ran`, `skipped(<reason>)` or `failed(<reason>)`, so you can see what happened and what didn't. The model that wrote a diff never reviews it. Specs, decisions, task state and receipts live under `.flow/` in your repository and stay readable if you stop using Flow-Next. `flow --explain <anything>` shows the route it would take, and why, without running it.
 
