@@ -222,8 +222,8 @@ DESCRIPTIONS: dict[str, str] = {
         "that does not resolve against the live project is an error."
     ),
     "tracker.perTracker.blocksLinkType": (
-        "GitLab link type used for blocks relations (e.g. blocks); probe and "
-        "mutation use the same resolved name."
+        "Jira issue link type used for blocks relations (e.g. Blocks); probe "
+        "and mutation use the same resolved name."
     ),
     "tracker.perTracker.preferredTransport": (
         "Linear transport preference (mcp routes through the MCP "

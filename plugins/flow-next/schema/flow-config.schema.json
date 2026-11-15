@@ -399,7 +399,7 @@
               ]
             },
             "blocksLinkType": {
-              "description": "GitLab link type used for blocks relations (e.g. blocks); probe and mutation use the same resolved name.",
+              "description": "Jira issue link type used for blocks relations (e.g. Blocks); probe and mutation use the same resolved name.",
               "type": [
                 "string",
                 "null"

@@ -44,7 +44,7 @@ Stage values add `triage` / `ask` to the common set.
   DEFERRED_TO_LAND | BLOCKED | NEEDS_HUMAN`. **`TRIAGED` is NOT a live terminal.**
   A live triage always resolves to a state-changing terminal; it MUST NOT end on a
   bare `TRIAGED` no-op line.
-- **Explain-only grammar** (`--explain`, or its one-release alias `--dry-run`): adds
+- **Explain-only grammar** (`--explain`): adds
   `TRIAGED <id> <class>` as the diagnostic terminal. The run classifies and stops,
   dispatching nothing and parking nothing. A `/loop` / `/goal` driver never runs
   `--explain`.
@@ -271,7 +271,7 @@ already skipped at SELECT**, so they must run here, before triage:
   `flowctl pilot strikes clear <spec-id>`, which is THE recognized human clear under an
   armed `tracker.readyState` (no board move can serve as one: a deliberate re-ready and a
   projection echo are byte-identical in every durable artifact)
-  (skip the write under `--dry-run`, report would-clear instead).
+  (skip the write under `--explain`, report would-clear instead).
 - **No gh here** - PR state belongs only to the all-done CLASSIFY branch.
 
 Reuse the existing ready-mode checks - do not reinvent them. (The dependency
