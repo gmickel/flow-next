@@ -587,7 +587,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perTracker.sslVerify", {"type": "boolean"}),
         (
             "tracker.perTracker.tokenCommand",
-            {"type": ["array", "null"], "items": {"type": "string"}, "minItems": 1},
+            {"type": ["array", "null"], "items": {"type": "string"}},
         ),
         ("tracker.perTracker.statusMap", _status_map_fragment()),
         ("tracker.staleAfterHours", {"type": "integer"}),

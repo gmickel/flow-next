@@ -432,8 +432,7 @@
               ],
               "items": {
                 "type": "string"
-              },
-              "minItems": 1
+              }
             },
             "statusMap": {
               "description": "Legacy normalized-status to Jira status map ({name}/{id}; id preferred - names are project-renamable). Live entries migrate into tracker.resolved.destination.statusIds; dead entries are dropped with a warning.",
