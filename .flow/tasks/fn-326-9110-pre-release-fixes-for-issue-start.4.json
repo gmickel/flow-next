@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-15T15:06:38.698645Z",
+  "depends_on": [
+    "fn-326-9110-pre-release-fixes-for-issue-start.1"
+  ],
+  "id": "fn-326-9110-pre-release-fixes-for-issue-start.4",
+  "priority": null,
+  "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
+  "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.4.md",
+  "status": "todo",
+  "title": "--auto post-merge checkout state: fix or prove harmless",
+  "updated_at": "2026-11-15T15:06:38.698645Z"
+}

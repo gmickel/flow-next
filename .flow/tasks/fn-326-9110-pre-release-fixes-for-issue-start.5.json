@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-15T15:06:48.099856Z",
+  "depends_on": [
+    "fn-326-9110-pre-release-fixes-for-issue-start.1",
+    "fn-326-9110-pre-release-fixes-for-issue-start.2",
+    "fn-326-9110-pre-release-fixes-for-issue-start.3",
+    "fn-326-9110-pre-release-fixes-for-issue-start.4"
+  ],
+  "id": "fn-326-9110-pre-release-fixes-for-issue-start.5",
+  "priority": null,
+  "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
+  "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.5.md",
+  "status": "todo",
+  "title": "End-to-end issue start on the final code",
+  "updated_at": "2026-11-15T15:06:48.099856Z"
+}
