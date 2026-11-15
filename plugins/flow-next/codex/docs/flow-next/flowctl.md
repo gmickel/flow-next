@@ -1935,6 +1935,11 @@ flowctl tracker wire list-states    [--json]
 # Read-only workflow-state enumeration (linear/jira; no locator). Returns the
 # exhaustive shape {"states":[{"id","name","type"}], "complete": bool}; never
 # writes .flow/config.json. resolve repairs and writes; list-states detects.
+flowctl tracker wire unready        --locator "$LOCATOR" [--json]
+# Moves an issue out of tracker.readyState: Linear and Jira to the resolved
+# backlog state, GitHub and GitLab by dropping the ready label. Returns
+# {"issue":{"id","identifier"},"from","to","changed"}; from/to are state names,
+# or on a label tracker the removed label and null. Not ready: changed false.
 flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
 flowctl tracker wire question       --locator "$LOCATOR" \
   --subject-id ID --blocked-stage STAGE --reason-code CODE \
@@ -1957,6 +1962,15 @@ Normalized comments include immutable `created_at`. A latest question marker
 dedups; a latest matching answer reopens the same stable id as a new question
 round. Missing, tied, or truncated chronology fails closed. The free-prose body
 is not part of the hash. `attach` and `attach-get` are capability-gated.
+
+`unready` reads the issue, decides readiness with the same match as the
+`tracker.readyState` projection, and writes only when the issue is ready. It
+needs no linked spec and writes no `.flow/` state. Errors: `tracker.readyState`
+unset returns `unresolved`/`ready_state` before any call; no resolved `backlog`
+state returns `unresolved`/`backlog_slot` (allowed on Jira, where many workflows
+have none) and a Jira workflow with no transition to it returns
+`unresolved`/`transition_unreachable`, both with no write; an issue that still
+reads as ready after the write returns `transport`/`readback`.
 
 `list-states` enumerates the destination's workflow states read-only for Linear
 and Jira; GitHub/GitLab have no workflow-state pool and return a typed

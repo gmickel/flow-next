@@ -240,7 +240,7 @@ PROVIDERS = [
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get", "list-states",
+    "question", "attach", "attach-get", "list-states", "unready",
 )
 
 
@@ -729,6 +729,26 @@ class ConformanceMatrix(unittest.TestCase):
                         verb="attach-get",
                         kwargs={"attachment_id": att_id,
                                 "out_path": str(out_p)})
+
+    def test_unready_all_four_writes_no_local_state(self) -> None:
+        backlog_ln = dict(LN_ISSUE, state={"id": "s0", "name": "Backlog",
+                                           "type": "backlog"})
+        backlog_jr = {**JR_ISSUE, "fields": {**JR_ISSUE["fields"], "status": {
+            "id": "1", "name": "Backlog", "statusCategory": {"key": "new"}}}}
+        cases = [
+            ("github", gh_cfg(), loc(GH_NODE, "#42"),
+             {"wire-read": ok(GH_ISSUE)}),
+            ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"),
+             {"wire-read": ok(GL_ISSUE)}),
+            ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
+             {"wire-read": ok({"data": {"issue": backlog_ln}})}),
+            ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
+             {"wire-read": ok(backlog_jr)}),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                self._matrix_case(provider, cfg, locator, responses,
+                                  verb="unready", kwargs={})
 
     def test_matrix_covers_every_wire_verb(self) -> None:
         self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)

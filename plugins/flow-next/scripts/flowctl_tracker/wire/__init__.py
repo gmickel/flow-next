@@ -66,11 +66,11 @@ _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get", "list-states",
+    "question", "attach", "attach-get", "list-states", "unready",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
-    "question", "attach",
+    "question", "attach", "unready",
 })
 #: Verbs that require a parent locator. attach-get, list-open, and list-states are context-free.
 LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get", "list-states"))
@@ -530,6 +530,81 @@ def link_pr(provider: str, config: dict, locator: dict, execute: Execute, *,
     return mod.pr_link(config, locator, execute, url=url.strip())
 
 
+def _unready(provider: str, mod: Any, config: dict, locator: dict,
+             execute: Execute) -> Result:
+    """Move one issue out of `tracker.readyState` (fn-324).
+
+    Linear and Jira move to the resolved `backlog` slot through the status
+    writer; GitHub and GitLab drop the readiness label. Readiness is read with
+    the same match the readyState projection uses, so "ready" means one thing.
+    """
+    from ..facade.projections import _desired, _norm  # noqa: PLC0415
+    from ..status.providers import apply_status  # noqa: PLC0415
+
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return TrackerError(
+            ErrorClass.UNRESOLVED,
+            "unready needs tracker.readyState, which is unset; no issue is "
+            "marked ready by the tracker",
+            subtype="ready_state", details={"key": "tracker.readyState"})
+    issue = mod.read(config, locator, execute)
+    if isinstance(issue, TrackerError):
+        return issue
+    ready = _desired(provider, issue, ready_state)
+    if isinstance(ready, TrackerError):
+        return ready
+    out = {"issue": {"id": issue.get("id"), "identifier": issue.get("identifier")}}
+
+    def status_name(item: dict) -> Optional[str]:
+        status = item.get("status") if isinstance(item.get("status"), dict) else {}
+        return status.get("raw")
+
+    if provider in ("github", "gitlab"):
+        if not ready:
+            return {**out, "from": None, "to": None, "changed": False}
+        labels = [name for name in issue.get("labels") or []
+                  if _norm(name) == _norm(ready_state)]
+        moved = mod.label(config, locator, execute, add=[], remove=labels)
+        if isinstance(moved, TrackerError):
+            return moved
+        still = _desired(provider, moved, ready_state)
+        if still is not False:
+            return still if isinstance(still, TrackerError) else TrackerError(
+                ErrorClass.TRANSPORT, "the readiness label is still on the issue "
+                "after removal", subtype="readback")
+        return {**out, "from": labels[0], "to": None, "changed": True}
+
+    if not ready:
+        name = status_name(issue)
+        return {**out, "from": name, "to": name, "changed": False}
+    applied = apply_status(provider, config, locator, issue.get("raw") or {},
+                           execute, target_slot="backlog")
+    if isinstance(applied, TrackerError) and applied.subtype == "stateIds":
+        applied = {"defer": True, "reason": "status-unmapped"}
+    if isinstance(applied, TrackerError):
+        return applied
+    if applied.get("defer"):
+        unmapped = applied.get("reason") == "status-unmapped"
+        return TrackerError(
+            ErrorClass.UNRESOLVED,
+            ("the tracker has no resolved backlog state to move the issue to"
+             if unmapped else
+             "the workflow has no transition from the issue's state to backlog"),
+            subtype="backlog_slot" if unmapped else "transition_unreachable",
+            details={"slot": "backlog"})
+    after = mod.read(config, locator, execute)
+    if isinstance(after, TrackerError):
+        return after
+    still = _desired(provider, after, ready_state)
+    if still is not False:
+        return still if isinstance(still, TrackerError) else TrackerError(
+            ErrorClass.TRANSPORT, "the issue still reads as ready after the move",
+            subtype="readback")
+    return {**out, "from": status_name(issue), "to": status_name(after),
+            "changed": True}
+
+
 def _dispatch_question(*, mod: Any, provider: str, config: dict,
                        locator: dict, execute: Execute, body: str,
                        question_id: str) -> Result:
@@ -700,6 +775,8 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         return mod.label(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
     if verb == "assign":
         return mod.assign(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
+    if verb == "unready":
+        return _unready(provider, mod, config, parsed, execute)  # type: ignore[arg-type]
     if verb == "list-open":
         return mod.list_open(config, execute)
     if verb == "list-states":

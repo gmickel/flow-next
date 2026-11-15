@@ -719,6 +719,41 @@ class FlowDepsCarryAndStrip(unittest.TestCase):
 # No-op seed when no base yet
 # ---------------------------------------------------------------------------
 
+class CaptureLinkSeed(unittest.TestCase):
+    """fn-324 R2: capture links a named issue in flow-id mode, then pushes."""
+
+    ISSUE = "Original issue body."
+    CAPTURED = "## Goal\nCaptured spec.\n"
+
+    def _push(self, flow_base: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            tracker_base = SB.trackerBodyForMerge(self.ISSUE)
+            _write_flow(flow, gh_cfg(), tracker={
+                "id": GH_NODE, "identifier": "#42", "url": "u",
+                "linkState": "linked",
+                "mergeBaseFlow": flow_base, "mergeBaseTracker": tracker_base,
+                "baseHashFlow": sha(flow_base), "baseHashTracker": sha(tracker_base)})
+            ex = fake_execute({
+                "sync-body-parent-read": ok(_gh_issue(self.ISSUE)),
+                "wire-parent-read": ok(_gh_issue(self.ISSUE)),
+                "wire-update": ok(_gh_issue(self.CAPTURED)),
+                "wire-read": ok(_gh_issue(self.CAPTURED))})
+            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=self.CAPTURED,
+                               direction="push", event="capture", execute=ex)
+            return out, [c.op for c in ex.calls]
+
+    def test_seeding_both_halves_from_the_issue_pushes_the_capture(self) -> None:
+        out, ops = self._push(self.ISSUE)
+        self.assertEqual(out["kind"], "pushed")
+        self.assertIn("wire-update", ops)
+
+    def test_seeding_the_flow_half_from_the_capture_would_swallow_it(self) -> None:
+        out, ops = self._push(self.CAPTURED)
+        self.assertEqual(out["kind"], "noop")
+        self.assertNotIn("wire-update", ops)
+
+
 class NoOpSeedsWhenNoBase(unittest.TestCase):
     def test_noop_with_no_base_seeds_without_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

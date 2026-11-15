@@ -6,7 +6,9 @@
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-324-unready-a-tracker-issue-and-link-named"
+  ],
   "id": "fn-314-intake-for-open-tracker-issues-that-no",
   "impl_review_rounds": {},
   "next_task": 1,
@@ -29,5 +31,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-03T11:27:26.377719Z"
+  "updated_at": "2026-11-15T10:05:16.055230Z"
 }

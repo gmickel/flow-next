@@ -49,6 +49,17 @@ fi
 
 The flow-first `spec create` in workflow.md §5.2 is the **silent degrade** post-check for this branch — deliberately outside the `if` above. A create-first noop / unreachable transport / failed mint leaves `SPEC_OUTPUT` unset inside the tracker branch, and an `else` arm can never run in that case, so the promised fall-through has to be an unconditional post-check. Its guard also stands: degrade ONLY when nothing was created remotely; if create-first already made and recorded an issue and the tracker-keyed MINT then failed (e.g. preflight found a mixed-history collision), surface identifier + url + retryKey and STOP rather than stranding an orphan issue.
 
+**Flow ids with a named issue.** With the bridge active and `tracker.specIds` anything but `tracker`, a request that names an existing issue still links the spec to it, so the capture push in §5.7 updates that issue instead of creating a second one. Read the issue first with `"$FLOWCTL" tracker wire read`, keeping its `id`, `identifier`, `url` and body under names other than `IDENTIFIER` so workflow.md's flow-first create still runs. Once that create succeeds, link it and seed both halves of the merge base from the issue body, the common ancestor before capture enriched it:
+
+```bash
+"$FLOWCTL" sync set-tracker-id "$SPEC_ID" "<issue id>" --identifier "<issue identifier>" --url "<issue url>" --json
+"$FLOWCTL" sync set-merge-base "$SPEC_ID" --flow-file "<0600 file holding the issue body>" --tracker-file "<the same file>" --json
+```
+
+Seeding the flow half from the captured spec instead makes the first push a no-op whenever the title is unchanged, because both sides then equal their bases.
+
+When the issue cannot be read, or `set-tracker-id` refuses because another spec already holds it, save the spec unlinked and report why, naming the holder; never pass `--force`. Then skip §5.7 and Phase 6's sync check and retro-fire for this run, since an unlinked push creates a second issue, and print `Tracker sync: skipped (named issue not linked: <reason>)`.
+
 ---
 
 ## 5.7 — Tracker sync (opt-in) — spec push/pull + merge
@@ -90,6 +101,8 @@ Best-effort — a tracker failure never blocks the capture. The skill emits its 
 ---
 
 ## Phase 6 — sync check
+
+When §5.2's named issue could not be read or linked this run, skip this check and its retro-fire: the line reads `Tracker sync: skipped (named issue not linked: <reason>)`, because a retro-fired push on the unlinked spec creates the second issue §5.2 refused.
 
 **Tracker-sync check first** (read-only, independent of §5.7, so a skipped touchpoint is still caught):
 
