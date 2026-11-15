@@ -10,11 +10,11 @@ Today's gaps:
 - Backlog mode decides "which open issues have no spec" in prose. [inferred]
 - Every row carries the provider's full `raw` payload, about 9 KB an issue on this repo, so 80 issues come to roughly 180K tokens. [inferred]
 
-A real bug in capture blocks this. In the default flow-id mode (`tracker.specIds` unset or `flow`), a capture that names an existing issue never links the spec to it. When the capture push is on, the unlinked spec then gets a second, new issue. [inferred]
+A real bug in capture blocks this. In the default flow-id mode (`tracker.specIds` unset or `flow`), a capture that names an existing issue never links the spec to it. When the capture push is on, the unlinked spec then gets a second, new issue. The fix moved to fn-324, which this spec depends on. [paraphrase]
 
 ## Architecture & Data Models
 
-- **Capture links a named issue in every id mode.** When the request names an existing tracker issue and the bridge is active, capture records that issue as the spec's tracker link in the default flow-id mode too, not only under `tracker.specIds: tracker`. The capture push then updates that issue instead of creating one. [inferred]
+- **Capture links a named issue in every id mode** (built by fn-324). The intake's "new spec" action relies on it. [paraphrase]
 - **`wire list-open` gains two flags.** Both are plain deterministic plumbing that backlog mode already does in prose. [inferred]
   - `--any-lane`: every open issue in the configured destination, whatever the ready lane. It works on every provider with `tracker.readyState` unset.
   - `--unlinked`: drops issues already linked to a spec in this checkout. The check reads local sync state only and makes no tracker call.
@@ -49,13 +49,13 @@ A real bug in capture blocks this. In the default flow-id mode (`tracker.specIds
 
 ## Acceptance Criteria
 
-- **R1:** In flow-id mode with an active bridge, a capture that names an existing issue records that issue as the spec's tracker link. A capture push afterwards updates that issue, and no second issue is created. Errors: the named issue can't be read → capture reports it and saves the spec unlinked, as an unknown issue is handled today. [inferred]
+- **R1:** Moved to fn-324 (its R2, capture links a named issue in flow-id mode); satisfied by that dependency, with no work here. [paraphrase]
 - **R2:** `wire list-open --any-lane` returns every open issue in the destination on GitHub, GitLab, Linear and Jira with `tracker.readyState` unset, in the compact row shape above. Errors: unreachable transport → the existing error envelope; a page cap → `truncated: true`. [inferred]
 - **R3:** `wire list-open --unlinked` omits every issue whose id is stored as a spec's tracker link in this checkout and makes no extra tracker call for that check. Combined with `--any-lane`, it covers all lanes; alone, the ready lane. Errors: no error surface beyond R2's. [inferred]
 - **R4:** `wire list-open` without the new flags returns the same output as 9.5.1. [inferred]
 - **R5:** Backlog mode's tracker-only set comes from `list-open --unlinked`, and its candidate set on a fixture backlog is unchanged. [inferred]
 - **R6:** Attended flow, given "triage the open issues", shows one table of unlinked issues with one proposed action and a reason each. It asks one confirming question, then runs only the existing stages for the picked actions. Errors: an autonomy marker → the existing attended refusal; tracker unreachable → stop with the reason. [inferred]
-- **R7:** Tests cover R1-R5 with fake transports for every provider. That includes the flag combinations, the unchanged default output, the no-API-call link check, and capture linking in flow-id mode. R6 gets a prose-contract test that pins the route row and the reference's one-table, one-question shape. The full existing tracker and flow suites pass. [inferred]
+- **R7:** Tests cover R2-R5 with fake transports for every provider. That includes the flag combinations, the unchanged default output, and the no-API-call link check. R6 gets a prose-contract test that pins the route row and the reference's one-table, one-question shape. The full existing tracker and flow suites pass. [inferred]
 
 ## Boundaries
 
@@ -71,7 +71,7 @@ A real bug in capture blocks this. In the default flow-id mode (`tracker.specIds
 - **Two flags on an existing verb, not a new verb.** The link check and the any-lane listing are zero-judgment facts that backlog mode already works out in prose. Moving them into flowctl meets the burden-of-proof rule, since there are two consumers. [inferred]
 - **Compact rows only under the new flags.** Callers of today's output keep `raw`, and intake gets about 12K tokens for 80 issues instead of about 180K. [inferred]
 - **A route row plus a reference, not a skill.** A new prose skill costs many review rounds and adds surface. The stages already exist; the route only picks among them. [inferred]
-- **The capture link fix is in this spec because intake's "new spec" action depends on it.** It is also a standalone bug fix. [inferred]
+- **The capture link fix moved to fn-324** (2026-11-15). The unattended issue start (fn-325) needs it too, so it ships first in its own spec and this spec depends on it. [paraphrase]
 
 ## Strategy Alignment
 

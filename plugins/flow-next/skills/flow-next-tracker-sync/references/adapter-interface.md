@@ -73,6 +73,7 @@ normalization, and deduplication.
 | `assign` | locator, add/remove ids | normalized assignees | none |
 | `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board) |
 | `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` (Jira: scoped to the resolved `issueTypeId`, matching `statusIds`) | none (read-only; linear/jira; never local state) |
+| `unready` | locator | `{issue, from, to, changed}` | `tracker.readyState` unset: `unresolved`/`ready_state` before any call; no resolved backlog state: `unresolved`/`backlog_slot`; Jira with no transition to it: `unresolved`/`transition_unreachable` |
 | `attach` | locator, file | attachment metadata | none |
 | `attach-get` | attachment id, output path | retrieved metadata | output file only |
 

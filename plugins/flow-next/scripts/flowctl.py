@@ -56490,6 +56490,13 @@ def main() -> None:
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
 
+    p_wire_unready = wire_sub.add_parser(
+        "unready",
+        help="Move an issue out of tracker.readyState (backlog / drop the label)")
+    _wire_locator(p_wire_unready)
+    _wire_json(p_wire_unready)
+    p_wire_unready.set_defaults(func=cmd_tracker_wire)
+
     p_wire_states = wire_sub.add_parser(
         "list-states",
         help="List tracker workflow states (no locator; linear/jira; read-only)")

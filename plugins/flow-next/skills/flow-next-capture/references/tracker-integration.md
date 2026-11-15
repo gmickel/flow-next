@@ -49,6 +49,15 @@ fi
 
 The flow-first `spec create` in workflow.md §5.2 is the **silent degrade** post-check for this branch — deliberately outside the `if` above. A create-first noop / unreachable transport / failed mint leaves `SPEC_OUTPUT` unset inside the tracker branch, and an `else` arm can never run in that case, so the promised fall-through has to be an unconditional post-check. Its guard also stands: degrade ONLY when nothing was created remotely; if create-first already made and recorded an issue and the tracker-keyed MINT then failed (e.g. preflight found a mixed-history collision), surface identifier + url + retryKey and STOP rather than stranding an orphan issue.
 
+**Flow ids with a named issue.** With the bridge active and `tracker.specIds` anything but `tracker`, a request that names an existing issue still links the spec to it, so the capture push in §5.7 updates that issue instead of creating a second one. Read the issue first with `"$FLOWCTL" tracker wire read`, keeping its `id`, `identifier`, `url` and body under names other than `IDENTIFIER` so workflow.md's flow-first create still runs. Once that create succeeds, link it and seed the merge base, as identity.md does for any first link:
+
+```bash
+"$FLOWCTL" sync set-tracker-id "$SPEC_ID" "<issue id>" --identifier "<issue identifier>" --url "<issue url>" --json
+"$FLOWCTL" sync set-merge-base "$SPEC_ID" --flow-file .flow/specs/"$SPEC_ID".md --tracker-file "<0600 file holding the issue body>" --json
+```
+
+When the issue cannot be read, say so and save the spec unlinked, as for an unknown issue. When `set-tracker-id` refuses because another spec already holds the issue, report that spec and leave this one unlinked; never pass `--force`.
+
 ---
 
 ## 5.7 — Tracker sync (opt-in) — spec push/pull + merge
