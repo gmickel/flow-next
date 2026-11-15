@@ -518,6 +518,27 @@ Backlog mode: post and park per backlog-mode.md §Phase 3, ending `ASKED`.
 
 A `land` stage uses `references/tail.md`'s verdict mapping and cadence, never the healthy-no-advance strike path below. Keep the pilot ledger untouched on a landing wait or blocker; a verified advance may clear it. A confirmed merge ends the run with `ADVANCED`, including when the tracker touchpoint failed.
 
+Before the terminal line of a run that confirmed a merge, leave the checkout for the next run. Land deleted the spec branch on origin, and make-pr's tracker write after its push left the spec's JSON changed; staying there, the next run's commits stage that JSON into another spec's pull request. Commit it on the local spec branch (kept, never pushed), then move to the default branch at its remote head. Any other change or a failed step leaves the checkout as it is, named in the reason; the merge verdict stands.
+
+```bash
+# fence:post-merge-checkout — reads the persisted snapshot of the merged spec
+SNAP_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
+MERGED_SPEC="$(jq -r '.selected.id // empty' "$SNAP_FILE" 2>/dev/null)"
+MERGED_BRANCH="$(jq -r '.selected.branch_name // empty' "$SNAP_FILE" 2>/dev/null)"
+DEFAULT_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+if [ -n "$MERGED_SPEC" ] && [ -n "$MERGED_BRANCH" ] && [ "$(git branch --show-current)" = "$MERGED_BRANCH" ]; then
+  SYNC_JSON=".flow/specs/$MERGED_SPEC.json"
+  git diff --quiet -- "$SYNC_JSON" \
+    || git commit -q --only -m "chore(flow): tracker sync state for $MERGED_SPEC after merge" -- "$SYNC_JSON"
+  if [ -z "$(git status --porcelain)" ] && git fetch -q origin "${DEFAULT_REF#origin/}" \
+    && git checkout -q "${DEFAULT_REF#origin/}" && git merge -q --ff-only "$DEFAULT_REF"; then
+    echo "Post-merge checkout: ${DEFAULT_REF#origin/} at $(git rev-parse --short HEAD)"
+  else
+    echo "Post-merge checkout left on $(git branch --show-current): $(git status --porcelain | tr '\n' ' ')"
+  fi
+fi
+```
+
 On `ADVANCED`, if the snapshot has a strike for the selected spec, clear it with `$FLOWCTL pilot strikes clear "$SELECTED_SPEC" --json`. Do not clear an absent entry.
 
 Then apply the continuation rule in "The hop loop" above.
