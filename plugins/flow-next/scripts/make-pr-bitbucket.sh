@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # make-pr's pull requests on a Bitbucket Cloud origin. make-pr-preflight.sh runs this in
 # place of gh for the same argv (`pr list --head <branch> --state all --json <keys>
-# [--jq <expr>]`, `pr view --json <keys> [--jq <expr>]`) and gets gh's JSON keys back:
-# number, url, state (OPEN, MERGED, CLOSED), baseRefName, createdAt and headRefOid (Bitbucket's
-# short hash), whatever --json names.
+# [--jq <expr>]`, `pr view --json <keys> [--jq <expr>]`) and gets exactly the gh keys --json
+# names, from number, url, state (OPEN, MERGED, CLOSED), baseRefName, createdAt, headRefOid
+# (Bitbucket's short hash), isDraft and body; any other key exits nonzero naming it.
 # make-pr-create.sh runs `pr create` with gh's argv (`--title --body-file [--draft]
 # --base --head`) and `pr edit <number> --body-file <file> [--ready]`; both print
 # the pull request's URL. `pr create` refuses a branch that already has an open pull
@@ -54,7 +54,7 @@ if [[ "$2" == create ]]; then
     shift 2
   done
   [[ -n "$TITLE" && -f "$BODY_FILE" && -n "$BASE" && -n "$HEAD" ]] || fail "pr create needs --title, --body-file, --base and --head"
-  OPEN=$("$SELF" pr list --head "$HEAD" --state all --json url --jq 'map(select(.state == "OPEN"))[0].url // empty') \
+  OPEN=$("$SELF" pr list --head "$HEAD" --state all --json url,state --jq 'map(select(.state == "OPEN"))[0].url // empty') \
     || fail "cannot read the pull requests of $HEAD; nothing created"
   [[ -z "$OPEN" ]] || fail "branch $HEAD already has an OPEN pull request: $OPEN; use --update"
   bkt_write POST "$REPO/pullrequests" "$(jq -cn --rawfile d "$BODY_FILE" --arg t "$TITLE" --arg s "$HEAD" --arg b "$BASE" \
@@ -81,16 +81,19 @@ if [[ "$2" == edit ]]; then
 fi
 
 READ=$2; shift 2
-HEAD=""; FILTER="."
+HEAD=""; FILTER="."; KEYS=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --head) HEAD=$2 ;;
     --state) [[ "$2" == all ]] || fail "only --state all is supported" ;;
-    --json) ;;   # every read answers the same keys
+    --json) KEYS=$2 ;;
     --jq) FILTER=$2 ;;
     *) echo "make-pr-bitbucket.sh: unsupported argument $1" >&2; exit 2 ;;
   esac
   shift 2
+done
+for KEY in ${KEYS//,/ }; do
+  [[ " number url state baseRefName createdAt headRefOid isDraft body " == *" $KEY "* ]] || fail "unsupported --json key: $KEY"
 done
 [[ "$READ" == list ]] || HEAD=$(git branch --show-current)
 [[ -n "$HEAD" ]] || fail "no branch to read"
@@ -111,7 +114,8 @@ while [[ -n "$NEXT" ]]; do
   fi
 done
 # A fork's pull request can share the branch name; only the origin repository's count.
-printf '%s' "$ROWS" | jq -c --arg read "$READ" '
+printf '%s' "$ROWS" | jq -c --arg read "$READ" --arg keys "$KEYS" '
+  def pick: if $keys == "" then . else with_entries(select(.key | IN($keys | split(",")[]))) end;
   if all(.[]; type == "object" and (.id | type) == "number" and (.links.html.href | type) == "string" and .links.html.href != ""
          and (.state | IN("OPEN", "MERGED", "DECLINED", "SUPERSEDED")) and (.destination.branch.name | type) == "string"
          and (.destination.repository.full_name | type) == "string" and (.created_on | type) == "string"
@@ -119,8 +123,8 @@ printf '%s' "$ROWS" | jq -c --arg read "$READ" '
          and (.source | has("repository")) and (.source.repository == null or (.source.repository.full_name | type) == "string"))
   then [.[] | select(((.source.repository.full_name // "") | ascii_downcase) == (.destination.repository.full_name | ascii_downcase))
         | {number: .id, url: .links.html.href, baseRefName: .destination.branch.name, createdAt: .created_on,
-           headRefOid: .source.commit.hash,
+           headRefOid: .source.commit.hash, isDraft: (.draft == true), body: (.description // ""),
            state: {OPEN: "OPEN", MERGED: "MERGED", DECLINED: "CLOSED", SUPERSEDED: "CLOSED"}[.state]}]
-       | if $read == "view" then map(select(.state == "OPEN"))[0] // empty else . end
+       | if $read == "view" then (map(select(.state == "OPEN"))[0] // empty) | pick else map(pick) end
   else error("malformed pull request row") end' | jq -rc "$FILTER" \
   || fail "malformed pull request listing"
