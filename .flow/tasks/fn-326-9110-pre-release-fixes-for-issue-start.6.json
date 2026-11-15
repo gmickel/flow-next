@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
   "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.6.md",
-  "status": "todo",
+  "status": "done",
   "title": "make-pr commits and pushes the tracker sync state it writes",
   "updated_at": "2026-11-15T16:03:04.368300Z"
 }

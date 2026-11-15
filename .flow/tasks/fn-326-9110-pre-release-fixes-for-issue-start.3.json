@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
   "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.3.md",
-  "status": "todo",
+  "status": "done",
   "title": "install-codex.sh deletes nothing outside CODEX_HOME when its path has spaces",
   "updated_at": "2026-11-15T15:06:38.698618Z"
 }

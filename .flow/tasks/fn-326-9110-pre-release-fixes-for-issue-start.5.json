@@ -14,7 +14,7 @@
   "priority": null,
   "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
   "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.5.md",
-  "status": "todo",
+  "status": "done",
   "title": "End-to-end issue start on the final code",
   "updated_at": "2026-11-15T16:03:04.788486Z"
 }

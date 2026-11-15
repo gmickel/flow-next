@@ -10,7 +10,7 @@
   "priority": null,
   "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
   "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.4.md",
-  "status": "todo",
+  "status": "done",
   "title": "--auto post-merge checkout state: fix or prove harmless",
   "updated_at": "2026-11-15T15:06:38.698645Z"
 }

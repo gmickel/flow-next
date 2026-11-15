@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-326-9110-pre-release-fixes-for-issue-start",
   "spec_path": ".flow/tasks/fn-326-9110-pre-release-fixes-for-issue-start.2.md",
-  "status": "todo",
+  "status": "done",
   "title": "Tracker fixes: capture merge-base seed, Linear default labels, GitLab host port",
   "updated_at": "2026-11-15T15:06:38.698585Z"
 }
