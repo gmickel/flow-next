@@ -44,6 +44,7 @@ PARSED_VARS = (
     "PILOT_DEPTH",
     "PILOT_GOAL_MODE",
     "PILOT_GOAL",
+    "PILOT_FROM_ISSUE",
 )
 
 _POSIX_BASH = unittest.skipIf(
@@ -76,6 +77,11 @@ class VerdictGrammar(unittest.TestCase):
             'spec=<id> stage=<stage> reason="goal <goal-id>; <one line>"',
             _read(FLOW_REFERENCES / "goal-mode.md"),
         )
+
+    def test_issue_start_refusal_ends_asked(self) -> None:
+        # A --from-issue run that asked on the issue ends ASKED with stage capture.
+        self.assertIn("PILOT_VERDICT=ASKED spec=<identifier> stage=capture",
+                      _read(FLOW_REFERENCES / "issue-start.md"))
 
     def test_already_merged_closed_spec_names_no_work(self) -> None:
         # A driver keyed on NO_WORK must stop on an already-merged scoped spec.
@@ -200,6 +206,7 @@ class ArgumentParseFence(unittest.TestCase):
         "PILOT_DEPTH": "short",
         "PILOT_GOAL_MODE": "0",
         "PILOT_GOAL": "",
+        "PILOT_FROM_ISSUE": "",
     }
 
     @_POSIX_BASH
@@ -240,6 +247,9 @@ class ArgumentParseFence(unittest.TestCase):
             ("--goal fn-40 --until=merge", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-40"}),
             ("--goal docs/linux port.md --tick", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "docs/linux port.md", "AUTO_TICK": "1"}),
             ("fn-40 --goal --review=codex", {"PILOT_GOAL_MODE": "1", "PILOT_GOAL": "fn-40", "PILOT_REVIEW": "codex"}),
+            ("--from-issue SCF-12 --until=merge", {"PILOT_FROM_ISSUE": "SCF-12"}),
+            ("--from-issue=https://linear.app/x/issue/SCF-12 --tick",
+             {"PILOT_FROM_ISSUE": "https://linear.app/x/issue/SCF-12", "AUTO_TICK": "1"}),
         )
         for arguments, overrides in cases:
             with self.subTest(arguments=arguments):
@@ -278,6 +288,23 @@ class ArgumentParseFence(unittest.TestCase):
         self.assertEqual(parsed["PILOT_BACKLOG_OVERRIDE"], "")
         self.assertEqual(parsed["PILOT_GOAL"], "fn-40")
         self.assertIn("--backlog", stderr)
+
+    @_POSIX_BASH
+    def test_from_issue_without_an_issue_or_beside_another_start_stops(self) -> None:
+        # An empty --from-issue must never fall back to unscoped selection.
+        cases = (
+            ("--from-issue", "--from-issue needs an issue key or URL"),
+            ("--from-issue= --until=merge", "--from-issue needs an issue key or URL"),
+            ("fn-1 --from-issue SCF-12", "--from-issue takes no other starting point"),
+            ("--goal fn-40 --from-issue SCF-12", "--from-issue takes no other starting point"),
+            ("--from-issue SCF-12 --backlog", "--from-issue takes no other starting point"),
+        )
+        for arguments, reason in cases:
+            with self.subTest(arguments=arguments):
+                res = subprocess.run(["bash", "-c", self._fence()], capture_output=True, text=True,
+                                     env={**os.environ, "ARGUMENTS": arguments})
+                self.assertEqual(res.returncode, 1, res.stderr)
+                self.assertIn(f'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="{reason}"', res.stdout)
 
     @_POSIX_BASH
     def test_second_positional_id_does_not_double_assign(self) -> None:

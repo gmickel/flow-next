@@ -26,7 +26,7 @@ workflow.md's Preamble defines `$FLOWCTL`; later blocks (there and in `phases.md
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal tokens `mode:autofix`, `from:flow` and `from:goal` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; the remainder is ignored (the conversation is the input), except under `from:goal`, where it names the goal or its source.
+Parse `$ARGUMENTS` for the literal tokens `mode:autofix`, `from:flow`, `from:goal` and `from:issue` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; the remainder is ignored (the conversation is the input), except under `from:goal`, where it names the goal or its source, and under `from:issue`, where it names the tracker issue.
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -52,12 +52,13 @@ if [[ "$RAW_ARGS" == *"--from-compacted-ok"* ]]; then
   RAW_ARGS="${RAW_ARGS//--from-compacted-ok/}"
 fi
 
-# --yes (autofix write gate), --override-strategy, --no-plan, from:flow and
-# from:goal authorize durable writes, so they are EXACT-token matches: lookalikes
+# --yes (autofix write gate), --override-strategy, --no-plan, from:flow, from:goal
+# and from:issue authorize durable writes, so they are EXACT-token matches: lookalikes
 # ("--yesterday", "--no-planning", "from:flowchart", "from:goals") stay in the remainder.
 NO_PLAN_OPT=0
 FROM_FLOW=0
 FROM_GOAL=0
+FROM_ISSUE=0
 CLEANED_ARGS=""
 for TOK in $(printf '%s\n' "$RAW_ARGS"); do
   if [ "$TOK" = "--yes" ]; then
@@ -70,6 +71,8 @@ for TOK in $(printf '%s\n' "$RAW_ARGS"); do
     FROM_FLOW=1
   elif [ "$TOK" = "from:goal" ]; then
     FROM_GOAL=1
+  elif [ "$TOK" = "from:issue" ]; then
+    FROM_ISSUE=1
   else
     CLEANED_ARGS="$CLEANED_ARGS $TOK"
   fi
@@ -82,6 +85,12 @@ if [ "$FROM_GOAL" = "1" ]; then
   COMMIT_YES=1
   echo "GATE ACTIVE — STOP. Read references/from-goal.md before continuing."
 fi
+# from:issue is the write a `flow --auto --from-issue` run consented to through the board move.
+if [ "$FROM_ISSUE" = "1" ]; then
+  MODE="autofix"
+  COMMIT_YES=1
+  echo "GATE ACTIVE — STOP. Read references/from-issue.md before continuing."
+fi
 if [ "$MODE" = "autofix" ]; then
   echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."
 fi   # default branch: bare no-op — NO link, NO read path
@@ -92,7 +101,7 @@ fi   # default branch: bare no-op — NO link, NO read path
 | **Interactive** (default) | User is at the terminal | Asks on duplicates and must-ask cases; writes the spec, shows its summary, offers the editor; no generic write approval |
 | **Autofix** (`mode:autofix`) | Batch or scripted invocation | No questions; every ask becomes exit 2; writes only with `--yes` |
 
-When the sentinel prints, read [references/autofix-mode.md](references/autofix-mode.md) before Phase 0; it owns the per-phase autofix rules. Under `from:goal`, read [references/from-goal.md](references/from-goal.md) as well; it says where a goal run's source differs. On the interactive path, read nothing.
+When the sentinel prints, read [references/autofix-mode.md](references/autofix-mode.md) before Phase 0; it owns the per-phase autofix rules. Under `from:goal`, read [references/from-goal.md](references/from-goal.md) as well; it says where a goal run's source differs. Under `from:issue`, read [references/from-issue.md](references/from-issue.md) as well. On the interactive path, read nothing.
 
 ## Questions (interactive only)
 
