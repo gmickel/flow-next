@@ -174,7 +174,7 @@
     },
     {
       "path": "flowctl_tracker/types.py",
-      "sha256": "cde29e064d8b228a8d84caad91d24f9fef67892be1142f5a0c5ef0ec9c4767e6"
+      "sha256": "b9851521249bd87de59686f20c61e3f598e7d26bf72e622222ad7bc313a247c7"
     },
     {
       "path": "flowctl_tracker/wire/__init__.py",

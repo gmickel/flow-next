@@ -1764,19 +1764,15 @@ class GitlabSelfHostedHostname(unittest.TestCase):
                                (None, {"GITLAB_HOST": "localhost:8929"})):
             with self.subTest(logged_in=logged_in), \
                     mock.patch.object(T, "glab_logged_in", return_value=logged_in):
-                T.gitlab_cli_host.cache_clear()
                 self.assertEqual(T.gitlab_cli_host("http://localhost:8929"), ([], env))
-        T.gitlab_cli_host.cache_clear()
 
     def test_wire_and_resolve_point_glab_at_the_host(self) -> None:
         from unittest import mock
         from flowctl_tracker import types as T
         from flowctl_tracker.providers import gitlab as GP
-        self.addCleanup(T.gitlab_cli_host.cache_clear)
         patcher = mock.patch.object(T, "glab_logged_in", return_value=True)
         patcher.start()
         self.addCleanup(patcher.stop)
-        T.gitlab_cli_host.cache_clear()
         for host, flags, env in self.CASES:
             with self.subTest(host=host):
                 cfg = gl_cfg()

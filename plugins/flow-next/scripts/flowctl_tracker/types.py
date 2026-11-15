@@ -8,6 +8,7 @@ otherwise "simplify" them back into the bug.
 from __future__ import annotations
 
 import enum
+import functools
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -124,6 +125,25 @@ class TrackerError:
         return EXIT_CODES[self.cls]
 
 
+@functools.lru_cache(maxsize=None)
+def glab_logged_in(host: str) -> Optional[bool]:
+    """`glab auth status` for one host key: True, False (glab's logged-out
+    answer) or None (unknown: offline host, timeout). Same rule as flowctl's
+    forge `_gitlab_owns_host`."""
+    import subprocess  # noqa: PLC0415
+    try:
+        proc = subprocess.run(["glab", "auth", "status", "--hostname", host],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                              text=True, timeout=5, check=False)
+    except subprocess.TimeoutExpired:
+        return None
+    except OSError:
+        return False
+    if proc.returncode == 0:
+        return True
+    return False if "has not been authenticated" in " ".join((proc.stderr or "").split()) else None
+
+
 def gitlab_cli_host(host: str) -> tuple[list[str], Optional[dict[str, str]]]:
     """How glab reaches perTracker.host: (extra argv, child environment).
 
@@ -132,8 +152,10 @@ def gitlab_cli_host(host: str) -> tuple[list[str], Optional[dict[str, str]]]:
     `glab auth login --hostname localhost:8929` stores, yet `glab api
     --hostname` rejects any value carrying a port (measured live 2026-11-15,
     glab 1.124: "invalid hostname"). Such a host goes through glab's own
-    GITLAB_HOST, as make-pr-gitlab.sh does; any other host stays a bare
-    --hostname."""
+    GITLAB_HOST, as make-pr-gitlab.sh does. A login made without the port is
+    keyed by the bare hostname, so glab's logged-out answer for `host:port`
+    sends the call there (flowctl's forge rule since 9.9.1). Any other host
+    stays a bare --hostname. The login is probed once per process."""
     from urllib.parse import urlparse
     try:
         parsed = urlparse(host if "://" in host else f"https://{host}")
@@ -142,5 +164,7 @@ def gitlab_cli_host(host: str) -> tuple[list[str], Optional[dict[str, str]]]:
         return ["--hostname", host], None
     hostname = parsed.hostname or host
     if port is not None and port != (80 if parsed.scheme == "http" else 443):
+        if glab_logged_in(f"{hostname}:{port}") is False:
+            return [], {"GITLAB_HOST": hostname}
         return [], {"GITLAB_HOST": f"{hostname}:{port}"}
     return ["--hostname", hostname], None
