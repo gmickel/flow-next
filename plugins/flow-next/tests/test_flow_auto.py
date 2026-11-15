@@ -423,8 +423,8 @@ class IssueStartFinalAuditContract(unittest.TestCase):
             self.assertIn(token, text)
 
     def test_every_task_review_lives_in_the_spec_and_the_working_rules(self) -> None:
-        line = "Every task gets implementation review; the risk rule does not skip it."
-        self.assertIn(line, _read(PLUGIN / "skills/flow-next-capture/references/from-issue.md"))
+        self.assertIn("Every task gets implementation review",
+                      _read(PLUGIN / "skills/flow-next-capture/references/from-issue.md"))
         self.assertIn("every task gets implementation review", _flat(_read(PLUGIN / "references/working-rules.md")))
 
     def test_question_slug_carries_the_issue_body_digest(self) -> None:

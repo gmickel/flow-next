@@ -47,9 +47,10 @@ command failing (a spec JSON it cannot read), stops `NEEDS_HUMAN`, never a captu
 - One: bring it into the checkout. The checkout holds the link: stay. `origin/<default>` holds it:
   on the default branch fast-forward (`git merge --ff-only origin/<default>`); a checkout on
   another branch stops `NEEDS_HUMAN`. Otherwise switch to the branch it lists by its short
-  name (`git switch <name>` for `refs/remotes/origin/<name>`, never the remote ref itself), and
-  when a local branch of that name already existed, bring it to the fetched copy with
-  `git merge --ff-only origin/<name>`; a branch that cannot fast-forward stops `NEEDS_HUMAN`.
+  name (`git switch <name>` for `refs/remotes/origin/<name>`, never the remote ref itself). When
+  the link was found on `refs/remotes/origin/<name>` and a local branch of that name already
+  existed, bring it to the fetched copy with `git merge --ff-only origin/<name>`; a branch that
+  cannot fast-forward stops `NEEDS_HUMAN`.
   The checkout's spec JSON must then carry the issue's durable id as `tracker.id`, or the run
   stops `NEEDS_HUMAN`. Then set `PILOT_SPEC` and continue with auto.md exactly as
   `flow --auto <spec-id>` would, capturing nothing.
