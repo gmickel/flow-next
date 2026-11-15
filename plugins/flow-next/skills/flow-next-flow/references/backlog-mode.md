@@ -139,25 +139,22 @@ to `flowctl specs`. Read this half directly through
 flowctl's deterministic tracker transport:
 
 ```text
-$FLOWCTL tracker wire list-open --json
+$FLOWCTL tracker wire list-open --unlinked --json
 ```
 
 - It enumerates open issues at the **exact** `tracker.readyState` (the promoted lane
   - the same explicit signal as the flow `ready` flag), via the `listOpenIssues`
-  adapter method. Returns normalized `issue[]` (`{id, identifier, title, status,
-  labels, url}`) - **provider-neutral**: backlog mode reads the struct and never
+  adapter method. Returns compact `issue[]` (`{id, identifier, title, url, labels,
+  excerpt}`) - **provider-neutral**: backlog mode reads the struct and never
   branches on tracker type (Linear / GitHub / GitLab / Jira).
 - **`tracker.readyState` unset ⇒ `list-open` no-ops** (returns `[]` + a note): no
   promoted lane exists to filter on, so backlog mode runs the **flow-ready specs
   only**. The flow `ready` flag needs no tracker. Same floor when no transport
   is reachable.
-- A tracker-only ticket is one with **no linked flow spec** - decided
-  authoritatively by the **local sync state** (the tracker-ids the skill recorded
-  as linked), NOT by the absence of a `flow:<id>` label (the label is a
-  corroborating hint only; a bounded/truncated label set is never read as
-  "unlinked"). A linked issue already shows up on the flow side via 1b, so **de-dup
-  by tracker id** (the sync-state link) when unioning - the `flow:<id>` label is a
-  fallback hint, never the sole test - to avoid scanning the same item twice.
+- A tracker-only ticket is one with **no linked flow spec**. `--unlinked` decides
+  that from the **local sync state** (every spec's stored tracker id) with no
+  tracker call, so every returned row is tracker-only and the de-dup against 1b
+  is already done. Never read the absence of a `flow:<id>` label as "unlinked".
 
 The merged candidate set = the flow specs (1b) ∪ the tracker-only issues (1c).
 
@@ -328,7 +325,7 @@ DRY="${PILOT_DRY_RUN:-0}"   # 1 => inspection-only: no tracker-sync dispatch, fl
 
    ```bash
    if [ "$DRY" = "0" ]; then
-     $FLOWCTL tracker wire list-open --json   # no-ops when tracker.readyState unset -> flow-ready specs only)
+     $FLOWCTL tracker wire list-open --unlinked --json   # no-ops when tracker.readyState unset -> flow-ready specs only)
    fi
    ```
 
@@ -635,7 +632,7 @@ selected item belongs to one.)
 
 ## Deterministic, multi-tracker
 
-Backlog reads use `$FLOWCTL tracker wire list-open --json`, `comment-list --locator "$LOCATOR" --json`, and `relation-list --locator "$LOCATOR" --json` (`LOCATOR` = `{"durable":…,"display":…}` JSON) directly. Their existing envelopes and failure behavior are unchanged; flow never adds a tracker-specific API or branches on tracker type. Keep tracker-sync for `reconcile` and `question`, where semantic folding and question authoring remain host work.
+Backlog reads use `$FLOWCTL tracker wire list-open --unlinked --json`, `comment-list --locator "$LOCATOR" --json`, and `relation-list --locator "$LOCATOR" --json` (`LOCATOR` = `{"durable":…,"display":…}` JSON) directly. Their existing envelopes and failure behavior are unchanged; flow never adds a tracker-specific API or branches on tracker type. Keep tracker-sync for `reconcile` and `question`, where semantic folding and question authoring remain host work.
 
 - **Ships on Linear, GitHub, GitLab + Jira** - the four adapters that implement
   `listOpenIssues` / `listIssueRelations` / the comment ops.

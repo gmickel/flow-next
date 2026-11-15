@@ -334,9 +334,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return _issue_out(refreshed)
 
 
-def list_open(config: dict, execute: Execute) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
     ready_state = _ready_state(config)
-    if ready_state is None:
+    if ready_state is None and not any_lane:
         return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
@@ -344,11 +344,10 @@ def list_open(config: dict, execute: Execute) -> Result:
     repo = _gh_repo(dest)
     if isinstance(repo, TrackerError):
         return repo
-    qs = urlencode({
-        "state": "open",
-        "labels": ready_state,
-        "per_page": _PAGE_SIZE,
-    })
+    query = {"state": "open", "per_page": _PAGE_SIZE}
+    if not any_lane:
+        query["labels"] = ready_state
+    qs = urlencode(query)
     drained = _rest_drain(lambda page: _cli(
         execute, "github", config, "wire-list-open", "GET",
         f"repos/{repo}/issues?{qs}&page={page}",

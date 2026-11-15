@@ -247,6 +247,35 @@ class BacklogTrackerOnlySetTests(unittest.TestCase):
         self.assertNotIn("$FLOWCTL tracker wire list-open --json", text)
 
 
+class IntakeRouteContractTests(unittest.TestCase):
+    """R6: one route row, one reference with one table and one question."""
+
+    REFS = ROOT / "skills/flow-next-flow/references"
+
+    def test_route_row_points_at_the_intake_reference(self) -> None:
+        rows = [line for line in (self.REFS / "route-matrix-more.md")
+                .read_text(encoding="utf-8").splitlines()
+                if "open-issue-intake.md" in line]
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0].startswith("| A request to triage the open tracker issues"))
+        self.assertIn("intake", (self.REFS / "route-matrix.md").read_text(encoding="utf-8"))
+
+    def test_reference_reads_unlinked_and_shows_one_table_one_question(self) -> None:
+        text = (self.REFS / "open-issue-intake.md").read_text(encoding="utf-8")
+        self.assertIn('"$FLOWCTL" tracker wire list-open --any-lane --unlinked --json', text)
+        separators = [line for line in text.splitlines()
+                      if line.startswith("|---|")]
+        self.assertEqual(len(separators), 1, "exactly one table")
+        self.assertIn("one confirming question", text)
+        self.assertIn("Do not ask per row", text)
+        self.assertIn("Attended only", text)
+        for action in ("new spec", "fold into", "dependency", "leave"):
+            self.assertIn(f"`{action}", text)
+        for stage in ("flow-next:flow-next-capture", "spec add-dep",
+                      "flow-next:flow-next-tracker-sync push"):
+            self.assertIn(stage, text)
+
+
 class CliFlagTests(unittest.TestCase):
     def test_cli_accepts_both_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

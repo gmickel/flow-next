@@ -609,9 +609,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return out
 
 
-def list_open(config: dict, execute: Execute) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
     ready_state = _ready_state(config)
-    if ready_state is None:
+    if ready_state is None and not any_lane:
         # #311: an empty list here was indistinguishable from a genuinely empty
         # ready lane, so a dedup query against a populated board looked healthy
         # and was blind. A caller can handle a refusal; it cannot detect a
@@ -632,7 +632,10 @@ def list_open(config: dict, execute: Execute) -> Result:
     if isinstance(dest, TrackerError):
         return dest
     team_id = dest.get("teamId")
-    filt: dict = {"state": {"name": {"eqIgnoreCase": ready_state}}}
+    # Open = any state type but completed / canceled (a duplicate is canceled).
+    filt: dict = {"state": ({"type": {"nin": ["completed", "canceled"]}}
+                            if any_lane else
+                            {"name": {"eqIgnoreCase": ready_state}})}
     if team_id:
         filt["team"] = {"id": {"eq": team_id}}
 

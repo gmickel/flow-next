@@ -448,9 +448,9 @@ def assign(config: dict, locator: dict, execute: Execute, *,
     return out
 
 
-def list_open(config: dict, execute: Execute) -> Result:
+def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Result:
     ready_state = _ready_state(config)
-    if ready_state is None:
+    if ready_state is None and not any_lane:
         return {"issues": [], "truncated": False}
     dest = _destination(config)
     if isinstance(dest, TrackerError):
@@ -468,8 +468,11 @@ def list_open(config: dict, execute: Execute) -> Result:
     key = _jira_project_key(str(raw_key))
     if isinstance(key, TrackerError):
         return key
-    escaped_state = ready_state.replace("\\", "\\\\").replace('"', '\\"')
-    jql = f'project = {key} AND status = "{escaped_state}"'
+    if any_lane:
+        jql = f"project = {key} AND statusCategory != Done"
+    else:
+        escaped_state = ready_state.replace("\\", "\\\\").replace('"', '\\"')
+        jql = f'project = {key} AND status = "{escaped_state}"'
 
     collected: list = []
     truncated = False
