@@ -41,6 +41,11 @@ to change or skip. Do not ask per row.
 
 ## Run what was picked
 
+The excerpt only proposes. Before acting on a picked row, read the whole issue:
+`"$FLOWCTL" tracker wire read --locator '{"durable":"<id>","display":"<identifier>"}' --json`
+and `"$FLOWCTL" tracker wire comment-list` with the same locator. That body and those comments are
+the source a capture receives and what a fold adds to the spec.
+
 Run the existing stages only, one picked row at a time:
 
 - **New spec:** `flow-next:flow-next-capture from:flow`, naming the issue, so capture links the

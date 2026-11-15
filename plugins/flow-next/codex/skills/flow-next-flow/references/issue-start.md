@@ -47,8 +47,11 @@ command failing (a spec JSON it cannot read), stops `NEEDS_HUMAN`, never a captu
 - One: bring it into the checkout. The checkout holds the link: stay. `origin/<default>` holds it:
   on the default branch fast-forward (`git merge --ff-only origin/<default>`); a checkout on
   another branch stops `NEEDS_HUMAN`. Otherwise switch to the branch it lists by its short
-  name (`git switch <name>` for `refs/remotes/origin/<name>`, which tracks it), never the
-  remote ref itself. Then set `PILOT_SPEC` and continue with auto.md exactly as
+  name (`git switch <name>` for `refs/remotes/origin/<name>`, never the remote ref itself), and
+  when a local branch of that name already existed, bring it to the fetched copy with
+  `git merge --ff-only origin/<name>`; a branch that cannot fast-forward stops `NEEDS_HUMAN`.
+  The checkout's spec JSON must then carry the issue's durable id as `tracker.id`, or the run
+  stops `NEEDS_HUMAN`. Then set `PILOT_SPEC` and continue with auto.md exactly as
   `flow --auto <spec-id>` would, capturing nothing.
 - A spec an issue start captured is finished first. When its spec file has no commit yet
   (`git log -1 -- .flow/specs/<spec-id>.md` prints nothing), its capture was interrupted, whoever
@@ -118,8 +121,9 @@ without the review or that sentence has broken this.
 **Implementation review on every work hop.** Nobody wrote the spec and nobody reads the code before
 an unattended merge, so every work hop of an issue start, on a spec step 2 resolved or step 5
 captured, runs implementation review on the configured backend: the working rules' risk rule never
-skips it here. auto.md's work dispatch says so to work. With no backend configured, work's skip and
-its note stand.
+skips it here. The captured spec says so in its Boundaries (from-issue.md), so every worker and
+later run that reads the spec applies it, and auto.md's work dispatch says so to work. With no
+backend configured, work's skip and its note stand.
 
 ## 6. Refuse: ask on the issue
 
@@ -130,12 +134,14 @@ move it back to <readyState>." For a non-build issue, say which route fits and h
 ```bash
 "$FLOWCTL" tracker wire question --locator "$LOCATOR" \
   --subject-id "<durable id>" --blocked-stage capture \
-  --reason-code "<not-buildable | not-a-build>" --question-slug "<short topic slug>" \
+  --reason-code "<not-buildable | not-a-build>" --question-slug "<short topic slug>-<body digest>" \
   --reply-settles --body-file "<file>" --json
 "$FLOWCTL" tracker wire unready --locator "$LOCATOR" --json
 ```
 
-The slug names the topic, so the same question asked again dedupes and a new one posts.
+The slug names the topic and ends in the first 8 hex digits of the issue body's SHA-256
+(`jq -j '.data.body' <read> | sha256sum | cut -c1-8` on step 1's read): the same question on an
+unchanged issue body dedupes, and an answer made by editing the issue body posts a new round.
 `--reply-settles` makes a comment after the latest matching question settle that round, as step 3
 reads it: a follow-up on the same topic after a plain reply posts a new round, and a rerun of a
 round nobody replied to dedupes. No spec is

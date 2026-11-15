@@ -35,6 +35,8 @@ Exit 2, writing nothing, naming the reason:
 
 The spec is linked to the issue: §5.2 reads the named issue and mints linked under
 `tracker.specIds=tracker`, or links it in flow-id mode ([tracker-integration.md](tracker-integration.md)).
-The run passes `--no-plan`, so §5.9b writes the field. Capture never marks the spec ready, never
+The run passes `--no-plan`, so §5.9b writes the field. `## Boundaries` carries the line
+"Every task gets implementation review; the risk rule does not skip it." verbatim, so every
+worker and later run that reads the spec reviews each task. Capture never marks the spec ready, never
 writes glossary terms and never commits: the run does what is its own. The closing block omits
 `Recommended next:`.
