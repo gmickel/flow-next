@@ -6,7 +6,7 @@
 #     && /tmp/flow-next-install/scripts/install-opencode.sh \
 #     && rm -rf /tmp/flow-next-install
 #
-# Usage: ./scripts/install-opencode.sh [--dest <path>] [--force]
+# Usage: ./scripts/install-opencode.sh [--dest <path>] [--force] [--uninstall]
 #
 # POSIX only (no Windows .ps1 in this spec). Snapshot-of-working-tree: a COPY,
 # never a symlink. Re-run after `git pull` to update. Deletions apply only to
@@ -59,7 +59,7 @@ SUPPORT_DIRS=(scripts templates references docs)
 
 usage() {
     cat <<'EOF'
-Usage: install-opencode.sh [--dest <path>] [--force] [--help]
+Usage: install-opencode.sh [--dest <path>] [--force] [--uninstall] [--help]
 
 Install flow-next into OpenCode's config directory by scattering canonical
 files (skills as-is, plugin-root support dirs at the config root).
@@ -67,6 +67,7 @@ files (skills as-is, plugin-root support dirs at the config root).
 Options:
   --dest <path>  Install here instead of ${XDG_CONFIG_HOME:-$HOME/.config}/opencode
   --force        Replace unclaimed support dirs / skill dirs that already exist
+  --uninstall    Remove only the paths the ownership manifest lists, then exit
   --help         Show this help
 
 What gets installed:
