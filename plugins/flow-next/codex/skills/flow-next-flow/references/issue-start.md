@@ -46,10 +46,10 @@ command failing (a spec JSON it cannot read), stops `NEEDS_HUMAN`, never a captu
 - Two or more linked specs stop `NEEDS_HUMAN` naming them. None: continue below.
 - One: bring it into the checkout. The checkout holds the link: stay. `origin/<default>` holds it:
   on the default branch fast-forward (`git merge --ff-only origin/<default>`); a checkout on
-  another branch stops `NEEDS_HUMAN`. Otherwise switch to the branch it lists by its short name
-  (`git switch <name>` for `refs/remotes/origin/<name>`, which tracks it), never the remote ref itself. Then set
-  `PILOT_SPEC` and continue with auto.md exactly as `flow --auto <spec-id>` would, capturing
-  nothing.
+  another branch stops `NEEDS_HUMAN`. Otherwise switch to the branch it lists by its short
+  name (`git switch <name>` for `refs/remotes/origin/<name>`, which tracks it), never the
+  remote ref itself. Then set `PILOT_SPEC` and continue with auto.md exactly as
+  `flow --auto <spec-id>` would, capturing nothing.
 - A spec an issue start captured is finished first. When its spec file has no commit yet
   (`git log -1 -- .flow/specs/<spec-id>.md` prints nothing), its capture was interrupted, whoever
   wrote it: finish step 5 from where it stopped (its checks, `spec ready`, the branch, the capture
