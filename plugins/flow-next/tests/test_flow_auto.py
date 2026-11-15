@@ -590,6 +590,21 @@ class PostMergeCheckout(unittest.TestCase):
             self.assertEqual(self._git(co, "status", "--porcelain"), "")
             self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
 
+    def test_a_local_default_branch_that_cannot_fast_forward_keeps_the_checkout(self) -> None:
+        # Work keeps planning commits on local main; after the squash merge that main has diverged.
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            self._git(co, "commit", "-q", "--only", "-m", "sync", "--", ".flow/specs/fn-1-add.json")
+            self._git(co, "switch", "-q", "main")
+            (co / ".flow" / "specs" / "fn-2-next.json").write_text("{}\n", encoding="utf-8")
+            self._git(co, "add", "-A")
+            self._git(co, "commit", "-q", "-m", "plan fn-2-next")
+            self._git(co, "switch", "-q", "fn-1-add")
+            result = self._run_fence(co)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "fn-1-add")
+            self.assertIn("left on fn-1-add", result.stdout)
+
     def test_another_change_keeps_the_checkout_where_it_is(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             co = self._merged_checkout(Path(tmp))
