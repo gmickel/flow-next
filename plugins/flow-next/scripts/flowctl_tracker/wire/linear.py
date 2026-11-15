@@ -651,7 +651,7 @@ def list_open(config: dict, execute: Execute, *, any_lane: bool = False) -> Resu
         execute, "wire-list-open",
         "query($filter: IssueFilter!, $after: String) { "
         f"issues(first: {_PAGE_SIZE}, filter: $filter, after: $after) "
-        "{ nodes { id identifier title description url } "
+        "{ nodes { id identifier title description url labels { nodes { name } } } "
         "pageInfo { hasNextPage endCursor } } }",
         {"filter": filt}, pluck)
     if isinstance(drained, TrackerError):

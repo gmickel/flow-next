@@ -194,7 +194,7 @@
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
-      "sha256": "aee7fead21273df381ca0c2266b681ed51e343c4fe8e6b71fc9bbe8827f1320d"
+      "sha256": "d4b84f87a31fe1cec87c1bf47053cc22aa1d4b994edf09872f96c794c121eee2"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

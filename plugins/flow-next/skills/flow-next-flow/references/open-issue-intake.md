@@ -43,7 +43,9 @@ to change or skip. Do not ask per row.
 Run the existing stages only, one picked row at a time:
 
 - **New spec:** `flow-next:flow-next-capture from:flow`, naming the issue, so capture links the
-  spec to it.
+  spec to it. A spec captured earlier in this run for another confirmed row is not a prior
+  capture of this one: the confirmation already answers capture's rewrite-or-proceed question
+  with `proceed`, so do not ask it again.
 - **Fold into a spec:** amend that spec's body with what the issue adds, push it through
   `flow-next:flow-next-tracker-sync push <spec-id>` when the spec is linked, and comment on the
   issue pointing at the spec (`"$FLOWCTL" tracker wire comment-add --locator

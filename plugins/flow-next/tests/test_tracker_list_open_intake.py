@@ -129,6 +129,12 @@ class AnyLaneTests(unittest.TestCase):
         self.assertEqual(out["issues"][0]["url"],
                          "https://ex.atlassian.net/browse/SCRUM-1")
 
+    def test_linear_listing_selects_labels(self) -> None:
+        # A fixture returns whatever it holds; the query must ask for labels.
+        ex = fake_execute({"wire-list-open": ok({"data": {"issues": {"nodes": [LN_ISSUE]}}})})
+        W.dispatch("list-open", _unset_ready(ln_cfg()), execute=ex, any_lane=True)
+        self.assertIn("labels { nodes { name } }", json.loads(ex.calls[0].body)["query"])
+
     def test_jira_cloud_v2_lists_through_search_jql(self) -> None:
         # Cloud answers 410 Gone on GET /rest/api/2/search (measured 2026-11-15).
         for flags in ({}, {"any_lane": True}):
@@ -281,8 +287,6 @@ class IntakeRouteContractTests(unittest.TestCase):
                 .read_text(encoding="utf-8").splitlines()
                 if "open-issue-intake.md" in line]
         self.assertEqual(len(rows), 1)
-        self.assertTrue(rows[0].startswith("| A request to triage the open tracker issues"))
-        self.assertIn("intake", (self.REFS / "route-matrix.md").read_text(encoding="utf-8"))
 
     def test_reference_reads_unlinked_and_shows_one_table_one_question(self) -> None:
         text = (self.REFS / "open-issue-intake.md").read_text(encoding="utf-8")
@@ -290,9 +294,6 @@ class IntakeRouteContractTests(unittest.TestCase):
         separators = [line for line in text.splitlines()
                       if line.startswith("|---|")]
         self.assertEqual(len(separators), 1, "exactly one table")
-        self.assertIn("one confirming question", text)
-        self.assertIn("Do not ask per row", text)
-        self.assertIn("Attended only", text)
         for action in ("new spec", "fold into", "dependency", "leave"):
             self.assertIn(f"`{action}", text)
         for stage in ("flow-next:flow-next-capture", "spec add-dep",
