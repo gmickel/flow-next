@@ -1,20 +1,67 @@
 {
   "branch_name": "fn-327-9110-final-audit-fixes-for-issue-start",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-15T18:29:57.983313Z",
   "created_at": "2026-11-15T18:22:15.135995Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-327-9110-final-audit-fixes-for-issue-start",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-327-9110-final-audit-fixes-for-issue-start.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "238ee61bd8724d585f8eb1f0a939e61fdd14b9c2d5e217889dcbc1718356ee8d",
+      "backend": "codex",
+      "base_sha": "9770095a535a09fea8dbc98bf3f4ec7e0a1636be",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "90fd625f7311f3a49d0cd2132a96043c541c206b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 158,
+      "output_sha256": "6ff70da3d83706800ca3cabc6ba62603ba0485fcf5259d27f1be54ce68686975",
+      "reservation_id": "89e57e9980ff4d479d66fe17b3ef8864",
+      "round_consumed": true,
+      "scope": "impl:fn-327-9110-final-audit-fixes-for-issue-start.1",
+      "superseded_by": null,
+      "task": "fn-327-9110-final-audit-fixes-for-issue-start.1",
+      "timestamp": "2026-11-15T18:28:53.505138Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-327-9110-final-audit-fixes-for-issue-start.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-327-9110-final-audit-fixes-for-issue-start.1": 0
+  },
   "spec_path": ".flow/specs/fn-327-9110-final-audit-fixes-for-issue-start.md",
   "status": "open",
   "title": "9.11.0 final-audit fixes for issue start and intake",
@@ -29,5 +76,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-15T18:22:16.335739Z"
+  "updated_at": "2026-11-15T18:29:57.983321Z"
 }
