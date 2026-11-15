@@ -571,13 +571,15 @@ class PostMergeCheckout(unittest.TestCase):
             json.dumps({"selected": {"id": "fn-1-add", "branch_name": "fn-1-add"}}), encoding="utf-8")
         return co
 
-    def _run_fence(self, co: Path) -> subprocess.CompletedProcess:
+    def _run_fence(self, co: Path, subdir: str = "") -> subprocess.CompletedProcess:
         text = _read(AUTO_MD)
         self.assertIn(self.FENCE, text)
         env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
                "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "commit.gpgsign", "GIT_CONFIG_VALUE_0": "false"}
-        return subprocess.run(["bash", "-c", _fence_from(text, self.FENCE)], cwd=co, env=env,
+        cwd = co / subdir
+        cwd.mkdir(parents=True, exist_ok=True)
+        return subprocess.run(["bash", "-c", _fence_from(text, self.FENCE)], cwd=cwd, env=env,
                               capture_output=True, text=True)
 
     def test_returns_to_the_default_branch_keeping_the_sync_write(self) -> None:
@@ -588,6 +590,14 @@ class PostMergeCheckout(unittest.TestCase):
             self.assertEqual(self._git(co, "branch", "--show-current"), "main")
             self.assertEqual(self._git(co, "rev-parse", "HEAD"), self._git(co, "rev-parse", "origin/main"))
             self.assertEqual(self._git(co, "status", "--porcelain"), "")
+            self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
+
+    def test_a_run_from_a_subdirectory_still_commits_the_sync_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            co = self._merged_checkout(Path(tmp))
+            result = self._run_fence(co, subdir="src")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self._git(co, "branch", "--show-current"), "main")
             self.assertIn('"make-pr"', self._git(co, "show", "fn-1-add:.flow/specs/fn-1-add.json"))
 
     def test_a_local_default_branch_that_cannot_fast_forward_keeps_the_checkout(self) -> None:
