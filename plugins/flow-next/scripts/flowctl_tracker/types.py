@@ -124,18 +124,23 @@ class TrackerError:
         return EXIT_CODES[self.cls]
 
 
-def gitlab_cli_hostname(host: str) -> str:
-    """glab's --hostname wants its config key: a BARE hostname. Self-managed
-    instances on http and/or a non-default port store a scheme-prefixed
-    origin in perTracker.host (the HTTP route derives its API base from it);
-    glab carries protocol/port itself under the bare-hostname key (measured
-    live 2026-07-28: --hostname http://gitlab.localhost:8929 is rejected 400,
-    while the profile key is gitlab.localhost with api_protocol/api_host)."""
-    if "://" in host:
-        from urllib.parse import urlparse
-        try:
-            parsed = urlparse(host)
-        except ValueError:
-            return host
-        return parsed.hostname or host
-    return host.split(":", 1)[0] if host.count(":") == 1 and host.rsplit(":", 1)[-1].isdigit() else host
+def gitlab_cli_host(host: str) -> tuple[list[str], Optional[dict[str, str]]]:
+    """How glab reaches perTracker.host: (extra argv, child environment).
+
+    perTracker.host stores the origin (the HTTP route derives its API base
+    from it). glab keys a host on a non-default port as `host:port`, the form
+    `glab auth login --hostname localhost:8929` stores, yet `glab api
+    --hostname` rejects any value carrying a port (measured live 2026-11-15,
+    glab 1.124: "invalid hostname"). Such a host goes through glab's own
+    GITLAB_HOST, as make-pr-gitlab.sh does; any other host stays a bare
+    --hostname."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(host if "://" in host else f"https://{host}")
+        port = parsed.port
+    except ValueError:
+        return ["--hostname", host], None
+    hostname = parsed.hostname or host
+    if port is not None and port != (80 if parsed.scheme == "http" else 443):
+        return [], {"GITLAB_HOST": f"{hostname}:{port}"}
+    return ["--hostname", hostname], None

@@ -745,7 +745,7 @@ class CaptureLinkSeed(unittest.TestCase):
                  "--flow-file", "flow-base.md", "--tracker-file", "issue.md",
                  "--json"],
                 cwd=repo, capture_output=True, text=True, check=False)
-            self.assertEqual(seeded.returncode, 0, seeded.stderr)
+            self.assertEqual(seeded.returncode, 0, seeded.stdout + seeded.stderr)
             pushed = f"{self.CAPTURED.rstrip()}\n\n{DEPS_BLOCK}"
             ex = fake_execute({
                 "sync-body-parent-read": ok(_gh_issue(self.ISSUE)),

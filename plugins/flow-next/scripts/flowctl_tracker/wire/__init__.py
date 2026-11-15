@@ -53,7 +53,7 @@ from ..question_claim import (
     release_question_claim,
 )
 from ..types import (ErrorClass, Request, Response, TrackerError,
-                     gitlab_cli_hostname)
+                     gitlab_cli_host)
 
 #: Jira project / issue-key grammars from jira.md (listOpenIssues JQL safety).
 #: Underscores and keys longer than Cloud's 10-char alnum cap are intentional:
@@ -215,14 +215,17 @@ def _json_loads(resp: Response, *, what: str) -> Union[Any, TrackerError]:
 
 
 def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
-              *, body: Optional[bytes] = None) -> list:
+              *, body: Optional[bytes] = None
+              ) -> tuple[list, Optional[dict[str, str]]]:
+    env = None
     if provider == "github":
         argv = ["gh", "api"]
     else:
         argv = ["glab", "api"]
         host = _dict(_dict(config.get("tracker")).get("perTracker")).get("host")
         if host:
-            argv += ["--hostname", gitlab_cli_hostname(str(host))]
+            flags, env = gitlab_cli_host(str(host))
+            argv += flags
     if method.upper() != "GET":
         argv += ["--method", method.upper()]
     argv.append(endpoint)
@@ -233,17 +236,17 @@ def _cli_argv(provider: str, config: dict, method: str, endpoint: str,
             # on every JSON mutation); gh api defaults to JSON already.
             argv += ["-H", "Content-Type: application/json"]
         argv += ["--input", "-"]
-    return argv
+    return argv, env
 
 
 def _cli(execute: Execute, provider: str, config: dict, op: str, method: str,
          endpoint: str, *, body: Optional[dict] = None,
          idempotent: bool = False) -> Union[Any, TrackerError]:
     raw = None if body is None else json.dumps(body).encode()
+    argv, env = _cli_argv(provider, config, method, endpoint, body=raw)
     result = execute(Request(
-        provider=provider, op=op, method=method.upper(),
-        url_or_argv=_cli_argv(provider, config, method, endpoint, body=raw),
-        body=raw, idempotent=idempotent,
+        provider=provider, op=op, method=method.upper(), url_or_argv=argv,
+        body=raw, idempotent=idempotent, env=env,
     ))
     if isinstance(result, TrackerError):
         return result
@@ -717,7 +720,9 @@ def _list_open(provider: str, mod: Any, config: dict, execute: Execute, *,
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "list-open --unlinked requires the .flow directory",
                             subtype="flow_dir")
-    out = mod.list_open(config, execute, any_lane=any_lane)
+    # Only Linear's query must ask for labels; the REST rows carry them.
+    extra = {"labels": True} if provider == "linear" else {}
+    out = mod.list_open(config, execute, any_lane=any_lane, **extra)
     if isinstance(out, TrackerError):
         return out
     rows = out["issues"]

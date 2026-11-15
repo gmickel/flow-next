@@ -43034,6 +43034,14 @@ def cmd_sync_set_merge_base(args: argparse.Namespace) -> None:
             "set-merge-base needs --flow/--flow-file and --tracker/--tracker-file.",
             use_json=args.json,
         )
+    try:
+        from flowctl_tracker.syncbody import trackerBodyForMerge
+    except ImportError:
+        pass  # Standalone copied flowctl has no tracker package to push with.
+    else:
+        # Push compares trackerBodyForMerge(issue body) with this half, so a
+        # raw issue body (trailing newline, flow:deps region) never matches.
+        tracker_body = trackerBodyForMerge(tracker_body)
 
     def mutate(state):
         state["mergeBaseFlow"] = flow_body

@@ -19,7 +19,7 @@ from urllib.parse import quote, urlparse
 
 from ..resolved_cache import STATIC_CAPABILITIES, apply_capability_probe
 from ..types import (ErrorClass, Request, Response, TrackerError,
-                     gitlab_cli_hostname)
+                     gitlab_cli_host)
 
 #: Plans that unlock `is_blocked_by` (Free degrades to `relates_to` in B).
 BLOCKEDBY_PLANS = frozenset({
@@ -47,12 +47,11 @@ def _json_body(resp: Response) -> Union[dict, TrackerError]:
     return data
 
 
-def _argv(config: dict, endpoint: str) -> list[str]:
+def _glab(config: dict, endpoint: str) -> dict:
+    """`url_or_argv` and `env` of a `glab api` GET Request."""
     host = ((config.get("tracker") or {}).get("perTracker") or {}).get("host")
-    argv = ["glab", "api", endpoint]
-    if host:
-        argv += ["--hostname", gitlab_cli_hostname(str(host))]
-    return argv
+    flags, env = gitlab_cli_host(str(host)) if host else ([], None)
+    return {"url_or_argv": ["glab", "api", endpoint, *flags], "env": env}
 
 
 def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerError]:
@@ -76,7 +75,7 @@ def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerE
                             "discovery ceremony first", subtype="destination")
     result = execute(Request(
         provider="gitlab", op="resolve-destination", method="GET",
-        url_or_argv=_argv(config, f"projects/{quote(str(path), safe='')}"),
+        **_glab(config, f"projects/{quote(str(path), safe='')}"),
         idempotent=True,
     ))
     if isinstance(result, TrackerError):
@@ -112,7 +111,7 @@ def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerE
         root = full_path.split("/", 1)[0]
         root_result = execute(Request(
             provider="gitlab", op="resolve-billing-namespace", method="GET",
-            url_or_argv=_argv(config, f"namespaces/{quote(root, safe='')}"),
+            **_glab(config, f"namespaces/{quote(root, safe='')}"),
             idempotent=True,
         ))
         if isinstance(root_result, TrackerError):
@@ -150,7 +149,7 @@ def probe_plan(config: dict, execute: Callable,
         return False, None, "no pinned namespaceId; resolve destination first"
     result = execute(Request(
         provider="gitlab", op="probe-plan", method="GET",
-        url_or_argv=_argv(config, f"namespaces/{namespace_id}"),
+        **_glab(config, f"namespaces/{namespace_id}"),
         idempotent=True,
     ))
     if isinstance(result, TrackerError):
