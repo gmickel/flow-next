@@ -316,6 +316,11 @@ class IntakeRouteContractTests(unittest.TestCase):
                       "flow-next:flow-next-tracker-sync push"):
             self.assertIn(stage, text)
 
+    def test_picked_rows_read_the_full_issue(self) -> None:
+        text = (self.REFS / "open-issue-intake.md").read_text(encoding="utf-8")
+        for token in ("tracker wire read", "tracker wire comment-list"):
+            self.assertIn(token, text)
+
 
 class CliFlagTests(unittest.TestCase):
     def test_cli_accepts_both_flags(self) -> None:
