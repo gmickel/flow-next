@@ -26,9 +26,10 @@ pull request was pushed. Commit that file alone and push it to the pull request 
 default branch with the merge:
 ```bash
 # fence:make-pr-sync-state
-SYNC_JSON=".flow/specs/$SPEC_ID.json"
-if [ -f "$SYNC_JSON" ] && ! git diff --quiet -- "$SYNC_JSON"; then
-  git commit -q --only -m "chore(flow): tracker sync state for $SPEC_ID" -- "$SYNC_JSON" \
-    && { git push -q origin HEAD || echo "Warning: tracker sync state for $SPEC_ID not pushed" >&2; }
+TOP="$(git rev-parse --show-toplevel)"
+SYNC_JSON="$TOP/.flow/specs/$SPEC_ID.json"
+if [ -f "$SYNC_JSON" ] && ! git -C "$TOP" diff --quiet -- "$SYNC_JSON"; then
+  git -C "$TOP" commit -q --only -m "chore(flow): tracker sync state for $SPEC_ID" -- "$SYNC_JSON" \
+    && { git -C "$TOP" push -q origin HEAD || echo "Warning: tracker sync state for $SPEC_ID not pushed" >&2; }
 fi
 ```
