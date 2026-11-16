@@ -552,6 +552,23 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
                 except (OSError, ValueError):
                     prior = None
                 if isinstance(prior, dict) and prior.get("id"):
+                    # The retry key does not hash the parent: an issue made
+                    # under another parent (or none) is not this request's.
+                    if prior.get("parent") != parent:
+                        return TrackerError(
+                            ErrorClass.CONFLICT,
+                            f"retry key {retry_key!r} already created "
+                            f"{prior.get('identifier')!r} under parent "
+                            f"{prior.get('parent')!r}, not {parent!r}; link "
+                            "that issue, or change the title or body to "
+                            "create a separate one",
+                            subtype="parent_mismatch",
+                            details={"retryKey": retry_key,
+                                     "recordedParent": prior.get("parent"),
+                                     "requestedParent": parent,
+                                     "id": prior["id"],
+                                     "identifier": prior.get("identifier"),
+                                     "url": prior.get("url")})
                     out = {"id": prior["id"],
                            "identifier": prior.get("identifier"),
                            "url": prior.get("url"), "retried": True}

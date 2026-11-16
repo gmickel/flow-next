@@ -2043,7 +2043,8 @@ flowctl tracker sync-body <spec-id> --flow-file F \
 
 `create` uses the spec's `tracker.parent` as the parent issue; `--parent`
 replaces it and is recorded on the spec with the link. `create-first --parent`
-sends it and keeps it in the retry record; pass the same value to
+sends it and keeps it in the retry record; a retry whose parent differs from
+the recorded one refuses with `conflict` / `parent_mismatch`. Pass the same value to
 `spec create --tracker-parent` when minting. Both results report `parent`.
 GitHub and Jira Data Center refuse a parent with a `capability` error before
 any request ([parent issue at creation](tracker-sync.md#parent-issue-at-creation)).

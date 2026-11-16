@@ -407,6 +407,15 @@ class GitLabEpicParent(unittest.TestCase):
         self.assertEqual(ex.calls, [])
         self.assertIsNone(_saved(flow)["id"])
 
+    def test_zero_epic_id_is_refused_not_sent_as_no_epic(self) -> None:
+        for zero in ("0", "00"):
+            with self.subTest(zero=zero):
+                out, ex, flow = self._create(zero, {})
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(ex.calls, [])
+                self.assertIsNone(_saved(flow)["id"])
+
     def test_tier_without_epics_returns_gitlabs_error(self) -> None:
         out, ex, flow = self._create("&5", {
             "lifecycle-create-parent": rejected(
@@ -536,6 +545,51 @@ class CreateFirstParent(unittest.TestCase):
             self.assertEqual(second["id"], LN_UUID)
             self.assertEqual(second["parent"], "WOR-40")
             self.assertEqual(again.calls, [])
+
+    def test_retry_under_another_parent_refuses_instead_of_adopting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp, ln_cfg())
+            key = L.compute_create_first_key("linear", "T", "B")
+            ex = fake_execute({"lifecycle-create": ok({"data": {"issueCreate": {
+                "success": True, "issue": _ln_issue("B")}}})})
+            L.create_first(flow, title="T", body="B", retry_key=key,
+                           parent="WOR-10", execute=ex)
+            for other in ("WOR-20", None):
+                with self.subTest(other=other):
+                    again = fake_execute({})
+                    out = L.create_first(flow, title="T", body="B",
+                                         retry_key=key, parent=other,
+                                         execute=again)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertIs(out.cls, ErrorClass.CONFLICT)
+                    self.assertEqual(out.subtype, "parent_mismatch")
+                    self.assertEqual(out.details["recordedParent"], "WOR-10")
+                    self.assertEqual(out.details["id"], LN_UUID)
+                    self.assertEqual(again.calls, [])
+
+    def test_recovery_put_keeps_the_recorded_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
+                           cwd=cwd, capture_output=True, check=True)
+            flow = cwd / ".flow"
+            (flow / "config.json").write_text(json.dumps(ln_cfg()), encoding="utf-8")
+            key = L.compute_create_first_key("linear", "T", "B")
+            ex = fake_execute({"lifecycle-create": ok({"data": {"issueCreate": {
+                "success": True, "issue": _ln_issue("B")}}})})
+            L.create_first(flow, title="T", body="B", retry_key=key,
+                           parent="WOR-10", execute=ex)
+            put = subprocess.run(
+                [sys.executable, str(FLOWCTL), "sync", "create-first-put",
+                 "--key", key, "--id", LN_UUID, "--identifier", "WOR-17",
+                 "--url", "https://linear.app/x/issue/WOR-17", "--title", "T",
+                 "--transport", "linear", "--spec-id", "wor-17-t", "--json"],
+                cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
+            retried = L.create_first(flow, title="T", body="B", retry_key=key,
+                                     parent="WOR-10", execute=fake_execute({}))
+            self.assertTrue(retried["retried"])
+            self.assertEqual(retried["parent"], "WOR-10")
 
     def test_github_create_first_refuses_before_any_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

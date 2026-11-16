@@ -49,7 +49,8 @@ def _gitlab_epic_id(config: dict, execute: Execute, dest: dict, parent: str
     """A GitLab parent is an epic. A numeric epic id is sent as is; an epic
     reference costs one read that resolves it to the id the create takes."""
     from ..wire import _cli  # noqa: PLC0415
-    if parent.isdigit():
+    # GitLab reads epic_id 0 as "no epic", so a zero id would be dropped.
+    if parent.isdigit() and int(parent) > 0:
         return int(parent)
     ref = _GITLAB_EPIC_REF.fullmatch(parent)
     if ref is None:

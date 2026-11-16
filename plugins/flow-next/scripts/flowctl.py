@@ -44166,6 +44166,10 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
         # A later put (e.g. re-recording transport) must not drop a specId
         # an earlier post-mint put already established.
         record["specId"] = existing["specId"]
+    if existing and existing.get("parent") is not None:
+        # The parent `tracker create-first --parent` created the issue under;
+        # its retry check compares it, so a later put must keep it.
+        record["parent"] = existing["parent"]
     # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
     # A project whose auto-managed .flow/.gitignore predates this release
     # would otherwise get an untracked-but-unignored recovery record, and a
