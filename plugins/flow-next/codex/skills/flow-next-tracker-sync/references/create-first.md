@@ -29,6 +29,17 @@ consume the record with `sync create-first-clear`. These four helpers
 exclusively own the retry record; do not recompute its hash or read, write, or
 delete its file directly.
 
+**Parent issue:** when the person names a parent for the work ("under
+PROJ-12", "as a sub-issue of ENG-40"), create under it: `tracker create
+<spec-id> --parent <identifier>`, or `tracker create-first --parent
+<identifier>` and the same value as `spec create --tracker-parent` on the
+linked mint. Every create, including the first push's, reads a parent the spec
+already records. Pass the identifier as the tracker displays it (a Jira Cloud
+key, a Linear identifier, a GitLab epic id or `&N` reference). A named parent
+is never linked as the spec's own issue. GitHub and Jira Data Center refuse a
+parent with a `capability` error; tell the person rather than creating the
+issue without it.
+
 **Back-reference:** write `flow:<spec-id>` only after the durable local link
 exists. A failed back-reference leaves the recovery record available for a
 safe retry. On GitHub, which caps label names at 50 characters, the wire verb

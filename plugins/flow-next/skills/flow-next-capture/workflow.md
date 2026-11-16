@@ -211,9 +211,8 @@ if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — STOP. Read references/tracker-integration.md before continuing."
 fi   # default branch: bare no-op — NO link, NO read path
 
-# SILENT degrade - the ONLY flow-first creation site, deliberately an
-# unconditional post-check outside the tracker-first branch (rationale + the
-# orphan-issue GUARD live in references/tracker-integration.md §5.2).
+# SILENT degrade: the only flow-first create, an unconditional post-check
+# (why, and the orphan-issue guard: references/tracker-integration.md §5.2).
 # Type the literal draft path verbatim (never a shell variable across tool calls).
 if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
   SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --plan-file "${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<suffix>.md" --json)
@@ -229,7 +228,7 @@ fi
 date -u +%Y-%m-%dT%H:%M:%SZ > "${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 ```
 
-On the tracker sentinel, read [references/tracker-integration.md](references/tracker-integration.md) and run its §5.2 tracker-first mint (and later its §5.7 touchpoint). Silent: `spec create` mints locally and nothing tracker-related runs. `spec create` leaves nothing behind on failure; report the error and exit 1. When the chart gate fired, run its §5.2 `chart link-spec` handoff only after a successful create.
+On the tracker sentinel, read [references/tracker-integration.md](references/tracker-integration.md) and run its §5.2 tracker-first mint (and later its §5.7 touchpoint). Silent: `spec create` mints locally, nothing tracker-related runs, and a named parent issue is not recorded (say so in one line). `spec create` leaves nothing behind on failure; report the error and exit 1. When the chart gate fired, run its §5.2 `chart link-spec` handoff only after a successful create.
 
 ### 5.2b — Split branch
 

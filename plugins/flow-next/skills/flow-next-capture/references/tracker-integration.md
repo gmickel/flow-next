@@ -60,6 +60,8 @@ Seeding the flow half from the captured spec instead makes the first push a no-o
 
 When the issue cannot be read, or `set-tracker-id` refuses because another spec already holds it, save the spec unlinked and report why, naming the holder; never pass `--force`. Then skip §5.7 and Phase 6's sync check and retro-fire for this run, since an unlinked push creates a second issue, and print `Tracker sync: skipped (named issue not linked: <reason>)`.
 
+**A named parent.** When the person names a parent for the work ("under PROJ-12", "as sub-issues of ENG-40"), add `--tracker-parent <identifier>` to every `spec create` this capture runs, workflow.md's flow-first create or the linked mint above; on the create-first path pass the same value to create-first as `--parent`. A split gives every child that parent unless the person says otherwise. The parent is not the spec's own issue: never read it, link it or seed from it as a named issue. On GitHub or Jira Data Center, which cannot take a parent, record nothing and say so in one line.
+
 ---
 
 ## 5.7 — Tracker sync (opt-in) — spec push/pull + merge

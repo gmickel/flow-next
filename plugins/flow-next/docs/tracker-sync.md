@@ -14,6 +14,7 @@ Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) an
 - [Hybrid id model](#hybrid-id-model)
 - [Grain: one spec ↔ one issue](#grain-one-spec-one-issue)
 - [Sync-state schema](#sync-state-schema)
+- [Parent issue at creation](#parent-issue-at-creation)
 - [Flowctl-owned transport and resolved capabilities](#flowctl-owned-transport-and-resolved-capabilities)
 - [Lifecycle sync points (on by default: opt-out)](#lifecycle-sync-points-on-by-default-opt-out)
 - [Lifecycle facade](#lifecycle-facade)
@@ -147,8 +148,23 @@ State lives in the existing `.flow/specs/<id>.json` sidecar (not frontmatter - m
 | `baseHashFlow` / `baseHashTracker` | content hashes of each merge-base side (echo fence) |
 | `mergeBaseFlow` / `mergeBaseTracker` | the body snapshots themselves - the common ancestor for the agentic 3-way merge |
 | `projectId` / `projectMilestoneId` | **optional, Linear only:** per-spec Linear Project (and Project Milestone) the issue belongs in. Hand-set in the spec's tracker block; sent on `issueCreate` and reconciled on every `sync-body` push (including converged-body pushes). **Absent = unmanaged, not none** - flow-next never clears tracker-side membership, never creates or manages Projects, and carries exactly the id it is given (a bad id surfaces Linear's own error). Non-Linear trackers refuse the field with a capability error |
+| `parent` | **optional:** the parent issue, as the tracker displays it, that the spec's issue is created under. Read only when flow-next creates the issue, then never sent again, so a parent set, moved or removed in the tracker survives every sync. **Absent = no parent sent.** Recorded with `spec create --tracker-parent` or `tracker create --parent`; see [Parent issue at creation](#parent-issue-at-creation) |
 
 The **merge base is a paired snapshot at one sync point**: `flowctl sync set-merge-base` requires **both** `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` together (a partial write that pins one half to a stale sync point is rejected). The base is stored in a form comparable to each side so a 3-way merge can compare flow-structured spec against tracker free-form issue.
+
+## Parent issue at creation
+
+A spec can name the parent its tracker issue belongs under (a Jira epic, a Linear parent issue, a GitLab epic), so the issue flow-next creates lands there with no second step. Every create honours `tracker.parent`: `tracker create`, the create the first push runs for an unlinked spec, `tracker create-first`, and the payload handed to the agent on the Linear MCP route. The create result reports the parent it set. From then on the tracker owns the relation: no push, pull, reconcile, comment, status, label, assignee, relation or pull-request-link write carries a parent field, and `sync unlink` clears the field with the rest of the tracker block without touching the tracker.
+
+| Tracker | Parent value | Sent as | Added cost |
+|---|---|---|---|
+| Jira Cloud | the key of an issue one hierarchy level up (`PROJ-12`, an epic above a story or task), team-managed or company-managed | `parent` in the create payload | one field |
+| Linear | a parent issue identifier (`ENG-40`) or id | `parentId` in the create input; Project fields behave as before, and a sub-issue without a Project inherits its parent's on Linear's side | one field |
+| GitLab (Premium, Ultimate) | an epic id (`42`) or reference (`&5` in the project's own group, `group/sub&5`) | `epic_id` in the create payload | one field, plus one read to resolve a reference |
+| GitHub | refused with a `capability` error before any request: an issue takes one parent, and flow-next uses it to project dependencies | - | none |
+| Jira Data Center / Server | refused with a `capability` error before any request: these place an issue in an epic through the Epic Link field | - | none |
+
+A spec without a parent sends the same create request as before. A parent the tracker rejects (missing, at the wrong hierarchy level, not visible to the account, or on a tier without epics) comes back as the tracker's own error, and no issue exists afterwards. A malformed value is `invalid_input` before any request.
 
 ## Flowctl-owned transport and resolved capabilities
 
