@@ -167,6 +167,47 @@ class WireReadPointsAtTheReference(unittest.TestCase):
             self.assertNotIn("idea", out, (config, display))
 
 
+class IdeasAreReadOnly(unittest.TestCase):
+    """R6: no write reaches an idea, even through a link made before opt-in."""
+
+    LOCATOR = {"durable": IDEA_ID, "display": "IDEAS-7"}
+
+    def test_writes_to_an_idea_are_refused_before_any_request(self) -> None:
+        for verb, kwargs in (("update", {"body": "spec body"}),
+                             ("comment-add", {"body": "note"}),
+                             ("label", {"add": ["x"]})):
+            ex = fake_execute({})
+            out = W.dispatch(verb, jr_cfg(idea_keys=["IDEAS"]),
+                             locator=self.LOCATOR, execute=ex, **kwargs)
+            self.assertIsInstance(out, TrackerError, verb)
+            self.assertIs(out.cls, ErrorClass.CAPABILITY, verb)
+            self.assertEqual(ex.calls, [], verb)
+
+    def test_without_the_key_the_write_goes_ahead(self) -> None:
+        ex = fake_execute({"wire-parent-read": ok(idea()),
+                           "wire-update": created()})
+        out = W.dispatch("update", jr_cfg(), locator=self.LOCATOR,
+                         body="spec body", execute=ex)
+        self.assertIsInstance(out, dict, out)
+
+    def test_a_configured_delivery_read_loads_no_idea_code(self) -> None:
+        probe = (
+            "import json, sys\n"
+            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            "from flowctl_tracker import wire\n"
+            "from flowctl_tracker.types import Response\n"
+            "body = json.dumps({'id': '10012', 'key': 'PROJ-12', 'fields': {}}).encode()\n"
+            "cfg = json.loads(sys.argv[1])\n"
+            "out = wire.dispatch('read', cfg, locator={'durable': '10012', "
+            "'display': 'PROJ-12'}, execute=lambda r: Response(200, {}, body, 0.0))\n"
+            "print(json.dumps(['idea' in out, 'flowctl_tracker.idea' in sys.modules]))\n")
+        run = subprocess.run([sys.executable, "-c", probe,
+                              json.dumps(jr_cfg(idea_keys=["IDEAS"]))],
+                             capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(json.loads(run.stdout), [False, False])
+
+
 class IdeaRead(unittest.TestCase):
     def test_reads_text_comments_and_delivery_links(self) -> None:
         ex = fake_execute({
@@ -318,6 +359,16 @@ class SettleParent(unittest.TestCase):
             self.assertIn("found", out.details)
             self.assertEqual([c.op for c in ex.calls], ["idea-link-types"])
 
+    def test_several_parent_level_types_block_only_a_create(self) -> None:
+        project = {**PROJECT, "issueTypes": PROJECT["issueTypes"] + [
+            {"id": "10005", "name": "Feature", "hierarchyLevel": 1, "subtask": False}]}
+        out, _ = self._settle([linked("PROJ-12")], extra={"idea-project": ok(project)})
+        self.assertEqual(out["parent"]["key"], "PROJ-12")
+        out, ex = self._settle([], extra={"idea-project": ok(project)})
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "parent_type")
+        self.assertTrue(all(c.method == "GET" for c in ex.calls))
+
     def test_failed_link_reports_the_parent_and_the_retry(self) -> None:
         out, _ = self._settle([], extra={
             "lifecycle-create": ok({"id": "40099", "key": "PROJ-99"}),
@@ -396,6 +447,20 @@ class Cli(unittest.TestCase):
                                "--tracker-first", "--tracker-identifier",
                                "IDEAS-7", "--json")
             self.assertNotEqual(minted.returncode, 0)
+            # A stored idea identifier cannot be completed into a link either.
+            (cwd / ".flow" / "config.json").write_text(json.dumps(jr_cfg()),
+                                                       encoding="utf-8")
+            stored = self._run(cwd, "spec", "create", "--title", "Old",
+                               "--tracker-first", "--tracker-identifier",
+                               "IDEAS-7", "--json")
+            self.assertEqual(stored.returncode, 0, stored.stdout + stored.stderr)
+            (cwd / ".flow" / "config.json").write_text(
+                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
+            completed = self._run(cwd, "sync", "set-tracker-id",
+                                  json.loads(stored.stdout)["id"], IDEA_ID,
+                                  "--json")
+            self.assertNotEqual(completed.returncode, 0,
+                                completed.stdout + completed.stderr)
             # A delivery issue still links as before.
             ok_link = self._run(cwd, "sync", "set-tracker-id", spec_id,
                                 "10012", "--identifier", "PROJ-12", "--json")

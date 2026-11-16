@@ -33,12 +33,13 @@ split proposal, the person's choice and its cycle check. Tell it:
 - Each spec's Goal & Context quotes the part of the idea it serves and gives the idea's key and URL.
 - Each spec's Decision Context names its sibling specs, the idea and the parent issue.
 - The idea is source material, not a named issue for the spec.
+- Save the specs locally first: flow ids, no create-first, and capture's tracker push waits until
+  step 4 has created their issues. Nothing is written to the tracker before the specs exist.
 
 ## 3. Settle the parent
 
-Once the person has agreed what to write (the read-back, or the split choice) and before the first
-spec is created, settle the parent. Write a short summary of what the idea asks for, with the
-idea's key and URL, to a mode `0600` file and run:
+After capture has saved the specs, settle the parent. Write a short summary of what the idea asks
+for, with the idea's key and URL, to a mode `0600` file and run:
 
 ```bash
 "$FLOWCTL" tracker idea parent <idea-key> --body-file <file> --json
@@ -59,9 +60,16 @@ parent too. A repeat run finds the same parent and creates nothing.
 
 ## 4. Children under the parent
 
-Treat the parent's key as a parent the person named: every spec this capture creates records it
-(`spec create --tracker-parent <parent-key>`, or `--parent` on create-first), so its issue is
-created under the parent. Dependency edges between the specs are projected as usual.
+Create each saved spec's issue under the parent, with the spec's body (`"$FLOWCTL" cat <spec-id>`)
+in a mode `0600` file:
+
+```bash
+"$FLOWCTL" tracker create <spec-id> --title "<spec title>" --body-file <file> --parent <parent-key> --json
+```
+
+This records the parent on the spec and links the issue. Then project each dependency edge between
+the specs with `"$FLOWCTL" tracker relate <spec-id> --blocked-by <dependency-spec-id> --json`, and
+let capture's tracker push run if it is configured; it updates the linked issues.
 
 ## 5. Close
 

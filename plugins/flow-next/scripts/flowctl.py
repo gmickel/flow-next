@@ -42941,6 +42941,11 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
             args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
             with _review_sidecar_lock(flow_dir, args.id):
                 spec_json_path, spec_data = _resolve_sync_spec(args)
+                if validated_identifier is None:
+                    # No --identifier: the link completes the stored one.
+                    stored = (spec_data.get("tracker") or {}).get("identifier")
+                    refuse_idea_as_spec_issue(
+                        stored if isinstance(stored, str) else None, args.json)
 
                 # PR #246: honor LIVE per-spec operation claims (create/sync-body/
                 # status). A verb's identity recheck can only detect a relink

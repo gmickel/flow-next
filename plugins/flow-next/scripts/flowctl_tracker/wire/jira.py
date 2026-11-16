@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 from urllib.parse import quote, urlencode
 
@@ -21,6 +22,30 @@ from . import (
     _PAGE_SIZE,
     _ready_state,
 )
+
+
+#: Read by the agent only on the idea-intake path (fn-330).
+IDEA_REFERENCE = Path(__file__).resolve().parents[3] / "references" / "idea-intake.md"
+
+
+def is_idea_key(config: dict, key: str) -> bool:
+    """A key in a project `tracker.perTracker.ideaProjectKeys` lists, never the
+    delivery project. Costs no request; absent or empty config is always False."""
+    keys = _dict(_dict(config.get("tracker")).get("perTracker")).get("ideaProjectKeys")
+    if not keys or not isinstance(keys, list) or not isinstance(key, str) or "-" not in key:
+        return False
+    project = key.strip().rsplit("-", 1)[0]
+    delivery = _dict(_dict(_dict(config.get("tracker")).get("resolved")).get("destination"))
+    return project in keys and project != delivery.get("projectKey")
+
+
+def _idea_write_refusal(key: str) -> TrackerError:
+    return TrackerError(
+        ErrorClass.CAPABILITY,
+        f"{key} is an idea in a discovery project (tracker.perTracker."
+        "ideaProjectKeys); flow-next never writes to an idea except its "
+        "delivery link (flowctl tracker idea link)",
+        subtype="idea_read_only", details={"capability": "idea_read_only"})
 
 
 def to_wire(body: str) -> Result:
@@ -91,6 +116,10 @@ def parent_read(config: dict, locator: dict, execute: Execute, *,
     key = _jira_issue_key(locator["display"])
     if isinstance(key, TrackerError):
         return key
+    # Every write validates its parent here first; an idea is read-only, even
+    # for a spec linked to it before the idea source was configured.
+    if op != "wire-read" and is_idea_key(config, key):
+        return _idea_write_refusal(key)
     data = _jira(execute, op, "GET",
                  f"{base}/rest/api/2/issue/{quote(str(key), safe='')}"
                  f"?fields=summary,description,status,priority,labels,assignee,updated",
@@ -115,11 +144,12 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     out = _issue_out(parent, parent_identity="validated")
     # An idea source is configured: an issue in a discovery project is an idea,
     # and the read names the reference that handles it (no extra request).
-    if _dict(_dict(config.get("tracker")).get("perTracker")).get("ideaProjectKeys"):
-        from ..idea import pointer  # noqa: PLC0415 - loads only when configured
-        idea = pointer(config, locator["display"])
-        if idea is not None:
-            out["idea"] = idea
+    if is_idea_key(config, locator["display"]):
+        out["idea"] = {
+            "reference": str(IDEA_REFERENCE),
+            "note": "This issue is an idea in a discovery project, not delivery "
+                    "work. Read the reference before routing it.",
+        }
     return out
 
 

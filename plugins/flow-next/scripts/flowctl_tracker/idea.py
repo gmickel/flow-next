@@ -19,8 +19,8 @@ issue and the idea the outward one, so the idea reads "is implemented by" the
 parent. The type's id differs per site and its name has changed before, so
 neither is hard-coded.
 
-This module loads only when one of those operations runs, or when the wire
-read meets an issue in a configured idea project.
+This module loads only when one of those operations runs. Deciding that an
+issue is an idea, and the wire read's pointer, live in `wire/jira.py`.
 """
 
 from __future__ import annotations
@@ -32,9 +32,8 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 from .types import ErrorClass, TrackerError
-
-#: Shipped next to `scripts/`; the agent reads it only on this path.
-REFERENCE = Path(__file__).resolve().parents[2] / "references" / "idea-intake.md"
+from .wire.jira import IDEA_REFERENCE as REFERENCE
+from .wire.jira import is_idea_key
 
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 _BROWSE_RE = re.compile(r"/browse/([A-Z][A-Z0-9_]+-[1-9][0-9]*)/?$")
@@ -57,24 +56,6 @@ def _delivery_project(config: dict) -> Optional[str]:
 
 def _project_of(key: str) -> str:
     return key.rsplit("-", 1)[0]
-
-
-def is_idea_key(config: dict, key: str) -> bool:
-    """A Jira key in a configured discovery project (never the delivery one)."""
-    keys = _per(config).get("ideaProjectKeys")
-    if not isinstance(keys, list) or not isinstance(key, str) or "-" not in key:
-        return False
-    project = _project_of(key.strip())
-    return project in keys and project != _delivery_project(config)
-
-
-def pointer(config: dict, key: str) -> Optional[dict]:
-    """What the wire read adds for an idea: the reference to read next."""
-    if _dict(config.get("tracker")).get("type") != "jira" or not is_idea_key(config, key):
-        return None
-    return {"reference": str(REFERENCE),
-            "note": "This issue is an idea in a discovery project, not delivery "
-                    "work. Read the reference before routing it."}
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +265,7 @@ def _link_type(config: dict, execute) -> Any:
 
 
 def _parent_level(config: dict, execute) -> Any:
-    """The configured issue type's level and the one type a level above it."""
+    """The parent level (one above the configured issue type) and its types."""
     from .wire import _jira  # noqa: PLC0415
     base = _base(config)
     if isinstance(base, TrackerError):
@@ -311,20 +292,26 @@ def _parent_level(config: dict, execute) -> Any:
             subtype="parent_type")
     level = own["hierarchyLevel"] + 1
     above = [t for t in types if t.get("hierarchyLevel") == level and not t.get("subtask")]
+    return {"project": project_key, "level": level, "own": own.get("name"),
+            "types": above}
+
+
+def _creation_type(level: dict) -> Any:
+    """The one issue type a new parent is created as; only creating needs it."""
+    above = level["types"]
     if not above:
         return TrackerError(
             ErrorClass.CAPABILITY,
-            f"project {project_key} has no issue type above {own.get('name')!r}",
+            f"project {level['project']} has no issue type above {level['own']!r}",
             subtype="parent_type", details={"capability": "parent_type"})
     if len(above) > 1:
         return TrackerError(
             ErrorClass.UNRESOLVED,
-            f"project {project_key} has several issue types above "
-            f"{own.get('name')!r}: {[t.get('name') for t in above]}",
+            f"project {level['project']} has several issue types above "
+            f"{level['own']!r}: {[t.get('name') for t in above]}; nothing was created",
             subtype="parent_type",
             details={"found": [{"id": t.get("id"), "name": t.get("name")} for t in above]})
-    return {"project": project_key, "level": level,
-            "typeId": str(above[0]["id"]), "typeName": above[0].get("name")}
+    return str(above[0]["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +389,7 @@ def settle_parent(config: dict, ref: Any, execute, *, body: str,
                                f"outside the delivery project {level['project']}"})
         elif d["hierarchyLevel"] != level["level"]:
             not_reused.append({"key": d["key"], "reason":
-                               f"not at the parent level ({level['typeName']})"})
+                               f"not at the parent level (one above {level['own']})"})
         else:
             candidates.append(d)
     base = _base(config)
@@ -436,9 +423,12 @@ def settle_parent(config: dict, ref: Any, execute, *, body: str,
             details={"normalized": "parent", "candidates": candidates,
                      "notReused": not_reused})
 
+    type_id = _creation_type(level)
+    if isinstance(type_id, TrackerError):
+        return type_id
     from .lifecycle.providers import create_jira  # noqa: PLC0415
     create_config = copy.deepcopy(config)
-    create_config["tracker"]["resolved"]["destination"]["issueTypeId"] = level["typeId"]
+    create_config["tracker"]["resolved"]["destination"]["issueTypeId"] = type_id
     title = _dict(raw.get("fields")).get("summary") or key
     made = create_jira(create_config, execute, title=title, body=body)
     if isinstance(made, TrackerError):

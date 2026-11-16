@@ -10,13 +10,107 @@
     "fn-329-set-a-parent-issue-when-creating"
   ],
   "id": "fn-330-start-from-an-upstream-idea-jira",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-330-start-from-an-upstream-idea-jira.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "2d4e18524ba78516f3e3508e5a29444fe94416a9fa31a1da66bde751ab3513d5",
+      "backend": "codex",
+      "base_sha": "45d9014107424069667a71117985aee5aa2c721a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-a3e409706ad10619db37ac58d95b7868",
+            "classification": "introduced",
+            "findingId": "finding-a3e409706ad10619db37ac58d95b7868",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-e6102ecaa0435a3dfff89604c9c0844b",
+            "classification": "introduced",
+            "findingId": "finding-e6102ecaa0435a3dfff89604c9c0844b",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-00f77abe83ae7096d363678daf1dc3d3",
+            "classification": "introduced",
+            "findingId": "finding-00f77abe83ae7096d363678daf1dc3d3",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-43369d1a35fa372cebb7009a2f2c3c68",
+            "classification": "introduced",
+            "findingId": "finding-43369d1a35fa372cebb7009a2f2c3c68",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-5a32e194b62c14058a944250e018680c",
+            "classification": "introduced",
+            "findingId": "finding-5a32e194b62c14058a944250e018680c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7a2ae1162daf886b94ecb00dbe8563bb",
+            "classification": "introduced",
+            "findingId": "finding-7a2ae1162daf886b94ecb00dbe8563bb",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "673e72490e311c91da84a3363c7e7dc14a89dbca",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 4899,
+      "output_sha256": "03bd3346a7ee50ef9c5c6176f4eaf060ce0ec5832be4373dd4acf3069f75d1ce",
+      "reservation_id": "7de1b4634a864c3abdc0feae586541da",
+      "round_consumed": true,
+      "scope": "impl:fn-330-start-from-an-upstream-idea-jira.1",
+      "superseded_by": null,
+      "task": "fn-330-start-from-an-upstream-idea-jira.1",
+      "timestamp": "2026-11-16T14:24:50.199281Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-330-start-from-an-upstream-idea-jira.1": 0
+  },
   "spec_path": ".flow/specs/fn-330-start-from-an-upstream-idea-jira.md",
   "status": "open",
   "title": "Start from an upstream idea (Jira Product Discovery first)",
@@ -31,5 +125,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-16T14:04:10.284694Z"
+  "updated_at": "2026-11-16T14:24:50.202733Z"
 }
