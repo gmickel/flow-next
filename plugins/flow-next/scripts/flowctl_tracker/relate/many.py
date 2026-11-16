@@ -34,6 +34,9 @@ def relate_many(flow_dir: Path, spec_id: str, dependencies: list[str], *,
         loc_a = _locator(merged_tracker(source[1]))
         if isinstance(loc_a, TrackerError):
             return [loc_a]
+        idea_err = P.jira_idea_guard(provider, config, locators=(loc_a,))
+        if idea_err:
+            return [idea_err]
         if provider == "gitlab":
             body_claim = _claim_body_mutation(
                 flow_dir, provider, loc_a, operation="relate", spec_id=spec_id)
@@ -57,7 +60,8 @@ def relate_many(flow_dir: Path, spec_id: str, dependencies: list[str], *,
             loc_b = _locator(merged_tracker(loaded[1]))
             if isinstance(loc_b, TrackerError):
                 return loc_b
-            err = P.display_durable_guard(provider, config, ex, locators=(loc_b,))
+            err = (P.jira_idea_guard(provider, config, locators=(loc_b,))
+                   or P.display_durable_guard(provider, config, ex, locators=(loc_b,)))
             if err:
                 return err
             remote = P.PROBES[provider](

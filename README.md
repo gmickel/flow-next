@@ -154,7 +154,7 @@ The full documentation is at [flow-next.dev](https://flow-next.dev). This reposi
 - [Choosing your route](https://flow-next.dev/choosing-your-route/): which stages a bug, a feature, a refactor or a performance request gets, and why the direct route is the default.
 - [Evidence & evals](https://flow-next.dev/project/evidence/): the benchmark against a plain agent, the research behind verification, and our own evals, including the ones that killed a feature.
 - [Going autonomous](https://flow-next.dev/autonomy/going-autonomous/): `flow --auto`, `--until=merge`, the Decisions list and when a run stops.
-- [For teams](https://flow-next.dev/guides/for-teams/): the spec as the handover between product, engineering and the agent, plus the tracker bridge to Linear, GitHub, GitLab and Jira.
+- [For teams](https://flow-next.dev/guides/for-teams/): the spec as the handover between product, engineering and the agent, plus the tracker bridge to Linear, GitHub, GitLab and Jira, and starting from an approved Jira Product Discovery idea.
 - [Regulated environments](https://flow-next.dev/guides/regulated-environments/): opt-in committed development evidence (`evidence.persist`), spec approval by pull request (`spec.approval`) and the `flowctl trace` matrix, which feed your team's validation rather than replace it.
 - [Model routing](https://flow-next.dev/guides/model-routing/): send each job to the model or harness that fits it, from one block in your instruction file.
 - [Review backends](https://flow-next.dev/reference/review-backends/): Codex, Copilot, Cursor, Claude and host review, and why the reviewer must come from another family.

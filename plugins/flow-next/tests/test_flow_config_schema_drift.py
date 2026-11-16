@@ -58,6 +58,9 @@ ALLOWLIST: dict[str, str] = {
     "tracker.perTracker.authScheme": "dict-read (resolve_verb.py)",
     "tracker.perTracker.issueType": "dict-read (providers/jira.py)",
     "tracker.perTracker.blocksLinkType": "dict-read (relate/providers.py)",
+    "tracker.perTracker.ideaProjectKeys": (
+        "opt-in, unseeded; dict-read (idea.py, wire/jira.py, flowctl.py link refusal)"
+    ),
     "tracker.perTracker.preferredTransport": "dict-read (facade/helpers.py)",
     "tracker.perTracker.transport": "dict-read legacy alias (facade/helpers.py)",
     "tracker.transport.timeoutS": "dict-read (resolve_verb.py)",

@@ -2046,6 +2046,36 @@ replaces it and is recorded on the spec with the link. `create-first --parent`
 sends it and keeps it in the retry record; a retry whose parent differs from
 the recorded one refuses with `conflict` / `parent_mismatch`. Pass the same value to
 `spec create --tracker-parent` when minting. Both results report `parent`.
+
+### Idea intake verbs
+
+Jira Cloud only, and only with `tracker.perTracker.ideaProjectKeys` set (see
+[tracker-sync.md](tracker-sync.md#idea-intake-start-from-a-jira-product-discovery-idea)).
+`<idea>` is a key in a listed project or its URL on the configured site.
+
+```bash
+# The idea's text, comments and delivery-linked issues; reads only.
+flowctl tracker idea read <idea> [--json]
+
+# Reuse the idea's delivery-linked parent in the delivery project, or create
+# one a hierarchy level above tracker.perTracker.issueType (description from F)
+# and link it to the idea. --use picks one of several linked parents.
+flowctl tracker idea parent <idea> --body-file F [--use KEY] [--json]
+
+# The delivery link from <parent-key> to the idea, when it is not there yet.
+flowctl tracker idea link <idea> <parent-key> [--json]
+```
+
+Each reads before it writes, so a repeat creates no second parent and no second
+link. `parent` returns `parent` (`key`, `created`), `link` (`created`,
+`existing`, or `error` and `retry` when the link failed after a create) and
+`notReused` (linked issues outside the delivery project or not at the parent
+level). It stops before any write with `conflict` / `several_parents` (the
+candidates are in `details.candidates`) or `unresolved` / `delivery_link_type`
+(zero or several link types; `details.found`). Another tracker, or Jira Data
+Center and Server, is `capability`. `tracker wire read` of an idea adds an
+`idea` block naming the reference that handles the path; its request is
+unchanged.
 GitHub and Jira Data Center refuse a parent with a `capability` error before
 any request ([parent issue at creation](tracker-sync.md#parent-issue-at-creation)).
 

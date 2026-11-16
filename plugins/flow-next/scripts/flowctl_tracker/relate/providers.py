@@ -331,6 +331,21 @@ def display_durable_guard(provider: str, config: dict, execute: Execute, *,
     return None
 
 
+def jira_idea_guard(provider: str, config: dict, *,
+                    locators: tuple) -> Optional[TrackerError]:
+    """Refuse a Jira relation with an idea at either end (fn-330 R6).
+
+    Costs no request, so it runs before the link-type, probe and create calls;
+    covers a spec linked to an idea before `ideaProjectKeys` was set."""
+    if provider != "jira":
+        return None
+    from ..wire.jira import _idea_write_refusal, is_idea_key  # noqa: PLC0415
+    for locator in locators:
+        if is_idea_key(config, locator["display"]):
+            return _idea_write_refusal(locator["display"].strip())
+    return None
+
+
 _FLOW_DEPS_RE = re.compile(
     re.escape(FLOW_DEPS_OPEN) + r".*?" + re.escape(FLOW_DEPS_CLOSE),
     re.DOTALL,
