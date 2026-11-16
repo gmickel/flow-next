@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-329-set-a-parent-issue-when-creating",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-11-16T11:59:03.762888Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-329-set-a-parent-issue-when-creating",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-329-set-a-parent-issue-when-creating.md",
   "status": "open",
   "title": "Set a parent issue when creating tracker issues",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-16T11:59:19.851187Z"
+  "updated_at": "2026-11-16T12:25:56.249953Z"
 }
