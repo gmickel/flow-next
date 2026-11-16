@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-330-start-from-an-upstream-idea-jira",
   "spec_path": ".flow/tasks/fn-330-start-from-an-upstream-idea-jira.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Start from an upstream idea (Jira Product Discovery first)",
   "updated_at": "2026-11-16T14:04:21.562151Z"
 }

@@ -198,7 +198,7 @@
     "impl:fn-330-start-from-an-upstream-idea-jira.1": 0
   },
   "spec_path": ".flow/specs/fn-330-start-from-an-upstream-idea-jira.md",
-  "status": "open",
+  "status": "done",
   "title": "Start from an upstream idea (Jira Product Discovery first)",
   "tracker": {
     "baseHashFlow": null,
@@ -211,5 +211,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-16T14:32:25.546625Z"
+  "updated_at": "2026-11-16T14:36:23.475954Z"
 }
