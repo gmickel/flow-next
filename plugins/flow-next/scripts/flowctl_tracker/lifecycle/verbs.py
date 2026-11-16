@@ -319,10 +319,13 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
             _release_claim(rec_path)
 
 
-def compute_create_first_key(tracker_type_name: str, title: str, body: str) -> str:
+def compute_create_first_key(tracker_type_name: str, title: str, body: str,
+                             parent: Optional[str] = None) -> str:
     """Identical semantics to flowctl.compute_create_first_key (fn-134)."""
     normalized = (tracker_type_name or "").strip().lower()
     payload = "\0".join([normalized, title or "", body or ""])
+    if parent and parent.strip():
+        payload += "\0parent=" + parent.strip()
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 

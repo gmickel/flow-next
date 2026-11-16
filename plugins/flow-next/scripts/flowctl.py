@@ -43561,10 +43561,13 @@ def _create_first_dir(flow_dir: Path) -> Path:
     return flow_dir / CREATE_FIRST_DIR
 
 
-def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
+def compute_create_first_key(tracker_type: str, title: str, body: str,
+                             parent: Optional[str] = None) -> str:
     """Stable retry lookup key for a pre-spec create-first attempt (fn-134).
 
-    First 16 hex chars of sha256(type NUL title NUL body). Same inputs always
+    First 16 hex chars of sha256(type NUL title NUL body), with NUL `parent=`
+    and the parent appended only when one is given, so the same work under
+    another parent never resumes onto this issue. Same inputs always
     yield the same key, so a resumed run finds the record written by the
     interrupted one and LINKS instead of creating a second issue. Must stay
     identical to the definition in the tracker-sync skill's steps.md Phase 2d.
@@ -43576,6 +43579,8 @@ def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
     # and the workflow creates a second remote issue.
     normalized_type = (tracker_type or "").strip().lower()
     payload = "\0".join([normalized_type, title or "", body or ""])
+    if parent and parent.strip():
+        payload += "\0parent=" + parent.strip()
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -43923,7 +43928,8 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
                 body = Path(body_file).read_text(encoding="utf-8")
             except OSError as exc:
                 error_exit(f"Cannot read --body-file: {exc}", use_json=use_json)
-        key = compute_create_first_key(args.type, args.title, body)
+        key = compute_create_first_key(args.type, args.title, body,
+                                       getattr(args, "parent", None))
         if use_json:
             json_output({"key": key})
         else:
@@ -56964,6 +56970,8 @@ def main() -> None:
     p_cfk.add_argument("--type", required=True, help="tracker.type (linear|github|gitlab|jira)")
     p_cfk.add_argument("--title", required=True, help="Issue title")
     p_cfk.add_argument("--body-file", dest="body_file", default=None, help="File holding the issue body")
+    p_cfk.add_argument("--parent", default=None,
+                       help="Parent issue the create-first will pass, so each parent gets its own key")
     p_cfk.add_argument("--json", action="store_true", help="JSON output")
     p_cfk.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="key")
 

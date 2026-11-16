@@ -567,6 +567,28 @@ class CreateFirstParent(unittest.TestCase):
                     self.assertEqual(out.details["id"], LN_UUID)
                     self.assertEqual(again.calls, [])
 
+    def test_retry_key_separates_parents_and_keeps_no_parent_keys(self) -> None:
+        no_parent = L.compute_create_first_key("linear", "T", "B")
+        self.assertEqual(L.compute_create_first_key("linear", "T", "B", None),
+                         no_parent)
+        under_10 = L.compute_create_first_key("linear", "T", "B", "WOR-10")
+        under_20 = L.compute_create_first_key("linear", "T", "B", "WOR-20")
+        self.assertEqual(len({no_parent, under_10, under_20}), 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".flow").mkdir()
+            body = Path(tmp) / "b.md"
+            body.write_text("B", encoding="utf-8")
+            for parent, expected in ((None, no_parent), ("WOR-10", under_10)):
+                argv = [sys.executable, str(FLOWCTL), "sync", "create-first-key",
+                        "--type", "linear", "--title", "T",
+                        "--body-file", str(body), "--json"]
+                if parent:
+                    argv += ["--parent", parent]
+                out = subprocess.run(argv, cwd=tmp, capture_output=True,
+                                     text=True, encoding="utf-8")
+                self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+                self.assertEqual(json.loads(out.stdout)["key"], expected)
+
     def test_recovery_put_keeps_the_recorded_parent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cwd = Path(tmp)

@@ -1593,14 +1593,14 @@ Idempotent - re-marking replaces `audit_notes` and re-stamps `last_audited`. Als
 Pre-spec recovery records for tracker-sync `create-first`, which creates a tracker issue *before* any local spec exists (so `sync receipt`, which resolves a local spec id, cannot be used). Thin atomic file layer only - no transport, no issue creation, no judgment. Records live at `.flow/create-first/<key>.json` and are gitignored, because a committed record would let a teammate computing the same key resume onto someone else's issue.
 
 ```bash
-flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md]
+flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md] [--parent <id>]
 flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
 flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport … \
                                 [--spec-id <id>] [--if-absent | --expect-spec-id <id>]
 flowctl sync create-first-clear --key <k>             # after the linked mint succeeds
 ```
 
-The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.
+The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `--parent` appends `NUL parent=<id>` before hashing, so the same work under another parent gets its own key; without it the key is unchanged. `put` is idempotent and preserves the original `createdAt` and any recorded `parent`.
 
 `--if-absent` makes the post-mint put a **compare-and-set**: it records the spec id only while the claim slot is free, and the loser of a concurrent promotion exits `10` (the shared tracker CONFLICT status) with `class=conflict`, `subtype=spec_already_minted`, and `details.recordedSpecId` naming the winner to adopt. `--expect-spec-id <id>` is the CAS update of a claim you already own (mismatch: `subtype=spec_id_mismatch`); the two flags are mutually exclusive. Other refusals: `record_unreadable` (a CAS never overwrites an unverifiable claim) and `lock_timeout` (`retryable: true`). Flagless `put` is unchanged, including last-write-wins.
 
