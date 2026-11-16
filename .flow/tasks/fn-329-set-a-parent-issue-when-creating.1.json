@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-329-set-a-parent-issue-when-creating",
   "spec_path": ".flow/tasks/fn-329-set-a-parent-issue-when-creating.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Set a parent issue when creating tracker issues",
   "updated_at": "2026-11-16T12:26:52.916324Z"
 }

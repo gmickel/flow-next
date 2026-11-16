@@ -224,7 +224,7 @@
     "impl:fn-329-set-a-parent-issue-when-creating.1": 0
   },
   "spec_path": ".flow/specs/fn-329-set-a-parent-issue-when-creating.md",
-  "status": "open",
+  "status": "done",
   "title": "Set a parent issue when creating tracker issues",
   "tracker": {
     "baseHashFlow": null,
@@ -237,5 +237,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-16T13:06:07.524899Z"
+  "updated_at": "2026-11-16T13:09:43.820345Z"
 }
