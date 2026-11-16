@@ -11,6 +11,7 @@ Resolution is per provider and by exact name, never a generic ladder.
 from __future__ import annotations
 
 import os
+import threading
 from typing import Callable, Optional
 
 
@@ -90,6 +91,7 @@ TOKEN_COMMAND_TIMEOUT_S = 10
 
 #: One run per flowctl process: a sync makes many requests, the store is read once.
 _COMMAND_RESULTS: dict[tuple[str, ...], "str | TokenCommandError"] = {}
+_COMMAND_LOCK = threading.Lock()
 
 
 class TokenCommandError(RuntimeError):
@@ -103,28 +105,30 @@ def _command_token(argv) -> str:
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
         raise TokenCommandError("token command must be a non-empty list of strings")
     key = tuple(argv)
-    if key not in _COMMAND_RESULTS:
-        try:
-            proc = subprocess.run(argv, capture_output=True, text=True, check=False,
-                                  stdin=subprocess.DEVNULL, timeout=TOKEN_COMMAND_TIMEOUT_S)
-            token = proc.stdout.strip()
-            if proc.returncode != 0:
-                outcome = TokenCommandError(f"token command exited {proc.returncode}")
-            elif not token:
-                outcome = TokenCommandError("token command printed an empty token")
-            elif "\n" in token:
-                outcome = TokenCommandError("token command printed more than one line")
-            else:
-                outcome = token
-        except FileNotFoundError:
-            outcome = TokenCommandError(f"token command not found: {argv[0]}")
-        except subprocess.TimeoutExpired:
-            outcome = TokenCommandError(
-                f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
-        except OSError as exc:
-            outcome = TokenCommandError(f"token command could not run: {exc.strerror}")
-        _COMMAND_RESULTS[key] = outcome
-    outcome = _COMMAND_RESULTS[key]
+    # Concurrent requests (Linear's parallel dependency probes) wait for the one run.
+    with _COMMAND_LOCK:
+        if key not in _COMMAND_RESULTS:
+            try:
+                proc = subprocess.run(argv, capture_output=True, text=True, check=False,
+                                      stdin=subprocess.DEVNULL, timeout=TOKEN_COMMAND_TIMEOUT_S)
+                token = proc.stdout.strip()
+                if proc.returncode != 0:
+                    outcome = TokenCommandError(f"token command exited {proc.returncode}")
+                elif not token:
+                    outcome = TokenCommandError("token command printed an empty token")
+                elif "\n" in token:
+                    outcome = TokenCommandError("token command printed more than one line")
+                else:
+                    outcome = token
+            except FileNotFoundError:
+                outcome = TokenCommandError(f"token command not found: {argv[0]}")
+            except subprocess.TimeoutExpired:
+                outcome = TokenCommandError(
+                    f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
+            except OSError as exc:
+                outcome = TokenCommandError(f"token command could not run: {exc.strerror}")
+            _COMMAND_RESULTS[key] = outcome
+        outcome = _COMMAND_RESULTS[key]
     if isinstance(outcome, TokenCommandError):
         raise outcome
     return outcome
