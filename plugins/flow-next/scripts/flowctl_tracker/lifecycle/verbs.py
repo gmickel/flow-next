@@ -14,12 +14,13 @@ from ..executor import execute as default_execute
 from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
-                      load_spec, merged_tracker, now_iso,
-                      read_config, spec_project_fields, tracker_type,
-                      write_sync_receipt)
+                      load_spec, merged_tracker, now_iso, parent_value,
+                      read_config, spec_parent_field, spec_project_fields,
+                      tracker_type, write_sync_receipt)
 from .helpers import locked_tracker_write as _locked_tracker_write
 from .linkstate import derive_link_state, resolve_linear_uuid
-from .providers import project_capability_error, provider_create
+from .providers import (parent_capability_error, project_capability_error,
+                        provider_create)
 
 
 def _claim_spec_operation(flow_dir: Path, spec_id: str, rec_path: Path,
@@ -110,8 +111,12 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
                         flow_body: Optional[str] = None,
                         event: Optional[str] = None,
                         execute: Execute = default_execute,
-                        write_receipt: bool = True) -> Result:
-    """Create, link, fresh-read, seed the paired base, then write one receipt."""
+                        write_receipt: bool = True,
+                        parent: Optional[str] = None) -> Result:
+    """Create, link, fresh-read, seed the paired base, then write one receipt.
+
+    `parent` (the `--parent` option) is recorded on the spec with the link;
+    without it the spec's own `tracker.parent` is used."""
     flow_dir = Path(flow_dir)
     config = read_config(flow_dir)
     provider = tracker_type(config)
@@ -134,7 +139,14 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
     project = spec_project_fields(tracker)
     if isinstance(project, TrackerError):
         return project
-    unsupported = project_capability_error(provider, project)
+    if parent is None:
+        parent = spec_parent_field(tracker)
+    else:
+        parent = parent_value(parent, source="--parent")
+    if isinstance(parent, TrackerError):
+        return parent
+    unsupported = (project_capability_error(provider, project)
+                   or parent_capability_error(config, parent))
     if unsupported is not None:
         return unsupported
     rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
@@ -144,7 +156,7 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
     created = provider_create(config, ex, title=title, body=body,
-                              project=project or None)
+                              project=project or None, parent=parent)
     if isinstance(created, TrackerError):
         _release_claim(rec_path)
         return created
@@ -154,6 +166,8 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
         "url": created.get("url"),
         "linkState": "linked",
     }
+    if parent is not None:
+        link_fields["parent"] = parent
 
     def _link(t: dict):
         # An identity that appeared concurrently (e.g. persist-external, which
@@ -272,6 +286,8 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
     result = {"id": created["id"], "identifier": created["identifier"],
               "url": created.get("url"), "linkState": "linked",
               "paired_base": seeded}
+    if parent is not None:
+        result["parent"] = parent
     if created.get("degraded") is not None:
         result["degraded"] = created["degraded"]
     _release_claim(rec_path)
@@ -282,7 +298,8 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
            flow_body: Optional[str] = None,
            event: Optional[str] = None,
            execute: Execute = default_execute,
-           write_receipt: bool = True) -> Result:
+           write_receipt: bool = True,
+           parent: Optional[str] = None) -> Result:
     """Create transaction with exception-safe release of its spec claim."""
     flow_dir = Path(flow_dir)
     rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
@@ -290,7 +307,8 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
     try:
         result = _create_transaction(
             flow_dir, spec_id, title=title, body=body, flow_body=flow_body,
-            event=event, execute=execute, write_receipt=write_receipt)
+            event=event, execute=execute, write_receipt=write_receipt,
+            parent=parent)
         completed = True
         return result
     finally:
@@ -493,7 +511,8 @@ def _release_claim(rec_path: Path) -> None:
 
 def _create_first_transaction(flow_dir, *, title: str, body: str,
                               retry_key: str,
-                              execute: Execute = default_execute) -> Result:
+                              execute: Execute = default_execute,
+                              parent: Optional[str] = None) -> Result:
     """NO spec, NO receipt. Recovery record is the retry-dedupe guarantee."""
     flow_dir = Path(flow_dir)
     if not CREATE_FIRST_KEY_RE.fullmatch(retry_key or ""):
@@ -504,6 +523,12 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+    parent = parent_value(parent, source="--parent")
+    if isinstance(parent, TrackerError):
+        return parent
+    unsupported = parent_capability_error(config, parent)
+    if unsupported is not None:
+        return unsupported
     rec_path = flow_dir / "create-first" / f"{retry_key}.json"
     unsafe = leaf_is_safe(flow_dir / "create-first", rec_path)
     if unsafe:
@@ -530,6 +555,8 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
                     out = {"id": prior["id"],
                            "identifier": prior.get("identifier"),
                            "url": prior.get("url"), "retried": True}
+                    if prior.get("parent") is not None:
+                        out["parent"] = prior["parent"]
                     if prior.get("degraded") is not None:
                         out["degraded"] = prior["degraded"]
                     return out
@@ -563,7 +590,8 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
-    created = provider_create(config, ex, title=title, body=body)
+    created = provider_create(config, ex, title=title, body=body,
+                              parent=parent)
     if isinstance(created, TrackerError):
         _release_claim(rec_path)
         return created
@@ -576,6 +604,8 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
         "createdAt": now_iso(),
         "transport": provider,
     }
+    if parent is not None:
+        record["parent"] = parent
     if created.get("degraded") is not None:
         record["degraded"] = created["degraded"]
     err = atomic_write_json(rec_path, record)
@@ -599,13 +629,16 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
         return dataclasses.replace(err, details=details)
     out = {"id": created["id"], "identifier": created["identifier"],
            "url": created.get("url"), "retried": False}
+    if parent is not None:
+        out["parent"] = parent
     if created.get("degraded") is not None:
         out["degraded"] = created["degraded"]
     return out
 
 
 def create_first(flow_dir, *, title: str, body: str, retry_key: str,
-                 execute: Execute = default_execute) -> Result:
+                 execute: Execute = default_execute,
+                 parent: Optional[str] = None) -> Result:
     """Create-first with cleanup only when an exception aborts finalization."""
     flow_dir = Path(flow_dir)
     rec_path = flow_dir / "create-first" / f"{retry_key}.json"
@@ -613,7 +646,7 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     try:
         result = _create_first_transaction(
             flow_dir, title=title, body=body, retry_key=retry_key,
-            execute=execute)
+            execute=execute, parent=parent)
         completed = True
         return result
     finally:

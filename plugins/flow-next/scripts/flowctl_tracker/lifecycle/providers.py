@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
+import re
+from typing import Optional, Union
+from urllib.parse import quote
 
 from ..types import ErrorClass, TrackerError
-from .helpers import Execute, Result, destination, tracker_type
+from .helpers import Execute, Result, destination, dict_, tracker_type
 
 
 def create_github(config: dict, execute: Execute, *, title: str, body: str
@@ -38,8 +40,49 @@ def create_github(config: dict, execute: Execute, *, title: str, body: str
             "bodyWritten": acknowledged}
 
 
-def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
-                  ) -> Result:
+#: `&5` (an epic of the project's own group) or `group/sub&5`.
+_GITLAB_EPIC_REF = re.compile(r"(?P<group>[^&\s]*)&(?P<iid>[1-9][0-9]*)")
+
+
+def _gitlab_epic_id(config: dict, execute: Execute, dest: dict, parent: str
+                    ) -> Union[int, TrackerError]:
+    """A GitLab parent is an epic. A numeric epic id is sent as is; an epic
+    reference costs one read that resolves it to the id the create takes."""
+    from ..wire import _cli  # noqa: PLC0415
+    if parent.isdigit():
+        return int(parent)
+    ref = _GITLAB_EPIC_REF.fullmatch(parent)
+    if ref is None:
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"GitLab parent {parent!r} is not an epic id (42) or an epic "
+            "reference (&5, group/path&5)",
+            subtype="parent")
+    group = ref["group"]
+    if not group:
+        path = dest.get("projectPath")
+        if not isinstance(path, str) or "/" not in path:
+            return TrackerError(
+                ErrorClass.UNRESOLVED,
+                f"cannot tell which group epic {parent!r} belongs to; give it "
+                "as group/path&N",
+                subtype="parent")
+        group = path.rsplit("/", 1)[0]
+    raw = _cli(execute, "gitlab", config, "lifecycle-create-parent", "GET",
+               f"groups/{quote(group, safe='')}/epics/{ref['iid']}",
+               idempotent=True)
+    if isinstance(raw, TrackerError):
+        return raw
+    epic_id = raw.get("id") if isinstance(raw, dict) else None
+    if not isinstance(epic_id, int) or isinstance(epic_id, bool):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "gitlab epic read missing id",
+                            subtype="malformed_body")
+    return epic_id
+
+
+def create_gitlab(config: dict, execute: Execute, *, title: str, body: str,
+                  parent: Optional[str] = None) -> Result:
     from ..wire import _cli, _gl_project, _gitlab_durable  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
@@ -47,9 +90,14 @@ def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
     pid = _gl_project(dest)
     if isinstance(pid, TrackerError):
         return pid
+    payload: dict = {"title": title, "description": body}
+    if parent is not None:
+        epic_id = _gitlab_epic_id(config, execute, dest, parent)
+        if isinstance(epic_id, TrackerError):
+            return epic_id
+        payload["epic_id"] = epic_id
     raw = _cli(execute, "gitlab", config, "lifecycle-create", "POST",
-               f"projects/{pid}/issues",
-               body={"title": title, "description": body})
+               f"projects/{pid}/issues", body=payload)
     if isinstance(raw, TrackerError):
         return raw
     if not isinstance(raw, dict):
@@ -76,7 +124,8 @@ def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
 
 
 def create_linear(config: dict, execute: Execute, *, title: str, body: str,
-                  project: Optional[dict] = None) -> Result:
+                  project: Optional[dict] = None,
+                  parent: Optional[str] = None) -> Result:
     from ..wire import _gql  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
@@ -92,6 +141,8 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str,
     inp = {"teamId": team_id, "title": title, "description": body}
     if project:
         inp.update(project)
+    if parent is not None:
+        inp["parentId"] = parent
     data = _gql(execute, "lifecycle-create",
                 "mutation($input: IssueCreateInput!) { "
                 "issueCreate(input: $input) { success "
@@ -115,8 +166,8 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str,
             "url": issue.get("url"), "bodyWritten": acknowledged}
 
 
-def create_jira(config: dict, execute: Execute, *, title: str, body: str
-                ) -> Result:
+def create_jira(config: dict, execute: Execute, *, title: str, body: str,
+                parent: Optional[str] = None) -> Result:
     from ..wire import _jira, _jira_base, _jira_issue_key  # noqa: PLC0415
     from ..wire.jira import from_wire, to_wire  # noqa: PLC0415
     dest = destination(config)
@@ -169,6 +220,8 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str
     }
     if description_settable:
         fields["description"] = wire_body
+    if parent is not None:
+        fields["parent"] = {"key": parent}
     raw = _jira(execute, "lifecycle-create", "POST",
                 f"{base}/rest/api/2/issue",
                 body={"fields": fields})
@@ -225,15 +278,48 @@ def project_capability_error(provider: Optional[str], project: Optional[dict]
     return None
 
 
+def parent_capability_error(config: dict, parent: Optional[str]
+                            ) -> Optional[TrackerError]:
+    """Refuse a parent this tracker or deployment cannot take, rather than
+    drop it and leave the issue outside its parent with nothing said."""
+    if parent is None:
+        return None
+    provider = tracker_type(config)
+    if provider == "github":
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            "a parent issue is not supported on GitHub: a GitHub issue takes "
+            "one parent, and flow-next uses it to project dependencies",
+            subtype="parent")
+    per = dict_(dict_(config.get("tracker")).get("perTracker"))
+    if provider == "jira" and per.get("authScheme") == "bearer-pat":
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            "a parent issue is supported on Jira Cloud only; Jira Data "
+            "Center and Server place an issue in an epic through the Epic "
+            "Link field, which flow-next does not set",
+            subtype="parent")
+    return None
+
+
 def provider_create(config: dict, execute: Execute, *, title: str, body: str,
-                    project: Optional[dict] = None) -> Result:
+                    project: Optional[dict] = None,
+                    parent: Optional[str] = None) -> Result:
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
-    unsupported = project_capability_error(provider, project)
+    unsupported = (project_capability_error(provider, project)
+                   or parent_capability_error(config, parent))
     if unsupported is not None:
         return unsupported
     if project:
-        return create_linear(config, execute, title=title, body=body,
-                             project=project)
-    return _CREATE[provider](config, execute, title=title, body=body)
+        created = create_linear(config, execute, title=title, body=body,
+                                project=project, parent=parent)
+    elif parent is not None:
+        created = _CREATE[provider](config, execute, title=title, body=body,
+                                    parent=parent)
+    else:
+        created = _CREATE[provider](config, execute, title=title, body=body)
+    if parent is not None and isinstance(created, dict):
+        created["parent"] = parent
+    return created

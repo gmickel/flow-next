@@ -28473,6 +28473,13 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         durable_tracker_id = durable_tracker_id.strip()
     if tracker_url is not None:
         tracker_url = tracker_url.strip()
+    # fn-329: a creation input only - the tracker package reads it when it
+    # creates the spec's issue and never sends it again.
+    tracker_parent = getattr(args, "tracker_parent", None)
+    if tracker_parent is not None:
+        tracker_parent = tracker_parent.strip()
+        if not tracker_parent:
+            error_exit("--tracker-parent must not be empty", use_json=args.json)
 
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
@@ -28538,6 +28545,8 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
                 spec_data["tracker"]["linkState"] = "linked"
                 if tracker_url is not None:
                     spec_data["tracker"]["url"] = tracker_url
+        if tracker_parent is not None:
+            spec_data["tracker"]["parent"] = tracker_parent
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
         spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
@@ -43697,6 +43706,7 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
         durable_id=getattr(args, "durable_id", None),
         url=getattr(args, "url", None),
         source=getattr(args, "source", None),
+        parent=getattr(args, "parent", None),
     )
     print(payload)
     sys.exit(code)
@@ -56658,6 +56668,10 @@ def main() -> None:
     p_tracker_create.add_argument("--body-file", required=True)
     p_tracker_create.add_argument("--event", default=None,
                                   help="perEvent key stamped on the sync receipt")
+    p_tracker_create.add_argument(
+        "--parent", default=None,
+        help="Parent issue to create the issue under (Jira Cloud key, Linear "
+        "identifier, GitLab epic id or reference); recorded on the spec")
     p_tracker_create.add_argument("--json", action="store_true",
                                   help="Accepted and ignored (output is always JSON)")
     p_tracker_create.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create")
@@ -56670,6 +56684,10 @@ def main() -> None:
     p_tracker_cf.add_argument("--body-file", required=True)
     p_tracker_cf.add_argument("--retry-key", required=True,
                               help="16-hex key from sync create-first-key")
+    p_tracker_cf.add_argument(
+        "--parent", default=None,
+        help="Parent issue to create the issue under; pass the same value to "
+        "spec create --tracker-parent when minting")
     p_tracker_cf.add_argument("--json", action="store_true",
                               help="Accepted and ignored (output is always JSON)")
     p_tracker_cf.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create-first")
@@ -58451,6 +58469,11 @@ def main() -> None:
         p_create.add_argument(
             "--tracker-url",
             help="Tracker issue URL; requires --tracker-id",
+        )
+        p_create.add_argument(
+            "--tracker-parent",
+            help="Parent issue the spec's tracker issue is created under "
+            "(read only when that issue is created)",
         )
         # fn-163.1: one-shot create+set-plan. Mutually exclusive; plan content
         # is fully read before id allocation (pre-write validation ordering).

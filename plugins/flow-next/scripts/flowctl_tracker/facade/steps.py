@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from ..lifecycle.helpers import Execute, Result
+from ..lifecycle.helpers import Execute, Result, spec_parent_field
 from ..lifecycle.verbs import create as lifecycle_create
 from ..status.verb import status as status_verb
 from ..types import ErrorClass, TrackerError
@@ -94,6 +94,12 @@ def create_if_unlinked(flow_dir: Path, spec_id: str, *, title: str, body: str,
                 "id": tracker.get("id"), "identifier": tracker.get("identifier")}
 
     if on_mcp_rung(config):
+        payload = {"title": title, "body": body}
+        parent = spec_parent_field(tracker)
+        if isinstance(parent, TrackerError):
+            return parent
+        if parent is not None:
+            payload["parent"] = parent
         return TrackerError(
             ErrorClass.EXTERNAL_ACTION_REQUIRED,
             "Linear MCP rung: agent must create the issue, then "
@@ -101,7 +107,7 @@ def create_if_unlinked(flow_dir: Path, spec_id: str, *, title: str, body: str,
             subtype="mcp_create",
             details={
                 "action": "create",
-                "payload": {"title": title, "body": body},
+                "payload": payload,
             },
         )
 
