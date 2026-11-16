@@ -1,13 +1,21 @@
 {
   "branch_name": "fn-330-start-from-an-upstream-idea-jira",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-11-16T11:59:13.468325Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-329-set-a-parent-issue-when-creating"
   ],
   "id": "fn-330-start-from-an-upstream-idea-jira",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-330-start-from-an-upstream-idea-jira.md",
   "status": "open",
   "title": "Start from an upstream idea (Jira Product Discovery first)",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-16T11:59:21.221313Z"
+  "updated_at": "2026-11-16T14:03:47.826185Z"
 }
