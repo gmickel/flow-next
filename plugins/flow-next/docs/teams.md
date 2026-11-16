@@ -22,6 +22,7 @@ The vocabulary on this page - *handover objects*, *Delegate / Review / Own*, *li
   - [Symmetric interview](#symmetric-interview)
   - [Decision records](#decision-records)
   - [Strategy alignment](#strategy-alignment)
+  - [Discovery to delivery](#discovery-to-delivery)
 - [Multi-developer coordination](#multi-developer-coordination)
 - [Autonomous work in a team](#autonomous-work-in-a-team)
 - [Tracker sync & Linear Diffs](#tracker-sync--linear-diffs)
@@ -429,6 +430,14 @@ Active tracks become an *advisory* signal flowing into downstream skills:
 - `/flow-next:sync` plan-sync surfaces drift in a `## Strategy drift flagged for review` heading; `/flow-next:make-pr` can use that evidence to explain the change in Why or a material unfinished finding in Open items.
 
 **Read-only and advisory.** Downstream skills *never auto-supersede* an active track. They surface conflicts and ask the human. See [Strategy on flow-next.dev](https://flow-next.dev/skills/strategy/) for the `STRATEGY.md` shape, foreign-file refusal, and how downstream skills consume it.
+
+### Discovery to delivery
+
+Teams that run discovery in Jira Product Discovery collect requirements from product, services and sales as ideas, and product management scores and prioritises them. When an idea is approved, a developer or product person gives attended flow its key or URL. Flow reads the idea (its text and comments), routes it like any other intent, and capture proposes a split into independent specs with their dependency edges checked for cycles. The person chooses the split.
+
+The tracker then shows one parent issue for the idea in the delivery project, one child issue per spec under it, the dependencies between the children, and a delivery link from the parent to the idea, so the idea's owner follows delivery progress in the idea's delivery view. The idea stays the discovery team's: flow-next adds that one link and writes nothing else to it. Running flow on the same idea again reuses the parent. Starting from an idea is attended only; `flow --auto` never picks one up.
+
+Turn it on with `flowctl config set tracker.perTracker.ideaProjectKeys '["IDEAS"]'` (Jira Cloud). See [Idea intake](tracker-sync.md#idea-intake-start-from-a-jira-product-discovery-idea).
 
 ---
 

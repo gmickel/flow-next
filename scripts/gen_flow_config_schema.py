@@ -254,6 +254,12 @@ DESCRIPTIONS: dict[str, str] = {
         "or Jira PAT. Runs once per flowctl process, only when the env var "
         "is unset; 10 s timeout; its output is never written anywhere."
     ),
+    "tracker.perTracker.ideaProjectKeys": (
+        "Jira Product Discovery project keys whose issues are ideas (e.g. "
+        "[\"IDEAS\"]). Absent or empty turns idea intake off; set, attended "
+        "flow can start from an idea and the tracker idea verbs run. Jira "
+        "Cloud only."
+    ),
     "tracker.perTracker.statusMap": (
         "Legacy normalized-status to Jira status map ({name}/{id}; id "
         "preferred - names are project-renamable). Live entries migrate into "
@@ -587,6 +593,10 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perTracker.sslVerify", {"type": "boolean"}),
         (
             "tracker.perTracker.tokenCommand",
+            {"type": ["array", "null"], "items": {"type": "string"}},
+        ),
+        (
+            "tracker.perTracker.ideaProjectKeys",
             {"type": ["array", "null"], "items": {"type": "string"}},
         ),
         ("tracker.perTracker.statusMap", _status_map_fragment()),

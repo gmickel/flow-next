@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "3b5d9e2162608f8e281e136d4b825541d151774c0a839677631f2ff809475809"
+      "sha256": "a9566ff34db3f363efebff708893511f3c8f78e170c6a1b5562d216f4604313b"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -67,6 +67,10 @@
     {
       "path": "flowctl_tracker/facade/steps.py",
       "sha256": "ae2df048ff3f73e1a5bb49e91556d070e2913cb5a222e4958296437d2943286b"
+    },
+    {
+      "path": "flowctl_tracker/idea.py",
+      "sha256": "7a8ad748575e80e7a11f0649a084bb2623180d70374ae48ff896c457bf6b4a45"
     },
     {
       "path": "flowctl_tracker/lifecycle/__init__.py",
@@ -190,7 +194,7 @@
     },
     {
       "path": "flowctl_tracker/wire/jira.py",
-      "sha256": "7d22d3a953177b8987c9278aa2bbf8c120515de4b7ef927d719b9467f056cc57"
+      "sha256": "c67de3564e269c6c9124ce43a245c5027d1b57eb04c626b2371f2d8bdc4bb521"
     },
     {
       "path": "flowctl_tracker/wire/linear.py",

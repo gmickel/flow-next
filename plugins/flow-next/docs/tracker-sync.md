@@ -15,6 +15,7 @@ Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) an
 - [Grain: one spec ↔ one issue](#grain-one-spec-one-issue)
 - [Sync-state schema](#sync-state-schema)
 - [Parent issue at creation](#parent-issue-at-creation)
+- [Idea intake: start from a Jira Product Discovery idea](#idea-intake-start-from-a-jira-product-discovery-idea)
 - [Flowctl-owned transport and resolved capabilities](#flowctl-owned-transport-and-resolved-capabilities)
 - [Lifecycle sync points (on by default: opt-out)](#lifecycle-sync-points-on-by-default-opt-out)
 - [Lifecycle facade](#lifecycle-facade)
@@ -165,6 +166,34 @@ A spec can name the parent its tracker issue belongs under (a Jira epic, a Linea
 | Jira Data Center / Server | refused with a `capability` error before any request: these place an issue in an epic through the Epic Link field | - | none |
 
 A spec without a parent sends the same create request as before. A parent the tracker rejects (missing, at the wrong hierarchy level, not visible to the account, or on a tier without epics) comes back as the tracker's own error, and no issue exists afterwards. A malformed value is `invalid_input` before any request.
+
+## Idea intake: start from a Jira Product Discovery idea
+
+Teams that run product discovery in Jira Product Discovery can point attended flow at an idea. Flow reads the idea and routes its content like any other starting point (a clear idea to capture, an oversized or unclear one to chart, then capture). After the person settles what to build, the idea gets one parent issue in the delivery project, one child issue per spec under it, the dependencies between the children, and a delivery link from the parent back to the idea, so the idea's owner sees delivery progress in the idea's delivery view.
+
+Turn it on by listing the discovery projects (Jira Cloud only):
+
+```bash
+flowctl config set tracker.perTracker.ideaProjectKeys '["IDEAS"]'
+```
+
+Absent or empty, nothing changes: no request is added and no extra text is read. Set, an issue key in a listed project is an idea, which costs no request to decide. The tracker's own delivery project is never treated as an idea project.
+
+- **The pointer.** `tracker wire read` of an idea returns an `idea` block naming the reference that handles the path; the request itself is unchanged.
+- **Attended only.** `flow --auto` in every mode, including `--from-issue`, behaves as before: an idea is not in the delivery project's ready lane, so an issue start stops before any write.
+- **Read-only apart from one link.** flow-next never edits an idea's text, fields or status and never comments on it. `sync set-tracker-id` and a tracker-first `spec create` refuse an idea's key, so a spec is never linked to an idea as its own issue.
+- **One parent.** The parent is the delivery-linked issue the idea already has at the parent level of the delivery project (the level above `tracker.perTracker.issueType`, usually an epic), or a new one titled with the idea's summary. Several candidates are a question for the person; a linked issue outside the delivery project or below parent level is named, never reused. Which parent serves an idea is read from its links each time, so a second run reuses the parent and creates no second link.
+- **The delivery link.** flowctl finds the discovery product's link type by listing the site's link types: the one whose name contains `Polaris` and whose descriptions are `implements` / `is implemented by`. The parent is the inward issue, so the idea reads "is implemented by" the parent. Zero or several matching types stop before anything is created. A link that fails after the parent exists is reported with the parent's key and the retry command; the children are still created.
+- **Children.** Each spec records the parent and its issue is created under it, as in [Parent issue at creation](#parent-issue-at-creation).
+- **Permissions.** Browse and Link issues on the discovery project; create rights on the delivery project. Creating, editing or transitioning ideas is never needed.
+
+| Command | What it does | Requests |
+|---|---|---|
+| `flowctl tracker idea read <key-or-url>` | the idea's title, body, status and URL, its comments, and its delivery-linked issues | issue read, comment list |
+| `flowctl tracker idea parent <key-or-url> --body-file F [--use KEY]` | reuse the delivery-linked parent, or create one (description from `F`) and link it | link types, issue read, project read; create and link only when no parent exists |
+| `flowctl tracker idea link <key-or-url> <parent-key>` | the delivery link, when it is not there yet (the retry path) | link types, issue read; link only when absent |
+
+Errors: no idea source configured is `unresolved`; a key outside the listed projects is `invalid_input`; another tracker, or Jira Data Center and Server, is `capability`; several parents are `conflict` / `several_parents` with the candidates; a missing or ambiguous link type is `unresolved` / `delivery_link_type` with what was found. Discovery insights and an idea's scoring fields are not read, and the parent's status is not synced.
 
 ## Flowctl-owned transport and resolved capabilities
 

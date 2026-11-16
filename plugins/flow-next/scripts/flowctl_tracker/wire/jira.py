@@ -112,7 +112,15 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     parent = parent_read(config, locator, execute, op="wire-read")
     if isinstance(parent, TrackerError):
         return parent
-    return _issue_out(parent, parent_identity="validated")
+    out = _issue_out(parent, parent_identity="validated")
+    # An idea source is configured: an issue in a discovery project is an idea,
+    # and the read names the reference that handles it (no extra request).
+    if _dict(_dict(config.get("tracker")).get("perTracker")).get("ideaProjectKeys"):
+        from ..idea import pointer  # noqa: PLC0415 - loads only when configured
+        idea = pointer(config, locator["display"])
+        if idea is not None:
+            out["idea"] = idea
+    return out
 
 
 def pr_link(config: dict, locator: dict, execute: Execute, *, url: str) -> Result:

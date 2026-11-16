@@ -28590,6 +28590,7 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         key, number, tracker_identifier = resolve_tracker_first_mint(
             tracker_identifier, use_json=args.json
         )
+        refuse_idea_as_spec_issue(tracker_identifier, args.json)
         preflight_tracker_mint(
             flow_dir, key, number, suffix,
             display=tracker_identifier, use_json=args.json,
@@ -42921,6 +42922,8 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
             validated_identifier[2],
             use_json=args.json,
         )
+    if validated_identifier is not None:
+        refuse_idea_as_spec_issue(validated_identifier[2], args.json)
 
     # PR #246: the relink is a spec-identity WRITE, so the whole
     # reload-guard-mutate-write runs INSIDE the shared config writer lock -
@@ -43715,6 +43718,54 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
     )
     print(payload)
     sys.exit(code)
+
+
+def cmd_tracker_idea(args: argparse.Namespace) -> None:
+    """`flowctl tracker idea read|parent|link` (fn-330) - discovery idea intake."""
+    if not ensure_flow_exists():
+        error_exit(".flow/ does not exist. Run 'flowctl init' first.",
+                   use_json=getattr(args, "json", False))
+    if _import_tracker_lifecycle() is None:
+        error_exit(
+            "flowctl_tracker package is not installed alongside flowctl.py; "
+            "update/reinstall the flow-next plugin to get the tracker verbs",
+            use_json=getattr(args, "json", False))
+    from flowctl_tracker import idea as tracker_idea  # noqa: PLC0415
+    payload, code = tracker_idea.run(
+        get_flow_dir(),
+        args.idea_verb,
+        idea=args.idea,
+        parent=getattr(args, "parent_key", None),
+        use=getattr(args, "use", None),
+        body_file=getattr(args, "body_file", None),
+    )
+    print(payload)
+    sys.exit(code)
+
+
+def refuse_idea_as_spec_issue(identifier: Optional[str], use_json: bool) -> None:
+    """A discovery idea is source material, never a spec's own issue (fn-330).
+
+    Linking one would make the next push write the spec body into the idea."""
+    if not identifier:
+        return
+    tracker = (_load_raw_flow_config() or {}).get("tracker")
+    tracker = tracker if isinstance(tracker, dict) else {}
+    per = tracker.get("perTracker") if isinstance(tracker.get("perTracker"), dict) else {}
+    keys = per.get("ideaProjectKeys")
+    if tracker.get("type") != "jira" or not isinstance(keys, list) or "-" not in identifier:
+        return
+    resolved = tracker.get("resolved") if isinstance(tracker.get("resolved"), dict) else {}
+    dest = resolved.get("destination") if isinstance(resolved.get("destination"), dict) else {}
+    project = identifier.strip().rsplit("-", 1)[0]
+    if project in keys and project != dest.get("projectKey"):
+        error_exit(
+            f"{identifier} is an idea in a discovery project "
+            "(tracker.perTracker.ideaProjectKeys); an idea is never a spec's own "
+            "issue. Settle its delivery parent with `flowctl tracker idea parent` "
+            "and create the spec's issue under that parent instead.",
+            use_json=use_json,
+        )
 
 
 def _with_forge_merge_read(module):
@@ -56701,6 +56752,38 @@ def main() -> None:
     p_tracker_cf.add_argument("--json", action="store_true",
                               help="Accepted and ignored (output is always JSON)")
     p_tracker_cf.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create-first")
+
+    # idea intake (fn-330) - Jira Product Discovery ideas; off until
+    # tracker.perTracker.ideaProjectKeys lists the discovery projects.
+    p_tracker_idea = tracker_sub.add_parser(
+        "idea",
+        help="Read a discovery idea, settle its delivery parent, write the "
+        "delivery link (Jira Product Discovery)",
+    )
+    idea_sub = p_tracker_idea.add_subparsers(dest="idea_verb", required=True)
+    p_idea_read = idea_sub.add_parser(
+        "read", help="The idea's text, comments and delivery-linked issues")
+    p_idea_read.add_argument("idea", help="Idea key (IDEAS-7) or URL")
+    p_idea_parent = idea_sub.add_parser(
+        "parent",
+        help="Reuse the idea's delivery-linked parent, or create one above the "
+        "configured issue type and link it")
+    p_idea_parent.add_argument("idea", help="Idea key (IDEAS-7) or URL")
+    p_idea_parent.add_argument(
+        "--body-file", required=True,
+        help="Description for a parent created here (a short summary and the "
+        "idea's key and URL); unused when a parent is reused")
+    p_idea_parent.add_argument(
+        "--use", default=None,
+        help="Which delivery-linked parent to reuse when the idea has several")
+    p_idea_link = idea_sub.add_parser(
+        "link", help="Link a delivery issue to the idea as its delivery (once)")
+    p_idea_link.add_argument("idea", help="Idea key (IDEAS-7) or URL")
+    p_idea_link.add_argument("parent_key", help="Delivery issue key (PROJ-12)")
+    for p in (p_idea_read, p_idea_parent, p_idea_link):
+        p.add_argument("--json", action="store_true",
+                       help="Accepted and ignored (output is always JSON)")
+        p.set_defaults(func=cmd_tracker_idea)
 
     p_tracker_pe = tracker_sub.add_parser(
         "persist-external",

@@ -36,6 +36,8 @@ Flow passes one PR and the current authorization to land per hop. `--auto --tick
 
 [`/flow-next:prospect`](../../skills/flow-next-prospect/SKILL.md) (ranked candidates) and [`/flow-next:chart`](../../skills/flow-next-chart/SKILL.md) (decision-map discovery for one oversized, unclear idea) are **upstream of every variant, not stages of any of them**. In most organizations their work already happened under another name: a roadmap, a product brief, a groomed backlog item *is* prospect/chart output. Reach for them only when no shaped intent exists yet - when you cannot state the outcome in a sentence.
 
+When discovery lives in Jira Product Discovery, attended flow can start from the idea itself: give it the idea's key or URL and it routes the idea's text and comments like any other intent, to capture or to chart and then capture. The specs land as child issues under one parent issue that carries a delivery link back to the idea. Set `tracker.perTracker.ideaProjectKeys` to turn it on; see [Idea intake](tracker-sync.md#idea-intake-start-from-a-jira-product-discovery-idea).
+
 The pipeline proper starts where shaped intent exists: at **capture** (turn the intent into a spec) or at **work** for an implementation-ready spec. Use **plan** when decomposition adds coordination value.
 
 ## The variants
