@@ -6,6 +6,27 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.12.0] - 2026-11-16
+
+Teams that keep their Jira or Linear credentials in a secret store or behind a company MCP server no longer need a token in every developer's shell. Set `tracker.perTracker.tokenCommand` once to the command that already prints it (`op read`, `security find-generic-password`, your vault CLI), and every tracker call reads the token from there; checked live against Jira Cloud. Bitbucket and GitLab pull requests get briefings whose file links open, the forge stand-ins for `gh` return a pull request's draft state and description when asked, and a repository that requires a fixed footer line on every pull request now gets it without breaking the rendered briefing. Thanks to @benjamin-benz-42 for running 9.10.0 on Bitbucket Cloud and Jira Cloud and reporting what broke (#602, #611).
+
+### Added
+
+- **Tracker credentials from your own secret store: `tracker.perTracker.tokenCommand`.** An argv list, run without a shell, that prints the Linear API key, the Jira Cloud API token or the Jira Data Center personal access token. flowctl runs it only when the matching environment variable (`LINEAR_API_KEY`, `JIRA_API_TOKEN`, `JIRA_PAT`) is unset, at most once per process, with a 10-second timeout, so a store that would prompt in an unattended run fails instead of hanging. Its output never reaches a log, receipt or `.flow/` file, and a failure stops before any request with the cause (`credential resolution failed: token command exited 3`). Jira Cloud still reads the account email from `JIRA_EMAIL`. A host MCP server (Rovo, Linear's MCP) cannot stand in for it: flowctl runs headless and cannot call MCP tools. A Linear tracker with a token command no longer takes the MCP create route. The tracker-sync setup offers the token command when no token is exported.
+- **Repository-required footer lines on pull requests.** When the repository's own instructions require a fixed line on every pull request description, make-pr appends it after the rendered briefing. Nothing else is added to the body.
+
+### Changed
+
+- **Land stops instead of gutting a pull request to turn CI green.** When land finds why a check fails but the only change that would pass it removes or weakens what the pull request is for, such as deleting its failing test, it commits nothing and stops `BLOCKED`, naming the check and the reason.
+- **The PR briefing follows the code at the head.** Where a task summary describes something a later commit changed, the briefing states what the head does.
+
+### Fixed
+
+- **Briefing file links open on Bitbucket and GitLab.** Links used GitHub's `/blob/` path everywhere, which Bitbucket answers with "Resource not found", and a GitLab project inside a nested group got no links. Links now use each forge's path (`/blob/`, `/-/blob/` for a group of any depth, `/src/`). A remote no forge recognises gets plain paths instead of a guessed link.
+- **The Bitbucket and GitLab stand-ins for `gh` answer exactly the `--json` keys asked for.** They returned a fixed set, so `isDraft` and `body` were missing. Both now return the requested keys, including `isDraft` and `body` (GitLab also `headRefOid`), and exit non-zero naming any key they cannot answer.
+- **Land's Bitbucket and GitLab references name the full readiness path** (`.selected.pr.open.readiness`), so an agent no longer reads `null` from the wrong place and takes it for "no readiness".
+- **Stale claims corrected:** backlog mode names `--explain` (the retired `--dry-run` alias), the config schema describes `blocksLinkType` as the Jira link type, the teams guide gives the impl-review receipt's real default path, and the OpenCode installer's help lists `--uninstall`.
+
 ## [flow-next 9.11.0] - 2026-11-15
 
 A tracker issue can now become a merged pull request with nobody capturing a spec first. Point `flow --auto --from-issue <key|url> --until=merge` at an issue someone moved into the ready state, and the run captures a spec from the issue's own words, reviews the spec's design against the issue, builds it with implementation review, and lands it. An issue that is not clear enough gets its questions posted on the issue and moves out of the ready state; moving it back after answering starts the next run. In a live run on Linear, a clear issue went from Todo to a merged pull request and Done in one invocation, and one-line requests were asked about twice, answered in a comment or by editing the issue, and then built and merged. Attended flow can also triage the open issues no spec covers: one table with a proposed action per issue and one question to confirm.
