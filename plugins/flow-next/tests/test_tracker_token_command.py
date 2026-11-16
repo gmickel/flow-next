@@ -107,18 +107,30 @@ class TokenCommand(unittest.TestCase):
         for token in ("parallel-token-5555", "fail"):
             with self.subTest(token=token):
                 log = Path(self.tmp.name) / f"parallel-{token}.log"
-                argv = py(slow, str(log), token)
+                config = {"tracker": {"type": "linear",
+                                      "perTracker": {"tokenCommand": py(slow, str(log), token)}}}
+                execute = RV.bound_executor(config, RV.default_execute, on_event=lambda _e: None)
                 gate = threading.Barrier(4)
+
+                class FakeResp:
+                    status, headers = 200, {}
+                    def read(self): return b"{}"
+                    def __enter__(self): return self
+                    def __exit__(self, *a): return False
 
                 def probe() -> None:
                     gate.wait()
-                    self.send("linear", {"tokenCommand": argv}, "https://api.linear.app/graphql")
+                    execute(Request(provider="linear", op="probe", method="GET",
+                                    url_or_argv="https://api.linear.app/graphql"))
 
-                threads = [threading.Thread(target=probe) for _ in range(4)]
-                for t in threads:
-                    t.start()
-                for t in threads:
-                    t.join()
+                # One patch around every thread: patching per thread is not thread-safe.
+                with mock.patch("urllib.request.OpenerDirector.open",
+                                side_effect=lambda *a, **k: FakeResp()):
+                    threads = [threading.Thread(target=probe) for _ in range(4)]
+                    for t in threads:
+                        t.start()
+                    for t in threads:
+                        t.join()
                 self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
 
     def test_environment_variable_wins(self) -> None:
