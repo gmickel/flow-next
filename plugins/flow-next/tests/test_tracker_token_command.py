@@ -118,7 +118,7 @@ class TokenCommand(unittest.TestCase):
                     def __enter__(self): return self
                     def __exit__(self, *a): return False
 
-                def probe() -> None:
+                def probe(gate=gate, execute=execute) -> None:
                     gate.wait()
                     execute(Request(provider="linear", op="probe", method="GET",
                                     url_or_argv="https://api.linear.app/graphql"))
