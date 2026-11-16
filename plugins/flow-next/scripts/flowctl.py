@@ -43764,11 +43764,14 @@ def refuse_idea_as_spec_issue(identifier: Optional[str], use_json: bool) -> None
     dest = resolved.get("destination") if isinstance(resolved.get("destination"), dict) else {}
     project = identifier.strip().rsplit("-", 1)[0]
     if project in keys and project != dest.get("projectKey"):
+        reference = _plugin_root() / "references" / "idea-intake.md"
+        reference = str(reference) if reference.is_file() else "references/idea-intake.md"
         error_exit(
             f"{identifier} is an idea in a discovery project "
             "(tracker.perTracker.ideaProjectKeys); an idea is never a spec's own "
             "issue. Settle its delivery parent with `flowctl tracker idea parent` "
-            "and create the spec's issue under that parent instead.",
+            "and create the spec's issue under that parent instead. Read "
+            f"{reference} for the idea-intake steps.",
             use_json=use_json,
         )
 

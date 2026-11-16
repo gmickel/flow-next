@@ -602,6 +602,9 @@ def _relate_txn(flow_dir: Path, spec_id: str, *, blocked_by: str,
     loc_b = _locator(tracker_b)
     if isinstance(loc_b, TrackerError):
         return loc_b
+    idea_err = P.jira_idea_guard(provider, config, locators=(loc_a, loc_b))
+    if idea_err:
+        return idea_err
 
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)

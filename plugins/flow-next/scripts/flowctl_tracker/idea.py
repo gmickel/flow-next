@@ -32,8 +32,7 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
 from .types import ErrorClass, TrackerError
-from .wire.jira import IDEA_REFERENCE as REFERENCE
-from .wire.jira import is_idea_key
+from .wire.jira import idea_reference, is_idea_key
 
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 _BROWSE_RE = re.compile(r"/browse/([A-Z][A-Z0-9_]+-[1-9][0-9]*)/?$")
@@ -232,7 +231,7 @@ def read(config: dict, ref: Any, execute) -> Any:
                      for c in listed.get("comments") or []],
         "commentsTruncated": bool(listed.get("truncated")),
         "deliveryLinks": _delivery_links(raw),
-        "reference": str(REFERENCE),
+        "reference": idea_reference(),
     }
 
 

@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -150,6 +151,13 @@ class WireReadPointsAtTheReference(unittest.TestCase):
         self.assertEqual(reference.name, "idea-intake.md")
         self.assertTrue(reference.is_file(), reference)
 
+    def test_missing_reference_is_named_under_the_plugin_root(self) -> None:
+        from flowctl_tracker.wire import jira as JW  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+                JW, "IDEA_REFERENCE", Path(tmp) / "missing.md"):
+            out, _ = self._read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7")
+        self.assertEqual(out["idea"]["reference"], "references/idea-intake.md")
+
     def test_request_is_byte_identical_with_and_without_the_key(self) -> None:
         _, plain = self._read(jr_cfg(), "IDEAS-7")
         _, configured = self._read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7")
@@ -181,6 +189,7 @@ class IdeasAreReadOnly(unittest.TestCase):
                              locator=self.LOCATOR, execute=ex, **kwargs)
             self.assertIsInstance(out, TrackerError, verb)
             self.assertIs(out.cls, ErrorClass.CAPABILITY, verb)
+            self.assertTrue(Path(out.details["reference"]).is_file(), verb)
             self.assertEqual(ex.calls, [], verb)
 
     def test_without_the_key_the_write_goes_ahead(self) -> None:
@@ -206,6 +215,66 @@ class IdeasAreReadOnly(unittest.TestCase):
                              capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(json.loads(run.stdout), [False, False])
+
+
+def _linked_spec(flow: Path, spec_id: str, durable: str, display: str) -> None:
+    (flow / "specs").mkdir(parents=True, exist_ok=True)
+    (flow / "specs" / f"{spec_id}.json").write_text(json.dumps({
+        "id": spec_id, "title": "Demo", "status": "open", "branch_name": spec_id,
+        "tracker": {"id": durable, "identifier": display, "url": None,
+                    "lastSyncedAt": None, "depRelations": [],
+                    "linkState": "linked"}}), encoding="utf-8")
+
+
+class IdeaStatusAndRelationsAreReadOnly(unittest.TestCase):
+    """R6 siblings: dependency links and status transitions skip the
+    pre-write parent read, so each refuses an idea itself."""
+
+    def _relate(self, a: str, b: str, *, many: bool = False):
+        from flowctl_tracker import relate as R  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _linked_spec(flow, "fn-1-a", *a)
+            _linked_spec(flow, "fn-2-b", *b)
+            (flow / "config.json").write_text(
+                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
+            ex = fake_execute({})
+            if many:
+                out = R.relate_many(flow, "fn-1-a", ["fn-2-b"], event="plan",
+                                    execute=ex)[0]
+            else:
+                out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
+        return out, ex
+
+    def test_relation_with_an_idea_at_either_end_makes_no_request(self) -> None:
+        idea_end, delivery = (IDEA_ID, "IDEAS-7"), ("10012", "PROJ-12")
+        for many in (False, True):
+            for a, b in ((idea_end, delivery), (delivery, idea_end)):
+                out, ex = self._relate(a, b, many=many)
+                self.assertIsInstance(out, TrackerError, (many, a))
+                self.assertIs(out.cls, ErrorClass.CAPABILITY, (many, a))
+                self.assertEqual(out.subtype, "idea_read_only", (many, a))
+                self.assertEqual(ex.calls, [], (many, a))
+
+    def test_status_transition_on_an_idea_makes_no_request(self) -> None:
+        from flowctl_tracker.status.providers import apply_status  # noqa: PLC0415
+        ex = fake_execute({})
+        out = apply_status("jira", jr_cfg(idea_keys=["IDEAS"]),
+                           {"durable": IDEA_ID, "display": "IDEAS-7"}, {}, ex,
+                           target_slot="done")
+        self.assertIs(out.cls, ErrorClass.CAPABILITY)
+        self.assertEqual(out.subtype, "idea_read_only")
+        self.assertEqual(ex.calls, [])
+
+    def test_unready_reads_the_idea_and_moves_nothing(self) -> None:
+        config = jr_cfg(idea_keys=["IDEAS"])
+        config["tracker"]["readyState"] = "Ready for delivery"
+        ex = fake_execute({"wire-read": ok(idea())})
+        out = W.dispatch("unready", config,
+                         locator={"durable": IDEA_ID, "display": "IDEAS-7"},
+                         execute=ex)
+        self.assertIs(out.cls, ErrorClass.CAPABILITY)
+        self.assertEqual([c.op for c in ex.calls], ["wire-read"])
 
 
 class IdeaRead(unittest.TestCase):
@@ -440,6 +509,7 @@ class Cli(unittest.TestCase):
                                    IDEA_ID, "--identifier", "IDEAS-7", "--json")
             self.assertNotEqual(linked_out.returncode, 0)
             self.assertIn("idea", linked_out.stdout.lower())
+            self.assertIn("idea-intake.md", linked_out.stdout)
             tracker = json.loads((cwd / ".flow" / "specs" / f"{spec_id}.json")
                                  .read_text(encoding="utf-8"))["tracker"]
             self.assertIsNone(tracker.get("id"))

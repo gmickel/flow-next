@@ -28,6 +28,12 @@ from . import (
 IDEA_REFERENCE = Path(__file__).resolve().parents[3] / "references" / "idea-intake.md"
 
 
+def idea_reference() -> str:
+    """The reference's absolute path when it sits beside `scripts/`, else its
+    path under the plugin root: the output never names a missing file."""
+    return str(IDEA_REFERENCE) if IDEA_REFERENCE.is_file() else "references/idea-intake.md"
+
+
 def is_idea_key(config: dict, key: str) -> bool:
     """A key in a project `tracker.perTracker.ideaProjectKeys` lists, never the
     delivery project. Costs no request; absent or empty config is always False."""
@@ -44,8 +50,10 @@ def _idea_write_refusal(key: str) -> TrackerError:
         ErrorClass.CAPABILITY,
         f"{key} is an idea in a discovery project (tracker.perTracker."
         "ideaProjectKeys); flow-next never writes to an idea except its "
-        "delivery link (flowctl tracker idea link)",
-        subtype="idea_read_only", details={"capability": "idea_read_only"})
+        f"delivery link (flowctl tracker idea link). Read {idea_reference()} "
+        "for the idea-intake steps",
+        subtype="idea_read_only",
+        details={"capability": "idea_read_only", "reference": idea_reference()})
 
 
 def to_wire(body: str) -> Result:
@@ -146,7 +154,7 @@ def read(config: dict, locator: dict, execute: Execute) -> Result:
     # and the read names the reference that handles it (no extra request).
     if is_idea_key(config, locator["display"]):
         out["idea"] = {
-            "reference": str(IDEA_REFERENCE),
+            "reference": idea_reference(),
             "note": "This issue is an idea in a discovery project, not delivery "
                     "work. Read the reference before routing it.",
         }

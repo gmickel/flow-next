@@ -18,7 +18,9 @@ about it locally. `$FLOWCTL` below is the flowctl that made the read which sent 
 `"$FLOWCTL" tracker idea read <key-or-url> --json` returns its title, body, status and URL, its
 comments, and the issues already delivery-linked to it (`deliveryLinks`). Discovery teams often
 keep the requirement in comments: the body and every comment are the source, next to what the
-person says in the session. A failed read stops with its error; nothing has been written.
+person says in the session. A failed read stops with its error; nothing has been written. When
+`commentsTruncated` is true, the read did not return every comment: tell the person the comment
+list is incomplete and ask before capturing from it.
 
 When neither body nor comments state a requirement (only a template's headings, or nothing), tell
 the person the idea has nothing to build from and ask what to build. Never invent criteria from
