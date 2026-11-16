@@ -49,10 +49,10 @@ Six probed signals:
 | Signal | Probe | Means |
 |---|---|---|
 | Linear MCP registered | host MCP/tool list contains a Linear server (e.g. `*Linear*` tools) | interactive Linear transport available (OAuth handled) |
-| `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]` | headless Linear GraphQL transport available |
+| `LINEAR_API_KEY` | `[ -n "$LINEAR_API_KEY" ]`, or `tracker.perTracker.tokenCommand` set | headless Linear GraphQL transport available |
 | GitHub auth | `gh auth status` exits 0 | headless GitHub transport available |
 | GitLab auth / token | `glab auth status` exits 0, or `GITLAB_TOKEN` / `CI_JOB_TOKEN` set | GitLab transport available (`glab` CLI primary → raw-REST token fallback; self-managed hosts honored) |
-| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` | Jira REST transport available and **offered**. API version 2 is the default for Cloud and DC/Server; a bare `*.atlassian.net` host with no credential is surfaced but cannot be offered |
+| Jira REST + token | `JIRA_BASE_URL` set, plus Cloud `JIRA_EMAIL`+`JIRA_API_TOKEN` OR self-hosted DC/Server `JIRA_PAT` (either token may come from `tracker.perTracker.tokenCommand`) | Jira REST transport available and **offered**. API version 2 is the default for Cloud and DC/Server; a bare `*.atlassian.net` host with no credential is surfaced but cannot be offered |
 
 No credential in the environment? Set `tracker.perTracker.tokenCommand` to an argv list that prints it from the secret store you already use, e.g. `flowctl config set tracker.perTracker.tokenCommand '["op","read","op://eng/jira/token"]'`. flowctl runs it without a shell, once per process and only when the variable is unset (`LINEAR_API_KEY`, `JIRA_API_TOKEN` or `JIRA_PAT`; Jira Cloud still reads `JIRA_EMAIL`). It times out after 10 seconds, and its output never reaches a log, receipt or `.flow/` file. Host MCP servers (Linear, Rovo) can't stand in for it: flowctl runs headless and cannot call them.
 

@@ -30,7 +30,7 @@
     },
     {
       "path": "flowctl_tracker/credentials.py",
-      "sha256": "e6e83564f4afca7049f3539840671c7a57f32ac01b79a8fbf5bc6ae8f96733d2"
+      "sha256": "2946ede32adea7a0bbece9a0279df4411f1b2a8b6714a839921390a38460e4ee"
     },
     {
       "path": "flowctl_tracker/envelope.py",

@@ -99,6 +99,40 @@ class TokenCommand(unittest.TestCase):
             self.send("jira", per, "https://acme.atlassian.net/rest/api/2/myself")
         self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
 
+    def test_concurrent_requests_run_the_command_once(self) -> None:
+        # Linear dependency probes send requests from a thread pool on a cold cache.
+        import threading
+        slow = ("import sys, time; open(sys.argv[1], 'a').write('run\\n'); time.sleep(0.3); "
+                "print(sys.argv[2]) if sys.argv[2] != 'fail' else sys.exit(4)")
+        for token in ("parallel-token-5555", "fail"):
+            with self.subTest(token=token):
+                log = Path(self.tmp.name) / f"parallel-{token}.log"
+                config = {"tracker": {"type": "linear",
+                                      "perTracker": {"tokenCommand": py(slow, str(log), token)}}}
+                execute = RV.bound_executor(config, RV.default_execute, on_event=lambda _e: None)
+                gate = threading.Barrier(4)
+
+                class FakeResp:
+                    status, headers = 200, {}
+                    def read(self): return b"{}"
+                    def __enter__(self): return self
+                    def __exit__(self, *a): return False
+
+                def probe(gate=gate, execute=execute) -> None:
+                    gate.wait()
+                    execute(Request(provider="linear", op="probe", method="GET",
+                                    url_or_argv="https://api.linear.app/graphql"))
+
+                # One patch around every thread: patching per thread is not thread-safe.
+                with mock.patch("urllib.request.OpenerDirector.open",
+                                side_effect=lambda *a, **k: FakeResp()):
+                    threads = [threading.Thread(target=probe) for _ in range(4)]
+                    for t in threads:
+                        t.start()
+                    for t in threads:
+                        t.join()
+                self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
+
     def test_environment_variable_wins(self) -> None:
         argv, log = self.counted("unused-token-1111")
         with mock.patch.dict(os.environ, {"JIRA_API_TOKEN": "env-token-2222"}):
