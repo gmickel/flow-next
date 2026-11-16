@@ -99,6 +99,28 @@ class TokenCommand(unittest.TestCase):
             self.send("jira", per, "https://acme.atlassian.net/rest/api/2/myself")
         self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
 
+    def test_concurrent_requests_run_the_command_once(self) -> None:
+        # Linear dependency probes send requests from a thread pool on a cold cache.
+        import threading
+        slow = ("import sys, time; open(sys.argv[1], 'a').write('run\\n'); time.sleep(0.3); "
+                "print(sys.argv[2]) if sys.argv[2] != 'fail' else sys.exit(4)")
+        for token in ("parallel-token-5555", "fail"):
+            with self.subTest(token=token):
+                log = Path(self.tmp.name) / f"parallel-{token}.log"
+                argv = py(slow, str(log), token)
+                gate = threading.Barrier(4)
+
+                def probe() -> None:
+                    gate.wait()
+                    self.send("linear", {"tokenCommand": argv}, "https://api.linear.app/graphql")
+
+                threads = [threading.Thread(target=probe) for _ in range(4)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+                self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
+
     def test_environment_variable_wins(self) -> None:
         argv, log = self.counted("unused-token-1111")
         with mock.patch.dict(os.environ, {"JIRA_API_TOKEN": "env-token-2222"}):
