@@ -28473,6 +28473,13 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         durable_tracker_id = durable_tracker_id.strip()
     if tracker_url is not None:
         tracker_url = tracker_url.strip()
+    # fn-329: a creation input only - the tracker package reads it when it
+    # creates the spec's issue and never sends it again.
+    tracker_parent = getattr(args, "tracker_parent", None)
+    if tracker_parent is not None:
+        tracker_parent = tracker_parent.strip()
+        if not tracker_parent:
+            error_exit("--tracker-parent must not be empty", use_json=args.json)
 
     # Use slugified title as suffix, fallback to random if empty/invalid.
     slug = slugify(args.title)
@@ -28538,6 +28545,8 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
                 spec_data["tracker"]["linkState"] = "linked"
                 if tracker_url is not None:
                     spec_data["tracker"]["url"] = tracker_url
+        if tracker_parent is not None:
+            spec_data["tracker"]["parent"] = tracker_parent
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
         spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
@@ -43552,10 +43561,13 @@ def _create_first_dir(flow_dir: Path) -> Path:
     return flow_dir / CREATE_FIRST_DIR
 
 
-def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
+def compute_create_first_key(tracker_type: str, title: str, body: str,
+                             parent: Optional[str] = None) -> str:
     """Stable retry lookup key for a pre-spec create-first attempt (fn-134).
 
-    First 16 hex chars of sha256(type NUL title NUL body). Same inputs always
+    First 16 hex chars of sha256(type NUL title NUL body), with NUL `parent=`
+    and the parent appended only when one is given, so the same work under
+    another parent never resumes onto this issue. Same inputs always
     yield the same key, so a resumed run finds the record written by the
     interrupted one and LINKS instead of creating a second issue. Must stay
     identical to the definition in the tracker-sync skill's steps.md Phase 2d.
@@ -43567,6 +43579,8 @@ def compute_create_first_key(tracker_type: str, title: str, body: str) -> str:
     # and the workflow creates a second remote issue.
     normalized_type = (tracker_type or "").strip().lower()
     payload = "\0".join([normalized_type, title or "", body or ""])
+    if parent and parent.strip():
+        payload += "\0parent=" + parent.strip()
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -43697,6 +43711,7 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
         durable_id=getattr(args, "durable_id", None),
         url=getattr(args, "url", None),
         source=getattr(args, "source", None),
+        parent=getattr(args, "parent", None),
     )
     print(payload)
     sys.exit(code)
@@ -43913,7 +43928,8 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
                 body = Path(body_file).read_text(encoding="utf-8")
             except OSError as exc:
                 error_exit(f"Cannot read --body-file: {exc}", use_json=use_json)
-        key = compute_create_first_key(args.type, args.title, body)
+        key = compute_create_first_key(args.type, args.title, body,
+                                       getattr(args, "parent", None))
         if use_json:
             json_output({"key": key})
         else:
@@ -44156,6 +44172,10 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
         # A later put (e.g. re-recording transport) must not drop a specId
         # an earlier post-mint put already established.
         record["specId"] = existing["specId"]
+    if existing and existing.get("parent") is not None:
+        # The parent `tracker create-first --parent` created the issue under;
+        # its retry check compares it, so a later put must keep it.
+        record["parent"] = existing["parent"]
     # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
     # A project whose auto-managed .flow/.gitignore predates this release
     # would otherwise get an untracked-but-unignored recovery record, and a
@@ -56658,6 +56678,10 @@ def main() -> None:
     p_tracker_create.add_argument("--body-file", required=True)
     p_tracker_create.add_argument("--event", default=None,
                                   help="perEvent key stamped on the sync receipt")
+    p_tracker_create.add_argument(
+        "--parent", default=None,
+        help="Parent issue to create the issue under (Jira Cloud key, Linear "
+        "identifier, GitLab epic id or reference); recorded on the spec")
     p_tracker_create.add_argument("--json", action="store_true",
                                   help="Accepted and ignored (output is always JSON)")
     p_tracker_create.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create")
@@ -56670,6 +56694,10 @@ def main() -> None:
     p_tracker_cf.add_argument("--body-file", required=True)
     p_tracker_cf.add_argument("--retry-key", required=True,
                               help="16-hex key from sync create-first-key")
+    p_tracker_cf.add_argument(
+        "--parent", default=None,
+        help="Parent issue to create the issue under; pass the same value to "
+        "spec create --tracker-parent when minting")
     p_tracker_cf.add_argument("--json", action="store_true",
                               help="Accepted and ignored (output is always JSON)")
     p_tracker_cf.set_defaults(func=cmd_tracker_lifecycle, lifecycle_verb="create-first")
@@ -56942,6 +56970,8 @@ def main() -> None:
     p_cfk.add_argument("--type", required=True, help="tracker.type (linear|github|gitlab|jira)")
     p_cfk.add_argument("--title", required=True, help="Issue title")
     p_cfk.add_argument("--body-file", dest="body_file", default=None, help="File holding the issue body")
+    p_cfk.add_argument("--parent", default=None,
+                       help="Parent issue the create-first will pass, so each parent gets its own key")
     p_cfk.add_argument("--json", action="store_true", help="JSON output")
     p_cfk.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="key")
 
@@ -58451,6 +58481,11 @@ def main() -> None:
         p_create.add_argument(
             "--tracker-url",
             help="Tracker issue URL; requires --tracker-id",
+        )
+        p_create.add_argument(
+            "--tracker-parent",
+            help="Parent issue the spec's tracker issue is created under "
+            "(read only when that issue is created)",
         )
         # fn-163.1: one-shot create+set-plan. Mutually exclusive; plan content
         # is fully read before id allocation (pre-write validation ordering).

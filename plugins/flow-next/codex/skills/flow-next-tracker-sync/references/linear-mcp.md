@@ -15,6 +15,9 @@ pull, or reconcile operations. Those use flowctl's GraphQL transport.
 
 ## Handoff
 
+When the create payload carries `parent`, create the issue as a sub-issue of
+that parent issue.
+
 Capture the MCP result as:
 
 ```json

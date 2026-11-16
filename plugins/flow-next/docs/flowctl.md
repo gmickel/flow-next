@@ -284,6 +284,9 @@ flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--plan-fi
 # Tracker-first: key the spec by its tracker identifier (wor-17-slug) instead of fn-NN
 flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 \
   [--tracker-id <durable-id> [--tracker-url <url>]] [--json]
+
+# Either form: the parent issue the spec's tracker issue is created under
+flowctl spec create --title "Spec title" --tracker-parent PROJ-12 [--json]
 ```
 
 Output:
@@ -294,6 +297,8 @@ Output:
 `--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key - no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
 
 `--tracker-id <durable-id>` (optionally with `--tracker-url <url>`) publishes the tracker-first spec already linked: `tracker.id`, `tracker.identifier`, `tracker.url`, and `linkState: linked` land in the same write, so no later touchpoint mistakes it for unlinked and creates a second issue. Both require `--tracker-first`; `--tracker-url` requires `--tracker-id`; empty values are refused. A durable id already linked to another spec refuses the create before anything is written. Without `--tracker-id` the spec stores only the display identifier until `sync set-tracker-id` links it.
+
+`--tracker-parent <identifier>` records `tracker.parent` on the new spec: the parent issue, as the tracker displays it, that the spec's issue is created under. It is read only when flow-next creates that issue, never sent again, and an empty value is refused. See [`tracker-sync.md`](tracker-sync.md#parent-issue-at-creation) for what each tracker accepts.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
 
@@ -1588,14 +1593,14 @@ Idempotent - re-marking replaces `audit_notes` and re-stamps `last_audited`. Als
 Pre-spec recovery records for tracker-sync `create-first`, which creates a tracker issue *before* any local spec exists (so `sync receipt`, which resolves a local spec id, cannot be used). Thin atomic file layer only - no transport, no issue creation, no judgment. Records live at `.flow/create-first/<key>.json` and are gitignored, because a committed record would let a teammate computing the same key resume onto someone else's issue.
 
 ```bash
-flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md]
+flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md] [--parent <id>]
 flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
 flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport … \
                                 [--spec-id <id>] [--if-absent | --expect-spec-id <id>]
 flowctl sync create-first-clear --key <k>             # after the linked mint succeeds
 ```
 
-The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.
+The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `--parent` appends `NUL parent=<id>` before hashing, so the same work under another parent gets its own key; without it the key is unchanged. `put` is idempotent and preserves the original `createdAt` and any recorded `parent`.
 
 `--if-absent` makes the post-mint put a **compare-and-set**: it records the spec id only while the claim slot is free, and the loser of a concurrent promotion exits `10` (the shared tracker CONFLICT status) with `class=conflict`, `subtype=spec_already_minted`, and `details.recordedSpecId` naming the winner to adopt. `--expect-spec-id <id>` is the CAS update of a claim you already own (mismatch: `subtype=spec_id_mismatch`); the two flags are mutually exclusive. Other refusals: `record_unreadable` (a CAS never overwrites an unverifiable claim) and `lock_timeout` (`retryable: true`). Flagless `put` is unchanged, including last-write-wins.
 
@@ -2006,12 +2011,12 @@ or any `.flow/` file: `resolve` repairs and writes `tracker.resolved`;
 ```bash
 # Create and link an issue for an existing spec; writes an event receipt.
 flowctl tracker create <spec-id> --title TEXT --body-file F \
-  [--event KEY] [--json]
+  [--event KEY] [--parent ID] [--json]
 
 # Create before the local spec exists; retry record key comes from
 # `flowctl sync create-first-key`; no spec receipt exists yet.
 flowctl tracker create-first --title TEXT --body-file F \
-  --retry-key <16-hex> [--json]
+  --retry-key <16-hex> [--parent ID] [--json]
 
 # Persist a Linear issue created through host MCP.
 flowctl tracker persist-external <spec-id> --identifier KEY-N \
@@ -2032,6 +2037,14 @@ flowctl tracker sync-body <spec-id> --flow-file F \
   [--tracker-body-file F] [--direction push|pull] \
   [--event KEY] [--json]
 ```
+
+`create` uses the spec's `tracker.parent` as the parent issue; `--parent`
+replaces it and is recorded on the spec with the link. `create-first --parent`
+sends it and keeps it in the retry record; a retry whose parent differs from
+the recorded one refuses with `conflict` / `parent_mismatch`. Pass the same value to
+`spec create --tracker-parent` when minting. Both results report `parent`.
+GitHub and Jira Data Center refuse a parent with a `capability` error before
+any request ([parent issue at creation](tracker-sync.md#parent-issue-at-creation)).
 
 `status --to` is a request, not an unconditional state assignment. Terminal
 states remain gated on merge evidence. `relate` maintains the

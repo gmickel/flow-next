@@ -211,6 +211,28 @@ def spec_project_fields(tracker_block: Any) -> Result:
     return fields
 
 
+def parent_value(value: Any, *, source: str) -> Result:
+    """A parent issue identifier, trimmed; None when absent.
+
+    The spec's `tracker.parent` is a creation input only: it is read when an
+    issue is created for the spec and never sent again. Like the Project
+    fields, a present-but-unusable value errors instead of being dropped."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return TrackerError(
+            ErrorClass.INVALID_INPUT,
+            f"{source} must be a non-empty parent issue identifier or absent; "
+            f"got {value!r}",
+            subtype="parent")
+    return value.strip()
+
+
+def spec_parent_field(tracker_block: Any) -> Result:
+    return parent_value(dict_(tracker_block).get("parent"),
+                        source="tracker.parent")
+
+
 def spec_path(flow_dir: Path, spec_id: str) -> Path:
     return Path(flow_dir) / "specs" / f"{spec_id}.json"
 

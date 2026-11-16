@@ -162,7 +162,7 @@ Two entry points:
 
 Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
 
-*(+ optional tracker sync)* - with the bridge active, `tracker.perEvent.capture` reconciles the new spec to a tracker issue (or pulls a "grab issue X and spec it" tracker-first link). On by default once the bridge is hooked up (opt-out per event); see [`tracker-sync.md`](tracker-sync.md).
+*(+ optional tracker sync)* - with the bridge active, `tracker.perEvent.capture` reconciles the new spec to a tracker issue (or pulls a "grab issue X and spec it" tracker-first link). On by default once the bridge is hooked up (opt-out per event); see [`tracker-sync.md`](tracker-sync.md). Work that belongs under existing planned work can say so while capturing ("under PROJ-12", "as sub-issues of ENG-40"): each spec, including every child of a split, records that parent and its issue is created under it on Jira Cloud, Linear and GitLab epics. The tracker owns the parent from then on ([parent issue at creation](tracker-sync.md#parent-issue-at-creation)).
 
 ### [2] Spec, business-layer complete: Handover #1
 

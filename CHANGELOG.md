@@ -6,6 +6,12 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+Work that belongs under an existing epic or parent issue now lands there when flow-next creates its tracker issue. Say "under PROJ-12" or "as sub-issues of ENG-40" while capturing, and each spec, including every child of a split, records that parent, and its issue on Jira Cloud, Linear or GitLab is created under it in the one create request, with no second step in the tracker. The tracker owns the parent from then on: no later sync sends, changes or clears it. Checked live on Jira Cloud, Linear and a self-managed GitLab with epics.
+
+### Added
+
+- **Create a tracker issue under its parent.** A spec's tracker block takes an optional `parent`, the parent's identifier as the tracker shows it. Jira Cloud sends it as the issue's `parent` (an epic above a story or task), Linear as `parentId`, and GitLab as `epic_id` (an epic id, or an `&5` / `group/sub&5` reference resolved with one read). Every create reads it: `flowctl tracker create`, the create the first push runs for an unlinked spec, `tracker create-first`, and the payload handed to the agent on the Linear MCP route; the result reports the parent it set. Record it with `flowctl spec create --tracker-parent`, `tracker create --parent` or `tracker create-first --parent`. A parent the tracker rejects comes back as its own error and creates no issue. GitHub refuses a parent, because flow-next uses an issue's one parent to project dependencies there, and so do Jira Data Center and Server, which place issues in epics through the Epic Link field; both refuse with a `capability` error before any request. A spec without a parent sends exactly the create request it sent before.
+
 ## [flow-next 9.12.0] - 2026-11-16
 
 Teams that keep their Jira or Linear credentials in a secret store or behind a company MCP server no longer need a token in every developer's shell. Set `tracker.perTracker.tokenCommand` once to the command that already prints it (`op read`, `security find-generic-password`, your vault CLI), and every tracker call reads the token from there; checked live against Jira Cloud. Bitbucket and GitLab pull requests get briefings whose file links open, the forge stand-ins for `gh` return a pull request's draft state and description when asked, and a repository that requires a fixed footer line on every pull request now gets it without breaking the rendered briefing. Thanks to @benjamin-benz-42 for running 9.10.0 on Bitbucket Cloud and Jira Cloud and reporting what broke (#602, #611).
