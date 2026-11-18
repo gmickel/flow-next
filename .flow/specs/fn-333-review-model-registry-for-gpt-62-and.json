@@ -1,13 +1,367 @@
 {
   "branch_name": "fn-333-review-model-registry-for-gpt-62-and",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-18T13:16:01.495519Z",
   "created_at": "2026-11-18T08:41:03.476690Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-333-review-model-registry-for-gpt-62-and",
+  "impl_review_rounds": {
+    "fn-333-review-model-registry-for-gpt-62-and.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "94f8414dda913c789d5c370dbbb334e3326d5aa6f39b00139542696f1c99e62f",
+      "backend": "codex",
+      "base_sha": "d5036ff96db37e5c95a964b13ea280c08762926f",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "classification": "introduced",
+            "findingId": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ea943446beaab1084ed489d398e5f471",
+            "classification": "introduced",
+            "findingId": "finding-ea943446beaab1084ed489d398e5f471",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c6197287e2711482789861227d422c87",
+            "classification": "introduced",
+            "findingId": "finding-c6197287e2711482789861227d422c87",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "classification": "introduced",
+            "findingId": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "classification": "introduced",
+            "findingId": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7f6776b4182a909aaf1ca8c95bf0835a9c485b2f",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 3327,
+      "output_sha256": "e5435fe20fc2ddcb88476fc6feead5d83c712810c825055bfc0caff1ff46fbe4",
+      "reservation_id": "0b6ca71565324b59a36f83f045b613e8",
+      "round_consumed": true,
+      "scope": "impl:fn-333-review-model-registry-for-gpt-62-and.1",
+      "superseded_by": null,
+      "task": "fn-333-review-model-registry-for-gpt-62-and.1",
+      "timestamp": "2026-11-18T12:41:04.062312Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "4f49693d207efc0520e4a00e9959ce4b2894a242966bfefb9f064456ea7ba077",
+      "backend": "codex",
+      "base_sha": "d5036ff96db37e5c95a964b13ea280c08762926f",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "classification": "introduced",
+            "findingId": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-ea943446beaab1084ed489d398e5f471",
+            "classification": "introduced",
+            "findingId": "finding-ea943446beaab1084ed489d398e5f471",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c6197287e2711482789861227d422c87",
+            "classification": "introduced",
+            "findingId": "finding-c6197287e2711482789861227d422c87",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "classification": "introduced",
+            "findingId": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "classification": "introduced",
+            "findingId": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "caff7552f3c4ecd2286c93b2f9be7c704d8b8631",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2500,
+      "output_sha256": "42fab79bc867f232f45a6d7a9426bba2b535db0e253e0061d61e40084cde9b55",
+      "reservation_id": "7b503ad7da464d838d72e0a5ce9d94fc",
+      "round_consumed": true,
+      "scope": "impl:fn-333-review-model-registry-for-gpt-62-and.1",
+      "superseded_by": null,
+      "task": "fn-333-review-model-registry-for-gpt-62-and.1",
+      "timestamp": "2026-11-18T12:44:39.068162Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "b8a2435e7ddbf528563e026628d3212fd16c548befdddc1d099665a499aec495",
+      "backend": "codex",
+      "base_sha": "2960a4d711d976145a4f709520a8d521518d17e3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "classification": "introduced",
+            "findingId": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-ea943446beaab1084ed489d398e5f471",
+            "classification": "introduced",
+            "findingId": "finding-ea943446beaab1084ed489d398e5f471",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c6197287e2711482789861227d422c87",
+            "classification": "introduced",
+            "findingId": "finding-c6197287e2711482789861227d422c87",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "classification": "introduced",
+            "findingId": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "classification": "introduced",
+            "findingId": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "fd241ff159ff5c1ff0f978ee6537125be08b685a",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 3150,
+      "output_sha256": "b3589a7af4e6d12a8fe75ce7a8dd91d94c2f9ee8dfa62c0563e84745961f38ab",
+      "reservation_id": "ad431f6bf63e499a97cf4a1028464351",
+      "round_consumed": true,
+      "scope": "impl:fn-333-review-model-registry-for-gpt-62-and.1",
+      "superseded_by": null,
+      "task": "fn-333-review-model-registry-for-gpt-62-and.1",
+      "timestamp": "2026-11-18T13:10:19.007472Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "ce3c9dfdd619f53b265c92d0a2137912c6ab86a24a0bbc309b64e928946c5f28",
+      "backend": "codex",
+      "base_sha": "2960a4d711d976145a4f709520a8d521518d17e3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "classification": "introduced",
+            "findingId": "finding-6b20ac00d87fb2a4d36110d75667d6d9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-ea943446beaab1084ed489d398e5f471",
+            "classification": "introduced",
+            "findingId": "finding-ea943446beaab1084ed489d398e5f471",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c6197287e2711482789861227d422c87",
+            "classification": "introduced",
+            "findingId": "finding-c6197287e2711482789861227d422c87",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "classification": "introduced",
+            "findingId": "finding-dd442ce093212d0a446daa29c597d0c4",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "classification": "introduced",
+            "findingId": "finding-c7d6225f78302b9f34047358a1a6d857",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "849bdc86981b8d4877a16cdd663c9780cf2eb2e9",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2249,
+      "output_sha256": "754b8ca5f542a419ca874b03e24055f4d534a70dca9635d903dcc0e99879a5e1",
+      "reservation_id": "e3b19b8a7dae46d3ae00abd3dbf02cc6",
+      "round_consumed": true,
+      "scope": "impl:fn-333-review-model-registry-for-gpt-62-and.1",
+      "superseded_by": null,
+      "task": "fn-333-review-model-registry-for-gpt-62-and.1",
+      "timestamp": "2026-11-18T13:13:44.031583Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e823f2daa599eb487bb36498273dcf3ed5daeea6fee0e95266f6f7548ab422cb",
+      "backend": "codex",
+      "base_sha": "2960a4d711d976145a4f709520a8d521518d17e3",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a645fe7fb9dfc5903d973948c3f4b2a15ca6c442",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 1716,
+      "output_sha256": "3339177d35cb2d76262b0249e3adc421b91cb44ecab3588c972ecbd2d2680f3d",
+      "reservation_id": "de632aa961994f27b88e4827e78c773f",
+      "round_consumed": true,
+      "scope": "impl:fn-333-review-model-registry-for-gpt-62-and.1",
+      "superseded_by": null,
+      "task": "fn-333-review-model-registry-for-gpt-62-and.1",
+      "timestamp": "2026-11-18T13:15:53.986874Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-333-review-model-registry-for-gpt-62-and.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-333-review-model-registry-for-gpt-62-and.1": 0
+  },
   "spec_path": ".flow/specs/fn-333-review-model-registry-for-gpt-62-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Review model registry for GPT-6.2 and Fable 5.2, Fable only when pinned",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +374,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T08:41:03.479369Z"
+  "updated_at": "2026-11-18T13:16:01.495527Z"
 }

@@ -3786,15 +3786,22 @@ _MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 # 2026-07-10 (all three CLIs). Matching ONLY these keeps the ladder from stepping
 # down on auth / network / sandbox / timeout failures.
 #   codex   : HTTP 400 invalid_request_error "The '<m>' model requires a newer
-#             version of Codex" (CLI < 0.144); OpenAI model-not-found 400.
-#   copilot : 'Model "<m>" from --model flag is not available' (copilot 1.0.65).
+#             version of Codex" (CLI < 0.144); OpenAI model-not-found 400;
+#             "The '<m>' model is not supported when using Codex with a ChatGPT
+#             account." (0.169.1 / 0.170.0 on a ChatGPT sign-in, 2026-11-18).
+#   copilot : 'Model "<m>" from --model flag is not available' (copilot 1.0.65);
+#             'Execution failed: Model "<m>" is not available.' (1.0.114,
+#             2026-11-18). Its quota refusal ("You have exceeded your monthly
+#             quota") matches neither, so it never steps down.
 #   cursor  : 'Cannot use this model: <m>. Available models: ...' (cursor-agent,
 #             probed live 2026-07-10 with a fake model id + --mode ask).
 _CODEX_UNAVAILABLE_MARKERS = (
     "requires a newer version of Codex",
     "model_not_found",
+    "model is not supported when using Codex with a ChatGPT account",
 )
 _COPILOT_UNAVAILABLE_MARKERS = ("from --model flag is not available",)
+_COPILOT_UNAVAILABLE_RE = re.compile(r'Execution failed: Model "[^"\n]+" is not available\.')
 _CURSOR_UNAVAILABLE_MARKERS = ("Cannot use this model:",)
 
 
@@ -3809,7 +3816,9 @@ def _codex_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
 
 def _copilot_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
     blob = _unavailable_blob(out, err)
-    return any(m in blob for m in _COPILOT_UNAVAILABLE_MARKERS)
+    return any(m in blob for m in _COPILOT_UNAVAILABLE_MARKERS) or bool(
+        _COPILOT_UNAVAILABLE_RE.search(blob)
+    )
 
 
 def _cursor_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
@@ -4786,7 +4795,7 @@ _FINDINGS_PRIOR_RECORD_RE = re.compile(
 )
 _FINDINGS_FILE_LINE_RE = re.compile(
     r"^`?(?P<path>[^`]+?):(?P<start>[1-9]\d*)"
-    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?`?(?:\s.*)?$"
+    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?`?(?:[\s,;].*)?$"
 )
 _FINDINGS_HOST_TABLE_SEPARATOR_RE = re.compile(
     r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
@@ -5199,6 +5208,166 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
             block_lines.append(line)
         blocks.append("\n".join(block_lines).strip())
     return blocks, saw_severity_label
+
+
+_FINDINGS_SHAPE_LABELS = (
+    r"severity|confidence|classification|file\s*:\s*line|r-?ids?|problem|"
+    r"suggestion|title"
+)
+_FINDINGS_BARE_LABEL_RE = re.compile(
+    r"""(?ix)
+    \*\*(?P<label>
+      severity(?=\*\*[ \t]+(?:P[0-3]|critical|major|minor|nitpick)\b)
+      | confidence(?=\*\*[ \t]+\d)
+      | classification(?=\*\*[ \t]+(?:introduced|pre[-_ ]existing)\b)
+      | file\s*:\s*line(?=\*\*[ \t]+[`\[])
+      | r-?ids?(?=\*\*[ \t]+`?\[)
+      | problem | suggestion | title
+    )\*\*(?![ \t]*[:=])[ \t]*
+    """
+)
+_FINDINGS_DOT_SPLIT_RE = re.compile(
+    rf"[ \t]+·[ \t]+(?=\*\*(?:{_FINDINGS_SHAPE_LABELS}):\*\*)", re.IGNORECASE
+)
+_FINDINGS_TUPLE_HEAD_RE = re.compile(
+    r"""(?ix)
+    ^[ \t]*(?:\#{1,6}[ \t]+|(?:[-*+]|\d+[.)])[ \t]+)?\**[ \t]*
+    (?P<severity>P[0-3])[ \t]*[·|][ \t]*confidence[ \t]+(?P<confidence>\d+)
+    [ \t]*[·|][ \t]*(?P<classification>introduced|pre[-_ ]existing)\b
+    (?P<rest>.*)$
+    """
+)
+_FINDINGS_SEVERITY_HEADING_RE = re.compile(
+    r"(?i)^[ \t]*\#{1,6}[ \t]+(?P<severity>P[0-3])[ \t]*[·:—-][ \t]*(?P<title>\S.*?)[ \t]*$"
+)
+_FINDINGS_LOCATION_RE = re.compile(r"`(?P<loc>[^`\s]+:[1-9]\d*(?:-[1-9]\d*)?)`")
+_FINDINGS_LINK_RE = re.compile(r"\[(?P<text>[^\]]*)\]\((?P<target>[^)\s]+)\)")
+_FINDINGS_FILE_LINE_FIELD_RE = re.compile(
+    r"(?i)^(?P<label>.*?\*\*file\s*:\s*line:\*\*)(?P<value>.*)$"
+)
+
+
+def _review_finding_link_location(match: "re.Match[str]") -> str:
+    """A markdown link in a File:Line value as a repo-relative `path:line`."""
+    target = re.sub(
+        r"#L(\d+)(?:-L?(\d+))?$",
+        lambda m: f":{m.group(1)}" + (f"-{m.group(2)}" if m.group(2) else ""),
+        match.group("target"),
+    )
+    if not re.match(r"^(?:/|[A-Za-z]:[/\\])", target):
+        # A relative target is the location as written; an unsafe path or a
+        # bad line number fails as an invalid anchor.
+        return f"`{target}`"
+    text = match.group("text").strip("` ")
+    if (
+        "/" in text
+        and re.search(r":[1-9]\d*(?:-[1-9]\d*)?$", text)
+        and _review_finding_safe_path(text.rsplit(":", 1)[0]) is not None
+    ):
+        return f"`{text}`"
+    # Only an absolute path to the reviewer's own checkout: no portable anchor.
+    return "-"
+
+
+def _review_finding_table_rows(lines: list[str]) -> Optional[list[str]]:
+    """Rewrite a findings table with the prompt's columns as labeled blocks."""
+    header = [cell.strip().lower() for cell in lines[0].strip().strip("|").split("|")]
+    if not {"severity", "confidence", "classification", "problem"} <= set(header):
+        return None
+    if len(lines) < 2 or not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[1]):
+        return None
+    out: list[str] = []
+    for line in lines[2:]:
+        cells = [
+            cell.strip().replace("\\|", "|")
+            for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))
+        ]
+        if len(cells) != len(header):
+            return None
+        out.append("")
+        for label, value in zip(header, cells, strict=True):
+            prefix = "- " if label == "severity" else "  "
+            out.append(_review_finding_location_field(f"{prefix}**{label}:** {value}"))
+    return out
+
+
+def _review_finding_location_field(line: str) -> str:
+    """Resolve a markdown link in a File:Line value; other fields keep theirs."""
+    match = _FINDINGS_FILE_LINE_FIELD_RE.match(line)
+    if not match:
+        return line
+    return match.group("label") + _FINDINGS_LINK_RE.sub(
+        _review_finding_link_location, match.group("value")
+    )
+
+
+def _review_finding_normalize_shapes(output: str) -> str:
+    """Rewrite finding layouts the prompt does not ask for into its labeled form.
+
+    Covers labels without a colon (``**Severity** P1``), fields joined on one
+    line by ``·``, a ``P1 · Confidence 100 · introduced`` tuple or a
+    ``### P1 · Title`` heading opening a finding, a findings table with the
+    prompt's columns, and a markdown link as the File:Line value. Used only
+    after the text as written failed to parse.
+    """
+    lines = output.splitlines()
+    rewritten: list[str] = []
+    index = 0
+    fence: Optional[str] = None
+    while index < len(lines):
+        line = lines[index]
+        # Quoted material in a code fence is an example, never a finding.
+        marker = re.match(r"^[ \t]*(`{3,}|~{3,})", line)
+        if marker and (fence is None or marker.group(1).startswith(fence)):
+            fence = None if fence is not None else marker.group(1)
+            rewritten.append(line)
+            index += 1
+            continue
+        if fence is not None:
+            rewritten.append(line)
+            index += 1
+            continue
+        if line.strip().startswith("|"):
+            end = index
+            while end < len(lines) and lines[end].strip().startswith("|"):
+                end += 1
+            table = _review_finding_table_rows(lines[index:end])
+            if table is not None:
+                rewritten.extend(table)
+                index = end
+                continue
+            rewritten.extend(lines[index:end])
+            index = end
+            continue
+        tuple_head = _FINDINGS_TUPLE_HEAD_RE.match(line)
+        heading = _FINDINGS_SEVERITY_HEADING_RE.match(line)
+        if tuple_head:
+            rest = tuple_head.group("rest")
+            rewritten.append(f"- **Severity:** {tuple_head.group('severity')}")
+            rewritten.append(f"  **Confidence:** {tuple_head.group('confidence')}")
+            rewritten.append(f"  **Classification:** {tuple_head.group('classification')}")
+            location = _FINDINGS_LOCATION_RE.search(rest)
+            if location:
+                rewritten.append(f"  **File:Line:** `{location.group('loc')}`")
+            rids = re.findall(r"(?<![A-Za-z0-9])R\d+(?![A-Za-z0-9])", rest)
+            if rids:
+                rewritten.append(f"  **R-IDs:** [{', '.join(rids)}]")
+        elif heading:
+            rewritten.append(f"- **Severity:** {heading.group('severity')}")
+            rewritten.append(f"  **Title:** {heading.group('title')}")
+        else:
+            line = _FINDINGS_BARE_LABEL_RE.sub(
+                lambda m: f"**{m.group('label')}:** ", line
+            )
+            line = _FINDINGS_DOT_SPLIT_RE.sub("\n  ", line)
+            rewritten.extend(
+                _review_finding_location_field(part) for part in line.split("\n")
+            )
+        index += 1
+    if rewritten == lines:
+        # Nothing to rewrite: the caller skips the second parse.
+        return output
+    return "\n".join(rewritten)
 
 
 def _review_finding_host_table(output: str) -> Optional[list[dict]]:
@@ -5892,8 +6061,7 @@ def parse_review_findings(
             or schema_version != _FINDINGS_SCHEMA_VERSION
         ):
             return None
-        return _parse_review_findings_v1(
-            output,
+        arguments = dict(
             source_receipt_id=source_receipt_id,
             review_kind=review_kind,
             backend=backend,
@@ -5903,8 +6071,37 @@ def parse_review_findings(
             supersedes_receipt_id=supersedes_receipt_id,
             prior_findings=prior_findings,
             anchor_side=anchor_side,
-            parse_status=parse_status,
         )
+        container = _parse_review_findings_v1(
+            output, parse_status=parse_status, **arguments
+        )
+        if not isinstance(output, str):
+            return container
+        # Text in the prompt's layout is parsed as written. The text is read
+        # once more with other observed layouts rewritten into the labeled
+        # form, and that reading wins only when the first failed or it finds
+        # more findings (a finding in another layout beside parsed ones), so
+        # a review fully in the prompt's layout never changes. When both
+        # fail, the first failure stands, unless the first pass found no
+        # findings at all: then the rewrite's reason names the finding that
+        # is actually wrong.
+        normalized = _review_finding_normalize_shapes(output)
+        if normalized == output:
+            return container
+        retry_status: dict = {}
+        retry = _parse_review_findings_v1(
+            normalized, parse_status=retry_status, **arguments
+        )
+        if container is not None:
+            if retry is not None and len(retry["items"]) > len(container["items"]):
+                return retry
+            return container
+        if retry is not None or (
+            parse_status.get("reason") == "no-findings-container"
+            and retry_status.get("reason") != "no-findings-container"
+        ):
+            parse_status.update(retry_status)
+        return retry
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
         parse_status.update(status="unparsed", reason="invalid-input", block=None)
         return None
@@ -7316,8 +7513,13 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # fallback ladder (run_codex_exec) steps DOWN this list on the codex
         # model-unavailable signature only. Ranking is a preference, never a
         # parse-time gate — unknown explicit models warn-and-accept.
+        # fn-333: ``pinned_only`` lists known models that run only when a spec
+        # names them: the parser accepts them without the unknown-model warning,
+        # and they never enter ``models``, so neither the default nor the ladder
+        # picks them.
         "models": [
-            "gpt-6.1-sol",  # served by codex CLI 0.159.0 (probed 2026-09-29); codex's models cache lists it first
+            "gpt-6.2-sol",  # served by codex CLI 0.169.1 / 0.170.0 (observed 2026-11-18); default at medium per the reviewer study
+            "gpt-6.1-sol",  # served by codex CLI 0.159.0 (probed 2026-09-29); the 6.2 Sol fallback
             "gpt-6-astra",  # GA 2026-09-05; confirmed served by the codex CLI on that date
             "gpt-6-sol",  # served alongside astra (codex models cache, 2026-09-27); same-generation first step down
             "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
@@ -7331,8 +7533,9 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-6.1-sol",  # == models[0] (fn-76 invariant)
-        "default_effort": "high",
+        "default_model": "gpt-6.2-sol",  # == models[0] (fn-76 invariant)
+        "default_effort": "medium",
+        "pinned_only": ["gpt-6.2-astra"],  # most expensive OpenAI tier (observed 2026-11-18)
     },
     "copilot": {
         # fn-76: ORDERED quality ranking (strongest first); ``default_model`` ==
@@ -7350,10 +7553,10 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ladder heals per-install gaps, so docs-listed rungs are safe even
         # where a given org disallows them.
         "models": [
+            "gpt-6.2-sol",  # GA in Copilot (observed 2026-11-18); medium carries over from the codex study
             "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
             "gpt-5.5",
             "gpt-5.4",
-            "claude-fable-5.1",  # rolled out to Copilot 2026-09-05; Claude-family, so --effort is dropped
             "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
@@ -7376,8 +7579,10 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
-        "default_effort": "high",
+        "default_model": "gpt-6.2-sol",  # == models[0] (fn-76 invariant)
+        "default_effort": "medium",
+        # GA in Copilot (observed 2026-11-18); the Claude-family ids drop --effort.
+        "pinned_only": ["gpt-6.2-astra", "claude-fable-5.2", "claude-fable-5.1"],
     },
     "cursor": {
         # NEW registry shape (fn-74): model accepted, effort folded into the
@@ -7424,7 +7629,6 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # claude-haiku-5-5 probed 2026-10-07 on 2.1.293.
         # The CLI has no ``--list-models``.
         "models": [
-            "claude-fable-5-1",
             "claude-opus-5-5",
             "claude-opus-5",
             "claude-sonnet-5-5",
@@ -7434,8 +7638,11 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         ],
         # The CLI's own ``--effort`` set (2.1.260).
         "efforts": {"low", "medium", "high", "xhigh", "max"},
-        "default_model": "claude-fable-5-1",  # == models[0] (fn-76 invariant)
+        "default_model": "claude-opus-5-5",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
+        # The most expensive Claude tier; claude-fable-5-2 served by Claude
+        # Code (observed 2026-11-18).
+        "pinned_only": ["claude-fable-5-2", "claude-fable-5-1"],
     },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
@@ -7628,7 +7835,7 @@ class BackendSpec:
                     f"Backend {backend!r} does not accept a model "
                     f"(got {model!r})"
                 )
-            if model not in reg["models"]:
+            if model not in reg["models"] and model not in reg.get("pinned_only", ()):
                 # fn-76 R1: the ranking is a PREFERENCE, not a parse-time gate —
                 # the CLI is the availability authority. Warn-and-accept unknown
                 # models so a newer / plan-specific model the registry has not
@@ -7759,10 +7966,11 @@ def _is_legacy_composite_model(backend: str, model: Optional[str]) -> bool:
     reg = BACKEND_REGISTRY.get(backend) or {}
     models = reg.get("models")
     efforts = reg.get("efforts")
-    if not models or not efforts or model in models or "-" not in model:
+    known = list(models or []) + list(reg.get("pinned_only") or [])
+    if not models or not efforts or model in known or "-" not in model:
         return False
     base, _, suffix = model.rpartition("-")
-    return base in models and suffix in efforts
+    return base in known and suffix in efforts
 
 
 def parse_backend_spec_lenient(

@@ -70,6 +70,18 @@ CURSOR_UNAVAILABLE_STREAM = (
     "Available models: auto, gpt-5.6-sol-high, gpt-5.5-high, gpt-5.4-high, "
     "composer-2.5, claude-opus-4-8-thinking-high"
 )
+# fn-333: verbatim live captures, 2026-11-18 (codex-cli 0.170.0 --json signed in
+# with a ChatGPT account; copilot 1.0.114, unknown model and exhausted quota).
+CODEX_CHATGPT_UNAVAILABLE_STREAM = (
+    '{"type":"error","message":"The \'gpt-6.9-nonexistent\' model is not '
+    'supported when using Codex with a ChatGPT account."}'
+)
+COPILOT_1_0_114_UNAVAILABLE_STREAM = (
+    'Execution failed: Model "gpt-6.9-nonexistent" is not available.'
+)
+COPILOT_QUOTA_STREAM = (
+    "You have exceeded your monthly quota (Request ID: AADE:181160:1B46827)"
+)
 
 # Ranking handles derived from the registry (the source of truth) so a ranking
 # change does not require editing every assertion in this file. The literal ids
@@ -270,6 +282,25 @@ class TestSignatureDetectors(unittest.TestCase):
                     flowctl._claude_model_unavailable(payload, "connection reset")
                 )
 
+    def test_current_cli_signatures_match(self) -> None:
+        # fn-333 R6, observed 2026-11-18: codex 0.169.1/0.170.0 on a ChatGPT
+        # account, copilot 1.0.114 on an unknown model.
+        self.assertTrue(flowctl._codex_model_unavailable(CODEX_CHATGPT_UNAVAILABLE_STREAM, ""))
+        self.assertTrue(
+            flowctl._copilot_model_unavailable("", COPILOT_1_0_114_UNAVAILABLE_STREAM)
+        )
+        # A quota refusal, a failed sign-in, or another quoted name that "is not
+        # available" is not an unavailable model.
+        self.assertFalse(flowctl._copilot_model_unavailable("", COPILOT_QUOTA_STREAM))
+        for blob in (
+            'Execution failed: Tool "grep" is not available.',
+            'Authentication failed: credential helper "gh" is not available.',
+        ):
+            self.assertFalse(flowctl._copilot_model_unavailable("", blob))
+        self.assertFalse(
+            flowctl._codex_model_unavailable("", "ERROR: 401 Unauthorized: sign in again")
+        )
+
     def test_non_signature_failures_do_not_match(self) -> None:
         # Auth / network / sandbox / timeout must never look like model-unavailable.
         for blob in (
@@ -316,7 +347,7 @@ class TestHappyPath(unittest.TestCase):
             with _repo() as root:
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:high"), repo_root=root,
+                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:medium"), repo_root=root,
                 )
         self.assertEqual(unconf[0], explicit[0])
 
@@ -434,6 +465,73 @@ class TestCodexLadder(unittest.TestCase):
         finally:
             flowctl.enforce_and_increment_review_cap = original
         self.assertEqual(hits["n"], 0)
+
+
+class TestPinnedOnlyNeverLaddered(unittest.TestCase):
+    """fn-333 R1/R2/R6: the ladder steps on current CLI text, never onto Fable/Astra."""
+
+    PINNED_ONLY = {
+        "claude-fable-5-2", "claude-fable-5-1", "claude-fable-5.2",
+        "claude-fable-5.1", "gpt-6.2-astra",
+    }
+
+    def test_codex_steps_from_6_2_sol_to_6_1_sol_on_chatgpt_account_text(self) -> None:
+        def result(model):
+            if model == "gpt-6.2-sol":
+                return (CODEX_CHATGPT_UNAVAILABLE_STREAM, "", 1)
+            return (CODEX_OK_STREAM, "", 0)
+
+        calls: list = []
+        with _scripted(flowctl, dispatch_result=result, calls=calls):
+            with _repo() as root, redirect_stderr(io.StringIO()):
+                _, _, rc, _ = flowctl.run_codex_exec(
+                    "p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root,
+                )
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            [_model_of(c) for c in calls if "exec" in c], ["gpt-6.2-sol", "gpt-6.1-sol"]
+        )
+
+    def test_copilot_steps_down_on_1_0_114_text_but_not_on_quota(self) -> None:
+        for stream, expected_dispatches in (
+            (COPILOT_1_0_114_UNAVAILABLE_STREAM, 2),
+            (COPILOT_QUOTA_STREAM, 1),
+        ):
+            with self.subTest(stream=stream):
+                def result(model, stream=stream):
+                    if model == "gpt-6.2-sol":
+                        return ("", stream, 1)
+                    return ("SHIP", "", 0)
+
+                calls: list = []
+                with _scripted(flowctl, dispatch_result=result, calls=calls):
+                    with _repo() as root, redirect_stderr(io.StringIO()):
+                        flowctl.run_copilot_exec("p", "sess", root, spec=BackendSpec("copilot"))
+                self.assertEqual(len([c for c in calls if "--model" in c]), expected_dispatches)
+
+    def test_exhausted_ladders_never_dispatch_a_pinned_only_model(self) -> None:
+        runs = (
+            ("codex", lambda root: flowctl.run_codex_exec(
+                "p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root),
+             lambda m: (CODEX_CHATGPT_UNAVAILABLE_STREAM, "", 1) if m else (CODEX_OK_STREAM, "", 0)),
+            ("copilot", lambda root: flowctl.run_copilot_exec(
+                "p", "sess", root, spec=BackendSpec("copilot")),
+             lambda m: ("", COPILOT_1_0_114_UNAVAILABLE_STREAM, 1) if m != "auto" else ("SHIP", "", 0)),
+            ("claude", lambda root: flowctl.run_claude_exec(
+                "p", spec=BackendSpec("claude"), repo_root=root),
+             lambda m: ("", CLAUDE_UNAVAILABLE_STDERR, 0) if m else (CLAUDE_OK_STREAM, "", 0)),
+        )
+        for backend, run, result in runs:
+            with self.subTest(backend=backend):
+                calls: list = []
+                with _scripted(flowctl, dispatch_result=result, calls=calls):
+                    with _repo() as root, redirect_stderr(io.StringIO()):
+                        run(root)
+                dispatched = {_model_of(c) for c in calls if "--version" not in c}
+                self.assertTrue(dispatched)
+                self.assertFalse(dispatched & self.PINNED_ONLY)
+                if backend == "claude":
+                    self.assertIn("claude-opus-5-5", dispatched)
 
 
 class TestCopilotLadder(unittest.TestCase):
@@ -1738,7 +1836,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
                 os.chdir(root)
                 r = BackendSpec("codex").resolve()
                 self.assertEqual(r.model, CODEX_TOP)
-                self.assertEqual(r.effort, "high")
+                self.assertEqual(r.effort, "medium")
                 self.assertFalse(r.model_explicit)
             finally:
                 os.chdir(prev)
