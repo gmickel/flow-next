@@ -110,6 +110,24 @@ container; it is never coerced to the nearest known value.
 Canonical item order is severity `P0` through `P3`, confidence descending, then
 ordinal ascending. Consumers preserve that order.
 
+### Reviewer layouts
+
+The parser reads any model's output, for every review kind, in the prompt's
+labeled layout (`- **Severity:** P1`, one field per line) and in these variants
+models write instead: labels without a colon (`**Severity** P1`), all fields of
+a finding on one line joined by `·`, a `P1 · Confidence 100 · introduced`
+tuple or a `### P1 · Title` heading opening the finding, and a findings table
+with the prompt's columns (`Severity | Confidence | Classification | File:Line |
+R-IDs | Problem | Suggestion`). Text in the prompt's layout is parsed as
+written, so its findings never depend on the variants; only text that fails
+that parse is read again with the variants rewritten into the labeled form, and
+when that also fails the first failure is reported, unless the first pass found
+no findings at all, in which case the reason names the finding that is wrong.
+A `File:Line` value may name a second location after a comma, and only the first
+is anchored. A markdown link as the value anchors at its repository-relative
+target or text; a link that names only an absolute path outside the repository
+leaves the finding without an anchor.
+
 ## Identity and lineage
 
 `sourceReceiptId` identifies one findings generation. Whenever a finding is

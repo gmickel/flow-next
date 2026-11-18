@@ -4795,7 +4795,7 @@ _FINDINGS_PRIOR_RECORD_RE = re.compile(
 )
 _FINDINGS_FILE_LINE_RE = re.compile(
     r"^`?(?P<path>[^`]+?):(?P<start>[1-9]\d*)"
-    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?`?(?:\s.*)?$"
+    r"(?:\s*[-–]\s*(?P<end>[1-9]\d*))?`?(?:[\s,;].*)?$"
 )
 _FINDINGS_HOST_TABLE_SEPARATOR_RE = re.compile(
     r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
@@ -5208,6 +5208,135 @@ def _review_finding_blocks(output: str) -> tuple[list[str], bool]:
             block_lines.append(line)
         blocks.append("\n".join(block_lines).strip())
     return blocks, saw_severity_label
+
+
+_FINDINGS_SHAPE_LABELS = (
+    r"severity|confidence|classification|file\s*:\s*line|r-?ids?|problem|"
+    r"suggestion|title"
+)
+_FINDINGS_BARE_LABEL_RE = re.compile(
+    r"""(?ix)
+    \*\*(?P<label>
+      severity(?=\*\*[ \t]+(?:P[0-3]|critical|major|minor|nitpick)\b)
+      | confidence(?=\*\*[ \t]+\d)
+      | classification(?=\*\*[ \t]+(?:introduced|pre[-_ ]existing)\b)
+      | file\s*:\s*line(?=\*\*[ \t]+[`\[])
+      | r-?ids?(?=\*\*[ \t]+`?\[)
+      | problem | suggestion | title
+    )\*\*(?![ \t]*[:=])[ \t]*
+    """
+)
+_FINDINGS_DOT_SPLIT_RE = re.compile(
+    rf"[ \t]+·[ \t]+(?=\*\*(?:{_FINDINGS_SHAPE_LABELS}):\*\*)", re.IGNORECASE
+)
+_FINDINGS_TUPLE_HEAD_RE = re.compile(
+    r"""(?ix)
+    ^[ \t]*(?:\#{1,6}[ \t]+|(?:[-*+]|\d+[.)])[ \t]+)?\**[ \t]*
+    (?P<severity>P[0-3])[ \t]*[·|][ \t]*confidence[ \t]+(?P<confidence>\d+)
+    [ \t]*[·|][ \t]*(?P<classification>introduced|pre[-_ ]existing)\b
+    (?P<rest>.*)$
+    """
+)
+_FINDINGS_SEVERITY_HEADING_RE = re.compile(
+    r"(?i)^[ \t]*\#{1,6}[ \t]+(?P<severity>P[0-3])[ \t]*[·:—-][ \t]*(?P<title>\S.*?)[ \t]*$"
+)
+_FINDINGS_LOCATION_RE = re.compile(r"`(?P<loc>[^`\s]+:[1-9]\d*(?:-[1-9]\d*)?)`")
+_FINDINGS_LINK_RE = re.compile(r"\[(?P<text>[^\]]*)\]\((?P<target>[^)\s]+)\)")
+
+
+def _review_finding_link_location(match: "re.Match[str]") -> str:
+    """A markdown link in a File:Line value as a repo-relative `path:line`."""
+    target = re.sub(
+        r"#L(\d+)(?:-L?(\d+))?$",
+        lambda m: f":{m.group(1)}" + (f"-{m.group(2)}" if m.group(2) else ""),
+        match.group("target"),
+    )
+    text = match.group("text").strip("` ")
+    for candidate in (target, text):
+        if (
+            re.search(r":[1-9]\d*(?:-[1-9]\d*)?$", candidate)
+            and _review_finding_safe_path(candidate.rsplit(":", 1)[0]) is not None
+            and (candidate is target or "/" in candidate)
+        ):
+            return f"`{candidate}`"
+    # Only an absolute path to the reviewer's own checkout: no portable anchor.
+    return "-"
+
+
+def _review_finding_table_rows(lines: list[str]) -> Optional[list[str]]:
+    """Rewrite a findings table with the prompt's columns as labeled blocks."""
+    header = [cell.strip().lower() for cell in lines[0].strip().strip("|").split("|")]
+    if not {"severity", "confidence", "classification", "problem"} <= set(header):
+        return None
+    if len(lines) < 2 or not _FINDINGS_HOST_TABLE_SEPARATOR_RE.match(lines[1]):
+        return None
+    out: list[str] = []
+    for line in lines[2:]:
+        cells = [
+            cell.strip().replace("\\|", "|")
+            for cell in re.split(r"(?<!\\)\|", line.strip().strip("|"))
+        ]
+        if len(cells) != len(header):
+            return None
+        out.append("")
+        for label, value in zip(header, cells, strict=True):
+            prefix = "- " if label == "severity" else "  "
+            out.append(f"{prefix}**{label}:** {value}")
+    return out
+
+
+def _review_finding_normalize_shapes(output: str) -> str:
+    """Rewrite finding layouts the prompt does not ask for into its labeled form.
+
+    Covers labels without a colon (``**Severity** P1``), fields joined on one
+    line by ``·``, a ``P1 · Confidence 100 · introduced`` tuple or a
+    ``### P1 · Title`` heading opening a finding, a findings table with the
+    prompt's columns, and a markdown link as the File:Line value. Used only
+    after the text as written failed to parse.
+    """
+    lines = output.splitlines()
+    rewritten: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.strip().startswith("|"):
+            end = index
+            while end < len(lines) and lines[end].strip().startswith("|"):
+                end += 1
+            table = _review_finding_table_rows(lines[index:end])
+            if table is not None:
+                rewritten.extend(table)
+                index = end
+                continue
+            rewritten.extend(lines[index:end])
+            index = end
+            continue
+        tuple_head = _FINDINGS_TUPLE_HEAD_RE.match(line)
+        heading = _FINDINGS_SEVERITY_HEADING_RE.match(line)
+        if tuple_head:
+            rest = tuple_head.group("rest")
+            rewritten.append(f"- **Severity:** {tuple_head.group('severity')}")
+            rewritten.append(f"  **Confidence:** {tuple_head.group('confidence')}")
+            rewritten.append(f"  **Classification:** {tuple_head.group('classification')}")
+            location = _FINDINGS_LOCATION_RE.search(rest)
+            if location:
+                rewritten.append(f"  **File:Line:** `{location.group('loc')}`")
+            rids = re.findall(r"(?<![A-Za-z0-9])R\d+(?![A-Za-z0-9])", rest)
+            if rids:
+                rewritten.append(f"  **R-IDs:** [{', '.join(rids)}]")
+        elif heading:
+            rewritten.append(f"- **Severity:** {heading.group('severity')}")
+            rewritten.append(f"  **Title:** {heading.group('title')}")
+        else:
+            line = _FINDINGS_BARE_LABEL_RE.sub(
+                lambda m: f"**{m.group('label')}:** ", line
+            )
+            line = _FINDINGS_DOT_SPLIT_RE.sub("\n  ", line)
+            if re.search(r"(?i)\*\*file\s*:\s*line:\*\*", line):
+                line = _FINDINGS_LINK_RE.sub(_review_finding_link_location, line)
+            rewritten.extend(line.split("\n"))
+        index += 1
+    return "\n".join(rewritten)
 
 
 def _review_finding_host_table(output: str) -> Optional[list[dict]]:
@@ -5901,8 +6030,7 @@ def parse_review_findings(
             or schema_version != _FINDINGS_SCHEMA_VERSION
         ):
             return None
-        return _parse_review_findings_v1(
-            output,
+        arguments = dict(
             source_receipt_id=source_receipt_id,
             review_kind=review_kind,
             backend=backend,
@@ -5912,8 +6040,31 @@ def parse_review_findings(
             supersedes_receipt_id=supersedes_receipt_id,
             prior_findings=prior_findings,
             anchor_side=anchor_side,
-            parse_status=parse_status,
         )
+        container = _parse_review_findings_v1(
+            output, parse_status=parse_status, **arguments
+        )
+        if container is not None or not isinstance(output, str):
+            return container
+        # Text in the prompt's layout parses as written, so a parse that
+        # succeeds there never changes. Only a failed parse is retried once
+        # with other observed layouts rewritten into the labeled form. When
+        # that also fails, the first failure stands, unless the first pass
+        # found no findings at all: then the rewrite's reason names the
+        # finding that is actually wrong.
+        normalized = _review_finding_normalize_shapes(output)
+        if normalized == output:
+            return None
+        retry_status: dict = {}
+        container = _parse_review_findings_v1(
+            normalized, parse_status=retry_status, **arguments
+        )
+        if container is not None or (
+            parse_status.get("reason") == "no-findings-container"
+            and retry_status.get("reason") != "no-findings-container"
+        ):
+            parse_status.update(retry_status)
+        return container
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
         parse_status.update(status="unparsed", reason="invalid-input", block=None)
         return None

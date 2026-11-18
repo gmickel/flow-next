@@ -1,6 +1,6 @@
 {
   "branch_name": "fn-333-review-model-registry-for-gpt-62-and",
-  "completion_review_status": "not_required",
+  "completion_review_status": "unknown",
   "completion_reviewed_at": "2026-11-18T12:47:57.092958Z",
   "created_at": "2026-11-18T08:41:03.476690Z",
   "default_impl": null,
@@ -191,5 +191,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T12:49:09.692534Z"
+  "updated_at": "2026-11-18T13:03:12.061592Z"
 }
