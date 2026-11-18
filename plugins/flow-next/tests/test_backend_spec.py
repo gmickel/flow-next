@@ -190,6 +190,62 @@ class TestParseValid(unittest.TestCase):
                 self.assertIn(f"not in flow-next's {expected[0]} ranking", err.getvalue())
 
 
+class TestPinnedOnlyModels(unittest.TestCase):
+    """fn-333: Fable and GPT-6.2 Astra run only when a spec names them."""
+
+    PINNED = (
+        "claude:claude-fable-5-2",
+        "claude:claude-fable-5-1",
+        "copilot:claude-fable-5.2",
+        "copilot:claude-fable-5.1",
+        "codex:gpt-6.2-astra",
+        "copilot:gpt-6.2-astra",
+        "claude:claude-fable-5-2:high",
+        "codex:gpt-6.2-astra:high",
+    )
+
+    def setUp(self) -> None:
+        self._env = mock.patch.dict(os.environ, {}, clear=False)
+        self._env.start()
+        for key in list(os.environ):
+            if key.startswith("FLOW_") and key.endswith(("_MODEL", "_EFFORT")):
+                del os.environ[key]
+
+    def tearDown(self) -> None:
+        self._env.stop()
+
+    def test_pin_runs_as_named_without_unknown_model_warning(self) -> None:
+        for raw in self.PINNED:
+            with self.subTest(spec=raw):
+                err = io.StringIO()
+                with redirect_stderr(err):
+                    resolved = BackendSpec.parse(raw).resolve()
+                self.assertEqual(resolved.model, raw.split(":")[1])
+                self.assertTrue(resolved.model_explicit)
+                self.assertEqual(err.getvalue(), "")
+
+    def test_no_ranking_holds_a_pinned_only_model(self) -> None:
+        for backend in ("codex", "copilot", "cursor", "claude"):
+            with self.subTest(backend=backend):
+                for model in BACKEND_REGISTRY[backend]["models"]:
+                    self.assertNotIn("fable", model)
+                    self.assertNotEqual(model, "gpt-6.2-astra")
+
+    def test_bare_backends_resolve_to_the_new_tops(self) -> None:
+        rows = (
+            ("codex", ("gpt-6.2-sol", "medium")),
+            ("copilot", ("gpt-6.2-sol", "medium")),
+            ("claude", ("claude-opus-5-5", "high")),
+        )
+        for raw, (model, effort) in rows:
+            with self.subTest(spec=raw):
+                resolved = BackendSpec.parse(raw).resolve()
+                self.assertEqual((resolved.model, resolved.effort), (model, effort))
+                self.assertFalse(resolved.model_explicit)
+        self.assertEqual(BACKEND_REGISTRY["codex"]["models"][1], "gpt-6.1-sol")
+        self.assertEqual(BackendSpec.parse("codex::high").resolve().effort, "high")
+
+
 # --- Invalid specs ---
 
 
