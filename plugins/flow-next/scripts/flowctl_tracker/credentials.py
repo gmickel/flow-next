@@ -98,8 +98,11 @@ class TokenCommandError(RuntimeError):
     """The configured token command gave no credential. Never carries its output."""
 
 
-def _command_token(argv) -> str:
-    """Run `tracker.perTracker.tokenCommand` (argv, no shell) and return its trimmed stdout."""
+def _command_token(argv, source=None) -> str:
+    """Run a token command (argv, no shell) and return its trimmed stdout.
+
+    `source` names a machine-local variable; its argv stays out of every message.
+    """
     import subprocess
 
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
@@ -121,7 +124,8 @@ def _command_token(argv) -> str:
                 else:
                     outcome = token
             except FileNotFoundError:
-                outcome = TokenCommandError(f"token command not found: {argv[0]}")
+                outcome = TokenCommandError(f"token command from {source} not found" if source
+                                        else f"token command not found: {argv[0]}")
             except subprocess.TimeoutExpired:
                 outcome = TokenCommandError(
                     f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
@@ -167,9 +171,11 @@ def resolve(provider: str, *, auth_scheme: Optional[str] = None,
     def env_or_command(name: str) -> Optional[str]:
         value = os.environ.get(name)
         if not value:
-            command = machine_local_command(provider) or token_command
-            if command is not None:
-                value = _command_token(command)
+            local = machine_local_command(provider)
+            if local is not None:
+                value = _command_token(local, f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}")
+            elif token_command is not None:
+                value = _command_token(token_command)
         return _remember(value)
 
     if provider == "github":
