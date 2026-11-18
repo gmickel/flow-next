@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-334-fixes-from-the-reviewer-study-idea",
+  "created_at": "2026-11-18T10:32:04.096198Z",
+  "depends_on_epics": [],
+  "id": "fn-334-fixes-from-the-reviewer-study-idea",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-334-fixes-from-the-reviewer-study-idea.md",
+  "status": "open",
+  "title": "Fixes from the reviewer study: idea intake, parent at creation, redaction",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-18T10:32:04.102658Z"
+}
