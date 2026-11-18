@@ -92,6 +92,12 @@ class ModelShapesTest(unittest.TestCase):
         self.assertIsNotNone(direct)
         self.assertEqual(parse(review), direct)
 
+    def test_prompt_layout_skips_the_second_reading(self) -> None:
+        # Unchanged text returns as-is (trailing newline included), so a review
+        # in the prompt's layout costs one parse, not two.
+        review = text("gpt-6.1-sol-labeled") + "\n"
+        self.assertIs(FLOWCTL._review_finding_normalize_shapes(review), review)
+
     def test_plan_review_path_reads_the_one_line_layout(self) -> None:
         container = FLOWCTL.build_review_receipt_findings(
             text("plan-gpt-6.2-sol-one-line"),

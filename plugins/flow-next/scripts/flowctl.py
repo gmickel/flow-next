@@ -5351,6 +5351,9 @@ def _review_finding_normalize_shapes(output: str) -> str:
                 line = _FINDINGS_LINK_RE.sub(_review_finding_link_location, line)
             rewritten.extend(line.split("\n"))
         index += 1
+    if rewritten == lines:
+        # Nothing to rewrite: the caller skips the second parse.
+        return output
     return "\n".join(rewritten)
 
 
