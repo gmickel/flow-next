@@ -213,6 +213,34 @@ class ModelShapesTest(unittest.TestCase):
                 self.assertIsNone(parse(review, status=status))
                 self.assertEqual(status["reason"], "invalid-anchor")
 
+    def test_links_in_problem_and_suggestion_stay_as_written(self) -> None:
+        problem = "See [the guide](docs/guide.md#L5) and [spec](https://example.com/s#L9) for why."
+        suggestion = "Follow [the steps](/abs/notes.md:3) in order."
+        review = (
+            "- **Severity** P1 · **Confidence** 100 · **Classification** introduced"
+            f" · **File:Line** `src/a.py:3` · **Problem** {problem} · **Suggestion** {suggestion}\n\n"
+            "<verdict>NEEDS_WORK</verdict>\n"
+        )
+        item = parse(review)["items"][0]
+        self.assertEqual(item["body"], problem)
+        self.assertEqual(item["suggestion"], suggestion)
+        self.assertEqual((item["anchor"]["path"], item["anchor"]["startLine"]), ("src/a.py", 3))
+
+    def test_table_link_location_to_a_checkout_path_drops_only_that_anchor(self) -> None:
+        review = (
+            "## Findings\n\n"
+            "| Severity | Confidence | Classification | File:Line | R-IDs | Problem | Suggestion |\n"
+            "|---|---:|---|---|---|---|---|\n"
+            "| P1 | 75 | introduced | [providers.py:99](/home/someone/wt/plugins/x/providers.py:99) | [R4] | First. | Fix it. |\n"
+            "| P2 | 100 | introduced | `src/b.py:4` | [R6] | Second. | Fix that. |\n\n"
+            "<verdict>NEEDS_WORK</verdict>\n"
+        )
+        status: dict = {}
+        items = parse(review, status=status)["items"]
+        self.assertEqual(status["status"], "parsed", status)
+        self.assertNotIn("anchor", items[0])
+        self.assertEqual((items[1]["anchor"]["path"], items[1]["anchor"]["startLine"]), ("src/b.py", 4))
+
     def test_second_location_after_a_comma_keeps_the_first(self) -> None:
         review = (
             "- **Severity:** P2\n- **Confidence:** 100\n- **Classification:** introduced\n"
