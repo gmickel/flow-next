@@ -168,7 +168,7 @@ A spec can name the parent its tracker issue belongs under (a Jira epic, a Linea
 | GitHub | refused with a `capability` error before any request: an issue takes one parent, and flow-next uses it to project dependencies | - | none |
 | Jira Data Center / Server | refused with a `capability` error before any request: these place an issue in an epic through the Epic Link field | - | none |
 
-A spec without a parent sends the same create request as before. A parent the tracker rejects (missing, at the wrong hierarchy level, not visible to the account, or on a tier without epics) comes back as the tracker's own error, and no issue exists afterwards. A malformed value is `invalid_input` before any request.
+A spec without a parent sends the same create request as before. A parent the tracker rejects (missing, at the wrong hierarchy level, not visible to the account, or on a tier without epics) comes back as the tracker's own error, and no issue exists afterwards. On Jira Cloud and GitLab that error is `invalid_input` and its message starts with the status, followed by the tracker's reason, redacted and cut to 200 characters (`rejected (400): parent: Please select valid parent issue.`); a body without a reason leaves the status alone. A malformed value is `invalid_input` before any request.
 
 ## Idea intake: start from a Jira Product Discovery idea
 

@@ -12,6 +12,7 @@ explosion into a `TrackerError`.
 from __future__ import annotations
 
 import http.client
+import json
 import os
 import re
 import subprocess
@@ -23,7 +24,7 @@ from typing import Callable, Optional, Protocol, Union
 from urllib.parse import urlparse
 
 from .classify import classify
-from .credentials import Credential, redact, resolve
+from .credentials import Credential, redact, remember_glab_token, resolve
 from .types import (BACKOFF_CAP_S, CONCURRENCY_CAP, MAX_RETRIES, CredentialPolicy,
                     ErrorClass, Request, Response, TrackerError)
 
@@ -272,7 +273,33 @@ def _cli(req: Request, verify_tls: bool) -> Result:
     diag = (proc.stderr or b"") + b"\n" + (proc.stdout or b"")
     m = _CLI_STATUS_RE.search(diag)
     status = int(m.group(1)) if m else 400
-    return Response(status, {}, diag.strip() or b"", elapsed)
+    body = diag.strip() or b""
+    if req.provider == "gitlab":
+        # glab prints the API's JSON body on stdout (measured); hand the
+        # classifier that document so it can read the tracker's reason. glab
+        # authenticated from its own login, so register that token for
+        # redaction before any of the body can reach a message.
+        remember_glab_token(_glab_host(req))
+        if _is_json_object(out):
+            body = out
+    return Response(status, {}, body, elapsed)
+
+
+def _glab_host(req: Request) -> Optional[str]:
+    """The host a glab call targets: `GITLAB_HOST`, `--hostname`, or glab's default."""
+    if req.env and req.env.get("GITLAB_HOST"):
+        return req.env["GITLAB_HOST"]
+    argv = list(req.url_or_argv)
+    if "--hostname" in argv[:-1]:
+        return argv[argv.index("--hostname") + 1]
+    return None
+
+
+def _is_json_object(raw: bytes) -> bool:
+    try:
+        return isinstance(json.loads(raw), dict)
+    except (ValueError, TypeError):
+        return False
 
 
 #: Operations that MUST NOT use the CLI route, per provider. `glab api -F file=@`
