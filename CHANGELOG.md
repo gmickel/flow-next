@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.14.0] - 2026-11-18
+
+When Jira or GitLab turns a request down, flow-next now tells you why, in the tracker's own words. Naming a story as the parent of a story used to come back as `rejected (400)`; it now carries Jira's reason after the status (`parent: Please select valid parent issue.`), so the person fixes the parent instead of guessing. A tracker token command whose path belongs to one machine can live in that machine's environment, so it never has to be committed with the project's config. Ideas read from Jira Product Discovery come back as plain text, without the colour markup of the idea template.
+
 ### Added
 
 - **A tracker token command that stays on one machine.** `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` and `FLOW_TRACKER_TOKEN_COMMAND_JIRA` hold the same JSON argv as `tracker.perTracker.tokenCommand`, read from the environment instead of the committed `.flow/config.json`, so a command whose path belongs to one machine never has to be committed. The token variable still wins, then the machine-local command, then the tracked one; a machine-local command that fails stops there and is reported like the tracked one. Setting it for Linear also skips the MCP create route unless `preferredTransport` is `mcp`. Asked for by MergeFoundry, whose daemon exports the variable to every session it starts.
