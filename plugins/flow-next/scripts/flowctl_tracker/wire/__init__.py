@@ -129,8 +129,11 @@ def _ready_state(config: dict) -> Optional[str]:
     return value or None
 
 
-def parse_locator(raw: Any) -> Union[dict, TrackerError]:
-    """Accept a dict or a JSON string → `{durable, display}` both non-empty str."""
+def parse_locator(raw: Any, *, key_only: bool = False) -> Union[dict, TrackerError]:
+    """Accept a dict or a JSON string → `{durable, display}` both non-empty str.
+
+    `key_only` (a Jira read) also accepts a locator without `durable`; it
+    comes back as None and the read fills it in."""
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
@@ -143,6 +146,8 @@ def parse_locator(raw: Any) -> Union[dict, TrackerError]:
                             subtype="locator")
     durable = raw.get("durable")
     display = raw.get("display")
+    if key_only and durable is None and isinstance(display, str) and display.strip():
+        return {"durable": None, "display": display.strip()}
     if not isinstance(durable, str) or not durable.strip():
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "locator.durable must be a non-empty string",
@@ -554,6 +559,10 @@ def _unready(provider: str, mod: Any, config: dict, locator: dict,
     issue = mod.read(config, locator, execute)
     if isinstance(issue, TrackerError):
         return issue
+    moved = (jira.moved_to_idea(config, locator["display"], issue.get("raw"))
+             if provider == "jira" else None)
+    if moved:
+        return moved
     ready = _desired(provider, issue, ready_state)
     if isinstance(ready, TrackerError):
         return ready
@@ -800,10 +809,16 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
 
     parsed: Optional[dict] = None
     if verb in LOCATOR_VERBS:
-        parsed_or_err = parse_locator(locator)
+        parsed_or_err = parse_locator(
+            locator, key_only=(verb == "read" and provider == "jira"))
         if isinstance(parsed_or_err, TrackerError):
             return parsed_or_err
         parsed = parsed_or_err
+        # An idea is never written, so its key is refused before any request
+        # (unready and question read before they write).
+        if (provider == "jira" and verb in WRITE_VERBS
+                and jira.is_idea_key(config, parsed["display"])):
+            return jira._idea_write_refusal(parsed["display"])
 
     if verb in ("comment-update", "comment-delete"):
         if not comment_id:

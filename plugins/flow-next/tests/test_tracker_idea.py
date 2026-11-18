@@ -743,15 +743,18 @@ class MovedIssueIsRefused(unittest.TestCase):
 
     def test_relation_with_a_moved_end_writes_nothing(self) -> None:
         from flowctl_tracker import relate as R  # noqa: PLC0415
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            _linked_spec(flow, "fn-1-a", "10011", "PROJ-11")
-            _linked_spec(flow, "fn-2-b", IDEA_ID, "PROJ-7")
-            (flow / "config.json").write_text(
-                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
-            ex = self._jira()
-            out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
-        self.assert_refused(out, ex, "relate")
+        for many in (False, True):
+            with tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                _linked_spec(flow, "fn-1-a", "10011", "PROJ-11")
+                _linked_spec(flow, "fn-2-b", IDEA_ID, "PROJ-7")
+                (flow / "config.json").write_text(
+                    json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
+                ex = self._jira()
+                out = (R.relate_many(flow, "fn-1-a", ["fn-2-b"], event="plan",
+                                     execute=ex)[0] if many else
+                       R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex))
+            self.assert_refused(out, ex, f"relate many={many}")
 
     def test_unready_refuses_a_moved_issue_after_its_read(self) -> None:
         config = jr_cfg(idea_keys=["IDEAS"])

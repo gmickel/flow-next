@@ -83,6 +83,10 @@ def failure(err: TrackerError, *, retryable: Optional[bool] = None) -> tuple[str
         "retryable": bool(err.auto_retryable if retryable is None else retryable),
         "details": _scrub(_details_for(err)),
     }
+    if err.subtype:
+        # Additive: the documented branches (several_parents, parent_mismatch,
+        # ...) are keyed by subtype, which the class alone does not carry.
+        payload["subtype"] = err.subtype
     return json.dumps(payload, sort_keys=True), EXIT_CODES[err.cls]
 
 

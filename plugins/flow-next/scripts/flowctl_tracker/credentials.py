@@ -40,15 +40,7 @@ def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
     import re
 
     want = (host or "gitlab.com").lower()
-    for candidate in (
-        os.path.expanduser("~/.config/glab-cli/config.yml"),
-        os.path.expanduser("~/Library/Application Support/glab-cli/config.yml"),
-    ):
-        try:
-            with open(candidate, encoding="utf-8") as fh:
-                text = fh.read()
-        except OSError:
-            continue
+    for text in _glab_config_texts():
         # hosts:\n    <host>:\n        token: <value>
         m = re.search(
             rf"^\s+{re.escape(want)}:\s*$(.*?)(?=^\s{{0,8}}\S+:\s*$|\Z)",
@@ -63,6 +55,38 @@ def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
             # glab itself reads it back.
             return _glab_cli_get("token", want) or None
     return None
+
+
+def _glab_config_texts():
+    """glab's config files, `GLAB_CONFIG_DIR` first (glab reads only that
+    directory when it is set)."""
+    custom = os.environ.get("GLAB_CONFIG_DIR")
+    for candidate in (
+        *([os.path.join(custom, "config.yml")] if custom else []),
+        os.path.expanduser("~/.config/glab-cli/config.yml"),
+        os.path.expanduser("~/Library/Application Support/glab-cli/config.yml"),
+    ):
+        try:
+            with open(candidate, encoding="utf-8") as fh:
+                yield fh.read()
+        except OSError:
+            continue
+
+
+def _glab_config_hosts() -> list[str]:
+    """Every host glab's config has a stanza for."""
+    import re
+
+    hosts: list[str] = []
+    for text in _glab_config_texts():
+        block = re.search(r"^hosts:\s*$(.*?)(?=^\S|\Z)", text, re.M | re.S)
+        if not block:
+            continue
+        names = re.findall(r"^([ \t]+)(\S+):\s*$", block.group(1), re.M)
+        if names:
+            indent = min(len(lead) for lead, _ in names)
+            hosts += [name.strip("\"'") for lead, name in names if len(lead) == indent]
+    return hosts
 
 
 def _glab_cli_get(key: str, host: str) -> str:
@@ -112,11 +136,18 @@ def _command_token(argv, source=None) -> str:
     with _COMMAND_LOCK:
         if key not in _COMMAND_RESULTS:
             try:
-                proc = subprocess.run(argv, capture_output=True, text=True, check=False,
+                # Bytes, decoded only after the exit status is known: text mode
+                # raised on output that is not UTF-8 and echoed a byte of it.
+                proc = subprocess.run(argv, capture_output=True, check=False,
                                       stdin=subprocess.DEVNULL, timeout=TOKEN_COMMAND_TIMEOUT_S)
-                token = proc.stdout.strip()
+                try:
+                    token = proc.stdout.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    token = None
                 if proc.returncode != 0:
                     outcome = TokenCommandError(f"token command exited {proc.returncode}")
+                elif token is None:
+                    outcome = TokenCommandError("token command printed output that is not UTF-8")
                 elif not token:
                     outcome = TokenCommandError("token command printed an empty token")
                 elif "\n" in token:
@@ -253,18 +284,25 @@ def _remember(value: Optional[str]) -> Optional[str]:
 def remember_glab_token(host: Optional[str]) -> None:
     """Register the token glab's own login holds for `host`, so `redact` strips
     it from text a glab call returns. The CLI route never resolves it otherwise.
+    With no known host, every configured host's token: glab may have used any.
     Never raises: the CLI route runs inside the executor's no-raise boundary."""
     try:
-        _remember(_glab_config_token(host))
-    except Exception:  # noqa: BLE001, S110 - a token too short to redact was never usable
-        pass
+        hosts = [host] if host else [None, *_glab_config_hosts()]
+    except Exception:  # noqa: BLE001 - an unreadable config still leaves the default
+        hosts = [None]
+    for name in hosts:
+        try:
+            _remember(_glab_config_token(name))
+        except Exception:  # noqa: BLE001, S110 - a token too short to redact was never usable
+            pass
 
 
 def redact(text: str) -> str:
     """Strip every known secret from a string bound for a log, error or receipt."""
     out = text
-    for name in ("GH_TOKEN", "GITLAB_TOKEN", "CI_JOB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN",
-                 "JIRA_PAT"):
+    # GITLAB_ACCESS_TOKEN and OAUTH_TOKEN: glab authenticates from them too.
+    for name in ("GH_TOKEN", "GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN",
+                 "CI_JOB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN", "JIRA_PAT"):
         val = os.environ.get(name)
         # Same rule as `_remember`: a value this short is never a usable
         # credential (resolution refuses it), and adding it here would let a

@@ -34,7 +34,8 @@ def relate_many(flow_dir: Path, spec_id: str, dependencies: list[str], *,
         loc_a = _locator(merged_tracker(source[1]))
         if isinstance(loc_a, TrackerError):
             return [loc_a]
-        idea_err = P.jira_idea_guard(provider, config, locators=(loc_a,))
+        # Held keys only; each dependency's guard below reads both current keys.
+        idea_err = P.jira_idea_guard(provider, config, None, locators=(loc_a,))
         if idea_err:
             return [idea_err]
         if provider == "gitlab":
@@ -60,7 +61,7 @@ def relate_many(flow_dir: Path, spec_id: str, dependencies: list[str], *,
             loc_b = _locator(merged_tracker(loaded[1]))
             if isinstance(loc_b, TrackerError):
                 return loc_b
-            err = (P.jira_idea_guard(provider, config, locators=(loc_b,))
+            err = (P.jira_idea_guard(provider, config, ex, locators=(loc_a, loc_b))
                    or P.display_durable_guard(provider, config, ex, locators=(loc_b,)))
             if err:
                 return err

@@ -182,7 +182,9 @@ _RAW_BODY_OPS = frozenset({"wire-attach-get"})
 def classify(provider: str, resp: Response,
              op: Optional[str] = None) -> Optional[TrackerError]:
     """None means success. Otherwise a normalized, classified failure."""
-    if op in _RAW_BODY_OPS:
+    # A rejected download is an API error document on Jira and GitLab, so
+    # their own rule reads its reason and GitLab's licence marker.
+    if op in _RAW_BODY_OPS and (provider == "linear" or 200 <= resp.status < 300):
         return _generic(resp)
     fn = _TABLE.get(provider, _generic)
     return fn(resp)

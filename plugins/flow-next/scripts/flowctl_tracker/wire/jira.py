@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from ..providers.jira_markup import markdown_to_wiki, wiki_to_markdown
 from ..types import ErrorClass, TrackerError
 from . import (
+    _JIRA_ISSUE_KEY_RE,
     Execute,
     Result,
     _check_durable,
@@ -34,26 +36,60 @@ def idea_reference() -> str:
     return str(IDEA_REFERENCE) if IDEA_REFERENCE.is_file() else "references/idea-intake.md"
 
 
+def has_idea_source(config: dict) -> bool:
+    """`tracker.perTracker.ideaProjectKeys` lists at least one project."""
+    keys = _dict(_dict(config.get("tracker")).get("perTracker")).get("ideaProjectKeys")
+    return bool(keys) and isinstance(keys, list)
+
+
 def is_idea_key(config: dict, key: str) -> bool:
     """A key in a project `tracker.perTracker.ideaProjectKeys` lists, never the
     delivery project. Costs no request; absent or empty config is always False."""
     keys = _dict(_dict(config.get("tracker")).get("perTracker")).get("ideaProjectKeys")
-    if not keys or not isinstance(keys, list) or not isinstance(key, str) or "-" not in key:
+    if not has_idea_source(config) or not isinstance(key, str) or "-" not in key:
         return False
-    project = key.strip().rsplit("-", 1)[0]
+    project = key.strip().rsplit("-", 1)[0].upper()
     delivery = _dict(_dict(_dict(config.get("tracker")).get("resolved")).get("destination"))
-    return project in keys and project != delivery.get("projectKey")
+    return (project in {str(k).upper() for k in keys}
+            and project != str(delivery.get("projectKey") or "").upper())
 
 
-def _idea_write_refusal(key: str) -> TrackerError:
+def _idea_write_refusal(key: str, requested: Optional[str] = None) -> TrackerError:
+    """`requested`: the key the caller asked for, when Jira now files the
+    issue under `key` (it moved into a discovery project)."""
+    named = f"{requested} (now {key})" if requested and requested != key else key
     return TrackerError(
         ErrorClass.CAPABILITY,
-        f"{key} is an idea in a discovery project (tracker.perTracker."
+        f"{named} is an idea in a discovery project (tracker.perTracker."
         "ideaProjectKeys); flow-next never writes to an idea except its "
         f"delivery link (flowctl tracker idea link). Read {idea_reference()} "
         "for the idea-intake steps",
         subtype="idea_read_only",
         details={"capability": "idea_read_only", "reference": idea_reference()})
+
+
+def moved_to_idea(config: dict, requested: str, raw) -> Optional[TrackerError]:
+    """The refusal when the issue Jira returned is filed under an idea key."""
+    current = raw.get("key") if isinstance(raw, dict) else None
+    if isinstance(current, str) and is_idea_key(config, current):
+        return _idea_write_refusal(current, requested)
+    return None
+
+
+def key_from_url(base: str, text: str) -> Optional[str]:
+    """The issue key in a `/browse/KEY` URL, or a view URL's `selectedIssue=KEY`,
+    on the configured site; None for anything else."""
+    parsed = urlparse(text)
+    if (parsed.scheme not in ("http", "https")
+            or parsed.netloc.lower() != urlparse(base).netloc.lower()):
+        return None
+    selected = parse_qs(parsed.query).get("selectedIssue", [])
+    if selected and _JIRA_ISSUE_KEY_RE.fullmatch(selected[0]):
+        return selected[0]
+    browse = re.search(r"/browse/([^/?#]+)/?$", parsed.path)
+    if browse and _JIRA_ISSUE_KEY_RE.fullmatch(browse.group(1)):
+        return browse.group(1)
+    return None
 
 
 def to_wire(body: str) -> Result:
@@ -137,8 +173,14 @@ def parent_read(config: dict, locator: dict, execute: Execute, *,
     if not isinstance(data, dict):
         return TrackerError(ErrorClass.TRANSPORT, "jira issue is not an object",
                             subtype="malformed_body")
+    if locator["durable"] is None:  # a read by key alone learns the id here
+        return data
     err = _check_durable("jira", locator, data)
-    return err if err else data
+    if err:
+        return err
+    # The key Jira files the issue under now decides: an issue moved into a
+    # discovery project is an idea, whatever key the caller holds.
+    return (moved_to_idea(config, key, data) if op != "wire-read" else None) or data
 
 
 def _require_parent(config: dict, locator: dict, execute: Execute) -> Result:
@@ -146,13 +188,24 @@ def _require_parent(config: dict, locator: dict, execute: Execute) -> Result:
 
 
 def read(config: dict, locator: dict, execute: Execute) -> Result:
+    if locator["durable"] is None:
+        # Read by key or URL alone (parse_locator allows it for this verb).
+        dest = _destination(config)
+        if isinstance(dest, TrackerError):
+            return dest
+        base = _jira_base(config, dest)
+        if isinstance(base, TrackerError):
+            return base
+        locator = {"durable": None,
+                   "display": key_from_url(base, locator["display"]) or locator["display"]}
     parent = parent_read(config, locator, execute, op="wire-read")
     if isinstance(parent, TrackerError):
         return parent
-    out = _issue_out(parent, parent_identity="validated")
+    out = _issue_out(parent, parent_identity=(
+        "validated" if locator["durable"] is not None else "not_available"))
     # An idea source is configured: an issue in a discovery project is an idea,
     # and the read names the reference that handles it (no extra request).
-    if is_idea_key(config, locator["display"]):
+    if is_idea_key(config, out["identifier"] or locator["display"]):
         out["idea"] = {
             "reference": idea_reference(),
             "note": "This issue is an idea in a discovery project, not delivery "
