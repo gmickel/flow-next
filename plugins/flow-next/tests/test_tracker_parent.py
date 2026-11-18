@@ -655,6 +655,46 @@ class CreateFirstParent(unittest.TestCase):
             self.assertIsNone(again["parent"])
             self.assertEqual(again["degraded"]["kind"], "parent_not_set")
 
+    def test_recovery_put_keeps_a_parent_gitlab_did_not_set(self) -> None:
+        # PR #625 review: after a put (the recovery one when the record write
+        # failed, or the ceremony's own), a retry still reports it not set.
+        from flowctl_tracker.lifecycle import verbs as LV  # noqa: PLC0415
+        for fail_record_write in (True, False):
+            with self.subTest(fail_record_write=fail_record_write), \
+                    tempfile.TemporaryDirectory() as tmp:
+                cwd = Path(tmp)
+                subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
+                               cwd=cwd, capture_output=True, check=True)
+                flow = cwd / ".flow"
+                (flow / "config.json").write_text(json.dumps(gl_cfg()), encoding="utf-8")
+                key = L.compute_create_first_key("gitlab", "T", "B", "42")
+                real_write = LV.atomic_write_json
+                writes = []
+
+                def flaky(path, data, fail=fail_record_write):
+                    writes.append(data)
+                    if fail and len(writes) == 2:
+                        return TrackerError(ErrorClass.TRANSPORT, "disk full", subtype="write")
+                    return real_write(path, data)
+
+                ex = fake_execute({"lifecycle-create": ok({**_gl_issue("B"), "epic": None})})
+                with mock.patch.object(LV, "atomic_write_json", side_effect=flaky):
+                    out = L.create_first(flow, title="T", body="B", retry_key=key,
+                                         parent="42", execute=ex)
+                d = out.details if fail_record_write else out
+                put = subprocess.run(
+                    [sys.executable, str(FLOWCTL), "sync", "create-first-put",
+                     "--key", key, "--id", str(d["id"]), "--identifier", d["identifier"],
+                     "--url", d["url"], "--title", "T", "--transport", "gitlab", "--json"],
+                    cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
+                retried = L.create_first(flow, title="T", body="B", retry_key=key,
+                                         parent="42", execute=fake_execute({}))
+                self.assertNotIsInstance(retried, TrackerError, retried)
+                self.assertTrue(retried["retried"])
+                self.assertIsNone(retried["parent"])
+                self.assertEqual((retried.get("degraded") or {}).get("kind"), "parent_not_set")
+
     def test_failed_record_write_keeps_the_parent_for_the_retry(self) -> None:
         # fn-334 R9: the issue exists, the record write failed; the recovery
         # put from the failure details and a same-parent retry link it.

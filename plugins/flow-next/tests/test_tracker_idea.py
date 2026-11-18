@@ -644,6 +644,19 @@ class RerunFindsTheUnlinkedParent(unittest.TestCase):
         self.assertIn("tracker idea link", out.message)
         self.assertEqual(_posts(ex, "lifecycle-create"), [])
 
+    def test_unreadable_marker_search_creates_nothing(self) -> None:
+        # PR #625 review: a search response it cannot read completely is an
+        # error, never "no marked parent".
+        for body in ([], {"issues": []}, {"issues": {}, "isLast": True},
+                     {"issues": [], "isLast": "yes"}):
+            with self.subTest(body=body):
+                out, ex = self._settle({"idea-marker-search": ok(body),
+                                        "lifecycle-create": ok({"id": "1", "key": "PROJ-1"}),
+                                        "idea-link": created()})
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.subtype, "malformed_body")
+                self.assertEqual(_posts(ex, "lifecycle-create"), [])
+
     def test_marker_search_reads_every_page(self) -> None:
         from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
 
