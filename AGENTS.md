@@ -40,11 +40,14 @@ model. Planning, judgment, user-facing design, and native workers otherwise
 inherit the actual session model. Read `flowctl usage` before model steering.
 
 For an OpenAI-family writer, prefer a reachable Claude-family reviewer through
-the configured review backend. Do not reuse the Claude entry point's Astra
+the configured review backend. Do not reuse the Claude entry point's OpenAI-family
 reviewer preference as an independent-family reviewer here. No host-review
 model is pinned in this entry point: when choosing `host`, resolve an explicit
 reachable cross-family reviewer before dispatch; absence is a reported blocker,
 not permission for self-review. Existing backend configuration remains in force.
+
+Reviews focus on overengineering, slop and YAGNI, and on whether a change to a skill's
+contract also updates that skill's checklist in `agent_docs/conduct/`.
 
 For ordinary implementation/scouting, an unreachable preference falls back to
 the session model with one notice. Host review is the exception: preserve its
