@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+## [flow-next 9.15.0] - 2026-11-18
+
+Idea intake from Jira Product Discovery gets safe to rerun and harder to misuse. Rerunning it after a delivery link failed reuses the parent epic it created instead of making a second one, an agent that reads Jira through its own connection still finds the idea path, and no write reaches an idea except its delivery link. Scripts can now branch on why a tracker command failed, because every failure carries its subtype. These fixes come from a review of recent releases on newer models, and each was reproduced on 9.14.1 before it was fixed.
+
 ### Added
 
 - **Scripts can branch on why a tracker command failed.** Every `flowctl tracker` failure envelope now carries `subtype` next to `class` whenever the error has one, so the documented cases (`several_parents`, `delivery_link_type`, `parent_mismatch`, `idea_read_only`, ...) reach the caller instead of only the class. The field is additive; callers that ignore it keep working.
