@@ -6,6 +6,19 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+Reviews that name no model run on the newest models without costing the most. A bare `codex` or `copilot` reviewer runs GPT-6.2 Sol at medium effort, which found 35 actionable defects per draw set against 14 for GPT-6.1 Sol at high on replayed reviews (two draw sets per model on six fixtures), caught as many known misses, made no more false claims, and took 285 seconds per review against 257, at the cost of about four non-actionable notes per review. A bare `claude` reviewer runs Opus 5.5 at high. Fable and GPT-6.2 Astra, the most expensive tiers, run only when you pin them, with no unknown-model warning, and the docs show the one-line pin for each. Teams that want the most thorough Codex review pin GPT-6.2 Astra, which caught the most known misses (7 of 10) and real defects (46) in the same screen, at about three times GPT-6.1 Sol's review time.
+
+**What changes when you upgrade.** A bare `claude` reviewer moves from Fable 5.1 to Opus 5.5 at the next review; keep Fable with `flowctl config set review.backend claude:claude-fable-5-2:high`. A bare `codex` reviewer moves from GPT-6.1 Sol at high to GPT-6.2 Sol at medium, and a bare `copilot` reviewer from GPT-6 Astra at high to GPT-6.2 Sol at medium; a spec that names a model or an effort keeps it (`codex:gpt-6.1-sol:high`).
+
+### Changed
+
+- **New review defaults, observed 2026-11-18.** `codex` and `copilot` start at `gpt-6.2-sol` with `medium` effort, with `gpt-6.1-sol` next in the codex ranking for the fallback; `claude` starts at `claude-opus-5-5`. The Cursor ranking is unchanged.
+- **Fable and GPT-6.2 Astra run only when pinned.** `claude-fable-5-2` and `claude-fable-5-1` on `claude`, `claude-fable-5.2` and `claude-fable-5.1` on `copilot`, and `gpt-6.2-astra` on `codex` and `copilot` are never a ranking top, and the fallback never steps onto them. Pinned (`claude:claude-fable-5-2:high`, `copilot:claude-fable-5.2`, `codex:gpt-6.2-astra:high`, `copilot:gpt-6.2-astra`), each runs as named without the unknown-model warning.
+
+### Fixed
+
+- **The review fallback recognises what current CLIs print for an unavailable model.** Codex signed in with a ChatGPT account (`The '<id>' model is not supported when using Codex with a ChatGPT account.`, CLI 0.169.1 and 0.170.0) and Copilot 1.0.114 (`Execution failed: Model "<id>" is not available.`) now step down to the next ranked model instead of failing the review. A Copilot quota refusal (`You have exceeded your monthly quota`) or a failed sign-in still fails the review unchanged.
+
 ## [flow-next 9.15.0] - 2026-11-18
 
 Idea intake from Jira Product Discovery gets safe to rerun and harder to misuse. Rerunning it after a delivery link failed reuses the parent epic it created instead of making a second one, an agent that reads Jira through its own connection still finds the idea path, and no write reaches an idea except its delivery link. Scripts can now branch on why a tracker command failed, because every failure carries its subtype. These fixes come from a review of recent releases on newer models, and each was reproduced on 9.14.1 before it was fixed.

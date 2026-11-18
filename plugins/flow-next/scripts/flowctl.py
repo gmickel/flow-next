@@ -3786,15 +3786,24 @@ _MODEL_CACHE_MAX_FUTURE_SKEW_SECS = 5 * 60
 # 2026-07-10 (all three CLIs). Matching ONLY these keeps the ladder from stepping
 # down on auth / network / sandbox / timeout failures.
 #   codex   : HTTP 400 invalid_request_error "The '<m>' model requires a newer
-#             version of Codex" (CLI < 0.144); OpenAI model-not-found 400.
-#   copilot : 'Model "<m>" from --model flag is not available' (copilot 1.0.65).
+#             version of Codex" (CLI < 0.144); OpenAI model-not-found 400;
+#             "The '<m>' model is not supported when using Codex with a ChatGPT
+#             account." (0.169.1 / 0.170.0 on a ChatGPT sign-in, 2026-11-18).
+#   copilot : 'Model "<m>" from --model flag is not available' (copilot 1.0.65);
+#             'Execution failed: Model "<m>" is not available.' (1.0.114,
+#             2026-11-18). Its quota refusal ("You have exceeded your monthly
+#             quota") matches neither, so it never steps down.
 #   cursor  : 'Cannot use this model: <m>. Available models: ...' (cursor-agent,
 #             probed live 2026-07-10 with a fake model id + --mode ask).
 _CODEX_UNAVAILABLE_MARKERS = (
     "requires a newer version of Codex",
     "model_not_found",
+    "model is not supported when using Codex with a ChatGPT account",
 )
-_COPILOT_UNAVAILABLE_MARKERS = ("from --model flag is not available",)
+_COPILOT_UNAVAILABLE_MARKERS = (
+    "from --model flag is not available",
+    '" is not available.',
+)
 _CURSOR_UNAVAILABLE_MARKERS = ("Cannot use this model:",)
 
 
@@ -7316,8 +7325,13 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # fallback ladder (run_codex_exec) steps DOWN this list on the codex
         # model-unavailable signature only. Ranking is a preference, never a
         # parse-time gate — unknown explicit models warn-and-accept.
+        # fn-333: ``pinned_only`` lists known models that run only when a spec
+        # names them: the parser accepts them without the unknown-model warning,
+        # and they never enter ``models``, so neither the default nor the ladder
+        # picks them.
         "models": [
-            "gpt-6.1-sol",  # served by codex CLI 0.159.0 (probed 2026-09-29); codex's models cache lists it first
+            "gpt-6.2-sol",  # served by codex CLI 0.169.1 / 0.170.0 (observed 2026-11-18); default at medium per the reviewer study
+            "gpt-6.1-sol",  # served by codex CLI 0.159.0 (probed 2026-09-29); the 6.2 Sol fallback
             "gpt-6-astra",  # GA 2026-09-05; confirmed served by the codex CLI on that date
             "gpt-6-sol",  # served alongside astra (codex models cache, 2026-09-27); same-generation first step down
             "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
@@ -7331,8 +7345,9 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-6.1-sol",  # == models[0] (fn-76 invariant)
-        "default_effort": "high",
+        "default_model": "gpt-6.2-sol",  # == models[0] (fn-76 invariant)
+        "default_effort": "medium",
+        "pinned_only": ["gpt-6.2-astra"],  # most expensive OpenAI tier (observed 2026-11-18)
     },
     "copilot": {
         # fn-76: ORDERED quality ranking (strongest first); ``default_model`` ==
@@ -7350,10 +7365,10 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ladder heals per-install gaps, so docs-listed rungs are safe even
         # where a given org disallows them.
         "models": [
+            "gpt-6.2-sol",  # GA in Copilot (observed 2026-11-18); medium carries over from the codex study
             "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
             "gpt-5.5",
             "gpt-5.4",
-            "claude-fable-5.1",  # rolled out to Copilot 2026-09-05; Claude-family, so --effort is dropped
             "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
@@ -7376,8 +7391,10 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
-        "default_effort": "high",
+        "default_model": "gpt-6.2-sol",  # == models[0] (fn-76 invariant)
+        "default_effort": "medium",
+        # GA in Copilot (observed 2026-11-18); the Claude-family ids drop --effort.
+        "pinned_only": ["gpt-6.2-astra", "claude-fable-5.2", "claude-fable-5.1"],
     },
     "cursor": {
         # NEW registry shape (fn-74): model accepted, effort folded into the
@@ -7424,7 +7441,6 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # claude-haiku-5-5 probed 2026-10-07 on 2.1.293.
         # The CLI has no ``--list-models``.
         "models": [
-            "claude-fable-5-1",
             "claude-opus-5-5",
             "claude-opus-5",
             "claude-sonnet-5-5",
@@ -7434,8 +7450,11 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         ],
         # The CLI's own ``--effort`` set (2.1.260).
         "efforts": {"low", "medium", "high", "xhigh", "max"},
-        "default_model": "claude-fable-5-1",  # == models[0] (fn-76 invariant)
+        "default_model": "claude-opus-5-5",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
+        # The most expensive Claude tier; claude-fable-5-2 served by Claude
+        # Code (observed 2026-11-18).
+        "pinned_only": ["claude-fable-5-2", "claude-fable-5-1"],
     },
     "none": {
         # Explicit opt-out. Parser still validates it so ``--review=none`` can
@@ -7628,7 +7647,7 @@ class BackendSpec:
                     f"Backend {backend!r} does not accept a model "
                     f"(got {model!r})"
                 )
-            if model not in reg["models"]:
+            if model not in reg["models"] and model not in reg.get("pinned_only", ()):
                 # fn-76 R1: the ranking is a PREFERENCE, not a parse-time gate —
                 # the CLI is the availability authority. Warn-and-accept unknown
                 # models so a newer / plan-specific model the registry has not

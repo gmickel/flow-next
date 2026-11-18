@@ -341,7 +341,7 @@ class TestHappyPath(unittest.TestCase):
             with _repo() as root:
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:high"), repo_root=root,
+                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:medium"), repo_root=root,
                 )
         self.assertEqual(unconf[0], explicit[0])
 
@@ -1830,7 +1830,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
                 os.chdir(root)
                 r = BackendSpec("codex").resolve()
                 self.assertEqual(r.model, CODEX_TOP)
-                self.assertEqual(r.effort, "high")
+                self.assertEqual(r.effort, "medium")
                 self.assertFalse(r.model_explicit)
             finally:
                 os.chdir(prev)

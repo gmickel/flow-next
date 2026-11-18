@@ -10,6 +10,7 @@
   "id": "fn-333-review-model-registry-for-gpt-62-and",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T12:21:03.409787Z"
+  "updated_at": "2026-11-18T12:21:45.052263Z"
 }

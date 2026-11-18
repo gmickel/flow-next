@@ -128,7 +128,7 @@ class TestRegistryShape(unittest.TestCase):
         # fn-272 R4: a withheld codex astra steps down within the same
         # generation first.
         self.assertEqual(
-            BACKEND_REGISTRY["codex"]["models"][:3], ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol"]
+            BACKEND_REGISTRY["codex"]["models"][:3], ["gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra"]
         )
 
 
@@ -346,14 +346,14 @@ class TestResolve(unittest.TestCase):
         r = BackendSpec.parse("codex").resolve()
         # fn-76: codex default is the ranking top.
         top = BACKEND_REGISTRY["codex"]["models"][0]
-        self.assertEqual(r, BackendSpec("codex", top, "high"))
+        self.assertEqual(r, BackendSpec("codex", top, "medium"))
         # Unconfigured → not explicit → ladder-/cache-eligible downstream.
         self.assertFalse(r.model_explicit)
 
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
         top = BACKEND_REGISTRY["copilot"]["models"][0]
-        self.assertEqual(r, BackendSpec("copilot", top, "high"))
+        self.assertEqual(r, BackendSpec("copilot", top, "medium"))
 
     def test_bare_cursor_fills_model_effort_stays_none(self) -> None:
         # Model fills from registry default; effort stays None (no effort axis).
@@ -375,7 +375,7 @@ class TestResolve(unittest.TestCase):
         os.environ["FLOW_CODEX_MODEL"] = "gpt-5.2"
         r = BackendSpec.parse("codex").resolve()
         self.assertEqual(r.model, "gpt-5.2")
-        self.assertEqual(r.effort, "high")  # still registry default
+        self.assertEqual(r.effort, "medium")  # still registry default
 
     def test_env_fills_missing_effort(self) -> None:
         os.environ["FLOW_CODEX_EFFORT"] = "low"
@@ -867,7 +867,7 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
         )
         self.assertEqual(
             argv[argv.index("-c") + 1],
-            'model_reasoning_effort="high"',
+            'model_reasoning_effort="medium"',
         )
 
     def test_partial_spec_gets_resolved(self) -> None:
@@ -1129,7 +1129,7 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(
                 resolved.model, BACKEND_REGISTRY["codex"]["models"][0]
             )
-            self.assertEqual(resolved.effort, "high")
+            self.assertEqual(resolved.effort, "medium")
 
     def test_no_task_id_still_resolves(self) -> None:
         # Plan / completion reviews pass task_id=None — must still resolve.
@@ -1338,17 +1338,17 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
             ]
             self.assertTrue(exec_calls, f"no codex exec calls captured: {captured}")
             argv, _ = exec_calls[-1]
-            # Per-task spec `codex:gpt-5.2` (effort unset → registry default "high").
+            # Per-task spec `codex:gpt-5.2` (effort unset → registry default "medium").
             self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.2")
             self.assertEqual(
                 argv[argv.index("-c") + 1],
-                'model_reasoning_effort="high"',
+                'model_reasoning_effort="medium"',
             )
             # Receipt carries model + effort + canonical spec string.
             receipt = json.loads(receipt_path.read_text())
             self.assertEqual(receipt["model"], "gpt-5.2")
-            self.assertEqual(receipt["effort"], "high")
-            self.assertEqual(receipt["spec"], "codex:gpt-5.2:high")
+            self.assertEqual(receipt["effort"], "medium")
+            self.assertEqual(receipt["spec"], "codex:gpt-5.2:medium")
 
     def test_spec_cli_flag_overrides_task_spec(self) -> None:
         # Task says codex:gpt-5.2 but --spec on argv says codex:gpt-5:low.
@@ -1486,9 +1486,9 @@ class TestReviewBackendCmd(unittest.TestCase):
             payload = self._run_json()
             top = BACKEND_REGISTRY["codex"]["models"][0]
             self.assertEqual(payload["backend"], "codex")
-            self.assertEqual(payload["spec"], f"codex:{top}:high")
+            self.assertEqual(payload["spec"], f"codex:{top}:medium")
             self.assertEqual(payload["model"], top)
-            self.assertEqual(payload["effort"], "high")
+            self.assertEqual(payload["effort"], "medium")
             self.assertEqual(payload["source"], "env")
 
     def test_env_bare_host_has_no_model_or_effort(self) -> None:
@@ -1516,7 +1516,7 @@ class TestReviewBackendCmd(unittest.TestCase):
             )
             payload = self._run_json()
             self.assertEqual(payload["backend"], "copilot")
-            self.assertEqual(payload["spec"], "copilot:claude-haiku-4.5:high")
+            self.assertEqual(payload["spec"], "copilot:claude-haiku-4.5:medium")
             self.assertEqual(payload["model"], "claude-haiku-4.5")
             self.assertEqual(payload["source"], "config")
 
@@ -1559,7 +1559,7 @@ class TestReviewBackendCmd(unittest.TestCase):
             # Full spec resolves to registry defaults since model was unparseable
             # (fn-76: legacy dash-composite still degrades to bare; ranking top).
             top = BACKEND_REGISTRY["codex"]["models"][0]
-            self.assertEqual(payload["spec"], f"codex:{top}:high")
+            self.assertEqual(payload["spec"], f"codex:{top}:medium")
             self.assertEqual(payload["source"], "env")
 
     def test_garbage_env_returns_ask(self) -> None:
