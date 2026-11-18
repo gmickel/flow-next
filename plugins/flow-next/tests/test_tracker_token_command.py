@@ -252,6 +252,16 @@ class MachineLocalTokenCommand(unittest.TestCase):
                 self.assertEqual(seen, [])
         self.assertFalse(tracked_log.exists())
 
+    def test_missing_local_executable_names_the_variable_not_the_path(self) -> None:
+        with self.local("LINEAR", ["/nonexistent/fn332-private-machine/token-helper"]):
+            result, seen = self.send("linear", {}, self.LINEAR)
+        self.assertIsInstance(result, TrackerError)
+        self.assertIs(result.cls, ErrorClass.AUTH)
+        self.assertIn("not found", result.message)
+        self.assertIn("FLOW_TRACKER_TOKEN_COMMAND_LINEAR", result.message)
+        self.assertNotIn("fn332-private-machine", result.message)
+        self.assertEqual(seen, [])
+
     def test_local_command_runs_once_per_process(self) -> None:
         local, log = self.counted("local-once-1515")
         with self.local("LINEAR", local):
