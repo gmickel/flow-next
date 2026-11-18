@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-331-tracker-rejections-say-why-and-idea",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-11-18T00:16:14.248808Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-331-tracker-rejections-say-why-and-idea",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-331-tracker-rejections-say-why-and-idea.md",
   "status": "open",
   "title": "Tracker rejections say why, and idea text reads clean",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T00:16:14.251387Z"
+  "updated_at": "2026-11-18T00:17:16.600043Z"
 }
