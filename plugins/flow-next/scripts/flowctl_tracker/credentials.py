@@ -263,7 +263,8 @@ def remember_glab_token(host: Optional[str]) -> None:
 def redact(text: str) -> str:
     """Strip every known secret from a string bound for a log, error or receipt."""
     out = text
-    for name in ("GH_TOKEN", "GITLAB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN", "JIRA_PAT"):
+    for name in ("GH_TOKEN", "GITLAB_TOKEN", "CI_JOB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN",
+                 "JIRA_PAT"):
         val = os.environ.get(name)
         # Same rule as `_remember`: a value this short is never a usable
         # credential (resolution refuses it), and adding it here would let a

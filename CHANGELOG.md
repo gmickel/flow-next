@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Added
 
-- **A tracker token command that stays on one machine.** `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` and `FLOW_TRACKER_TOKEN_COMMAND_JIRA` hold the same JSON argv as `tracker.perTracker.tokenCommand`, read from the environment instead of the committed `.flow/config.json`, so a command whose path belongs to one machine never has to be committed. The token variable still wins, then the machine-local command, then the tracked one; a machine-local command that fails stops there and is reported like the tracked one. Setting it for Linear also skips the MCP create route. Asked for by MergeFoundry, whose daemon exports the variable to every session it starts.
+- **A tracker token command that stays on one machine.** `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` and `FLOW_TRACKER_TOKEN_COMMAND_JIRA` hold the same JSON argv as `tracker.perTracker.tokenCommand`, read from the environment instead of the committed `.flow/config.json`, so a command whose path belongs to one machine never has to be committed. The token variable still wins, then the machine-local command, then the tracked one; a machine-local command that fails stops there and is reported like the tracked one. Setting it for Linear also skips the MCP create route unless `preferredTransport` is `mcp`. Asked for by MergeFoundry, whose daemon exports the variable to every session it starts.
 
 ### Fixed
 
