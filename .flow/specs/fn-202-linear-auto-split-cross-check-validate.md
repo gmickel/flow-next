@@ -2,7 +2,7 @@
 
 ## Goal & Context
 
-Field finding from the Systabuild rollout (weekly sync, 7 Aug 2026, Swen Niebann): Swen creates a project in Linear and lets the model cut it into issues itself -- one spec per issue, dependencies included -- and then feeds those issues into flow-next. The open question is whether that tracker-side cut is trustworthy: does the model, cutting from the tracker's project view, arrive at the same decomposition it would produce cutting directly against the code?
+Field finding from a team rolling out flow-next (August 2026): a product owner creates a project in Linear and lets the model cut it into issues itself -- one spec per issue, dependencies included -- and then feeds those issues into flow-next. The open question is whether that tracker-side cut is trustworthy: does the model, cutting from the tracker's project view, arrive at the same decomposition it would produce cutting directly against the code?
 
 The agreed validation is a controlled double-run: take the same source ticket, run it once through the Linear auto-split path and once through direct capture/plan against the repository, and compare the resulting splits (spec count, boundaries, dependency edges). Outcome is either confidence in the tracker-side workflow or a concrete counterexample showing where the tracker view lacks the code context to cut correctly.
 
@@ -33,8 +33,8 @@ None. Uses existing flowctl and tracker-sync surfaces as-is.
 ## Boundaries
 
 - In scope: the evaluation protocol, one documented double-run, the comparison write-up.
-- Out of scope: building new product features; changing the capture/interview split heuristic (already shipped, 8+ criteria); Systabuild-specific consulting artifacts (those live in the vault, not this repo).
+- Out of scope: building new product features; changing the capture/interview split heuristic (already shipped, 8+ criteria); consulting artifacts for that team (they live outside this repo).
 
 ## Decision Context
 
-Origin: Systabuild weekly 7 Aug 2026 (Swen Niebann), carried as Todoist 6hF8cCCf3Vg3mgXR, stubbed into the repo 21 Aug 2026 so the backlog owns it instead of a task list. Swen's workflow motivation: letting Linear hold the project shape gives POs a familiar surface while flow-next executes; the double-run is the cheap way to find out whether that surface loses information that matters for cutting. No deadline; natural slot is alongside the next tracker-sync iteration.
+Origin: a field team's weekly sync in August 2026, stubbed into the repo on 21 Aug 2026 so the backlog owns it instead of a task list. The workflow motivation: letting Linear hold the project shape gives POs a familiar surface while flow-next executes; the double-run is the cheap way to find out whether that surface loses information that matters for cutting. No deadline; natural slot is alongside the next tracker-sync iteration.
