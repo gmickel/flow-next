@@ -148,7 +148,7 @@
     "impl:fn-334-fixes-from-the-reviewer-study-idea.1": 0
   },
   "spec_path": ".flow/specs/fn-334-fixes-from-the-reviewer-study-idea.md",
-  "status": "open",
+  "status": "done",
   "title": "Fixes from the reviewer study: idea intake, parent at creation, redaction",
   "tracker": {
     "baseHashFlow": null,
@@ -161,5 +161,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T11:19:14.953515Z"
+  "updated_at": "2026-11-18T11:20:25.825927Z"
 }

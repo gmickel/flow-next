@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-334-fixes-from-the-reviewer-study-idea",
   "spec_path": ".flow/tasks/fn-334-fixes-from-the-reviewer-study-idea.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Fixes from the reviewer study: idea intake, parent at creation, redaction",
   "updated_at": "2026-11-18T11:12:02.955015Z"
 }
