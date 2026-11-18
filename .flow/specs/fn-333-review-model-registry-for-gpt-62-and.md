@@ -19,13 +19,13 @@ The users are teams choosing a review backend in setup, and teams that pin a rev
 | Backend | Top when nothing is pinned | Fable |
 |---|---|---|
 | claude | `claude-opus-5-5` at high | `claude-fable-5-2`, `claude-fable-5-1` pinned only |
-| copilot | Settled by the reviewer study below, among GPT-6.2 Astra, GPT-6.2 Sol and GPT-6 Astra | `claude-fable-5.2`, `claude-fable-5.1` pinned only |
-| codex | Settled by the reviewer study below, among GPT-6.2 Astra, GPT-6.2 Sol and GPT-6.1 Sol | not served |
+| copilot | The GPT model the Codex row settles on, in its Copilot id; GPT-6.2 Astra is pinned only | `claude-fable-5.2`, `claude-fable-5.1` pinned only |
+| codex | Settled by the reviewer study's replication: `gpt-6.1-sol` at high or `gpt-6.2-sol` at medium. GPT-6.2 Astra is pinned only | not served |
 | cursor | unchanged | not in the ranking today; stays out |
 
-`gpt-6.2-astra` and `gpt-6.2-sol` join the Codex and Copilot rankings in the order the study sets. The invariant that a backend's default equals the top of its ranking still holds.
+`gpt-6.2-astra` and `gpt-6.2-sol` join the Codex and Copilot rankings. GPT-6.2 Astra, like Fable, is never chosen automatically: it is the most expensive OpenAI tier. It is the documented recommendation for a team that wants the most thorough review and pins it. The invariant that a backend's default equals the top of its ranking still holds.
 
-**Codex host agents.** The Codex mirror pins its generated agents to a baseline model, and those baselines follow the same study (the reviewer baseline) and the scout screen (the scout baselines).
+**Codex host agents.** The Codex mirror pins its generated agents to a baseline model. The scout screen kept the intelligent-scout baseline on `gpt-6.1-sol`: 6.2 Sol at medium named 28 of 30 changed files against 26, but took 1.43 times as long, past the 1.25 limit. The fast-scout baseline (`gpt-6-luna`) has no 6.2 counterpart and stays.
 
 **Signatures.** The fallback steps down only on each CLI's own model-unavailable text, and two of the stored markers no longer match what the CLIs print (observed 2026-11-18):
 
@@ -59,12 +59,12 @@ For host reviews, the reviewer line of the project's model-routing block names F
 ## Acceptance Criteria
 
 - **R1:** With a bare `claude` review backend, a review runs `claude-opus-5-5` at high. Errors: when Opus 5.5 is unavailable on the installed CLI, the fallback steps down the non-Fable ranking. [paraphrase]
-- **R2:** No backend's automatic choice or fallback selects a Fable model. No error surface. [paraphrase]
-- **R3:** A pinned `claude:claude-fable-5-2`, `claude:claude-fable-5-1`, `copilot:claude-fable-5.2` or `copilot:claude-fable-5.1` runs that model and prints no unknown-model warning. No error surface beyond the CLI's own. [paraphrase]
-- **R4:** The Codex and Copilot rankings contain `gpt-6.2-astra` and `gpt-6.2-sol`, and their tops are the ones the reviewer study selects under its pre-registered rule. No error surface. [inferred]
-- **R5:** The Codex mirror's reviewer and scout baselines are the models the study and the scout screen select, and the generated agents carry them. No error surface. [inferred]
+- **R2:** No backend's automatic choice or fallback selects a Fable model or GPT-6.2 Astra. No error surface. [paraphrase]
+- **R3:** A pinned `claude:claude-fable-5-2`, `claude:claude-fable-5-1`, `copilot:claude-fable-5.2`, `copilot:claude-fable-5.1`, `codex:gpt-6.2-astra` or `copilot:gpt-6.2-astra` runs that model and prints no unknown-model warning. No error surface beyond the CLI's own. [paraphrase]
+- **R4:** The Codex and Copilot rankings contain `gpt-6.2-sol`, their tops (model and effort) are the ones the reviewer study's replication selects under its pre-registered rule, and `gpt-6.2-astra` is accepted pinned only. No error surface. [inferred]
+- **R5:** The Codex mirror's scout baselines stay `gpt-6.1-sol` (intelligent) and `gpt-6-luna` (fast), per the scout screen. No error surface. [inferred]
 - **R6:** The Copilot fallback steps down on Copilot's current unavailable text, and the Codex fallback steps down on the ChatGPT-account text, while neither steps down on a quota or authentication failure (Copilot's quota text is `You have exceeded your monthly quota`). Errors: a failure that matches no signature propagates unchanged, as today. [inferred]
-- **R7:** The documentation that names rankings or defaults (the flowctl reference, the per-host reach pages, the setup review question, the changelog) states the new tops with the date they were observed, says Fable is chosen only when pinned, and shows how to pin it. No error surface. [paraphrase]
+- **R7:** The documentation that names rankings or defaults (the flowctl reference, the per-host reach pages, the setup review question, the changelog) states the new tops with the date they were observed, says Fable and GPT-6.2 Astra are chosen only when pinned, shows how to pin each, and recommends GPT-6.2 Astra as the most thorough Codex reviewer, citing the screen (most known and real defects caught, about three times the review time). No error surface. [paraphrase]
 
 Tests that pin defaults are updated to the new tops, and new cases cover R2, R3 and both signatures (G2). Docs and the flow-next.dev pages that describe review backends change in the same release.
 
@@ -79,10 +79,10 @@ Tests that pin defaults are updated to the new tops, and new cases cover R2, R3 
 
 The maintainer decided on 2026-11-18 that the top of the Claude ranking, the model a team gets without choosing one, is not Fable, and that the documentation shows clearly how to use Fable. Keeping Fable out of the fallback as well follows from the same reasoning: a step down that lands on the most expensive tier is a choice nobody made.
 
-The Codex and Copilot tops are not decided here. GPT-6.1 Sol missed defects in this month's reviews that later passes found, and a reviewer study replays those reviewed commits on GPT-6.1 Sol, GPT-6.2 Sol and GPT-6.2 Astra with a pre-registered rule (`~/work/agent-evals/studies/reviewer-model-2026-11/`). Its result fills R4 and R5.
+GPT-6.1 Sol missed defects in this month's reviews that later passes found. A reviewer study (`~/work/agent-evals/studies/reviewer-model-2026-11/`) replayed those reviewed commits. In its screen, GPT-6.2 Astra caught the most known misses (7 of 10) and real other defects (46), at about three times 6.1 Sol's review time. The maintainer decided on 2026-11-18 that Astra is the documented recommendation, not the default, because of its price. The default is settled between 6.1 Sol at high and 6.2 Sol at medium, which ran at 6.1's speed and found more than twice its real defects in the screen, by a pre-registered replication. Its result fills R4.
 
 <!-- Source: 30% user / 10% [paraphrase] / 60% [inferred] -->
 
 ## Parked unknowns
 
-- The Codex and Copilot tops and the Codex mirror baselines: resolved by the reviewer study and the scout screen.
+- The Codex and Copilot tops (model and effort): resolved by the reviewer study's replication.
