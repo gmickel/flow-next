@@ -151,7 +151,11 @@ class RejectionReason(unittest.TestCase):
         bodies = [b"", b"not json", b"\xff\xfe", b'["a list"]', b'"text"', b"null",
                   b"{}", b'{"errorMessages":[],"errors":{}}',
                   b'{"message":[],"error":""}', b'{"other":"field"}',
-                  b'{"errorMessages":[42],"errors":{"f":null}}']
+                  b'{"errorMessages":[42],"errors":{"f":null}}',
+                  b'{"errors":{"parent":""," ":" "}}', b'{"message":{"title":["", " "]}}',
+                  b'[\n{"errorMessages":["nested"],"message":"nested"}\n]',
+                  b'{"errorMessages":["no"],"message":"no"} trailing garbage',
+                  b'glab: oops\n{"errorMessages":["no"],"message":"no"}']
         for provider in ("jira", "gitlab"):
             for body in bodies:
                 with self.subTest(provider=provider, body=body):
@@ -387,14 +391,16 @@ class CliClassificationThroughExecute(unittest.TestCase):
     `invalid_input`.
     """
 
-    def _cli(self, provider: str, stderr: bytes, rc: int = 1, stdout: bytes = b""):
+    def _cli(self, provider: str, stderr: bytes, rc: int = 1, stdout: bytes = b"",
+             env: dict | None = None):
         def fake(argv, **kw):
             return subprocess.CompletedProcess(argv, rc, stdout, stderr)
 
         with mock.patch.object(X.subprocess, "run", side_effect=fake), \
              mock.patch.object(X.time, "sleep"):
             return X.execute(Request(provider=provider, op="r", method="GET",
-                                     url_or_argv=[provider, "api", "x"], idempotent=True))
+                                     url_or_argv=[provider, "api", "x"], idempotent=True,
+                                     env=env or {}))
 
     def test_cli_auth_failure(self) -> None:
         self.assertIs(self._cli("github", b"HTTP 401: Bad credentials").cls, ErrorClass.AUTH)
@@ -427,6 +433,26 @@ class CliClassificationThroughExecute(unittest.TestCase):
         self.assertEqual(e.subtype, "http")
         self.assertEqual(
             e.message, "rejected (400): title: is too long (maximum is 255 characters)")
+
+    def test_gitlab_cli_rejection_redacts_glabs_stored_token(self) -> None:
+        # The CLI route authenticates through glab's own login, so the token
+        # never came from the environment; an echo of it is still redacted.
+        secret = "glpat-stored-only-12345678"
+        hosts = []
+
+        def stored(host):
+            hosts.append(host)
+            return secret
+
+        env = {k: v for k, v in os.environ.items() if k != "GITLAB_TOKEN"}
+        with mock.patch.object(CR, "_SEEN", set()), \
+                mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(CR, "_glab_config_token", side_effect=stored):
+            e = self._cli("gitlab", b"glab: map[error:bad]\n",
+                          stdout=json.dumps({"error": f"bad token {secret}"}).encode(),
+                          env={"GITLAB_HOST": "localhost:8929"})
+        self.assertEqual(e.message, "rejected (400): bad token <redacted>")
+        self.assertEqual(hosts, ["localhost:8929"])
 
 
 class TlsOptOut(unittest.TestCase):

@@ -62,38 +62,23 @@ def _reason(resp: Response, reasons: Callable[[dict], list[str]]) -> str:
     Provider text is untrusted and may echo the credential back, so it is
     redacted before the cut: a cut first could leave part of a secret that no
     longer matches."""
-    payload = _document(resp.body or b"")
-    if payload is None:
+    try:
+        payload = json.loads(resp.body or b"")
+    except (ValueError, TypeError):
         return ""
-    joined = "; ".join(r for r in reasons(payload) if r.strip())
-    return redact(joined)[:_REASON_MAX]
-
-
-def _document(body: bytes) -> Optional[dict]:
-    """The JSON object a rejection's body holds, or None.
-
-    On the CLI route the body is the CLI's diagnostics followed by its stdout
-    (`executor._cli`), so the object may start on a later line: glab prints
-    `glab: map[...]` on stderr and the API's JSON on stdout (measured)."""
-    text = body.decode("utf-8", "replace")
-    for line_start in [0] + [m.end() for m in re.finditer("\n", text)]:
-        chunk = text[line_start:].lstrip()
-        if not chunk.startswith("{"):
-            continue
-        try:
-            return json.JSONDecoder().raw_decode(chunk)[0]
-        except ValueError:
-            continue
-    return None
+    if not isinstance(payload, dict):
+        return ""
+    return redact("; ".join(reasons(payload)))[:_REASON_MAX]
 
 
 def _texts(value: Any, field: str = "") -> list[str]:
-    """A string, a list of strings, or a map of either, as `field: text`."""
+    """A string, a list of strings, or a map of either, as `field: text`.
+    Blank text is no reason and is dropped before the field is named."""
     prefix = f"{field}: " if field else ""
     if isinstance(value, str):
-        return [prefix + value]
+        value = [value]
     if isinstance(value, list):
-        return [prefix + v for v in value if isinstance(v, str)]
+        return [prefix + v for v in value if isinstance(v, str) and v.strip()]
     if isinstance(value, dict) and not field:
         return [t for k, v in value.items() for t in _texts(v, str(k))]
     return []
