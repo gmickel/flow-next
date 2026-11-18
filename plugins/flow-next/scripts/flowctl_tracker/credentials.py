@@ -134,18 +134,42 @@ def _command_token(argv) -> str:
     return outcome
 
 
+def machine_local_command(provider: str):
+    """`FLOW_TRACKER_TOKEN_COMMAND_<PROVIDER>`: an untracked JSON argv, or None when unset or empty.
+
+    Read before the tracked `tracker.perTracker.tokenCommand`, so a machine-specific path never
+    has to be committed. A malformed value raises without echoing it.
+    """
+    import json
+
+    name = f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}"
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        argv = json.loads(raw)
+    except ValueError:
+        argv = None
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise TokenCommandError(f"{name} must be a JSON list of non-empty strings")
+    return argv
+
+
 def resolve(provider: str, *, auth_scheme: Optional[str] = None,
             host: Optional[str] = None, token_command=None) -> Optional[Credential]:
     """Return a Credential, or None when the transport authenticates itself.
 
     GitHub and GitLab ordinarily go through their CLI, which carries its own
     auth - so None there is correct, not a failure. Linear and Jira fall back
-    to `token_command` only when their environment variable is unset.
+    to a token command only when their environment variable is unset: the
+    machine-local one first, else the tracked `token_command`, never both.
     """
     def env_or_command(name: str) -> Optional[str]:
         value = os.environ.get(name)
-        if not value and token_command is not None:
-            value = _command_token(token_command)
+        if not value:
+            command = machine_local_command(provider) or token_command
+            if command is not None:
+                value = _command_token(command)
         return _remember(value)
 
     if provider == "github":
