@@ -44251,6 +44251,11 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
         # The parent `tracker create-first --parent` created the issue under;
         # its retry check compares it, so a later put must keep it.
         record["parent"] = existing["parent"]
+    if (existing and existing.get("degraded") is not None
+            and existing.get("id") in (None, args.id)):
+        # What the create did not set (a GitLab parent_not_set); the retry
+        # replays it, so a put for the same issue, or over its claim, keeps it.
+        record["degraded"] = existing["degraded"]
     # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
     # A project whose auto-managed .flow/.gitignore predates this release
     # would otherwise get an untracked-but-unignored recovery record, and a

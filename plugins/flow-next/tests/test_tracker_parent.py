@@ -671,7 +671,8 @@ class CreateFirstParent(unittest.TestCase):
                 real_write = LV.atomic_write_json
                 writes = []
 
-                def flaky(path, data, fail=fail_record_write):
+                def flaky(path, data, fail=fail_record_write, writes=writes,
+                          real_write=real_write):
                     writes.append(data)
                     if fail and len(writes) == 2:
                         return TrackerError(ErrorClass.TRANSPORT, "disk full", subtype="write")

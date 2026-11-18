@@ -655,6 +655,9 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
             details["parent"] = parent
         if created.get("degraded") is not None:
             details["degraded"] = created["degraded"]
+            # Best effort: the recovery put copies the claim's `degraded`, so a
+            # retry still reports a parent the tracker did not set.
+            atomic_write_json(rec_path, {**claim, "degraded": created["degraded"]})
         return dataclasses.replace(err, details=details)
     out = {"id": created["id"], "identifier": created["identifier"],
            "url": created.get("url"), "retried": False}

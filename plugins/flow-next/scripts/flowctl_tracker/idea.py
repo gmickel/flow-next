@@ -245,11 +245,17 @@ def _marked_parents(config: dict, execute, key: str, level: dict) -> Any:
                     f"{base}/rest/api/2/search/jql?" + urlencode(query), idempotent=True)
         if isinstance(raw, TrackerError):
             return raw
-        found += [_candidate(i) for i in _dict(raw).get("issues") or []
+        # A page it cannot read completely must never read as "no parent".
+        if (not isinstance(raw, dict) or not isinstance(raw.get("issues"), list)
+                or not isinstance(raw.get("isLast"), bool)):
+            return TrackerError(ErrorClass.TRANSPORT,
+                                "jira marker search response is malformed; nothing was created",
+                                subtype="malformed_body")
+        found += [_candidate(i) for i in raw["issues"]
                   if isinstance(i, dict) and i.get("key")]
-        if _dict(raw).get("isLast") is not False:
+        if raw["isLast"]:
             return [c for c in found if c["hierarchyLevel"] == level["level"]]
-        token = _dict(raw).get("nextPageToken")
+        token = raw.get("nextPageToken")
         if not isinstance(token, str) or not token or token in seen:
             break
         seen.add(token)
