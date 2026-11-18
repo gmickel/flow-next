@@ -23,7 +23,7 @@
     "enabled": false
   },
   "review": {
-    "backend": "codex:gpt-6.1-sol:high",
+    "backend": "codex:gpt-6.2-sol:medium",
     "maxIterations": 8
   },
   "scouts": {
