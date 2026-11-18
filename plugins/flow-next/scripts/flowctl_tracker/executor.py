@@ -286,19 +286,20 @@ def _cli(req: Request, verify_tls: bool) -> Result:
 
 
 def _glab_host(req: Request) -> Optional[str]:
-    """The host a glab call targets: `GITLAB_HOST`, `--hostname`, or glab's default."""
+    """The host a glab call targets: the request's `GITLAB_HOST`, `--hostname`,
+    the inherited `GITLAB_HOST` (glab honours it), or glab's default."""
     if req.env and req.env.get("GITLAB_HOST"):
         return req.env["GITLAB_HOST"]
     argv = list(req.url_or_argv)
     if "--hostname" in argv[:-1]:
         return argv[argv.index("--hostname") + 1]
-    return None
+    return os.environ.get("GITLAB_HOST") or None
 
 
 def _is_json_object(raw: bytes) -> bool:
     try:
         return isinstance(json.loads(raw), dict)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return False
 
 

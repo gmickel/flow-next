@@ -64,7 +64,7 @@ def _reason(resp: Response, reasons: Callable[[dict], list[str]]) -> str:
     longer matches."""
     try:
         payload = json.loads(resp.body or b"")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return ""
     if not isinstance(payload, dict):
         return ""
