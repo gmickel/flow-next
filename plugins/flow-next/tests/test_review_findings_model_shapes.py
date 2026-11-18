@@ -148,6 +148,51 @@ class ModelShapesTest(unittest.TestCase):
         self.assertEqual((items[0]["anchor"]["path"], items[0]["anchor"]["startLine"]), ("plugins/x/providers.py", 100))
         self.assertNotIn("anchor", items[1])
 
+    def test_new_layout_beside_a_parsed_finding_is_not_dropped(self) -> None:
+        one_line = (
+            "- **Severity** P1 · **Confidence** 100 · **Classification** introduced"
+            " · **File:Line** `src/a.py:3`\n  **Problem** New-layout finding.\n\n"
+        )
+        canonical = (
+            "- **Severity:** P2\n- **Confidence:** 75\n- **Classification:** introduced\n"
+            "- **Problem:** Canonical finding.\n\n"
+        )
+        items = parse(canonical + one_line + "<verdict>NEEDS_WORK</verdict>\n")["items"]
+        self.assertEqual([item["severity"] for item in items], ["P1", "P2"])
+
+        prior = parse(canonical + "<verdict>NEEDS_WORK</verdict>\n")
+        status: dict = {}
+        round_two = FLOWCTL.parse_review_findings(
+            "Prior finding #1: fixed\n\n" + one_line + "<verdict>NEEDS_WORK</verdict>\n",
+            source_receipt_id="receipt-round-2",
+            review_kind="implementation",
+            backend="codex",
+            round_number=2,
+            head_sha=HEAD_SHA,
+            base_sha=BASE_SHA,
+            supersedes_receipt_id="receipt-round-1",
+            prior_findings=prior,
+            anchor_side="head",
+            parse_status=status,
+        )
+        self.assertEqual(status["status"], "parsed", status)
+        self.assertEqual(
+            sorted((item["severity"], item["status"]) for item in round_two["items"]),
+            [("P1", "open"), ("P2", "fixed")],
+        )
+
+    def test_invalid_relative_link_anchor_still_fails(self) -> None:
+        for link in ("[outside.py:9](../outside.py#L9)", "[example.py](src/example.py#L0)"):
+            with self.subTest(link=link):
+                review = (
+                    "- **Severity** P1 · **Confidence** 75 · **Classification** introduced\n"
+                    f"  **File:Line** {link}\n  **Problem** First.\n\n"
+                    "<verdict>NEEDS_WORK</verdict>\n"
+                )
+                status: dict = {}
+                self.assertIsNone(parse(review, status=status))
+                self.assertEqual(status["reason"], "invalid-anchor")
+
     def test_second_location_after_a_comma_keeps_the_first(self) -> None:
         review = (
             "- **Severity:** P2\n- **Confidence:** 100\n- **Classification:** introduced\n"

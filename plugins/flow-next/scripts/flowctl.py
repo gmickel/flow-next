@@ -5251,14 +5251,17 @@ def _review_finding_link_location(match: "re.Match[str]") -> str:
         lambda m: f":{m.group(1)}" + (f"-{m.group(2)}" if m.group(2) else ""),
         match.group("target"),
     )
+    if not re.match(r"^(?:/|[A-Za-z]:[/\\])", target):
+        # A relative target is the location as written; an unsafe path or a
+        # bad line number fails as an invalid anchor.
+        return f"`{target}`"
     text = match.group("text").strip("` ")
-    for candidate in (target, text):
-        if (
-            re.search(r":[1-9]\d*(?:-[1-9]\d*)?$", candidate)
-            and _review_finding_safe_path(candidate.rsplit(":", 1)[0]) is not None
-            and (candidate is target or "/" in candidate)
-        ):
-            return f"`{candidate}`"
+    if (
+        "/" in text
+        and re.search(r":[1-9]\d*(?:-[1-9]\d*)?$", text)
+        and _review_finding_safe_path(text.rsplit(":", 1)[0]) is not None
+    ):
+        return f"`{text}`"
     # Only an absolute path to the reviewer's own checkout: no portable anchor.
     return "-"
 
@@ -6044,27 +6047,33 @@ def parse_review_findings(
         container = _parse_review_findings_v1(
             output, parse_status=parse_status, **arguments
         )
-        if container is not None or not isinstance(output, str):
+        if not isinstance(output, str):
             return container
-        # Text in the prompt's layout parses as written, so a parse that
-        # succeeds there never changes. Only a failed parse is retried once
-        # with other observed layouts rewritten into the labeled form. When
-        # that also fails, the first failure stands, unless the first pass
-        # found no findings at all: then the rewrite's reason names the
-        # finding that is actually wrong.
+        # Text in the prompt's layout is parsed as written. The text is read
+        # once more with other observed layouts rewritten into the labeled
+        # form, and that reading wins only when the first failed or it finds
+        # more findings (a finding in another layout beside parsed ones), so
+        # a review fully in the prompt's layout never changes. When both
+        # fail, the first failure stands, unless the first pass found no
+        # findings at all: then the rewrite's reason names the finding that
+        # is actually wrong.
         normalized = _review_finding_normalize_shapes(output)
         if normalized == output:
-            return None
+            return container
         retry_status: dict = {}
-        container = _parse_review_findings_v1(
+        retry = _parse_review_findings_v1(
             normalized, parse_status=retry_status, **arguments
         )
-        if container is not None or (
+        if container is not None:
+            if retry is not None and len(retry["items"]) > len(container["items"]):
+                return retry
+            return container
+        if retry is not None or (
             parse_status.get("reason") == "no-findings-container"
             and retry_status.get("reason") != "no-findings-container"
         ):
             parse_status.update(retry_status)
-        return container
+        return retry
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, UnicodeError):
         parse_status.update(status="unparsed", reason="invalid-input", block=None)
         return None
