@@ -144,7 +144,7 @@ re-flagging issues the primary already caught.
 ### Step D.3: Dispatch each pass
 
 ```bash
-ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
 # Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
 # reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
 # other coordinators; never branch on it inside your own optional phases.
@@ -262,7 +262,7 @@ parse error; fall through to normal fix loop.
 ### Step V.2: Dispatch the validator pass
 
 ```bash
-ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
 # Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
 # reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
 # other coordinators; never branch on it inside your own optional phases.

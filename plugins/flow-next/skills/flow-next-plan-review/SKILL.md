@@ -135,7 +135,7 @@ same backend has broken this.
 Recovery after context compaction:
 
 ```bash
-$FLOWCTL checkpoint restore --spec <SPEC_ID> --json
+"$FLOWCTL" checkpoint restore --spec <SPEC_ID> --json
 ```
 
 Every re-review follows the selected backend file's receipt/status rules.
