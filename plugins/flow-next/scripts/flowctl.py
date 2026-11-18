@@ -5242,6 +5242,9 @@ _FINDINGS_SEVERITY_HEADING_RE = re.compile(
 )
 _FINDINGS_LOCATION_RE = re.compile(r"`(?P<loc>[^`\s]+:[1-9]\d*(?:-[1-9]\d*)?)`")
 _FINDINGS_LINK_RE = re.compile(r"\[(?P<text>[^\]]*)\]\((?P<target>[^)\s]+)\)")
+_FINDINGS_FILE_LINE_FIELD_RE = re.compile(
+    r"(?i)^(?P<label>.*?\*\*file\s*:\s*line:\*\*)(?P<value>.*)$"
+)
 
 
 def _review_finding_link_location(match: "re.Match[str]") -> str:
@@ -5284,8 +5287,18 @@ def _review_finding_table_rows(lines: list[str]) -> Optional[list[str]]:
         out.append("")
         for label, value in zip(header, cells, strict=True):
             prefix = "- " if label == "severity" else "  "
-            out.append(f"{prefix}**{label}:** {value}")
+            out.append(_review_finding_location_field(f"{prefix}**{label}:** {value}"))
     return out
+
+
+def _review_finding_location_field(line: str) -> str:
+    """Resolve a markdown link in a File:Line value; other fields keep theirs."""
+    match = _FINDINGS_FILE_LINE_FIELD_RE.match(line)
+    if not match:
+        return line
+    return match.group("label") + _FINDINGS_LINK_RE.sub(
+        _review_finding_link_location, match.group("value")
+    )
 
 
 def _review_finding_normalize_shapes(output: str) -> str:
@@ -5347,9 +5360,9 @@ def _review_finding_normalize_shapes(output: str) -> str:
                 lambda m: f"**{m.group('label')}:** ", line
             )
             line = _FINDINGS_DOT_SPLIT_RE.sub("\n  ", line)
-            if re.search(r"(?i)\*\*file\s*:\s*line:\*\*", line):
-                line = _FINDINGS_LINK_RE.sub(_review_finding_link_location, line)
-            rewritten.extend(line.split("\n"))
+            rewritten.extend(
+                _review_finding_location_field(part) for part in line.split("\n")
+            )
         index += 1
     if rewritten == lines:
         # Nothing to rewrite: the caller skips the second parse.
