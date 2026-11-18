@@ -91,6 +91,127 @@ class Classification(unittest.TestCase):
         self.assertFalse(C.classify("github", resp(400)).auto_retryable)
 
 
+def _rejection(provider: str, status: int, body) -> TrackerError:
+    raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+    err = C.classify(provider, resp(status, raw))
+    assert isinstance(err, TrackerError)
+    return err
+
+
+class RejectionReason(unittest.TestCase):
+    """fn-331: a Jira or GitLab rejection carries the tracker's own reason."""
+
+    def assertRejected(self, err: TrackerError, message: str) -> None:
+        self.assertIs(err.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(err.subtype, "http")
+        self.assertEqual(err.message, message)
+
+    def test_jira_wrong_level_parent_names_each_field(self) -> None:
+        # Jira Cloud's answer for a story given as the parent of a story.
+        err = _rejection("jira", 400, {"errorMessages": [], "errors": {
+            "parent": "Please select valid parent issue.",
+            "parentId": "Please select valid parent issue."}})
+        self.assertRejected(
+            err, "rejected (400): parent: Please select valid parent issue.; "
+                 "parentId: Please select valid parent issue.")
+
+    def test_jira_error_messages_come_before_field_errors(self) -> None:
+        err = _rejection("jira", 400, {
+            "errorMessages": ["Issue type is invalid.", "Try again."],
+            "errors": {"summary": "You must specify a summary."}})
+        self.assertRejected(
+            err, "rejected (400): Issue type is invalid.; Try again.; "
+                 "summary: You must specify a summary.")
+
+    def test_gitlab_reason_shapes(self) -> None:
+        cases = [
+            ({"error": "title is missing"}, "rejected (400): title is missing"),
+            ({"message": "Epic not found"}, "rejected (400): Epic not found"),
+            ({"message": ["title is too long", "label is invalid"]},
+             "rejected (400): title is too long; label is invalid"),
+            ({"message": {"title": ["can't be blank", "is too short"],
+                          "base": ["Epic is invalid"]}},
+             "rejected (400): title: can't be blank; title: is too short; "
+             "base: Epic is invalid"),
+        ]
+        for body, message in cases:
+            with self.subTest(body=body):
+                self.assertRejected(_rejection("gitlab", 400, body), message)
+
+    def test_status_stays_at_the_start(self) -> None:
+        for provider, body in (("jira", {"errorMessages": ["No."]}),
+                               ("gitlab", {"message": "No."})):
+            for status in (400, 409, 422):
+                with self.subTest(provider=provider, status=status):
+                    err = _rejection(provider, status, body)
+                    self.assertTrue(err.message.startswith(f"rejected ({status})"))
+                    self.assertEqual(err.message, f"rejected ({status}): No.")
+
+    def test_no_reason_keeps_the_bare_message(self) -> None:
+        bodies = [b"", b"not json", b"\xff\xfe", b'["a list"]', b'"text"', b"null",
+                  b"{}", b'{"errorMessages":[],"errors":{}}',
+                  b'{"message":[],"error":""}', b'{"other":"field"}',
+                  b'{"errorMessages":[42],"errors":{"f":null}}']
+        for provider in ("jira", "gitlab"):
+            for body in bodies:
+                with self.subTest(provider=provider, body=body):
+                    self.assertRejected(_rejection(provider, 400, body),
+                                        "rejected (400)")
+
+    def test_echoed_credential_is_redacted(self) -> None:
+        secret = "test-only-token-12345678"
+        with mock.patch.object(CR, "_SEEN", set()), \
+                mock.patch.dict(os.environ, {"JIRA_API_TOKEN": secret,
+                                             "GITLAB_TOKEN": secret}):
+            for provider, body in (
+                    ("jira", {"errors": {"token": f"bad token {secret}"}}),
+                    ("gitlab", {"error": f"bad token {secret}"})):
+                with self.subTest(provider=provider):
+                    err = _rejection(provider, 400, body)
+                    self.assertNotIn(secret, err.message)
+                    self.assertIn("<redacted>", err.message)
+
+    def test_reason_is_bounded(self) -> None:
+        for provider, body in (("jira", {"errorMessages": ["x" * 5000]}),
+                               ("gitlab", {"message": "x" * 5000})):
+            with self.subTest(provider=provider):
+                err = _rejection(provider, 400, body)
+                self.assertTrue(err.message.startswith("rejected (400): x"))
+                self.assertEqual(len(err.message), len("rejected (400): ") + 200)
+
+    def test_other_classifications_are_unchanged(self) -> None:
+        reason = {"errorMessages": ["why"], "errors": {"f": "why"},
+                  "message": "why", "error": "why"}
+        expected = {401: (ErrorClass.AUTH, "unauthorized (401)"),
+                    403: (ErrorClass.AUTH, "unauthorized (403)"),
+                    404: (ErrorClass.NOT_FOUND, "not found"),
+                    429: (ErrorClass.RATE_LIMITED, "rate limited"),
+                    500: (ErrorClass.TRANSPORT, "server error 500")}
+        for provider in ("jira", "gitlab"):
+            for status, (cls, message) in expected.items():
+                with self.subTest(provider=provider, status=status):
+                    err = _rejection(provider, status, reason)
+                    self.assertIs(err.cls, cls)
+                    self.assertEqual(err.message, message)
+        xsrf = C.classify("jira", resp(404, b'{"errorMessages":["XSRF check failed"]}'))
+        self.assertEqual((xsrf.subtype, xsrf.message),
+                         ("xsrf", "Jira rejected the request: missing "
+                                  "X-Atlassian-Token header"))
+        licence = _rejection("gitlab", 403, {
+            "message": "Blocked issues not available for current license"})
+        self.assertEqual((licence.cls, licence.subtype),
+                         (ErrorClass.CAPABILITY, "licence"))
+        self.assertEqual(licence.message, "feature not available on this GitLab tier")
+
+    def test_github_and_linear_messages_are_unchanged(self) -> None:
+        gh = _rejection("github", 422, {"message": "Validation Failed",
+                                        "errors": [{"message": "one parent"}]})
+        self.assertRejected(gh, "rejected (422)")
+        lin = _rejection("linear", 400, {"errors": [{"message": "Parent Is Invalid"}]})
+        self.assertEqual((lin.cls, lin.subtype, lin.message),
+                         (ErrorClass.INVALID_INPUT, "graphql", "parent is invalid"))
+
+
 class Credentials(unittest.TestCase):
 
     def test_jira_selects_by_persisted_auth_scheme_not_by_racing(self) -> None:
