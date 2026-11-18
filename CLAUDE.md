@@ -41,13 +41,14 @@ inherit the actual session model. Read `flowctl usage` before model steering.
 For a Claude-family writer, the maintainer's preferred tiers are:
 
 ```text
-reviewer: gpt-6.2-sol at medium
+reviewer: gpt-6.1-sol at high
 implementer: opus-5.5
 fast scout: opus-5.5
 thinking scout: opus-5.5
 ```
 
-Reviews focus on overengineering, slop and YAGNI.
+Reviews focus on overengineering, slop and YAGNI, and on whether a change to a skill's
+contract also updates that skill's checklist in `agent_docs/conduct/`.
 
 Verify availability through the active harness. If this file is read by an
 OpenAI-family writer, the reviewer preference is not independent-family review;
