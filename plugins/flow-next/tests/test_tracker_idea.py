@@ -64,6 +64,8 @@ def fake_execute(responses: dict):
         calls.append(request)
         if request.op == "lifecycle-create-meta" and request.op not in responses:
             return ok({})
+        if request.op == "idea-marker-search" and request.op not in responses:
+            return ok({"issues": [], "isLast": True})
         if request.op not in responses:
             raise AssertionError(
                 f"unexpected op {request.op!r}; have {sorted(responses)}")
@@ -274,7 +276,7 @@ class IdeaStatusAndRelationsAreReadOnly(unittest.TestCase):
                          locator={"durable": IDEA_ID, "display": "IDEAS-7"},
                          execute=ex)
         self.assertIs(out.cls, ErrorClass.CAPABILITY)
-        self.assertEqual([c.op for c in ex.calls], ["wire-read"])
+        self.assertEqual([c.op for c in ex.calls], [])
 
 
 class IdeaRead(unittest.TestCase):
@@ -565,6 +567,259 @@ class Cli(unittest.TestCase):
             ok_link = self._run(cwd, "sync", "set-tracker-id", spec_id,
                                 "10012", "--identifier", "PROJ-12", "--json")
             self.assertEqual(ok_link.returncode, 0, ok_link.stdout + ok_link.stderr)
+
+
+def _search_jql(request) -> str:
+    from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+    return parse_qs(urlparse(request.url_or_argv).query)["jql"][0]
+
+
+def _marked(key: str, *, level: int = 1) -> dict:
+    return {"id": str(40000 + int(key.rsplit("-", 1)[1])), "key": key,
+            "fields": {"summary": f"{key} summary", "status": {"name": "To Do"},
+                       "issuetype": {"name": "Epic" if level else "Story",
+                                     "hierarchyLevel": level}}}
+
+
+class RerunFindsTheUnlinkedParent(unittest.TestCase):
+    """fn-334 R1: a parent whose delivery link failed is found by its marker."""
+
+    def _settle(self, extra: dict, *, use=None):
+        responses = {"idea-link-types": ok(LINK_TYPES),
+                     "idea-read": ok(idea()), "idea-project": ok(PROJECT)}
+        responses.update(extra)
+        ex = fake_execute(responses)
+        out = _idea_mod().settle_parent(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7",
+                                        ex, body="B", use=use)
+        return out, ex
+
+    def test_rerun_after_a_failed_link_links_the_first_parent(self) -> None:
+        first, ex = self._settle({
+            "lifecycle-create": ok({"id": "40099", "key": "PROJ-99"}),
+            "idea-link": rejected(500, {})})
+        self.assertFalse(first["link"]["created"])
+        labels = _posts(ex, "lifecycle-create")[0]["fields"].get("labels", [])
+        self.assertEqual(len(labels), 1)
+        marker = labels[0]
+        self.assertIn("IDEAS-7", marker)
+
+        def search(request):
+            self.assertIn(marker, _search_jql(request))
+            self.assertIn("PROJ", _search_jql(request))
+            return ok({"issues": [_marked("PROJ-99"), _marked("PROJ-98", level=0)],
+                       "isLast": True})
+
+        second, ex = self._settle({"idea-marker-search": search,
+                                   "lifecycle-create": ok({"id": "1", "key": "PROJ-1"}),
+                                   "idea-link": created()})
+        self.assertEqual(_posts(ex, "lifecycle-create"), [])
+        self.assertEqual(second["parent"]["key"], "PROJ-99")
+        self.assertFalse(second["parent"]["created"])
+        self.assertTrue(second["link"]["created"])
+        self.assertEqual(_posts(ex, "idea-link")[0]["inwardIssue"], {"key": "PROJ-99"})
+
+    def test_several_marked_parents_are_a_conflict_and_use_picks(self) -> None:
+        found = ok({"issues": [_marked("PROJ-98"), _marked("PROJ-99")], "isLast": True})
+        out, ex = self._settle({"idea-marker-search": found})
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CONFLICT)
+        self.assertEqual(out.subtype, "several_parents")
+        self.assertEqual(sorted(c["key"] for c in out.details["candidates"]),
+                         ["PROJ-98", "PROJ-99"])
+        self.assertTrue(all(c.method == "GET" for c in ex.calls))
+        picked, ex = self._settle({"idea-marker-search": ok(
+            {"issues": [_marked("PROJ-98"), _marked("PROJ-99")], "isLast": True}),
+            "idea-link": created()}, use="PROJ-98")
+        self.assertEqual(picked["parent"]["key"], "PROJ-98")
+        self.assertEqual(_posts(ex, "lifecycle-create"), [])
+
+
+def _flow_dir(tmp: str, config: dict) -> Path:
+    flow = Path(tmp) / ".flow"
+    flow.mkdir()
+    (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    return flow
+
+
+class KeyOnlyRead(unittest.TestCase):
+    """fn-334 R2: a Jira read by key or URL alone fills in the durable id."""
+
+    def _read(self, display: str, responses: dict, config=None):
+        ex = fake_execute(responses)
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = _flow_dir(tmp, config or jr_cfg(idea_keys=["IDEAS"]))
+            payload, code = W.run(flow, "read",
+                                  locator=json.dumps({"display": display}),
+                                  execute=ex)
+        return json.loads(payload), code, ex
+
+    def test_idea_key_alone_returns_the_id_and_the_idea_block(self) -> None:
+        out, code, ex = self._read("IDEAS-7", {"wire-read": ok(idea())})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["data"]["id"], IDEA_ID)
+        self.assertEqual(out["data"]["identifier"], "IDEAS-7")
+        self.assertTrue(Path(out["data"]["idea"]["reference"]).is_file())
+        self.assertIn("/issue/IDEAS-7", ex.calls[0].url_or_argv)
+
+    def test_ordinary_key_and_url_alone(self) -> None:
+        issue = {"id": "10012", "key": "PROJ-12", "fields": {"summary": "S"}}
+        for display in ("PROJ-12", f"{BASE}/browse/PROJ-12"):
+            with self.subTest(display=display):
+                out, code, ex = self._read(display, {"wire-read": ok(issue)})
+                self.assertEqual(code, 0, out)
+                self.assertEqual(out["data"]["id"], "10012")
+                self.assertNotIn("idea", out["data"])
+                self.assertIn("/issue/PROJ-12", ex.calls[0].url_or_argv)
+
+    def test_unknown_key_and_another_site_keep_the_reads_errors(self) -> None:
+        out, code, _ex = self._read("PROJ-404", {"wire-read": rejected(404, {})})
+        self.assertEqual(out["class"], "not_found", out)
+        out, code, ex = self._read("https://other.atlassian.net/browse/PROJ-12", {})
+        self.assertEqual(out["class"], "invalid_input", out)
+        self.assertEqual(ex.calls, [])
+
+
+class MovedIssueIsRefused(unittest.TestCase):
+    """fn-334 R3: the key Jira returns decides, and every write path refuses
+    an idea before it writes; a display key that is an idea, before any request."""
+
+    LOCATOR = {"durable": IDEA_ID, "display": "PROJ-7"}
+
+    def _jira(self, *, moved_key: str = "IDEAS-7", ready: bool = False):
+        calls = []
+
+        def execute(request):
+            calls.append(request)
+            if request.method != "GET":
+                return created()
+            if "/transitions" in request.url_or_argv:
+                return ok({"transitions": [{"id": "31", "to": {"id": "4"}}]})
+            if "issueLinkType" in request.url_or_argv:
+                return ok({"issueLinkTypes": [LINK_TYPES["issueLinkTypes"][0]]})
+            if "/comment" in request.url_or_argv:
+                return ok(comments())
+            durable = request.url_or_argv.split("/issue/", 1)[1].split("?", 1)[0]
+            key = moved_key if durable in (IDEA_ID, "PROJ-7") else f"PROJ-{durable[-2:]}"
+            status = "Ready for delivery" if ready else "To Do"
+            return ok({"id": IDEA_ID if key == moved_key else durable, "key": key,
+                       "fields": {"summary": "S", "description": "d", "labels": [],
+                                  "status": {"id": "1", "name": status,
+                                             "statusCategory": {"key": "new"}},
+                                  "issuelinks": []}})
+
+        execute.calls = calls
+        return execute
+
+    def _writes(self, ex) -> list:
+        return [(c.op, c.method) for c in ex.calls if c.method != "GET"]
+
+    def assert_refused(self, out, ex, label) -> None:
+        self.assertIsInstance(out, TrackerError, label)
+        self.assertIs(out.cls, ErrorClass.CAPABILITY, label)
+        self.assertEqual(out.subtype, "idea_read_only", label)
+        self.assertEqual(self._writes(ex), [], label)
+
+    def test_wire_writes_refuse_a_moved_issue_and_name_both_keys(self) -> None:
+        for verb, kwargs in (("update", {"body": "spec body"}),
+                             ("comment-add", {"body": "note"}),
+                             ("label", {"add": ["x"]})):
+            ex = self._jira()
+            out = W.dispatch(verb, jr_cfg(idea_keys=["IDEAS"]),
+                             locator=self.LOCATOR, execute=ex, **kwargs)
+            self.assert_refused(out, ex, verb)
+            self.assertIn("PROJ-7", out.message, verb)
+            self.assertIn("IDEAS-7", out.message, verb)
+
+    def test_pr_link_and_status_refuse_a_moved_issue(self) -> None:
+        from flowctl_tracker.status.providers import apply_status  # noqa: PLC0415
+        ex = self._jira()
+        out = W.link_pr("jira", jr_cfg(idea_keys=["IDEAS"]), self.LOCATOR, ex,
+                        url="https://github.com/o/r/pull/1")
+        self.assert_refused(out, ex, "pr link")
+        ex = self._jira()
+        out = apply_status("jira", jr_cfg(idea_keys=["IDEAS"]), self.LOCATOR, {},
+                           ex, target_slot="done")
+        self.assert_refused(out, ex, "status")
+
+    def test_relation_with_a_moved_end_writes_nothing(self) -> None:
+        from flowctl_tracker import relate as R  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _linked_spec(flow, "fn-1-a", "10011", "PROJ-11")
+            _linked_spec(flow, "fn-2-b", IDEA_ID, "PROJ-7")
+            (flow / "config.json").write_text(
+                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
+            ex = self._jira()
+            out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
+        self.assert_refused(out, ex, "relate")
+
+    def test_unready_refuses_a_moved_issue_after_its_read(self) -> None:
+        config = jr_cfg(idea_keys=["IDEAS"])
+        config["tracker"]["readyState"] = "Ready for delivery"
+        ex = self._jira(ready=True)
+        out = W.dispatch("unready", config, locator=self.LOCATOR, execute=ex)
+        self.assert_refused(out, ex, "unready")
+
+    def test_question_to_an_idea_makes_no_request(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ex = self._jira()
+            out = W.dispatch(
+                "question", jr_cfg(idea_keys=["IDEAS"]),
+                locator={"durable": IDEA_ID, "display": "IDEAS-7"}, body="Q?",
+                subject_id="fn-1", blocked_stage="plan", reason_code="r",
+                question_slug="q", flow_dir=Path(tmp), execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "idea_read_only")
+        self.assertEqual(ex.calls, [])
+
+
+class SpecLinkRefusal(unittest.TestCase):
+    """fn-334 R4: any case of an idea key, and a durable id given alone."""
+
+    _run = Cli._run
+    _repo = Cli._repo
+
+    def test_lowercase_key_and_id_alone_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = self._repo(tmp, jr_cfg(idea_keys=["IDEAS"]))
+            made = self._run(cwd, "spec", "create", "--title", "Child", "--json")
+            spec_id = json.loads(made.stdout)["id"]
+            lower = self._run(cwd, "sync", "set-tracker-id", spec_id, IDEA_ID,
+                              "--identifier", "ideas-7", "--json")
+            self.assertNotEqual(lower.returncode, 0, lower.stdout)
+            self.assertIn("idea-intake.md", lower.stdout)
+            alone = self._run(cwd, "sync", "set-tracker-id", spec_id, IDEA_ID,
+                              "--json")
+            self.assertNotEqual(alone.returncode, 0, alone.stdout)
+            self.assertIn("--identifier", alone.stdout)
+            tracker = json.loads((cwd / ".flow" / "specs" / f"{spec_id}.json")
+                                 .read_text(encoding="utf-8"))["tracker"]
+            self.assertIsNone(tracker.get("id"))
+            # Without an idea source a durable id alone still links.
+            (cwd / ".flow" / "config.json").write_text(json.dumps(jr_cfg()),
+                                                       encoding="utf-8")
+            plain = self._run(cwd, "sync", "set-tracker-id", spec_id, "10012",
+                              "--json")
+            self.assertEqual(plain.returncode, 0, plain.stdout + plain.stderr)
+
+
+class ColourTagsLeaveCodeAlone(unittest.TestCase):
+    """fn-334 R7: code and {noformat} blocks are byte-for-byte unchanged."""
+
+    def test_colour_is_removed_only_outside_code(self) -> None:
+        description = (
+            "Plain {color:#97a0af}grey{color} text.\n"
+            "{code:python}\nx = \"{color:red}\"\n{code}\n"
+            "{noformat}\n{color}raw{color}\n{noformat}\n"
+            "Inline {noformat}{color:blue}{noformat} stays.")
+        ex = fake_execute({"idea-read": ok(idea(description=description)),
+                           "wire-comment-list": ok(comments())})
+        out = _idea_mod().read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7", ex)
+        body = out["idea"]["body"]
+        self.assertIn("Plain grey text.", body)
+        self.assertIn('```python\nx = "{color:red}"\n```', body)
+        self.assertIn("```\n{color}raw{color}\n```", body)
+        self.assertIn("{noformat}{color:blue}{noformat}", body)
 
 
 if __name__ == "__main__":

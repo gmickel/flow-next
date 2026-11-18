@@ -373,7 +373,9 @@ class GitLabEpicParent(unittest.TestCase):
         return L.create(flow, "fn-1-demo", title="T", body="B", execute=ex), ex, flow
 
     def test_epic_id_is_sent_without_a_read(self) -> None:
-        out, ex, _flow = self._create("42", _create_responses("gitlab"))
+        responses = _create_responses("gitlab")
+        responses["lifecycle-create"] = ok({**_gl_issue("B"), "epic": {"id": 42, "iid": 5}})
+        out, ex, _flow = self._create("42", responses)
         self.assertEqual(out["parent"], "42")
         self.assertEqual(_create_json(ex),
                          {"title": "T", "description": "B", "epic_id": 42})
@@ -430,6 +432,32 @@ class GitLabEpicParent(unittest.TestCase):
                 "gitlab", 404, {"message": "404 Epic Not Found"})})
         self.assertIsInstance(out, TrackerError)
         self.assertIsNone(_saved(flow)["id"])
+
+    def test_epic_id_the_response_does_not_carry_is_reported_not_set(self) -> None:
+        # fn-334 R8: GitLab may create the issue without the epic.
+        for epic in (None, {"id": 7, "iid": 1}):
+            with self.subTest(epic=epic):
+                responses = _create_responses("gitlab")
+                responses["lifecycle-create"] = ok({**_gl_issue("B"), "epic": epic})
+                out, ex, _flow = self._create("42", responses)
+                self.assertNotIsInstance(out, TrackerError, out)
+                self.assertIsNone(out["parent"])
+                self.assertEqual(out["degraded"]["kind"], "parent_not_set")
+                self.assertEqual([c.op for c in ex.calls],
+                                 ["lifecycle-create", "sync-body-parent-read"])
+
+    def test_digits_that_are_not_ascii_are_invalid_input(self) -> None:
+        for parent in ("²", "４２", "٤٢"):
+            with self.subTest(parent=parent), tempfile.TemporaryDirectory() as tmp:
+                flow = Path(tmp) / ".flow"
+                _write_flow(flow, gl_cfg(), tracker={"parent": parent})
+                body = Path(tmp) / "b.md"
+                body.write_text("B", encoding="utf-8")
+                ex = fake_execute({})
+                payload, _code = L.run(flow, "create", spec_id="fn-1-demo",
+                                       title="T", body_file=str(body), execute=ex)
+                self.assertEqual(json.loads(payload)["class"], "invalid_input", payload)
+                self.assertEqual(ex.calls, [])
 
 
 class RefusedParent(unittest.TestCase):
@@ -612,6 +640,50 @@ class CreateFirstParent(unittest.TestCase):
                                      parent="WOR-10", execute=fake_execute({}))
             self.assertTrue(retried["retried"])
             self.assertEqual(retried["parent"], "WOR-10")
+
+    def test_failed_record_write_keeps_the_parent_for_the_retry(self) -> None:
+        # fn-334 R9: the issue exists, the record write failed; the recovery
+        # put from the failure details and a same-parent retry link it.
+        from flowctl_tracker.lifecycle import verbs as LV  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = Path(tmp)
+            subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
+                           cwd=cwd, capture_output=True, check=True)
+            flow = cwd / ".flow"
+            (flow / "config.json").write_text(json.dumps(ln_cfg()), encoding="utf-8")
+            key = L.compute_create_first_key("linear", "T", "B", "WOR-10")
+            real_write = LV.atomic_write_json
+            writes = []
+
+            def flaky(path, data):
+                writes.append(data)
+                if len(writes) == 2:
+                    return TrackerError(ErrorClass.TRANSPORT, "disk full", subtype="write")
+                return real_write(path, data)
+
+            ex = fake_execute({"lifecycle-create": ok({"data": {"issueCreate": {
+                "success": True, "issue": _ln_issue("B")}}})})
+            with mock.patch.object(LV, "atomic_write_json", side_effect=flaky):
+                failed = L.create_first(flow, title="T", body="B", retry_key=key,
+                                        parent="WOR-10", execute=ex)
+            self.assertIsInstance(failed, TrackerError)
+            self.assertEqual(failed.details.get("parent"), "WOR-10")
+            claim = json.loads((flow / "create-first" / f"{key}.json")
+                               .read_text(encoding="utf-8"))
+            self.assertEqual(claim.get("parent"), "WOR-10")
+            d = failed.details
+            put = subprocess.run(
+                [sys.executable, str(FLOWCTL), "sync", "create-first-put",
+                 "--key", key, "--id", d["id"], "--identifier", d["identifier"],
+                 "--url", d["url"], "--title", "T", "--transport", "linear",
+                 "--json"],
+                cwd=cwd, capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
+            retried = L.create_first(flow, title="T", body="B", retry_key=key,
+                                     parent="WOR-10", execute=fake_execute({}))
+            self.assertNotIsInstance(retried, TrackerError, retried)
+            self.assertTrue(retried["retried"])
+            self.assertEqual(retried["id"], LN_UUID)
 
     def test_github_create_first_refuses_before_any_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

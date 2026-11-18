@@ -1374,3 +1374,124 @@ class RawBodyOpsSkipGraphQLParse(unittest.TestCase):
     def test_attach_get_error_status_still_classifies(self) -> None:
         e = C.classify("linear", resp(500, b"boom"), op="wire-attach-get")
         self.assertIsNotNone(e)
+
+
+class EnvelopeCarriesSubtype(unittest.TestCase):
+    """fn-334 R5: the documented subtypes reach the caller of every command."""
+
+    def test_subtype_is_in_the_failure_envelope_when_set(self) -> None:
+        for subtype in ("several_parents", "delivery_link_type", "parent_mismatch"):
+            with self.subTest(subtype=subtype):
+                payload, _ = E.failure(TrackerError(ErrorClass.CONFLICT, "x",
+                                                    subtype=subtype))
+                self.assertEqual(json.loads(payload).get("subtype"), subtype)
+        payload, _ = E.failure(TrackerError(ErrorClass.TRANSPORT, "x"))
+        self.assertNotIn("subtype", json.loads(payload))
+
+    def test_idea_parent_stop_reaches_the_cli_caller(self) -> None:
+        import tempfile  # noqa: PLC0415
+        from flowctl_tracker import idea  # noqa: PLC0415
+        link_types = {"issueLinkTypes": [
+            {"id": "1", "name": "Polaris work item link",
+             "inward": "is implemented by", "outward": "implements"},
+            {"id": "2", "name": "Polaris work item link (old)",
+             "inward": "is implemented by", "outward": "implements"}]}
+        config = {"tracker": {"type": "jira", "perTracker": {"ideaProjectKeys": ["IDEAS"]},
+                              "resolved": {"destination": {
+                                  "baseUrl": "https://ex.atlassian.net",
+                                  "projectKey": "PROJ", "projectId": "1",
+                                  "issueTypeId": "10001"}}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
+            body = Path(tmp) / "b.md"
+            body.write_text("B", encoding="utf-8")
+            payload, code = idea.run(
+                flow, "parent", idea="IDEAS-7", body_file=str(body),
+                execute=lambda r: resp(200, json.dumps(link_types).encode()))
+        out = json.loads(payload)
+        self.assertEqual(code, EXIT_CODES[ErrorClass.UNRESOLVED])
+        self.assertEqual(out.get("subtype"), "delivery_link_type")
+
+
+class GlabCredentialsAreRedacted(unittest.TestCase):
+    """fn-334 R11: every credential glab may have used is redacted."""
+
+    def _cli(self, stdout: bytes, env: dict, req_env: dict | None = None):
+        def fake(argv, **kw):
+            return subprocess.CompletedProcess(argv, 1, stdout, b"glab: map[error:bad]\n")
+
+        with mock.patch.object(CR, "_SEEN", set()), \
+                mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(CR, "_glab_cli_get", return_value=""), \
+                mock.patch.object(X.subprocess, "run", side_effect=fake):
+            return X.execute(Request(provider="gitlab", op="r", method="GET",
+                                     url_or_argv=["glab", "api", "x"],
+                                     env=req_env or {}))
+
+    def _env(self, home: str, **extra: str) -> dict:
+        keep = {k: v for k, v in os.environ.items()
+                if k not in ("GITLAB_TOKEN", "GITLAB_HOST", "GLAB_CONFIG_DIR",
+                             "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN")}
+        return {**keep, "HOME": home, **extra}
+
+    def test_glab_environment_tokens_are_redacted(self) -> None:
+        import tempfile  # noqa: PLC0415
+        for name in ("GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN"):
+            secret = f"glpat-{name.lower()}-12345678"
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as home:
+                e = self._cli(json.dumps({"error": f"bad token {secret}"}).encode(),
+                              self._env(home, **{name: secret}))
+                self.assertEqual(e.message, "rejected (400): bad token <redacted>")
+
+    def test_glab_config_dir_and_every_host_when_the_host_is_unknown(self) -> None:
+        import tempfile  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as home, \
+                tempfile.TemporaryDirectory() as config_dir:
+            Path(config_dir, "config.yml").write_text(
+                "hosts:\n"
+                "    gitlab.com:\n"
+                "        token: glpat-first-host-12345678\n"
+                "    localhost:8929:\n"
+                "        token: glpat-second-host-12345678\n",
+                encoding="utf-8")
+            env = self._env(home, GLAB_CONFIG_DIR=config_dir)
+            for secret in ("glpat-first-host-12345678", "glpat-second-host-12345678"):
+                with self.subTest(secret=secret):
+                    e = self._cli(json.dumps({"error": f"bad token {secret}"}).encode(),
+                                  env)
+                    self.assertEqual(e.message, "rejected (400): bad token <redacted>")
+            e = self._cli(json.dumps(
+                {"error": "bad token glpat-second-host-12345678"}).encode(),
+                env, {"GITLAB_HOST": "localhost:8929"})
+            self.assertEqual(e.message, "rejected (400): bad token <redacted>")
+
+
+class AttachmentAndLicenceRejections(unittest.TestCase):
+    """fn-334 R12: attachment downloads carry the reason; a licence marker in
+    glab's diagnostic keeps the capability class."""
+
+    def test_attachment_download_rejection_carries_the_reason(self) -> None:
+        e = C.classify("jira", resp(400, b'{"errorMessages":["Attachment 9 is gone"]}'),
+                       op="wire-attach-get")
+        self.assertEqual(e.message, "rejected (400): Attachment 9 is gone")
+        e = C.classify("gitlab", resp(400, b'{"message":"file too old"}'),
+                       op="wire-attach-get")
+        self.assertEqual(e.message, "rejected (400): file too old")
+        e = C.classify("gitlab", resp(
+            403, b'{"message":"403 Forbidden - Blocked issues not available for current license"}'),
+            op="wire-attach-get")
+        self.assertIs(e.cls, ErrorClass.CAPABILITY)
+
+    def test_licence_marker_only_in_glabs_diagnostic_stays_capability(self) -> None:
+        def fake(argv, **kw):
+            return subprocess.CompletedProcess(
+                argv, 1, b'{"message":"403 Forbidden"}',
+                b"glab: Blocked issues not available for current license (HTTP 403)")
+
+        with mock.patch.object(X, "remember_glab_token"), \
+                mock.patch.object(X.subprocess, "run", side_effect=fake):
+            e = X.execute(Request(provider="gitlab", op="relate", method="GET",
+                                  url_or_argv=["glab", "api", "x"]))
+        self.assertIs(e.cls, ErrorClass.CAPABILITY)

@@ -175,6 +175,24 @@ class TokenCommand(unittest.TestCase):
         with mock.patch.object(CR, "TOKEN_COMMAND_TIMEOUT_S", 0.5, create=True):
             self.assert_auth_failure(py("import time; time.sleep(5)"), "timed out")
 
+    def test_output_that_is_not_utf8_fails_once_without_echoing_it(self) -> None:
+        # fn-334 R13: the bytes stay out of the message and the failure is cached.
+        log = Path(self.tmp.name) / "runs-bytes.log"
+        code = ("import sys; open(sys.argv[1], 'a').write('run\\n'); "
+                "sys.stdout.buffer.write(b'tok\\xffen-1234')")
+        argv = py(code, str(log))
+        for _ in range(2):
+            self.assert_auth_failure(argv, "not UTF-8")
+            result, _seen = self.send("linear", {"tokenCommand": argv},
+                                      "https://api.linear.app/graphql")
+            self.assertNotIn("0xff", result.message)
+            self.assertNotIn("\\xff", result.message)
+        self.assertEqual(log.read_text().count("run"), 1)
+
+    def test_exit_status_is_checked_before_the_output_is_decoded(self) -> None:
+        code = "import sys; sys.stdout.buffer.write(b'\\xff'); sys.exit(3)"
+        self.assert_auth_failure(py(code), "exited 3")
+
     def test_linear_with_a_token_command_is_not_on_the_mcp_rung(self) -> None:
         argv, _log = self.counted("mcp-check-3333")
         config = {"tracker": {"type": "linear", "perTracker": {"tokenCommand": argv}}}
