@@ -147,7 +147,7 @@
     "impl:fn-332-machine-local-tracker-token-command.1": 0
   },
   "spec_path": ".flow/specs/fn-332-machine-local-tracker-token-command.md",
-  "status": "open",
+  "status": "done",
   "title": "Machine-local tracker token command",
   "tracker": {
     "baseHashFlow": null,
@@ -160,5 +160,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T00:46:37.372592Z"
+  "updated_at": "2026-11-18T00:46:53.586369Z"
 }
