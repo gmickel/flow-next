@@ -8,13 +8,83 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-334-fixes-from-the-reviewer-study-idea",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-334-fixes-from-the-reviewer-study-idea.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "9544c359c3939cd14f2c162bebd188c27d3237b70f46a443cc856b50960ad3f3",
+      "backend": "codex",
+      "base_sha": "f8bad308c7dc147214ce1780bf8ca0f84075b10b",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-2f44f7b3996d48e5cb3df37940718310",
+            "classification": "introduced",
+            "findingId": "finding-2f44f7b3996d48e5cb3df37940718310",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3de6b917047814dd16e33dcdb7e06fd9",
+            "classification": "introduced",
+            "findingId": "finding-3de6b917047814dd16e33dcdb7e06fd9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f23634b87588d8bc27c8e964fd63ca3d",
+            "classification": "introduced",
+            "findingId": "finding-f23634b87588d8bc27c8e964fd63ca3d",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4a37ffc5d262bef25ad13d24e48303050a769ceb",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2457,
+      "output_sha256": "8fc2a4a06ac053875f3b6055ae071285af6a15c29c9fdce0655e0cea73378270",
+      "reservation_id": "c035ce2946524f3fa89b911dfeb8b135",
+      "round_consumed": true,
+      "scope": "impl:fn-334-fixes-from-the-reviewer-study-idea.1",
+      "superseded_by": null,
+      "task": "fn-334-fixes-from-the-reviewer-study-idea.1",
+      "timestamp": "2026-11-18T11:10:59.439596Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-334-fixes-from-the-reviewer-study-idea.1": 0
+  },
   "spec_path": ".flow/specs/fn-334-fixes-from-the-reviewer-study-idea.md",
   "status": "open",
   "title": "Fixes from the reviewer study: idea intake, parent at creation, redaction",
@@ -29,5 +99,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T10:37:13.264540Z"
+  "updated_at": "2026-11-18T11:10:59.456654Z"
 }

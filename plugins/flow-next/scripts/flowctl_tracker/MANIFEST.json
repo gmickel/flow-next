@@ -18,7 +18,7 @@
     },
     {
       "path": "flowctl_tracker/classify.py",
-      "sha256": "938f726fdbcf772e71899e79f2a1ab8aaca6bc5caa4078c12aa01c0e5f157f5a"
+      "sha256": "0935f8c69e147f23ff6be72055132db283a5ae5b3cd22217c0da44a6191acdfd"
     },
     {
       "path": "flowctl_tracker/config_io.py",
@@ -70,7 +70,7 @@
     },
     {
       "path": "flowctl_tracker/idea.py",
-      "sha256": "f7c4c476eb8994edccaa3683fd7b5d607a15c0a26d8b7668a54a36109523279a"
+      "sha256": "0ec60253ad93229355855f91089ea7dea7ba5704cfeb84832bfb3e278a91bad3"
     },
     {
       "path": "flowctl_tracker/lifecycle/__init__.py",
@@ -86,11 +86,11 @@
     },
     {
       "path": "flowctl_tracker/lifecycle/providers.py",
-      "sha256": "f758031760307c31daaa51a542967dc0773a41c973db3d1e71475c4000ad2936"
+      "sha256": "8cb70a8d0ba6bc9a828be7a4bb9565cea50d672dc0ac45ce81df6a1443737a04"
     },
     {
       "path": "flowctl_tracker/lifecycle/verbs.py",
-      "sha256": "75303784b393eccfc7f2fe6365d28e5833203a4f7e3933dbbb9f5e6deae6b580"
+      "sha256": "4bd12052d5768eda3d147e82ea28dbb3cd4206b5b633a5aa98ce14bea2fca493"
     },
     {
       "path": "flowctl_tracker/providers/__init__.py",

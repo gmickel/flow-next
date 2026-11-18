@@ -576,7 +576,10 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
                            "identifier": prior.get("identifier"),
                            "url": prior.get("url"), "retried": True}
                     if prior.get("parent") is not None:
-                        out["parent"] = prior["parent"]
+                        # The record keeps the requested parent for the match
+                        # above; replay what the create actually set.
+                        not_set = (prior.get("degraded") or {}).get("kind") == "parent_not_set"
+                        out["parent"] = None if not_set else prior["parent"]
                     if prior.get("degraded") is not None:
                         out["degraded"] = prior["degraded"]
                     return out

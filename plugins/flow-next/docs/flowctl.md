@@ -2064,10 +2064,12 @@ flowctl tracker idea link <idea> <parent-key> [--json]
 ```
 
 Each reads before it writes, so a repeat creates no second parent and no second
-link. A parent `parent` creates carries the label `flow-next-idea-<idea>`
-(`parent.marker`, null when the create screen has no labels field); with no
-delivery-linked parent, a parent-level issue in the delivery project with that
-label is reused and linked, so a rerun after a failed link creates nothing.
+link. A parent `parent` creates carries the label `flow-next-idea-<idea>`; with
+no delivery-linked parent, a parent-level issue in the delivery project with
+that label is reused and linked, so a rerun after a failed link creates nothing.
+A create screen without a Labels field stops with `capability` / `labels` and
+creates nothing. A key Jira now files outside the discovery projects is
+`capability` / `not_an_idea` on all three verbs, before any write.
 `parent` returns `parent` (`key`, `created`), `link` (`created`,
 `existing`, or `error` and `retry` when the link failed) and
 `notReused` (linked issues outside the delivery project or not at the parent

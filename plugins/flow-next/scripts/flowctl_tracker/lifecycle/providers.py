@@ -235,7 +235,17 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str,
         fields["description"] = wire_body
     if parent is not None:
         fields["parent"] = {"key": parent}
-    if labels and labels_settable:
+    if labels:
+        if not labels_settable:
+            # Only an idea's parent asks for labels: the label is how a rerun
+            # finds it, so a parent without it is refused, never dropped.
+            return TrackerError(
+                ErrorClass.CAPABILITY,
+                f"issue type {issue_type_id}'s create screen has no Labels field, so the "
+                "parent cannot carry the label a rerun finds it by; nothing was "
+                "created. Add Labels to that screen, or create the parent yourself "
+                "and link it with `flowctl tracker idea link <idea> <parent-key>`",
+                subtype="labels", details={"capability": "labels"})
         fields["labels"] = labels
     raw = _jira(execute, "lifecycle-create", "POST",
                 f"{base}/rest/api/2/issue",
@@ -261,8 +271,6 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str,
            # screen, the local body remains a pending change for the
            # following sync-body push.
            "bodyWritten": from_wire(wire_body) if description_settable else ""}
-    if labels:
-        out["labelsWritten"] = labels_settable
     if not description_settable:
         out["seedFlowBody"] = ""
         out["degraded"] = {

@@ -68,7 +68,11 @@ def _reason(resp: Response, reasons: Callable[[dict], list[str]]) -> str:
         return ""
     if not isinstance(payload, dict):
         return ""
-    return redact("; ".join(reasons(payload)))[:_REASON_MAX]
+    try:
+        texts = reasons(payload)
+    except RecursionError:  # decoded, but nested too deep to walk
+        return ""
+    return redact("; ".join(texts))[:_REASON_MAX]
 
 
 def _texts(value: Any, field: str = "") -> list[str]:

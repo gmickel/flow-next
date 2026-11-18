@@ -178,6 +178,15 @@ def _get_idea(config: dict, key: str, execute) -> Any:
     if not isinstance(raw, dict) or raw.get("id") is None or not raw.get("key"):
         return TrackerError(ErrorClass.TRANSPORT, "jira idea read missing id/key",
                             subtype="malformed_body")
+    if not is_idea_key(config, raw["key"]):
+        # Moved out of the discovery projects: delivery work now, not an idea.
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            f"{key} is now {raw['key']}, outside the discovery projects "
+            "(tracker.perTracker.ideaProjectKeys); it is no longer an idea, so "
+            "idea intake does not apply. Work from it as an ordinary issue",
+            subtype="not_an_idea",
+            details={"capability": "idea_source", "identifier": raw["key"]})
     return raw
 
 
@@ -224,20 +233,31 @@ def _marker(key: str) -> str:
 def _marked_parents(config: dict, execute, key: str, level: dict) -> Any:
     """Parent-level issues in the delivery project carrying the idea's marker:
     a parent an earlier run created whose delivery link then failed."""
-    from .wire import _jira  # noqa: PLC0415
+    from .wire import _MAX_PAGES, _PAGE_SIZE, _jira  # noqa: PLC0415
     base = _base(config)
     if isinstance(base, TrackerError):
         return base
-    jql = f'project = "{level["project"]}" AND labels = "{_marker(key)}"'
-    raw = _jira(execute, "idea-marker-search", "GET",
-                f"{base}/rest/api/2/search/jql?" + urlencode(
-                    {"jql": jql, "fields": "summary,status,issuetype", "maxResults": 50}),
-                idempotent=True)
-    if isinstance(raw, TrackerError):
-        return raw
-    found = [_candidate(i) for i in _dict(raw).get("issues") or []
-             if isinstance(i, dict) and i.get("key")]
-    return [c for c in found if c["hierarchyLevel"] == level["level"]]
+    query = {"jql": f'project = "{level["project"]}" AND labels = "{_marker(key)}"',
+             "fields": "summary,status,issuetype", "maxResults": _PAGE_SIZE}
+    found, seen = [], set()
+    for _ in range(_MAX_PAGES):
+        raw = _jira(execute, "idea-marker-search", "GET",
+                    f"{base}/rest/api/2/search/jql?" + urlencode(query), idempotent=True)
+        if isinstance(raw, TrackerError):
+            return raw
+        found += [_candidate(i) for i in _dict(raw).get("issues") or []
+                  if isinstance(i, dict) and i.get("key")]
+        if _dict(raw).get("isLast") is not False:
+            return [c for c in found if c["hierarchyLevel"] == level["level"]]
+        token = _dict(raw).get("nextPageToken")
+        if not isinstance(token, str) or not token or token in seen:
+            break
+        seen.add(token)
+        query["nextPageToken"] = token
+    # Every candidate decides between reuse, a conflict and a create.
+    return TrackerError(ErrorClass.TRANSPORT,
+                        "jira marker search did not finish; nothing was created",
+                        subtype="truncated")
 
 
 def _idea_out(config: dict, raw: dict) -> dict:
@@ -502,9 +522,7 @@ def settle_parent(config: dict, ref: Any, execute, *, body: str,
     if isinstance(made, TrackerError):
         return made
     out = settled({"id": made["id"], "key": made["identifier"], "title": title,
-                   "url": made.get("url"), "created": True,
-                   "marker": _marker(key) if made.get("labelsWritten") else None},
-                  linked=False)
+                   "url": made.get("url"), "created": True}, linked=False)
     if made.get("degraded") is not None:
         out["degraded"] = made["degraded"]
     return out
