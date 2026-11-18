@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-331-tracker-rejections-say-why-and-idea",
   "spec_path": ".flow/tasks/fn-331-tracker-rejections-say-why-and-idea.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Tracker rejections say why, and idea text reads clean",
   "updated_at": "2026-11-18T00:18:00.628771Z"
 }
