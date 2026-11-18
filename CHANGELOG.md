@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **`flow --auto` and host reviews no longer stop at a command guard.** Under a Bash guard such as dcg, the `flow --auto` pilot-snapshot write and the host-review snapshot write were refused, because each redirected into a path held in a variable; a live 9.14.1 run stopped there. The pilot snapshot is now written to its literal `.flow/tmp/pilot-snapshot.json` from the repository root, and the review snapshots through `tee`, so the same files are written as before and runs without a guard behave the same.
+
 ## [flow-next 9.14.1] - 2026-11-18
 
 ### Fixed

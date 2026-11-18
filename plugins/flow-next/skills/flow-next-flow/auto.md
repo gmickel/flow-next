@@ -97,14 +97,14 @@ Resolve the scope and capture the hop with one read-only call. Shell variables d
 ```bash
 SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
-SNAPSHOT_FILE="$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json"
-mkdir -p "$(dirname "$SNAPSHOT_FILE")" && rm -f "$SNAPSHOT_FILE" \
+SNAPSHOT_ROOT="$(git rev-parse --show-toplevel)" || exit 1
+mkdir -p "$SNAPSHOT_ROOT/.flow/tmp" && rm -f "$SNAPSHOT_ROOT/.flow/tmp/pilot-snapshot.json" \
   || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot reset the pilot snapshot file\""; exit 1; }
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
   printf 'PILOT_VERDICT=NEEDS_HUMAN spec=%s stage=- reason="%spilot snapshot failed: %s"\n' "${GOAL_SPEC:--}" "${GOAL_REASON_PREFIX:-}" "$PILOT_SNAPSHOT"
   exit 1
 fi
-printf '%s' "$PILOT_SNAPSHOT" > "$SNAPSHOT_FILE" \
+( cd "$SNAPSHOT_ROOT" && printf '%s' "$PILOT_SNAPSHOT" > .flow/tmp/pilot-snapshot.json ) \
   || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot write the pilot snapshot file\""; exit 1; }
 [ -z "$PILOT_SPEC" ] || PILOT_SPEC="$(printf '%s' "$PILOT_SNAPSHOT" | jq -er ' .selected.id')" || exit 1
 ```
@@ -470,7 +470,7 @@ On a forge other than GitHub (the snapshot's `forge` is set and is not `github`)
 ```bash
 PR_VERIFY_FAILED=0
 if PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot --spec "$SELECTED_SPEC" --json)"; then
-  printf '%s' "$PILOT_SNAPSHOT" > "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" || PR_VERIFY_FAILED=1
+  ( cd "$(git rev-parse --show-toplevel)" && printf '%s' "$PILOT_SNAPSHOT" > .flow/tmp/pilot-snapshot.json ) || PR_VERIFY_FAILED=1
 else
   PR_VERIFY_FAILED=1
 fi

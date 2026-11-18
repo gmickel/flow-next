@@ -87,7 +87,7 @@ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
 [[ -n "$REVIEW_HEAD_SHA" && -n "$REVIEW_BASE_SHA" ]] \
   || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
-  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" | tee "$REVIEW_SNAPSHOT_FILE" >/dev/null
 if [[ "$REVIEW_BASE_SHA" != "$REVIEW_HEAD_SHA" ]]; then
   git diff --quiet "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA"; DIFF_RC=$?
   [[ "$DIFF_RC" -ne 0 ]] || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
