@@ -387,9 +387,9 @@ class CliClassificationThroughExecute(unittest.TestCase):
     `invalid_input`.
     """
 
-    def _cli(self, provider: str, stderr: bytes, rc: int = 1):
+    def _cli(self, provider: str, stderr: bytes, rc: int = 1, stdout: bytes = b""):
         def fake(argv, **kw):
-            return subprocess.CompletedProcess(argv, rc, b"", stderr)
+            return subprocess.CompletedProcess(argv, rc, stdout, stderr)
 
         with mock.patch.object(X.subprocess, "run", side_effect=fake), \
              mock.patch.object(X.time, "sleep"):
@@ -415,6 +415,18 @@ class CliClassificationThroughExecute(unittest.TestCase):
     def test_unparseable_cli_failure_falls_back(self) -> None:
         e = self._cli("github", b"something went wrong")
         self.assertIs(e.cls, ErrorClass.INVALID_INPUT)
+
+    def test_gitlab_cli_rejection_carries_the_reason(self) -> None:
+        # fn-331: glab's output for a create whose title is too long, as
+        # measured: the body on stdout, a Go map rendering on stderr.
+        e = self._cli(
+            "gitlab",
+            b"glab: map[message:map[title:[is too long (maximum is 255 characters)]]]\n",
+            stdout=b'{"message":{"title":["is too long (maximum is 255 characters)"]}}\n')
+        self.assertIs(e.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(e.subtype, "http")
+        self.assertEqual(
+            e.message, "rejected (400): title: is too long (maximum is 255 characters)")
 
 
 class TlsOptOut(unittest.TestCase):
