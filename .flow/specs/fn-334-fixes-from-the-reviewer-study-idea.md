@@ -73,13 +73,13 @@ A Jira read by key, for example `flowctl tracker wire read --locator '{"display"
 - **R11:** Redaction covers `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, glab's stored tokens under `GLAB_CONFIG_DIR`, and every configured host's stored token when the host glab used is not known. A rejection that echoes any of them prints `<redacted>`. No error surface. [paraphrase]
 - **R12:** A Jira or GitLab attachment download that is rejected carries the tracker's reason like other rejections, and a GitLab licence refusal whose marker is only in glab's diagnostic stays `capability`. No error surface. [paraphrase]
 - **R13:** A token command whose output is not UTF-8 fails as a cached authentication error naming the problem, without echoing its bytes, and the exit status is checked first. No error surface beyond that error. [paraphrase]
-- **R14:** The always-loaded skill files (the flow, capture and tracker-sync entry files and the workflow and routing files they always read) do not grow; the pull request reports their sizes before and after (G1). No error surface.
+- **R14:** The always-loaded skill files (the flow, capture and tracker-sync entry files and the workflow and routing files they always read) do not grow, except flow's routing file by the one phrase R15 adds; the pull request reports their sizes before and after (G1). No error surface.
+- **R15:** An agent that reads an idea through its own tracker connection (an MCP server) still reaches the idea reference. Flow's routing file names "an idea from a configured discovery project" in its existing list of rarer starting states, and the conditionally read rarer-states file has a row routing that state to the idea reference. The always-loaded addition is that one phrase. No error surface. [paraphrase]
 
 Each fix gets a test that fails on `main` and passes after it, reaching the behaviour through the real entry point (G2); the verification snippets are the starting point. Tests that pin the exact failure-envelope shape gain the `subtype` field and are listed in the pull request; no other existing assertion changes. Live checks before release: a key-only read of an idea and of an ordinary issue on the Jira test site, a rerun of `idea parent` after an induced link failure, and a numeric-epic create on the local GitLab instance. The test sites and credential lookups are in the gitignored notes file `.flow/tmp/tracker-live-checks.md`. Docs updated in the same change: the tracker-sync reference, the flowctl reference (envelope `subtype`, key-only read), the idea-intake reference and its codex copy, and the changelog under Unreleased.
 
 ## Boundaries
 
-- No routing line for ideas in an always-loaded skill file. The key-only read (R2) is the path, and the open question below asks whether to add one anyway. [paraphrase]
 - No change to how a concurrent second intake of the same idea behaves. The spec promises safety for a sequential rerun only. [paraphrase]
 - No GitLab epic resolution for a project that moved groups (a narrow case the review raised). [inferred]
 - No change to the retry-key formula in the create-first reference. A key made without the parent already fails safely. [inferred]
@@ -89,7 +89,7 @@ Each fix gets a test that fails on `main` and passes after it, reaching the beha
 
 The marker on the parent keeps idea intake free of local state, which is what made a second run safe in the first place. The alternative, a local record of created parents, was rejected for 9.13.0 for that reason.
 
-A key-only Jira read was chosen over a routing sentence in an always-loaded file, because the maintainer's rule for idea intake was zero growth of always-loaded text. In the end-to-end run of 9.13.0, one fresh session tried a key-only read on its own and another found the reference by searching the plugin. With R2, the first of those routes works.
+The idea path is reached two ways. R2 makes flowctl's own read work from a bare key: in the end-to-end run of 9.13.0, one fresh session tried a key-only read on its own and another found the reference by searching the plugin. R15 covers agents that read Jira through an MCP server and never see flowctl's output. The maintainer decided on 2026-11-18 to accept that cost, about seven words in the always-loaded routing file, in place of 9.13.0's zero-growth rule, because otherwise the feature silently does not happen for those teams.
 
 The envelope's `subtype` is additive and applies to every tracker command because the documentation already promises those subtypes. Leaving them out of the output made the documented branches unreachable.
 
@@ -100,7 +100,3 @@ Findings the review raised that are not defects on `main`, and are left alone: a
 ## Strategy Alignment
 
 - Tracker determinism: every fix is mechanical plumbing in the tracker package or a sentence in the reference read on the idea path. Routing and judgement stay with the agent. [strategy:Tracker determinism]
-
-## Open Questions
-
-- **Should one short routing line for discovery ideas go into an always-loaded routing file, so an agent that reads ideas through its own tracker connection (an MCP server) also reaches the idea reference?** — for the maintainer to decide; leaning no for now, since R2 fixes the flowctl path and the zero-growth rule was deliberate. *(owner: maintainer)*
