@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Fixed
+
+- **Reviews and gated work runs no longer trip a destructive-command guard.** Under a Claude Code Bash guard such as dcg, every CLI implementation review was refused at its first step, plan-review's `flowctl checkpoint restore` was refused, and full-gate `flowctl gate check|receipt` calls were refused, because an unquoted `$FLOWCTL` or a separate `--command "<cmd>"` argument looks like a hidden `git` call or an inline shell. The skills now quote `"$FLOWCTL"` on those lines and pass `--command="<cmd>"`, which flowctl already reads the same way, so runs without a guard keep their gate receipts. One Git Bash exception: an `MSYS2_ARG_CONV_EXCL` prefix written for a standalone path argument does not match `--command=<path>`, so a gate whose command starts with that path runs once more instead of reusing its receipt; add `--command=<prefix>` to the exclusion list to keep reusing it.
+
 ## [flow-next 9.14.0] - 2026-11-18
 
 When Jira or GitLab turns a request down, flow-next now tells you why, in the tracker's own words. Naming a story as the parent of a story used to come back as `rejected (400)`; it now carries Jira's reason after the status (`parent: Please select valid parent issue.`), so the person fixes the parent instead of guessing. A tracker token command whose path belongs to one machine can live in that machine's environment, so it never has to be committed with the project's config. Ideas read from Jira Product Discovery come back as plain text, without the colour markup of the idea template.

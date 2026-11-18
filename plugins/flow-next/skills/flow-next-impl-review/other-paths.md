@@ -130,7 +130,7 @@ Opt-out: `--no-triage` argument.
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" ]]; then
   # Only a first-round route may skip review; probe failure falls through.
-  if ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)" \
+  if ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --json)" \
       && [[ "$(jq -r '.action // empty' <<<"$ROUTE")" == "fanout" ]]; then
     TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
     RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"

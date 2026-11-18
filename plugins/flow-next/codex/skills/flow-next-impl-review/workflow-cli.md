@@ -35,7 +35,7 @@ full foreground operation.
 # receipt on an open cycle, deep-overturned receipt, NEEDS_HUMAN). Branch on its
 # action — never re-derive any of that in shell. flowctl's first-round guard
 # stays the no-cost exit-2 backstop behind it.
-ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --rotate-stale --json)" || { printf '%s\n' "$ROUTE" >&2; exit 1; }
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --rotate-stale --json)" || { printf '%s\n' "$ROUTE" >&2; exit 1; }
 ACTION="$(jq -r '.action' <<<"$ROUTE")"
 TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
@@ -245,7 +245,7 @@ release is bound to the owning rid:
 # After every enabled optional phase has run (deep, validator, walkthrough).
 # The rid is typed as a LITERAL from the phase-one JSON (shell state does not
 # survive across prompt turns) — release is bound to it.
-$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "<rid from phase-one JSON>" --json
+"$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "<rid from phase-one JSON>" --json
 ```
 
 A coordinator that dies mid-phase does not wedge the scope — the lease
@@ -265,7 +265,7 @@ If `VERDICT=NEEDS_WORK`:
 # Bash state does NOT survive across prompt turns (the fix/test/commit steps ran
 # between) — re-derive the Step-1 values in THIS block rather than reading
 # stale variables; TASK_ID and BACKEND are literals from the invocation context.
-ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
 TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 if [[ -z "$BASE_COMMIT" ]]; then
