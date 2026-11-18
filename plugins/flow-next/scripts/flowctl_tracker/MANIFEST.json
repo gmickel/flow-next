@@ -18,7 +18,7 @@
     },
     {
       "path": "flowctl_tracker/classify.py",
-      "sha256": "852238f44290b4c0eaa6c7fb386bff676c46484c2f86b4073078959243303a3d"
+      "sha256": "cb8c48370bd2309cbdc85bc4cbbd0890287141bdc16139911ba20b87ba598219"
     },
     {
       "path": "flowctl_tracker/config_io.py",
