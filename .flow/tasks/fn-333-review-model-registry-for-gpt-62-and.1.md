@@ -18,8 +18,12 @@ Tests: failing tests committed first (1b14c6d05, fa8a945e6); focused suites gree
 
 stage: impl-review - ran [rounds 1-2 on gpt-6.2-sol medium NEEDS_WORK (floor finding, later settled by the R2 amendment); rounds 3-5 on gpt-6.1-sol high: NEEDS_WORK (1 P1, 1 P2, fixed), NEEDS_WORK (1 P1, fixed), SHIP] (model: gpt-6.1-sol)
 
+CI fix after SHIP: the layout rewrite returns unchanged text as-is, so a review in the prompt's layout is parsed once (Windows max-item budget: main 14 ms, previous head 29 ms, now 15.5 ms process time; 144-lens parity unchanged).
+
+stage: impl-review - skipped(policy: risk - one-line behaviour-preserving fix after the round-5 SHIP; regression test and corpus parity)
+
 stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits: 504ca520a4ecec2f22d00dcac6298c3a860a4a92, 1b14c6d0528c0ef64f5f525e03bffc2d15661b67, 7f6776b4182a909aaf1ca8c95bf0835a9c485b2f, caff7552f3c4ecd2286c93b2f9be7c704d8b8631, 9da09f90aca6c14d1ce25ada2395749e885bc636, 30d35295541257e9ef7108ba70a7bc52f0a673c2, 6314e4a175c540010509a0e4903aa2c76907b397, 2960a4d711d976145a4f709520a8d521518d17e3, 5c837421c8410b82388b632206408bc22d5be3ea, fa8a945e6481822d45a81911ad0f8a2512b0498a, fd241ff159ff5c1ff0f978ee6537125be08b685a, 849bdc86981b8d4877a16cdd663c9780cf2eb2e9, a645fe7fb9dfc5903d973948c3f4b2a15ca6c442
+- Commits: 504ca520a4ecec2f22d00dcac6298c3a860a4a92, 1b14c6d0528c0ef64f5f525e03bffc2d15661b67, 7f6776b4182a909aaf1ca8c95bf0835a9c485b2f, caff7552f3c4ecd2286c93b2f9be7c704d8b8631, 9da09f90aca6c14d1ce25ada2395749e885bc636, 30d35295541257e9ef7108ba70a7bc52f0a673c2, 6314e4a175c540010509a0e4903aa2c76907b397, 2960a4d711d976145a4f709520a8d521518d17e3, 5c837421c8410b82388b632206408bc22d5be3ea, fa8a945e6481822d45a81911ad0f8a2512b0498a, fd241ff159ff5c1ff0f978ee6537125be08b685a, 849bdc86981b8d4877a16cdd663c9780cf2eb2e9, a645fe7fb9dfc5903d973948c3f4b2a15ca6c442, 2f61a9311f69b1b44dddea3bd61bd8b2ff9fbd17, 6efeba8dcdd69f4a90d3c8d4ac184a5f419ae242
 - Tests: python3 scripts/run_tests_parallel.py
 - PRs:
