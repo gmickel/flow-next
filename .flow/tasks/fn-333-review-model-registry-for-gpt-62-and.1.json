@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-333-review-model-registry-for-gpt-62-and",
   "spec_path": ".flow/tasks/fn-333-review-model-registry-for-gpt-62-and.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Review model registry for GPT-6.2 and Fable 5.2, Fable only when pinned",
   "updated_at": "2026-11-18T12:22:01.264696Z"
 }

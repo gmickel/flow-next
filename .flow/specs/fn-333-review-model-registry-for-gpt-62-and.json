@@ -178,7 +178,7 @@
     "impl:fn-333-review-model-registry-for-gpt-62-and.1": 0
   },
   "spec_path": ".flow/specs/fn-333-review-model-registry-for-gpt-62-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Review model registry for GPT-6.2 and Fable 5.2, Fable only when pinned",
   "tracker": {
     "baseHashFlow": null,
@@ -191,5 +191,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T12:47:57.092970Z"
+  "updated_at": "2026-11-18T12:49:09.692534Z"
 }
