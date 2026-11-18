@@ -8,7 +8,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Fixed
 
-- **Reviews and gated work runs no longer trip a destructive-command guard.** Under a Claude Code Bash guard such as dcg, every CLI implementation review was refused at its first step, plan-review's `flowctl checkpoint restore` was refused, and full-gate `flowctl gate check|receipt` calls were refused, because an unquoted `$FLOWCTL` or a separate `--command "<cmd>"` argument looks like a hidden `git` call or an inline shell. The skills now quote `"$FLOWCTL"` on those lines and pass `--command="<cmd>"`, which flowctl already accepts; nothing changes for runs without a guard.
+- **Reviews and gated work runs no longer trip a destructive-command guard.** Under a Claude Code Bash guard such as dcg, every CLI implementation review was refused at its first step, plan-review's `flowctl checkpoint restore` was refused, and full-gate `flowctl gate check|receipt` calls were refused, because an unquoted `$FLOWCTL` or a separate `--command "<cmd>"` argument looks like a hidden `git` call or an inline shell. The skills now quote `"$FLOWCTL"` on those lines and pass `--command="<cmd>"`, which flowctl already reads the same way, so runs without a guard keep their gate receipts. One Git Bash exception: an `MSYS2_ARG_CONV_EXCL` prefix written for a standalone path argument does not match `--command=<path>`, so a gate whose command starts with that path runs once more instead of reusing its receipt; add `--command=<prefix>` to the exclusion list to keep reusing it.
 
 ## [flow-next 9.14.0] - 2026-11-18
 
