@@ -641,6 +641,20 @@ class CreateFirstParent(unittest.TestCase):
             self.assertTrue(retried["retried"])
             self.assertEqual(retried["parent"], "WOR-10")
 
+    def test_retry_replays_a_parent_gitlab_did_not_set(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = self._flow(tmp, gl_cfg())
+            key = L.compute_create_first_key("gitlab", "T", "B", "42")
+            ex = fake_execute({"lifecycle-create": ok({**_gl_issue("B"), "epic": None})})
+            first = L.create_first(flow, title="T", body="B", retry_key=key,
+                                   parent="42", execute=ex)
+            self.assertIsNone(first["parent"])
+            again = L.create_first(flow, title="T", body="B", retry_key=key,
+                                   parent="42", execute=fake_execute({}))
+            self.assertTrue(again["retried"])
+            self.assertIsNone(again["parent"])
+            self.assertEqual(again["degraded"]["kind"], "parent_not_set")
+
     def test_failed_record_write_keeps_the_parent_for_the_retry(self) -> None:
         # fn-334 R9: the issue exists, the record write failed; the recovery
         # put from the failure details and a same-parent retry link it.

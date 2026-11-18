@@ -1415,6 +1415,20 @@ class EnvelopeCarriesSubtype(unittest.TestCase):
         self.assertEqual(out.get("subtype"), "delivery_link_type")
 
 
+class DeepReasonBody(unittest.TestCase):
+    """fn-334 R16: a body that decodes but nests too deep to walk."""
+
+    def test_reason_walk_too_deep_keeps_the_bare_message(self) -> None:
+        for provider, key in (("jira", "errors"), ("gitlab", "message")):
+            with self.subTest(provider=provider):
+                body = ('{"%s":' % key + '{"":' * 1200 + '"x"' + "}" * 1201).encode()
+                try:
+                    err = _rejection(provider, 400, body)
+                except RecursionError:
+                    self.fail("RecursionError escaped classify()")
+                self.assertEqual(err.message, "rejected (400)")
+
+
 class GlabCredentialsAreRedacted(unittest.TestCase):
     """fn-334 R11: every credential glab may have used is redacted."""
 

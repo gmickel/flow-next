@@ -633,6 +633,62 @@ class RerunFindsTheUnlinkedParent(unittest.TestCase):
         self.assertEqual(picked["parent"]["key"], "PROJ-98")
         self.assertEqual(_posts(ex, "lifecycle-create"), [])
 
+    def test_no_labels_field_refuses_before_creating(self) -> None:
+        meta = ok({"projects": [{"issuetypes": [{"id": "10003", "fields": {
+            "summary": {}, "description": {}}}]}]})
+        out, ex = self._settle({"lifecycle-create-meta": meta,
+                                "lifecycle-create": ok({"id": "40099", "key": "PROJ-99"}),
+                                "idea-link": created()})
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.CAPABILITY)
+        self.assertIn("tracker idea link", out.message)
+        self.assertEqual(_posts(ex, "lifecycle-create"), [])
+
+    def test_marker_search_reads_every_page(self) -> None:
+        from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+        def search(request):
+            query = parse_qs(urlparse(request.url_or_argv).query)
+            if "nextPageToken" not in query:
+                return ok({"issues": [_marked("PROJ-98", level=0), _marked("PROJ-97")],
+                           "isLast": False, "nextPageToken": "p2"})
+            self.assertEqual(query["nextPageToken"], ["p2"])
+            return ok({"issues": [_marked("PROJ-99")], "isLast": True})
+
+        out, ex = self._settle({"idea-marker-search": search,
+                                "lifecycle-create": ok({"id": "1", "key": "PROJ-1"}),
+                                "idea-link": created()})
+        self.assertIsInstance(out, TrackerError)
+        self.assertEqual(out.subtype, "several_parents")
+        self.assertEqual(sorted(c["key"] for c in out.details["candidates"]),
+                         ["PROJ-97", "PROJ-99"])
+        self.assertTrue(all(c.method == "GET" for c in ex.calls))
+
+
+class MovedOutIdeaIsRefused(unittest.TestCase):
+    """fn-334 R17: an idea key Jira now files outside the discovery projects."""
+
+    def test_read_parent_and_link_refuse_before_any_write(self) -> None:
+        moved = {**idea(), "key": "PROJ-77"}
+        config = jr_cfg(idea_keys=["IDEAS"])
+        for verb in ("read", "parent", "link"):
+            with self.subTest(verb=verb):
+                ex = fake_execute({
+                    "idea-link-types": ok(LINK_TYPES), "idea-read": ok(moved),
+                    "idea-project": ok(PROJECT), "wire-comment-list": ok(comments()),
+                    "lifecycle-create": ok({"id": "1", "key": "PROJ-1"}),
+                    "idea-link": created()})
+                if verb == "read":
+                    out = _idea_mod().read(config, "IDEAS-7", ex)
+                elif verb == "parent":
+                    out = _idea_mod().settle_parent(config, "IDEAS-7", ex, body="B")
+                else:
+                    out = _idea_mod().link(config, "IDEAS-7", "PROJ-12", ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.CAPABILITY)
+                self.assertIn("PROJ-77", out.message)
+                self.assertTrue(all(c.method == "GET" for c in ex.calls))
+
 
 def _flow_dir(tmp: str, config: dict) -> Path:
     flow = Path(tmp) / ".flow"
