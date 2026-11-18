@@ -181,6 +181,20 @@ class ModelShapesTest(unittest.TestCase):
             [("P1", "open"), ("P2", "fixed")],
         )
 
+    def test_fenced_example_is_not_rewritten_into_a_finding(self) -> None:
+        one_line = (
+            "- **Severity** P1 · **Confidence** 100 · **Classification** introduced\n"
+            "  **Problem** One-line finding.\n\n"
+        )
+        canonical = (
+            "- **Severity:** P2\n- **Confidence:** 75\n- **Classification:** introduced\n"
+            "- **Problem:** Canonical finding.\n\n"
+        )
+        fenced = "An example of the layout:\n\n```markdown\n" + one_line + "```\n\n"
+        verdict = "<verdict>NEEDS_WORK</verdict>\n"
+        self.assertEqual(len(parse(canonical + fenced + verdict)["items"]), 1)
+        self.assertEqual(len(parse(canonical + one_line + fenced + verdict)["items"]), 2)
+
     def test_invalid_relative_link_anchor_still_fails(self) -> None:
         for link in ("[outside.py:9](../outside.py#L9)", "[example.py](src/example.py#L0)"):
             with self.subTest(link=link):

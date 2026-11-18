@@ -5300,8 +5300,20 @@ def _review_finding_normalize_shapes(output: str) -> str:
     lines = output.splitlines()
     rewritten: list[str] = []
     index = 0
+    fence: Optional[str] = None
     while index < len(lines):
         line = lines[index]
+        # Quoted material in a code fence is an example, never a finding.
+        marker = re.match(r"^[ \t]*(`{3,}|~{3,})", line)
+        if marker and (fence is None or marker.group(1).startswith(fence)):
+            fence = None if fence is not None else marker.group(1)
+            rewritten.append(line)
+            index += 1
+            continue
+        if fence is not None:
+            rewritten.append(line)
+            index += 1
+            continue
         if line.strip().startswith("|"):
             end = index
             while end < len(lines) and lines[end].strip().startswith("|"):
