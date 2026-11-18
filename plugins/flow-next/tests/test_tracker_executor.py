@@ -91,6 +91,18 @@ class Classification(unittest.TestCase):
         self.assertFalse(C.classify("github", resp(400)).auto_retryable)
 
 
+def _deep_json() -> bytes:
+    """A rejection body nested deep enough that `json.loads` raises
+    RecursionError rather than ValueError. Python 3.14 decodes far deeper than
+    3.11-3.13 before overflowing, so the depth is generous and checked."""
+    body = b'{"message":' + b"[" * 1_000_000
+    try:
+        json.loads(body)
+    except RecursionError:
+        return body
+    raise AssertionError("body no longer makes json.loads raise RecursionError")
+
+
 def _rejection(provider: str, status: int, body) -> TrackerError:
     raw = body if isinstance(body, bytes) else json.dumps(body).encode()
     err = C.classify(provider, resp(status, raw))
@@ -174,6 +186,19 @@ class RejectionReason(unittest.TestCase):
                     err = _rejection(provider, 400, body)
                     self.assertNotIn(secret, err.message)
                     self.assertIn("<redacted>", err.message)
+
+    def test_echoed_ci_job_token_is_redacted(self) -> None:
+        secret = "test-only-job-token-12345678"
+        env = {k: v for k, v in os.environ.items() if k != "GITLAB_TOKEN"}
+        env["CI_JOB_TOKEN"] = secret
+        with mock.patch.object(CR, "_SEEN", set()), \
+                mock.patch.dict(os.environ, env, clear=True):
+            err = _rejection("gitlab", 400, {"error": f"bad token {secret}"})
+        self.assertNotIn(secret, err.message)
+        self.assertEqual(err.message, "rejected (400): bad token <redacted>")
+
+    def test_deeply_nested_body_keeps_the_bare_message(self) -> None:
+        self.assertRejected(_rejection("jira", 400, _deep_json()), "rejected (400)")
 
     def test_reason_is_bounded(self) -> None:
         for provider, body in (("jira", {"errorMessages": ["x" * 5000]}),
@@ -453,6 +478,51 @@ class CliClassificationThroughExecute(unittest.TestCase):
                           env={"GITLAB_HOST": "localhost:8929"})
         self.assertEqual(e.message, "rejected (400): bad token <redacted>")
         self.assertEqual(hosts, ["localhost:8929"])
+
+    def test_gitlab_cli_rejection_uses_an_inherited_gitlab_host(self) -> None:
+        # glab honours GITLAB_HOST from the shell, so the token it used is the
+        # one stored for that host, not for its default.
+        secret = "glpat-inherited-host-12345678"
+        hosts = []
+
+        def stored(host):
+            hosts.append(host)
+            return secret
+
+        env = {k: v for k, v in os.environ.items() if k != "GITLAB_TOKEN"}
+        env["GITLAB_HOST"] = "gitlab.internal.corp"
+        with mock.patch.object(CR, "_SEEN", set()), \
+                mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(CR, "_glab_config_token", side_effect=stored):
+            e = self._cli("gitlab", b"glab: map[error:bad]\n",
+                          stdout=json.dumps({"error": f"bad token {secret}"}).encode())
+        self.assertEqual(e.message, "rejected (400): bad token <redacted>")
+        self.assertEqual(hosts, ["gitlab.internal.corp"])
+
+    def test_glab_host_precedence(self) -> None:
+        def host(argv, env):
+            return X._glab_host(Request(provider="gitlab", op="r", method="GET",
+                                        url_or_argv=argv, env=env))
+
+        flagged = ["glab", "api", "--hostname", "flag.example", "x"]
+        with mock.patch.dict(os.environ, {"GITLAB_HOST": "shell.example"}):
+            self.assertEqual(host(["glab", "api", "x"], {"GITLAB_HOST": "req.example"}),
+                             "req.example")
+            self.assertEqual(host(flagged, {"GITLAB_HOST": "req.example"}), "req.example")
+            self.assertEqual(host(flagged, {}), "flag.example")
+            self.assertEqual(host(["glab", "api", "x"], {}), "shell.example")
+        env = {k: v for k, v in os.environ.items() if k != "GITLAB_HOST"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertIsNone(host(["glab", "api", "x"], {}))
+
+    def test_gitlab_cli_deeply_nested_body_keeps_the_bare_message(self) -> None:
+        body = _deep_json()
+        for stderr in (b"", b"glab: map[message:...]\n"):
+            with self.subTest(stderr=stderr), \
+                    mock.patch.object(X, "remember_glab_token"):
+                e = self._cli("gitlab", stderr, stdout=body)
+                self.assertIs(e.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(e.message, "rejected (400)")
 
 
 class TlsOptOut(unittest.TestCase):
