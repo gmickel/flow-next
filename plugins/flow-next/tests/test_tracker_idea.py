@@ -300,6 +300,36 @@ class IdeaRead(unittest.TestCase):
         self.assertIn("issuelinks", ex.calls[0].url_or_argv)
         self.assertTrue(all(c.method == "GET" for c in ex.calls))
 
+    def test_colour_tags_are_removed_and_their_text_kept(self) -> None:
+        # fn-331: the discovery template wraps its prompts in colour tags.
+        ex = fake_execute({
+            "idea-read": ok(idea(description=(
+                "h2. Problem\n\n{color:#97a0af}Who has the problem?{color}\n\n"
+                "* {color:#97A0AF}first{color} and {color}stray close\n"
+                "* {color:red}open without a close"))),
+            "wire-comment-list": ok(comments(
+                "{color:#97a0af}Decision: ship in Q1{color}", "plain")),
+        })
+        out = _idea_mod().read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7", ex)
+        self.assertIsInstance(out, dict, out)
+        self.assertEqual(out["idea"]["body"],
+                         "## Problem\n\nWho has the problem?\n\n"
+                         "- first and stray close\n- open without a close")
+        self.assertEqual([c["body"] for c in out["comments"]],
+                         ["Decision: ship in Q1", "plain"])
+
+    def test_ordinary_issue_read_keeps_colour_tags(self) -> None:
+        body = "{color:#97a0af}Who has the problem?{color}"
+        ex = fake_execute({"wire-read": ok(idea(description=body)),
+                           "wire-comment-list": ok(comments(body))})
+        locator = {"durable": IDEA_ID, "display": "IDEAS-7"}
+        out = W.dispatch("read", jr_cfg(idea_keys=["IDEAS"]),
+                         locator=locator, execute=ex)
+        self.assertEqual(out["body"], body)
+        listed = W.dispatch("comment-list", jr_cfg(idea_keys=["IDEAS"]),
+                            locator=locator, execute=ex)
+        self.assertEqual([c["body"] for c in listed["comments"]], [body])
+
     def test_url_with_selected_issue_resolves_to_the_key(self) -> None:
         ex = fake_execute({"idea-read": ok(idea()),
                            "wire-comment-list": ok(comments())})

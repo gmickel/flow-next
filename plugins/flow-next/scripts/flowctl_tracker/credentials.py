@@ -250,6 +250,16 @@ def _remember(value: Optional[str]) -> Optional[str]:
     return value
 
 
+def remember_glab_token(host: Optional[str]) -> None:
+    """Register the token glab's own login holds for `host`, so `redact` strips
+    it from text a glab call returns. The CLI route never resolves it otherwise.
+    Never raises: the CLI route runs inside the executor's no-raise boundary."""
+    try:
+        _remember(_glab_config_token(host))
+    except Exception:  # noqa: BLE001, S110 - a token too short to redact was never usable
+        pass
+
+
 def redact(text: str) -> str:
     """Strip every known secret from a string bound for a log, error or receipt."""
     out = text

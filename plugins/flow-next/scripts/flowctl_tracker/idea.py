@@ -37,6 +37,14 @@ from .wire.jira import idea_reference, is_idea_key
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 _BROWSE_RE = re.compile(r"/browse/([A-Z][A-Z0-9_]+-[1-9][0-9]*)/?$")
 _IDEA_FIELDS = "summary,description,status,project,issuelinks"
+#: Jira's colour markup, opening `{color:#97a0af}` or closing `{color}`.
+_COLOR_TAG_RE = re.compile(r"\{color(?::[^{}]*)?\}")
+
+
+def _plain(text: Any) -> Any:
+    """Idea text without colour tags. Ideas are never written back, so this
+    loses nothing; a linked issue's text keeps its markup for the next push."""
+    return _COLOR_TAG_RE.sub("", text) if isinstance(text, str) else text
 
 
 def _dict(value: Any) -> dict:
@@ -206,7 +214,7 @@ def _idea_out(config: dict, raw: dict) -> dict:
         "identifier": raw["key"],
         "url": f"{base}/browse/{raw['key']}" if isinstance(base, str) else None,
         "title": fields.get("summary"),
-        "body": from_wire(fields.get("description")),
+        "body": _plain(from_wire(fields.get("description"))),
         "status": _dict(fields.get("status")).get("name"),
     }
 
@@ -226,7 +234,7 @@ def read(config: dict, ref: Any, execute) -> Any:
         return listed
     return {
         "idea": _idea_out(config, raw),
-        "comments": [{"id": c.get("id"), "body": c.get("body"),
+        "comments": [{"id": c.get("id"), "body": _plain(c.get("body")),
                       "created_at": c.get("created_at")}
                      for c in listed.get("comments") or []],
         "commentsTruncated": bool(listed.get("truncated")),
