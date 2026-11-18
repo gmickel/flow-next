@@ -35,7 +35,7 @@ these fits: no written direction (strategy), a search for candidate investments 
 narrow (prospect), one large idea with unclear boundaries (chart), an outcome to reach over
 several specs (goal mode), the open tracker issues no spec covers (intake), a metric improved over repeated attempts (hill climb), a prompt or skill change whose behaviour should be measured, a spec needing an independent design review (plan-review), a spec whose
 open tasks are all blocked, a closed spec with no pull request, a feature map to seed or maintain,
-output too dense to read (visual), or chat prose that needs discipline (prose).
+output too dense to read (visual), an idea from a configured discovery project, or chat prose that needs discipline (prose).
 
 **Host command form:** print every copy-pasteable flow-next command in the spelling this host
 invokes: the flat `/flow-next-<name>` form when the resolved plugin root carries

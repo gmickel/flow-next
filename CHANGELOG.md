@@ -6,6 +6,25 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **Scripts can branch on why a tracker command failed.** Every `flowctl tracker` failure envelope now carries `subtype` next to `class` whenever the error has one, so the documented cases (`several_parents`, `delivery_link_type`, `parent_mismatch`, `idea_read_only`, ...) reach the caller instead of only the class. The field is additive; callers that ignore it keep working.
+- **Read a Jira issue by its key or URL alone.** `flowctl tracker wire read --locator '{"display":"IDEAS-7"}'` (or the issue's `/browse/` URL on the configured site) returns the same result as a read by durable id, with the id filled in, and an idea still comes back with its `idea` block. An agent handed only an idea's key reaches the idea instructions through flowctl.
+- **Agents that read Jira through their own connection still find the idea path.** Flow's routing names an idea from a configured discovery project among its rarer starting states, and that row points at the idea-intake reference, so an agent reading the idea through an MCP server follows the same steps.
+
+### Fixed
+
+- **Rerunning idea intake after a failed delivery link no longer creates a second parent.** A parent flowctl creates for an idea carries the label `flow-next-idea-<idea-key>`, and `tracker idea parent` looks for a parent-level issue with that label in the delivery project before it creates one, so the rerun links the first parent. Several labelled parents come back as `several_parents` for the person to choose with `--use`. Nothing is stored locally.
+- **No write reaches a Jira Product Discovery idea.** The key Jira returns now decides, so an issue moved into a discovery project is refused like an idea, naming both keys. `wire unready` and `wire question` refuse an idea's key before any request (unready used to read it and report success with nothing changed). Relations read each end's current key while an idea source is configured. Linking a spec to an idea is refused whatever the letter case of the key, and `sync set-tracker-id` given only a durable id asks for `--identifier` when an idea source is configured.
+- **Idea text keeps its code intact.** Colour tags are removed only outside code and `{noformat}` blocks, which come back byte for byte.
+- **The idea-intake steps cover the gaps a run hit.** Capture's later sync check and retry push wait for the child issues like its first push, each spec's Decision Context gets the parent's key and URL once it is settled, a chart run with `tracker.charts` on projects its own issues, and a parent created without its description is reported and given the summary with `tracker wire update`.
+- **A GitLab parent is reported set only when GitLab set it.** A numeric epic id counts as set only when the create response carries that epic; otherwise the result's `parent` is null with `degraded` kind `parent_not_set`, and no extra request is made. A parent that is neither ASCII digits nor an epic reference (`²`, full-width digits) is `invalid_input` before any request.
+- **A create-first retry links the issue it already made.** When the final record write fails after the remote create, the pending claim and the failure details carry the parent, so the recovery `sync create-first-put` keeps it and a retry with the same parent links the existing issue instead of refusing with `parent_mismatch`.
+- **A GitLab rejection cannot print a token glab used.** Redaction now covers `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, glab's config under `GLAB_CONFIG_DIR`, and every configured host's stored token when the host glab used is not known.
+- **Rejected attachment downloads say why.** A Jira or GitLab attachment download that is turned down carries the tracker's reason like every other rejection, and GitLab's licence refusal stays `capability` when glab prints its marker only on stderr.
+- **A token command that prints bytes that are not UTF-8 fails cleanly.** The exit status is checked first, and output that is not UTF-8 is a cached `auth` error naming the problem without echoing the bytes, instead of an unhandled decode error.
+- **The parent docs name the command that removes a parent.** `flowctl sync clear <spec-id>` clears the recorded parent with the rest of the tracker block, and capture records a named parent only while the tracker bridge is active.
+
 ## [flow-next 9.14.1] - 2026-11-18
 
 ### Fixed
