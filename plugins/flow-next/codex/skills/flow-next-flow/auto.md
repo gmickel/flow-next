@@ -97,7 +97,8 @@ Resolve the scope and capture the hop with one read-only call. Shell variables d
 ```bash
 SNAPSHOT_ARGS=()
 [ -n "$PILOT_SPEC" ] && SNAPSHOT_ARGS+=(--spec "$PILOT_SPEC")
-SNAPSHOT_ROOT="$(git rev-parse --show-toplevel)" || exit 1
+SNAPSHOT_ROOT="$(git rev-parse --show-toplevel)" \
+  || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot find the repository root for the pilot snapshot\""; exit 1; }
 mkdir -p "$SNAPSHOT_ROOT/.flow/tmp" && rm -f "$SNAPSHOT_ROOT/.flow/tmp/pilot-snapshot.json" \
   || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}cannot reset the pilot snapshot file\""; exit 1; }
 if ! PILOT_SNAPSHOT="$("$FLOWCTL" pilot snapshot "${SNAPSHOT_ARGS[@]}" --json)"; then
