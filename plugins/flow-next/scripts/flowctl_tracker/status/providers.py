@@ -608,7 +608,7 @@ def _apply_jira(config, locator, execute, *, target_slot) -> Result:
     Never uses a cached transition id.
     """
     from ..wire import _destination, _jira, _jira_base  # noqa: PLC0415
-    from ..wire.jira import _idea_write_refusal, is_idea_key  # noqa: PLC0415
+    from ..wire.jira import _idea_write_refusal, is_idea_key, moved_to_idea  # noqa: PLC0415
     # unready reads the issue unguarded ("wire-read") before transitioning;
     # an idea's status is never written (fn-330 R6), before any request.
     if is_idea_key(config, locator["display"]):
@@ -633,6 +633,9 @@ def _apply_jira(config, locator, execute, *, target_slot) -> Result:
                 f"?fields=status", idempotent=True)
     if isinstance(cur, TrackerError):
         return cur
+    moved = moved_to_idea(config, issue_key, cur)
+    if moved:
+        return moved
     cur_status = dict_(dict_(dict_(cur).get("fields")).get("status"))
     if str(cur_status.get("id")) == str(target_id):
         return {"noop": True, "applied": target_slot}

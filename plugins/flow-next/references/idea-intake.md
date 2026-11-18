@@ -1,7 +1,9 @@
 # Starting from a discovery idea
 
-Read when a flowctl read of a tracker issue returned an `idea` block that points here. The issue
-is an idea in a discovery project (Jira Product Discovery): the people who run discovery own it,
+Read when a flowctl read of a tracker issue returned an `idea` block that points here, or when you
+read an issue from a project `tracker.perTracker.ideaProjectKeys` lists through another tracker
+connection. The issue is an idea in a discovery project (Jira Product Discovery): the people who
+run discovery own it,
 and an approved idea becomes one parent issue in the delivery project with one child issue per
 spec under it.
 
@@ -10,8 +12,9 @@ do not build from an idea: stop `NEEDS_HUMAN` naming it. The person's invocation
 
 **The idea is read-only apart from one delivery link.** Never edit its text, fields or status,
 never comment on it, and never link a spec to it as the spec's own issue (flowctl refuses that
-link). Which parent serves the idea is read from its delivery links every time; record nothing
-about it locally. `$FLOWCTL` below is the flowctl that made the read which sent you here.
+link). Which parent serves the idea is read from the tracker every time; record nothing about it
+locally. `$FLOWCTL` below is the plugin's bundled flowctl (the one whose read sent you here, if
+one did).
 
 ## 1. Read the idea
 
@@ -29,14 +32,17 @@ the title.
 ## 2. Route and capture
 
 Route the idea's content with the route matrix like any other starting point: a clear idea to
-capture, an oversized or unclear one to chart first, then capture. Capture runs as usual, with its
-split proposal, the person's choice and its cycle check. Tell it:
+capture, an oversized or unclear one to chart first, then capture. With `tracker.charts` on, a
+chart run projects its own issues for the chart; they are not the idea's parent or children.
+Capture runs as usual, with its split proposal, the person's choice and its cycle check. Tell it:
 
 - Each spec's Goal & Context quotes the part of the idea it serves and gives the idea's key and URL.
-- Each spec's Decision Context names its sibling specs, the idea and the parent issue.
+- Each spec's Decision Context names its sibling specs and the idea; step 3 adds the parent.
 - The idea is source material, not a named issue for the spec.
-- Save the specs locally first: flow ids, no create-first, and capture's tracker push waits until
-  step 4 has created their issues. Nothing is written to the tracker before the specs exist.
+- Save the specs locally first: flow ids, no create-first. Capture's tracker push, its later sync
+  check and any retry push all wait until step 4 has created the specs' issues; an earlier push
+  would create each issue without its parent. Nothing is written to the tracker before the specs
+  exist.
 
 ## 3. Settle the parent
 
@@ -49,7 +55,10 @@ for, with the idea's key and URL, to a mode `0600` file and run:
 
 It reuses the idea's delivery-linked issue at the parent level of the delivery project, or creates
 one titled with the idea's summary and links it to the idea. An idea that becomes one spec gets a
-parent too. A repeat run finds the same parent and creates nothing.
+parent too. A repeat run finds the same parent and creates nothing, including a parent whose
+delivery link failed: a parent flowctl creates carries a label naming the idea, and a rerun links
+it. Once the parent is settled, add its key and URL to each spec's Decision Context
+(`"$FLOWCTL" spec set-plan <spec-id> --file <file>` with the edited spec).
 
 - `conflict` / `several_parents`: ask the person which of `details.candidates` to use, then rerun
   with `--use <key>`.
@@ -59,6 +68,10 @@ parent too. A repeat run finds the same parent and creates nothing.
   `link.retry` command, and continue; no build step waits on the link.
 - `notReused`: linked issues that cannot serve as the parent (outside the delivery project, or not
   at the parent level). Name them in the close.
+- `degraded` with `field: description`: the parent was created without the summary, because its
+  create screen has no description field. Tell the person, and write the summary onto the parent:
+  `"$FLOWCTL" tracker wire update --locator '{"durable":"<parent.id>","display":"<parent.key>"}'
+  --body-file <file> --json`.
 
 ## 4. Children under the parent
 

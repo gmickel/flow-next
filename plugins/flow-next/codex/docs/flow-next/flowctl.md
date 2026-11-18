@@ -2067,15 +2067,25 @@ flowctl tracker idea link <idea> <parent-key> [--json]
 ```
 
 Each reads before it writes, so a repeat creates no second parent and no second
-link. `parent` returns `parent` (`key`, `created`), `link` (`created`,
-`existing`, or `error` and `retry` when the link failed after a create) and
+link. A parent `parent` creates carries the label `flow-next-idea-<idea>`; with
+no delivery-linked parent, a parent-level issue in the delivery project with
+that label is reused and linked, so a rerun after a failed link creates nothing.
+A create screen without a Labels field stops with `capability` / `labels` and
+creates nothing. A key Jira now files outside the discovery projects is
+`capability` / `not_an_idea` on all three verbs, before any write.
+`parent` returns `parent` (`key`, `created`), `link` (`created`,
+`existing`, or `error` and `retry` when the link failed) and
 `notReused` (linked issues outside the delivery project or not at the parent
-level). It stops before any write with `conflict` / `several_parents` (the
+level). It stops before any write with `conflict` / `several_parents` (several
+linked parents, or several labelled ones when none is linked; the
 candidates are in `details.candidates`) or `unresolved` / `delivery_link_type`
 (zero or several link types; `details.found`). Another tracker, or Jira Data
 Center and Server, is `capability`. `tracker wire read` of an idea adds an
 `idea` block naming the reference that handles the path; its request is
-unchanged.
+unchanged. On Jira, `wire read` also takes a locator with only `display`, an
+issue key or its URL on the configured site (`--locator '{"display":"IDEAS-7"}'`),
+and returns the same shape with the durable id filled in; an unknown key or
+another site's URL returns the read's usual error.
 GitHub and Jira Data Center refuse a parent with a `capability` error before
 any request ([parent issue at creation](tracker-sync.md#parent-issue-at-creation)).
 
@@ -2148,11 +2158,16 @@ Failure:
 {
   "success": false,
   "class": "conflict",
+  "subtype": "several_parents",
   "error": "redacted human-readable summary",
   "retryable": false,
   "details": {"normalized": "todo", "candidates": []}
 }
 ```
+
+`subtype` is present whenever the error has one and names the case within the
+class that the verb docs branch on (`several_parents`, `delivery_link_type`,
+`parent_mismatch`, `idea_read_only`, ...).
 
 `data` is verb-specific. `degraded` reports a confirmed capability transition;
 `probe` reports a capability probe outcome without claiming a transition. A
@@ -2161,7 +2176,7 @@ failed GitLab TTL probe keeps the prior capability and returns it through
 variant: rate limits include `retry_after_s`, capability failures include
 `capability` and `required_plan`, conflicts include `normalized` and
 `candidates`, and MCP continuations include `action` and `payload`. Branch on
-`class`, never provider error text.
+`class` and `subtype`, never provider error text.
 
 The `class` enum and fixed process exit codes are exhaustive:
 

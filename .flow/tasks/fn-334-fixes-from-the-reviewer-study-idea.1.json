@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-18T10:37:36.328326Z",
+  "depends_on": [],
+  "id": "fn-334-fixes-from-the-reviewer-study-idea.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-334-fixes-from-the-reviewer-study-idea",
+  "spec_path": ".flow/tasks/fn-334-fixes-from-the-reviewer-study-idea.1.md",
+  "status": "done",
+  "title": "Implement Fixes from the reviewer study: idea intake, parent at creation, redaction",
+  "updated_at": "2026-11-18T11:12:02.955015Z"
+}

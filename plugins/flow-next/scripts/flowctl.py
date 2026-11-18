@@ -42924,6 +42924,14 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
         )
     if validated_identifier is not None:
         refuse_idea_as_spec_issue(validated_identifier[2], args.json)
+    elif _idea_source_configured():
+        # A durable id alone cannot show whether the issue is an idea.
+        error_exit(
+            "an idea source is configured (tracker.perTracker.ideaProjectKeys); "
+            "pass --identifier with the issue's key so a discovery idea is never "
+            "linked as a spec's own issue",
+            use_json=args.json,
+        )
 
     # PR #246: the relink is a spec-identity WRITE, so the whole
     # reload-guard-mutate-write runs INSIDE the shared config writer lock -
@@ -42941,11 +42949,6 @@ def cmd_sync_set_tracker_id(args: argparse.Namespace) -> None:
             args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
             with _review_sidecar_lock(flow_dir, args.id):
                 spec_json_path, spec_data = _resolve_sync_spec(args)
-                if validated_identifier is None:
-                    # No --identifier: the link completes the stored one.
-                    stored = (spec_data.get("tracker") or {}).get("identifier")
-                    refuse_idea_as_spec_issue(
-                        stored if isinstance(stored, str) else None, args.json)
 
                 # PR #246: honor LIVE per-spec operation claims (create/sync-body/
                 # status). A verb's identity recheck can only detect a relink
@@ -43748,22 +43751,35 @@ def cmd_tracker_idea(args: argparse.Namespace) -> None:
     sys.exit(code)
 
 
+def _idea_project_keys() -> tuple[dict, list]:
+    """The tracker block and its Jira idea project keys ([] when none)."""
+    tracker = (_load_raw_flow_config() or {}).get("tracker")
+    tracker = tracker if isinstance(tracker, dict) else {}
+    per = tracker.get("perTracker") if isinstance(tracker.get("perTracker"), dict) else {}
+    keys = per.get("ideaProjectKeys")
+    if tracker.get("type") != "jira" or not isinstance(keys, list):
+        return tracker, []
+    return tracker, keys
+
+
+def _idea_source_configured() -> bool:
+    return bool(_idea_project_keys()[1])
+
+
 def refuse_idea_as_spec_issue(identifier: Optional[str], use_json: bool) -> None:
     """A discovery idea is source material, never a spec's own issue (fn-330).
 
     Linking one would make the next push write the spec body into the idea."""
     if not identifier:
         return
-    tracker = (_load_raw_flow_config() or {}).get("tracker")
-    tracker = tracker if isinstance(tracker, dict) else {}
-    per = tracker.get("perTracker") if isinstance(tracker.get("perTracker"), dict) else {}
-    keys = per.get("ideaProjectKeys")
-    if tracker.get("type") != "jira" or not isinstance(keys, list) or "-" not in identifier:
+    tracker, keys = _idea_project_keys()
+    if not keys or "-" not in identifier:
         return
     resolved = tracker.get("resolved") if isinstance(tracker.get("resolved"), dict) else {}
     dest = resolved.get("destination") if isinstance(resolved.get("destination"), dict) else {}
-    project = identifier.strip().rsplit("-", 1)[0]
-    if project in keys and project != dest.get("projectKey"):
+    project = identifier.strip().rsplit("-", 1)[0].upper()
+    if (project in {str(k).upper() for k in keys}
+            and project != str(dest.get("projectKey") or "").upper()):
         reference = _plugin_root() / "references" / "idea-intake.md"
         reference = str(reference) if reference.is_file() else "references/idea-intake.md"
         error_exit(
@@ -44235,6 +44251,11 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
         # The parent `tracker create-first --parent` created the issue under;
         # its retry check compares it, so a later put must keep it.
         record["parent"] = existing["parent"]
+    if (existing and existing.get("degraded") is not None
+            and existing.get("id") in (None, args.id)):
+        # What the create did not set (a GitLab parent_not_set); the retry
+        # replays it, so a put for the same issue, or over its claim, keeps it.
+        record["degraded"] = existing["degraded"]
     # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
     # A project whose auto-managed .flow/.gitignore predates this release
     # would otherwise get an untracked-but-unignored recovery record, and a

@@ -50,7 +50,8 @@ def _gitlab_epic_id(config: dict, execute: Execute, dest: dict, parent: str
     reference costs one read that resolves it to the id the create takes."""
     from ..wire import _cli  # noqa: PLC0415
     # GitLab reads epic_id 0 as "no epic", so a zero id would be dropped.
-    if parent.isdigit() and int(parent) > 0:
+    # ASCII digits only: str.isdigit() also accepts "²" and "４２".
+    if re.fullmatch(r"[0-9]+", parent) and int(parent) > 0:
         return int(parent)
     ref = _GITLAB_EPIC_REF.fullmatch(parent)
     if ref is None:
@@ -120,8 +121,17 @@ def create_gitlab(config: dict, execute: Execute, *, title: str, body: str,
     acknowledged = raw.get("description")
     if not isinstance(acknowledged, str):
         acknowledged = body
-    return {"id": durable, "identifier": ident, "url": raw.get("web_url"),
-            "bodyWritten": acknowledged}
+    out = {"id": durable, "identifier": ident, "url": raw.get("web_url"),
+           "bodyWritten": acknowledged}
+    epic = raw.get("epic") if isinstance(raw.get("epic"), dict) else {}
+    if parent is not None and epic.get("id") != payload["epic_id"]:
+        # GitLab can create the issue and leave out an epic it will not
+        # take; the response is the only evidence, so no extra read.
+        out["parent"] = None
+        out["degraded"] = {"kind": "parent_not_set", "parent": parent,
+                           "reason": "the created issue carries no epic "
+                                     f"{payload['epic_id']}"}
+    return out
 
 
 def create_linear(config: dict, execute: Execute, *, title: str, body: str,
@@ -168,7 +178,8 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str,
 
 
 def create_jira(config: dict, execute: Execute, *, title: str, body: str,
-                parent: Optional[str] = None) -> Result:
+                parent: Optional[str] = None,
+                labels: Optional[list] = None) -> Result:
     from ..wire import _jira, _jira_base, _jira_issue_key  # noqa: PLC0415
     from ..wire.jira import from_wire, to_wire  # noqa: PLC0415
     dest = destination(config)
@@ -194,7 +205,7 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str,
     # screen. Include Description by default, but omit it when createmeta
     # positively reports a non-empty field map without `description`.
     # Unavailable/legacy createmeta keeps the common include behavior.
-    description_settable = True
+    description_settable = labels_settable = True
     meta = _jira(
         execute, "lifecycle-create-meta", "GET",
         f"{base}/rest/api/2/issue/createmeta"
@@ -211,8 +222,9 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str,
                         or str(issue_type.get("id")) != str(issue_type_id)):
                     continue
                 fields = issue_type.get("fields")
-                if isinstance(fields, dict) and fields and "description" not in fields:
-                    description_settable = False
+                if isinstance(fields, dict) and fields:
+                    description_settable = "description" in fields
+                    labels_settable = "labels" in fields
                 break
     fields = {
         "project": {"id": str(project_id)},
@@ -223,6 +235,18 @@ def create_jira(config: dict, execute: Execute, *, title: str, body: str,
         fields["description"] = wire_body
     if parent is not None:
         fields["parent"] = {"key": parent}
+    if labels:
+        if not labels_settable:
+            # Only an idea's parent asks for labels: the label is how a rerun
+            # finds it, so a parent without it is refused, never dropped.
+            return TrackerError(
+                ErrorClass.CAPABILITY,
+                f"issue type {issue_type_id}'s create screen has no Labels field, so the "
+                "parent cannot carry the label a rerun finds it by; nothing was "
+                "created. Add Labels to that screen, or create the parent yourself "
+                "and link it with `flowctl tracker idea link <idea> <parent-key>`",
+                subtype="labels", details={"capability": "labels"})
+        fields["labels"] = labels
     raw = _jira(execute, "lifecycle-create", "POST",
                 f"{base}/rest/api/2/issue",
                 body={"fields": fields})
@@ -322,5 +346,5 @@ def provider_create(config: dict, execute: Execute, *, title: str, body: str,
     else:
         created = _CREATE[provider](config, execute, title=title, body=body)
     if parent is not None and isinstance(created, dict):
-        created["parent"] = parent
+        created.setdefault("parent", parent)  # None: the tracker did not set it
     return created

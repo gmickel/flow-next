@@ -331,18 +331,39 @@ def display_durable_guard(provider: str, config: dict, execute: Execute, *,
     return None
 
 
-def jira_idea_guard(provider: str, config: dict, *,
+def jira_idea_guard(provider: str, config: dict, execute: Optional[Execute], *,
                     locators: tuple) -> Optional[TrackerError]:
     """Refuse a Jira relation with an idea at either end (fn-330 R6).
 
-    Costs no request, so it runs before the link-type, probe and create calls;
-    covers a spec linked to an idea before `ideaProjectKeys` was set."""
+    Runs before the link-type, probe and create calls. A held key that is an
+    idea costs no request (a spec linked to an idea before `ideaProjectKeys`
+    was set). Given `execute` and an idea source, each end's current key is
+    then read, so an issue moved into a discovery project is refused too."""
     if provider != "jira":
         return None
-    from ..wire.jira import _idea_write_refusal, is_idea_key  # noqa: PLC0415
+    from ..wire.jira import (_idea_write_refusal, has_idea_source,  # noqa: PLC0415
+                             is_idea_key, moved_to_idea)
     for locator in locators:
         if is_idea_key(config, locator["display"]):
             return _idea_write_refusal(locator["display"].strip())
+    if execute is None or not has_idea_source(config):
+        return None
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    for locator in locators:
+        raw = _jira(execute, "relate-idea-read", "GET",
+                    f"{base}/rest/api/2/issue/"
+                    f"{quote(str(locator['durable']), safe='')}?fields=summary",
+                    idempotent=True)
+        if isinstance(raw, TrackerError):
+            return raw
+        moved = moved_to_idea(config, locator["display"], raw)
+        if moved:
+            return moved
     return None
 
 

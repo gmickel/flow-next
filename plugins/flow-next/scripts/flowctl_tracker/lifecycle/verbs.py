@@ -287,7 +287,7 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
               "url": created.get("url"), "linkState": "linked",
               "paired_base": seeded}
     if parent is not None:
-        result["parent"] = parent
+        result["parent"] = created["parent"]
     if created.get("degraded") is not None:
         result["degraded"] = created["degraded"]
     _release_claim(rec_path)
@@ -576,7 +576,10 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
                            "identifier": prior.get("identifier"),
                            "url": prior.get("url"), "retried": True}
                     if prior.get("parent") is not None:
-                        out["parent"] = prior["parent"]
+                        # The record keeps the requested parent for the match
+                        # above; replay what the create actually set.
+                        not_set = (prior.get("degraded") or {}).get("kind") == "parent_not_set"
+                        out["parent"] = None if not_set else prior["parent"]
                     if prior.get("degraded") is not None:
                         out["degraded"] = prior["degraded"]
                     return out
@@ -603,6 +606,10 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
                      "pid": os.getpid(), "host": socket.gethostname(),
                      "claimedAt": time.time(), "title": title,
                      "transport": provider}
+            if parent is not None:
+                # A recovery put over this claim keeps it, so a same-parent
+                # retry links the issue if the record write below fails.
+                claim["parent"] = parent
             cerr = atomic_write_json(rec_path, claim)
             if cerr:
                 return cerr
@@ -644,13 +651,18 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
             "url": created.get("url"),
             "retryKey": retry_key,
         }
+        if parent is not None:
+            details["parent"] = parent
         if created.get("degraded") is not None:
             details["degraded"] = created["degraded"]
+            # Best effort: the recovery put copies the claim's `degraded`, so a
+            # retry still reports a parent the tracker did not set.
+            atomic_write_json(rec_path, {**claim, "degraded": created["degraded"]})
         return dataclasses.replace(err, details=details)
     out = {"id": created["id"], "identifier": created["identifier"],
            "url": created.get("url"), "retried": False}
     if parent is not None:
-        out["parent"] = parent
+        out["parent"] = created["parent"]
     if created.get("degraded") is not None:
         out["degraded"] = created["degraded"]
     return out

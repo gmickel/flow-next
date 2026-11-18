@@ -10,7 +10,9 @@ Three operations, each reading before it writes so a repeat is safe:
 - `link`: the delivery link from a parent to the idea (the retry path).
 
 flow-next stores no idea state. Which parent serves an idea is read from the
-idea's delivery links every time. The only write to an idea is the link.
+idea's delivery links every time, and a parent it creates carries a label
+naming the idea, so a rerun finds one whose link failed. The only write to an
+idea is the link.
 
 The delivery link is the discovery product's own issue link type, found by
 listing the site's link types: its name contains `Polaris` and its
@@ -29,22 +31,31 @@ import copy
 import re
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 from .types import ErrorClass, TrackerError
-from .wire.jira import idea_reference, is_idea_key
+from .wire.jira import idea_reference, is_idea_key, key_from_url
 
 _KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
-_BROWSE_RE = re.compile(r"/browse/([A-Z][A-Z0-9_]+-[1-9][0-9]*)/?$")
 _IDEA_FIELDS = "summary,description,status,project,issuelinks"
 #: Jira's colour markup, opening `{color:#97a0af}` or closing `{color}`.
 _COLOR_TAG_RE = re.compile(r"\{color(?::[^{}]*)?\}")
+#: Text kept byte for byte: a fenced block (how a `{code}` or `{noformat}`
+#: block decodes) and a `{noformat}` span left inline.
+_VERBATIM_RE = re.compile(r"^(`{3,})[^\n]*\n.*?^\1[ \t]*$|\{noformat\}.*?\{noformat\}",
+                          re.M | re.S)
 
 
 def _plain(text: Any) -> Any:
-    """Idea text without colour tags. Ideas are never written back, so this
-    loses nothing; a linked issue's text keeps its markup for the next push."""
-    return _COLOR_TAG_RE.sub("", text) if isinstance(text, str) else text
+    """Idea text without colour tags outside code. Ideas are never written
+    back, so this loses nothing; a linked issue's text keeps its markup."""
+    if not isinstance(text, str):
+        return text
+    out, pos = [], 0
+    for m in _VERBATIM_RE.finditer(text):
+        out += [_COLOR_TAG_RE.sub("", text[pos:m.start()]), m.group(0)]
+        pos = m.end()
+    return "".join(out) + _COLOR_TAG_RE.sub("", text[pos:])
 
 
 def _dict(value: Any) -> dict:
@@ -134,12 +145,9 @@ def _key_from_ref(config: dict, ref: Any) -> Any:
             return TrackerError(
                 ErrorClass.INVALID_INPUT,
                 f"idea URL is not on {base}", subtype="idea_url")
-        selected = parse_qs(parsed.query).get("selectedIssue", [])
-        if selected and _KEY_RE.fullmatch(selected[0]):
-            return selected[0]
-        browse = _BROWSE_RE.search(parsed.path)
-        if browse:
-            return browse.group(1)
+        key = key_from_url(base, text)
+        if key:
+            return key
     return TrackerError(
         ErrorClass.INVALID_INPUT,
         f"cannot read an idea key from {ref!r}; give the key (IDEAS-7) or its URL",
@@ -170,6 +178,15 @@ def _get_idea(config: dict, key: str, execute) -> Any:
     if not isinstance(raw, dict) or raw.get("id") is None or not raw.get("key"):
         return TrackerError(ErrorClass.TRANSPORT, "jira idea read missing id/key",
                             subtype="malformed_body")
+    if not is_idea_key(config, raw["key"]):
+        # Moved out of the discovery projects: delivery work now, not an idea.
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            f"{key} is now {raw['key']}, outside the discovery projects "
+            "(tracker.perTracker.ideaProjectKeys); it is no longer an idea, so "
+            "idea intake does not apply. Work from it as an ordinary issue",
+            subtype="not_an_idea",
+            details={"capability": "idea_source", "identifier": raw["key"]})
     return raw
 
 
@@ -188,21 +205,65 @@ def _delivery_links(raw: dict, type_id: Optional[str] = None) -> list:
         elif not _is_delivery_type(link_type):
             continue
         other = _dict(link.get("inwardIssue"))
-        if not other.get("key"):
-            continue
-        fields = _dict(other.get("fields"))
-        issue_type = _dict(fields.get("issuetype"))
-        out.append({
-            "linkId": link.get("id"),
-            "id": str(other.get("id")) if other.get("id") is not None else None,
-            "key": other["key"],
-            "title": fields.get("summary"),
-            "status": _dict(fields.get("status")).get("name"),
-            "issueType": issue_type.get("name"),
-            "hierarchyLevel": issue_type.get("hierarchyLevel"),
-            "project": _project_of(other["key"]),
-        })
+        if other.get("key"):
+            out.append(_candidate(other, link.get("id")))
     return out
+
+
+def _candidate(issue: dict, link_id: Any = None) -> dict:
+    fields = _dict(issue.get("fields"))
+    issue_type = _dict(fields.get("issuetype"))
+    return {
+        "linkId": link_id,
+        "id": str(issue.get("id")) if issue.get("id") is not None else None,
+        "key": issue["key"],
+        "title": fields.get("summary"),
+        "status": _dict(fields.get("status")).get("name"),
+        "issueType": issue_type.get("name"),
+        "hierarchyLevel": issue_type.get("hierarchyLevel"),
+        "project": _project_of(issue["key"]),
+    }
+
+
+def _marker(key: str) -> str:
+    """The label a parent created for idea `key` carries."""
+    return f"flow-next-idea-{key}"
+
+
+def _marked_parents(config: dict, execute, key: str, level: dict) -> Any:
+    """Parent-level issues in the delivery project carrying the idea's marker:
+    a parent an earlier run created whose delivery link then failed."""
+    from .wire import _MAX_PAGES, _PAGE_SIZE, _jira  # noqa: PLC0415
+    base = _base(config)
+    if isinstance(base, TrackerError):
+        return base
+    query = {"jql": f'project = "{level["project"]}" AND labels = "{_marker(key)}"',
+             "fields": "summary,status,issuetype", "maxResults": _PAGE_SIZE}
+    found, seen = [], set()
+    for _ in range(_MAX_PAGES):
+        raw = _jira(execute, "idea-marker-search", "GET",
+                    f"{base}/rest/api/2/search/jql?" + urlencode(query), idempotent=True)
+        if isinstance(raw, TrackerError):
+            return raw
+        # A page it cannot read completely must never read as "no parent".
+        if (not isinstance(raw, dict) or not isinstance(raw.get("issues"), list)
+                or not isinstance(raw.get("isLast"), bool)):
+            return TrackerError(ErrorClass.TRANSPORT,
+                                "jira marker search response is malformed; nothing was created",
+                                subtype="malformed_body")
+        found += [_candidate(i) for i in raw["issues"]
+                  if isinstance(i, dict) and i.get("key")]
+        if raw["isLast"]:
+            return [c for c in found if c["hierarchyLevel"] == level["level"]]
+        token = raw.get("nextPageToken")
+        if not isinstance(token, str) or not token or token in seen:
+            break
+        seen.add(token)
+        query["nextPageToken"] = token
+    # Every candidate decides between reuse, a conflict and a create.
+    return TrackerError(ErrorClass.TRANSPORT,
+                        "jira marker search did not finish; nothing was created",
+                        subtype="truncated")
 
 
 def _idea_out(config: dict, raw: dict) -> dict:
@@ -403,31 +464,56 @@ def settle_parent(config: dict, ref: Any, execute, *, body: str,
     idea_ref = {"identifier": key,
                 "url": f"{base}/browse/{key}" if isinstance(base, str) else None}
 
-    def reuse(c: dict) -> dict:
-        return {"idea": idea_ref, "linkType": link_type, "notReused": not_reused,
-                "parent": {"id": c["id"], "key": c["key"], "title": c["title"],
-                           "url": f"{base}/browse/{c['key']}" if isinstance(base, str) else None,
-                           "created": False},
-                "link": {"created": False, "existing": True}}
+    def settled(parent: dict, *, linked: bool) -> dict:
+        """The result; an unlinked parent gets its delivery link now."""
+        out = {"idea": idea_ref, "linkType": link_type, "notReused": not_reused,
+               "parent": parent}
+        if linked:
+            out["link"] = {"created": False, "existing": True}
+            return out
+        posted = _post_link(config, execute, type_id=link_type["id"],
+                            parent_key=parent["key"], idea_key=key)
+        if isinstance(posted, TrackerError):
+            out["link"] = {"created": False,
+                           "error": {"class": posted.cls.value, "message": posted.message},
+                           "retry": _retry(key, parent["key"])}
+        else:
+            out["link"] = {"created": True, "existing": False}
+        return out
 
+    def reuse(c: dict) -> dict:
+        return settled({"id": c["id"], "key": c["key"], "title": c["title"],
+                        "url": f"{base}/browse/{c['key']}" if isinstance(base, str) else None,
+                        "created": False}, linked=bool(candidates))
+
+    marked: Any = []
+    if not candidates:
+        # Nothing linked: an earlier run may have created the parent and
+        # failed to link it. Its marker finds it, with no local record.
+        marked = _marked_parents(config, execute, key, level)
+        if isinstance(marked, TrackerError):
+            return marked
+    pool = candidates or marked
     if use is not None:
-        chosen = next((c for c in candidates if c["key"] == use.strip()), None)
+        chosen = next((c for c in pool if c["key"] == use.strip()), None)
         if chosen is None:
             return TrackerError(
                 ErrorClass.INVALID_INPUT,
-                f"--use {use!r} is not one of the idea's delivery-linked parents: "
-                f"{[c['key'] for c in candidates]}",
-                subtype="use", details={"candidates": candidates})
+                f"--use {use!r} is not one of the idea's parents: "
+                f"{[c['key'] for c in pool]}",
+                subtype="use", details={"candidates": pool})
         return reuse(chosen)
-    if len(candidates) == 1:
-        return reuse(candidates[0])
-    if len(candidates) > 1:
+    if len(pool) == 1:
+        return reuse(pool[0])
+    if len(pool) > 1:
         return TrackerError(
             ErrorClass.CONFLICT,
-            f"idea {key} has several delivery-linked parents; choose one and "
-            "rerun with --use <key>",
+            f"idea {key} has several "
+            + ("delivery-linked parents" if candidates else
+               "parent-level issues carrying its marker label")
+            + "; choose one and rerun with --use <key>",
             subtype="several_parents",
-            details={"normalized": "parent", "candidates": candidates,
+            details={"normalized": "parent", "candidates": pool,
                      "notReused": not_reused})
 
     type_id = _creation_type(level)
@@ -437,22 +523,14 @@ def settle_parent(config: dict, ref: Any, execute, *, body: str,
     create_config = copy.deepcopy(config)
     create_config["tracker"]["resolved"]["destination"]["issueTypeId"] = type_id
     title = _dict(raw.get("fields")).get("summary") or key
-    made = create_jira(create_config, execute, title=title, body=body)
+    made = create_jira(create_config, execute, title=title, body=body,
+                       labels=[_marker(key)])
     if isinstance(made, TrackerError):
         return made
-    out = {"idea": idea_ref, "linkType": link_type, "notReused": not_reused,
-           "parent": {"id": made["id"], "key": made["identifier"], "title": title,
-                      "url": made.get("url"), "created": True}}
+    out = settled({"id": made["id"], "key": made["identifier"], "title": title,
+                   "url": made.get("url"), "created": True}, linked=False)
     if made.get("degraded") is not None:
         out["degraded"] = made["degraded"]
-    posted = _post_link(config, execute, type_id=link_type["id"],
-                        parent_key=made["identifier"], idea_key=key)
-    if isinstance(posted, TrackerError):
-        out["link"] = {"created": False,
-                       "error": {"class": posted.cls.value, "message": posted.message},
-                       "retry": _retry(key, made["identifier"])}
-    else:
-        out["link"] = {"created": True, "existing": False}
     return out
 
 

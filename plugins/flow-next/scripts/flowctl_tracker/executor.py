@@ -23,7 +23,7 @@ import urllib.request
 from typing import Callable, Optional, Protocol, Union
 from urllib.parse import urlparse
 
-from .classify import classify
+from .classify import _LICENCE_RE, classify
 from .credentials import Credential, redact, remember_glab_token, resolve
 from .types import (BACKOFF_CAP_S, CONCURRENCY_CAP, MAX_RETRIES, CredentialPolicy,
                     ErrorClass, Request, Response, TrackerError)
@@ -280,7 +280,11 @@ def _cli(req: Request, verify_tls: bool) -> Result:
         # authenticated from its own login, so register that token for
         # redaction before any of the body can reach a message.
         remember_glab_token(_glab_host(req))
-        if _is_json_object(out):
+        # The licence marker decides the class, so a diagnostic that alone
+        # carries it stays the body.
+        licence_in_stderr_only = (_LICENCE_RE.search(proc.stderr or b"")
+                                  and not _LICENCE_RE.search(out))
+        if _is_json_object(out) and not licence_in_stderr_only:
             body = out
     return Response(status, {}, body, elapsed)
 
