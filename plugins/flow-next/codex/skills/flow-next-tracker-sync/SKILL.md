@@ -93,8 +93,10 @@ deterministic.
 The bridge is off until the user confirms it; [steps.md](steps.md) §1 is the procedure. Every
 discovery surfaces the provider signals, the proposed project or team, and the lifecycle defaults.
 Credentials come from the environment, or from `tracker.perTracker.tokenCommand`, a command
-that prints the token from the user's secret store; offer it when no token is exported. Config
-holds the command, never its output. Never copy credentials into config, a prompt, argv,
+that prints the token from the user's secret store; offer it when no token is exported. A
+command whose path belongs to one machine goes in `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` or `_JIRA`
+instead, never in config. Order: the token variable, then that machine-local command, then the
+tracked `tokenCommand`. Config holds the command, never its output. Never copy credentials into config, a prompt, argv,
 receipt, or error note.
 
 Linear MCP is discovery/create only. All later shell-reachable operations use

@@ -252,7 +252,9 @@ DESCRIPTIONS: dict[str, str] = {
     "tracker.perTracker.tokenCommand": (
         "Argv list (no shell) that prints the Linear API key, Jira API token "
         "or Jira PAT. Runs once per flowctl process, only when the env var "
-        "is unset; 10 s timeout; its output is never written anywhere."
+        "is unset; 10 s timeout; its output is never written anywhere. "
+        "FLOW_TRACKER_TOKEN_COMMAND_LINEAR / _JIRA (a JSON argv) takes its "
+        "place on one machine without committing a local path."
     ),
     "tracker.perTracker.ideaProjectKeys": (
         "Jira Product Discovery project keys whose issues are ideas (e.g. "

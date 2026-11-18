@@ -1,13 +1,153 @@
 {
   "branch_name": "fn-332-machine-local-tracker-token-command",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-18T00:46:37.372583Z",
   "created_at": "2026-11-18T00:36:32.260716Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-332-machine-local-tracker-token-command",
+  "impl_review_rounds": {
+    "fn-332-machine-local-tracker-token-command.1": 0
+  },
   "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "b24789fb5790971b1ae80668106532abdf88cd5e92633473090045ba541de43a",
+      "backend": "codex",
+      "base_sha": "7f2633058bdc788303b91c90977b8b1fe9f3f8c1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-e46a9fee61165d340fae05f6ec9b0438",
+            "classification": "introduced",
+            "findingId": "finding-e46a9fee61165d340fae05f6ec9b0438",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-8b1981869c60e02eb8e7e7d6ac4a3c2e",
+            "classification": "introduced",
+            "findingId": "finding-8b1981869c60e02eb8e7e7d6ac4a3c2e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3a4b6918919e65ead0f69897e36e1029",
+            "classification": "introduced",
+            "findingId": "finding-3a4b6918919e65ead0f69897e36e1029",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2e2a1cfde51a828cdf00d03eed69ebb8b7e08fe6",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 2665,
+      "output_sha256": "2fc20c94b68371258b486c8dc691d644ba50bb612a39aa41b6c87cacacb1f942",
+      "reservation_id": "24a91fc7f9e4436dbbd1f662e6303d29",
+      "round_consumed": true,
+      "scope": "impl:fn-332-machine-local-tracker-token-command.1",
+      "superseded_by": null,
+      "task": "fn-332-machine-local-tracker-token-command.1",
+      "timestamp": "2026-11-18T00:44:15.041002Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "686ca6f7cbdcfdbfb6aad1bb15d0f95471a2d21aaa324e852fd27c13df92d39c",
+      "backend": "codex",
+      "base_sha": "7f2633058bdc788303b91c90977b8b1fe9f3f8c1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-e46a9fee61165d340fae05f6ec9b0438",
+            "classification": "introduced",
+            "findingId": "finding-e46a9fee61165d340fae05f6ec9b0438",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-8b1981869c60e02eb8e7e7d6ac4a3c2e",
+            "classification": "introduced",
+            "findingId": "finding-8b1981869c60e02eb8e7e7d6ac4a3c2e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-3a4b6918919e65ead0f69897e36e1029",
+            "classification": "introduced",
+            "findingId": "finding-3a4b6918919e65ead0f69897e36e1029",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ba1997156f0455e2244d253c6eff5c0330ffdcc",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.1-sol",
+      "outcome": "verdict",
+      "output_bytes": 1585,
+      "output_sha256": "376be18958043f9b5b1acd8dc81dfb988339ac2cf7f9c356c8748b87b0ac3406",
+      "reservation_id": "05f921aedf434a90bbcf36374361047b",
+      "round_consumed": true,
+      "scope": "impl:fn-332-machine-local-tracker-token-command.1",
+      "superseded_by": null,
+      "task": "fn-332-machine-local-tracker-token-command.1",
+      "timestamp": "2026-11-18T00:46:20.595889Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-332-machine-local-tracker-token-command.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-332-machine-local-tracker-token-command.1": 0
+  },
   "spec_path": ".flow/specs/fn-332-machine-local-tracker-token-command.md",
-  "status": "open",
+  "status": "done",
   "title": "Machine-local tracker token command",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +160,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T00:36:32.263443Z"
+  "updated_at": "2026-11-18T00:46:53.586369Z"
 }

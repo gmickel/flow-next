@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **A tracker token command that stays on one machine.** `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` and `FLOW_TRACKER_TOKEN_COMMAND_JIRA` hold the same JSON argv as `tracker.perTracker.tokenCommand`, read from the environment instead of the committed `.flow/config.json`, so a command whose path belongs to one machine never has to be committed. The token variable still wins, then the machine-local command, then the tracked one; a machine-local command that fails stops there and is reported like the tracked one. Setting it for Linear also skips the MCP create route. Asked for by MergeFoundry, whose daemon exports the variable to every session it starts.
+
 ### Fixed
 
 - **A Jira or GitLab rejection now says why.** Naming a story as the parent of a story used to come back as `rejected (400)` and nothing more; it now reads `rejected (400): parent: Please select valid parent issue.; parentId: Please select valid parent issue.`, and GitLab's answers read the same way (`rejected (400): title is missing`). The reason is the tracker's own text from the response, after the status, redacted and cut to 200 characters. The error's class and subtype are unchanged, so anything that branches on them or on the status behaves as before; a response without a reason keeps the bare message. GitHub and Linear messages are unchanged.

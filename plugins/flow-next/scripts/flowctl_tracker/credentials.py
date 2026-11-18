@@ -98,8 +98,11 @@ class TokenCommandError(RuntimeError):
     """The configured token command gave no credential. Never carries its output."""
 
 
-def _command_token(argv) -> str:
-    """Run `tracker.perTracker.tokenCommand` (argv, no shell) and return its trimmed stdout."""
+def _command_token(argv, source=None) -> str:
+    """Run a token command (argv, no shell) and return its trimmed stdout.
+
+    `source` names a machine-local variable; its argv stays out of every message.
+    """
     import subprocess
 
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
@@ -121,7 +124,8 @@ def _command_token(argv) -> str:
                 else:
                     outcome = token
             except FileNotFoundError:
-                outcome = TokenCommandError(f"token command not found: {argv[0]}")
+                outcome = TokenCommandError(f"token command from {source} not found" if source
+                                        else f"token command not found: {argv[0]}")
             except subprocess.TimeoutExpired:
                 outcome = TokenCommandError(
                     f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
@@ -134,18 +138,44 @@ def _command_token(argv) -> str:
     return outcome
 
 
+def machine_local_command(provider: str):
+    """`FLOW_TRACKER_TOKEN_COMMAND_<PROVIDER>`: an untracked JSON argv, or None when unset or empty.
+
+    Read before the tracked `tracker.perTracker.tokenCommand`, so a machine-specific path never
+    has to be committed. A malformed value raises without echoing it.
+    """
+    import json
+
+    name = f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}"
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        argv = json.loads(raw)
+    except ValueError:
+        argv = None
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise TokenCommandError(f"{name} must be a JSON list of non-empty strings")
+    return argv
+
+
 def resolve(provider: str, *, auth_scheme: Optional[str] = None,
             host: Optional[str] = None, token_command=None) -> Optional[Credential]:
     """Return a Credential, or None when the transport authenticates itself.
 
     GitHub and GitLab ordinarily go through their CLI, which carries its own
     auth - so None there is correct, not a failure. Linear and Jira fall back
-    to `token_command` only when their environment variable is unset.
+    to a token command only when their environment variable is unset: the
+    machine-local one first, else the tracked `token_command`, never both.
     """
     def env_or_command(name: str) -> Optional[str]:
         value = os.environ.get(name)
-        if not value and token_command is not None:
-            value = _command_token(token_command)
+        if not value:
+            local = machine_local_command(provider)
+            if local is not None:
+                value = _command_token(local, f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}")
+            elif token_command is not None:
+                value = _command_token(token_command)
         return _remember(value)
 
     if provider == "github":
