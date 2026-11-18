@@ -27,7 +27,12 @@ The users are teams choosing a review backend in setup, and teams that pin a rev
 
 **Codex host agents.** The Codex mirror pins its generated agents to a baseline model, and those baselines follow the same study (the reviewer baseline) and the scout screen (the scout baselines).
 
-**Signatures.** The fallback steps down only on each CLI's own model-unavailable text. Copilot's current text for an unknown model is `Model "<id>" is not available.`, which the stored marker does not match (observed on Copilot 1.0.114, 2026-11-18). The Codex text for a 6.2 model on a CLI too old to serve it is captured in the study.
+**Signatures.** The fallback steps down only on each CLI's own model-unavailable text, and two of the stored markers no longer match what the CLIs print (observed 2026-11-18):
+
+- Copilot 1.0.114, unknown model: `Execution failed: Model "<id>" is not available.` The stored marker is `from --model flag is not available`.
+- Codex 0.169.1 and 0.170.0 signed in with a ChatGPT account, model the account cannot use: `ERROR: The '<id>' model is not supported when using Codex with a ChatGPT account.` The stored markers are `requires a newer version of Codex` and `model_not_found`.
+
+Codex 0.169.1 already serves `gpt-6.2-sol` and `gpt-6.2-astra`, so the CLI version is not the near risk; the account text is.
 
 <!-- Source: 25% user / 25% [paraphrase] / 50% [inferred] -->
 
@@ -58,7 +63,7 @@ For host reviews, the reviewer line of the project's model-routing block names F
 - **R3:** A pinned `claude:claude-fable-5-2`, `claude:claude-fable-5-1`, `copilot:claude-fable-5.2` or `copilot:claude-fable-5.1` runs that model and prints no unknown-model warning. No error surface beyond the CLI's own. [paraphrase]
 - **R4:** The Codex and Copilot rankings contain `gpt-6.2-astra` and `gpt-6.2-sol`, and their tops are the ones the reviewer study selects under its pre-registered rule. No error surface. [inferred]
 - **R5:** The Codex mirror's reviewer and scout baselines are the models the study and the scout screen select, and the generated agents carry them. No error surface. [inferred]
-- **R6:** The Copilot fallback steps down on Copilot's current unavailable text and still does not step down on a quota or authentication failure; the Codex fallback steps down on the text a CLI too old for the new top returns. Errors: a failure that matches no signature propagates unchanged, as today. [inferred]
+- **R6:** The Copilot fallback steps down on Copilot's current unavailable text, and the Codex fallback steps down on the ChatGPT-account text, while neither steps down on a quota or authentication failure (Copilot's quota text is `You have exceeded your monthly quota`). Errors: a failure that matches no signature propagates unchanged, as today. [inferred]
 - **R7:** The documentation that names rankings or defaults (the flowctl reference, the per-host reach pages, the setup review question, the changelog) states the new tops with the date they were observed, says Fable is chosen only when pinned, and shows how to pin it. No error surface. [paraphrase]
 
 Tests that pin defaults are updated to the new tops, and new cases cover R2, R3 and both signatures (G2). Docs and the flow-next.dev pages that describe review backends change in the same release.
@@ -81,4 +86,3 @@ The Codex and Copilot tops are not decided here. GPT-6.1 Sol missed defects in t
 ## Parked unknowns
 
 - The Codex and Copilot tops and the Codex mirror baselines: resolved by the reviewer study and the scout screen.
-- The Codex CLI version that first serves GPT-6.2 and the error older versions return: resolved by the study's mechanics check.
