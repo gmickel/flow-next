@@ -21,7 +21,8 @@ from flowctl_tracker import resolve_verb as RV  # noqa: E402
 from flowctl_tracker.facade import helpers as H  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Request, TrackerError  # noqa: E402
 
-CRED_VARS = ("JIRA_API_TOKEN", "JIRA_PAT", "LINEAR_API_KEY")
+CRED_VARS = ("JIRA_API_TOKEN", "JIRA_PAT", "LINEAR_API_KEY",
+             "FLOW_TRACKER_TOKEN_COMMAND_LINEAR", "FLOW_TRACKER_TOKEN_COMMAND_JIRA")
 SEEN_SECRET = "leak-me-9999"
 
 
@@ -178,6 +179,90 @@ class TokenCommand(unittest.TestCase):
         argv, _log = self.counted("mcp-check-3333")
         config = {"tracker": {"type": "linear", "perTracker": {"tokenCommand": argv}}}
         self.assertFalse(H.on_mcp_rung(config))
+
+
+class MachineLocalTokenCommand(unittest.TestCase):
+    """fn-332: FLOW_TRACKER_TOKEN_COMMAND_<TRACKER> comes before the tracked tokenCommand."""
+
+    setUp = TokenCommand.setUp
+    counted = TokenCommand.counted
+    send = TokenCommand.send
+
+    LINEAR = "https://api.linear.app/graphql"
+    JIRA = "https://acme.atlassian.net/rest/api/2/myself"
+
+    def local(self, tracker: str, argv: list[str]):
+        import json
+        return mock.patch.dict(os.environ, {f"FLOW_TRACKER_TOKEN_COMMAND_{tracker}": json.dumps(argv)})
+
+    def test_linear_local_command_wins_over_the_tracked_one(self) -> None:
+        local, _ = self.counted("local-lin-4444")
+        tracked, tracked_log = self.counted("tracked-lin-5555")
+        with self.local("LINEAR", local):
+            _result, seen = self.send("linear", {"tokenCommand": tracked}, self.LINEAR)
+        self.assertEqual(seen[0].get("Authorization"), "local-lin-4444")
+        self.assertFalse(tracked_log.exists())
+
+    def test_jira_local_command_needs_no_tracked_config(self) -> None:
+        import base64
+        local, _ = self.counted("local-jira-6666")
+        with self.local("JIRA", local):
+            _result, seen = self.send("jira", {"authScheme": "cloud-basic"}, self.JIRA)
+        want = "Basic " + base64.b64encode(b"dev@example.test:local-jira-6666").decode()
+        self.assertEqual(seen[0].get("Authorization"), want)
+
+    def test_token_variable_still_wins_over_both(self) -> None:
+        local, local_log = self.counted("local-unused-7777")
+        tracked, tracked_log = self.counted("tracked-unused-8888")
+        with self.local("LINEAR", local), \
+             mock.patch.dict(os.environ, {"LINEAR_API_KEY": "env-key-9999"}):
+            _result, seen = self.send("linear", {"tokenCommand": tracked}, self.LINEAR)
+        self.assertEqual(seen[0].get("Authorization"), "env-key-9999")
+        self.assertFalse(local_log.exists())
+        self.assertFalse(tracked_log.exists())
+
+    def test_empty_variable_counts_as_unset(self) -> None:
+        tracked, _ = self.counted("tracked-used-1212")
+        with mock.patch.dict(os.environ, {"FLOW_TRACKER_TOKEN_COMMAND_LINEAR": ""}):
+            _result, seen = self.send("linear", {"tokenCommand": tracked}, self.LINEAR)
+        self.assertEqual(seen[0].get("Authorization"), "tracked-used-1212")
+
+    def test_failed_local_command_does_not_fall_back(self) -> None:
+        tracked, tracked_log = self.counted("tracked-never-1313")
+        failing = py("import sys; print(sys.argv[1]); sys.exit(3)", SEEN_SECRET)
+        with self.local("LINEAR", failing):
+            result, seen = self.send("linear", {"tokenCommand": tracked}, self.LINEAR)
+        self.assertIsInstance(result, TrackerError)
+        self.assertIs(result.cls, ErrorClass.AUTH)
+        self.assertIn("exited 3", result.message)
+        self.assertNotIn(SEEN_SECRET, result.message)
+        self.assertEqual(seen, [])
+        self.assertFalse(tracked_log.exists())
+
+    def test_malformed_value_names_the_variable_without_echoing_it(self) -> None:
+        tracked, tracked_log = self.counted("tracked-never-1414")
+        for raw in ('["leak-me-9999"', '"leak-me-9999"', "[]", '["", "leak-me-9999"]', '[1, "leak-me-9999"]'):
+            with self.subTest(raw=raw), \
+                 mock.patch.dict(os.environ, {"FLOW_TRACKER_TOKEN_COMMAND_LINEAR": raw}):
+                result, seen = self.send("linear", {"tokenCommand": tracked}, self.LINEAR)
+                self.assertIsInstance(result, TrackerError)
+                self.assertIs(result.cls, ErrorClass.AUTH)
+                self.assertIn("FLOW_TRACKER_TOKEN_COMMAND_LINEAR", result.message)
+                self.assertNotIn(SEEN_SECRET, result.message)
+                self.assertEqual(seen, [])
+        self.assertFalse(tracked_log.exists())
+
+    def test_local_command_runs_once_per_process(self) -> None:
+        local, log = self.counted("local-once-1515")
+        with self.local("LINEAR", local):
+            for _ in range(3):
+                self.send("linear", {}, self.LINEAR)
+        self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
+
+    def test_linear_with_a_local_command_is_not_on_the_mcp_rung(self) -> None:
+        local, _ = self.counted("local-mcp-1616")
+        with self.local("LINEAR", local):
+            self.assertFalse(H.on_mcp_rung({"tracker": {"type": "linear", "perTracker": {}}}))
 
 
 if __name__ == "__main__":
