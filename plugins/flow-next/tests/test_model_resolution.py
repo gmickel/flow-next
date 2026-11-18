@@ -289,8 +289,14 @@ class TestSignatureDetectors(unittest.TestCase):
         self.assertTrue(
             flowctl._copilot_model_unavailable("", COPILOT_1_0_114_UNAVAILABLE_STREAM)
         )
-        # A quota refusal or a failed sign-in is not an unavailable model.
+        # A quota refusal, a failed sign-in, or another quoted name that "is not
+        # available" is not an unavailable model.
         self.assertFalse(flowctl._copilot_model_unavailable("", COPILOT_QUOTA_STREAM))
+        for blob in (
+            'Execution failed: Tool "grep" is not available.',
+            'Authentication failed: credential helper "gh" is not available.',
+        ):
+            self.assertFalse(flowctl._copilot_model_unavailable("", blob))
         self.assertFalse(
             flowctl._codex_model_unavailable("", "ERROR: 401 Unauthorized: sign in again")
         )

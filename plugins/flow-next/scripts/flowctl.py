@@ -3800,10 +3800,8 @@ _CODEX_UNAVAILABLE_MARKERS = (
     "model_not_found",
     "model is not supported when using Codex with a ChatGPT account",
 )
-_COPILOT_UNAVAILABLE_MARKERS = (
-    "from --model flag is not available",
-    '" is not available.',
-)
+_COPILOT_UNAVAILABLE_MARKERS = ("from --model flag is not available",)
+_COPILOT_UNAVAILABLE_RE = re.compile(r'Execution failed: Model "[^"\n]+" is not available\.')
 _CURSOR_UNAVAILABLE_MARKERS = ("Cannot use this model:",)
 
 
@@ -3818,7 +3816,9 @@ def _codex_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
 
 def _copilot_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
     blob = _unavailable_blob(out, err)
-    return any(m in blob for m in _COPILOT_UNAVAILABLE_MARKERS)
+    return any(m in blob for m in _COPILOT_UNAVAILABLE_MARKERS) or bool(
+        _COPILOT_UNAVAILABLE_RE.search(blob)
+    )
 
 
 def _cursor_model_unavailable(out: Optional[str], err: Optional[str]) -> bool:
@@ -7778,10 +7778,11 @@ def _is_legacy_composite_model(backend: str, model: Optional[str]) -> bool:
     reg = BACKEND_REGISTRY.get(backend) or {}
     models = reg.get("models")
     efforts = reg.get("efforts")
-    if not models or not efforts or model in models or "-" not in model:
+    known = list(models or []) + list(reg.get("pinned_only") or [])
+    if not models or not efforts or model in known or "-" not in model:
         return False
     base, _, suffix = model.rpartition("-")
-    return base in models and suffix in efforts
+    return base in known and suffix in efforts
 
 
 def parse_backend_spec_lenient(

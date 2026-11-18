@@ -224,6 +224,17 @@ class TestPinnedOnlyModels(unittest.TestCase):
                 self.assertTrue(resolved.model_explicit)
                 self.assertEqual(err.getvalue(), "")
 
+    def test_legacy_dash_composite_of_a_pinned_only_model_degrades_to_bare(self) -> None:
+        for raw, backend in (
+            ("claude:claude-fable-5-1-high", "claude"),
+            ("copilot:claude-fable-5.1-high", "copilot"),
+            ("codex:gpt-6.2-astra-high", "codex"),
+        ):
+            with self.subTest(spec=raw):
+                with redirect_stderr(io.StringIO()):
+                    result = flowctl.parse_backend_spec_lenient(raw)
+                self.assertEqual(result, BackendSpec(backend, None, None))
+
     def test_no_ranking_holds_a_pinned_only_model(self) -> None:
         for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
