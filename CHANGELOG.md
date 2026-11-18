@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Added
+
+- **A tracker token command that stays on one machine.** `FLOW_TRACKER_TOKEN_COMMAND_LINEAR` and `FLOW_TRACKER_TOKEN_COMMAND_JIRA` hold the same JSON argv as `tracker.perTracker.tokenCommand`, read from the environment instead of the committed `.flow/config.json`, so a command whose path belongs to one machine never has to be committed. The token variable still wins, then the machine-local command, then the tracked one; a machine-local command that fails stops there and is reported like the tracked one. Setting it for Linear also skips the MCP create route. Asked for by MergeFoundry, whose daemon exports the variable to every session it starts.
+
 ## [flow-next 9.13.0] - 2026-11-17
 
 Teams that run product discovery in Jira Product Discovery can start flow from an approved idea. Give attended flow the idea's key or URL: it reads the idea's text and comments, routes them like any other request, and capture cuts the idea into specs with their dependencies, the person choosing the split. The tracker then shows one parent issue for the idea in the delivery project, the specs as child issues under it with their dependencies, and a delivery link from the parent back to the idea, so the idea's owner follows delivery in the idea's own delivery view. Running it again on the same idea reuses the parent. A team that configures no idea source sees no change. Checked live on Jira Cloud.
