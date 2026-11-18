@@ -20,16 +20,23 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from .credentials import redact
 from .types import ErrorClass, Response, TrackerError
 
 _LICENCE_RE = re.compile(rb"not available for current license", re.I)
 
+#: Longest provider text a message carries.
+_REASON_MAX = 200
 
-def _fallback(resp: Response) -> TrackerError:
-    """Total rule. Retryability follows the SUBTYPE, not the class."""
+
+def _fallback(resp: Response,
+              reasons: Optional[Callable[[dict], list[str]]] = None) -> TrackerError:
+    """Total rule. Retryability follows the SUBTYPE, not the class.
+
+    `reasons` reads the provider's own explanation from a rejection's body;
+    only the plain client-error rule uses it, after the status."""
     if resp.status >= 500:
         return TrackerError(ErrorClass.TRANSPORT, f"server error {resp.status}",
                             subtype="5xx", auto_retryable=True)
@@ -41,9 +48,50 @@ def _fallback(resp: Response) -> TrackerError:
         return TrackerError(ErrorClass.RATE_LIMITED, "rate limited", subtype="http",
                             retry_after_s=_retry_after(resp), auto_retryable=True)
     if 400 <= resp.status < 500:
-        return TrackerError(ErrorClass.INVALID_INPUT, f"rejected ({resp.status})", subtype="http")
+        message = f"rejected ({resp.status})"
+        reason = _reason(resp, reasons) if reasons else ""
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"{message}: {reason}" if reason else message, subtype="http")
     return TrackerError(ErrorClass.TRANSPORT, f"unexpected status {resp.status}",
                         subtype="unknown")
+
+
+def _reason(resp: Response, reasons: Callable[[dict], list[str]]) -> str:
+    """The provider's reasons joined, redacted, then bounded; "" when none.
+
+    Provider text is untrusted and may echo the credential back, so it is
+    redacted before the cut: a cut first could leave part of a secret that no
+    longer matches."""
+    try:
+        payload = json.loads(resp.body or b"")
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    joined = "; ".join(r for r in reasons(payload) if r.strip())
+    return redact(joined)[:_REASON_MAX]
+
+
+def _texts(value: Any, field: str = "") -> list[str]:
+    """A string, a list of strings, or a map of either, as `field: text`."""
+    prefix = f"{field}: " if field else ""
+    if isinstance(value, str):
+        return [prefix + value]
+    if isinstance(value, list):
+        return [prefix + v for v in value if isinstance(v, str)]
+    if isinstance(value, dict) and not field:
+        return [t for k, v in value.items() for t in _texts(v, str(k))]
+    return []
+
+
+def _jira_reasons(payload: dict) -> list[str]:
+    # `errorMessages` is a list of strings; `errors` maps a field to its text.
+    return _texts(payload.get("errorMessages")) + _texts(payload.get("errors"))
+
+
+def _gitlab_reasons(payload: dict) -> list[str]:
+    # `message` or `error`: a string, a list, or a map from field to a list.
+    return _texts(payload.get("message")) + _texts(payload.get("error"))
 
 
 def _retry_after(resp: Response) -> Optional[float]:
@@ -140,10 +188,11 @@ def classify(provider: str, resp: Response,
     return fn(resp)
 
 
-def _generic(resp: Response) -> Optional[TrackerError]:
+def _generic(resp: Response,
+             reasons: Optional[Callable[[dict], list[str]]] = None) -> Optional[TrackerError]:
     if 200 <= resp.status < 300:
         return None
-    return _fallback(resp)
+    return _fallback(resp, reasons)
 
 
 def _gitlab(resp: Response) -> Optional[TrackerError]:
@@ -154,7 +203,7 @@ def _gitlab(resp: Response) -> Optional[TrackerError]:
             ErrorClass.CAPABILITY, "feature not available on this GitLab tier",
             subtype="licence", details={"capability": "blockedBy", "required_plan": "premium"},
         )
-    return _generic(resp)
+    return _generic(resp, _gitlab_reasons)
 
 
 def _linear(resp: Response) -> Optional[TrackerError]:
@@ -208,7 +257,7 @@ def _jira(resp: Response) -> Optional[TrackerError]:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "Jira rejected the request: missing X-Atlassian-Token header",
                             subtype="xsrf")
-    return _generic(resp)
+    return _generic(resp, _jira_reasons)
 
 
 def _github(resp: Response) -> Optional[TrackerError]:

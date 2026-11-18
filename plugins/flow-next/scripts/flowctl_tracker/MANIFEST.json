@@ -18,7 +18,7 @@
     },
     {
       "path": "flowctl_tracker/classify.py",
-      "sha256": "dfdf6225ebaf694debf742b3a306ca3743ccbdaf51b31b97311464e0b69797e9"
+      "sha256": "852238f44290b4c0eaa6c7fb386bff676c46484c2f86b4073078959243303a3d"
     },
     {
       "path": "flowctl_tracker/config_io.py",
@@ -70,7 +70,7 @@
     },
     {
       "path": "flowctl_tracker/idea.py",
-      "sha256": "50ab67a395dadbcfefba5aa5ab6a552e46b7ab321a2ce6719af458b20a1a45d0"
+      "sha256": "f46481e9eda3423fd65514aef728bcba73f19aa7ae6dcf2dace850cc903bd963"
     },
     {
       "path": "flowctl_tracker/lifecycle/__init__.py",

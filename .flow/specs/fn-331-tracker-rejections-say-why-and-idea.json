@@ -10,6 +10,7 @@
   "id": "fn-331-tracker-rejections-say-why-and-idea",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-18T00:17:16.600043Z"
+  "updated_at": "2026-11-18T00:17:47.687886Z"
 }
