@@ -41352,7 +41352,15 @@ def _run_validator_pass(
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
-            if backend == "command" and not spec_arg and prior_mode == "command":
+            if backend == "command" and prior_mode == "command":
+                if spec_arg and spec_arg.strip() != prior.get("spec"):
+                    error_exit(
+                        f"--spec {spec_arg!r} does not match the receipt's "
+                        f"{prior.get('spec')!r}: a command session continues only "
+                        "under its own label",
+                        use_json=use_json,
+                        code=2,
+                    )
                 spec_arg = prior.get("spec")
         except (json.JSONDecodeError, OSError):
             pass
@@ -42254,7 +42262,15 @@ def _run_deep_pass(
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
-            if backend == "command" and not spec_arg and prior_mode == "command":
+            if backend == "command" and prior_mode == "command":
+                if spec_arg and spec_arg.strip() != prior.get("spec"):
+                    error_exit(
+                        f"--spec {spec_arg!r} does not match the receipt's "
+                        f"{prior.get('spec')!r}: a command session continues only "
+                        "under its own label",
+                        use_json=use_json,
+                        code=2,
+                    )
                 spec_arg = prior.get("spec")
             if isinstance(prior.get("deep_passes"), list):
                 prior_passes = list(prior["deep_passes"])
@@ -46069,6 +46085,59 @@ def _last_line(text: str) -> str:
     return lines[-1][:300] if lines else ""
 
 
+def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict):
+    """Run a review command; return (returncode, stdout, stderr_tail, problem).
+
+    stdout is kept up to REVIEW_EXECUTION_RESPONSE_MAX + 1 bytes and the command
+    is killed once it writes more; only the last 64 KiB of stderr is kept.
+    ``problem`` is "timeout" or "oversized" when the command was stopped.
+    Raises OSError (FileNotFoundError included) when it cannot start.
+    """
+    proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, cwd=str(cwd), env=env)
+    out = bytearray()
+    tail = bytearray()
+    oversized = threading.Event()
+
+    def feed():
+        with suppress(OSError):
+            proc.stdin.write(data)
+        with suppress(OSError):
+            proc.stdin.close()
+
+    def drain_out():
+        for chunk in iter(lambda: proc.stdout.read(65536), b""):
+            if not oversized.is_set():
+                out.extend(chunk)
+                if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
+                    oversized.set()
+                    with suppress(OSError):
+                        proc.kill()
+
+    def drain_err():
+        for chunk in iter(lambda: proc.stderr.read(65536), b""):
+            tail.extend(chunk)
+            del tail[:-65536]
+
+    threads = [threading.Thread(target=fn, daemon=True) for fn in (feed, drain_out, drain_err)]
+    for thread in threads:
+        thread.start()
+    problem = None
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        problem = "timeout"
+        with suppress(OSError):
+            proc.kill()
+        proc.wait()
+    # A child the command left running may hold the pipes open; do not wait on it.
+    for thread in threads:
+        thread.join(timeout=5)
+    if oversized.is_set():
+        problem = "oversized"
+    return proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail), problem
+
+
 def _command_run_exec(
     prompt: str,
     *,
@@ -46111,34 +46180,23 @@ def _command_run_exec(
             timeout=timeout,
             request_scope=getattr(args, "managed_review_request_scope", None),
         )
-        # Output spools to files so a flood costs disk, not memory, and only
-        # what the checks need is read back.
-        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            try:
-                proc = subprocess.run(
-                    argv,
-                    input=json.dumps(payload).encode("utf-8"),
-                    stdout=out,
-                    stderr=err,
-                    check=False,
-                    timeout=timeout,
-                    cwd=str(repo_root),
-                    env=env,
-                )
-            except FileNotFoundError:
-                return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
-            except subprocess.TimeoutExpired:
-                return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
-            except OSError as exc:
-                return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
-            err.seek(max(0, err.seek(0, os.SEEK_END) - 65536))
-            stderr_tail = err.read().decode("utf-8", errors="replace")
-            if proc.returncode != 0:
-                detail = _last_line(stderr_tail)
-                return None, ("", sid or "", proc.returncode if proc.returncode > 0 else 2,
-                              f"{name} exited {proc.returncode}" + (f": {detail}" if detail else ""))
-            out.seek(0)
-            raw = out.read(REVIEW_EXECUTION_RESPONSE_MAX + 1)
+        try:
+            returncode, raw, stderr_tail, problem = _run_review_command(
+                argv, json.dumps(payload).encode("utf-8"),
+                timeout=timeout, cwd=repo_root, env=env,
+            )
+        except FileNotFoundError:
+            return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
+        except OSError as exc:
+            return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
+        if problem == "timeout":
+            return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
+        if problem == "oversized":
+            return None, ("", sid or "", 2, f"{name}: invalid response: response exceeds 16 MiB")
+        if returncode != 0:
+            detail = _last_line(stderr_tail.decode("utf-8", errors="replace"))
+            return None, ("", sid or "", returncode if returncode > 0 else 2,
+                          f"{name} exited {returncode}" + (f": {detail}" if detail else ""))
         try:
             result = _parse_review_execution_response(
                 raw, session_id=sid, resume_only=resume_only,

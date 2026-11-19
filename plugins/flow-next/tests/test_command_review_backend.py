@@ -357,6 +357,24 @@ class CommandSessionPass(unittest.TestCase):
             self.assertEqual(env.requests()[-1]["request"]["sessionId"], "cmd-1")
 
 
+    def test_explicit_spec_cannot_move_the_session_to_another_label(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [NEEDS_WORK], extra_labels=("other",))
+            receipt = repo / "r.json"
+            self.assertEqual(impl_review(base, receipt, "--spec", "command:fake")[0], 0)
+            findings = repo / "findings.jsonl"
+            findings.write_text(json.dumps({"id": "f1", "title": "off by one"}) + "\n",
+                                encoding="utf-8")
+            for sub, extra in (("validate", ("--findings-file", str(findings))),
+                               ("deep-pass", ("--pass", "adversarial"))):
+                with self.subTest(sub=sub):
+                    code, out, _ = _run_cli("command", sub, *extra, "--receipt", str(receipt),
+                                            "--spec", "command:other", "--json")
+                    self.assertEqual(code, 2)
+                    self.assertIn("own label", json.loads(out)["error"])
+            self.assertEqual(len(env.requests()), 1)
+
+
 class CommandReviewFixes(unittest.TestCase):
     def test_fresh_retry_never_inherits_the_failed_calls_model(self):
         with _flow_repo() as (repo, base):
