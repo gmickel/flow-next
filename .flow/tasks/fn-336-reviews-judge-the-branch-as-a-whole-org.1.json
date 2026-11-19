@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-19T11:57:57.456970Z",
+  "depends_on": [],
+  "id": "fn-336-reviews-judge-the-branch-as-a-whole-org.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-336-reviews-judge-the-branch-as-a-whole-org",
+  "spec_path": ".flow/tasks/fn-336-reviews-judge-the-branch-as-a-whole-org.1.md",
+  "status": "todo",
+  "title": "Implement Reviews judge the branch as a whole; org criteria by reference",
+  "updated_at": "2026-11-19T11:57:57.456970Z"
+}

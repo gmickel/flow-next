@@ -8999,6 +8999,7 @@ SMELL_BASELINE_BLOCK = """
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
 Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
+Duplicated Code includes a repeat of something outside the diff: for each helper or block of logic the change adds, search the repository for one that already does the job, and report a new copy as a finding that names the existing one. A copy the repository's standards allow (a generated mirror, a documented duplicate) is not a finding.
 """
 
 # Plan-review analog of the code-smell baseline: the four things a strong plan
@@ -9469,8 +9470,12 @@ All tasks are marked done. Your job is to find gaps between spec and implementat
 
 **Goal:** Does the implementation deliver everything the spec requires?
 
-This is NOT a code quality review (per-task impl-review handles that).
-Focus ONLY on requirement coverage and completeness.
+Requirement coverage is the first job. When `<task_specs>` lists more than one task, also judge
+the branch as a whole, which no per-task review saw, and report each of these as an ordinary gap:
+- logic a later task wrote again instead of reusing what an earlier task added;
+- a fix layered on an earlier fix instead of changing the cause;
+- code that grew where the spec meant to replace or shrink it.
+Leave other code-quality notes to the per-task implementation review.
 
 It is also NOT a task-bookkeeping review: committed `.flow/tasks/<id>.json` `status` fields are
 snapshots, not authoritative, and live lifecycle state is runtime state in the git-common-dir
@@ -9519,11 +9524,13 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 - Requirements partially implemented across tasks (cross-task gaps)
 - Scope drift (task marked done without fully addressing spec intent)
 - Missing doc updates mentioned in spec
+- Whole-branch defects on a multi-task spec (above)
 
 ## Blocking calibration
 
 - **P0** — a stated requirement is missing, or the build breaks it.
-- **P1** — a requirement is only partly met in a way a user or caller would hit.
+- **P1** — a requirement is only partly met in a way a user or caller would hit, or a whole-branch
+  defect above.
 - **P2/P3** — consistency or polish; never blocking.
 
 **Settled decisions:** A finding that re-litigates a recorded Decision Context
