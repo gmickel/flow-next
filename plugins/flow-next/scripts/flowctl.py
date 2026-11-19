@@ -8999,7 +8999,6 @@ SMELL_BASELINE_BLOCK = """
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
 Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
-Duplicated Code includes a repeat of something outside the diff: for each helper or block of logic the change adds, search the repository for one that already does the job, and report a new copy as a finding that names the existing one. A copy the repository's standards allow (a generated mirror, a documented duplicate) is not a finding.
 """
 
 # Plan-review analog of the code-smell baseline: the four things a strong plan
