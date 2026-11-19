@@ -74,7 +74,7 @@ configured), review is `none` and the handoff says once "no review backend set; 
 review.backend". Show the hint:
 
 ```
-(Tip: --depth=short|standard|deep, --review=codex|copilot|cursor|claude|host|none)
+(Tip: --depth=short|standard|deep, --review=codex|copilot|cursor|claude|command:<label>|host|none)
 ```
 
 ## Workflow

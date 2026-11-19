@@ -12,6 +12,7 @@ user-invocable: false
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
 - `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
+- `BACKEND=command` → [workflow-command.md](workflow-command.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 
 Do not load the others — only the active backend's file is needed.
@@ -19,7 +20,7 @@ Do not load the others — only the active backend's file is needed.
 Verify that the combined implementation of all tasks in a spec satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
-**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
+**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), a configured review command (`command:<label>`), or host-native (`host`)
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
@@ -27,7 +28,7 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 **The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Never invoke `flowctl review-backend` a second time in the same run.
 
-Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them.
+Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them. For `--review=command:<label>`, set `BACKEND=command` and keep the label for the backend file.
 
 ## Backend at a glance
 
@@ -35,7 +36,7 @@ The per-backend summary (models, env vars, `--spec` forms and `FLOW_REVIEW_BACKE
 
 ## Critical Rules
 
-Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-claude.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
+Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-claude.md`, `workflow-command.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
 
 **For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -55,7 +56,7 @@ The three **hard invariants** (never self-declare SHIP, never mix backends, neve
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `<spec-id> [--review=codex|copilot|cursor|claude|host|none]`
+Format: `<spec-id> [--review=codex|copilot|cursor|claude|command:<label>|host|none]`
 
 - Spec ID - Required, e.g. `fn-1` or `fn-22-53k`
 - `--review` - Optional backend override

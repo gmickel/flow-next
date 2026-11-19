@@ -71,7 +71,8 @@ DESCRIPTIONS: dict[str, str] = {
     "review.backend": (
         "Default review backend (codex, copilot, cursor, claude, host, "
         "none) or spec form backend[:model[:effort]], e.g. codex:<model>:high "
-        "or claude:<model>:high. cursor folds effort into the model "
+        "or claude:<model>:high, or command:<label> for a command in "
+        "review.commands. cursor folds effort into the model "
         "name (no :effort rung); host and none are bare-only. copilot "
         "accepts no none/minimal effort; claude takes the claude CLI's own "
         "low|medium|high|xhigh|max. If "
@@ -82,6 +83,14 @@ DESCRIPTIONS: dict[str, str] = {
         "without a human reading them line by line, or invoke "
         "/flow-next:impl-review manually instead. See "
         "docs/running-lean.md."
+    ),
+    "review.commands": (
+        "Named review commands for the command backend, selected as "
+        "command:<label>: each label maps to a non-empty argv array, run "
+        "without a shell (a leading ~ in the first element expands to the "
+        "home directory). The command reads the review execution request "
+        "as JSON on stdin and writes the response JSON on stdout. The "
+        "command owns read-only access and the model."
     ),
     "review.fanoutExecution": (
         "First-round CLI review draw scheduling: concurrent (default) or "
@@ -467,18 +476,21 @@ def _review_backend_fragment() -> dict:
         for b in effort_backends
     ]
     only_alt = "|".join(re.escape(b) for b in model_only)
+    # command is never bare: it takes exactly one label (fn-337).
+    bare = [b for b in flowctl.VALID_BACKENDS if b != "command"]
     return {
         "anyOf": [
             {"type": "null"},
-            {"enum": list(flowctl.VALID_BACKENDS)},
+            {"enum": bare},
             # Degenerate-but-runtime-valid: a bare backend with ONE trailing
             # colon (`host:`) parses to the bare backend.
             {
                 "type": "string",
-                "pattern": "^(" + "|".join(re.escape(b) for b in sorted(flowctl.VALID_BACKENDS)) + "):{1,2}$",
+                "pattern": "^(" + "|".join(re.escape(b) for b in sorted(bare)) + "):{1,2}$",
             },
             *effort_branches,
             {"type": "string", "pattern": f"^({only_alt}):[^:\\s]*:?$"},  # model-only: optional trailing empty effort colon
+            {"type": "string", "pattern": "^command:[^:\\s]+$"},
         ],
     }
 
@@ -538,6 +550,17 @@ def _build_table() -> list[tuple[str, dict]]:
         ("planSync.crossSpec", {"type": "boolean"}),
         ("review", {"kind": "object", "open": False}),
         ("review.backend", _review_backend_fragment()),
+        (
+            "review.commands",
+            {
+                "type": "object",
+                # Non-empty array: flowctl checks it before dispatch.
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": "."},
+                },
+            },
+        ),
         ("review.fanoutExecution", {"type": "string", "enum": list(flowctl.REVIEW_FANOUT_EXECUTION_VALUES)}),
         ("review.maxIterations", {"type": "integer", "minimum": 1}),
         ("scouts", {"kind": "object", "open": False}),

@@ -1,6 +1,6 @@
 # Implementation Review Workflow — CLI Backends
 
-Use when `BACKEND` is `codex`, `claude`, `copilot` or `cursor`. Prerequisite: SKILL.md's setup has resolved `BACKEND`, and [other-paths.md](other-paths.md) has set `FLOWCTL` and (optionally) `TASK_ID` / `BASE_COMMIT`. Every CLI backend takes the same steps through the same flowctl commands; only the reviewer CLI behind them differs (see "Backend notes" below).
+Use when `BACKEND` is `codex`, `claude`, `copilot`, `cursor` or `command`. Prerequisite: SKILL.md's setup has resolved `BACKEND`, and [other-paths.md](other-paths.md) has set `FLOWCTL` and (optionally) `TASK_ID` / `BASE_COMMIT`. Every CLI backend takes the same steps through the same flowctl commands; only the reviewer CLI behind them differs (see "Backend notes" below).
 
 ## Critical Rules (CLI backends)
 
@@ -325,6 +325,10 @@ Grammar and defaults: [references/backend-specs.md](references/backend-specs.md)
 - **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
   effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
   rejected. Ask mode can block shell, so it gets the diff by path too.
+- **command** — the argv at `review.commands.<label>`, selected as `command:<label>`, run
+  without a shell; it reads the review execution request on stdin and answers on stdout. The
+  wrapper owns the model and read-only access, so there is no model, effort or ladder here and
+  the receipt records the model the wrapper reported. It gets the diff by path.
 
 ---
 

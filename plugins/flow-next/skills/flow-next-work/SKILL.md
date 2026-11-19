@@ -77,11 +77,11 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 before any branch is created.
 
 **Review mode**:
-- `--review=<codex|copilot|cursor|claude|host|none>`, or the same backend named in words
+- `--review=<codex|copilot|cursor|claude|command:<label>|host|none>`, or the same backend named in words
   ("review with codex", "host review", "skip review"); `--no-review` = `none`
 
 (All non-`none` review modes route through `flow-next:flow-next-impl-review`, which resolves the
-configured/overridden backend — codex, copilot, cursor, claude, or host — itself.)
+configured/overridden backend — codex, copilot, cursor, claude, command, or host — itself.)
 
 **No-plan (direct spec execution)**:
 - `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated

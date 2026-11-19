@@ -106,7 +106,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, trace, triage-skip, gate,
-checkpoint, codex, copilot, cursor, claude,
+checkpoint, codex, copilot, cursor, claude, command,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
@@ -1298,7 +1298,7 @@ flowctl config get [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # codex, copilot, cursor, claude, host, or none
+flowctl config set review.backend codex [--json]  # codex, copilot, cursor, claude, command:<label>, host, or none
 
 # Disable a boolean config explicitly
 flowctl config set memory.enabled false [--json]
@@ -1323,7 +1323,8 @@ flowctl config set memory.enabled false [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in; configs from older inits may carry `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. A stale `rp` or `export` value prints a notice and review reads as not configured; `config set` rejects it. |
+| `review.backend` | string | `null` | Default review backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung), or `command:<label>` for a [review command](#review-command-backend). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. A stale `rp` or `export` value prints a notice and review reads as not configured; `config set` rejects it. |
+| `review.commands` | object | unset | Review commands for the [command backend](#review-command-backend): each label maps to a non-empty argv array, selected as `command:<label>`. |
 | `review.fanoutExecution` | string | `concurrent` | First-round CLI review scheduling: concurrent by default or sequential in supplied axis order, completing each draw and its sidecars before starting the next; re-review stays single. |
 | `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (`flow --auto`) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
@@ -1392,7 +1393,7 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:<model>:high", "model": "<model>", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). `none` is an explicit opt-out. A stale `rp` or `export` value (env, task, spec or config) prints one notice on stderr and resolution stops there: `ASK`, no reviewer configured, without falling through to a lower-precedence value.
+Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung), `command:<label>` (exactly one label, naming an entry in `review.commands`). `none` is an explicit opt-out. A stale `rp` or `export` value (env, task, spec or config) prints one notice on stderr and resolution stops there: `ASK`, no reviewer configured, without falling through to a lower-precedence value.
 
 | Backend form | Meaning |
 |--------------|---------|
@@ -2541,7 +2542,7 @@ Exit `0` (`2` for a bad `--repo`). A repository without `.flow/` has no map and 
 
 ### Review commands
 
-All twelve `flowctl {codex,copilot,cursor,claude} {impl,plan,completion}-review` commands share one pipeline, so flags and receipts behave the same across backends. Each review ends in a `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tag. Plan and completion reviews write `*_review_status` from the verdict; the standalone `spec set-*-review-status` commands still work.
+All fifteen `flowctl {codex,copilot,cursor,claude,command} {impl,plan,completion}-review` commands share one pipeline, so flags and receipts behave the same across backends. Each review ends in a `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tag. Plan and completion reviews write `*_review_status` from the verdict; the standalone `spec set-*-review-status` commands still work.
 
 ### codex
 
@@ -2587,7 +2588,7 @@ With no provider URL, ordinary CLI execution remains the default. See the
 and failure rules.
 
 **First-round fan-out - two coordinator-visible invocations, the same on every CLI
-backend (`codex`, `copilot`, `cursor`, `claude`):**
+backend (`codex`, `copilot`, `cursor`, `claude`, `command`):**
 
 CLI draws run concurrently by default. Set `review.fanoutExecution=sequential` to run them back
 to back in supplied axis order, completing each draw and its sidecars before launching the next.
@@ -2940,6 +2941,87 @@ Spec form: `claude[:model[:effort]]`; efforts are the CLI's own `low`, `medium`,
 **Errors.** `claude` missing from PATH → exit 2 `claude not found in PATH` before any spawn (install: [Claude Code setup](https://code.claude.com/docs/en/setup)). The CLI's `--output-format json` result is parsed strictly: stdout must be one `type: "result"` object with a boolean `is_error` field and string `result`. Missing or wrong-typed fields, malformed or wrong-type output, and error envelopes outside the unavailable-model signature are terminal transport failures - journaled as attempts with no verdict, never receipts. A valid success envelope with `is_error: false` remains reviewer output when stderr also carries the unknown-model tag. A nonzero process exit is always terminal; its stdout never supplies a verdict or triggers fallback. The model-unavailable signature is a zero-exit `is_error: true` envelope with `api_error_status` 404 and selected-model result text, or zero-exit empty stdout with the stderr tag. The stderr-tag route requires empty stdout; a valid selected-model 404 envelope still uses the JSON signature. Only those cases step the ladder (max 2 steps, cached per CLI version); the floor omits `--model` and `--effort`.
 
 **Fan-out.** The first round runs through `flowctl claude impl-review-fanout` / `impl-review-fanout-finalize` like every CLI backend; each draw gets its own diff file under `.flow/tmp/claude-review/`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot`; with the judge off (the default) claude reviews use the deterministic whitelist.
+
+### command
+
+<a id="review-command-backend"></a>
+
+A review command you configure: one way to put any CLI behind flow-next's reviews (another model family such as Gemini, Grok, Kimi or DeepSeek, or an organisation's own reviewer) without a new backend per vendor. flowctl keeps the prompt, rounds, panel, verdict parsing and receipt; only inference crosses to the command.
+
+```json
+"review": {
+  "commands": {
+    "grok": ["~/bin/review-opencode", "xai/grok-4.7"],
+    "kimi": ["~/bin/review-opencode", "openrouter/moonshotai/kimi-k3.1-pro"]
+  }
+}
+```
+
+Select a label wherever a review backend is named: `flowctl config set review.backend command:grok`, `FLOW_REVIEW_BACKEND=command:grok`, `--review=command:kimi`, or a per-spec or per-task pin (`flowctl spec set-backend <spec> --review command:kimi`). The commands are the same as every CLI backend's:
+
+```bash
+flowctl command impl-review <task-id> [--base <branch>] [--receipt <path>] [--spec command:<label>] [--json]
+flowctl command impl-review-fanout <task-id> [--base <branch>] [--draw AXIS[=SPEC]]... [--receipt <path>] [--spec command:<label>] [--json]
+flowctl command plan-review <spec-id> [--receipt <path>] [--spec command:<label>] [--json]
+flowctl command completion-review <spec-id> [--receipt <path>] [--spec command:<label>] [--json]
+flowctl command validate|deep-pass ... --receipt <path> [--spec command:<label>] [--json]
+```
+
+Spec form is exactly `command:<label>`: a bare `command`, an empty label or any further `:` part is rejected, and there is no default label. An unknown label, or an entry that is not a non-empty array of non-empty strings, stops before any review round is reserved, naming the label and `review.commands.<label>`. There is no model, effort, ladder or `FLOW_COMMAND_*` variable: the wrapper owns the model.
+
+**Contract.** flowctl runs the argv directly, with no shell and no interpolation; a leading `~` in the first element expands to the home directory. It writes one JSON request to the command's standard input, the same request the [review execution URL](orchestration.md#review-backends-cross-model-review) receives: `schemaVersion` (1), `backend` (`command`), `model` and `effort` (both `null`), `prompt`, `repositoryPath`, `sessionId`, `resumeOnly`, `permissionMode` (`read-only`), `timeoutSeconds` and `requestId`. It reads one JSON response from standard output, in the same shape: `schemaVersion` (1), `output` (the reviewer's text, which carries the verdict tag), `stderr`, `exitCode`, and optionally `sessionId`, `resumeFailed` and `observedModel`. The prompt names a diff file under `.flow/tmp/` for reviewers that cannot run `git`.
+
+A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict.
+
+**Receipt.** `mode: "command"`, `label`, `spec: "command:<label>"`, and `model`: the `observedModel` the command reported, or `"not reported"`.
+
+**Sessions.** A re-review sends the `sessionId` the command returned (only under the same label; another label starts fresh), and its prompt always carries the prior findings, since flowctl cannot tell whether the wrapped CLI really continued the session. A command that cannot continue it answers with a non-zero `exitCode` and `resumeFailed: true`, and flowctl runs it once more as a fresh session. `validate` and `deep-pass` continue the receipt's own label (a `--spec` naming another label is refused), send `resumeOnly: true`, and never start over. A command that returns no `sessionId` always starts fresh.
+
+**The wrapper owns read-only access and the model.** flowctl cannot sandbox it; run the wrapped CLI in a read-only mode. A command never uses the managed execution provider, so `command completion-review` does not offer `--require-managed-execution`, and the provider's `FLOW_REVIEW_EXECUTION_TOKEN` is removed from the wrapper's environment. flowctl does not know the model family behind a command, so it computes no same-family notice; the receipt's `model` is the record.
+
+**Example wrapper.** `~/bin/review-opencode` runs one review through `opencode run` on its `plan` agent; the model is the argument after the path in the config above. It starts every review fresh. The `plan` agent refuses file edits but can still run shell commands (opencode 2.3.2 ran Python during a review), so the reviewer is only as read-only as opencode's own permissions make it; run it where that is acceptable.
+
+```python
+#!/usr/bin/env python3
+"""flow-next review command: one review through `opencode run`."""
+import json
+import subprocess
+import sys
+
+
+def reply(output="", stderr="", exit_code=0, resume_failed=False, model=None):
+    json.dump({"schemaVersion": 1, "output": output, "stderr": stderr,
+               "exitCode": exit_code, "sessionId": None,
+               "resumeFailed": resume_failed, "observedModel": model}, sys.stdout)
+
+
+def main():
+    model = sys.argv[1]
+    request = json.load(sys.stdin)
+    if request["resumeOnly"]:
+        # This wrapper starts fresh; flowctl re-sends the prior findings.
+        return reply(stderr="resume not supported", exit_code=2, resume_failed=True)
+    try:
+        run = subprocess.run(
+            ["opencode", "run", "--model", model, "--agent", "plan",
+             "--format", "json", "--archived"],
+            input=request["prompt"], capture_output=True, text=True,
+            cwd=request["repositoryPath"],
+            timeout=max(30, request["timeoutSeconds"] - 15))
+    except subprocess.TimeoutExpired:
+        return reply(stderr="opencode timed out", exit_code=124)
+    if run.returncode != 0:
+        return reply(stderr=run.stderr[-2000:], exit_code=run.returncode)
+    text = []
+    for line in run.stdout.splitlines():
+        event = json.loads(line) if line.startswith("{") else {}
+        if event.get("type") == "text":
+            text.append(event["part"]["text"])
+    reply(output="\n".join(text), stderr=run.stderr[-2000:], model=model)
+
+
+main()
+```
 
 ### review-deep-auto
 

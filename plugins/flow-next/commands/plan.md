@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Draft a structured build plan from a short request
-argument-hint: "<idea or fn-N> [--depth=short|standard|deep] [--review=codex|copilot|cursor|claude|host|none]"
+argument-hint: "<idea or fn-N> [--depth=short|standard|deep] [--review=codex|copilot|cursor|claude|command:<label>|host|none]"
 disable-model-invocation: true
 ---
 

@@ -2,7 +2,7 @@
 
 > **Loaded only on the wave route's single-worker path when THIS task's resolved review mode is `host`** (worker flag
 > `REVIEW_MODE: host-deferred`, multi-task.md 3c). Every other backend (`none`,
-> `codex`, `copilot`, `cursor`, `claude`) keeps the worker-owned review dispatch + worker-owned
+> `codex`, `copilot`, `cursor`, `claude`, `command`) keeps the worker-owned review dispatch + worker-owned
 > `flowctl done` unchanged and never reads this file.
 
 Contents:

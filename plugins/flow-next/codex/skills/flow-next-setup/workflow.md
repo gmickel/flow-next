@@ -248,7 +248,7 @@ If ANY config values are already set, print a notice before asking questions:
 
 ```
 Current configuration:
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, or claude:<model>:<effort>>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, claude:<model>:<effort>, or command:<label>>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
 - Live QA: <off|on|auto> (change with: flowctl config set pipeline.qa <off|on|auto>)
 ```
