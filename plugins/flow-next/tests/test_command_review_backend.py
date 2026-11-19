@@ -245,6 +245,7 @@ class CommandImplReview(CommandTest):
             ({"fake": json.dumps(secret)}, "command:fake", [var, "command:fake"]),
             ({"fake": ["x", 3]}, "command:fake", [var, "command:fake"]),
             ({"fake": ["python3", "a\u0000b"]}, "command:fake", [var, "command:fake"]),
+            ({"fake": "[" * 100000 + "]" * 100000}, "command:fake", [var, "command:fake"]),
             ({"fake": f"not json {secret}"}, "command:fake", [var, "command:fake"]),
             ({"fake": ""}, "command:fake", [var, "command:fake", "not set"]),
             ({}, "command:fake", [var, "command:fake", "not set"]),
@@ -252,8 +253,13 @@ class CommandImplReview(CommandTest):
             ({}, "command:Bad.Label", ["FLOW_REVIEW_COMMAND_", "Bad.Label"]),
             ({}, "command", ["command:<label>"]),
         ]
+        if os.name != "nt":
+            # POSIX argv is bytes: a lone surrogate cannot be encoded for the spawn.
+            cases.append(({"fake": json.dumps(["python3", "\ud800"])}, "command:fake",
+                          [var, "command:fake"]))
         for commands, backend, needles in cases:
-            with self.subTest(backend=backend, commands=commands), _flow_repo() as (repo, base):
+            with self.subTest(backend=backend, commands=str(commands)[:60]), \
+                    _flow_repo() as (repo, base):
                 env = CommandRepo(repo, [SHIP], commands=commands, backend=backend)
                 code, out, err = impl_review(base, repo / "r.json")
                 self.assertEqual(code, 2, out + err)
@@ -284,6 +290,39 @@ class CommandImplReview(CommandTest):
             self.assertNotEqual(code, 0)
             self.assertFalse(marker.exists())
             self.assertEqual(env.rounds(), 0)
+
+    def test_program_inside_the_checkout_is_refused_before_dispatch(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [SHIP])
+            os.environ["FLOW_REVIEW_COMMAND_FAKE"] = json.dumps([str(repo / "wrapper.py")])
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
+            self.assertEqual(code, 2, out + err)
+            error = json.loads(out)["error"]
+            self.assertIn("FLOW_REVIEW_COMMAND_FAKE", error)
+            self.assertIn("inside the checkout", error)
+            self.assertEqual(env.requests(), [])
+            self.assertEqual(env.rounds(), 0)
+
+    def test_bare_program_resolves_on_path_never_in_the_current_directory(self):
+        os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["reviewer", "--flag"])
+        found = os.path.join(os.path.abspath(os.sep), "opt", "tools", "reviewer")
+        with mock.patch.object(flowctl.shutil, "which", return_value=found):
+            self.assertEqual(flowctl._review_command_argv("g"), [found, "--flag"])
+        # Windows puts the current directory first; a hit there is refused.
+        with mock.patch.object(flowctl.shutil, "which",
+                               return_value=os.path.join(os.curdir, "reviewer")):
+            with self.assertRaises(ValueError) as ctx:
+                flowctl._review_command_argv("g")
+            self.assertIn("inside the checkout", str(ctx.exception))
+        # Not found anywhere: left to the spawn, which reports a missing executable.
+        with mock.patch.object(flowctl.shutil, "which", return_value=None):
+            self.assertEqual(flowctl._review_command_argv("g"), ["reviewer", "--flag"])
+
+    def test_relative_program_resolves_against_the_home_directory(self):
+        os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
+                           "FLOW_REVIEW_COMMAND_G": json.dumps(["bin/review"])})
+        self.assertEqual(flowctl._review_command_argv("g"),
+                         [os.path.join(os.path.expanduser("~"), "bin/review")])
 
     def test_tracked_commands_never_supply_or_change_the_argv(self):
         """A branch's config names a program; reviewing the branch never runs it."""
@@ -345,8 +384,10 @@ class CommandImplReview(CommandTest):
                           os.path.expanduser("~/conf.json"), "a~b"])
 
     def test_windows_refuses_a_batch_file_first(self):
-        # pathlib refuses WindowsPath on POSIX, so the config read is stubbed.
+        # pathlib refuses WindowsPath on POSIX, so the config and repo reads are stubbed.
         self.enterContext(mock.patch.object(flowctl, "load_flow_config", return_value={}))
+        self.enterContext(mock.patch.object(flowctl, "get_repo_root",
+                                            return_value="/nonexistent-checkout"))
         for first in ("C:/tools/review.cmd", "review.BAT", "~/bin/review.Cmd"):
             os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps([first])
             with self.subTest(first=first), mock.patch.object(flowctl.os, "name", "nt"):
@@ -354,9 +395,9 @@ class CommandImplReview(CommandTest):
                     flowctl._review_command_argv("g")
                 self.assertIn("interpreter", str(ctx.exception))
                 self.assertIn("FLOW_REVIEW_COMMAND_G", str(ctx.exception))
-        os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["python", "review.cmd"])
+        os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["/opt/py/python", "review.cmd"])
         with mock.patch.object(flowctl.os, "name", "nt"):
-            self.assertEqual(flowctl._review_command_argv("g"), ["python", "review.cmd"])
+            self.assertEqual(flowctl._review_command_argv("g"), ["/opt/py/python", "review.cmd"])
 
     def test_missing_observed_model_is_recorded_as_not_reported(self):
         with _flow_repo() as (repo, base):
