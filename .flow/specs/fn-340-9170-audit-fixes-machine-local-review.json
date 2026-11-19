@@ -44,13 +44,40 @@
       "task": "fn-340-9170-audit-fixes-machine-local-review.1",
       "timestamp": "2026-11-19T20:50:00.100299Z",
       "verdict": null
+    },
+    {
+      "artifact_sha256": "d1b982eb37cbeb01e7e9bf7b58431e0aa30dcde11f0d8921520731b98ae72b2c",
+      "backend": "codex",
+      "base_sha": "c8d62b7632f727b313810862aa991d2e754f927c",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3db94bf9a308961b7d6acec9962b4598804b7350",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "54b02730ac595ae9a541c118aa0103a8933560e5cd07beeb8c1751632d3b6a32",
+      "reservation_id": "9ce8bc4190a54d359adb2d31ad2d304c",
+      "round_consumed": false,
+      "scope": "impl:fn-340-9170-audit-fixes-machine-local-review.1",
+      "superseded_by": null,
+      "task": "fn-340-9170-audit-fixes-machine-local-review.1",
+      "timestamp": "2026-11-19T20:59:01.509050Z",
+      "verdict": null
     }
   ],
   "review_hash_epoch": {},
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
-    "impl:fn-340-9170-audit-fixes-machine-local-review.1": 1
+    "impl:fn-340-9170-audit-fixes-machine-local-review.1": 2
   },
   "spec_path": ".flow/specs/fn-340-9170-audit-fixes-machine-local-review.md",
   "status": "open",
@@ -66,5 +93,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T20:50:00.100613Z"
+  "updated_at": "2026-11-19T20:59:01.509424Z"
 }

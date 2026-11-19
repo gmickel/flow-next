@@ -46164,10 +46164,19 @@ def _review_command_argv(label: Optional[str]) -> list:
         )
     try:
         entry = json.loads(raw)
-    except ValueError:
+    except (ValueError, RecursionError):
         entry = None
-    if (not isinstance(entry, list) or not entry
-            or not all(isinstance(arg, str) and arg and "\0" not in arg for arg in entry)):
+
+    def spawnable(arg) -> bool:
+        if not isinstance(arg, str) or not arg or "\0" in arg:
+            return False
+        try:
+            os.fsencode(arg)
+        except UnicodeEncodeError:
+            return False
+        return True
+
+    if not isinstance(entry, list) or not entry or not all(map(spawnable, entry)):
         raise ValueError(
             f"{var} (command:{label}) must be a JSON array of non-empty strings"
         )
@@ -46179,7 +46188,30 @@ def _review_command_argv(label: Optional[str]) -> list:
             "Windows runs through cmd.exe; name the interpreter first, "
             'e.g. ["python", "~/bin/review.py"]'
         )
-    return argv
+    # The program is fixed here, never by a lookup in the checkout under review: a
+    # relative path is taken from the home directory (where the command starts), and a
+    # bare name from PATH, which on Windows also searches the current directory first.
+    program = argv[0]
+    if not os.path.isabs(program):
+        if os.path.dirname(program):
+            program = os.path.join(os.path.expanduser("~"), program)
+        else:
+            program = shutil.which(program) or program
+    if os.path.isabs(program):
+        repo = os.path.realpath(str(get_repo_root()))
+        try:
+            inside = os.path.commonpath([os.path.realpath(program), repo]) == repo
+        except ValueError:  # another Windows drive
+            inside = False
+    else:
+        # Found only as a relative PATH or current-directory hit.
+        inside = program != argv[0]
+    if inside:
+        raise ValueError(
+            f"{var} (command:{label}) names a program inside the checkout under "
+            "review; give one outside it, by absolute path or by name on PATH"
+        )
+    return [program, *argv[1:]]
 
 
 def _last_line(text: str) -> str:
@@ -46293,8 +46325,8 @@ def _command_run_exec(
         try:
             returncode, raw, stderr_tail, problem = _run_review_command(
                 argv, json.dumps(payload).encode("utf-8"),
-                # Started outside the checkout, so no relative path (or a Windows lookup in
-                # the current directory) reaches a program the branch under review placed.
+                # Started outside the checkout, so a relative argument never resolves
+                # inside the branch under review.
                 timeout=timeout, cwd=Path.home(), env=env,
             )
         except FileNotFoundError:

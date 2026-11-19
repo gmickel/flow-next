@@ -245,7 +245,7 @@ class CommandImplReview(CommandTest):
             ({"fake": json.dumps(secret)}, "command:fake", [var, "command:fake"]),
             ({"fake": ["x", 3]}, "command:fake", [var, "command:fake"]),
             ({"fake": ["python3", "a\u0000b"]}, "command:fake", [var, "command:fake"]),
-            ({"fake": "[" * 100000 + "]" * 100000}, "command:fake", [var, "command:fake"]),
+            ({"fake": "[" * 20000 + "]" * 20000}, "command:fake", [var, "command:fake"]),
             ({"fake": f"not json {secret}"}, "command:fake", [var, "command:fake"]),
             ({"fake": ""}, "command:fake", [var, "command:fake", "not set"]),
             ({}, "command:fake", [var, "command:fake", "not set"]),
@@ -369,7 +369,8 @@ class CommandImplReview(CommandTest):
 
     def test_missing_executable_is_a_transport_failure(self):
         with _flow_repo() as (repo, base):
-            env = CommandRepo(repo, [SHIP], commands={"fake": [str(repo / "no-such-wrapper")]})
+            missing = repo.parent / f"{repo.name}-no-such-wrapper"   # outside the checkout
+            env = CommandRepo(repo, [SHIP], commands={"fake": [str(missing)]})
             code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
             self.assertNotEqual(code, 0)
             self.assertIn("executable not found", out + err)
