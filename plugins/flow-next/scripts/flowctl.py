@@ -12228,10 +12228,13 @@ def _enforce_and_increment_review_cap_locked(
         "review_type": review_type or review_kind,
         "exclusive": bool(exclusive),
     }
+    reservation = _review_reservations(spec_data)[reservation_id]
     if reviewed_range:
         # #513: the attempt row records the range this round reviewed.
-        reservation = _review_reservations(spec_data)[reservation_id]
         reservation["base_sha"], reservation["head_sha"] = reviewed_range
+    elif (review_type or review_kind) == "plan" and (head := _review_head_sha()):
+        # #505: HEAD before dispatch is the commit a plan review saw (host reviews pass none).
+        reservation["head_sha"] = head
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
     return (new_val, reservation_id) if return_reservation else new_val

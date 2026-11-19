@@ -76,16 +76,22 @@ class PlanReviewDriftTests(unittest.TestCase):
                 stack.enter_context(patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger))
             yield
 
-    def ship(self):
-        """Record a SHIP plan verdict at HEAD through the real reservation and recorder."""
+    def ship(self, host=False, during_review=None):
+        """Record a SHIP plan verdict at HEAD through the real reservation and recorder.
+
+        `host` passes no reviewed commit, as the host review workflow does; `during_review`
+        is a file changed and committed between the reservation and the verdict.
+        """
         head = _git(self.repo, 'rev-parse', 'HEAD').stdout.strip()
         with self.in_repo():
             _, reservation = f.enforce_and_increment_review_cap(
                 self.sid, 'plan', artifact_sha256='a' * 64, review_type='plan', return_reservation=True)
+            if during_review:
+                self.change(during_review, 'landed during the review')
             f.record_review_attempt(
                 self.sid, 'plan', backend='host', output='<verdict>SHIP</verdict>', verdict='SHIP',
                 review_type='plan', reservation_id=reservation, finalize_status_kind='plan',
-                reset_rounds_on_ship=True, reviewed_head_sha=head)
+                reset_rounds_on_ship=True, reviewed_head_sha=None if host else head)
         self.commit('chore(flow): plan review')
         self.assertEqual(self.spec_json()['plan_review_status'], 'ship')
 
@@ -159,6 +165,16 @@ class PlanReviewDriftTests(unittest.TestCase):
                 rows[-1]['head_sha_observed'] = observed
                 self.edit_spec_json(review_attempts=rows)
                 self.assert_no_drift()
+
+    def test_r1_host_review_reads_the_commit_before_dispatch(self):
+        self.ship(host=True)
+        self.assertTrue(self.spec_json()['review_attempts'][-1]['head_sha_observed'])
+        self.assert_no_drift()
+        self.change('src/cited.py')
+        self.assert_drift(['src/cited.py'])
+        # A cited change committed while the host review ran is not what it reviewed.
+        self.ship(host=True, during_review='docs/guide/a.md')
+        self.assert_drift(['docs/guide/'])
 
     def test_r1_unreachable_commit_is_no_drift_until_a_branch_holds_it(self):
         # A rebased-away review commit: readable, but on no branch and not behind HEAD.

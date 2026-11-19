@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-315-re-review-a-ship-spec-when-files-it",
   "impl_review_rounds": {
-    "fn-315-re-review-a-ship-spec-when-files-it.1": 2
+    "fn-315-re-review-a-ship-spec-when-files-it.1": 3
   },
   "next_task": 1,
   "no_plan": true,
@@ -193,6 +193,106 @@
       "task": "fn-315-re-review-a-ship-spec-when-files-it.1",
       "timestamp": "2026-11-19T10:04:24.298089Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e7edce57f56a980cbd395ea1462a8121619a0856f6a95dd4c9ff1fdc9504c052",
+      "backend": "codex",
+      "base_sha": "8e78eeb80ed95e5b8e996120b51d807ddc549151",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-675ba7aaf7150abbebdd9972ee02041f",
+            "classification": "introduced",
+            "findingId": "finding-675ba7aaf7150abbebdd9972ee02041f",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-9d8697af3d69ab2c1f0d9d83381b7a26",
+            "classification": "introduced",
+            "findingId": "finding-9d8697af3d69ab2c1f0d9d83381b7a26",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c2b17a76f074cea4b22eb9b7dbed55ec",
+            "classification": "introduced",
+            "findingId": "finding-c2b17a76f074cea4b22eb9b7dbed55ec",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-fbc6920fe8c54e64bed4762e7ad662ef",
+            "classification": "introduced",
+            "findingId": "finding-fbc6920fe8c54e64bed4762e7ad662ef",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-192e54cc7f41ffea68e0cca47a257c30",
+            "classification": "introduced",
+            "findingId": "finding-192e54cc7f41ffea68e0cca47a257c30",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-ea4686fe32a7ad550fe90ec3d9cbefe8",
+            "classification": "introduced",
+            "findingId": "finding-ea4686fe32a7ad550fe90ec3d9cbefe8",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3921ae2991232d535838ece2e364e07a",
+            "classification": "introduced",
+            "findingId": "finding-3921ae2991232d535838ece2e364e07a",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f9f7124d59638886e5cfb138e382f83e",
+            "classification": "introduced",
+            "findingId": "finding-f9f7124d59638886e5cfb138e382f83e",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "withdrawn"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "bb8276ab2998b25fd3654e79ab1128b554678b5e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2182,
+      "output_sha256": "f0a7d64f76ecea88fa52f97faaa668355ebda58c74c4e8dfc5f2d3cc9e34a53f",
+      "reservation_id": "c82e84cd5ea843df9cd1d32f75d40a2e",
+      "round_consumed": true,
+      "scope": "impl:fn-315-re-review-a-ship-spec-when-files-it.1",
+      "superseded_by": null,
+      "task": "fn-315-re-review-a-ship-spec-when-files-it.1",
+      "timestamp": "2026-11-19T10:07:02.378606Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {},
@@ -215,5 +315,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T10:04:24.301134Z"
+  "updated_at": "2026-11-19T10:07:02.381706Z"
 }
