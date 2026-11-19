@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-338-evaluate-pi-as-a-host",
   "spec_path": ".flow/tasks/fn-338-evaluate-pi-as-a-host.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Evaluate Pi as a host",
   "updated_at": "2026-11-19T10:19:20.880203Z"
 }

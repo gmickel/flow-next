@@ -16,7 +16,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-338-evaluate-pi-as-a-host.md",
-  "status": "open",
+  "status": "done",
   "title": "Evaluate Pi as a host",
   "tracker": {
     "baseHashFlow": null,
@@ -29,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T10:49:18.432679Z"
+  "updated_at": "2026-11-19T10:49:59.351679Z"
 }
