@@ -27,10 +27,16 @@ Not paths: `jq`, `--json`, `origin/main`.
 
 
 class PlanReviewDriftTests(unittest.TestCase):
-    tearDown = support.PilotStrikesTestCase.tearDown
+    def tearDown(self):
+        os.chdir(self._cwd)
+        support.PilotStrikesTestCase.tearDown(self)
 
     def setUp(self):
         support.PilotStrikesTestCase.setUp(self)
+        # Task runtime state resolves through the process's git dir, so in-process
+        # route calls run from the fixture, as `flowctl` does.
+        self._cwd = os.getcwd()
+        os.chdir(self.repo)
         self.assertEqual(_run(self.repo, 'init', '--json').returncode, 0)
         created = _run(self.repo, 'spec', 'create', '--title', 'Drift fixture', '--json')
         self.assertEqual(created.returncode, 0, created.stderr)

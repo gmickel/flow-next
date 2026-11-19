@@ -158,7 +158,11 @@ For a live spec, code reads lifecycle facts in this order:
    merged, closed, and failed observations; a failed probe never means no PR.
 2. Existing tasks all done routes to make-pr, after the applicable QA decision.
    Otherwise a `stale` plan review (the spec changed after its SHIP) routes to
-   `plan_review`, whatever the task count.
+   `plan_review`, whatever the task count. So does a `ship` review while every
+   task is still `todo` (or none exist) when a repo path the spec cites in
+   backticks changed between the commit that review recorded and `HEAD`;
+   `.flow/` paths never count, and a missing reviewed commit means no drift.
+   `flowctl show <spec> --json` lists those paths as `plan_review_drift`.
 3. An intentional plan with tasks, or one implicit owner under `no_plan: true`,
    continues work on the recorded route, preserving resume admission.
 4. A ready spec with no tasks uses a recorded `no_plan: true` directly.
