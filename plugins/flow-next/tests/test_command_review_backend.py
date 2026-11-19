@@ -37,7 +37,7 @@ WRAPPER = textwrap.dedent("""
         except FileExistsError:
             seq += 1
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps({"argv": sys.argv, "request": request,
+        fh.write(json.dumps({"argv": sys.argv, "request": request, "cwd": os.getcwd(),
                              "token": "FLOW_REVIEW_EXECUTION_TOKEN" in os.environ}))
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     if len(plan) > 1:
@@ -194,6 +194,8 @@ class CommandImplReview(CommandTest):
                              ("command", None, None))
             self.assertEqual(request["permissionMode"], "read-only")
             self.assertEqual(request["repositoryPath"], str(repo))
+            # The command starts outside the checkout, so a relative path never reaches it.
+            self.assertEqual(Path(call["cwd"]).resolve(), Path.home().resolve())
             self.assertIsNone(request["sessionId"])
             self.assertFalse(request["resumeOnly"])
             self.assertEqual(request["schemaVersion"], 1)
@@ -242,6 +244,7 @@ class CommandImplReview(CommandTest):
             ({"fake": [""]}, "command:fake", [var, "command:fake"]),
             ({"fake": json.dumps(secret)}, "command:fake", [var, "command:fake"]),
             ({"fake": ["x", 3]}, "command:fake", [var, "command:fake"]),
+            ({"fake": ["python3", "a\u0000b"]}, "command:fake", [var, "command:fake"]),
             ({"fake": f"not json {secret}"}, "command:fake", [var, "command:fake"]),
             ({"fake": ""}, "command:fake", [var, "command:fake", "not set"]),
             ({}, "command:fake", [var, "command:fake", "not set"]),
@@ -270,6 +273,17 @@ class CommandImplReview(CommandTest):
             self.assertEqual(code, 0, out + err)
             self.assertEqual(json.loads((repo / "r.json").read_text())["label"], "kimi-pro")
             self.assertEqual(len(env.requests()), 1)
+
+    def test_relative_paths_never_resolve_in_the_checkout(self):
+        with _flow_repo() as (repo, base):
+            marker = repo / "ran-relative"
+            (repo / "planted.py").write_text(
+                f"open({str(marker)!r}, 'w').write('x')\n", encoding="utf-8")
+            env = CommandRepo(repo, [SHIP], commands={"fake": [sys.executable, "planted.py"]})
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
+            self.assertNotEqual(code, 0)
+            self.assertFalse(marker.exists())
+            self.assertEqual(env.rounds(), 0)
 
     def test_tracked_commands_never_supply_or_change_the_argv(self):
         """A branch's config names a program; reviewing the branch never runs it."""

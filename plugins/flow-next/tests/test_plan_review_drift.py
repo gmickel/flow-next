@@ -210,6 +210,13 @@ class PlanReviewDriftTests(unittest.TestCase):
                                    'status': 'pending'}})
         self.edit_spec_json(review_attempts=rows)
         self.assert_drift(['src/cited.py'])
+        # A record-only verdict wrote no status either; a malformed leg never breaks the check.
+        for finalized in ({'receipt': 'not_applicable', 'digest': 'not_applicable',
+                           'status': 'not_applicable'}, True, 'complete'):
+            with self.subTest(finalized=finalized):
+                rows[-1]['finalized'] = finalized
+                self.edit_spec_json(review_attempts=rows)
+                self.assert_drift(['src/cited.py'])
         # Once its status lands, it is the reviewed commit.
         rows[-1]['finalized'] = {'receipt': 'complete', 'digest': 'not_applicable',
                                  'status': 'complete'}
