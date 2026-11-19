@@ -61,14 +61,15 @@ BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 class TestRegistryShape(unittest.TestCase):
     """Registry contents are the contract downstream code depends on."""
 
-    def test_exactly_six_backends(self) -> None:
+    def test_exactly_seven_backends(self) -> None:
         # cursor added in fn-74 (model-yes / effort-no shape).
         # host added in fn-123 (non-executable selection sentinel; no model/effort).
         # claude added in fn-221 (model-yes / effort-yes, the CLI's own set).
+        # command added in fn-337 (command:<label>, a configured argv).
         # rp (RepoPrompt) removed in 8.0.0.
         self.assertEqual(
             sorted(BACKEND_REGISTRY.keys()),
-            ["claude", "codex", "copilot", "cursor", "host", "none"],
+            ["claude", "codex", "command", "copilot", "cursor", "host", "none"],
         )
 
     def test_claude_effort_set(self) -> None:

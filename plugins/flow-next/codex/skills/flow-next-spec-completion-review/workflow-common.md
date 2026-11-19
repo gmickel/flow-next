@@ -35,7 +35,7 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
-  echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
+  echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|command:<label>|host|none"
   exit 1
 fi
 
@@ -52,8 +52,8 @@ echo "Review backend: $BACKEND"
 
 **The fix loop never pauses for user confirmation**; never use plain-text numbered prompt in it. Which findings it fixes, and which it lists as follow-ups, follows the Review section of [working-rules.md](../../references/working-rules.md).
 
-**MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, host):**
-The codex/copilot/cursor/claude handlers reserve a round before dispatch; the host
+**MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, command, host):**
+The codex/copilot/cursor/claude/command handlers reserve a round before dispatch; the host
 workflow calls the same `review-rounds` reserve/record surface.
 Verdict-bearing attempts consume the reservation; no-verdict transport failures
 are recorded and refunded.
@@ -61,7 +61,7 @@ are recorded and refunded.
 When a delivered `NEEDS_WORK` consumes round
 `${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
 
-- codex/copilot/cursor/claude already self-wrote `needs_work` while handling that
+- codex/copilot/cursor/claude/command already self-wrote `needs_work` while handling that
   verdict; do not duplicate it.
 - host: [references/terminal-status.md § Capped round](references/terminal-status.md#capped-round).
 
@@ -86,6 +86,7 @@ If the verdict is NEEDS_WORK, fix and re-review (working-rules.md, Review):
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
    - **Claude**: Re-run `flowctl claude completion-review` (receipt enables context; must be `mode == "claude"` to resume)
+   - **Command**: Re-run `flowctl command completion-review` (receipt enables context; must be `mode == "command"` to resume)
    - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
      re-review path.
 5. **Stop.** Attended, the re-review's verdict is terminal: `SHIP` completes; `NEEDS_WORK`
@@ -96,7 +97,7 @@ If the verdict is NEEDS_WORK, fix and re-review (working-rules.md, Review):
 
 ## Record the terminal verdict exactly once
 
-`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude. **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for repairing a missed write:
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude/command. **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for repairing a missed write:
 
 `host`: read [references/terminal-status.md](references/terminal-status.md) and run it on the
 final verdict.

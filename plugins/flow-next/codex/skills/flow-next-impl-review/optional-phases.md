@@ -154,7 +154,7 @@ PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
 for pass in $(printf '%s\n' $SELECTED_PASSES); do
   case "$BACKEND" in
-    codex|copilot|cursor|claude)
+    codex|copilot|cursor|claude|command)
       # claude resumes the primary session from the receipt; writes no diff file.
       $FLOWCTL "$BACKEND" deep-pass \
         --pass "$pass" \
@@ -271,7 +271,7 @@ RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 
 case "$BACKEND" in
-  codex|copilot|cursor|claude)
+  codex|copilot|cursor|claude|command)
     # claude resumes the primary session from the receipt; writes no diff file.
     VALIDATOR_JSON="$($FLOWCTL "$BACKEND" validate \
       --findings-file "$FINDINGS_FILE" \

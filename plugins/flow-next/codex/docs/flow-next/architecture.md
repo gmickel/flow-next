@@ -220,7 +220,7 @@ real one, so only work volume separates them.
 
 Write-ordering differs by path, on purpose:
 
-- **In-process plan review** (`flowctl codex|copilot|cursor|claude plan-review`)
+- **In-process plan review** (`flowctl codex|copilot|cursor|claude|command plan-review`)
   finalizes the attempt row, writes `plan_review_status`, and performs the
   SHIP round-counter reset as ONE atomic sidecar write inside
   `record_review_attempt` - there is no interrupt window where the ledger

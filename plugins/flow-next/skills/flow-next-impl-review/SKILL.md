@@ -42,6 +42,9 @@ git diff --shortstat "$DIFF_BASE"...HEAD
   never its fix pass or re-review.
 - `claude` when a Claude model wrote the change: say once that this review is same-family, then
   continue.
+- `command:<label>` from `--review`: use `BACKEND=command` and add `--spec command:<label>` to
+  every `$FLOWCTL command` call. A bare `command` takes its label from the task, the spec,
+  `FLOW_REVIEW_BACKEND` or `review.backend`.
 
 Shell state does not survive between Bash calls: each block below resolves `FLOWCTL` again and
 takes `REVIEW_ID`, `DIFF_BASE` and `BACKEND` as literals.
@@ -53,7 +56,7 @@ integration. The re-review after fixes runs one reviewer. You make the call; flo
 
 ## 2. CLI review
 
-For `codex`, `claude`, `copilot` and `cursor`. Run each review command as one blocking foreground
+For `codex`, `claude`, `copilot`, `cursor` and `command`. Run each review command as one blocking foreground
 Bash call with a 600-second timeout. Never run it in the background: its completion would not
 resume you.
 

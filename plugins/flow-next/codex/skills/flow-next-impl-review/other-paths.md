@@ -170,7 +170,7 @@ only when a triage result needs justifying or auditing.
 
 **MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *design/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`**. A re-approach is a human/worker decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 
-**MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, host):**
+**MAX ITERATIONS (backend-agnostic — codex, copilot, cursor, claude, command, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
 SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
 is durably recorded and refunded. A first round of three draws (any backend)

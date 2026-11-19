@@ -14,6 +14,7 @@ selected review backend:**
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
 - `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
+- `BACKEND=command` → [workflow-command.md](workflow-command.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 
 Do not load the other backend files. `BACKEND=none` and an unknown explicit
@@ -23,7 +24,7 @@ Conduct a John Carmack-level review of spec plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor),
-Claude Code CLI (claude), or host-native (`host`)
+Claude Code CLI (claude), a configured review command (`command:<label>`), or host-native (`host`)
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
@@ -114,7 +115,7 @@ When the verdict is `NEEDS_WORK`:
 3. Sync affected task specs when requirements, acceptance, design decisions,
    interfaces, retry/error semantics, or state values changed.
 4. Re-enter the SAME selected backend file's re-review step. Never load or mix
-   another backend. Codex/Copilot/Cursor/Claude resume only through a same-mode receipt;
+   another backend. Codex/Copilot/Cursor/Claude/command resume only through a same-mode receipt;
    host uses a fresh read-only subagent.
 5. Attended, stop after that one re-review: `SHIP` completes; `NEEDS_WORK` surfaces the
    surviving findings to the caller, never a second fix pass. In the review loop, repeat

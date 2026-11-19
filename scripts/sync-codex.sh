@@ -605,7 +605,7 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|codex|copilot|cursor|claude|host|host-deferred
+REVIEW_MODE: none|codex|copilot|cursor|claude|command[:<label>]|host|host-deferred
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>

@@ -13,8 +13,9 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
-Accepted explicit modes: `codex`, `copilot`, `cursor`, `claude`, `host`, `none`.
+Accepted explicit modes: `codex`, `copilot`, `cursor`, `claude`, `command:<label>`, `host`, `none`.
 Any other explicit value fails closed as for `ASK`, naming these accepted modes.
+For `command:<label>`, set `BACKEND=command` and keep the label for the backend file.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:

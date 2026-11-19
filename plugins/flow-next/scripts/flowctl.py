@@ -7659,6 +7659,14 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "models": None,
         "efforts": None,
     },
+    "command": {
+        # fn-337: a configured argv (``review.commands.<label>``) answers the
+        # review execution contract over stdin/stdout. Spec form is exactly
+        # ``command:<label>``; the label rides the model slot of BackendSpec.
+        # The wrapper owns the model, so there is no ranking, effort or ladder.
+        "models": None,
+        "efforts": None,
+    },
 }
 
 
@@ -7810,6 +7818,14 @@ class BackendSpec:
                 f"Unknown backend: {backend!r}. Valid: {valid}"
             )
         reg = BACKEND_REGISTRY[backend]
+        if backend == "command":
+            label = parts[1].strip() if len(parts) > 1 else ""
+            if not label or len(parts) > 2:
+                raise ValueError(
+                    f"Backend 'command' takes exactly one label: command:<label>, "
+                    f"naming an entry in review.commands (got {raw!r})"
+                )
+            return cls(backend=backend, model=label, model_explicit=True)
 
         model: Optional[str] = None
         if len(parts) > 1:
@@ -7885,7 +7901,12 @@ class BackendSpec:
         ``model`` to ``None`` - env vars are ignored for fields the backend
         doesn't accept. Same for ``effort``. This prevents a stray
         ``FLOW_HOST_MODEL`` from leaking into a host spec.
+
+        ``command`` resolves to itself: its second field is a label, never
+        filled from the environment or a default.
         """
+        if self.backend == "command":
+            return self
         reg = BACKEND_REGISTRY[self.backend]
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
         env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
@@ -33885,7 +33906,7 @@ def _resume_completion_terminal(flow_dir: Path, spec_id: str, receipt_path: Opti
                 recovery.unlink()
             # Attempts recorded before 8.0.0 can carry the removed ``rp``
             # backend; their receipt contract still holds on recovery.
-            required = backend in ("codex", "copilot", "cursor", "claude", "host") or (
+            required = backend in ("codex", "copilot", "cursor", "claude", "command", "host") or (
                 backend == "rp" and verdict == "SHIP" and (bool(receipt_path) or recovery.exists())
             )
             if recovery.exists():
@@ -41229,6 +41250,7 @@ def _resolve_session_pass_spec(
     strict_grammar = {
         "cursor": "cursor:<model>",
         "claude": "claude:<model>[:<effort>]",
+        "command": "command:<label>",
     }
     if backend in strict_grammar and spec_arg:
         try:
@@ -41538,6 +41560,17 @@ def cmd_claude_validate(args: argparse.Namespace) -> None:
     """Dispatch a claude validator pass over findings from a prior review."""
     _run_validator_pass(
         backend="claude",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_command_validate(args: argparse.Namespace) -> None:
+    """Dispatch a validator pass through a configured review command (fn-337)."""
+    _run_validator_pass(
+        backend="command",
         findings_file=getattr(args, "findings_file", None),
         receipt_path=args.receipt,
         spec_arg=getattr(args, "spec", None),
@@ -42408,6 +42441,18 @@ def cmd_claude_deep_pass(args: argparse.Namespace) -> None:
     """Dispatch one claude deep-pass (adversarial|security|performance)."""
     _run_deep_pass(
         backend="claude",
+        pass_name=args.pass_name,
+        primary_findings_file=getattr(args, "primary_findings", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_command_deep_pass(args: argparse.Namespace) -> None:
+    """Dispatch one deep-pass through a configured review command (fn-337)."""
+    _run_deep_pass(
+        backend="command",
         pass_name=args.pass_name,
         primary_findings_file=getattr(args, "primary_findings", None),
         receipt_path=args.receipt,
@@ -45657,6 +45702,52 @@ def _read_review_execution_response(url, token, payload, timeout):
         connection.close()
 
 
+REVIEW_EXECUTION_RESPONSE_MAX = 16 * 1024 * 1024
+
+
+def _review_execution_request(*, backend, model, effort, prompt, repository_path,
+                              session_id, resume_only, timeout, request_scope):
+    """The review execution request, shared by the URL and command transports."""
+    payload = {
+        "schemaVersion": 1,
+        "backend": backend, "model": model, "effort": effort,
+        "prompt": prompt, "repositoryPath": str(repository_path),
+        "sessionId": session_id, "resumeOnly": resume_only,
+        "permissionMode": "read-only", "timeoutSeconds": timeout,
+    }
+    identity = {key: value for key, value in payload.items() if key != "timeoutSeconds"}
+    identity["requestScope"] = request_scope
+    payload["requestId"] = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return payload
+
+
+def _parse_review_execution_response(raw, *, session_id, resume_only):
+    """Validate one review execution response; raises ValueError when invalid."""
+    if len(raw) > REVIEW_EXECUTION_RESPONSE_MAX:
+        raise ValueError("response exceeds 16 MiB")
+    result = json.loads(raw)
+    if (not isinstance(result, dict) or type(result.get("schemaVersion")) is not int
+            or result["schemaVersion"] != 1
+            or not isinstance(result.get("output"), str)
+            or not isinstance(result.get("stderr"), str)
+            or type(result.get("exitCode")) is not int
+            or result["exitCode"] < 0
+            or (result.get("sessionId") is not None
+                and not isinstance(result["sessionId"], str))
+            or type(result.get("resumeFailed", False)) is not bool
+            or (result.get("observedModel") is not None
+                and not isinstance(result["observedModel"], str))):
+        raise ValueError("response does not match the review execution shape")
+    if result.get("resumeFailed") and (not session_id or result["exitCode"] == 0):
+        raise ValueError("invalid resume failure")
+    if resume_only and (not session_id or (
+            result["exitCode"] == 0 and result.get("sessionId") != session_id)):
+        raise ValueError("response did not preserve the continuation session")
+    return result
+
+
 def execute_review(*, backend, model, effort, prompt, repository_path,
                    session_id, resume_only, timeout, resolution_out, request_scope=None):
     """Return the adapter tuple, or None only when no provider was configured.
@@ -45671,39 +45762,15 @@ def execute_review(*, backend, model, effort, prompt, repository_path,
         return None
     try:
         url, token = require_execution_provider_configuration()
-        payload = {
-            "schemaVersion": 1,
-            "backend": backend, "model": model, "effort": effort,
-            "prompt": prompt, "repositoryPath": str(repository_path),
-            "sessionId": session_id, "resumeOnly": resume_only,
-            "permissionMode": "read-only", "timeoutSeconds": timeout,
-        }
-        identity = {key: value for key, value in payload.items() if key != "timeoutSeconds"}
-        identity["requestScope"] = request_scope
-        payload["requestId"] = hashlib.sha256(
-            json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
+        payload = _review_execution_request(
+            backend=backend, model=model, effort=effort, prompt=prompt,
+            repository_path=repository_path, session_id=session_id,
+            resume_only=resume_only, timeout=timeout, request_scope=request_scope,
+        )
         raw = _read_review_execution_response(url, token, payload, timeout)
-        if len(raw) > 16 * 1024 * 1024:
-            raise ValueError("provider response exceeds 16 MiB")
-        result = json.loads(raw)
-        if (not isinstance(result, dict) or type(result.get("schemaVersion")) is not int
-                or result["schemaVersion"] != 1
-                or not isinstance(result.get("output"), str)
-                or not isinstance(result.get("stderr"), str)
-                or type(result.get("exitCode")) is not int
-                or result["exitCode"] < 0
-                or (result.get("sessionId") is not None
-                    and not isinstance(result["sessionId"], str))
-                or type(result.get("resumeFailed", False)) is not bool
-                or (result.get("observedModel") is not None
-                    and not isinstance(result["observedModel"], str))):
-            raise ValueError("invalid provider response")
-        if result.get("resumeFailed") and (not session_id or result["exitCode"] == 0):
-            raise ValueError("invalid resume failure")
-        if resume_only and (not session_id or (
-                result["exitCode"] == 0 and result.get("sessionId") != session_id)):
-            raise ValueError("provider did not preserve the continuation session")
+        result = _parse_review_execution_response(
+            raw, session_id=session_id, resume_only=resume_only,
+        )
         if token in (result.get("sessionId") or ""):
             raise ValueError("provider returned a credential as a session handle")
         if resolution_out is not None:
@@ -45900,6 +45967,9 @@ _DIFF_SESSION = {
                 "unavailable, and shell and write tools are denied.", "a file-viewing tool"),
     "cursor": ("Shell commands, `git diff` included, may be blocked in this session.",
                "a file-reading tool"),
+    # fn-337: flowctl cannot know what a configured wrapper allows.
+    "command": ("Shell commands, `git diff` included, may be unavailable in this session.",
+                "a file-reading tool"),
 }
 
 
@@ -45959,6 +46029,114 @@ def _claude_run_exec(
         prompt, session_id=session_id, repo_root=repo_root, spec=spec,
         resolution_out=resolution_out,
     )
+
+
+def _review_command_argv(label: Optional[str]) -> list:
+    """The argv configured at ``review.commands.<label>`` (fn-337).
+
+    Raises ValueError naming the label and the config key. A leading ``~`` in
+    the first element expands to the home directory; nothing else is touched.
+    """
+    if not label:
+        raise ValueError(
+            "review backend `command` needs a label: command:<label>, "
+            "naming an entry in review.commands"
+        )
+    key = f"review.commands.{label}"
+    commands = get_config("review.commands")
+    entry = commands.get(label) if isinstance(commands, dict) else None
+    if entry is None:
+        raise ValueError(
+            f"no review command labelled {label!r}: set {key} in "
+            ".flow/config.json to a non-empty array of strings"
+        )
+    if (not isinstance(entry, list) or not entry
+            or not all(isinstance(arg, str) and arg for arg in entry)):
+        raise ValueError(f"{key} must be a non-empty array of non-empty strings")
+    return [os.path.expanduser(entry[0]) if entry[0].startswith("~") else entry[0],
+            *entry[1:]]
+
+
+def _last_line(text: str) -> str:
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    return lines[-1][:300] if lines else ""
+
+
+def _command_run_exec(
+    prompt: str,
+    *,
+    session_id: Optional[str],
+    repo_root: Path,
+    spec: "BackendSpec",
+    resolution_out: dict,
+    args: argparse.Namespace,
+) -> tuple[str, Optional[str], int, str]:
+    """Command spawn (fn-337): run ``review.commands.<label>`` with no shell.
+
+    The review execution request goes to standard input and the response is
+    read from standard output, in the same shapes as FLOW_REVIEW_EXECUTION_URL.
+    Any failure returns empty output, so raw command output is never a verdict.
+    Prior findings are always in the prompt, so when a primary review's resume
+    fails it runs once more as a fresh session with the same prompt.
+    """
+    label = spec.model or ""
+    name = f"command:{label}"
+    # The label rides spec.model; only an observed model may reach a receipt.
+    resolution_out["model"] = "not reported"
+    try:
+        argv = _review_command_argv(label)
+        prompt = _attach_review_diff(prompt, "command", repo_root, args)
+    except (ValueError, ReviewDiffError, OSError) as exc:
+        return "", session_id or "", 2, f"{name}: {exc}"
+    # validate / deep-pass continue the primary session and cannot start over.
+    resume_only = getattr(args, "managed_resume_only", False)
+    timeout = get_review_exec_timeout()
+
+    def invoke(sid: Optional[str]) -> tuple[Optional[dict], tuple]:
+        payload = _review_execution_request(
+            backend="command", model=None, effort=None, prompt=prompt,
+            repository_path=repo_root, session_id=sid, resume_only=resume_only,
+            timeout=timeout,
+            request_scope=getattr(args, "managed_review_request_scope", None),
+        )
+        try:
+            proc = subprocess.run(
+                argv,
+                input=json.dumps(payload).encode("utf-8"),
+                capture_output=True,
+                check=False,
+                timeout=timeout,
+                cwd=str(repo_root),
+            )
+        except FileNotFoundError:
+            return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
+        except subprocess.TimeoutExpired:
+            return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
+        except OSError as exc:
+            return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
+        if proc.returncode != 0:
+            detail = _last_line(proc.stderr.decode("utf-8", errors="replace"))
+            return None, ("", sid or "", proc.returncode if proc.returncode > 0 else 2,
+                          f"{name} exited {proc.returncode}" + (f": {detail}" if detail else ""))
+        try:
+            result = _parse_review_execution_response(
+                proc.stdout, session_id=sid, resume_only=resume_only,
+            )
+        except (ValueError, TypeError, RecursionError) as exc:
+            return None, ("", sid or "", 2, f"{name}: invalid response: {exc}")
+        if result.get("observedModel"):
+            resolution_out["model"] = result["observedModel"]
+        if result["exitCode"] != 0:
+            detail = _last_line(result["stderr"])
+            return result, ("", result.get("sessionId") or sid or "", result["exitCode"],
+                            f"{name} reported exit code {result['exitCode']}"
+                            + (f": {detail}" if detail else ""))
+        return result, (result["output"], result.get("sessionId"), 0, result["stderr"])
+
+    result, outcome = invoke(session_id)
+    if result is not None and result.get("resumeFailed") and not resume_only:
+        result, outcome = invoke(None)
+    return outcome
 
 
 def _completion_review_receipt_recovery_path(review_id: str) -> Path:
@@ -46158,6 +46336,8 @@ def _backend_review_receipt_payload(
     if include_effort:
         receipt_data["effort"] = effective_effort
     receipt_data["spec"] = str(resolved_spec)
+    if backend == "command":
+        receipt_data["label"] = resolved_spec.model
     receipt_data["timestamp"] = now_iso()
     receipt_data["review"] = review_text
     if review_type == "completion_review":
@@ -46637,6 +46817,28 @@ def _wire_backend_review_hooks() -> None:
         "no_verdict_label": "Claude",
         # ``claude -p`` loads the repo's CLAUDE.md - the same ambient-instruction
         # hazard cursor neutralises with the persona override.
+        "needs_persona_override": True,
+    })
+    BACKEND_REGISTRY["command"].update({
+        # fn-337: spawn shape = review execution request on stdin, response on
+        # stdout; the diff is delivered by path (see _command_run_exec).
+        "run_exec": _command_run_exec,
+        "resolve_spec": _resolve_command_review_spec,
+        "check_probe": None,
+        "resume_modes": ("command",),
+        # Prior findings are always injected (no two-phase lean resume): a
+        # wrapper's CLI may create a fresh session under a requested id, and a
+        # lean prompt there would be a blind re-review. A reported failed
+        # resume re-runs fresh inside _command_run_exec.
+        "track_prior_receipt_model": False,
+        "require_nonempty_sid": True,
+        "mint_session_id": False,
+        "has_sandbox": False,
+        "include_effort": False,
+        "extract_review": lambda output: output,
+        "cli_label": "command",
+        "no_verdict_label": "Command",
+        # The wrapped CLI may load the repo's agent instruction files.
         "needs_persona_override": True,
     })
 
@@ -48367,6 +48569,8 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
                 )
             try:
                 spec = BackendSpec.parse(spec_str).resolve()
+                if spec.backend == "command":
+                    _review_command_argv(spec.model)
             except ValueError as exc:
                 error_exit(
                     f"invalid --draw spec for {axis}: {exc}",
@@ -48563,6 +48767,8 @@ def _review_fanout_run_draw(
         "review_path": str(review_path),
         "output_path": str(output_path),
     }
+    if backend == "command":
+        meta["label"] = spec.model
     try:
         _review_fanout_publish(
             output_path, output if isinstance(output, str) else "",
@@ -50649,7 +50855,9 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     primary = _review_fanout_primary_draw(meta, meta_draws, args.review_backend)
     resolved_spec = BackendSpec(
         backend=args.review_backend,
-        model=primary.get("model"),
+        # A command spec carries its label; the observed model is the receipt's.
+        model=(primary.get("label") if args.review_backend == "command"
+               else primary.get("model")),
         effort=primary.get("effort"),
     )
     hold_phases = getattr(args, "hold_for_phases", None)
@@ -51006,6 +51214,55 @@ def _resolve_claude_review_spec(
     if resolved.backend != "claude":
         return BackendSpec("claude").resolve()
     return resolved
+
+
+def _resolve_command_review_spec(
+    args: argparse.Namespace,
+    task_id: Optional[str],
+    spec_id: Optional[str] = None,
+) -> BackendSpec:
+    """Resolve ``command:<label>`` for a command review (fn-337).
+
+    ``--spec`` (strict) first, then task/spec pin, env and config. There is no
+    default to fall back to, so a resolved spec that is not a labelled command
+    fails here, as does a label with no valid ``review.commands`` entry: before
+    any review round is reserved.
+    """
+    spec_arg = getattr(args, "spec", None)
+    if spec_arg:
+        try:
+            resolved = BackendSpec.parse(spec_arg)
+        except ValueError as e:
+            error_exit(f"Invalid --spec: {e}", use_json=args.json, code=2)
+    else:
+        resolved = resolve_review_spec("command", task_id, spec_id=spec_id)
+    if resolved.backend != "command":
+        error_exit(
+            "command reviews need command:<label>, naming an entry in "
+            f"review.commands (got '{resolved}')",
+            use_json=args.json,
+            code=2,
+        )
+    try:
+        _review_command_argv(resolved.model)
+    except ValueError as e:
+        error_exit(str(e), use_json=args.json, code=2)
+    return resolved
+
+
+def cmd_command_impl_review(args: argparse.Namespace) -> None:
+    """Run implementation review via a configured review command (fn-337)."""
+    cmd_backend_review(args, backend="command", kind="impl")
+
+
+def cmd_command_plan_review(args: argparse.Namespace) -> None:
+    """Run plan review via a configured review command (fn-337)."""
+    cmd_backend_review(args, backend="command", kind="plan")
+
+
+def cmd_command_completion_review(args: argparse.Namespace) -> None:
+    """Run spec completion review via a configured review command (fn-337)."""
+    cmd_backend_review(args, backend="command", kind="completion")
 
 
 def cmd_cursor_impl_review(args: argparse.Namespace) -> None:
@@ -56383,6 +56640,11 @@ def _add_impl_review_parser(sub, backend: str):
             "Backend spec override (e.g. 'claude:claude-opus-5:high'). "
             "Overrides task/epic/env/config resolution. Strict parse."
         )
+    elif backend == "command":
+        spec_help = (
+            "Backend spec override (e.g. 'command:gemini', a label in "
+            "review.commands). Overrides task/epic/env/config resolution."
+        )
     else:
         raise ValueError(f"unknown review backend parser: {backend}")
     p.add_argument("--spec", help=spec_help)
@@ -56393,6 +56655,7 @@ def _add_impl_review_parser(sub, backend: str):
         "copilot": cmd_copilot_impl_review,
         "cursor": cmd_cursor_impl_review,
         "claude": cmd_claude_impl_review,
+        "command": cmd_command_impl_review,
     }[backend]
     p.set_defaults(func=func, review_backend=backend, review_kind="impl")
     return p
@@ -56533,6 +56796,7 @@ def _backend_spec_help(backend: str, *, for_pass: bool = False) -> str:
         "copilot": "copilot:claude-opus-4.5:xhigh",
         "cursor": "cursor:gpt-5.5-high",
         "claude": "claude:claude-opus-5:high",
+        "command": "command:gemini",
     }
     example = examples[backend]
     if for_pass:
@@ -56581,6 +56845,7 @@ def _add_plan_review_parser(sub, backend: str):
             "copilot": cmd_copilot_plan_review,
             "cursor": cmd_cursor_plan_review,
             "claude": cmd_claude_plan_review,
+            "command": cmd_command_plan_review,
         }[backend],
         review_backend=backend,
         review_kind="plan",
@@ -56617,6 +56882,7 @@ def _add_completion_review_parser(sub, backend: str):
             "copilot": cmd_copilot_completion_review,
             "cursor": cmd_cursor_completion_review,
             "claude": cmd_claude_completion_review,
+            "command": cmd_command_completion_review,
         }[backend],
         review_backend=backend,
         review_kind="completion",
@@ -56646,6 +56912,7 @@ def _add_validate_parser(sub, backend: str):
         "copilot": cmd_copilot_validate,
         "cursor": cmd_cursor_validate,
         "claude": cmd_claude_validate,
+        "command": cmd_command_validate,
     }[backend])
     return p
 
@@ -56676,6 +56943,7 @@ def _add_deep_pass_parser(sub, backend: str):
         "copilot": cmd_copilot_deep_pass,
         "cursor": cmd_cursor_deep_pass,
         "claude": cmd_claude_deep_pass,
+        "command": cmd_command_deep_pass,
     }[backend])
     return p
 
@@ -59605,6 +59873,17 @@ def main() -> None:
     _add_completion_review_parser(claude_sub, "claude")
     _add_validate_parser(claude_sub, "claude")
     _add_deep_pass_parser(claude_sub, "claude")
+
+    p_command = subparsers.add_parser(
+        "command", help="Configured review command helpers (review.commands)"
+    )
+    command_sub = p_command.add_subparsers(dest="command_cmd", required=True)
+    _add_impl_review_parser(command_sub, "command")
+    _add_impl_review_fanout_parsers(command_sub, "command")
+    _add_plan_review_parser(command_sub, "command")
+    _add_completion_review_parser(command_sub, "command")
+    _add_validate_parser(command_sub, "command")
+    _add_deep_pass_parser(command_sub, "command")
 
     # Review auto-enable heuristic (fn-32.2 --deep). Skill layer calls this
     # to determine which deep passes auto-enable for a given changed-file
