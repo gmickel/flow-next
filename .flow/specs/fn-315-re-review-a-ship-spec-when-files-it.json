@@ -404,7 +404,7 @@
     "impl:fn-315-re-review-a-ship-spec-when-files-it.1": 0
   },
   "spec_path": ".flow/specs/fn-315-re-review-a-ship-spec-when-files-it.md",
-  "status": "open",
+  "status": "done",
   "title": "Re-review a SHIP spec when files it cites changed before work starts",
   "tracker": {
     "baseHashFlow": null,
@@ -417,5 +417,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T10:10:38.718958Z"
+  "updated_at": "2026-11-19T10:13:34.614454Z"
 }
