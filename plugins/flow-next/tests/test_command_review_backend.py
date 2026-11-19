@@ -308,15 +308,41 @@ class CommandImplReview(CommandTest):
         found = os.path.join(os.path.abspath(os.sep), "opt", "tools", "reviewer")
         with mock.patch.object(flowctl.shutil, "which", return_value=found):
             self.assertEqual(flowctl._review_command_argv("g"), [found, "--flag"])
-        # Windows puts the current directory first; a hit there is refused.
+        # A relative hit (Windows searches the current directory first) is taken from
+        # where the lookup ran: refused inside the checkout, kept outside it.
+        repo = os.path.realpath(str(flowctl.get_repo_root()))
         with mock.patch.object(flowctl.shutil, "which",
-                               return_value=os.path.join(os.curdir, "reviewer")):
+                               return_value=os.path.join(os.curdir, "reviewer")), \
+                mock.patch.object(flowctl.os, "getcwd", return_value=repo):
             with self.assertRaises(ValueError) as ctx:
                 flowctl._review_command_argv("g")
             self.assertIn("inside the checkout", str(ctx.exception))
-        # Not found anywhere: left to the spawn, which reports a missing executable.
+        outside = os.path.dirname(repo)
+        with mock.patch.object(flowctl.shutil, "which",
+                               return_value=os.path.join(os.curdir, "reviewer")), \
+                mock.patch.object(flowctl.os, "getcwd", return_value=outside):
+            self.assertEqual(flowctl._review_command_argv("g"),
+                             [os.path.join(outside, "reviewer"), "--flag"])
+        # Not found on PATH: refused before dispatch, never left to a later lookup.
         with mock.patch.object(flowctl.shutil, "which", return_value=None):
-            self.assertEqual(flowctl._review_command_argv("g"), ["reviewer", "--flag"])
+            with self.assertRaises(ValueError) as ctx:
+                flowctl._review_command_argv("g")
+            self.assertIn("not found on PATH", str(ctx.exception))
+            self.assertNotIn("reviewer", str(ctx.exception))
+
+    @unittest.skipIf(os.name == "nt", "symlinks need privileges on Windows")
+    def test_checkout_symlink_to_an_outside_program_is_refused(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [SHIP])
+            (repo / "bin").mkdir()
+            (repo / "bin" / "py").symlink_to(sys.executable)
+            os.environ["FLOW_REVIEW_COMMAND_FAKE"] = json.dumps(
+                [str(repo / "bin" / "py"), *env.argv[1:]])
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
+            self.assertEqual(code, 2, out + err)
+            self.assertIn("inside the checkout", json.loads(out)["error"])
+            self.assertEqual(env.requests(), [])
+            self.assertEqual(env.rounds(), 0)
 
     def test_relative_program_resolves_against_the_home_directory(self):
         os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
@@ -396,6 +422,12 @@ class CommandImplReview(CommandTest):
                     flowctl._review_command_argv("g")
                 self.assertIn("interpreter", str(ctx.exception))
                 self.assertIn("FLOW_REVIEW_COMMAND_G", str(ctx.exception))
+        os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["reviewer"])
+        with mock.patch.object(flowctl.os, "name", "nt"), mock.patch.object(
+                flowctl.shutil, "which", return_value="/opt/tools/reviewer.CMD"):
+            with self.assertRaises(ValueError) as ctx:
+                flowctl._review_command_argv("g")
+            self.assertIn("interpreter", str(ctx.exception))
         os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["/opt/py/python", "review.cmd"])
         with mock.patch.object(flowctl.os, "name", "nt"):
             self.assertEqual(flowctl._review_command_argv("g"), ["/opt/py/python", "review.cmd"])
