@@ -415,7 +415,7 @@ class CommandImplReview(CommandTest):
         self.enterContext(mock.patch.object(flowctl, "load_flow_config", return_value={}))
         self.enterContext(mock.patch.object(flowctl, "get_repo_root",
                                             return_value="/nonexistent-checkout"))
-        for first in ("C:/tools/review.cmd", "review.BAT", "~/bin/review.Cmd"):
+        for first in ("C:/tools/review.cmd", "/opt/review.BAT", "~/bin/review.Cmd"):
             os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps([first])
             with self.subTest(first=first), mock.patch.object(flowctl.os, "name", "nt"):
                 with self.assertRaises(ValueError) as ctx:

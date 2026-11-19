@@ -46181,35 +46181,39 @@ def _review_command_argv(label: Optional[str]) -> list:
             f"{var} (command:{label}) must be a JSON array of non-empty strings"
         )
     argv = [os.path.expanduser(arg) if arg.startswith("~") else arg for arg in entry]
-    # cmd.exe runs a batch file and interpolates its arguments; argv stays shell-free.
-    if os.name == "nt" and os.path.splitext(argv[0])[1].lower() in (".cmd", ".bat"):
-        raise ValueError(
-            f"{var} (command:{label}) names a .cmd or .bat file first, which "
-            "Windows runs through cmd.exe; name the interpreter first, "
-            'e.g. ["python", "~/bin/review.py"]'
-        )
     # The program is fixed here, never by a lookup in the checkout under review: a
     # relative path is taken from the home directory (where the command starts), and a
-    # bare name from PATH, which on Windows also searches the current directory first.
+    # bare name from PATH (which on Windows also searches the current directory first).
     program = argv[0]
     if not os.path.isabs(program):
         if os.path.dirname(program):
             program = os.path.join(os.path.expanduser("~"), program)
         else:
-            program = shutil.which(program) or program
-    if os.path.isabs(program):
-        repo = os.path.realpath(str(get_repo_root()))
+            found = shutil.which(program)
+            if not found:
+                raise ValueError(
+                    f"{var} (command:{label}) names a program not found on PATH; "
+                    "give its absolute path"
+                )
+            program = os.path.abspath(found)  # a relative hit is from the current directory
+    repo = os.path.realpath(str(get_repo_root()))
+    for path in (os.path.normpath(program), os.path.realpath(program)):
+        # A checkout-owned symlink chooses the program even when its target is outside.
         try:
-            inside = os.path.commonpath([os.path.realpath(program), repo]) == repo
+            inside = os.path.commonpath([path, repo]) == repo
         except ValueError:  # another Windows drive
             inside = False
-    else:
-        # Found only as a relative PATH or current-directory hit.
-        inside = program != argv[0]
-    if inside:
+        if inside:
+            raise ValueError(
+                f"{var} (command:{label}) names a program inside the checkout under "
+                "review; give one outside it, by absolute path or by name on PATH"
+            )
+    # cmd.exe runs a batch file and interpolates its arguments; argv stays shell-free.
+    if os.name == "nt" and os.path.splitext(program)[1].lower() in (".cmd", ".bat"):
         raise ValueError(
-            f"{var} (command:{label}) names a program inside the checkout under "
-            "review; give one outside it, by absolute path or by name on PATH"
+            f"{var} (command:{label}) names a .cmd or .bat file first, which "
+            "Windows runs through cmd.exe; name the interpreter first, "
+            'e.g. ["python", "~/bin/review.py"]'
         )
     return [program, *argv[1:]]
 
