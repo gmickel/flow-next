@@ -24836,12 +24836,14 @@ def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[st
     """
     if spec.get("plan_review_status") != "ship" or any(t.get("status") != "todo" for t in tasks):
         return []
-    # A superseded verdict finalized late and never governed the status; skip it. So did one
-    # whose status leg still waits on a receipt that never published.
+    # A superseded verdict finalized late and never governed the status; skip it. Only a row
+    # whose status leg completed (or one predating the leg) took effect: a leg still waiting on
+    # a receipt that never published, or a record-only verdict, did not.
     rows = [row for row in spec.get("review_attempts") or []
             if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
             and not row.get("superseded_by")
-            and (row.get("finalized") or {}).get("status") not in ("pending", "superseded")]
+            and ("finalized" not in row
+                 or isinstance(row["finalized"], dict) and row["finalized"].get("status") == "complete")]
     # Only a commit observed before dispatch is the reviewed one; a finalize-time fallback
     # (`head_sha_observed: false`, or a row predating the marker) may postdate the review.
     head = rows[-1].get("head_sha") if rows and rows[-1].get("head_sha_observed") is True else None
@@ -46165,7 +46167,7 @@ def _review_command_argv(label: Optional[str]) -> list:
     except ValueError:
         entry = None
     if (not isinstance(entry, list) or not entry
-            or not all(isinstance(arg, str) and arg for arg in entry)):
+            or not all(isinstance(arg, str) and arg and "\0" not in arg for arg in entry)):
         raise ValueError(
             f"{var} (command:{label}) must be a JSON array of non-empty strings"
         )
@@ -46291,7 +46293,9 @@ def _command_run_exec(
         try:
             returncode, raw, stderr_tail, problem = _run_review_command(
                 argv, json.dumps(payload).encode("utf-8"),
-                timeout=timeout, cwd=repo_root, env=env,
+                # Started outside the checkout, so no relative path (or a Windows lookup in
+                # the current directory) reaches a program the branch under review placed.
+                timeout=timeout, cwd=Path.home(), env=env,
             )
         except FileNotFoundError:
             return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
