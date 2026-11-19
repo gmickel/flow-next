@@ -482,10 +482,19 @@ Teams accumulate project-wide acceptance criteria that no single spec owns - "ev
 
 How it works in the team lifecycle:
 
-- **The spec is the unit of compliance.** The existing **spec completion review is the sole compliance surface**: when the file exists, the reviewer judges every G-ID against the whole spec's implementation and records `met` / `violated` / `n/a` per criterion in the ordinary review receipt (`criteria: [{id, status, note?}]` - [`review-findings.md`](review-findings.md) § Global-criteria compliance). No separate auditor pass, no rule engine, no per-task application.
+- **The spec is the unit of compliance.** Standing criteria are judged when a review runs on a spec: the spec completion review, or on a one-task spec (which skips completion review) that task's implementation review. The reviewer judges every G-ID against the whole spec's implementation and records `met` / `violated` / `n/a` per criterion in the ordinary review receipt (`criteria: [{id, status, note?}]` - [`review-findings.md`](review-findings.md) § Global-criteria compliance). Work with no spec, and a small change whose review the risk rule skips, are not judged against them. No separate auditor pass, no rule engine.
 - **Standing criteria are not restated per spec.** G-IDs and R-IDs serve different purposes: a G-ID is a project invariant judged automatically against every spec; an R-ID is one spec's own deliverable. `/flow-next:plan`, `/flow-next:capture`, and `/flow-next:refine` do not copy G-IDs into a spec's acceptance criteria - a copy would freeze while `criteria.md` evolves and get judged twice. A spec references a relevant G-ID in prose and adds an R-ID only for what it requires beyond the standing rule.
 - **The file is user content.** `/flow-next:setup` offers to scaffold it from a bundled template (opt-in; declining leaves no trace, and an existing file is never touched or re-asked about). Edit it like any reviewed team artifact - it lives in the repo, so criteria changes go through the same PR review as code.
 - **Absence costs nothing.** No file means no criteria content in any assembled review prompt and no `criteria` field in receipts - adopt it when the team has standing rules worth enforcing, ignore it until then.
+
+### Rules shared across an organisation
+
+Rules that hold for every repository usually live in one shared guidelines repository. A repository reaches them through its own `.flow/criteria.md`, in one of two ways:
+
+- **`.flow/criteria.md` is a link to a shared criteria file** written in the same `- **G<N>:**` grammar, for example a symlink into a submodule (`.flow/criteria.md -> ../vendor/org-guidelines/criteria.md`). flowctl follows the link and puts the shared G-IDs in the review prompt itself, so every backend sees them, and the receipt records one verdict per G-ID. The target must exist wherever a review runs: a broken link fails the review closed (`invalid .flow/criteria.md: broken symlink`), never silently without criteria. A checkout without symlink support (Windows with `core.symlinks` off) writes the link as a plain file holding its target path, which carries no criteria; use the second form there.
+- **A criterion names a shared guidelines file**, for example `- **G3:** The change follows every rule in vendor/org-guidelines/review.md; name the rule a violation breaks.` The reviewer reads that file during the review. The receipt records one verdict for G3, with the broken rule named in its note: coarser than one G-ID per rule. Keep the file inside the repository (a submodule, a vendored copy) so every backend can read it. A path outside the repository was checked live per backend: the `codex` and `cursor` reviewers read it, and so did a `host` reviewer on Claude Code (host access follows the host's own permission settings); the `claude` reviewer cannot (it reports the criterion as not evaluated and returns `NEEDS_HUMAN`); `copilot` is unchecked.
+
+Both forms keep the rules in the repository's own criteria file, so a runner without some user-level file cannot skip them.
 
 ---
 
