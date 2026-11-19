@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **A pull succeeds when the card sits in your ready state, even if that state counts as started.** A team that keeps its `tracker.readyState` among the started states (a Linear `started`-type column, a Jira status in the In Progress category, or a readiness label on a GitHub or GitLab issue with no `status:` label) used to see `flowctl tracker sync --op pull` project readiness and then fail with `status conflict (unmapped): flow='backlog' tracker='in_progress'` and exit 10, so `flow --auto` and scheduled pulls read an admitted card as a failed sync. When the card is in the configured ready state and the spec has not started (no tasks, or only todo tasks), the status step now agrees and writes nothing, so admission stays a person's board move. A card in any other started state, and a started spec, decide as before. Thanks to @sn-furali for the report and the fix sketch in #627.
+
 ## [flow-next 9.16.0] - 2026-11-18
 
 Reviews that name no model run on the newest models without costing the most. A bare `codex` or `copilot` reviewer runs GPT-6.2 Sol at medium effort, which found 35 actionable defects per draw set against 14 for GPT-6.1 Sol at high in a replication on replayed reviews (two draw sets per model on six fixtures), caught as many known misses, made no more false claims, and took 285 seconds per review against 257, at the cost of about four non-actionable notes per review. A bare `claude` reviewer runs Opus 5.5 at high. Fable and GPT-6.2 Astra, the most expensive tiers, run only when you pin them, with no unknown-model warning, and the docs show the one-line pin for each. Teams that want the most thorough Codex review pin GPT-6.2 Astra, which in the earlier screen of reviewer models caught the most known misses (7 of 10) and other real defects (46), at about three times GPT-6.1 Sol's review time. Their findings stay structured too: the findings parser now reads the layouts GPT-6.2 models write, for every review kind, so the fix loop and the pull request see each finding instead of the prose alone.

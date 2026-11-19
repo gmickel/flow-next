@@ -2364,3 +2364,45 @@ class TodoBacklogEarlyAgreement(unittest.TestCase):
     def test_taskless_spec_still_noops(self) -> None:
         d = decide("backlog", None, "backlog", "backlog", "none")
         self.assertEqual(d.kind, "noop")
+
+
+class ReadyStateAgreement(unittest.TestCase):
+    """#627: a card in the configured readyState agrees with an unstarted
+    spec; every other pairing decides exactly as it does without it."""
+
+    SLOTS = ("backlog", "todo", "in_progress", "in_review", "done")
+
+    def test_unstarted_spec_noops_against_ready_card_under_every_tiebreak(
+            self) -> None:
+        for tiebreak in ("always-ask", "flow-wins", "tracker-wins"):
+            for flow_slot in ("backlog", "todo"):
+                for card in ("in_progress", "in_review"):
+                    with self.subTest(tiebreak=tiebreak, flow=flow_slot,
+                                      card=card):
+                        d = decide(flow_slot, None, flow_slot, card,
+                                   "none", tiebreak, card_ready=True)
+                        self.assertEqual(d.kind, "noop")
+                        self.assertEqual(d.target_slot, card)
+                        self.assertEqual(d.details["who"],
+                                         "ready-state-agree")
+
+    def test_every_other_pairing_ignores_card_ready(self) -> None:
+        for flow_slot in self.SLOTS:
+            for tracker_slot in self.SLOTS:
+                for requested in self.SLOTS:
+                    for evidence in ("none", "open", "merged"):
+                        if (flow_slot in ("backlog", "todo")
+                                and requested in ("backlog", "todo")
+                                and tracker_slot in ("in_progress",
+                                                     "in_review")):
+                            continue  # the pairings the rule changes
+                        with self.subTest(flow=flow_slot,
+                                          tracker=tracker_slot,
+                                          requested=requested,
+                                          evidence=evidence):
+                            self.assertEqual(
+                                decide(requested, None, flow_slot,
+                                       tracker_slot, evidence,
+                                       card_ready=True),
+                                decide(requested, None, flow_slot,
+                                       tracker_slot, evidence))
