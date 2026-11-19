@@ -23,7 +23,7 @@
 }
 ```
 
-**When `PLATFORM=grok` or `PLATFORM=muse`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
   "header": "Review",
@@ -40,7 +40,7 @@
 }
 ```
 
-**When `PLATFORM` is none of `cursor`, `grok`, `muse`** (Claude Code / Droid / Codex / OpenCode — unchanged; Cursor uses its dedicated menu above and Grok and Muse share theirs; OpenCode uses this default Host + None menu):
+**When `PLATFORM` is none of `cursor`, `grok`, `muse`, `antigravity`** (Claude Code / Droid / Codex / OpenCode — unchanged; Cursor uses its dedicated menu above and Grok, Muse and Antigravity share theirs; OpenCode uses this default Host + None menu):
 ```json
 {
   "header": "Review",

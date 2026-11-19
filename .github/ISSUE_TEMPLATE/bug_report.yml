@@ -21,6 +21,7 @@ body:
         - Cursor
         - OpenCode
         - Muse Code
+        - Antigravity CLI
         - Other
     validations:
       required: true

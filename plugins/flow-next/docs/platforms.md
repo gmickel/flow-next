@@ -1,6 +1,6 @@
 # Other Platforms
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode, and Meta Muse Code.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode, Meta Muse Code, and Google Antigravity CLI.
 
 First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host.
 
@@ -22,6 +22,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 - [Cursor](#cursor)
 - [OpenCode](#opencode)
 - [Muse Code](#muse-code)
+- [Antigravity CLI](#antigravity-cli)
 - [Windows: Python discovery](#windows-python-discovery)
 - [Windows + Copilot review backend](#windows-copilot-review-backend)
 - [Claude Code CLI review backend](#claude-code-cli-review-backend)
@@ -42,6 +43,7 @@ The plugin **does not** ship `hooks/hooks.json` and registers no hooks on any ho
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Namespaced slash commands (`/flow-next:*`), plugin-resolved flowctl, multi-agent verified. See [Grok Build](#grok-build-claude-code-compatibility) |
 | Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace - does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified) - see [Cursor](#cursor) |
 | Muse Code (Meta) | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-muse.sh` | `.claude-plugin/plugin.json` (installed as a Muse bundle with translated agents) | **First-class** (installer delivery; see [Muse Code](#muse-code)) |
+| Antigravity CLI (Google) | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-antigravity.sh` | `plugin.json` at the bundle root (installed as a native Antigravity bundle with translated agents) | **First-class** (installer delivery; start sessions with the setting in [Antigravity CLI](#antigravity-cli)) |
 | OpenCode | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-opencode.sh` | n/a (OpenCode has no plugin format - the installer scatters canonical files into `~/.config/opencode/`) | **First-class** (installer delivery; multi-agent fan-out, codex + host review, and setup verified live) - see [OpenCode](#opencode) |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
@@ -57,7 +59,7 @@ search (`scripts/sync-codex.sh` fails the build on such a directive).
 | Claude Code, native macOS/Linux build (2.1.117+) | no Grep or Glob tool; Bash with bundled search | WebSearch, WebFetch |
 | Claude Code, Windows or npm install | Grep, Glob, Bash | WebSearch, WebFetch |
 | Codex | shell only, in a read-only sandbox without network | built-in web search (`web_search` in `config.toml`) |
-| Droid, Cursor, OpenCode, Grok Build, Muse Code | the host's own search tools and shell | the host's own web tools |
+| Droid, Cursor, OpenCode, Grok Build, Muse Code, Antigravity CLI | the host's own search tools and shell | the host's own web tools |
 
 The `claude` review backend is the exception: flowctl passes `--tools Read Grep Glob` explicitly,
 and Claude Code provides tools that are named this way.
@@ -66,7 +68,7 @@ and Claude Code provides tools that are named this way.
 
 `/flow-next:setup` **copies nothing into your repo.** It runs `flowctl init`, writes a slim versioned docs snippet (CLAUDE.md / AGENTS.md), walks the config ceremony, and optionally seeds user-owned files (`SPEC.md`, `.flow/criteria.md`, `.codex/agents/*.toml` on Codex).
 
-Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Muse Code by substituting `${CLAUDE_PLUGIN_ROOT}` in skill text, Cursor, Grok, and OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
+Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Muse Code by substituting `${CLAUDE_PLUGIN_ROOT}` in skill text, Cursor, Grok, OpenCode, and Antigravity CLI by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
 
 **Plugin updates land silently - no setup re-run.** Re-run it only when setup says the docs-snippet schema bumped, or to change configuration. Repos set up before this layout carry leftover `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` snapshots; setup offers to delete them, and deleting them changes nothing observable.
 
@@ -111,9 +113,11 @@ where it does (moved from the setup skill; nothing here is read at runtime):
 
 **Muse rung first — the bundle marker.** `install-muse.sh` writes `.flow-next-muse-bundle` at the bundle root, which is the resolved `PLUGIN_ROOT` inside Muse's plugin cache. No other host loads that bundle, so the marker is a positive signal no inherited variable can fake, and it sits above every rung. Muse's own session variable (`MUSE_SESSION_ID`) is deliberately not used: Codex and Claude Code children of a Muse shell inherit it. The Muse cache also carries `.claude-plugin/plugin.json`, so a Muse session launched from a Claude Code shell (inherited `CLAUDECODE`) would otherwise classify `claude-code`.
 
+**Antigravity rung beside Muse — the bundle marker.** `install-antigravity.sh` writes `.flow-next-antigravity-bundle` at the bundle root, which is the resolved `PLUGIN_ROOT` under `~/.gemini/config/plugins/`. Antigravity sets `ANTIGRAVITY_CONVERSATION_ID` and similar variables in its agent shell, but Codex and Claude Code children inherit them, so they are not used. The installed bundle also carries `.claude-plugin/plugin.json`, so without the marker rung a session launched from a Claude Code shell would classify `claude-code`, and one from a plain shell `codex`.
+
 **Known nesting edge (Droid → Grok) — NEEDS-HUMAN.** A grok child inherits `CLAUDECODE` from a Claude parent, and the Claude rung now sits BELOW grok, so Claude-from-parent does not misfire. It did **not** disprove `DROID_PLUGIN_ROOT` propagation: if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Treat nested Droid→Grok as **unsupported pending a this-process-is-grok discriminator** unless a NEEDS-HUMAN smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Cursor-from-grok remains correct via its higher-precedence signal. The mirror-image nesting edge is Claude-from-Grok / Claude-from-Cursor: a Claude Code session launched inside a grok or Cursor agent shell inherits that host's marker and classifies as the parent host. That trade is deliberate - both markers are set by the parent's own process, and the reverse (Claude outranking them on an inherited `CLAUDECODE`) is the far more common nesting, since Claude sessions routinely spawn grok / cursor-agent bridges.
 
-**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`; (11) `PLUGIN_ROOT` carrying `.flow-next-opencode-manifest` (no higher signal) → `opencode`; (12) same + `GROK_AGENT=1` → `grok`; (13) same + inherited `CLAUDECODE=1` without `.claude-plugin/plugin.json` → `opencode`; (14) `PLUGIN_ROOT` carrying `.flow-next-muse-bundle` → `muse`, also with inherited `CLAUDECODE`, `GROK_AGENT` or `DROID_PLUGIN_ROOT`; (15) inherited `MUSE_SESSION_ID` on a Codex or Claude plugin root → that root's host.
+**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`; (11) `PLUGIN_ROOT` carrying `.flow-next-opencode-manifest` (no higher signal) → `opencode`; (12) same + `GROK_AGENT=1` → `grok`; (13) same + inherited `CLAUDECODE=1` without `.claude-plugin/plugin.json` → `opencode`; (14) `PLUGIN_ROOT` carrying `.flow-next-muse-bundle` → `muse`, also with inherited `CLAUDECODE`, `GROK_AGENT` or `DROID_PLUGIN_ROOT`; (15) inherited `MUSE_SESSION_ID` on a Codex or Claude plugin root → that root's host; (16) `PLUGIN_ROOT` carrying `.flow-next-antigravity-bundle` → `antigravity`, also with inherited `CLAUDECODE`, `GROK_AGENT` or `DROID_PLUGIN_ROOT`; (17) inherited `ANTIGRAVITY_CONVERSATION_ID` on a Codex or Claude plugin root → that root's host.
 
 ## Factory Droid (native support)
 
@@ -439,6 +443,46 @@ The script builds the bundle in a temporary directory, runs `muse plugins instal
 - **Install integrity.** Muse binds agent approval to the installed package's contents; flowctl writes nothing into its install, so the approval survives normal use. Reinstalling re-approves.
 - **POSIX only**, matching the OpenCode installer.
 - **Verification status:** the bundle, the installer and setup detection are covered by deterministic tests; agent spawning, setup, capture, plan with scouts, work with workers, codex review, `flow --auto` through make-pr, and land to a merged pull request (sandbox disabled) were verified live on Muse Code 1.4.6 with Claude Code and the Codex install on the same machine. Re-verify on major Muse releases.
+
+## Antigravity CLI
+
+**First-class, installer-delivered.** [Antigravity CLI](https://antigravity.google/docs/cli/reference.md) (`agy`, Google's coding agent CLI) converts Claude-format plugins on install: skills load and `flowctl` resolves by deriving the plugin root from the skill file's own path. Four things stop the canonical plugin from working there unchanged, so `./scripts/install-antigravity.sh` builds an Antigravity bundle at install time:
+
+- **Agent models.** Antigravity accepts only its own tiers in an agent's `model` (`inherit`, `flash_lite`, `flash`, `pro`) and skips an agent that names `sonnet` or `opus`: 19 of the 21 agents. The bundle maps `sonnet` → `flash` and `opus` → `pro`; `inherit` stays.
+- **Agent tools.** Antigravity ignores `disallowedTools`, and an agent with no `tools` list gets no shell. The bundle replaces each agent's `disallowedTools` with a `tools` allowlist in Antigravity's names: every agent gets `run_command`, `read_file` and `search_web`; `edit_file`, `write_file`, `invoke_subagent` and `ask_question` are added unless the canonical agent denies `Edit`, `Write` or `Task`. An agent the bundle has no mapping for fails the install by name.
+- **Commands.** The converter turns each command into a `flow-next-cmd-<name>` skill, doubling the skill catalog. The bundle drops `commands/` and carries one stub skill per command instead, hidden from the model (`disable-model-invocation: true`), so `/flow-next:plan` and the other documented commands work as typed and the model's catalog lists only the canonical skills.
+- **Rules.** Antigravity loads plugin rules from `rules/AGENTS.md` only; the bundle delivers the plugin's rule there.
+
+### Install
+
+```bash
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
+  && /tmp/flow-next-install/scripts/install-antigravity.sh \
+  && trash /tmp/flow-next-install
+```
+
+The script builds the bundle in a temporary directory, with a `plugin.json` at its root so Antigravity installs it as a native plugin, runs `agy plugin install <bundle>`, validates the installed copy (`~/.gemini/config/plugins/flow-next`) with `agy plugin validate`, and deletes the bundle. It exits non-zero, without the success message, when `agy` is missing, the install fails, or the installed copy does not load every skill and agent. Antigravity owns the installed copy; re-run after `git pull` to update, which replaces it. Then start a session in a project with the setting below and run **`/flow-next:setup`**. Setup detects Antigravity by the `.flow-next-antigravity-bundle` marker at the plugin root, writes the `/flow-next:` snippet to `AGENTS.md`, and offers review backends the way it does on Grok and Muse.
+
+### Session setting
+
+```bash
+agy --settings '{"toolPermission":"always-proceed"}'
+```
+
+In Antigravity's default Auto mode, a subagent's shell commands run in a sandbox where the repository's git storage is read-only and the network is off, whatever the agent's own command policy says. A worker then cannot commit, write the task lock, or run a review CLI. Narrow `permissions.allow` rules for `git` and `curl` do not lift it; `toolPermission: always-proceed` does, and with it a worker commits and reaches the network. The setting approves every tool call without asking, so use it only in an environment you already trust. `--settings` applies to that session only and is never saved. Without it a run can still finish, because the conductor commits and reviews on the workers' behalf, but that is a degraded path, not the supported one.
+
+### Caveats / intentional limits
+
+- **Use the installer, not a plain plugin install.** `agy plugin install` of this repository skips 19 of the 21 agents, doubles the skill catalog with converted commands, and leaves setup classifying the host as Codex.
+- **Review.** A subagent's model on Antigravity is a tier, not a named model, and a reviewer pinned to another model family was not demonstrated, so `review.backend host` fails closed. Use a CLI backend (`codex`, `copilot`, `cursor`, `claude`) or a `command:<label>`; each needs the session setting above to run from a worker.
+- **Instructions file.** Antigravity reads `AGENTS.md` and `GEMINI.md`; `CLAUDE.md` is not documented as read. A repository set up under Claude Code has its snippet in `CLAUDE.md`: choose `Both` at setup's Docs question, or run `/flow-next:setup` once in Antigravity.
+- **Read-only is partial.** Read-only scouts have no file edit or write tool, but keep the shell (as on Claude Code and Muse), which can still write files.
+- **Tool names.** `agy plugin validate` does not check the names in an agent's `tools` list, and Antigravity documents that a misspelled name can hang a subagent. The bundle uses names verified against a live dispatch.
+- **Setup questions.** Antigravity's question tool showed at most four options in the verified run, so setup's review question listed Host, Codex, Copilot and None; type another backend through its write-in option.
+- **Version.** Auto as the default mode needs Antigravity CLI 1.5.7 or later; Gemini Enterprise accounts are not offered Auto mode and were not verified.
+- **POSIX only**, matching the Muse and OpenCode installers. The Antigravity IDE and app and Windows are not verified.
+- **Driving Antigravity from another host:** the bridge recipe is in `flowctl usage` (Orchestration & model steering), and a review wrapper for `command:<label>` is in [flowctl.md](flowctl.md#review-command-backend).
+- **Verification status:** the bundle, the installer and setup detection are covered by deterministic tests. Verified live on Antigravity CLI 1.5.13 on Linux, with the session setting: install, validation and re-install; the scout and worker tool allowlists through live dispatches; `/flow-next:<name>` stubs forwarding their arguments while staying out of the model's catalog; setup classifying the host and writing `AGENTS.md`; `plan` with its scouts and a codex plan review; and `work` on a two-task spec, where each worker committed its own task and ran a codex review to a receipt, followed by a codex completion review. The subagent sandbox without the setting was measured on 1.5.12 and not re-run. make-pr, land, `flow --auto`, and the IDE and app are not verified. Antigravity's flags change between releases; re-verify on each minor release.
 
 ## Windows: Python discovery
 

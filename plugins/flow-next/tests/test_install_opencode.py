@@ -55,7 +55,11 @@ READ_SURFACE_EXCLUSIONS = {
         "Muse bundle detection marker written by install-muse.sh, "
         "not a support dir to copy"
     ),
-    "commit": "non-filesystem noise (URL fragment)",
+    ".flow-next-antigravity-bundle": (
+        "Antigravity bundle detection marker written by install-antigravity.sh, "
+        "not a support dir to copy"
+    ),
+    "commit":"non-filesystem noise (URL fragment)",
     "..": "non-filesystem noise (../../../ matching ../../ then ..)",
 }
 

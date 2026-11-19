@@ -77,6 +77,21 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 # Model + effort are separate flags: `-m <model> --reasoning-effort high` (NOT a fused `-m <model>-high`).
 grok -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
 grok --always-approve --no-plan -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Ask the CLI what it offers (`grok --help`, host catalog) rather than copying an identifier from a doc.
+
+# agy: Google's Antigravity CLI (1.5.x) - a headless EDITING agent that commits without
+# --dangerously-skip-permissions. FLAGS BEFORE -p (it takes the next token as the prompt).
+# --print-timeout bounds the turn (default 0 = no limit). --settings (inline JSON or a file,
+# session only) denies push and history rewrite at the tool level: one rule per command,
+# regex without `\`, `+` or parentheses (rules using them silently match nothing; verified 1.5.13).
+# A guard, not containment: `git -C <dir> push` does not match, so the host still checks the remote.
+cat > agy-bridge.json <<'EOF'
+{"permissions":{"deny":["command(regex:git push.*)","command(regex:git rebase.*)","command(regex:git reset.*)",
+ "command(regex:git filter-branch.*)","command(regex:git filter-repo.*)","command(regex:git update-ref.*)",
+ "command(regex:git commit.*--amend.*)"]}}
+EOF
+agy --model <model> --settings agy-bridge.json --output-format json --print-timeout 1800s -p "<self-contained prompt>" </dev/null >out.json
+# Success = exit 0 AND .status == "SUCCESS" in out.json (answer in .response). A non-zero exit, any
+# other status, or an empty <base>..HEAD diff is a failed bridge call. `--mode plan` is NOT read-only.
 ```
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m <model> -c model_reasoning_effort=<effort> "<prompt>"` steers a different tier of the same family. It is one route, not the only one. Since codex-cli 0.146.0, `spawn_agent` model and effort steering works on both the role path and the explicit-parameter path (the codex reach page carries the precedence rule and the two dispatch gotchas). Known upstream issue: openai/codex#33267, a `codex exec` parent unable to decode the result of a child that fanned out subagents, is reported on codex-cli 0.144 to 0.145 and has not reproduced on 0.153. A bridged child on a current build may fan out; on a build in the reported range, keep the child prompt flat.
