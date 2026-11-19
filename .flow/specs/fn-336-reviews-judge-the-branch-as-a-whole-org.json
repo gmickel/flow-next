@@ -116,7 +116,7 @@
     "impl:fn-336-reviews-judge-the-branch-as-a-whole-org.1": 0
   },
   "spec_path": ".flow/specs/fn-336-reviews-judge-the-branch-as-a-whole-org.md",
-  "status": "open",
+  "status": "done",
   "title": "Reviews judge the branch as a whole; org criteria by reference",
   "tracker": {
     "baseHashFlow": null,
@@ -129,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T13:09:48.595532Z"
+  "updated_at": "2026-11-19T13:10:29.001802Z"
 }

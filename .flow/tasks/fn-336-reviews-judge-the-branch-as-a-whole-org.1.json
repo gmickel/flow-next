@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-336-reviews-judge-the-branch-as-a-whole-org",
   "spec_path": ".flow/tasks/fn-336-reviews-judge-the-branch-as-a-whole-org.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Reviews judge the branch as a whole; org criteria by reference",
   "updated_at": "2026-11-19T11:57:57.456970Z"
 }
