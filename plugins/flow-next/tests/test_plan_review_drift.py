@@ -149,10 +149,14 @@ class PlanReviewDriftTests(unittest.TestCase):
     def test_r1_missing_or_unrecorded_commit_is_no_drift(self):
         self.change('src/cited.py')
         attempts = self.spec_json()['review_attempts']
-        for head in ('0' * 40, None, '--output=x'):
-            with self.subTest(head=head):
+        reviewed = attempts[-1]['head_sha']
+        # A finalize-time fallback, or a row older than the marker, may postdate the review.
+        for head, observed in (('0' * 40, True), (None, True), ('--output=x', True),
+                               (reviewed, False), (reviewed, None)):
+            with self.subTest(head=head, observed=observed):
                 rows = [dict(row) for row in attempts]
                 rows[-1]['head_sha'] = head
+                rows[-1]['head_sha_observed'] = observed
                 self.edit_spec_json(review_attempts=rows)
                 self.assert_no_drift()
 

@@ -24806,7 +24806,9 @@ def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[st
     rows = [row for row in spec.get("review_attempts") or []
             if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
             and not row.get("superseded_by")]
-    head = rows[-1].get("head_sha") if rows else None
+    # Only a commit observed before dispatch is the reviewed one; a finalize-time fallback
+    # (`head_sha_observed: false`, or a row predating the marker) may postdate the review.
+    head = rows[-1].get("head_sha") if rows and rows[-1].get("head_sha_observed") is True else None
     if not isinstance(head, str) or not re.fullmatch(r"[0-9a-f]{7,64}", head):
         return []
     cited = sorted({token.removeprefix("./") for token in _CITED_TOKEN_RE.findall(body)
