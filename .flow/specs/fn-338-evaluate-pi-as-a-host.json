@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-338-evaluate-pi-as-a-host",
+  "created_at": "2026-11-19T08:42:05.401088Z",
+  "depends_on_epics": [],
+  "id": "fn-338-evaluate-pi-as-a-host",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-338-evaluate-pi-as-a-host.md",
+  "status": "open",
+  "title": "Evaluate Pi as a host",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-19T08:42:05.406932Z"
+}
