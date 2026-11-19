@@ -22,18 +22,33 @@ from test_claude_review_commands import (  # noqa: E402
 
 WRAPPER = textwrap.dedent("""
     import json, os, sys, pathlib, time
-    plan_path, log_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+    plan_path, log_dir = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
     request = json.loads(sys.stdin.read())
-    with log_path.open("a", encoding="utf-8") as fh:
+    # One file per call, numbered by exclusive create: fan-out draws run
+    # concurrently, and appends to a shared file can clobber each other on Windows.
+    log_dir.mkdir(exist_ok=True)
+    seq = 0
+    while True:
+        try:
+            fd = os.open(log_dir / f"{seq:06d}.json", os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            seq += 1
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(json.dumps({"argv": sys.argv, "request": request,
-                             "token": "FLOW_REVIEW_EXECUTION_TOKEN" in os.environ}) + "\\n")
+                             "token": "FLOW_REVIEW_EXECUTION_TOKEN" in os.environ}))
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    step = plan.pop(0) if len(plan) > 1 else plan[0]
-    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    if len(plan) > 1:
+        step = plan.pop(0)
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    else:
+        step = plan[0]
     time.sleep(step.get("sleep", 0))
     if step.get("linger"):
         import subprocess
-        subprocess.Popen([sys.executable, "-c", f"import time; time.sleep({step['linger']})"])
+        # Outside the repo: Windows cannot delete a directory a live process sits in.
+        subprocess.Popen([sys.executable, "-c", f"import time; time.sleep({step['linger']})"],
+                         cwd=os.path.dirname(sys.executable))
     sys.stderr.write(step.get("stderr", ""))
     if "flood" in step:
         sys.stdout.write("x" * step["flood"])
@@ -61,7 +76,7 @@ class CommandRepo:
     def __init__(self, repo: Path, plan, commands=None, backend=None, extra_labels=()):
         self.repo = repo
         self.plan = repo / "plan.json"
-        self.log = repo / "requests.jsonl"
+        self.log = repo / "requests"
         wrapper = repo / "wrapper.py"
         wrapper.write_text(WRAPPER, encoding="utf-8")
         self.set_plan(plan)
@@ -79,7 +94,8 @@ class CommandRepo:
     def requests(self):
         if not self.log.exists():
             return []
-        return [json.loads(line) for line in self.log.read_text().splitlines()]
+        return [json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted(self.log.glob("*.json"))]
 
     def rounds(self):
         return flowctl._current_review_rounds(EPIC_ID, "impl", task_id=TASK_ID, use_json=True)
