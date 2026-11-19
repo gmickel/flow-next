@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-337-command-review-backend-for-other-model",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-19T11:49:27.637794Z",
   "created_at": "2026-11-19T08:42:04.914291Z",
   "default_impl": null,
   "default_review": null,
@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-337-command-review-backend-for-other-model",
   "impl_review_rounds": {
-    "fn-337-command-review-backend-for-other-model.1": 3
+    "fn-337-command-review-backend-for-other-model.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -333,9 +333,127 @@
       "task": "fn-337-command-review-backend-for-other-model.1",
       "timestamp": "2026-11-19T11:44:35.489167Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "6b96f9e8fc0f25fa31124b53db73137d3cd9a11edc26a48cdac8829794bf013e",
+      "backend": "codex",
+      "base_sha": "b448446f1d6d9a8071161de63f286f6156e06548",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-131219abab019ec4d691ea5a87007eb3",
+            "classification": "introduced",
+            "findingId": "finding-131219abab019ec4d691ea5a87007eb3",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4438d2a80b02e4f651ae3223a9c6eace",
+            "classification": "introduced",
+            "findingId": "finding-4438d2a80b02e4f651ae3223a9c6eace",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-eb3006f61c0c1ffe938e7f2173982d8b",
+            "classification": "introduced",
+            "findingId": "finding-eb3006f61c0c1ffe938e7f2173982d8b",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-c7eb35d0ab2b8b09d77fce4c400f90a2",
+            "classification": "introduced",
+            "findingId": "finding-c7eb35d0ab2b8b09d77fce4c400f90a2",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-559fb5a29141015337cc63532f37a651",
+            "classification": "introduced",
+            "findingId": "finding-559fb5a29141015337cc63532f37a651",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-bf661a57ac484c5ee68b26b1b73fd4ad",
+            "classification": "introduced",
+            "findingId": "finding-bf661a57ac484c5ee68b26b1b73fd4ad",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-789fa3f795e2122b968a9cbc6941faa3",
+            "classification": "introduced",
+            "findingId": "finding-789fa3f795e2122b968a9cbc6941faa3",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-bc1c9a12382a6c517f8c53dbe07eea48",
+            "classification": "introduced",
+            "findingId": "finding-bc1c9a12382a6c517f8c53dbe07eea48",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-b6120d60ed3ecd90d6416fb59800f406",
+            "classification": "introduced",
+            "findingId": "finding-b6120d60ed3ecd90d6416fb59800f406",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-4ab42256d3a21fb5e791c4d1cb1eb56c",
+            "classification": "introduced",
+            "findingId": "finding-4ab42256d3a21fb5e791c4d1cb1eb56c",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "63ff6264bda004e608d0caecb3f69c6cc45dc6bb",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 1606,
+      "output_sha256": "4a50eff5eda1b0063df640e0331f74022805a3bcc29fd1c1ef9974613711f219",
+      "reservation_id": "83e33074dd6f4aefb09dcbbd48235968",
+      "round_consumed": true,
+      "scope": "impl:fn-337-command-review-backend-for-other-model.1",
+      "superseded_by": null,
+      "task": "fn-337-command-review-backend-for-other-model.1",
+      "timestamp": "2026-11-19T11:47:16.429380Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-337-command-review-backend-for-other-model.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -355,5 +473,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T11:44:35.492084Z"
+  "updated_at": "2026-11-19T11:49:27.637802Z"
 }
