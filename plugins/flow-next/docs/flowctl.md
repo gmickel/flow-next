@@ -1321,7 +1321,6 @@ flowctl config set memory.enabled false [--json]
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung), or `command:<label>` for a [review command](#review-command-backend). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. A stale `rp` or `export` value prints a notice and review reads as not configured; `config set` rejects it. |
-| `review.commands` | object | unset | Review commands for the [command backend](#review-command-backend): each label maps to a non-empty argv array, selected as `command:<label>`. |
 | `review.fanoutExecution` | string | `concurrent` | First-round CLI review scheduling: concurrent by default or sequential in supplied axis order, completing each draw and its sidecars before starting the next; re-review stays single. |
 | `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (`flow --auto`) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
@@ -1390,7 +1389,7 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:<model>:high", "model": "<model>", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung), `command:<label>` (exactly one label, naming an entry in `review.commands`). `none` is an explicit opt-out. A stale `rp` or `export` value (env, task, spec or config) prints one notice on stderr and resolution stops there: `ASK`, no reviewer configured, without falling through to a lower-precedence value.
+Spec grammar: `backend[:model[:effort]]`. Examples: `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung), `command:<label>` (exactly one label, whose argv is in `FLOW_REVIEW_COMMAND_<LABEL>`). `none` is an explicit opt-out. A stale `rp` or `export` value (env, task, spec or config) prints one notice on stderr and resolution stops there: `ASK`, no reviewer configured, without falling through to a lower-precedence value.
 
 | Backend form | Meaning |
 |--------------|---------|
@@ -2943,16 +2942,16 @@ Spec form: `claude[:model[:effort]]`; efforts are the CLI's own `low`, `medium`,
 
 <a id="review-command-backend"></a>
 
-A review command you configure: one way to put any CLI behind flow-next's reviews (another model family such as Gemini, Grok, Kimi or DeepSeek, or an organisation's own reviewer) without a new backend per vendor. flowctl keeps the prompt, rounds, panel, verdict parsing and receipt; only inference crosses to the command.
+A review command you set on your machine: one way to put any CLI behind flow-next's reviews (another model family such as Gemini, Grok, Kimi or DeepSeek, or an organisation's own reviewer) without a new backend per vendor. flowctl keeps the prompt, rounds, panel, verdict parsing and receipt; only inference crosses to the command.
 
-```json
-"review": {
-  "commands": {
-    "grok": ["~/bin/review-opencode", "xai/grok-4.7"],
-    "kimi": ["~/bin/review-opencode", "openrouter/moonshotai/kimi-k3.1-pro"]
-  }
-}
+Each label's argv is a JSON array of non-empty strings in the environment variable `FLOW_REVIEW_COMMAND_<LABEL>`: the label upper-cased, with `-` written as `_` (`command:kimi-pro` reads `FLOW_REVIEW_COMMAND_KIMI_PRO`). Labels use lowercase letters, digits, `-` and `_`. Name the interpreter first, so the same form works on every platform:
+
+```bash
+export FLOW_REVIEW_COMMAND_GROK='["python3", "~/bin/review-opencode.py", "xai/grok-4.7"]'
+export FLOW_REVIEW_COMMAND_KIMI='["python3", "~/bin/review-opencode.py", "openrouter/moonshotai/kimi-k3.1-pro"]'
 ```
+
+The argv comes from this variable and from nowhere else. Tracked config only selects the backend and label (`review.backend: "command:grok"`), because a branch under review must not choose the program its reviewer runs. A `review.commands` key in `.flow/config.json` is not read: a command review stops, says so and names the variable, until the key is removed.
 
 Select a label wherever a review backend is named: `flowctl config set review.backend command:grok`, `FLOW_REVIEW_BACKEND=command:grok`, `--review=command:kimi`, or a per-spec or per-task pin (`flowctl spec set-backend <spec> --review command:kimi`). The commands are the same as every CLI backend's:
 
@@ -2964,9 +2963,9 @@ flowctl command completion-review <spec-id> [--receipt <path>] [--spec command:<
 flowctl command validate|deep-pass ... --receipt <path> [--spec command:<label>] [--json]
 ```
 
-Spec form is exactly `command:<label>`: a bare `command`, an empty label or any further `:` part is rejected, and there is no default label. An unknown label, or an entry that is not a non-empty array of non-empty strings, stops before any review round is reserved, naming the label and `review.commands.<label>`. There is no model, effort, ladder or `FLOW_COMMAND_*` variable: the wrapper owns the model.
+Spec form is exactly `command:<label>`: a bare `command`, an empty label, a label with other characters or any further `:` part is rejected, and there is no default label. A variable that is unset or empty, or is not a JSON array of non-empty strings, stops before any review round is reserved, naming the variable and the label; the value is never echoed. There is no model, effort, ladder or `FLOW_COMMAND_*` variable: the wrapper owns the model.
 
-**Contract.** flowctl runs the argv directly, with no shell and no interpolation; a leading `~` in the first element expands to the home directory. It writes one JSON request to the command's standard input, the same request the [review execution URL](orchestration.md#review-backends-cross-model-review) receives: `schemaVersion` (1), `backend` (`command`), `model` and `effort` (both `null`), `prompt`, `repositoryPath`, `sessionId`, `resumeOnly`, `permissionMode` (`read-only`), `timeoutSeconds` and `requestId`. It reads one JSON response from standard output, in the same shape: `schemaVersion` (1), `output` (the reviewer's text, which carries the verdict tag), `stderr`, `exitCode`, and optionally `sessionId`, `resumeFailed` and `observedModel`. The prompt names a diff file under `.flow/tmp/` for reviewers that cannot run `git`.
+**Contract.** flowctl runs the argv directly, with no shell and no interpolation; a leading `~` in any element expands to the home directory. On Windows a `.cmd` or `.bat` first element is refused, because Windows runs those through `cmd.exe` and its interpolation: name the interpreter first (`["python", "~/bin/review-opencode.py", ...]`). The Windows path is covered by unit tests only. It writes one JSON request to the command's standard input, the same request the [review execution URL](orchestration.md#review-backends-cross-model-review) receives: `schemaVersion` (1), `backend` (`command`), `model` and `effort` (both `null`), `prompt`, `repositoryPath`, `sessionId`, `resumeOnly`, `permissionMode` (`read-only`), `timeoutSeconds` and `requestId`. It reads one JSON response from standard output, in the same shape: `schemaVersion` (1), `output` (the reviewer's text, which carries the verdict tag), `stderr`, `exitCode`, and optionally `sessionId`, `resumeFailed` and `observedModel`. The prompt names a diff file under `.flow/tmp/` for reviewers that cannot run `git`.
 
 A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict.
 
@@ -2976,10 +2975,9 @@ A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, o
 
 **The wrapper owns read-only access and the model.** flowctl cannot sandbox it; run the wrapped CLI in a read-only mode. A command never uses the managed execution provider, so `command completion-review` does not offer `--require-managed-execution`, and the provider's `FLOW_REVIEW_EXECUTION_TOKEN` is removed from the wrapper's environment. flowctl does not know the model family behind a command, so it computes no same-family notice; the receipt's `model` is the record.
 
-**Example wrapper.** `~/bin/review-opencode` runs one review through `opencode run` on its `plan` agent; the model is the argument after the path in the config above. It starts every review fresh. The `plan` agent refuses file edits but can still run shell commands (opencode 2.3.2 ran Python during a review), so the reviewer is only as read-only as opencode's own permissions make it; run it where that is acceptable.
+**Example wrapper.** `~/bin/review-opencode.py` runs one review through `opencode run` on its `plan` agent; the model is the argument after the script in the variables above. It starts every review fresh. The `plan` agent refuses file edits but can still run shell commands (opencode 2.3.2 ran Python during a review), so the reviewer is only as read-only as opencode's own permissions make it; run it where that is acceptable.
 
 ```python
-#!/usr/bin/env python3
 """flow-next review command: one review through `opencode run`."""
 import json
 import subprocess

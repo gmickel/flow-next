@@ -389,14 +389,15 @@ task_count.after=<m>
 advanced=<m > 0>
 ```
 
-For `plan-review`, advancement means the field is now `ship`:
+For `plan-review`, advancement means the field is now `ship`; when the route sent the hop for drift (its rule names changed cited files), the spec must also no longer be drifted, read from `plan_review_drift` in a fresh `$FLOWCTL show <spec-id> --json`:
 
 ```text
 Evidence:
 stage=plan-review
 plan_review_status.before=<value>
 plan_review_status.after=<value>
-advanced=<after == ship>
+plan_review_drift.after=<paths, or none>   (drift-routed hop only)
+advanced=<after == ship, and drift.after empty on a drift-routed hop>
 ```
 
 For `work`, advancement means at least one task/spec status transition occurred, or `completion_review_status` newly entered the satisfying set (`ship`, or the policy-excused `not_required`) when that gate was the work to do; `not_required` counts as advanced, since logging it as a no-advance would burn a false strike:

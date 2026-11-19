@@ -85,7 +85,7 @@ positional arguments:
     copilot             GitHub Copilot CLI helpers
     cursor              Cursor (cursor-agent CLI) helpers
     claude              Claude Code (claude CLI) helpers
-    command             Configured review command helpers (review.commands)
+    command             Review command helpers (FLOW_REVIEW_COMMAND_<LABEL>)
     review-deep-auto    Print deep passes that auto-enable for a changed-file
                         list (fn-32.2)
     review-walkthrough-defer

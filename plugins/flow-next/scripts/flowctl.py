@@ -7660,14 +7660,19 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "efforts": None,
     },
     "command": {
-        # fn-337: a configured argv (``review.commands.<label>``) answers the
-        # review execution contract over stdin/stdout. Spec form is exactly
+        # fn-337: a machine-local argv (``FLOW_REVIEW_COMMAND_<LABEL>``) answers
+        # the review execution contract over stdin/stdout. Spec form is exactly
         # ``command:<label>``; the label rides the model slot of BackendSpec.
         # The wrapper owns the model, so there is no ranking, effort or ladder.
         "models": None,
         "efforts": None,
     },
 }
+
+
+# A command label maps to exactly one variable name; the config schema's
+# ``command:<label>`` pattern uses the same characters.
+REVIEW_COMMAND_LABEL_RE = re.compile(r"[a-z0-9_-]+")
 
 
 # Sorted list of backend names. Handy for argparse ``choices=`` and for any
@@ -7823,7 +7828,12 @@ class BackendSpec:
             if not label or len(parts) > 2:
                 raise ValueError(
                     f"Backend 'command' takes exactly one label: command:<label>, "
-                    f"naming an entry in review.commands (got {raw!r})"
+                    f"whose argv is in FLOW_REVIEW_COMMAND_<LABEL> (got {raw!r})"
+                )
+            if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
+                raise ValueError(
+                    f"command label {label!r} may use only lowercase letters, digits, "
+                    "'-' and '_', so it names one FLOW_REVIEW_COMMAND_<LABEL> variable"
                 )
             return cls(backend=backend, model=label, model_explicit=True)
 
@@ -24826,10 +24836,12 @@ def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[st
     """
     if spec.get("plan_review_status") != "ship" or any(t.get("status") != "todo" for t in tasks):
         return []
-    # A superseded verdict finalized late and never governed the status; skip it.
+    # A superseded verdict finalized late and never governed the status; skip it. So did one
+    # whose status leg still waits on a receipt that never published.
     rows = [row for row in spec.get("review_attempts") or []
             if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
-            and not row.get("superseded_by")]
+            and not row.get("superseded_by")
+            and (row.get("finalized") or {}).get("status") not in ("pending", "superseded")]
     # Only a commit observed before dispatch is the reviewed one; a finalize-time fallback
     # (`head_sha_observed: false`, or a row predating the marker) may postdate the review.
     head = rows[-1].get("head_sha") if rows and rows[-1].get("head_sha_observed") is True else None
@@ -46118,29 +46130,54 @@ def _claude_run_exec(
 
 
 def _review_command_argv(label: Optional[str]) -> list:
-    """The argv configured at ``review.commands.<label>`` (fn-337).
+    """The argv in the machine-local ``FLOW_REVIEW_COMMAND_<LABEL>`` variable.
 
-    Raises ValueError naming the label and the config key. A leading ``~`` in
-    the first element expands to the home directory; nothing else is touched.
+    Nothing in a tracked or checked-out file can supply or change it: a branch
+    under review must not choose the program its reviewer runs. Raises
+    ValueError naming the label and the variable, never echoing the value. A
+    leading ``~`` expands to the home directory in every element.
     """
     if not label:
         raise ValueError(
             "review backend `command` needs a label: command:<label>, "
-            "naming an entry in review.commands"
+            "whose argv is in FLOW_REVIEW_COMMAND_<LABEL>"
         )
-    key = f"review.commands.{label}"
-    commands = get_config("review.commands")
-    entry = commands.get(label) if isinstance(commands, dict) else None
-    if entry is None:
+    if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
         raise ValueError(
-            f"no review command labelled {label!r}: set {key} in "
-            ".flow/config.json to a non-empty array of strings"
+            f"command label {label!r} may use only lowercase letters, digits, "
+            "'-' and '_', so it names one FLOW_REVIEW_COMMAND_<LABEL> variable"
         )
+    var = "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
+    review = load_flow_config().get("review")
+    if isinstance(review, dict) and "commands" in review:
+        raise ValueError(
+            f"review.commands in .flow/config.json is no longer read; remove it and "
+            f"set {var} in this machine's environment for command:{label}"
+        )
+    raw = os.environ.get(var, "")
+    if not raw.strip():
+        raise ValueError(
+            f"{var} is not set: for command:{label}, set it to a JSON array of "
+            "non-empty strings, the argv to run"
+        )
+    try:
+        entry = json.loads(raw)
+    except ValueError:
+        entry = None
     if (not isinstance(entry, list) or not entry
             or not all(isinstance(arg, str) and arg for arg in entry)):
-        raise ValueError(f"{key} must be a non-empty array of non-empty strings")
-    return [os.path.expanduser(entry[0]) if entry[0].startswith("~") else entry[0],
-            *entry[1:]]
+        raise ValueError(
+            f"{var} (command:{label}) must be a JSON array of non-empty strings"
+        )
+    argv = [os.path.expanduser(arg) if arg.startswith("~") else arg for arg in entry]
+    # cmd.exe runs a batch file and interpolates its arguments; argv stays shell-free.
+    if os.name == "nt" and os.path.splitext(argv[0])[1].lower() in (".cmd", ".bat"):
+        raise ValueError(
+            f"{var} (command:{label}) names a .cmd or .bat file first, which "
+            "Windows runs through cmd.exe; name the interpreter first, "
+            'e.g. ["python", "~/bin/review.py"]'
+        )
+    return argv
 
 
 def _last_line(text: str) -> str:
@@ -46218,7 +46255,7 @@ def _command_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Command spawn (fn-337): run ``review.commands.<label>`` with no shell.
+    """Command spawn (fn-337): run ``FLOW_REVIEW_COMMAND_<LABEL>`` with no shell.
 
     The review execution request goes to standard input and the response is
     read from standard output, in the same shapes as FLOW_REVIEW_EXECUTION_URL.
@@ -51380,8 +51417,8 @@ def _resolve_command_review_spec(
 
     ``--spec`` (strict) first, then task/spec pin, env and config. There is no
     default to fall back to, so a resolved spec that is not a labelled command
-    fails here, as does a label with no valid ``review.commands`` entry: before
-    any review round is reserved.
+    fails here, as does a label with no valid ``FLOW_REVIEW_COMMAND_<LABEL>``:
+    before any review round is reserved.
     """
     spec_arg = getattr(args, "spec", None)
     if spec_arg:
@@ -51393,8 +51430,8 @@ def _resolve_command_review_spec(
         resolved = resolve_review_spec("command", task_id, spec_id=spec_id)
     if resolved.backend != "command":
         error_exit(
-            "command reviews need command:<label>, naming an entry in "
-            f"review.commands (got '{resolved}')",
+            "command reviews need command:<label>, whose argv is in "
+            f"FLOW_REVIEW_COMMAND_<LABEL> (got '{resolved}')",
             use_json=args.json,
             code=2,
         )
@@ -56797,8 +56834,8 @@ def _add_impl_review_parser(sub, backend: str):
         )
     elif backend == "command":
         spec_help = (
-            "Backend spec override (e.g. 'command:gemini', a label in "
-            "review.commands). Overrides task/epic/env/config resolution."
+            "Backend spec override (e.g. 'command:gemini', whose argv is in "
+            "FLOW_REVIEW_COMMAND_GEMINI). Overrides task/epic/env/config resolution."
         )
     else:
         raise ValueError(f"unknown review backend parser: {backend}")
@@ -60031,7 +60068,7 @@ def main() -> None:
     _add_deep_pass_parser(claude_sub, "claude")
 
     p_command = subparsers.add_parser(
-        "command", help="Configured review command helpers (review.commands)"
+        "command", help="Review command helpers (FLOW_REVIEW_COMMAND_<LABEL>)"
     )
     command_sub = p_command.add_subparsers(dest="command_cmd", required=True)
     _add_impl_review_parser(command_sub, "command")

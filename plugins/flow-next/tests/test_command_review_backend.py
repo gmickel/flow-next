@@ -238,14 +238,14 @@ class CommandImplReview(CommandTest):
         secret = "SECRET-VALUE-7731"
         var = "FLOW_REVIEW_COMMAND_FAKE"
         cases = [
-            ({"fake": []}, "command:fake", [var, "'fake'"]),
-            ({"fake": [""]}, "command:fake", [var, "'fake'"]),
-            ({"fake": json.dumps(secret)}, "command:fake", [var, "'fake'"]),
-            ({"fake": ["x", 3]}, "command:fake", [var, "'fake'"]),
-            ({"fake": f"not json {secret}"}, "command:fake", [var, "'fake'"]),
-            ({"fake": ""}, "command:fake", [var, "'fake'", "not set"]),
-            ({}, "command:fake", [var, "'fake'", "not set"]),
-            ({"fake": "wrapper"}, "command:nope", ["FLOW_REVIEW_COMMAND_NOPE", "'nope'"]),
+            ({"fake": []}, "command:fake", [var, "command:fake"]),
+            ({"fake": [""]}, "command:fake", [var, "command:fake"]),
+            ({"fake": json.dumps(secret)}, "command:fake", [var, "command:fake"]),
+            ({"fake": ["x", 3]}, "command:fake", [var, "command:fake"]),
+            ({"fake": f"not json {secret}"}, "command:fake", [var, "command:fake"]),
+            ({"fake": ""}, "command:fake", [var, "command:fake", "not set"]),
+            ({}, "command:fake", [var, "command:fake", "not set"]),
+            ({"fake": "wrapper"}, "command:nope", ["FLOW_REVIEW_COMMAND_NOPE", "command:nope"]),
             ({}, "command:Bad.Label", ["FLOW_REVIEW_COMMAND_", "Bad.Label"]),
             ({}, "command", ["command:<label>"]),
         ]
@@ -254,8 +254,9 @@ class CommandImplReview(CommandTest):
                 env = CommandRepo(repo, [SHIP], commands=commands, backend=backend)
                 code, out, err = impl_review(base, repo / "r.json")
                 self.assertEqual(code, 2, out + err)
+                # A stored label that fails to parse is named in the warning on stderr.
                 for needle in needles:
-                    self.assertIn(needle, json.loads(out)["error"])
+                    self.assertIn(needle, json.loads(out)["error"] + err)
                 self.assertNotIn(secret, out + err)
                 self.assertEqual(env.requests(), [])
                 self.assertEqual(env.rounds(), 0)
@@ -330,6 +331,8 @@ class CommandImplReview(CommandTest):
                           os.path.expanduser("~/conf.json"), "a~b"])
 
     def test_windows_refuses_a_batch_file_first(self):
+        # pathlib refuses WindowsPath on POSIX, so the config read is stubbed.
+        self.enterContext(mock.patch.object(flowctl, "load_flow_config", return_value={}))
         for first in ("C:/tools/review.cmd", "review.BAT", "~/bin/review.Cmd"):
             os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps([first])
             with self.subTest(first=first), mock.patch.object(flowctl.os, "name", "nt"):
