@@ -46131,6 +46131,29 @@ def _claude_run_exec(
     )
 
 
+def _review_command_lookup(name: str) -> Optional[str]:
+    """Find a bare program name in PATH's absolute directories only.
+
+    ``shutil.which`` searches the current directory first on Windows (whatever
+    ``path`` it is given, before Python 3.12), and a relative PATH entry is the
+    current directory again: either can pick a program from the checkout under
+    review. Windows applies PATHEXT, as its own lookup does.
+    """
+    exts = [""]
+    if os.name == "nt":
+        pathext = [e for e in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep) if e]
+        if not any(name.lower().endswith(e.lower()) for e in pathext):
+            exts = pathext
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory or not os.path.isabs(directory):
+            continue
+        for ext in exts:
+            candidate = os.path.join(directory, name + ext)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
 def _review_command_argv(label: Optional[str]) -> list:
     """The argv in the machine-local ``FLOW_REVIEW_COMMAND_<LABEL>`` variable.
 
@@ -46189,13 +46212,13 @@ def _review_command_argv(label: Optional[str]) -> list:
         if os.path.dirname(program):
             program = os.path.join(os.path.expanduser("~"), program)
         else:
-            found = shutil.which(program)
+            found = _review_command_lookup(program)
             if not found:
                 raise ValueError(
                     f"{var} (command:{label}) names a program not found on PATH; "
                     "give its absolute path"
                 )
-            program = os.path.abspath(found)  # a relative hit is from the current directory
+            program = found
     repo = os.path.realpath(str(get_repo_root()))
     for path in (os.path.normpath(program), os.path.realpath(program)):
         # A checkout-owned symlink chooses the program even when its target is outside.
