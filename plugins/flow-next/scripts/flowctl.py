@@ -46085,6 +46085,11 @@ def _last_line(text: str) -> str:
     return lines[-1][:300] if lines else ""
 
 
+# Seconds to keep collecting output after a command exits while a helper it
+# started still holds the pipes.
+COMMAND_PIPE_GRACE = 5
+
+
 def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict):
     """Run a review command; return (returncode, stdout, stderr_tail, problem).
 
@@ -46106,7 +46111,9 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
             proc.stdin.close()
 
     def drain_out():
-        for chunk in iter(lambda: proc.stdout.read(65536), b""):
+        # read1 returns what is available, so a flushed response is collected
+        # even while a lingering helper keeps the pipe from reaching EOF.
+        for chunk in iter(lambda: proc.stdout.read1(65536), b""):
             if not oversized.is_set():
                 out.extend(chunk)
                 if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
@@ -46115,7 +46122,7 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
                         proc.kill()
 
     def drain_err():
-        for chunk in iter(lambda: proc.stderr.read(65536), b""):
+        for chunk in iter(lambda: proc.stderr.read1(65536), b""):
             tail.extend(chunk)
             del tail[:-65536]
 
@@ -46131,8 +46138,9 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
             proc.kill()
         proc.wait()
     # A child the command left running may hold the pipes open; do not wait on it.
+    deadline = time.monotonic() + COMMAND_PIPE_GRACE
     for thread in threads:
-        thread.join(timeout=5)
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
     if oversized.is_set():
         problem = "oversized"
     return proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail), problem

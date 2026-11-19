@@ -31,6 +31,9 @@ WRAPPER = textwrap.dedent("""
     step = plan.pop(0) if len(plan) > 1 else plan[0]
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     time.sleep(step.get("sleep", 0))
+    if step.get("linger"):
+        import subprocess
+        subprocess.Popen([sys.executable, "-c", f"import time; time.sleep({step['linger']})"])
     sys.stderr.write(step.get("stderr", ""))
     if "flood" in step:
         sys.stdout.write("x" * step["flood"])
@@ -432,6 +435,14 @@ class CommandReviewFixes(unittest.TestCase):
             self.assertIn("exceeds 16 MiB", out + err)
             self.assertFalse(receipt.exists())
             self.assertEqual(env.rounds(), 0)
+
+    def test_response_flushed_before_a_lingering_helper_is_kept(self):
+        with _flow_repo() as (repo, base), \
+                mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5):
+            CommandRepo(repo, [dict(SHIP, linger=4)])
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(json.loads(out)["verdict"], "SHIP")
 
     def test_command_draw_rows_name_their_label(self):
         with _flow_repo() as (repo, base):
