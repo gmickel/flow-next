@@ -8,13 +8,50 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-340-9170-audit-fixes-machine-local-review",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-340-9170-audit-fixes-machine-local-review.1": 0
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "729327bcd130215d2a2343332eff46db03c2b7a6cd68713cc0016f411c950738",
+      "backend": "codex",
+      "base_sha": "c8d62b7632f727b313810862aa991d2e754f927c",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e90d7181e61e3235ac6d90cd40cd85e11d80318c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "b6a914b3192e71f6627c8209ea082e8026804a6c4e45f8fc0dbb75c6bc09ef29",
+      "reservation_id": "4176999a7fd944e69f809b22d102d2e6",
+      "round_consumed": false,
+      "scope": "impl:fn-340-9170-audit-fixes-machine-local-review.1",
+      "superseded_by": null,
+      "task": "fn-340-9170-audit-fixes-machine-local-review.1",
+      "timestamp": "2026-11-19T20:50:00.100299Z",
+      "verdict": null
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-340-9170-audit-fixes-machine-local-review.1": 1
+  },
   "spec_path": ".flow/specs/fn-340-9170-audit-fixes-machine-local-review.md",
   "status": "open",
   "title": "9.17.0 audit fixes: machine-local review commands",
@@ -29,5 +66,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T20:27:05.652844Z"
+  "updated_at": "2026-11-19T20:50:00.100613Z"
 }
