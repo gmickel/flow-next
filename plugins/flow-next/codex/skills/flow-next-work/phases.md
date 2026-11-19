@@ -28,6 +28,10 @@ re-invoke work. Stop before route writes, task minting, claims or dispatch,
 including when no review backend is available. Work's `--review` selects
 implementation review; it does not satisfy this gate.
 
+**Plan-review drift (both modes):** when the parent spec's `plan_review_drift` in
+`$FLOWCTL show <spec-id> --json` is non-empty, print one line,
+`Note: plan review predates changes to cited files: <paths>`, and continue.
+
 **Direct-owner resume admission (both modes):** for the sole implicit-owner shape above,
 fetch `$FLOWCTL show <owner-id> --json` after reading the parent spec. Only when that owner
 reads `in_progress`: read [references/direct-owner-resume.md](references/direct-owner-resume.md)
