@@ -2376,12 +2376,15 @@ class ReadyStateAgreement(unittest.TestCase):
             self) -> None:
         for tiebreak in ("always-ask", "flow-wins", "tracker-wins"):
             for flow_slot in ("backlog", "todo"):
-                with self.subTest(tiebreak=tiebreak, flow=flow_slot):
-                    d = decide(flow_slot, None, flow_slot, "in_progress",
-                               "none", tiebreak, card_ready=True)
-                    self.assertEqual(d.kind, "noop")
-                    self.assertEqual(d.target_slot, "in_progress")
-                    self.assertEqual(d.details["who"], "ready-state-agree")
+                for card in ("in_progress", "in_review"):
+                    with self.subTest(tiebreak=tiebreak, flow=flow_slot,
+                                      card=card):
+                        d = decide(flow_slot, None, flow_slot, card,
+                                   "none", tiebreak, card_ready=True)
+                        self.assertEqual(d.kind, "noop")
+                        self.assertEqual(d.target_slot, card)
+                        self.assertEqual(d.details["who"],
+                                         "ready-state-agree")
 
     def test_every_other_pairing_ignores_card_ready(self) -> None:
         for flow_slot in self.SLOTS:
@@ -2390,8 +2393,9 @@ class ReadyStateAgreement(unittest.TestCase):
                     for evidence in ("none", "open", "merged"):
                         if (flow_slot in ("backlog", "todo")
                                 and requested in ("backlog", "todo")
-                                and tracker_slot == "in_progress"):
-                            continue  # the one pairing the rule changes
+                                and tracker_slot in ("in_progress",
+                                                     "in_review")):
+                            continue  # the pairings the rule changes
                         with self.subTest(flow=flow_slot,
                                           tracker=tracker_slot,
                                           requested=requested,

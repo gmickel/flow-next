@@ -2305,6 +2305,27 @@ class ReadyStateStatusAgreement(unittest.TestCase):
                             "status-label-rm", "status-transitions"}],
                         ops)
 
+    def test_review_named_ready_state_agrees(self) -> None:
+        # Linear and Jira read a started state named "...review" as in_review.
+        for provider in ("linear", "jira"):
+            for tasks in (None, [{"status": "todo"}]):
+                with self.subTest(provider=provider, tasks=tasks):
+                    out, saved, ops = self._pull(
+                        provider, ready_state="Ready for Review",
+                        card_state="Ready for Review", tasks=tasks)
+                    self.assertNotIsInstance(out, TrackerError, out)
+                    self.assertTrue(saved["ready"])
+                    self.assertEqual(out["status"]["kind"], "noop")
+                    self.assertEqual(out["status"]["tracker"], "in_review")
+                    self.assertNotIn("status-set", ops)
+                    self.assertNotIn("status-transitions", ops)
+                with self.subTest(provider=provider, other_state=True):
+                    out, _saved, _ops = self._pull(
+                        provider, ready_state="Queue",
+                        card_state="In Review", tasks=tasks)
+                    self.assertIsInstance(out, TrackerError)
+                    self.assertIn("status conflict (unmapped)", out.message)
+
     def test_ready_state_match_ignores_case(self) -> None:
         out, _saved, _ops = self._pull(
             "linear", ready_state="queue", card_state="Queue", tasks=None)

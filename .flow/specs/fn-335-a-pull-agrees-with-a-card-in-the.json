@@ -8,13 +8,67 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-335-a-pull-agrees-with-a-card-in-the",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-335-a-pull-agrees-with-a-card-in-the.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0589234d9cdd4208fe75c41cd190a663cb9fd7e615e3c86ef4019d2a06364813",
+      "backend": "codex",
+      "base_sha": "8e78eeb80ed95e5b8e996120b51d807ddc549151",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-82550e31c6832079fe942b767eb2d251",
+            "classification": "introduced",
+            "findingId": "finding-82550e31c6832079fe942b767eb2d251",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "bb1ba2af4387f25b7949e55b21a0c4ed1ba5caa5",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 1162,
+      "output_sha256": "9585fcb9a3b56a031eea1dc7bdd1abebd5061e62a1aec93eaf0e3d3a8641a202",
+      "reservation_id": "8445169ca9ca4a4daa3107c3b61b87d7",
+      "round_consumed": true,
+      "scope": "impl:fn-335-a-pull-agrees-with-a-card-in-the.1",
+      "superseded_by": null,
+      "task": "fn-335-a-pull-agrees-with-a-card-in-the.1",
+      "timestamp": "2026-11-19T09:32:45.813889Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-335-a-pull-agrees-with-a-card-in-the.1": 0
+  },
   "spec_path": ".flow/specs/fn-335-a-pull-agrees-with-a-card-in-the.md",
   "status": "open",
   "title": "A pull agrees with a card in the configured ready state",
@@ -29,5 +83,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T09:23:31.489605Z"
+  "updated_at": "2026-11-19T09:32:45.816801Z"
 }

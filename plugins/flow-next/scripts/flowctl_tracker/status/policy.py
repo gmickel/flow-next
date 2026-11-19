@@ -465,10 +465,11 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
 
     # ── READY-STATE AGREEMENT: a card in the configured tracker.readyState
     #    is admitted, not started, even when the team keeps that state among
-    #    its started ones (#627). An unstarted spec agrees with it; writing
+    #    its started ones (#627), where it reads as in_progress, or in_review
+    #    when its name says review. An unstarted spec agrees with it; writing
     #    would move the card out of (or a todo push into) the ready state. ──
     if (card_ready and flow_norm in EARLY and requested_to in EARLY
-            and tracker_norm in EARLY | {ACTIVE_IN_PROGRESS}):
+            and tracker_norm in EARLY | {ACTIVE_IN_PROGRESS, "in_review"}):
         return Decision("noop", target_slot=tracker_norm,
                         details={"who": "ready-state-agree"})
 

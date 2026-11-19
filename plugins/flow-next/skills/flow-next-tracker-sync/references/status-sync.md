@@ -155,7 +155,7 @@ status → surface; the deadlock check; a locally-done spec whose `prEvidence` i
 `closed-unmerged` / `ambiguous` / `probe-error` → NEEDS_HUMAN `conflict`, no
 status write; agreement → `noop` (including an unstarted spec, `backlog` or
 `todo`, against a card in the configured `tracker.readyState` that reads as
-`in_progress`: the card is admitted, not started); the per-field rules (tracker terminal wins,
+`in_progress` or `in_review`: the card is admitted, not started); the per-field rules (tracker terminal wins,
 flow in-progress wins, the no-PR preserve rule, the open-PR `in-review` push, the
 merged terminal push); anything else → `conflict` (`unmapped`), never a silent
 default.
