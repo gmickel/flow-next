@@ -2,12 +2,12 @@
 
 Use when `BACKEND="command"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and `SPEC_ID`; its foreground rule and Fix Loop apply unchanged.
 
-The command backend runs the argv configured at `review.commands.<label>` in `.flow/config.json`, selected as `command:<label>`. flowctl runs it without a shell, keeps the prompt, rounds, verdict parsing and receipt, and sends only inference to the command; the wrapper owns read-only access and the model.
+The command backend runs the argv in this machine's `FLOW_REVIEW_COMMAND_<LABEL>` environment variable, selected as `command:<label>`. flowctl runs it without a shell, keeps the prompt, rounds, verdict parsing and receipt, and sends only inference to the command; the wrapper owns read-only access and the model.
 
 ## Critical rules (command backend)
 
 1. Use `$FLOWCTL command completion-review` exclusively
-2. Label resolved via (first match wins): `--spec command:<label>` (pass it when `--review=command:<label>` was given), per-spec `default_review`, `FLOW_REVIEW_BACKEND`, `review.backend`. There is no default label; an unknown label or a bad `review.commands` entry stops before any round is reserved
+2. Label resolved via (first match wins): `--spec command:<label>` (pass it when `--review=command:<label>` was given), per-spec `default_review`, `FLOW_REVIEW_BACKEND`, `review.backend`. There is no default label; an unset `FLOW_REVIEW_COMMAND_<LABEL>` or a bad value stops before any round is reserved
 3. Pass `--receipt`; a re-review resumes only a receipt with `mode == "command"` and the same label
 
 ## Execute Review

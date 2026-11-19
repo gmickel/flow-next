@@ -7660,14 +7660,19 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "efforts": None,
     },
     "command": {
-        # fn-337: a configured argv (``review.commands.<label>``) answers the
-        # review execution contract over stdin/stdout. Spec form is exactly
+        # fn-337: a machine-local argv (``FLOW_REVIEW_COMMAND_<LABEL>``) answers
+        # the review execution contract over stdin/stdout. Spec form is exactly
         # ``command:<label>``; the label rides the model slot of BackendSpec.
         # The wrapper owns the model, so there is no ranking, effort or ladder.
         "models": None,
         "efforts": None,
     },
 }
+
+
+# A command label maps to exactly one variable name; the config schema's
+# ``command:<label>`` pattern uses the same characters.
+REVIEW_COMMAND_LABEL_RE = re.compile(r"[a-z0-9_-]+")
 
 
 # Sorted list of backend names. Handy for argparse ``choices=`` and for any
@@ -7823,7 +7828,12 @@ class BackendSpec:
             if not label or len(parts) > 2:
                 raise ValueError(
                     f"Backend 'command' takes exactly one label: command:<label>, "
-                    f"naming an entry in review.commands (got {raw!r})"
+                    f"whose argv is in FLOW_REVIEW_COMMAND_<LABEL> (got {raw!r})"
+                )
+            if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
+                raise ValueError(
+                    f"command label {label!r} may use only lowercase letters, digits, "
+                    "'-' and '_', so it names one FLOW_REVIEW_COMMAND_<LABEL> variable"
                 )
             return cls(backend=backend, model=label, model_explicit=True)
 
@@ -24826,10 +24836,14 @@ def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[st
     """
     if spec.get("plan_review_status") != "ship" or any(t.get("status") != "todo" for t in tasks):
         return []
-    # A superseded verdict finalized late and never governed the status; skip it.
+    # A superseded verdict finalized late and never governed the status; skip it. Only a row
+    # whose status leg completed (or one predating the leg) took effect: a leg still waiting on
+    # a receipt that never published, or a record-only verdict, did not.
     rows = [row for row in spec.get("review_attempts") or []
             if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
-            and not row.get("superseded_by")]
+            and not row.get("superseded_by")
+            and ("finalized" not in row
+                 or isinstance(row["finalized"], dict) and row["finalized"].get("status") == "complete")]
     # Only a commit observed before dispatch is the reviewed one; a finalize-time fallback
     # (`head_sha_observed: false`, or a row predating the marker) may postdate the review.
     head = rows[-1].get("head_sha") if rows and rows[-1].get("head_sha_observed") is True else None
@@ -46117,30 +46131,114 @@ def _claude_run_exec(
     )
 
 
-def _review_command_argv(label: Optional[str]) -> list:
-    """The argv configured at ``review.commands.<label>`` (fn-337).
+def _review_command_lookup(name: str) -> Optional[str]:
+    """Find a bare program name in PATH's absolute directories only.
 
-    Raises ValueError naming the label and the config key. A leading ``~`` in
-    the first element expands to the home directory; nothing else is touched.
+    ``shutil.which`` searches the current directory first on Windows (whatever
+    ``path`` it is given, before Python 3.12), and a relative PATH entry is the
+    current directory again: either can pick a program from the checkout under
+    review. Windows applies PATHEXT, as its own lookup does.
+    """
+    exts = [""]
+    if os.name == "nt":
+        pathext = [e for e in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep) if e]
+        if not any(name.lower().endswith(e.lower()) for e in pathext):
+            exts = pathext
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory or not os.path.isabs(directory):
+            continue
+        for ext in exts:
+            candidate = os.path.join(directory, name + ext)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+    return None
+
+
+def _review_command_argv(label: Optional[str]) -> list:
+    """The argv in the machine-local ``FLOW_REVIEW_COMMAND_<LABEL>`` variable.
+
+    Nothing in a tracked or checked-out file can supply or change it: a branch
+    under review must not choose the program its reviewer runs. Raises
+    ValueError naming the label and the variable, never echoing the value. A
+    leading ``~`` expands to the home directory in every element.
     """
     if not label:
         raise ValueError(
             "review backend `command` needs a label: command:<label>, "
-            "naming an entry in review.commands"
+            "whose argv is in FLOW_REVIEW_COMMAND_<LABEL>"
         )
-    key = f"review.commands.{label}"
-    commands = get_config("review.commands")
-    entry = commands.get(label) if isinstance(commands, dict) else None
-    if entry is None:
+    if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
         raise ValueError(
-            f"no review command labelled {label!r}: set {key} in "
-            ".flow/config.json to a non-empty array of strings"
+            f"command label {label!r} may use only lowercase letters, digits, "
+            "'-' and '_', so it names one FLOW_REVIEW_COMMAND_<LABEL> variable"
         )
-    if (not isinstance(entry, list) or not entry
-            or not all(isinstance(arg, str) and arg for arg in entry)):
-        raise ValueError(f"{key} must be a non-empty array of non-empty strings")
-    return [os.path.expanduser(entry[0]) if entry[0].startswith("~") else entry[0],
-            *entry[1:]]
+    var = "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
+    review = load_flow_config().get("review")
+    if isinstance(review, dict) and "commands" in review:
+        raise ValueError(
+            f"review.commands in .flow/config.json is no longer read; remove it and "
+            f"set {var} in this machine's environment for command:{label}"
+        )
+    raw = os.environ.get(var, "")
+    if not raw.strip():
+        raise ValueError(
+            f"{var} is not set: for command:{label}, set it to a JSON array of "
+            "non-empty strings, the argv to run"
+        )
+    try:
+        entry = json.loads(raw)
+    except (ValueError, RecursionError):
+        entry = None
+
+    def spawnable(arg) -> bool:
+        if not isinstance(arg, str) or not arg or "\0" in arg:
+            return False
+        try:
+            os.fsencode(arg)
+        except UnicodeEncodeError:
+            return False
+        return True
+
+    if not isinstance(entry, list) or not entry or not all(map(spawnable, entry)):
+        raise ValueError(
+            f"{var} (command:{label}) must be a JSON array of non-empty strings"
+        )
+    argv = [os.path.expanduser(arg) if arg.startswith("~") else arg for arg in entry]
+    # The program is fixed here, never by a lookup in the checkout under review: a
+    # relative path is taken from the home directory (where the command starts), and a
+    # bare name from PATH (which on Windows also searches the current directory first).
+    program = argv[0]
+    if not os.path.isabs(program):
+        if os.path.dirname(program):
+            program = os.path.join(os.path.expanduser("~"), program)
+        else:
+            found = _review_command_lookup(program)
+            if not found:
+                raise ValueError(
+                    f"{var} (command:{label}) names a program not found on PATH; "
+                    "give its absolute path"
+                )
+            program = found
+    repo = os.path.realpath(str(get_repo_root()))
+    for path in (os.path.normpath(program), os.path.realpath(program)):
+        # A checkout-owned symlink chooses the program even when its target is outside.
+        try:
+            inside = os.path.commonpath([path, repo]) == repo
+        except ValueError:  # another Windows drive
+            inside = False
+        if inside:
+            raise ValueError(
+                f"{var} (command:{label}) names a program inside the checkout under "
+                "review; give one outside it, by absolute path or by name on PATH"
+            )
+    # cmd.exe runs a batch file and interpolates its arguments; argv stays shell-free.
+    if os.name == "nt" and os.path.splitext(program)[1].lower() in (".cmd", ".bat"):
+        raise ValueError(
+            f"{var} (command:{label}) names a .cmd or .bat file first, which "
+            "Windows runs through cmd.exe; name the interpreter first, "
+            'e.g. ["python", "~/bin/review.py"]'
+        )
+    return [program, *argv[1:]]
 
 
 def _last_line(text: str) -> str:
@@ -46218,7 +46316,7 @@ def _command_run_exec(
     resolution_out: dict,
     args: argparse.Namespace,
 ) -> tuple[str, Optional[str], int, str]:
-    """Command spawn (fn-337): run ``review.commands.<label>`` with no shell.
+    """Command spawn (fn-337): run ``FLOW_REVIEW_COMMAND_<LABEL>`` with no shell.
 
     The review execution request goes to standard input and the response is
     read from standard output, in the same shapes as FLOW_REVIEW_EXECUTION_URL.
@@ -46254,7 +46352,9 @@ def _command_run_exec(
         try:
             returncode, raw, stderr_tail, problem = _run_review_command(
                 argv, json.dumps(payload).encode("utf-8"),
-                timeout=timeout, cwd=repo_root, env=env,
+                # Started outside the checkout, so a relative argument never resolves
+                # inside the branch under review.
+                timeout=timeout, cwd=Path.home(), env=env,
             )
         except FileNotFoundError:
             return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
@@ -51380,8 +51480,8 @@ def _resolve_command_review_spec(
 
     ``--spec`` (strict) first, then task/spec pin, env and config. There is no
     default to fall back to, so a resolved spec that is not a labelled command
-    fails here, as does a label with no valid ``review.commands`` entry: before
-    any review round is reserved.
+    fails here, as does a label with no valid ``FLOW_REVIEW_COMMAND_<LABEL>``:
+    before any review round is reserved.
     """
     spec_arg = getattr(args, "spec", None)
     if spec_arg:
@@ -51393,8 +51493,8 @@ def _resolve_command_review_spec(
         resolved = resolve_review_spec("command", task_id, spec_id=spec_id)
     if resolved.backend != "command":
         error_exit(
-            "command reviews need command:<label>, naming an entry in "
-            f"review.commands (got '{resolved}')",
+            "command reviews need command:<label>, whose argv is in "
+            f"FLOW_REVIEW_COMMAND_<LABEL> (got '{resolved}')",
             use_json=args.json,
             code=2,
         )
@@ -56797,8 +56897,8 @@ def _add_impl_review_parser(sub, backend: str):
         )
     elif backend == "command":
         spec_help = (
-            "Backend spec override (e.g. 'command:gemini', a label in "
-            "review.commands). Overrides task/epic/env/config resolution."
+            "Backend spec override (e.g. 'command:gemini', whose argv is in "
+            "FLOW_REVIEW_COMMAND_GEMINI). Overrides task/epic/env/config resolution."
         )
     else:
         raise ValueError(f"unknown review backend parser: {backend}")
@@ -60031,7 +60131,7 @@ def main() -> None:
     _add_deep_pass_parser(claude_sub, "claude")
 
     p_command = subparsers.add_parser(
-        "command", help="Configured review command helpers (review.commands)"
+        "command", help="Review command helpers (FLOW_REVIEW_COMMAND_<LABEL>)"
     )
     command_sub = p_command.add_subparsers(dest="command_cmd", required=True)
     _add_impl_review_parser(command_sub, "command")

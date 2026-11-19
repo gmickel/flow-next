@@ -43,9 +43,10 @@ git diff --shortstat "$DIFF_BASE"...HEAD
 - `claude` when a Claude model wrote the change: say once that this review is same-family, then
   continue.
 - `command:<label>` from `--review`: use `BACKEND=command` and add `--spec command:<label>` to
-  the `impl-review-fanout` and `impl-review` calls (finalize reads the round; `validate` and
-  `deep-pass` read the receipt). A bare `command` takes its label from the task, the spec,
-  `FLOW_REVIEW_BACKEND` or `review.backend`.
+  every `impl-review-fanout` and `impl-review` call, on this path and on other-paths.md's,
+  re-reviews included (finalize reads the round; `validate` and `deep-pass` read the receipt). A
+  bare `command` takes its label from the task, the spec, `FLOW_REVIEW_BACKEND` or
+  `review.backend`.
 
 Shell state does not survive between Bash calls: each block below resolves `FLOWCTL` again and
 takes `REVIEW_ID`, `DIFF_BASE` and `BACKEND` as literals.
@@ -82,6 +83,8 @@ args=(); [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
 ONE_REVIEWER=0   # 1 when the panel rule above calls for one reviewer
 [ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
+REVIEW_SPEC="<command:<label> when --review named one, else empty>"
+[ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
 "$FLOWCTL" "$BACKEND" impl-review-fanout "${args[@]}"
 ```
 

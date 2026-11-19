@@ -200,6 +200,29 @@ class PlanReviewDriftTests(unittest.TestCase):
         self.edit_spec_json(review_attempts=rows)
         self.assert_no_drift()
 
+    def test_r6_verdict_whose_receipt_never_published_does_not_hide_drift(self):
+        self.change('src/cited.py')
+        # A later SHIP whose status leg still waits on receipt publication never took effect.
+        head = _git(self.repo, 'rev-parse', 'HEAD').stdout.strip()
+        rows = self.spec_json()['review_attempts']
+        rows.append({**rows[-1], 'head_sha': head, 'reservation_id': 'unpublished',
+                     'finalized': {'receipt': 'pending', 'digest': 'not_applicable',
+                                   'status': 'pending'}})
+        self.edit_spec_json(review_attempts=rows)
+        self.assert_drift(['src/cited.py'])
+        # A record-only verdict wrote no status either; a malformed leg never breaks the check.
+        for finalized in ({'receipt': 'not_applicable', 'digest': 'not_applicable',
+                           'status': 'not_applicable'}, True, 'complete'):
+            with self.subTest(finalized=finalized):
+                rows[-1]['finalized'] = finalized
+                self.edit_spec_json(review_attempts=rows)
+                self.assert_drift(['src/cited.py'])
+        # Once its status lands, it is the reviewed commit.
+        rows[-1]['finalized'] = {'receipt': 'complete', 'digest': 'not_applicable',
+                                 'status': 'complete'}
+        self.edit_spec_json(review_attempts=rows)
+        self.assert_no_drift()
+
     @unittest.skipIf(os.name == 'nt', 'byte paths in argv are POSIX-only')
     def test_r2_uncited_non_utf8_filename_leaves_the_route(self):
         blob = subprocess.run(['git', 'hash-object', '-w', '--stdin'], cwd=self.repo, input=b'x\n',

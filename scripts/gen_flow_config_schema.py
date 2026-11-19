@@ -71,8 +71,9 @@ DESCRIPTIONS: dict[str, str] = {
     "review.backend": (
         "Default review backend (codex, copilot, cursor, claude, host, "
         "none) or spec form backend[:model[:effort]], e.g. codex:<model>:high "
-        "or claude:<model>:high, or command:<label> for a command in "
-        "review.commands. cursor folds effort into the model "
+        "or claude:<model>:high, or command:<label> for the argv in this "
+        "machine's FLOW_REVIEW_COMMAND_<LABEL> variable (label: lowercase "
+        "letters, digits, - and _). cursor folds effort into the model "
         "name (no :effort rung); host and none are bare-only. copilot "
         "accepts no none/minimal effort; claude takes the claude CLI's own "
         "low|medium|high|xhigh|max. If "
@@ -83,14 +84,6 @@ DESCRIPTIONS: dict[str, str] = {
         "without a human reading them line by line, or invoke "
         "/flow-next:impl-review manually instead. See "
         "docs/running-lean.md."
-    ),
-    "review.commands": (
-        "Named review commands for the command backend, selected as "
-        "command:<label>: each label maps to a non-empty argv array, run "
-        "without a shell (a leading ~ in the first element expands to the "
-        "home directory). The command reads the review execution request "
-        "as JSON on stdin and writes the response JSON on stdout. The "
-        "command owns read-only access and the model."
     ),
     "review.fanoutExecution": (
         "First-round CLI review draw scheduling: concurrent (default) or "
@@ -490,7 +483,7 @@ def _review_backend_fragment() -> dict:
             },
             *effort_branches,
             {"type": "string", "pattern": f"^({only_alt}):[^:\\s]*:?$"},  # model-only: optional trailing empty effort colon
-            {"type": "string", "pattern": "^command:[^:\\s]+$"},
+            {"type": "string", "pattern": f"^command:{flowctl.REVIEW_COMMAND_LABEL_RE.pattern}$"},
         ],
     }
 
@@ -550,17 +543,6 @@ def _build_table() -> list[tuple[str, dict]]:
         ("planSync.crossSpec", {"type": "boolean"}),
         ("review", {"kind": "object", "open": False}),
         ("review.backend", _review_backend_fragment()),
-        (
-            "review.commands",
-            {
-                "type": "object",
-                # Non-empty array: flowctl checks it before dispatch.
-                "additionalProperties": {
-                    "type": "array",
-                    "items": {"type": "string", "pattern": "."},
-                },
-            },
-        ),
         ("review.fanoutExecution", {"type": "string", "enum": list(flowctl.REVIEW_FANOUT_EXECUTION_VALUES)}),
         ("review.maxIterations", {"type": "integer", "minimum": 1}),
         ("scouts", {"kind": "object", "open": False}),

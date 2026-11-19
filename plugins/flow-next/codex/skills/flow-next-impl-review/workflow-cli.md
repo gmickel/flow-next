@@ -65,6 +65,8 @@ args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
 [ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
+REVIEW_SPEC="<command:<label> when --review named one, else empty>"
+[ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
 # FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing),
 # else the review focus the project's instructions state. It rides the draw
 # prompts, the sidecar meta, and the receipt for re-review.
@@ -277,6 +279,8 @@ fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
+REVIEW_SPEC="<command:<label> when --review named one, else empty>"
+[ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
 $FLOWCTL "$BACKEND" impl-review "${args[@]}"
 ```
 
@@ -325,7 +329,7 @@ Grammar and defaults: [references/backend-specs.md](references/backend-specs.md)
 - **cursor** — `cursor-agent -p --output-format json --trust --mode ask` (read-only). No
   effort field: Cursor folds effort into the model name, and `cursor:<model>:<effort>` is
   rejected. Ask mode can block shell, so it gets the diff by path too.
-- **command** — the argv at `review.commands.<label>`, selected as `command:<label>`, run
+- **command** — the argv in `FLOW_REVIEW_COMMAND_<LABEL>`, selected as `command:<label>`, run
   without a shell; it reads the review execution request on stdin and answers on stdout. The
   wrapper owns the model and read-only access, so there is no model, effort or ladder here and
   the receipt records the model the wrapper reported. It gets the diff by path.
