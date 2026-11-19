@@ -6,6 +6,10 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ## Unreleased
 
+### Changed
+
+- **A reviewed spec that waited while its files changed is reviewed again before it is built.** A spec that passed plan review and then sat while other work changed the files it describes used to be built on the old SHIP, including by `flow --auto` and goal mode with nobody watching. Now, while no task has started, flow compares the files the spec cites in backticks against the commit its plan review saw; if any changed, flow sends the spec back to plan review first, naming the files (`plan review predates changes to cited files: <paths>`), and the reviewer decides. The next SHIP clears it; there is no setting. `flowctl show <spec> --json` lists the paths as `plan_review_drift`, and `/flow-next:work` run directly on such a spec prints them in one line and continues. Only paths the spec itself cites count, and `.flow/` paths never do. Every plan review, host reviews included, now records the commit it saw before it ran; a review recorded before this release keeps the previous behaviour. Thanks to @TechupBusiness for reporting #505.
+
 ### Fixed
 
 - **A pull succeeds when the card sits in your ready state, even if that state counts as started.** A team that keeps its `tracker.readyState` among the started states (a Linear `started`-type column, a Jira status in the In Progress category, or a readiness label on a GitHub or GitLab issue with no `status:` label) used to see `flowctl tracker sync --op pull` project readiness and then fail with `status conflict (unmapped): flow='backlog' tracker='in_progress'` and exit 10, so `flow --auto` and scheduled pulls read an admitted card as a failed sync. When the card is in the configured ready state and the spec has not started (no tasks, or only todo tasks), the status step now agrees and writes nothing, so admission stays a person's board move. A card in any other started state, and a started spec, decide as before. Thanks to @sn-furali for the report and the fix sketch in #627.

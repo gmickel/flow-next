@@ -12249,10 +12249,13 @@ def _enforce_and_increment_review_cap_locked(
         "review_type": review_type or review_kind,
         "exclusive": bool(exclusive),
     }
+    reservation = _review_reservations(spec_data)[reservation_id]
     if reviewed_range:
         # #513: the attempt row records the range this round reviewed.
-        reservation = _review_reservations(spec_data)[reservation_id]
         reservation["base_sha"], reservation["head_sha"] = reviewed_range
+    elif (review_type or review_kind) == "plan" and (head := _review_head_sha()):
+        # #505: HEAD before dispatch is the commit a plan review saw (host reviews pass none).
+        reservation["head_sha"] = head
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
     return (new_val, reservation_id) if return_reservation else new_val
@@ -24810,6 +24813,49 @@ def cmd_trace(args: argparse.Namespace) -> None:
     sys.exit(1 if result["gaps"] else 0)
 
 
+_CITED_TOKEN_RE = re.compile(r"`([^`\s]+)`")
+
+
+def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[str]:
+    """Cited paths changed since the commit the latest plan review saw (#505).
+
+    Derived on read, never stored. Applies only to a `ship` plan review whose tasks are all
+    still `todo` (or absent). Cited paths are backtick tokens containing a `/`, outside
+    `.flow/`; a cited directory counts when anything under it changed. A reviewed commit
+    that is missing, or reachable from neither HEAD nor any branch or tag, means no drift.
+    """
+    if spec.get("plan_review_status") != "ship" or any(t.get("status") != "todo" for t in tasks):
+        return []
+    # A superseded verdict finalized late and never governed the status; skip it.
+    rows = [row for row in spec.get("review_attempts") or []
+            if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
+            and not row.get("superseded_by")]
+    # Only a commit observed before dispatch is the reviewed one; a finalize-time fallback
+    # (`head_sha_observed: false`, or a row predating the marker) may postdate the review.
+    head = rows[-1].get("head_sha") if rows and rows[-1].get("head_sha_observed") is True else None
+    if not isinstance(head, str) or not re.fullmatch(r"[0-9a-f]{7,64}", head):
+        return []
+    cited = sorted({token.removeprefix("./") for token in _CITED_TOKEN_RE.findall(body)
+                    if "/" in token} - {""})
+    cited = [path for path in cited
+             if path.rstrip("/") != ".flow" and not path.startswith(".flow/")]
+    if not cited:
+        return []
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=repo, capture_output=True, check=False)
+    if git("merge-base", "--is-ancestor", head, "HEAD").returncode and not git(
+            "for-each-ref", "--contains", head, "--count=1", "--format=%(refname)",
+            "refs/heads", "refs/remotes", "refs/tags").stdout.strip():
+        return []
+    diff = git("diff", "--no-renames", "--name-only", "-z", head, "HEAD", "--")
+    if diff.returncode:
+        return []
+    # Raw path bytes: an uncited non-UTF-8 name must not break the check.
+    changed = [name.decode("utf-8", "surrogateescape") for name in diff.stdout.split(b"\0") if name]
+    return [path for path in cited
+            if any(name == path or name.startswith(path.rstrip("/") + "/") for name in changed)]
+
+
 def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
     """Assemble live lifecycle facts in code; the host never summarizes lifecycle or PR state."""
     state = dict(state)
@@ -24830,6 +24876,7 @@ def judge_route_state(state: dict, spec_id: str | None = None) -> dict:
             "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
             "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}"
                                 for t in tasks if t["status"] == "blocked"],
+            "plan_review_drift": plan_review_drift(repo, spec, tasks, body),
             "pr_exists": None, "pr_ref": None,
         }
         if spec_approval_mode() == "pr":
@@ -24881,6 +24928,10 @@ def judge_route_lifecycle(state: dict) -> dict:
         # #514: the spec changed after its plan SHIP, so its tasks may predate
         # the criteria; review the plan again before any work.
         return decision("plan_review", "plan review stale")
+    if state.get("plan_review_drift"):
+        # #505: files the spec cites changed since its SHIP review, before any task started.
+        return decision("plan_review", "plan review predates changes to cited files: "
+                        + ", ".join(state["plan_review_drift"]))
     if total:
         if state.get("tasks_blocked", 0) == total - state["tasks_done"]:
             reasons = "; ".join(state.get("blocked_reasons", []))
@@ -32341,6 +32392,14 @@ def cmd_show(args: argparse.Namespace) -> None:
             configured = False
         result["completion_review_pending"] = configured and not completion_review_satisfied(
             epic_data.get("completion_review_status")
+        )
+        # #505: cited paths changed since the SHIP plan review; empty when none or n/a.
+        try:
+            body = find_spec_md_path(flow_dir, args.id).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            body = ""
+        result["plan_review_drift"] = plan_review_drift(
+            get_repo_root(), epic_data, inventory.by_spec.get(args.id, []), body
         )
 
         if args.json:
@@ -44839,6 +44898,7 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         candidates = [s for s in specs if (s["status"] != "done" and s.get("ready") is True)
                       or (s["status"] == "done" and s.get("branch_name") in open_branches)]
     result = []
+    full_specs = {spec["id"]: spec for spec in candidates}
     remote_heads = RemoteHeads()
     for spec in candidates:
         sid, branch = spec["id"], spec.get("branch_name")
@@ -44897,10 +44957,13 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
         spec, tasks = candidate["spec"], candidate["tasks"]
         prs = candidate["pr"]
         pr_ref = prs["open"] or prs["merged"] or next(iter(prs["closed"]), None)
+        body = find_spec_md_path(flow_dir, spec["id"]).read_text(encoding="utf-8")
         state = judge_route_state({
-            "spec_body": find_spec_md_path(flow_dir, spec["id"]).read_text(encoding="utf-8"),
+            "spec_body": body,
             "status": spec["status"], "ready": spec.get("ready") is True, "no_plan": spec.get("no_plan") is True,
             "plan_review_status": spec.get("plan_review_status"),
+            # The lean row drops review_attempts; drift reads the full spec record.
+            "plan_review_drift": plan_review_drift(repo, full_specs[spec["id"]], tasks, body),
             "tasks_total": len(tasks), "tasks_done": sum(t["status"] == "done" for t in tasks),
             "tasks_blocked": sum(t["status"] == "blocked" for t in tasks),
             "blocked_reasons": [f"{t['id']}: {t.get('blocked_reason') or 'blocked'}" for t in tasks if t["status"] == "blocked"],
