@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-340-9170-audit-fixes-machine-local-review",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-19T21:09:02.526192Z",
   "created_at": "2026-11-19T20:25:56.724865Z",
   "default_impl": null,
   "default_review": null,
@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-340-9170-audit-fixes-machine-local-review",
   "impl_review_rounds": {
-    "fn-340-9170-audit-fixes-machine-local-review.1": 1
+    "fn-340-9170-audit-fixes-machine-local-review.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -147,9 +147,87 @@
       "task": "fn-340-9170-audit-fixes-machine-local-review.1",
       "timestamp": "2026-11-19T21:03:11.112169Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "b8a60a71e9443dade4cd8581a7e46684aba58c503e6a4506c360eab5397bd653",
+      "backend": "codex",
+      "base_sha": "c8d62b7632f727b313810862aa991d2e754f927c",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-cb3e3fabd65c7663e5b8f6c3fde56362",
+            "classification": "introduced",
+            "findingId": "finding-cb3e3fabd65c7663e5b8f6c3fde56362",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-534bb8993900dd04f12a91fca956c7c9",
+            "classification": "introduced",
+            "findingId": "finding-534bb8993900dd04f12a91fca956c7c9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1fe3bf6ae9e6de9c43da2a166c0e5eba",
+            "classification": "introduced",
+            "findingId": "finding-1fe3bf6ae9e6de9c43da2a166c0e5eba",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-a502e31acbd50d63e9b70af96f6c5bb6",
+            "classification": "introduced",
+            "findingId": "finding-a502e31acbd50d63e9b70af96f6c5bb6",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dab2831931f184d95a23638c08a373e1",
+            "classification": "introduced",
+            "findingId": "finding-dab2831931f184d95a23638c08a373e1",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "withdrawn"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "49b8dc1fcf72d7b0fb29e9e3024ce6b2dcdc7f4c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2261,
+      "output_sha256": "0830da5248305d3a6e7eb0a27d69593c749488c880ed48afdffd8866bdb9f295",
+      "reservation_id": "6e863158d5f14ad49f313a9eed1dd993",
+      "round_consumed": true,
+      "scope": "impl:fn-340-9170-audit-fixes-machine-local-review.1",
+      "superseded_by": null,
+      "task": "fn-340-9170-audit-fixes-machine-local-review.1",
+      "timestamp": "2026-11-19T21:06:38.850729Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-340-9170-audit-fixes-machine-local-review.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -169,5 +247,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T21:03:11.115468Z"
+  "updated_at": "2026-11-19T21:09:02.526200Z"
 }
