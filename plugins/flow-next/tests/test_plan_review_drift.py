@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import unittest
+from contextlib import ExitStack, contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -17,8 +18,8 @@ BODY = """# Drift fixture
 
 ## Goal & Context
 
-Change `src/cited.py` and anything under `docs/guide/`. Notes live in `.flow/notes/n.md`.
-Not paths: `jq`, `--json`, `origin/main`.
+Change `src/cited.py` and anything under `docs/guide/`. Notes live in `.flow/notes/n.md`
+(all of `./.flow` is bookkeeping). Not paths: `jq`, `--json`, `origin/main`.
 
 ## Acceptance Criteria
 
@@ -58,26 +59,33 @@ class PlanReviewDriftTests(unittest.TestCase):
         (self.repo / name).write_text('v2\n', encoding='utf-8')
         self.commit(message)
 
-    def in_repo(self):
-        return [patch.object(f, 'get_repo_root', return_value=self.repo),
-                patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow')]
+    @contextmanager
+    def in_repo(self, forge=False):
+        """flowctl's repo and flow dirs point at the fixture; `forge` adds an empty gh listing."""
+        real_run = subprocess.run
+        def run(command, *args, **kwargs):
+            if command[0] == 'gh':
+                return SimpleNamespace(returncode=0, stdout='[]', stderr='')
+            return real_run(command, *args, **kwargs)
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(f, 'get_repo_root', return_value=self.repo))
+            stack.enter_context(patch.object(f, 'get_flow_dir', return_value=self.repo / '.flow'))
+            if forge:
+                stack.enter_context(patch.object(f.subprocess, 'run', side_effect=run))
+                stack.enter_context(patch.dict(os.environ, TYPESAFE_API_KEY=''))
+                stack.enter_context(patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger))
+            yield
 
     def ship(self):
         """Record a SHIP plan verdict at HEAD through the real reservation and recorder."""
         head = _git(self.repo, 'rev-parse', 'HEAD').stdout.strip()
-        patches = self.in_repo()
-        for p in patches:
-            p.start()
-        try:
+        with self.in_repo():
             _, reservation = f.enforce_and_increment_review_cap(
                 self.sid, 'plan', artifact_sha256='a' * 64, review_type='plan', return_reservation=True)
             f.record_review_attempt(
                 self.sid, 'plan', backend='host', output='<verdict>SHIP</verdict>', verdict='SHIP',
                 review_type='plan', reservation_id=reservation, finalize_status_kind='plan',
                 reset_rounds_on_ship=True, reviewed_head_sha=head)
-        finally:
-            for p in patches:
-                p.stop()
         self.commit('chore(flow): plan review')
         self.assertEqual(self.spec_json()['plan_review_status'], 'ship')
 
@@ -90,35 +98,14 @@ class PlanReviewDriftTests(unittest.TestCase):
         data.update(fields)
         path.write_text(json.dumps(data), encoding='utf-8')
 
-    def gh_shim(self):
-        real_run = subprocess.run
-        def run(command, *args, **kwargs):
-            if command[0] == 'gh':
-                return SimpleNamespace(returncode=0, stdout='[]', stderr='')
-            return real_run(command, *args, **kwargs)
-        return patch.object(f.subprocess, 'run', side_effect=run)
-
     def route(self):
         """The route judge (`flowctl judge --preset route --spec`)."""
-        patches = [*self.in_repo(), self.gh_shim(), patch.dict(os.environ, TYPESAFE_API_KEY='')]
-        for p in patches:
-            p.start()
-        try:
+        with self.in_repo(forge=True):
             return f.judge_route(f.judge_route_state({}, self.sid))['decision']
-        finally:
-            for p in patches:
-                p.stop()
 
     def pilot_route(self):
-        patches = [*self.in_repo(), self.gh_shim(), patch.dict(os.environ, TYPESAFE_API_KEY=''),
-                   patch.object(f, '_pilot_strikes_ledger_path', return_value=self.ledger)]
-        for p in patches:
-            p.start()
-        try:
+        with self.in_repo(forge=True):
             return f.pilot_snapshot(self.sid)['route']['decision']
-        finally:
-            for p in patches:
-                p.stop()
 
     def show_drift(self):
         shown = _run(self.repo, 'show', self.sid, '--json')
@@ -168,6 +155,41 @@ class PlanReviewDriftTests(unittest.TestCase):
                 rows[-1]['head_sha'] = head
                 self.edit_spec_json(review_attempts=rows)
                 self.assert_no_drift()
+
+    def test_r1_unreachable_commit_is_no_drift_until_a_branch_holds_it(self):
+        # A rebased-away review commit: readable, but on no branch and not behind HEAD.
+        orphan = _git(self.repo, 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'orphan').stdout.strip()
+        rows = self.spec_json()['review_attempts']
+        rows[-1]['head_sha'] = orphan
+        self.edit_spec_json(review_attempts=rows)
+        self.commit('point review at the orphan')
+        self.change('src/cited.py')
+        self.assert_no_drift()
+        # Reviewed on a branch that still exists: its tree is what the reviewer saw.
+        _git(self.repo, 'branch', 'reviewed-here', orphan)
+        self.assert_drift(['src/cited.py'])
+
+    def test_r3_late_superseded_verdict_does_not_restore_drift(self):
+        stale_head = _git(self.repo, 'rev-parse', 'HEAD').stdout.strip()
+        self.change('src/cited.py')
+        self.ship()
+        # An older review finalizing after the fresh SHIP lands as superseded evidence.
+        rows = self.spec_json()['review_attempts']
+        rows.append({**rows[-1], 'head_sha': stale_head, 'verdict': 'NEEDS_WORK',
+                     'round_consumed': False, 'superseded_by': 'fresh-ship'})
+        self.edit_spec_json(review_attempts=rows)
+        self.assert_no_drift()
+
+    @unittest.skipIf(os.name == 'nt', 'byte paths in argv are POSIX-only')
+    def test_r2_uncited_non_utf8_filename_leaves_the_route(self):
+        blob = subprocess.run(['git', 'hash-object', '-w', '--stdin'], cwd=self.repo, input=b'x\n',
+                              capture_output=True, check=True).stdout.decode().strip()
+        subprocess.run([b'git', b'update-index', b'--add', b'--cacheinfo', b'100644', blob.encode(),
+                        b'src/caf\xe9.txt'], cwd=self.repo, check=True)
+        _git(self.repo, 'commit', '-qm', 'latin-1 name')
+        self.assert_no_drift()
+        self.change('src/cited.py')
+        self.assert_drift(['src/cited.py'])
 
     def test_r2_uncited_and_flow_only_changes_leave_the_route(self):
         self.change('src/other.py')

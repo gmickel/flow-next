@@ -24797,26 +24797,35 @@ def plan_review_drift(repo: Path, spec: dict, tasks: list, body: str) -> list[st
 
     Derived on read, never stored. Applies only to a `ship` plan review whose tasks are all
     still `todo` (or absent). Cited paths are backtick tokens containing a `/`, outside
-    `.flow/`; a cited directory counts when anything under it changed. A missing or
-    unreadable reviewed commit means no drift.
+    `.flow/`; a cited directory counts when anything under it changed. A reviewed commit
+    that is missing, or reachable from neither HEAD nor any branch or tag, means no drift.
     """
     if spec.get("plan_review_status") != "ship" or any(t.get("status") != "todo" for t in tasks):
         return []
+    # A superseded verdict finalized late and never governed the status; skip it.
     rows = [row for row in spec.get("review_attempts") or []
-            if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")]
+            if isinstance(row, dict) and row.get("kind") == "plan" and row.get("verdict")
+            and not row.get("superseded_by")]
     head = rows[-1].get("head_sha") if rows else None
     if not isinstance(head, str) or not re.fullmatch(r"[0-9a-f]{7,64}", head):
         return []
     cited = sorted({token.removeprefix("./") for token in _CITED_TOKEN_RE.findall(body)
                     if "/" in token} - {""})
-    cited = [path for path in cited if not path.startswith(".flow/")]
+    cited = [path for path in cited
+             if path.rstrip("/") != ".flow" and not path.startswith(".flow/")]
     if not cited:
         return []
-    diff = subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", head, "HEAD", "--"],
-                          cwd=repo, capture_output=True, text=True, check=False)
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=repo, capture_output=True, check=False)
+    if git("merge-base", "--is-ancestor", head, "HEAD").returncode and not git(
+            "for-each-ref", "--contains", head, "--count=1", "--format=%(refname)",
+            "refs/heads", "refs/remotes", "refs/tags").stdout.strip():
+        return []
+    diff = git("diff", "--no-renames", "--name-only", "-z", head, "HEAD", "--")
     if diff.returncode:
         return []
-    changed = [name for name in diff.stdout.split("\0") if name]
+    # Raw path bytes: an uncited non-UTF-8 name must not break the check.
+    changed = [name.decode("utf-8", "surrogateescape") for name in diff.stdout.split(b"\0") if name]
     return [path for path in cited
             if any(name == path or name.startswith(path.rstrip("/") + "/") for name in changed)]
 

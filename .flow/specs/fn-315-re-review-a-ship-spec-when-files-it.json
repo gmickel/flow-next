@@ -8,13 +8,107 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-315-re-review-a-ship-spec-when-files-it",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-315-re-review-a-ship-spec-when-files-it.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "8d8085987f71ddb6806735cd12f7df967eb8dff00209dc20d473f2a268b737c8",
+      "backend": "codex",
+      "base_sha": "8e78eeb80ed95e5b8e996120b51d807ddc549151",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-675ba7aaf7150abbebdd9972ee02041f",
+            "classification": "introduced",
+            "findingId": "finding-675ba7aaf7150abbebdd9972ee02041f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-9d8697af3d69ab2c1f0d9d83381b7a26",
+            "classification": "introduced",
+            "findingId": "finding-9d8697af3d69ab2c1f0d9d83381b7a26",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c2b17a76f074cea4b22eb9b7dbed55ec",
+            "classification": "introduced",
+            "findingId": "finding-c2b17a76f074cea4b22eb9b7dbed55ec",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-fbc6920fe8c54e64bed4762e7ad662ef",
+            "classification": "introduced",
+            "findingId": "finding-fbc6920fe8c54e64bed4762e7ad662ef",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-192e54cc7f41ffea68e0cca47a257c30",
+            "classification": "introduced",
+            "findingId": "finding-192e54cc7f41ffea68e0cca47a257c30",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f9f7124d59638886e5cfb138e382f83e",
+            "classification": "introduced",
+            "findingId": "finding-f9f7124d59638886e5cfb138e382f83e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "2564fa7b0ec89048242eb978796180493b51e625",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 3986,
+      "output_sha256": "873167e07647a49dba35fbe321e069a2fadedecb3a0ee5e5015c4dd525d9766e",
+      "reservation_id": "38ff5feae1fe49ae987cbd69c2971142",
+      "round_consumed": true,
+      "scope": "impl:fn-315-re-review-a-ship-spec-when-files-it.1",
+      "superseded_by": null,
+      "task": "fn-315-re-review-a-ship-spec-when-files-it.1",
+      "timestamp": "2026-11-19T09:59:17.138310Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-315-re-review-a-ship-spec-when-files-it.1": 0
+  },
   "spec_path": ".flow/specs/fn-315-re-review-a-ship-spec-when-files-it.md",
   "status": "open",
   "title": "Re-review a SHIP spec when files it cites changed before work starts",
@@ -29,5 +123,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-03T11:27:27.248706Z"
+  "updated_at": "2026-11-19T09:59:17.141711Z"
 }

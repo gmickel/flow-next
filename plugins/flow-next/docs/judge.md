@@ -161,7 +161,8 @@ For a live spec, code reads lifecycle facts in this order:
    `plan_review`, whatever the task count. So does a `ship` review while every
    task is still `todo` (or none exist) when a repo path the spec cites in
    backticks changed between the commit that review recorded and `HEAD`;
-   `.flow/` paths never count, and a missing reviewed commit means no drift.
+   `.flow/` paths never count, and a reviewed commit that is missing, or on no
+   branch or tag and not behind `HEAD`, means no drift.
    `flowctl show <spec> --json` lists those paths as `plan_review_drift`.
 3. An intentional plan with tasks, or one implicit owner under `no_plan: true`,
    continues work on the recorded route, preserving resume admission.
