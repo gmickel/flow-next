@@ -84,13 +84,13 @@ grok --always-approve --no-plan -m <model> --reasoning-effort high -p "<self-con
 # session only) denies push and history rewrite at the tool level: one rule per command,
 # regex without `\`, `+` or parentheses (rules using them silently match nothing; verified 1.5.13).
 # A guard, not containment: `git -C <dir> push` does not match, so the host still checks the remote.
-cat > agy-bridge.json <<'EOF'
+cat > "$HOME/.agy-bridge.json" <<'EOF'   # outside the worktree, so the child cannot commit it
 {"permissions":{"deny":["command(regex:git push.*)","command(regex:git rebase.*)","command(regex:git reset.*)",
  "command(regex:git filter-branch.*)","command(regex:git filter-repo.*)","command(regex:git update-ref.*)",
  "command(regex:git commit.*--amend.*)"]}}
 EOF
-agy --model <model> --settings agy-bridge.json --output-format json --print-timeout 1800s -p "<self-contained prompt>" </dev/null >out.json
-# Success = exit 0 AND .status == "SUCCESS" in out.json (answer in .response). A non-zero exit, any
+agy --model <model> --settings "$HOME/.agy-bridge.json" --output-format json --print-timeout 1800s -p "<self-contained prompt>" </dev/null >"${TMPDIR:-/tmp}/agy-out.json"
+# Success = exit 0 AND .status == "SUCCESS" in agy-out.json (answer in .response). A non-zero exit, any
 # other status, or an empty <base>..HEAD diff is a failed bridge call. `--mode plan` is NOT read-only.
 ```
 

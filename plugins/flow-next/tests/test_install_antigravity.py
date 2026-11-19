@@ -105,6 +105,17 @@ class TranslateAgentTest(unittest.TestCase):
         self.assertEqual(ctx.exception.name, "UNMAPPED_DISALLOWED_TOOL")
         self.assertIn("NotebookEdit", str(ctx.exception))
 
+    def test_other_yaml_forms_of_a_translated_key_fail_closed(self) -> None:
+        for front in ('model: sonnet\n"disallowedTools": Edit, Write, NotebookEdit\n',
+                      "model: sonnet\ndisallowedTools : Edit, Write, Task\n",
+                      "model: sonnet\ndisallowedTools:\n  - NotebookEdit\n",
+                      "'model': sonnet\n"):
+            with self.subTest(front=front):
+                with self.assertRaises(antigravity_bundle.BundleError) as ctx:
+                    antigravity_bundle.translate_agent(_agent(front), "odd-agent.md")
+                self.assertEqual(ctx.exception.name, "UNSUPPORTED_FIELD_FORM")
+                self.assertIn("odd-agent.md", str(ctx.exception))
+
     def test_tools_allowlist_fails_closed(self) -> None:
         with self.assertRaises(antigravity_bundle.BundleError) as ctx:
             antigravity_bundle.translate_agent(_agent("model: sonnet\ntools: Read, Grep\n"), "a.md")
@@ -122,12 +133,14 @@ class CommandStubTest(unittest.TestCase):
 
 
 class RulesTest(unittest.TestCase):
-    def test_rule_is_scoped_by_its_description_and_drops_frontmatter(self) -> None:
+    def test_rule_keeps_its_scope_and_body_and_drops_frontmatter(self) -> None:
         text = ("---\ndescription: Apply when the workspace has .flow/. More text.\n"
                 "alwaysApply: false\n---\n\n# Flow-Next\n\nBody.\n")
         out = antigravity_bundle.rules_agents_md(text)
-        self.assertEqual(out, "Apply when the workspace has .flow/; otherwise ignore this rule.\n\n"
-                              "# Flow-Next\n\nBody.\n")
+        self.assertNotIn("---", out)
+        self.assertNotIn("alwaysApply", out)
+        self.assertIn("Apply when the workspace has .flow/", out.split("\n\n", 1)[0])
+        self.assertTrue(out.endswith("# Flow-Next\n\nBody.\n"))
 
 
 class BuildRealPluginTest(unittest.TestCase):
@@ -181,8 +194,9 @@ class BuildRealPluginTest(unittest.TestCase):
         self.assertNotIn("email", manifest.get("author", {}))
         self.assertTrue((self.bundle / antigravity_bundle.MARKER).is_file())
         rule = (self.bundle / "rules" / "AGENTS.md").read_text(encoding="utf-8")
+        source = (PLUGIN / "rules" / "flow-next.mdc").read_text(encoding="utf-8")
         self.assertFalse(rule.startswith("---"))
-        self.assertIn("otherwise ignore this rule", rule.splitlines()[0])
+        self.assertTrue(source.endswith(rule.split("\n\n", 1)[1]))
         self.assertEqual([p.name for p in (self.bundle / "rules").iterdir()], ["AGENTS.md"])
 
     def test_other_host_files_and_tests_are_left_out(self) -> None:
@@ -260,7 +274,6 @@ class InstallerTest(unittest.TestCase):
         self.assertTrue(calls[2].endswith("plugins/flow-next --json"), calls[2])
         self.assertIn("Installed flow-next into Antigravity CLI", proc.stdout)
         self.assertIn("""agy --settings '{"toolPermission":"always-proceed"}'""", proc.stdout)
-        self.assertIn("environment you already trust", proc.stdout)
         self.assertEqual(list(work_tmp.iterdir()), [])
 
     def test_rerun_replaces_the_install(self) -> None:

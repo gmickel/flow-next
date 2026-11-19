@@ -26,6 +26,9 @@ Fail closed (named error on stderr, non-zero exit) on:
   UNMAPPED_MODEL            — agent model outside MODEL_TO_TIER, or none
   UNMAPPED_DISALLOWED_TOOL  — token outside DENIED_TOOLS
   UNSUPPORTED_TOOLS_KEY     — a canonical agent declares a `tools:` allowlist
+  UNSUPPORTED_FIELD_FORM    — `model`, `tools` or `disallowedTools` written in any
+                              form but a plain `key: value` line (quoted key,
+                              space before the colon, block list, empty value)
   STUB_NAME_COLLISION       — a command name matches an existing skill
 """
 
@@ -66,6 +69,9 @@ EXCLUDED = shutil.ignore_patterns(
 MARKER = ".flow-next-antigravity-bundle"
 
 _FIELD_RE = r"^{}:[ \t]*(.*)$"
+_TRANSLATED_KEYS = ("model", "tools", "disallowedTools")
+_LOOSE_KEY_RE = re.compile(
+    r"^[ \t]*[\"']?(" + "|".join(_TRANSLATED_KEYS) + r")[\"']?[ \t]*:", re.M)
 
 
 class BundleError(Exception):
@@ -93,6 +99,10 @@ def translate_agent(text: str, source: str) -> str:
     if parts is None:
         raise BundleError("UNMAPPED_MODEL", f"{source}: no frontmatter")
     front, body = parts
+    for loose in _LOOSE_KEY_RE.finditer(front):
+        line = front[loose.start():].split("\n", 1)[0]
+        if not re.match(rf"{loose.group(1)}:[ \t]*\S", line):
+            raise BundleError("UNSUPPORTED_FIELD_FORM", f"{source}: {line.strip()}")
     if _field(front, "tools"):
         raise BundleError("UNSUPPORTED_TOOLS_KEY", source)
 

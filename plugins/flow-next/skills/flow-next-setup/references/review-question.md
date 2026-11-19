@@ -23,7 +23,7 @@
 }
 ```
 
-**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend (on `antigravity`, say in the Host description that its subagent models are tiers with no named-model pin, so host review fails closed for every writer); when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
   "header": "Review",

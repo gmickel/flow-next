@@ -554,11 +554,7 @@ Muse Code host notes:
 **If PLATFORM=antigravity, also show:**
 ```
 Antigravity CLI host notes:
-- flowctl resolves from the installed bundle via the skill's own absolute path - nothing is copied into the repo
-- Docs: AGENTS.md (Antigravity reads AGENTS.md and GEMINI.md; CLAUDE.md is not documented as read)
-- Review: host fails closed (subagent models are tiers, not named cross-family models) + codex/copilot/cursor/claude/none
 - Start flow-next sessions with agy --settings '{"toolPermission":"always-proceed"}' so workers can commit and run review CLIs; only in an environment you already trust
-- Detection: ${PLUGIN_ROOT}/.flow-next-antigravity-bundle (written by install-antigravity.sh; never an env var)
 - Update with scripts/install-antigravity.sh
 ```
 
