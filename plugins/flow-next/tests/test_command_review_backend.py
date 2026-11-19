@@ -2,12 +2,14 @@
 
 Every review here runs a real subprocess (a stand-in wrapper) through the
 public CLI, so the request on stdin, the response on stdout, the receipt and
-the round accounting are what a user would see.
+the round accounting are what a user would see. The argv comes only from the
+machine-local ``FLOW_REVIEW_COMMAND_<LABEL>`` variable.
 """
 
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import textwrap
 import unittest
@@ -70,19 +72,43 @@ NEEDS_WORK = {"response": {
     "sessionId": "cmd-1", "observedModel": "gemini-9-pro"}}
 
 
-class CommandRepo:
-    """A flow repo whose config labels the stand-in wrapper ``fake``."""
+def command_var(label):
+    return "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
 
-    def __init__(self, repo: Path, plan, commands=None, backend=None, extra_labels=()):
+
+class CommandTest(unittest.TestCase):
+    """Each test's environment changes are undone when it ends."""
+
+    def setUp(self):
+        self.enterContext(mock.patch.dict(os.environ))
+
+
+class CommandRepo:
+    """A flow repo whose environment labels the stand-in wrapper ``fake``.
+
+    ``commands`` maps a label to its variable's value (a list is JSON-encoded,
+    a string is set verbatim); ``tracked`` writes ``review.commands`` into the
+    checked-out config.
+    """
+
+    def __init__(self, repo: Path, plan, commands=None, backend=None, extra_labels=(),
+                 tracked=None):
         self.repo = repo
         self.plan = repo / "plan.json"
         self.log = repo / "requests"
         wrapper = repo / "wrapper.py"
         wrapper.write_text(WRAPPER, encoding="utf-8")
         self.set_plan(plan)
-        argv = [sys.executable, str(wrapper), str(self.plan), str(self.log)]
-        review = {"commands": commands if commands is not None else {
-            "fake": argv, **{label: argv for label in extra_labels}}}
+        self.argv = [sys.executable, str(wrapper), str(self.plan), str(self.log)]
+        if commands is None:
+            commands = {"fake": self.argv, **{label: self.argv for label in extra_labels}}
+        for name in [k for k in os.environ if k.startswith("FLOW_REVIEW_COMMAND_")]:
+            del os.environ[name]
+        for label, value in commands.items():
+            os.environ[command_var(label)] = value if isinstance(value, str) else json.dumps(value)
+        review = {}
+        if tracked is not None:
+            review["commands"] = tracked
         if backend:
             review["backend"] = backend
         (repo / ".flow" / "config.json").write_text(
@@ -106,7 +132,11 @@ def impl_review(base, receipt, *extra):
                     "--receipt", str(receipt), "--json", *extra)
 
 
-class CommandSpecGrammar(unittest.TestCase):
+LABELS_ACCEPTED = ("gemini", "kimi-pro", "a_b", "x9", "-", "_")
+LABELS_REJECTED = ("Gemini", "kimi.pro", "a/b", "a$b", "k\u00e9", "a b")
+
+
+class CommandSpecGrammar(CommandTest):
     def test_label_round_trips_and_resolves_to_itself(self):
         spec = flowctl.BackendSpec.parse("command:gemini")
         self.assertEqual((spec.backend, spec.model, spec.effort), ("command", "gemini", None))
@@ -118,10 +148,30 @@ class CommandSpecGrammar(unittest.TestCase):
         for raw in ("command", "command:", "command:gemini:high"):
             with self.subTest(raw=raw), self.assertRaises(ValueError) as ctx:
                 flowctl.BackendSpec.parse(raw)
-            self.assertIn("review.commands", str(ctx.exception))
+            self.assertIn("command:<label>", str(ctx.exception))
+            self.assertNotIn("review.commands", str(ctx.exception))
+
+    def test_label_characters_match_the_schema(self):
+        schema = json.loads((Path(flowctl.__file__).resolve().parents[1] / "schema"
+                             / "flow-config.schema.json").read_text(encoding="utf-8"))
+        backend = schema["properties"]["review"]["properties"]["backend"]
+        patterns = [branch["pattern"] for branch in backend["anyOf"]
+                    if branch.get("pattern", "").startswith("^command")]
+        self.assertEqual(len(patterns), 1)
+        for label in LABELS_ACCEPTED + LABELS_REJECTED:
+            with self.subTest(label=label):
+                try:
+                    flowctl.BackendSpec.parse(f"command:{label}")
+                    runtime = True
+                except ValueError as exc:
+                    runtime = False
+                    self.assertIn(label, str(exc))
+                    self.assertIn("FLOW_REVIEW_COMMAND_", str(exc))
+                self.assertEqual(runtime, label in LABELS_ACCEPTED)
+                self.assertEqual(bool(re.fullmatch(patterns[0], f"command:{label}")), runtime)
 
 
-class CommandImplReview(unittest.TestCase):
+class CommandImplReview(CommandTest):
     def test_request_receipt_and_observed_model(self):
         with _flow_repo() as (repo, base):
             env = CommandRepo(repo, [NEEDS_WORK])
@@ -184,24 +234,60 @@ class CommandImplReview(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertIn("command:<label>", out)
 
-    def test_bad_selection_fails_before_dispatch_naming_label_and_key(self):
+    def test_bad_selection_fails_before_dispatch_naming_label_and_variable(self):
+        secret = "SECRET-VALUE-7731"
+        var = "FLOW_REVIEW_COMMAND_FAKE"
         cases = [
-            ({"fake": []}, "command:fake", "review.commands.fake"),
-            ({"fake": [""]}, "command:fake", "review.commands.fake"),
-            ({"fake": "wrapper"}, "command:fake", "review.commands.fake"),
-            ({"fake": ["x", 3]}, "command:fake", "review.commands.fake"),
-            (None, "command:nope", "review.commands.nope"),
-            (None, "command", "command:<label>"),
+            ({"fake": []}, "command:fake", [var, "'fake'"]),
+            ({"fake": [""]}, "command:fake", [var, "'fake'"]),
+            ({"fake": json.dumps(secret)}, "command:fake", [var, "'fake'"]),
+            ({"fake": ["x", 3]}, "command:fake", [var, "'fake'"]),
+            ({"fake": f"not json {secret}"}, "command:fake", [var, "'fake'"]),
+            ({"fake": ""}, "command:fake", [var, "'fake'", "not set"]),
+            ({}, "command:fake", [var, "'fake'", "not set"]),
+            ({"fake": "wrapper"}, "command:nope", ["FLOW_REVIEW_COMMAND_NOPE", "'nope'"]),
+            ({}, "command:Bad.Label", ["FLOW_REVIEW_COMMAND_", "Bad.Label"]),
+            ({}, "command", ["command:<label>"]),
         ]
-        for commands, backend, needle in cases:
+        for commands, backend, needles in cases:
             with self.subTest(backend=backend, commands=commands), _flow_repo() as (repo, base):
                 env = CommandRepo(repo, [SHIP], commands=commands, backend=backend)
-                code, out, _ = impl_review(base, repo / "r.json")
-                self.assertEqual(code, 2)
-                self.assertIn(needle, json.loads(out)["error"])
+                code, out, err = impl_review(base, repo / "r.json")
+                self.assertEqual(code, 2, out + err)
+                for needle in needles:
+                    self.assertIn(needle, json.loads(out)["error"])
+                self.assertNotIn(secret, out + err)
                 self.assertEqual(env.requests(), [])
                 self.assertEqual(env.rounds(), 0)
                 self.assertFalse((repo / "r.json").exists())
+
+    def test_label_maps_to_one_variable(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [SHIP], commands={})
+            os.environ["FLOW_REVIEW_COMMAND_KIMI_PRO"] = json.dumps(env.argv)
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:kimi-pro")
+            self.assertEqual(code, 0, out + err)
+            self.assertEqual(json.loads((repo / "r.json").read_text())["label"], "kimi-pro")
+            self.assertEqual(len(env.requests()), 1)
+
+    def test_tracked_commands_never_supply_or_change_the_argv(self):
+        """A branch's config names a program; reviewing the branch never runs it."""
+        for with_variable in (False, True):
+            with self.subTest(with_variable=with_variable), _flow_repo() as (repo, base):
+                marker = repo / "ran-tracked"
+                tracked_argv = [sys.executable, "-c",
+                                f"open({str(marker)!r}, 'w').write('x')"]
+                env = CommandRepo(repo, [SHIP], commands=None if with_variable else {},
+                                  backend="command:fake", tracked={"fake": tracked_argv})
+                code, out, err = impl_review(base, repo / "r.json")
+                self.assertEqual(code, 2, out + err)
+                error = json.loads(out)["error"]
+                self.assertIn("review.commands", error)
+                self.assertIn("no longer read", error)
+                self.assertIn("FLOW_REVIEW_COMMAND_FAKE", error)
+                self.assertFalse(marker.exists())
+                self.assertEqual(env.requests(), [])
+                self.assertEqual(env.rounds(), 0)
 
     def test_transport_failures_refund_and_never_publish_a_verdict(self):
         verdict = "<verdict>SHIP</verdict>"
@@ -235,12 +321,25 @@ class CommandImplReview(unittest.TestCase):
             self.assertIn("executable not found", out + err)
             self.assertEqual(env.rounds(), 0)
 
-    def test_tilde_expands_in_the_first_element_only(self):
-        with mock.patch.dict(os.environ, {"HOME": "/home/someone"}), \
-                mock.patch.object(flowctl, "get_config",
-                                  return_value={"g": ["~/bin/review", "~/kept"]}):
-            self.assertEqual(flowctl._review_command_argv("g"),
-                             [os.path.expanduser("~/bin/review"), "~/kept"])
+    def test_leading_tilde_expands_in_every_element(self):
+        os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
+                           "FLOW_REVIEW_COMMAND_G": json.dumps(
+                               ["~/bin/review", "~/conf.json", "a~b"])})
+        self.assertEqual(flowctl._review_command_argv("g"),
+                         [os.path.expanduser("~/bin/review"),
+                          os.path.expanduser("~/conf.json"), "a~b"])
+
+    def test_windows_refuses_a_batch_file_first(self):
+        for first in ("C:/tools/review.cmd", "review.BAT", "~/bin/review.Cmd"):
+            os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps([first])
+            with self.subTest(first=first), mock.patch.object(flowctl.os, "name", "nt"):
+                with self.assertRaises(ValueError) as ctx:
+                    flowctl._review_command_argv("g")
+                self.assertIn("interpreter", str(ctx.exception))
+                self.assertIn("FLOW_REVIEW_COMMAND_G", str(ctx.exception))
+        os.environ["FLOW_REVIEW_COMMAND_G"] = json.dumps(["python", "review.cmd"])
+        with mock.patch.object(flowctl.os, "name", "nt"):
+            self.assertEqual(flowctl._review_command_argv("g"), ["python", "review.cmd"])
 
     def test_missing_observed_model_is_recorded_as_not_reported(self):
         with _flow_repo() as (repo, base):
@@ -251,7 +350,7 @@ class CommandImplReview(unittest.TestCase):
             self.assertEqual(json.loads(receipt.read_text())["model"], "not reported")
 
 
-class CommandResume(unittest.TestCase):
+class CommandResume(CommandTest):
     def test_rereview_resumes_the_returned_session(self):
         with _flow_repo() as (repo, base):
             env = CommandRepo(repo, [NEEDS_WORK, {"response": {
@@ -291,7 +390,7 @@ class CommandResume(unittest.TestCase):
             self.assertEqual(json.loads(receipt.read_text())["session_id"], "cmd-2")
 
 
-class CommandOtherReviews(unittest.TestCase):
+class CommandOtherReviews(CommandTest):
     def test_plan_and_completion_reviews_run_through_the_command(self):
         for sub in ("plan-review", "completion-review"):
             with self.subTest(sub=sub), _flow_repo() as (repo, base):
@@ -336,12 +435,12 @@ class CommandOtherReviews(unittest.TestCase):
                                     "--spec", "command:fake", "--draw", "correctness",
                                     "--draw", "contracts=command:nope", "--json")
             self.assertEqual(code, 2)
-            self.assertIn("review.commands.nope", json.loads(out)["error"])
+            self.assertIn("FLOW_REVIEW_COMMAND_NOPE", json.loads(out)["error"])
             self.assertEqual(env.requests(), [])
             self.assertEqual(env.rounds(), 0)
 
 
-class CommandSessionPass(unittest.TestCase):
+class CommandSessionPass(CommandTest):
     def test_validate_continues_the_session_and_never_restarts(self):
         with _flow_repo() as (repo, base):
             env = CommandRepo(repo, [NEEDS_WORK])
@@ -394,7 +493,7 @@ class CommandSessionPass(unittest.TestCase):
             self.assertEqual(len(env.requests()), 1)
 
 
-class CommandReviewFixes(unittest.TestCase):
+class CommandReviewFixes(CommandTest):
     def test_fresh_retry_never_inherits_the_failed_calls_model(self):
         with _flow_repo() as (repo, base):
             env = CommandRepo(repo, [
