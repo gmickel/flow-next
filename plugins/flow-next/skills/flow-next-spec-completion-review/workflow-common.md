@@ -86,7 +86,7 @@ If the verdict is NEEDS_WORK, fix and re-review (working-rules.md, Review):
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
    - **Claude**: Re-run `flowctl claude completion-review` (receipt enables context; must be `mode == "claude"` to resume)
-   - **Command**: Re-run `flowctl command completion-review` (receipt enables context; must be `mode == "command"` to resume)
+   - **Command**: Re-run `flowctl command completion-review` with the same `--spec command:<label>` when `--review=command:<label>` named one (receipt enables context; must be `mode == "command"` with the same label to resume)
    - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
      re-review path.
 5. **Stop.** Attended, the re-review's verdict is terminal: `SHIP` completes; `NEEDS_WORK`
