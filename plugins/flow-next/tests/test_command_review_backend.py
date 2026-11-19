@@ -21,17 +21,20 @@ from test_claude_review_commands import (  # noqa: E402
 )
 
 WRAPPER = textwrap.dedent("""
-    import json, sys, pathlib, time
+    import json, os, sys, pathlib, time
     plan_path, log_path = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
     request = json.loads(sys.stdin.read())
     with log_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"argv": sys.argv, "request": request}) + "\\n")
+        fh.write(json.dumps({"argv": sys.argv, "request": request,
+                             "token": "FLOW_REVIEW_EXECUTION_TOKEN" in os.environ}) + "\\n")
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     step = plan.pop(0) if len(plan) > 1 else plan[0]
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     time.sleep(step.get("sleep", 0))
     sys.stderr.write(step.get("stderr", ""))
-    if "raw" in step:
+    if "flood" in step:
+        sys.stdout.write("x" * step["flood"])
+    elif "raw" in step:
         sys.stdout.write(step["raw"])
     else:
         response = {"schemaVersion": 1, "output": "", "stderr": "", "exitCode": 0}
@@ -52,16 +55,16 @@ NEEDS_WORK = {"response": {
 class CommandRepo:
     """A flow repo whose config labels the stand-in wrapper ``fake``."""
 
-    def __init__(self, repo: Path, plan, commands=None, backend=None):
+    def __init__(self, repo: Path, plan, commands=None, backend=None, extra_labels=()):
         self.repo = repo
         self.plan = repo / "plan.json"
         self.log = repo / "requests.jsonl"
         wrapper = repo / "wrapper.py"
         wrapper.write_text(WRAPPER, encoding="utf-8")
         self.set_plan(plan)
+        argv = [sys.executable, str(wrapper), str(self.plan), str(self.log)]
         review = {"commands": commands if commands is not None else {
-            "fake": [sys.executable, str(wrapper), str(self.plan), str(self.log)],
-        }}
+            "fake": argv, **{label: argv for label in extra_labels}}}
         if backend:
             review["backend"] = backend
         (repo / ".flow" / "config.json").write_text(
@@ -337,6 +340,101 @@ class CommandSessionPass(unittest.TestCase):
             last = env.requests()[-1]["request"]
             self.assertEqual((last["sessionId"], last["resumeOnly"]), ("cmd-1", True))
             self.assertEqual(len(env.requests()), 2)
+
+    def test_validate_without_spec_continues_the_receipt_label(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [NEEDS_WORK], extra_labels=("other",),
+                              backend="command:other")
+            receipt = repo / "r.json"
+            self.assertEqual(impl_review(base, receipt, "--spec", "command:fake")[0], 0)
+            findings = repo / "findings.jsonl"
+            findings.write_text(json.dumps({"id": "f1", "title": "off by one"}) + "\n",
+                                encoding="utf-8")
+            env.set_plan([{"response": {"output": "Validated.", "sessionId": "ECHO"}}])
+            _run_cli("command", "validate", "--findings-file", str(findings),
+                     "--receipt", str(receipt), "--json")
+            self.assertEqual(len(env.requests()), 2)
+            self.assertEqual(env.requests()[-1]["request"]["sessionId"], "cmd-1")
+
+
+class CommandReviewFixes(unittest.TestCase):
+    def test_fresh_retry_never_inherits_the_failed_calls_model(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [
+                NEEDS_WORK,
+                {"response": {"exitCode": 2, "resumeFailed": True, "observedModel": "old-model"}},
+                {"response": {"output": "<verdict>SHIP</verdict>", "sessionId": "cmd-2"}},
+            ])
+            receipt = repo / "r.json"
+            self.assertEqual(impl_review(base, receipt, "--spec", "command:fake")[0], 0)
+            _commit_change(repo, "def a(x):\n    return x + 2\n", "fix")
+            code, _, err = impl_review(base, receipt, "--spec", "command:fake")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(len(env.requests()), 3)
+            self.assertEqual(json.loads(receipt.read_text())["model"], "not reported")
+
+    def test_another_label_never_receives_the_previous_session(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [NEEDS_WORK, SHIP], extra_labels=("other",))
+            receipt = repo / "r.json"
+            self.assertEqual(impl_review(base, receipt, "--spec", "command:fake")[0], 0)
+            _commit_change(repo, "def a(x):\n    return x + 2\n", "fix")
+            code, _, err = impl_review(base, receipt, "--spec", "command:other")
+            self.assertEqual(code, 0, err)
+            second = env.requests()[1]["request"]
+            self.assertIsNone(second["sessionId"])
+            self.assertIn("off by one", second["prompt"])
+            self.assertEqual(json.loads(receipt.read_text())["label"], "other")
+
+    def test_managed_only_completion_is_not_offered(self):
+        with _flow_repo() as (repo, _base):
+            env = CommandRepo(repo, [SHIP])
+            code, out, _ = _run_cli("command", "completion-review", "--help")
+            self.assertEqual(code, 0)
+            self.assertNotIn("--require-managed-execution", out)
+            code, _, err = _run_cli("command", "completion-review", EPIC_ID, "--spec",
+                                    "command:fake", "--require-managed-execution", "--json")
+            self.assertEqual(code, 2)
+            self.assertIn("--require-managed-execution", err)
+            self.assertEqual(env.requests(), [])
+
+    def test_managed_provider_token_does_not_reach_the_wrapper(self):
+        with _flow_repo() as (repo, base), mock.patch.dict(
+                os.environ, {"FLOW_REVIEW_EXECUTION_TOKEN": "scoped-secret"}):
+            env = CommandRepo(repo, [SHIP])
+            self.assertEqual(impl_review(base, repo / "r.json", "--spec", "command:fake")[0], 0)
+            self.assertFalse(env.requests()[0]["token"])
+
+    def test_oversized_output_is_a_transport_failure(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [{"flood": flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10}])
+            receipt = repo / "r.json"
+            code, out, err = impl_review(base, receipt, "--spec", "command:fake")
+            self.assertNotEqual(code, 0)
+            self.assertIn("exceeds 16 MiB", out + err)
+            self.assertFalse(receipt.exists())
+            self.assertEqual(env.rounds(), 0)
+
+    def test_command_draw_rows_name_their_label(self):
+        with _flow_repo() as (repo, base):
+            CommandRepo(repo, [SHIP], extra_labels=("other",))
+            receipt = repo / "fanout.json"
+            code, out, err = _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                                      "--receipt", str(receipt), "--spec", "command:fake",
+                                      "--draw", "correctness", "--draw",
+                                      "contracts=command:other", "--json")
+            self.assertEqual(code, 0, err)
+            merged = repo / "merged.md"
+            merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
+            code, _, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
+                                    "--base", base, "--rid", json.loads(out)["rid"],
+                                    "--merged-file", str(merged), "--receipt", str(receipt),
+                                    "--json")
+            self.assertEqual(code, 0, err)
+            rows = {row["axis"]: row for row in json.loads(receipt.read_text())["draws"]}
+            self.assertEqual((rows["correctness"]["backend"], rows["correctness"]["label"]),
+                             ("command", "fake"))
+            self.assertEqual(rows["contracts"]["label"], "other")
 
 
 if __name__ == "__main__":

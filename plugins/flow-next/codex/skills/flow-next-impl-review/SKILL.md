@@ -43,7 +43,8 @@ git diff --shortstat "$DIFF_BASE"...HEAD
 - `claude` when a Claude model wrote the change: say once that this review is same-family, then
   continue.
 - `command:<label>` from `--review`: use `BACKEND=command` and add `--spec command:<label>` to
-  every `$FLOWCTL command` call. A bare `command` takes its label from the task, the spec,
+  the `impl-review-fanout` and `impl-review` calls (finalize reads the round; `validate` and
+  `deep-pass` read the receipt). A bare `command` takes its label from the task, the spec,
   `FLOW_REVIEW_BACKEND` or `review.backend`.
 
 Shell state does not survive between Bash calls: each block below resolves `FLOWCTL` again and

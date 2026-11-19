@@ -8,13 +8,115 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-337-command-review-backend-for-other-model",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-337-command-review-backend-for-other-model.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "f0e4a4b8e696165d7a5d4da0e1ea3b53084106b89510bb8d08c486cd9358d6f3",
+      "backend": "codex",
+      "base_sha": "b448446f1d6d9a8071161de63f286f6156e06548",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-131219abab019ec4d691ea5a87007eb3",
+            "classification": "introduced",
+            "findingId": "finding-131219abab019ec4d691ea5a87007eb3",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4438d2a80b02e4f651ae3223a9c6eace",
+            "classification": "introduced",
+            "findingId": "finding-4438d2a80b02e4f651ae3223a9c6eace",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-eb3006f61c0c1ffe938e7f2173982d8b",
+            "classification": "introduced",
+            "findingId": "finding-eb3006f61c0c1ffe938e7f2173982d8b",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-bf661a57ac484c5ee68b26b1b73fd4ad",
+            "classification": "introduced",
+            "findingId": "finding-bf661a57ac484c5ee68b26b1b73fd4ad",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-789fa3f795e2122b968a9cbc6941faa3",
+            "classification": "introduced",
+            "findingId": "finding-789fa3f795e2122b968a9cbc6941faa3",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b6120d60ed3ecd90d6416fb59800f406",
+            "classification": "introduced",
+            "findingId": "finding-b6120d60ed3ecd90d6416fb59800f406",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4ab42256d3a21fb5e791c4d1cb1eb56c",
+            "classification": "introduced",
+            "findingId": "finding-4ab42256d3a21fb5e791c4d1cb1eb56c",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "ef62d273cc6683d071995363d93792a7cda664a7",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 5763,
+      "output_sha256": "9b95f44a88ce613d1373a374d5c28e8dfd2f8d79d1a572d057d523ca9a37d7e6",
+      "reservation_id": "e53990ebb1ad4650ba9f509f3b149691",
+      "round_consumed": true,
+      "scope": "impl:fn-337-command-review-backend-for-other-model.1",
+      "superseded_by": null,
+      "task": "fn-337-command-review-backend-for-other-model.1",
+      "timestamp": "2026-11-19T11:34:06.614654Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-337-command-review-backend-for-other-model.1": 0
+  },
   "spec_path": ".flow/specs/fn-337-command-review-backend-for-other-model.md",
   "status": "open",
   "title": "Command review backend for other model families",
@@ -29,5 +131,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T10:58:46.865295Z"
+  "updated_at": "2026-11-19T11:34:06.618468Z"
 }

@@ -10,7 +10,7 @@ The backend's workflow file and the Fix Loop below own the verdict handling; of 
 
 **Workflow is backend-split. Read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail (including the phase-ordering matrix) lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
-- `BACKEND=codex`, `claude`, `copilot` or `cursor` → [workflow-cli.md](workflow-cli.md)
+- `BACKEND=codex`, `claude`, `copilot`, `cursor` or `command` → [workflow-cli.md](workflow-cli.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 
 Do not load the other one. Each file carries its own Critical Rules and anti-patterns; both apply the panel rule in [SKILL.md](SKILL.md).
@@ -18,7 +18,7 @@ Do not load the other one. Each file carries its own Critical Rules and anti-pat
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
+**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), a configured review command (`command:<label>`), or host-native (`host`)
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
@@ -31,7 +31,7 @@ parse the flags in Step 0.
 
 ## Critical Rules
 
-**Rules** for `codex`, `copilot`, `cursor`, and `claude` live at the top of [workflow-cli.md](workflow-cli.md), with each backend's notes at its end.
+**Rules** for `codex`, `copilot`, `cursor`, `claude` and `command` live at the top of [workflow-cli.md](workflow-cli.md), with each backend's notes at its end.
 
 **For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).

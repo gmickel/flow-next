@@ -41352,6 +41352,8 @@ def _run_validator_pass(
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
+            if backend == "command" and not spec_arg and prior_mode == "command":
+                spec_arg = prior.get("spec")
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -42252,6 +42254,8 @@ def _run_deep_pass(
             prior_verdict = prior.get("verdict")
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
+            if backend == "command" and not spec_arg and prior_mode == "command":
+                spec_arg = prior.get("spec")
             if isinstance(prior.get("deep_passes"), list):
                 prior_passes = list(prior["deep_passes"])
         except (json.JSONDecodeError, OSError):
@@ -45566,12 +45570,14 @@ def _resume_session_from_receipt(
     allowed_modes: tuple,
     track_prior_model: bool = False,
     require_nonempty_sid: bool = False,
+    label: Optional[str] = None,
 ) -> tuple[Optional[str], bool, Optional[str], Optional[str]]:
     """Load session resume state from a prior receipt.
 
     Returns (session_id, is_rereview, prior_model, prior_effort).
     ``allowed_modes`` is the set of receipt ``mode`` values that may resume
-    (codex includes ``None`` for legacy receipts).
+    (codex includes ``None`` for legacy receipts). A ``label`` (command
+    backend) must also match the receipt's: another label is another wrapper.
     """
     session_id: Optional[str] = None
     is_rereview = False
@@ -45584,7 +45590,8 @@ def _resume_session_from_receipt(
         return session_id, is_rereview, prior_model, prior_effort
     try:
         receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
-        if receipt_data.get("mode") in allowed_modes:
+        if receipt_data.get("mode") in allowed_modes and (
+                label is None or receipt_data.get("label") == label):
             prior_sid = receipt_data.get("session_id")
             if require_nonempty_sid:
                 if prior_sid:
@@ -46092,35 +46099,49 @@ def _command_run_exec(
     resume_only = getattr(args, "managed_resume_only", False)
     timeout = get_review_exec_timeout()
 
+    # A managed provider's scoped credential never reaches a local wrapper.
+    env = {k: v for k, v in os.environ.items() if k != "FLOW_REVIEW_EXECUTION_TOKEN"}
+
     def invoke(sid: Optional[str]) -> tuple[Optional[dict], tuple]:
+        # Each call stands alone: only the response that answered may name a model.
+        resolution_out["model"] = "not reported"
         payload = _review_execution_request(
             backend="command", model=None, effort=None, prompt=prompt,
             repository_path=repo_root, session_id=sid, resume_only=resume_only,
             timeout=timeout,
             request_scope=getattr(args, "managed_review_request_scope", None),
         )
-        try:
-            proc = subprocess.run(
-                argv,
-                input=json.dumps(payload).encode("utf-8"),
-                capture_output=True,
-                check=False,
-                timeout=timeout,
-                cwd=str(repo_root),
-            )
-        except FileNotFoundError:
-            return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
-        except subprocess.TimeoutExpired:
-            return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
-        except OSError as exc:
-            return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
-        if proc.returncode != 0:
-            detail = _last_line(proc.stderr.decode("utf-8", errors="replace"))
-            return None, ("", sid or "", proc.returncode if proc.returncode > 0 else 2,
-                          f"{name} exited {proc.returncode}" + (f": {detail}" if detail else ""))
+        # Output spools to files so a flood costs disk, not memory, and only
+        # what the checks need is read back.
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            try:
+                proc = subprocess.run(
+                    argv,
+                    input=json.dumps(payload).encode("utf-8"),
+                    stdout=out,
+                    stderr=err,
+                    check=False,
+                    timeout=timeout,
+                    cwd=str(repo_root),
+                    env=env,
+                )
+            except FileNotFoundError:
+                return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
+            except subprocess.TimeoutExpired:
+                return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
+            except OSError as exc:
+                return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
+            err.seek(max(0, err.seek(0, os.SEEK_END) - 65536))
+            stderr_tail = err.read().decode("utf-8", errors="replace")
+            if proc.returncode != 0:
+                detail = _last_line(stderr_tail)
+                return None, ("", sid or "", proc.returncode if proc.returncode > 0 else 2,
+                              f"{name} exited {proc.returncode}" + (f": {detail}" if detail else ""))
+            out.seek(0)
+            raw = out.read(REVIEW_EXECUTION_RESPONSE_MAX + 1)
         try:
             result = _parse_review_execution_response(
-                proc.stdout, session_id=sid, resume_only=resume_only,
+                raw, session_id=sid, resume_only=resume_only,
             )
         except (ValueError, TypeError, RecursionError) as exc:
             return None, ("", sid or "", 2, f"{name}: invalid response: {exc}")
@@ -47132,6 +47153,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             allowed_modes=reg["resume_modes"],
             track_prior_model=reg["track_prior_receipt_model"],
             require_nonempty_sid=reg["require_nonempty_sid"],
+            label=resolved_spec.model if backend == "command" else None,
         )
     )
     if reg["mint_session_id"] and not session_id:
@@ -47672,6 +47694,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             allowed_modes=reg["resume_modes"],
             track_prior_model=reg["track_prior_receipt_model"],
             require_nonempty_sid=reg["require_nonempty_sid"],
+            label=resolved_spec.model if backend == "command" else None,
         )
     )
     if reg["mint_session_id"] and not session_id:
@@ -47982,6 +48005,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             allowed_modes=reg["resume_modes"],
             track_prior_model=reg["track_prior_receipt_model"],
             require_nonempty_sid=reg["require_nonempty_sid"],
+            label=resolved_spec.model if backend == "command" else None,
         )
     )
     if reg["mint_session_id"] and not session_id:
@@ -50238,6 +50262,8 @@ def _review_fanout_receipt_draws(draws: list) -> list:
             "session_id": row.get("session_id"),
             "verdict": row.get("verdict"),
             "failed": bool(row.get("failed")),
+            **({"backend": "command", "label": row.get("label")}
+               if row.get("backend") == "command" else {}),
         }
         for row in draws
         if isinstance(row, dict)
@@ -56856,10 +56882,11 @@ def _add_plan_review_parser(sub, backend: str):
 def _add_completion_review_parser(sub, backend: str):
     """Register ``completion-review`` for a backend (fn-112 parameterized argparse)."""
     p = sub.add_parser("completion-review", help="Spec completion review")
-    p.add_argument(
-        "--require-managed-execution", action="store_true",
-        help="Require a scoped local execution provider before reserving a review",
-    )
+    if backend != "command":  # a configured command never uses the managed provider
+        p.add_argument(
+            "--require-managed-execution", action="store_true",
+            help="Require a scoped local execution provider before reserving a review",
+        )
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument(
         "--base",
