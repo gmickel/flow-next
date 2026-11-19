@@ -400,7 +400,7 @@
     "impl:fn-341-antigravity-cli-as-a-first-class-host.1": 0
   },
   "spec_path": ".flow/specs/fn-341-antigravity-cli-as-a-first-class-host.md",
-  "status": "open",
+  "status": "done",
   "title": "Antigravity CLI as a first-class host and a driven target",
   "tracker": {
     "baseHashFlow": null,
@@ -413,5 +413,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T23:53:50.300882Z"
+  "updated_at": "2026-11-19T23:54:42.902892Z"
 }
