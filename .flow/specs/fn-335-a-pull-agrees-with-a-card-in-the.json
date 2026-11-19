@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-335-a-pull-agrees-with-a-card-in-the",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-19T09:35:49.016249Z",
   "created_at": "2026-11-19T08:42:03.628237Z",
   "default_impl": null,
   "default_review": null,
@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-335-a-pull-agrees-with-a-card-in-the",
   "impl_review_rounds": {
-    "fn-335-a-pull-agrees-with-a-card-in-the.1": 1
+    "fn-335-a-pull-agrees-with-a-card-in-the.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -61,9 +61,55 @@
       "task": "fn-335-a-pull-agrees-with-a-card-in-the.1",
       "timestamp": "2026-11-19T09:32:45.813889Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "8ae38cb98814b89356c4ad7d8d26a1085d7e7007cdecd41a07461b4054238409",
+      "backend": "codex",
+      "base_sha": "8e78eeb80ed95e5b8e996120b51d807ddc549151",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-82550e31c6832079fe942b767eb2d251",
+            "classification": "introduced",
+            "findingId": "finding-82550e31c6832079fe942b767eb2d251",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8e42e04a2e1d206a09da78b74ec7e8e2ce68ae53",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 1570,
+      "output_sha256": "98d103a045f0aabd2c44483a8bcdf4631ce3ced32a1a4e1e59e48a8b39f7284c",
+      "reservation_id": "76118d3b25f5453cb871100ced925373",
+      "round_consumed": true,
+      "scope": "impl:fn-335-a-pull-agrees-with-a-card-in-the.1",
+      "superseded_by": null,
+      "task": "fn-335-a-pull-agrees-with-a-card-in-the.1",
+      "timestamp": "2026-11-19T09:35:16.208523Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-335-a-pull-agrees-with-a-card-in-the.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -83,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T09:32:45.816801Z"
+  "updated_at": "2026-11-19T09:35:49.016256Z"
 }
