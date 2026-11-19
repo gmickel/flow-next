@@ -234,7 +234,7 @@
     "impl:fn-340-9170-audit-fixes-machine-local-review.1": 0
   },
   "spec_path": ".flow/specs/fn-340-9170-audit-fixes-machine-local-review.md",
-  "status": "open",
+  "status": "done",
   "title": "9.17.0 audit fixes: machine-local review commands",
   "tracker": {
     "baseHashFlow": null,
@@ -247,5 +247,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T21:09:02.526200Z"
+  "updated_at": "2026-11-19T21:12:16.754412Z"
 }
