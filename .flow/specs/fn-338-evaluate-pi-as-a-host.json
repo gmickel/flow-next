@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-338-evaluate-pi-as-a-host",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-19T10:49:18.432671Z",
   "created_at": "2026-11-19T08:42:05.401088Z",
   "default_impl": null,
   "default_review": null,
@@ -29,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T10:19:01.312763Z"
+  "updated_at": "2026-11-19T10:49:18.432679Z"
 }
