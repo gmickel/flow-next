@@ -61,6 +61,20 @@ def _completion_review_configured(config: dict,
     return True
 
 
+def _card_in_ready_state(provider: str, config: dict, parent: dict) -> bool:
+    """Whether the raw parent sits in tracker.readyState, by the same match
+    the readiness projection uses (state name, or label on GitHub/GitLab)."""
+    from ..facade.projections import _desired, _ready_state  # noqa: PLC0415
+    ready_state = _ready_state(config)
+    if ready_state is None:
+        return False
+    raw_labels = parent.get("labels")
+    labels = [x.get("name") if isinstance(x, dict) else x
+              for x in (raw_labels if isinstance(raw_labels, list) else [])]
+    return _desired(provider, {"raw": parent, "labels": labels},
+                    ready_state) is True
+
+
 def _state_dir(flow_dir: Path) -> Path:
     """Mirror flowctl's get_state_dir: FLOW_STATE_DIR env, then the git
     common-dir (shared across worktrees), then .flow/state for non-git."""
@@ -380,7 +394,8 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     if not repair_retry:
         decision = decide(
             to, reason, flow_norm, tracker_norm, pr_evidence,
-            conflict_tiebreak)
+            conflict_tiebreak,
+            card_ready=_card_in_ready_state(provider, config, parent))
     err = decision_as_error(decision)
     if err:
         return err

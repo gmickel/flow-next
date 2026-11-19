@@ -355,7 +355,8 @@ def in_progress_wins_matches(flow_norm: str, tracker_norm: str) -> bool:
 
 def decide(requested_to: str, reason: Optional[str], flow_norm: str,
            tracker_norm: str, pr_evidence: str,
-           conflict_tiebreak: str = "always-ask") -> Decision:
+           conflict_tiebreak: str = "always-ask", *,
+           card_ready: bool = False) -> Decision:
     """`--to` is a REQUEST, not an authority — the gate decides.
 
     Order (load-bearing):
@@ -461,6 +462,15 @@ def decide(requested_to: str, reason: Optional[str], flow_norm: str,
     if {flow_norm, tracker_norm} == EARLY and requested_to in EARLY:
         return Decision("noop", target_slot=tracker_norm,
                         details={"who": "early-agree"})
+
+    # ── READY-STATE AGREEMENT: a card in the configured tracker.readyState
+    #    is admitted, not started, even when the team keeps that state among
+    #    its started ones (#627). An unstarted spec agrees with it; writing
+    #    would move the card out of (or a todo push into) the ready state. ──
+    if (card_ready and flow_norm in EARLY and requested_to in EARLY
+            and tracker_norm in EARLY | {ACTIVE_IN_PROGRESS}):
+        return Decision("noop", target_slot=tracker_norm,
+                        details={"who": "ready-state-agree"})
 
     # ── TRACKER-TERMINAL WINS: fold into LOCAL state (no tracker write).
     #    After the agreement no-op and the evidence conflicts; deadlock

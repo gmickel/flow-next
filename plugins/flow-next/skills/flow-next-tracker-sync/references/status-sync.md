@@ -153,7 +153,9 @@ the two current normalized statuses, which are always available).
 The facade evaluates in this order: a `deferred`/`wontfix` (cancelled-family)
 status → surface; the deadlock check; a locally-done spec whose `prEvidence` is
 `closed-unmerged` / `ambiguous` / `probe-error` → NEEDS_HUMAN `conflict`, no
-status write; agreement → `noop`; the per-field rules (tracker terminal wins,
+status write; agreement → `noop` (including an unstarted spec, `backlog` or
+`todo`, against a card in the configured `tracker.readyState` that reads as
+`in_progress`: the card is admitted, not started); the per-field rules (tracker terminal wins,
 flow in-progress wins, the no-PR preserve rule, the open-PR `in-review` push, the
 merged terminal push); anything else → `conflict` (`unmapped`), never a silent
 default.
@@ -278,8 +280,8 @@ $FLOWCTL sync defer "$SPEC_ID" \
 **One-way, pull-side only.** When `tracker.readyState` is configured, every
 operation that reads the issue (`pull` / `reconcile`) projects the configured
 tracker state onto the local spec `ready` flag — after the status normalization above, independent of the who-wins rules
-(readiness is **orthogonal to status**; it never feeds the status policy and never
-drives a `setStatus`). `readyState: null` (the default) ⇒ this whole section is
+(readiness is **orthogonal to status**; it never drives a `setStatus`, and feeds the
+status policy only as the ready-state agreement above). `readyState: null` (the default) ⇒ this whole section is
 skipped — no calls, no receipts, no flag writes.
 
 **Derive the desired flag** from the normalized `issue`:

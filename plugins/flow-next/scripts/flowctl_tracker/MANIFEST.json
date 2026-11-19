@@ -158,7 +158,7 @@
     },
     {
       "path": "flowctl_tracker/status/policy.py",
-      "sha256": "245e0a96832c3113a16ee55b4402a8049947936da83a489d6e494ded810abb7f"
+      "sha256": "bce953c489f3968b5e89bd96306c3d27ee227836b0d4a7ce429d177573ec4710"
     },
     {
       "path": "flowctl_tracker/status/providers.py",
@@ -166,7 +166,7 @@
     },
     {
       "path": "flowctl_tracker/status/verb.py",
-      "sha256": "18a604eb41033f647abc174b3882a57a94aee3b1580e1c5e9cf6092d3c0872fe"
+      "sha256": "b5774047afcb8e3681630b27a0b8d909db5a90d23e05594a3373b73a8a872e7f"
     },
     {
       "path": "flowctl_tracker/subjects.py",
