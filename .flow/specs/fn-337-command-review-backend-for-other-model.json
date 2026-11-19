@@ -460,7 +460,7 @@
     "impl:fn-337-command-review-backend-for-other-model.1": 0
   },
   "spec_path": ".flow/specs/fn-337-command-review-backend-for-other-model.md",
-  "status": "open",
+  "status": "done",
   "title": "Command review backend for other model families",
   "tracker": {
     "baseHashFlow": null,
@@ -473,5 +473,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T11:49:27.637802Z"
+  "updated_at": "2026-11-19T11:50:11.555417Z"
 }
