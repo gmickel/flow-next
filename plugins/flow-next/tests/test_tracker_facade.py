@@ -2235,6 +2235,102 @@ class ReadinessProjection(unittest.TestCase):
             self.assertIn("per_page=100&page=2", requests[1].url_or_argv[-1])
 
 
+def _started_card(provider: str, state: str) -> dict:
+    """A card whose tracker status reads in_progress, named `state`."""
+    if provider == "github":
+        return _gh_issue(FLOW_BODY, labels=[{"name": state}])
+    if provider == "gitlab":
+        return {**_gl_issue(FLOW_BODY), "labels": [state]}
+    if provider == "linear":
+        return {**_ln_issue(FLOW_BODY),
+                "state": {"id": "s-queue", "name": state, "type": "started"}}
+    issue = _jr_issue(FLOW_BODY)
+    issue["fields"]["status"] = {
+        "id": "9", "name": state, "statusCategory": {"key": "indeterminate"}}
+    return issue
+
+
+class ReadyStateStatusAgreement(unittest.TestCase):
+    """#627: an unstarted spec agrees with a card in the configured
+    readyState, even when that state reads as started on the tracker."""
+
+    def _pull(self, provider: str, *, ready_state: str | None,
+              card_state: str, tasks: list | None):
+        cfg_fn, durable, display = {
+            "github": (gh_cfg, GH_NODE, "#42"),
+            "gitlab": (gl_cfg, str(GL_ID), "g/p#12"),
+            "linear": (ln_cfg, LN_UUID, "WOR-17"),
+            "jira": (jr_cfg, JR_ID, "SCRUM-1"),
+        }[provider]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            flow = root / ".flow"
+            config = cfg_fn()
+            if ready_state is not None:
+                config["tracker"]["readyState"] = ready_state
+            _write_flow(flow, config,
+                        tracker=_linked(id=durable, identifier=display),
+                        tasks=tasks)
+            ex = fake_execute({
+                "wire-read": _parent_resp(
+                    provider, _started_card(provider, card_state)),
+                "facade-readiness-exists": ok([]),
+            })
+            out = F.sync(flow, SPEC_ID, op="pull", event="manual",
+                         flow_file=_flow_file(root),
+                         body_file=_body_file(root, FLOW_BODY),
+                         comments_file=_comments_file(root),
+                         execute=ex)
+            saved = json.loads((flow / "specs" / f"{SPEC_ID}.json")
+                               .read_text(encoding="utf-8"))
+            return out, saved, [c.op for c in ex.calls]
+
+    def test_unstarted_spec_agrees_with_started_ready_state(self) -> None:
+        for provider, _cfg, _durable, _display, _issue in ADAPTERS:
+            for label, tasks, flow_slot in (
+                    ("no tasks", None, "backlog"),
+                    ("one todo task", [{"status": "todo"}], "todo")):
+                with self.subTest(provider=provider, spec=label):
+                    out, saved, ops = self._pull(
+                        provider, ready_state="Queue", card_state="Queue",
+                        tasks=tasks)
+                    self.assertNotIsInstance(out, TrackerError, out)
+                    self.assertTrue(saved["ready"])
+                    self.assertEqual(out["status"]["kind"], "noop")
+                    self.assertEqual(out["status"]["flow"], flow_slot)
+                    self.assertEqual(out["status"]["tracker"], "in_progress")
+                    self.assertFalse(
+                        [op for op in ops if op in {
+                            "status-set", "status-label-add",
+                            "status-label-rm", "status-transitions"}],
+                        ops)
+
+    def test_ready_state_match_ignores_case(self) -> None:
+        out, _saved, _ops = self._pull(
+            "linear", ready_state="queue", card_state="Queue", tasks=None)
+        self.assertNotIsInstance(out, TrackerError, out)
+        self.assertEqual(out["status"]["kind"], "noop")
+
+    def test_other_started_state_still_conflicts(self) -> None:
+        for provider, _cfg, _durable, _display, _issue in ADAPTERS:
+            with self.subTest(provider=provider):
+                out, saved, _ops = self._pull(
+                    provider, ready_state="Queue", card_state="Doing",
+                    tasks=None)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIn("status conflict (unmapped)", out.message)
+                self.assertFalse(saved.get("ready"))
+
+    def test_unset_ready_state_keeps_conflict(self) -> None:
+        for provider, _cfg, _durable, _display, _issue in ADAPTERS:
+            with self.subTest(provider=provider):
+                out, _saved, _ops = self._pull(
+                    provider, ready_state=None, card_state="Queue",
+                    tasks=None)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIn("status conflict (unmapped)", out.message)
+
+
 # ---------------------------------------------------------------------------
 # Pull: wire read inside the claimed sync-body transaction (PR #246 review)
 # ---------------------------------------------------------------------------
