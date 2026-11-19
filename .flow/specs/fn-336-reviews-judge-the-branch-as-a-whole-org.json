@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-336-reviews-judge-the-branch-as-a-whole-org",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-19T13:09:48.595525Z",
   "created_at": "2026-11-19T08:42:04.362737Z",
   "default_impl": null,
   "default_review": null,
@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-336-reviews-judge-the-branch-as-a-whole-org",
   "impl_review_rounds": {
-    "fn-336-reviews-judge-the-branch-as-a-whole-org.1": 1
+    "fn-336-reviews-judge-the-branch-as-a-whole-org.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -61,9 +61,55 @@
       "task": "fn-336-reviews-judge-the-branch-as-a-whole-org.1",
       "timestamp": "2026-11-19T13:07:37.534848Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fb2f9aa7dcdcd36f9c4a69651099d010b960f5403cd081e8d9415a5f865a3b32",
+      "backend": "codex",
+      "base_sha": "28603f73559f33edbb0b5077ecc66361b07168a0",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-fb627f441d89937162c285937bbaaa88",
+            "classification": "introduced",
+            "findingId": "finding-fb627f441d89937162c285937bbaaa88",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "12b88b7c86ca45b736ec9db3247cf3cec92f0014",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 1429,
+      "output_sha256": "e94db90a33115a61dfb950448967169ca6fb0134cccc48b29280f06a0a308868",
+      "reservation_id": "dd0e42ff7b65410d95bad5698b00f553",
+      "round_consumed": true,
+      "scope": "impl:fn-336-reviews-judge-the-branch-as-a-whole-org.1",
+      "superseded_by": null,
+      "task": "fn-336-reviews-judge-the-branch-as-a-whole-org.1",
+      "timestamp": "2026-11-19T13:09:30.693035Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-336-reviews-judge-the-branch-as-a-whole-org.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -83,5 +129,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-19T13:07:37.537527Z"
+  "updated_at": "2026-11-19T13:09:48.595532Z"
 }
