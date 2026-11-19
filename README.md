@@ -116,7 +116,7 @@ droid plugin marketplace add \
 
 Use installation commands in your terminal or the host's plugin interface as shown above. Workflow invocations belong in the agent conversation. Codex uses `$flow-next-<name>`; OpenCode uses `/flow-next-<name>`; the other hosts accept `/flow-next:<name>` (Cursor also accepts the hyphen form).
 
-**Cursor, Grok Build, OpenCode, Muse Code, or Antigravity CLI?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation. Codex installs are per home; set `CODEX_HOME` when you use more than one.
+**Cursor, Grok Build, OpenCode, Muse Code, or Antigravity CLI?** [Install](https://flow-next.dev/install/) has the current steps per host, including the Cursor team-marketplace import and Claude Code managed settings for an organisation; Antigravity CLI's steps are in [platforms.md](plugins/flow-next/docs/platforms.md#antigravity-cli). Codex installs are per home; set `CODEX_HOME` when you use more than one.
 
 ## Start one change
 
