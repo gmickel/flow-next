@@ -46530,6 +46530,10 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         # Its own session no longer receives the terminal's interrupt, during the
         # wait or while a helper it left still holds the pipes.
         stop_error = _stop_review_command_tree(proc)
+        try:
+            proc.wait(timeout=COMMAND_PIPE_GRACE)   # reap it, so no zombie outlives the stop
+        except subprocess.TimeoutExpired:
+            stop_error = stop_error or f"the command (pid {proc.pid}) did not exit after it was stopped"
         if stop_error:
             print(f"review command (pid {proc.pid}) interrupted; its process tree was not "
                   f"stopped: {stop_error}", file=sys.stderr)

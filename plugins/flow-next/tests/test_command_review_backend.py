@@ -890,6 +890,10 @@ class CommandReviewFixes(CommandTest):
                 while any(map(_alive, pids)) and time.monotonic() < deadline:
                     time.sleep(0.1)
                 self.assertEqual([pid for pid in pids if _alive(pid)], [])
+                # Reaped too: a zombie would read as running where /proc is absent.
+                for pid in pids:
+                    with self.assertRaises(ChildProcessError):
+                        os.waitpid(pid, os.WNOHANG)
             finally:
                 for pid in pids:
                     if _alive(pid):
