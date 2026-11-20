@@ -860,6 +860,9 @@ class CommandReviewFixes(CommandTest):
         import types
         with tempfile.TemporaryDirectory() as td:
             def draw(row, _prompt, _repo_root, _args, _sidecar):
+                if row["axis"] == "integration":
+                    time.sleep(20)   # a draw that cannot be cancelled, like a managed HTTP call
+                    return {}
                 pid_file = Path(td) / f"{row['axis']}.pid"
                 child = (f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); "
                          "time.sleep(20)")
@@ -867,7 +870,7 @@ class CommandReviewFixes(CommandTest):
                                                    timeout=60, cwd=Path.home(),
                                                    env=dict(os.environ))
 
-            draws = [{"axis": "correctness"}, {"axis": "contracts"}]
+            draws = [{"axis": "correctness"}, {"axis": "contracts"}, {"axis": "integration"}]
             timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGINT))
             started = time.monotonic()
             with mock.patch.object(flowctl, "_review_fanout_run_draw", side_effect=draw):
@@ -875,12 +878,12 @@ class CommandReviewFixes(CommandTest):
                 try:
                     with self.assertRaises(KeyboardInterrupt):
                         flowctl._review_fanout_dispatch(
-                            draws, {"correctness": "", "contracts": ""}, Path(td),
+                            draws, {row["axis"]: "" for row in draws}, Path(td),
                             types.SimpleNamespace(fanout_execution="concurrent"), Path(td))
                 finally:
                     timer.cancel()
             elapsed = time.monotonic() - started
-            pids = [int((Path(td) / f"{row['axis']}.pid").read_text()) for row in draws]
+            pids = [int((Path(td) / f"{row['axis']}.pid").read_text()) for row in draws[:2]]
             try:
                 self.assertLess(elapsed, 10, "the interrupt waited for the reviewers")
                 deadline = time.monotonic() + 5

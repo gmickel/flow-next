@@ -49283,39 +49283,49 @@ def _review_fanout_run_draw(
 
 
 def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
-    from concurrent.futures import ThreadPoolExecutor
-
     execution = getattr(args, "fanout_execution", None)
     if execution is None:
         execution = _review_fanout_execution()
-    max_workers = 1 if execution == "sequential" else len(draws)
+    outcomes: list = [None] * len(draws)
+
+    def run(index: int, draw: dict) -> None:
+        try:
+            outcomes[index] = (True, _review_fanout_run_draw(
+                draw, prompts[draw["axis"]], repo_root, args, sidecar_dir))
+        except BaseException as exc:   # re-raised by the coordinator below
+            outcomes[index] = (False, exc)
+
+    def result(index: int):
+        ok, value = outcomes[index]
+        if not ok:
+            raise value
+        return value
+
+    # Daemon workers, so an interrupted coordinator never waits on a draw it
+    # cannot cancel (a managed HTTP call); command draws stop their trees first.
+    workers = [threading.Thread(target=run, args=(index, draw), daemon=True)
+               for index, draw in enumerate(draws)]
     try:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            try:
-                if execution == "sequential":
-                    # Await each worker before submitting the next: coordinator interruption
-                    # must not leave queued reviewers for executor shutdown to launch.
-                    results = []
-                    for draw in draws:
-                        future = pool.submit(
-                            _review_fanout_run_draw,
-                            draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
-                        )
-                        results.append(future.result())
-                    return results
-                futs = [
-                    pool.submit(
-                        _review_fanout_run_draw,
-                        draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
-                    )
-                    for draw in draws
-                ]
-                return [fut.result() for fut in futs]
-            except BaseException:
-                # Before executor shutdown waits on them: running command draws
-                # stop their trees instead of finishing or timing out.
-                _REVIEW_COMMAND_CANCEL.set()
-                raise
+        if execution == "sequential":
+            # Await each draw before starting the next: interruption leaves none queued.
+            results = []
+            for index, worker in enumerate(workers):
+                worker.start()
+                worker.join()
+                results.append(result(index))
+            return results
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        return [result(index) for index in range(len(workers))]
+    except BaseException:
+        _REVIEW_COMMAND_CANCEL.set()
+        deadline = time.monotonic() + COMMAND_PIPE_GRACE
+        for worker in workers:
+            if worker.is_alive():
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
+        raise
     finally:
         _REVIEW_COMMAND_CANCEL.clear()
 
