@@ -46350,10 +46350,15 @@ def _last_line(text: str) -> str:
 # started still holds the pipes.
 COMMAND_PIPE_GRACE = 5
 
-# Set by an interrupted fan-out coordinator: each command draw still running
-# stops its process tree and raises, so the executor never waits for a reviewer
-# that its own session keeps from the terminal's interrupt.
-_REVIEW_COMMAND_CANCEL = threading.Event()
+# A fan-out draw's worker thread carries its dispatch's state here: ``cancel``
+# (set by an interrupted coordinator, so a command its own session keeps from
+# the terminal's interrupt stops its tree and raises) and ``pid`` (the command
+# running now, which the coordinator waits on while it is stopped).
+_REVIEW_COMMAND_DRAW = threading.local()
+
+# Longest a stop can take: the POSIX process listing (10 s) or Windows taskkill
+# (30 s), then the bounded reap.
+REVIEW_COMMAND_STOP_BOUND = 30 + COMMAND_PIPE_GRACE + 5
 
 
 def _stop_review_command_tree(proc) -> Optional[str]:
@@ -46436,9 +46441,15 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
     its whole process tree; ``stop_error`` says why the tree could not be.
     Raises OSError (FileNotFoundError included) when it cannot start.
     """
+    draw = getattr(_REVIEW_COMMAND_DRAW, "state", None)   # set on a fan-out worker
+    cancel = draw["cancel"] if draw is not None else threading.Event()
+    if cancel.is_set():
+        raise KeyboardInterrupt
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, cwd=str(cwd), env=env,
                             start_new_session=os.name != "nt")
+    if draw is not None:
+        draw["pid"] = proc.pid
     out = bytearray()
     tail = bytearray()
     oversized = threading.Event()
@@ -46470,7 +46481,7 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
     def wait_until(deadline: float, done) -> bool:
         # Polls so an oversized response or an interrupted fan-out is seen at once.
         while not done():
-            if _REVIEW_COMMAND_CANCEL.is_set():
+            if cancel.is_set():
                 raise KeyboardInterrupt
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -46522,7 +46533,11 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         if stop_error:
             print(f"review command (pid {proc.pid}) interrupted; its process tree was not "
                   f"stopped: {stop_error}", file=sys.stderr)
+        if draw is not None:
+            draw["pid"] = None
         raise
+    if draw is not None:
+        draw["pid"] = None
     if overflowed:
         problem = problem or "oversized"
     stop_error = next((e for e in stop_errors if e), None)
@@ -49287,13 +49302,18 @@ def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
     if execution is None:
         execution = _review_fanout_execution()
     outcomes: list = [None] * len(draws)
+    cancel = threading.Event()   # this dispatch's; never cleared, so a late worker still sees it
+    states = [{"cancel": cancel, "pid": None, "done": threading.Event()} for _ in draws]
 
     def run(index: int, draw: dict) -> None:
+        _REVIEW_COMMAND_DRAW.state = states[index]
         try:
             outcomes[index] = (True, _review_fanout_run_draw(
                 draw, prompts[draw["axis"]], repo_root, args, sidecar_dir))
         except BaseException as exc:   # re-raised by the coordinator below
             outcomes[index] = (False, exc)
+        finally:
+            states[index]["done"].set()
 
     def result(index: int):
         ok, value = outcomes[index]
@@ -49302,7 +49322,8 @@ def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
         return value
 
     # Daemon workers, so an interrupted coordinator never waits on a draw it
-    # cannot cancel (a managed HTTP call); command draws stop their trees first.
+    # cannot cancel (a managed HTTP call). Completion is each worker's own event:
+    # an interrupted Thread.join can misreport is_alive.
     workers = [threading.Thread(target=run, args=(index, draw), daemon=True)
                for index, draw in enumerate(draws)]
     try:
@@ -49311,23 +49332,34 @@ def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
             results = []
             for index, worker in enumerate(workers):
                 worker.start()
-                worker.join()
+                states[index]["done"].wait()
                 results.append(result(index))
             return results
         for worker in workers:
             worker.start()
-        for worker in workers:
-            worker.join()
+        for state in states:
+            state["done"].wait()
         return [result(index) for index in range(len(workers))]
     except BaseException:
-        _REVIEW_COMMAND_CANCEL.set()
-        deadline = time.monotonic() + COMMAND_PIPE_GRACE
-        for worker in workers:
-            if worker.is_alive():
-                worker.join(timeout=max(0.0, deadline - time.monotonic()))
+        # Command draws stop their trees. Every unfinished draw gets the pipe grace
+        # to publish its outcome for recovery; one still stopping a command gets
+        # as long as a stop can take and is named if it outlasts that. A draw that
+        # cannot be cancelled (a managed HTTP call) is never waited on beyond it.
+        cancel.set()
+        started = time.monotonic()
+        for state in states:
+            while not state["done"].is_set():
+                bound = (REVIEW_COMMAND_STOP_BOUND if state["pid"] is not None
+                         else COMMAND_PIPE_GRACE)
+                remaining = started + bound - time.monotonic()
+                if remaining <= 0:
+                    if state["pid"] is not None:
+                        print(f"review command (pid {state['pid']}) was still being stopped "
+                              "when the review was interrupted; its process tree may still run",
+                              file=sys.stderr)
+                    break
+                state["done"].wait(min(0.05, remaining))
         raise
-    finally:
-        _REVIEW_COMMAND_CANCEL.clear()
 
 
 def _review_fanout_write_meta(

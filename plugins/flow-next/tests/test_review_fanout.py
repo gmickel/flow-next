@@ -500,23 +500,24 @@ class TestReviewFanout(unittest.TestCase):
                     return "provider unavailable", "sess-correctness", 1, "provider unavailable"
             return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
 
-        real_join = threading.Thread.join
+        real_wait = threading.Event.wait
         interrupted = []
 
-        def interrupted_join(worker, timeout=None):
-            # The coordinator's untimed wait is interrupted once; its bounded
-            # cleanup joins run for real.
-            if timeout is not None or interrupted:
-                return real_join(worker, timeout)
-            interrupted.append(worker)
+        def interrupted_wait(event, timeout=None):
+            # The coordinator's untimed wait for the first draw is interrupted
+            # once; every other wait (timed, already satisfied, or on a worker
+            # thread) runs for real.
+            if (timeout is not None or interrupted or event.is_set()
+                    or threading.current_thread() is not threading.main_thread()):
+                return real_wait(event, timeout)
+            interrupted.append(event)
             try:
                 self.assertTrue(started.wait(timeout=5), "the real first draw worker must be active")
-                self.assertTrue(worker.is_alive(), "interrupt must occur during the coordinator wait")
             finally:
                 release.set()
             raise KeyboardInterrupt("coordinator interrupted while first worker was active")
 
-        with mock.patch.object(threading.Thread, "join", autospec=True, side_effect=interrupted_join):
+        with mock.patch.object(threading.Event, "wait", autospec=True, side_effect=interrupted_wait):
             with self.assertRaisesRegex(KeyboardInterrupt, "coordinator interrupted"):
                 self._dispatch(fake)
         self.assertEqual(calls, ["correctness"], "later draws must never start after coordinator interruption")
