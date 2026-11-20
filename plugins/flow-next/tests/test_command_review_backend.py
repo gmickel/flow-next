@@ -999,8 +999,9 @@ class DocumentedAgyWrapper(unittest.TestCase):
             pid_file = td / "agy.pid"
             agy = td / "bin" / "agy"
             agy.parent.mkdir()
-            agy.write_text(f"#!{sys.executable}\nimport os, time\n"
-                           f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+            agy.write_text(f"#!{sys.executable}\nimport os, sys, time\n"
+                           f"open({str(pid_file)!r}, 'w').write(str(os.getpid()) + ' '"
+                           " + sys.argv[sys.argv.index('--print-timeout') + 1])\n"
                            "time.sleep(60)\n", encoding="utf-8")
             agy.chmod(0o755)
             wrapper = td / "review-agy.py"
@@ -1011,9 +1012,13 @@ class DocumentedAgyWrapper(unittest.TestCase):
             flowctl._run_review_command(
                 [sys.executable, str(wrapper), "gemini-x"], json.dumps(request).encode(),
                 timeout=request["timeoutSeconds"], cwd=td, env=dict(os.environ, AGY_PATH=str(agy)))
-            pid = int(pid_file.read_text(encoding="utf-8"))
+            pid, deadline = pid_file.read_text(encoding="utf-8").split()
+            pid = int(pid)
             try:
                 self.assertFalse(CtrlCReachesTheReviewer._running(pid), "agy outlived the review")
+                # agy's own deadline comes first; the wrapper's stop is the backstop.
+                self.assertRegex(deadline, r"^[0-9]+s$")
+                self.assertLess(int(deadline[:-1]), request["timeoutSeconds"] / 2)
             finally:
                 if CtrlCReachesTheReviewer._running(pid):
                     os.kill(pid, 9)
