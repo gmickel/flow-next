@@ -546,6 +546,18 @@ class TestLenientParse(unittest.TestCase):
         self.assertIn("codex:gpt-5.4-high", err)
         self.assertIn("codex", err)
 
+    def test_legacy_dash_spec_on_a_retired_copilot_model_falls_back_to_bare(self) -> None:
+        # A stored ``copilot:gpt-5.5-high`` must decode as a legacy composite even
+        # after GitHub retired the model, never run as an explicit model id.
+        for raw in ("copilot:gpt-5.5-high", "copilot:gpt-4.1-low",
+                    "copilot:claude-sonnet-4-xhigh"):
+            with self.subTest(raw=raw):
+                result, err = self._capture_stderr(
+                    lambda raw=raw: flowctl.parse_backend_spec_lenient(raw)
+                )
+                self.assertEqual(result, BackendSpec("copilot", None, None))
+                self.assertIn(raw, err)
+
     def test_legacy_bad_effort_falls_back_to_bare(self) -> None:
         result, err = self._capture_stderr(
             lambda: flowctl.parse_backend_spec_lenient("codex:gpt-5.4:bogus")
