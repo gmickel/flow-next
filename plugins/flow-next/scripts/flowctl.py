@@ -6485,10 +6485,12 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             stripped = lines[pos].strip()
             if re.match(r"^#{1,6}\s", stripped):
                 break
-            fence = stripped.startswith("```") and _REVIEW_JSON_FENCE_RE.match(
-                "\n".join(lines[pos:]).lstrip())
-            if fence and extract_review_json_block(fence.group(0)) is not None:
-                break  # the fenced tally block; any other fence is ambiguous
+            if stripped.startswith("```"):
+                close = next((j for j in range(pos + 1, len(lines))
+                              if lines[j].strip().startswith("```")), None)
+                block = "\n".join(lines[pos:close + 1]) if close else ""
+                if block.count("```") == 2 and extract_review_json_block(block) is not None:
+                    break  # the fenced tally block; any other fence is ambiguous
             if not stripped:
                 continue
             if re.match(
