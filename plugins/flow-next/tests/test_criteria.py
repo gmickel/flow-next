@@ -1054,16 +1054,17 @@ class TestCriteriaLinkStoredAsFile(unittest.TestCase):
     def test_conflicted_link_matching_any_stage_fails_closed(self):
         # A merge leaves stages 1, 2 and 3; the file holds the stage-2 target.
         def conflicted(td):
-            def git(*argv, stdin=None):
+            def git(*argv, stdin=b""):
+                # Bytes: a text-mode pipe on Windows would turn \n into \r\n in the index.
                 return subprocess.run(["git", *argv], cwd=td, check=True, input=stdin,
-                                      capture_output=True, text=True).stdout.strip()
-            blobs = [git("hash-object", "-w", "--stdin", stdin=target)
+                                      capture_output=True).stdout.decode().strip()
+            blobs = [git("hash-object", "-w", "--stdin", stdin=target.encode())
                      for target in ("../a/criteria.md", "../ours/criteria.md",
                                     "../theirs/criteria.md")]
             git("update-index", "--force-remove", ".flow/criteria.md")
             git("update-index", "--index-info", stdin="".join(
                 f"120000 {blob} {stage}\t.flow/criteria.md\n"
-                for stage, blob in enumerate(blobs, start=1)))
+                for stage, blob in enumerate(blobs, start=1)).encode())
         listed, block = self._run("../ours/criteria.md", as_link=True, plant=conflicted)
         self.assertNotEqual(listed.returncode, 0, listed.stdout)
         self.assertIn("symlink", listed.stdout + listed.stderr)

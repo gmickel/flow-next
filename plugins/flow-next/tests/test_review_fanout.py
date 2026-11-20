@@ -503,12 +503,19 @@ class TestReviewFanout(unittest.TestCase):
         real_wait = threading.Event.wait
         interrupted = []
 
+        def called_from_dispatch() -> bool:
+            # The nearest caller outside mock's own frames.
+            frame = sys._getframe(2)
+            while frame is not None and (frame.f_code.co_filename == "<string>"
+                                         or frame.f_code.co_filename.endswith("mock.py")):
+                frame = frame.f_back
+            return frame is not None and frame.f_code.co_name == "_review_fanout_dispatch"
+
         def interrupted_wait(event, timeout=None):
             # The coordinator's untimed wait for the first draw is interrupted
-            # once; every other wait (timed, already satisfied, or on a worker
-            # thread) runs for real.
-            if (timeout is not None or interrupted or event.is_set()
-                    or threading.current_thread() is not threading.main_thread()):
+            # once; every other wait (timed, or anyone else's, such as a thread
+            # start inside subprocess on Windows) runs for real.
+            if timeout is not None or interrupted or not called_from_dispatch():
                 return real_wait(event, timeout)
             interrupted.append(event)
             try:
