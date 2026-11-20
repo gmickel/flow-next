@@ -4,7 +4,11 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
-## Unreleased
+## [flow-next 9.18.0] - 2026-11-20
+
+Flow-Next runs in Google's Antigravity CLI, and the host you already use can drive Antigravity. One installer puts every skill and all 21 agents into Antigravity, with agent models mapped to its tiers, and checks that each one loads; setup recognizes the host and the `/flow-next:<name>` commands work as typed. On Antigravity CLI 1.5.13 a full plan ran with its scouts and a codex plan review, and work on a two-task spec had each worker commit its task and pass a codex review. From Claude Code, Codex or another host, the bridge recipe in `flowctl usage` hands Antigravity a self-contained implementation task with push and history rewrite denied, and a read-only `agy` wrapper puts Antigravity behind your reviews as a review command; it reached SHIP in a live review and resumed its conversation on the re-review. Bare `copilot` and `cursor` reviewers now fall back through the models their CLI serves today, and a bare `cursor` reviewer runs at medium effort, as `codex` and `copilot` do. A shared criteria link checked out as a plain file now fails the review closed instead of reviewing without your standing criteria, and a completion receipt keeps its per-criterion verdicts when a tally line follows them.
+
+**What changes when you upgrade.** A bare `cursor` reviewer runs GPT-5.6 Sol at medium effort instead of high from its next review; keep high with `flowctl config set review.backend cursor:gpt-5.6-sol-high`. On a checkout without symlink support, a `.flow/criteria.md` that git tracks as a symlink stops reviews until you run `git config core.symlinks true` and `git checkout -- .flow/criteria.md`, or copy the target's content into the file. `flowctl config set review.backend command`, and a command spec containing whitespace, are refused when you set them; name the reviewer as `command:<label>`. On Antigravity, install with `./scripts/install-antigravity.sh` rather than a plain `agy plugin install` of the repository, then start sessions as [Antigravity CLI setup](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/platforms.md#antigravity-cli) describes.
 
 ### Added
 
