@@ -899,6 +899,71 @@ class CommandReviewFixes(CommandTest):
                     if _alive(pid):
                         os.kill(pid, 9)
 
+    @unittest.skipIf(os.name == "nt", "a real SIGINT reaches the coordinator on POSIX only")
+    def test_interrupted_fanout_waits_for_a_slow_stop_to_publish(self):
+        # The tree stop outlasts the pipe grace; the draw still publishes before the raise.
+        import signal
+        import threading
+        import types
+        real_stop = flowctl._stop_review_command_tree
+
+        def slow_stop(proc):
+            time.sleep(1)
+            return real_stop(proc)
+
+        with tempfile.TemporaryDirectory() as td:
+            published = Path(td) / "published"
+
+            def draw(_row, _prompt, _repo_root, _args, _sidecar):
+                try:
+                    return flowctl._run_review_command(
+                        [sys.executable, "-c", "import time; time.sleep(20)"], b"{}",
+                        timeout=60, cwd=Path.home(), env=dict(os.environ))
+                finally:
+                    time.sleep(0.5)   # publishing its outcome for recovery
+                    published.write_text("yes")
+
+            draws = [{"axis": "correctness"}]
+            timer = threading.Timer(1, os.kill, (os.getpid(), signal.SIGINT))
+            with mock.patch.object(flowctl, "_review_fanout_run_draw", side_effect=draw), \
+                    mock.patch.object(flowctl, "_stop_review_command_tree", side_effect=slow_stop), \
+                    mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.2):
+                timer.start()
+                try:
+                    with self.assertRaises(KeyboardInterrupt):
+                        flowctl._review_fanout_dispatch(
+                            draws, {"correctness": ""}, Path(td),
+                            types.SimpleNamespace(fanout_execution="concurrent"), Path(td))
+                finally:
+                    timer.cancel()
+            self.assertTrue(published.exists(), "the coordinator abandoned a draw still stopping")
+
+    def test_cancel_during_the_reap_does_not_stop_the_tree_twice(self):
+        import threading
+        procs = []
+
+        def stop_and_cancel(proc):
+            procs.append(proc)
+            state["cancel"].set()   # the fan-out is interrupted while the stop reaps
+            return None
+
+        state = {"cancel": threading.Event(), "pid": None}
+        flowctl._REVIEW_COMMAND_DRAW.state = state
+        try:
+            with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.3), \
+                    mock.patch.object(flowctl, "_stop_review_command_tree",
+                                      side_effect=stop_and_cancel) as stop, \
+                    self.assertRaises(KeyboardInterrupt):
+                flowctl._run_review_command(
+                    [sys.executable, "-c", "import time; time.sleep(30)"], b"{}",
+                    timeout=0.3, cwd=Path.home(), env=dict(os.environ))
+        finally:
+            del flowctl._REVIEW_COMMAND_DRAW.state
+            for proc in procs:
+                proc.kill()
+                proc.wait()
+        self.assertEqual(stop.call_count, 1, "one owner stops the tree")
+
     def test_response_flushed_before_a_lingering_helper_is_kept(self):
         with _flow_repo() as (repo, base), \
                 mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5):
