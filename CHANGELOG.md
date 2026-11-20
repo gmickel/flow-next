@@ -4,6 +4,19 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **A criteria link checked out as a plain file fails the review closed.** On a checkout without symlink support, git writes a `.flow/criteria.md` symlink as a file holding only the target path. That used to parse to zero criteria, so reviews ran without the standing criteria and said nothing. It now fails the way a broken link does (`invalid .flow/criteria.md: holds only the path ...`), naming the git setting that fixes it. A file with only headings, prose or commented examples still holds zero criteria without a message.
+- **The completion receipt keeps its per-criterion verdicts when a tally line follows them.** Reviewers often write `Classification counts: ...` (or another tally line, or the fenced tally block) straight after the `## Global criteria` section. The receipt used to drop the whole `criteria` field then; the tally now ends the section.
+- **A command reviewer that times out is stopped with every process it started.** The CLI a wrapper runs used to keep running after the wrapper was killed. On Linux and macOS the command now runs in its own session and the whole group is killed; on Windows `taskkill /T` stops the tree. A tree that cannot be stopped is named in the failure, and the round is still refunded. An oversized response stops the tree the same way.
+- **Command backend errors name the variable, never its value.** A program that cannot be found, or cannot be run, is reported as `the program in FLOW_REVIEW_COMMAND_<LABEL>`, without the path from the variable.
+- **`flowctl config set review.backend command` is refused when you set it,** naming the `command:<label>` form, instead of failing at the next review. A label whose variable is not set yet is still accepted. `command: grok` and other command specs with whitespace are refused by flowctl as they already were by the config schema.
+- **Fan-out validate and deep passes stay on the primary draw's command label.** When the primary draw failed, the receipt could take its session from a draw that ran another label, so `--validate` and `--deep` continued a different program's session. Only a draw on the primary's label can stand in now; with none, the round records no session and those passes are skipped as for any round without one.
+- **Re-running setup on Muse with a saved `CLAUDE.md only` answer says that Muse will not see the snippet** when a repository-root `AGENTS.md` exists, instead of reporting a snippet the host never reads.
+- **Plan says memory is not initialized instead of reporting a failed scan** when `memory.enabled` is true but `flowctl memory init` has not run.
+
 ## [flow-next 9.17.0] - 2026-11-19
 
 Any model family can now review your work, and a reviewed spec is no longer built on a stale SHIP. A review command you set on your machine puts Gemini, Grok, Kimi, DeepSeek or your organisation's own reviewer behind implementation, plan and completion reviews, while flowctl keeps the prompt, rounds, verdict and receipt. A wrapper around `opencode run` reached SHIP on Grok 4.7 in a live review. A spec whose cited files changed after its plan review goes back to plan review before any task starts, including under `flow --auto` and goal mode, and the reviewer sees which files changed. Tracker pulls no longer fail on a card that sits in your ready state when that state counts as started. Teams that keep review rules in one shared guidelines repository get two documented ways to apply them in every repository, with what each review backend could read in live checks.

@@ -208,7 +208,8 @@ class CommandSpecGrammar(CommandTest):
                 with self.assertRaises(ValueError) as ctx:
                     flowctl.BackendSpec.parse(raw)
                 self.assertIn("command:<label>", str(ctx.exception))
-                self.assertFalse(any(re.search(p, raw) for p in patterns))
+                # fullmatch: JSON Schema's `$` never matches before a trailing newline.
+                self.assertFalse(any(re.fullmatch(p, raw) for p in patterns))
         self.assertEqual(flowctl.BackendSpec.parse("command:grok").model, "grok")
 
     def test_config_set_refuses_a_command_without_a_label(self):
@@ -797,7 +798,7 @@ class CommandReviewFixes(CommandTest):
                 self.assertEqual(code, 0, out + err)
                 published = json.loads(receipt.read_text())
                 self.assertEqual(published["spec"], "command:fake")
-                self.assertEqual(published["session_id"], expected)
+                self.assertEqual(published["session_id"] or None, expected)
                 calls_before = len(env.requests())
                 findings = repo / "findings.jsonl"
                 findings.write_text(json.dumps({"id": "f1", "title": "x"}) + "\n",
