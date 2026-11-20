@@ -8,13 +8,99 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-344-9180-last-fixes-legacy-fan-out-rows",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-344-9180-last-fixes-legacy-fan-out-rows.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "fe6029ce95a7a059cc712f9e375c102989ff5b0788bb55be0526d59a5652e42c",
+      "backend": "codex",
+      "base_sha": "b054b9c83b5f87ab47f3be1e4bb34ec6a0ca84cf",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-993a7a90156fbdd6c6a843cc6648a6f9",
+            "classification": "introduced",
+            "findingId": "finding-993a7a90156fbdd6c6a843cc6648a6f9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c08d710a43e8b4ea4729cc554dd2df2c",
+            "classification": "introduced",
+            "findingId": "finding-c08d710a43e8b4ea4729cc554dd2df2c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b781ba291a530d9404d2062d2af52196",
+            "classification": "introduced",
+            "findingId": "finding-b781ba291a530d9404d2062d2af52196",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-9ac9766e1a2136536c724a687fa6e794",
+            "classification": "introduced",
+            "findingId": "finding-9ac9766e1a2136536c724a687fa6e794",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-70061cf969cdadd90700b79cefb6cb9b",
+            "classification": "introduced",
+            "findingId": "finding-70061cf969cdadd90700b79cefb6cb9b",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "59b0f01480bb7b1d2da49f073c95e9c9d4ba74fa",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 3934,
+      "output_sha256": "f24cca44de34e72c9595f8e32e198cd8fe04c84174cc7272c12ef6d479813c95",
+      "reservation_id": "b1999f74536d4a18958f5afc5883eaf8",
+      "round_consumed": true,
+      "scope": "impl:fn-344-9180-last-fixes-legacy-fan-out-rows.1",
+      "superseded_by": null,
+      "task": "fn-344-9180-last-fixes-legacy-fan-out-rows.1",
+      "timestamp": "2026-11-20T13:14:19.777721Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-344-9180-last-fixes-legacy-fan-out-rows.1": 0
+  },
   "spec_path": ".flow/specs/fn-344-9180-last-fixes-legacy-fan-out-rows.md",
   "status": "open",
   "title": "9.18.0 last fixes: legacy fan-out rows, criteria section end",
@@ -29,5 +115,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-20T13:00:37.676825Z"
+  "updated_at": "2026-11-20T13:14:19.780696Z"
 }

@@ -6449,8 +6449,8 @@ _REVIEW_CRITERIA_MAX_NOTE = 400
 # The tally lines and fenced tally block the review prompts ask for after the
 # findings; reviewers often write them straight after the criteria section.
 _REVIEW_CRITERIA_TALLY_RE = re.compile(
-    r"^[\s>*_`]*(classification counts|suppressed findings|unaddressed r-ids"
-    r"|protected-path filter)[\s*_`]*:",
+    r"^[\s>*_`]*(classification\s+counts|suppressed\s+findings"
+    r"|unaddressed(?:\s+r[-_ ]?ids?)?|protected-path\s+filter)[\s*_`]*:",
     re.IGNORECASE,
 )
 
@@ -51243,6 +51243,14 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     unaddressed_rids = parse_unaddressed_rids(merged_text)
     receipt_draws = _review_fanout_receipt_draws(meta_draws)
     primary = _review_fanout_primary_draw(meta, meta_draws, args.review_backend)
+    if args.review_backend == "command" and not primary.get("label"):
+        error_exit(
+            "fan-out finalize: the primary draw's command label is unknown (a round "
+            "interrupted under 9.17.0 with no surviving command draw); re-dispatch "
+            "the review. Nothing was recorded.",
+            use_json=args.json,
+            code=2,
+        )
     resolved_spec = BackendSpec(
         backend=args.review_backend,
         # A command spec carries its label; the observed model is the receipt's.
