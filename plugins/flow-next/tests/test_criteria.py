@@ -1167,7 +1167,8 @@ class TestReceiptTallyTerminator(unittest.TestCase):
         # Conflicting records around an unrelated fence are never one status.
         for fence in ("```bash\ngit status\n```", "```\nquoted\n```", "```json\n{}\n```",
                       # Backticks inside the line do not close the block.
-                      '```json\n{"unaddressed": []}```\nG1: met - ok\n```'):
+                      '```json\n{"unaddressed": []}```\nG1: met - ok\n```',
+                      '```json\n{"unaddressed": []}\n```quoted\nG1: met - ok\n```'):
             with self.subTest(fence=fence):
                 text = f"## Global criteria\nG1: met - ok\n{fence}\nG1: violated - no\n"
                 self.assertIsNone(flowctl.parse_review_criteria(text))
