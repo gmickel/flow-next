@@ -23,8 +23,8 @@ Fixed the ten follow-ups in flowctl, setup and plan prose, docs and tests.
 - R9: setup on Muse (list form, one word to add antigravity) reports a saved CLAUDE.md-only answer the host will not see.
 - R10: plan's memory reference renders one line for uninitialized memory.
 
-stage: impl-review - ran [round 1 three-lens NEEDS_WORK, round 2 NEEDS_WORK, round 3 NEEDS_WORK] (model: gpt-6.2-sol)
-OPEN_ITEM: R7 - should command --validate/--deep start a fresh session on the primary label when it has none (new session-less pass), or not run as built? Left for the maintainer.
+stage: impl-review - ran [round 1 three-lens NEEDS_WORK, round 2 NEEDS_WORK, round 3 NEEDS_WORK, round 4 SHIP] (model: gpt-6.2-sol)
+R7 settled by the maintainer: the passes do not run without a primary-label session; the spec's error clause now says so (421a895c9).
 
 stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
