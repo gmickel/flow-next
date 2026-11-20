@@ -6,6 +6,8 @@
 
 **Four options, not seven.** Each menu below is a catalog; the question carries four of its options, in the menu's order: Host, None, and the first two CLI options whose `HAVE_*` is 1 (when fewer than two are detected, fill from the undetected ones in menu order; on `PLATFORM=codex`, take Codex CLI last, since it is the writer's family). A backend left off the menu is set with `flowctl config set review.backend <name>`, which Step 8's summary names.
 
+**On `PLATFORM=antigravity`, nothing is left off.** Host review fails closed there for every writer, so the first question carries None, the first two CLI options by the rule above, and `{"label": "More backends", "description": "Host and the review CLIs not listed here, in one more question"}` in Host's place. Choosing it asks one follow-up question in its own `plain-text numbered prompt` call holding Host and the two remaining CLI options, in menu order and with the same labels and descriptions; that answer is the review answer.
+
 **When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor:
 ```json
 {
