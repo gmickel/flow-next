@@ -8200,11 +8200,13 @@ def resolve_review_spec(
                 pass
 
     # 3: FLOW_REVIEW_BACKEND env (spec-form or bare backend)
-    env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    env_raw = os.environ.get("FLOW_REVIEW_BACKEND", "")
+    env_val = env_raw.strip()
     if _is_removed_backend_value(env_val):
         return _ret(BackendSpec(backend_hint).resolve(), "removed")
     if env_val:
-        parsed = parse_backend_spec_lenient(env_val, warn=True)
+        # The unstripped value: a command spec allows no whitespace, as in the schema.
+        parsed = parse_backend_spec_lenient(env_raw, warn=True)
         if parsed is not None:
             return _ret(parsed.resolve(), "env")
 
@@ -20587,14 +20589,15 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
         except Exception:
             pass
 
-    env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    env_raw = os.environ.get("FLOW_REVIEW_BACKEND", "")
+    env_val = env_raw.strip()
     if spec is None and not removed and _is_removed_backend_value(env_val):
         removed = True
     if spec is None and not removed and env_val:
         # Lenient parse handles spec-form and legacy bare values; degrades on
         # bad input rather than silently falling to ASK (previous behavior
         # quietly dropped ``codex:gpt-5.2``).
-        parsed = parse_backend_spec_lenient(env_val, warn=False)
+        parsed = parse_backend_spec_lenient(env_raw, warn=False)
         if parsed is not None:
             spec = parsed.resolve()
             source = "env"
@@ -28331,6 +28334,34 @@ def get_criteria_path() -> Path:
     return get_flow_dir() / CRITERIA_FILE
 
 
+CRITERIA_LINK_AS_FILE_ERROR = (
+    "invalid .flow/criteria.md: git tracks it as a symlink, but this checkout "
+    "holds a plain file with the link's target path (git without symlink "
+    "support); run `git config core.symlinks true` and "
+    "`git checkout -- .flow/criteria.md`, or copy the target's content in"
+)
+
+
+def _criteria_link_stored_as_file(path: Path) -> bool:
+    """True when git tracks ``path`` as a symlink but the checkout holds a plain file.
+
+    That is what git writes for a link on a checkout without symlink support:
+    a link that never resolved, not a file with zero criteria. Asked only after
+    the file parsed to zero criteria, so criteria-bearing repos pay nothing.
+    """
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "--stage", "--", path.name],
+            cwd=str(path.parent), capture_output=True, text=True,
+            timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.startswith("120000 ")
+
+
 def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
     """Parse criteria markdown into ([{id, text}], [error strings]).
 
@@ -28348,18 +28379,6 @@ def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
     errors: list[str] = []
     seen: set[str] = set()
     dup_reported: set[str] = set()
-
-    # A checkout without symlink support writes a link as a plain file holding
-    # only its target path: that is a link that did not resolve, not "no criteria".
-    lone = text.strip()
-    if lone and not re.search(r"\s", lone) and (
-        "/" in lone or "\\" in lone or lone.lower().endswith(".md")
-    ):
-        return [], [
-            f"holds only the path {lone[:120]!r}: a symlink checked out as a plain "
-            "file by git without symlink support; run `git config core.symlinks true` "
-            "and `git checkout -- .flow/criteria.md`, or copy the target's content in"
-        ]
 
     for line in text.splitlines():
         m = _CRITERIA_LINE_RE.match(line)
@@ -28428,6 +28447,8 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
             "invalid .flow/criteria.md: " + "; ".join(errors),
             use_json=use_json,
         )
+    if not entries and _criteria_link_stored_as_file(path):
+        error_exit(CRITERIA_LINK_AS_FILE_ERROR, use_json=use_json)
 
     if use_json:
         json_output(
@@ -28509,6 +28530,8 @@ def build_global_criteria_block() -> str:
             + " (run `flowctl criteria list` to diagnose)"
         )
     if not entries:
+        if _criteria_link_stored_as_file(path):
+            raise ValueError(CRITERIA_LINK_AS_FILE_ERROR)
         return ""
     bullets = "\n".join(f"- **{e['id']}:** {e['text']}" for e in entries)
     return _GLOBAL_CRITERIA_BLOCK_TEMPLATE.format(criteria_bullets=bullets)
@@ -46288,10 +46311,11 @@ COMMAND_PIPE_GRACE = 5
 def _stop_review_command_tree(proc) -> Optional[str]:
     """Kill a review command and every process it started; say why not, or None.
 
-    POSIX starts the command in its own session, so one signal reaches its whole
-    process group (a helper that starts its own session escapes it). Windows walks
-    the tree from the still-running command with taskkill, by absolute path so the
-    checkout's directory is never searched for it.
+    POSIX starts the command in its own session, so one signal reaches its process
+    group; descendants that left the group (a helper in a session of its own) are
+    found by parent pid while the command still runs, and killed one by one.
+    Windows walks the tree from the still-running command with taskkill, by
+    absolute path so the checkout's directory is never searched for it.
     """
     stop_error = None
     if os.name == "nt":
@@ -46306,15 +46330,49 @@ def _stop_review_command_tree(proc) -> Optional[str]:
             stop_error = f"taskkill failed: {exc}"
     else:
         import signal
+        descendants = _review_command_descendants(proc.pid)
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
         except OSError as exc:
             stop_error = f"cannot kill its process group: {exc.strerror or exc}"
+        if descendants is None:
+            stop_error = stop_error or "cannot list its processes to stop any outside its group"
+        for pid in descendants or ():
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                stop_error = stop_error or f"cannot kill process {pid}: {exc.strerror or exc}"
     with suppress(OSError):
         proc.kill()
     return stop_error
+
+
+def _review_command_descendants(root: int) -> Optional[list]:
+    """Every process descended from ``root``, by parent pid (POSIX ``ps``); None if unlisted."""
+    ps = _review_command_lookup("ps")   # never a program from the checkout
+    if not ps:
+        return None
+    try:
+        listing = subprocess.run([ps, "-A", "-o", "pid=", "-o", "ppid="],
+                                 capture_output=True, text=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    children: dict = {}
+    for line in listing.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit():
+            children.setdefault(int(fields[1]), []).append(int(fields[0]))
+    found, frontier = [], [root]
+    while frontier:
+        for child in children.get(frontier.pop(), ()):
+            if child not in found:
+                found.append(child)
+                frontier.append(child)
+    return found
 
 
 def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict):
@@ -48871,7 +48929,7 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
     seen: list[str] = []
     draws: list[dict] = []
     for raw in raw_draws:
-        token = (raw or "").strip()
+        token = raw or ""
         if "=" in token:
             axis, spec_str = token.split("=", 1)
         else:
@@ -48891,14 +48949,14 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
         if spec_str is None:
             spec = default_spec
         else:
-            spec_str = spec_str.strip()
-            if not spec_str:
+            if not spec_str.strip():
                 error_exit(
                     f"invalid --draw spec for {axis}: empty",
                     use_json=args.json,
                     code=2,
                 )
             try:
+                # Unstripped: a command spec allows no whitespace, as in the schema.
                 spec = BackendSpec.parse(spec_str).resolve()
                 if spec.backend == "command":
                     _review_command_argv(spec.model)

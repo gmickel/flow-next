@@ -1003,40 +1003,56 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
 class TestCriteriaLinkStoredAsFile(unittest.TestCase):
     """A checkout without symlink support writes the link as a file holding its target path."""
 
-    def _criteria_list(self, content):
-        import tempfile, os as _os, subprocess
-        with tempfile.TemporaryDirectory() as td:
-            subprocess.run(["git", "init", "-q", td], check=True)
-            flow = _os.path.join(td, ".flow")
-            _os.makedirs(flow)
-            with open(_os.path.join(flow, "criteria.md"), "w", encoding="utf-8") as fh:
-                fh.write(content)
-            return subprocess.run(
-                [*FLOWCTL_CMD, "criteria", "list", "--json"],
-                capture_output=True, text=True, cwd=td,
-            )
+    def _run(self, content, *, as_link):
+        """criteria list and prompt-block on a plain .flow/criteria.md holding ``content``.
 
-    def test_link_target_alone_fails_closed(self):
-        for content in ("../vendor/org-guidelines/criteria.md",
-                        "../vendor/org-guidelines/criteria.md\n",
-                        "..\\shared\\criteria.md"):
-            with self.subTest(content=content):
-                r = self._criteria_list(content)
-                self.assertNotEqual(r.returncode, 0, r.stdout)
-                self.assertIn("symlink", r.stdout + r.stderr)
-                _, errors = flowctl._criteria_parse(content)
-                self.assertTrue(any("symlink" in e for e in errors), errors)
+        ``as_link`` records it in the index as a symlink (mode 120000), exactly
+        what a checkout with ``core.symlinks`` off has for a committed link.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            def git(*argv):
+                return subprocess.run(["git", *argv], cwd=td, check=True,
+                                      capture_output=True, text=True).stdout.strip()
+            git("init", "-q")
+            os.makedirs(os.path.join(td, ".flow"))
+            with open(os.path.join(td, ".flow", "criteria.md"), "w", encoding="utf-8") as fh:
+                fh.write(content)
+            if as_link:
+                blob = git("hash-object", "-w", ".flow/criteria.md")
+                git("update-index", "--add", "--cacheinfo", f"120000,{blob},.flow/criteria.md")
+            else:
+                git("add", ".flow/criteria.md")
+            listed = subprocess.run([*FLOWCTL_CMD, "criteria", "list", "--json"],
+                                    capture_output=True, text=True, cwd=td)
+            block = subprocess.run([*FLOWCTL_CMD, "criteria", "prompt-block"],
+                                   capture_output=True, text=True, cwd=td)
+            return listed, block
+
+    def test_link_checked_out_as_a_file_fails_closed(self):
+        for target in ("../vendor/org-guidelines/criteria.md", "../Shared Rules/criteria.md",
+                       "criteria"):
+            with self.subTest(target=target):
+                listed, block = self._run(target, as_link=True)
+                self.assertNotEqual(listed.returncode, 0, listed.stdout)
+                self.assertIn("symlink", listed.stdout + listed.stderr)
+                self.assertNotEqual(block.returncode, 0)
+                self.assertIn("symlink", block.stderr)
+                self.assertEqual(block.stdout, "")
 
     def test_other_zero_criteria_files_stay_valid_and_silent(self):
         for content in ("# Global acceptance criteria\n",
                         "No standing criteria yet.\n",
                         "<!-- - **G1:** example -->\n",
-                        "TODO\n",
+                        "<!--see:docs/criteria.md-->\n",
+                        "[review](./review.md)\n",
+                        "../vendor/org-guidelines/criteria.md\n",
+                        "N/A\n",
                         ""):
             with self.subTest(content=content):
-                r = self._criteria_list(content)
-                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-                self.assertEqual(json.loads(r.stdout)["count"], 0)
+                listed, block = self._run(content, as_link=False)
+                self.assertEqual(listed.returncode, 0, listed.stdout + listed.stderr)
+                self.assertEqual(json.loads(listed.stdout)["count"], 0)
+                self.assertEqual((block.returncode, block.stdout, block.stderr), (0, "", ""))
 
 
 class TestReceiptTallyTerminator(unittest.TestCase):

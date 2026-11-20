@@ -212,6 +212,23 @@ class CommandSpecGrammar(CommandTest):
                 self.assertFalse(any(re.fullmatch(p, raw) for p in patterns))
         self.assertEqual(flowctl.BackendSpec.parse("command:grok").model, "grok")
 
+    def test_padded_command_spec_never_runs_from_env_or_draw(self):
+        for padded in (" command:fake", "command:fake ", "command:fake\n"):
+            with self.subTest(padded=padded), _flow_repo() as (repo, base), \
+                    mock.patch.dict(os.environ, {"FLOW_REVIEW_BACKEND": padded}):
+                env = CommandRepo(repo, [SHIP])
+                resolved = json.loads(_run_cli("review-backend", "--json")[1])
+                self.assertNotEqual(resolved.get("spec"), "command:fake")
+                code, out, err = impl_review(base, repo / "r.json")
+                self.assertNotEqual(code, 0)
+                self.assertNotIn('"verdict": "SHIP"', out)
+                code, out, err = _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                                          "--spec", "command:fake", "--draw", "correctness",
+                                          "--draw", f"contracts={padded}", "--json")
+                self.assertEqual(code, 2, out)
+                self.assertIn("command:<label>", out + err)
+                self.assertEqual(env.requests(), [])
+
     def test_config_set_refuses_a_command_without_a_label(self):
         with _flow_repo() as (repo, _base):
             for raw in ("command", "command:", "command: grok"):
@@ -465,30 +482,36 @@ class CommandImplReview(CommandTest):
             pid_file = repo.parent / f"{repo.name}-helper.pid"
             spawner = repo.parent / f"{repo.name}-spawner.py"
             # Outside the repo: Windows cannot delete a directory a live process sits in.
+            # One helper in the wrapper's group, one that left it for a session of its own.
             spawner.write_text(textwrap.dedent("""
                 import os, subprocess, sys, time
-                helper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
-                                          cwd=os.path.dirname(sys.executable))
+                sleeper = [sys.executable, "-c", "import time; time.sleep(60)"]
+                where = os.path.dirname(sys.executable)
+                helpers = [subprocess.Popen(sleeper, cwd=where)]
+                if os.name != "nt":
+                    helpers.append(subprocess.Popen(sleeper, cwd=where, start_new_session=True))
                 with open(sys.argv[1], "w", encoding="utf-8") as fh:
-                    fh.write(str(helper.pid))
+                    fh.write(" ".join(str(h.pid) for h in helpers))
                 time.sleep(60)
             """), encoding="utf-8")
             env = CommandRepo(repo, [SHIP], commands={
                 "fake": [sys.executable, str(spawner), str(pid_file)]})
             code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
-            helper = int(pid_file.read_text(encoding="utf-8"))
+            helpers = [int(pid) for pid in pid_file.read_text(encoding="utf-8").split()]
             try:
                 self.assertNotEqual(code, 0)
                 self.assertIn("timed out", out + err)
                 self.assertNotIn("not stopped", out + err)
                 self.assertEqual(env.rounds(), 0)
                 deadline = time.monotonic() + 10
-                while _alive(helper) and time.monotonic() < deadline:
+                while any(map(_alive, helpers)) and time.monotonic() < deadline:
                     time.sleep(0.1)
-                self.assertFalse(_alive(helper), "the wrapper's helper outlived the timeout")
+                self.assertEqual([pid for pid in helpers if _alive(pid)], [],
+                                 "the wrapper's helpers outlived the timeout")
             finally:
-                if _alive(helper) and os.name != "nt":
-                    os.kill(helper, 9)
+                for pid in helpers:
+                    if _alive(pid) and os.name != "nt":
+                        os.kill(pid, 9)
 
     @unittest.skipIf(os.name == "nt", "the POSIX process-group kill is what is refused here")
     def test_a_tree_that_cannot_be_stopped_is_named_in_the_reason(self):
@@ -498,6 +521,12 @@ class CommandImplReview(CommandTest):
                 argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
         self.assertEqual(problem, "timeout")
         self.assertIn("Operation not permitted", stop_error)
+        # Helpers outside the group cannot be found without a process listing.
+        with mock.patch.object(flowctl, "_review_command_lookup", return_value=None):
+            _, _, _, problem, stop_error = flowctl._run_review_command(
+                argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
+        self.assertEqual(problem, "timeout")
+        self.assertIn("cannot list its processes", stop_error)
 
     def test_leading_tilde_expands_in_every_element(self):
         os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
@@ -806,12 +835,15 @@ class CommandReviewFixes(CommandTest):
                 env.set_plan([{"response": {"output": "Validated.", "sessionId": "ECHO"}}])
                 for sub, extra in (("validate", ("--findings-file", str(findings))),
                                    ("deep-pass", ("--pass", "adversarial"))):
-                    _run_cli("command", sub, *extra, "--receipt", str(receipt), "--json")
+                    code, out, err = _run_cli("command", sub, *extra, "--receipt", str(receipt),
+                                              "--json")
+                    # With no session on the primary's label, the passes do not run
+                    # (they only continue a session, never start one).
+                    self.assertEqual(code == 0, expected is not None, out + err)
                 continued = [call["request"]["sessionId"]
                              for call in env.requests()[calls_before:]]
                 self.assertNotIn("other-1", continued)
-                if expected:
-                    self.assertEqual(continued[:1], [expected])
+                self.assertEqual(continued, [expected] * 2 if expected else [])
 
 
 if __name__ == "__main__":
