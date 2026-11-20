@@ -768,6 +768,24 @@ class CommandReviewFixes(CommandTest):
             self.assertFalse(receipt.exists())
             self.assertEqual(env.rounds(), 0)
 
+    def test_oversized_output_names_a_tree_that_cannot_be_stopped(self):
+        real_stop = flowctl._stop_review_command_tree
+
+        def stop_but_report(proc):
+            real_stop(proc)
+            return "cannot kill process 4242: Operation not permitted"
+
+        with _flow_repo() as (repo, base), \
+                mock.patch.object(flowctl, "_stop_review_command_tree", side_effect=stop_but_report):
+            env = CommandRepo(repo, [{"flood": flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10}])
+            receipt = repo / "r.json"
+            code, out, err = impl_review(base, receipt, "--spec", "command:fake")
+            self.assertNotEqual(code, 0)
+            self.assertIn("exceeds 16 MiB; its process tree was not stopped: "
+                          "cannot kill process 4242", out + err)
+            self.assertFalse(receipt.exists())
+            self.assertEqual(env.rounds(), 0)
+
     def test_response_flushed_before_a_lingering_helper_is_kept(self):
         with _flow_repo() as (repo, base), \
                 mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5):
@@ -775,6 +793,19 @@ class CommandReviewFixes(CommandTest):
             code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
             self.assertEqual(code, 0, err)
             self.assertEqual(json.loads(out)["verdict"], "SHIP")
+
+    def test_interrupt_while_draining_pipes_still_stops_the_tree(self):
+        # The command has exited; a helper it left may still hold the pipes.
+        argv = [sys.executable, "-c", "pass"]
+        with mock.patch.object(flowctl, "_stop_review_command_tree",
+                               wraps=flowctl._stop_review_command_tree) as stop, \
+                mock.patch.object(flowctl.threading.Thread, "join",
+                                  side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                flowctl._run_review_command(argv, b"{}", timeout=30, cwd=Path.home(),
+                                            env=dict(os.environ))
+        stop.assert_called_once()
+        self.assertEqual(stop.call_args.args[0].args, argv)
 
     def test_command_draw_rows_name_their_label(self):
         with _flow_repo() as (repo, base):

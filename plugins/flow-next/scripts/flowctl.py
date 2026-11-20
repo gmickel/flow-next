@@ -46424,19 +46424,21 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         thread.start()
     problem = None
     try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        problem = "timeout"
-        stop_errors.append(_stop_review_command_tree(proc))
-        proc.wait()
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            problem = "timeout"
+            stop_errors.append(_stop_review_command_tree(proc))
+            proc.wait()
+        # A child the command left running may hold the pipes open; do not wait on it.
+        deadline = time.monotonic() + COMMAND_PIPE_GRACE
+        for thread in threads:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
     except BaseException:
-        # Its own session no longer receives the terminal's interrupt.
+        # Its own session no longer receives the terminal's interrupt, during the
+        # wait or while a helper it left still holds the pipes.
         _stop_review_command_tree(proc)
         raise
-    # A child the command left running may hold the pipes open; do not wait on it.
-    deadline = time.monotonic() + COMMAND_PIPE_GRACE
-    for thread in threads:
-        thread.join(timeout=max(0.0, deadline - time.monotonic()))
     if oversized.is_set():
         problem = "oversized"
     stop_error = next((e for e in stop_errors if e), None)
@@ -46500,12 +46502,12 @@ def _command_run_exec(
         except OSError as exc:
             return None, ("", sid or "", 2, f"{name}: cannot run the program in {var}: "
                           f"{exc.strerror or type(exc).__name__}")
-        if problem == "timeout":
-            return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)"
-                          + (f"; its process tree was not stopped: {stop_error}"
-                             if stop_error else ""))
-        if problem == "oversized":
-            return None, ("", sid or "", 2, f"{name}: invalid response: response exceeds 16 MiB")
+        if problem:
+            not_stopped = (f"; its process tree was not stopped: {stop_error}"
+                           if stop_error else "")
+            reason = (f"{name} timed out ({timeout}s)" if problem == "timeout"
+                      else f"{name}: invalid response: response exceeds 16 MiB")
+            return None, ("", sid or "", 2, reason + not_stopped)
         if returncode != 0:
             detail = _last_line(stderr_tail.decode("utf-8", errors="replace"))
             return None, ("", sid or "", returncode if returncode > 0 else 2,
