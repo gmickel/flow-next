@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-20T10:15:29.254246Z",
+  "depends_on": [],
+  "id": "fn-342-9180-audit-fixes-command-review-cleanup.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-342-9180-audit-fixes-command-review-cleanup",
+  "spec_path": ".flow/tasks/fn-342-9180-audit-fixes-command-review-cleanup.1.md",
+  "status": "todo",
+  "title": "Implement 9.18.0 audit fixes: command review cleanup, criteria probe and Antigravity recipe",
+  "updated_at": "2026-11-20T10:15:29.254246Z"
+}

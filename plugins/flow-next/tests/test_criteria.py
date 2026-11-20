@@ -1003,11 +1003,13 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
 class TestCriteriaLinkStoredAsFile(unittest.TestCase):
     """A checkout without symlink support writes the link as a file holding its target path."""
 
-    def _run(self, content, *, as_link):
+    def _run(self, content, *, as_link, replaced_with=None, plant=None, env=None):
         """criteria list and prompt-block on a plain .flow/criteria.md holding ``content``.
 
         ``as_link`` records it in the index as a symlink (mode 120000), exactly
         what a checkout with ``core.symlinks`` off has for a committed link.
+        ``replaced_with`` then overwrites the working-tree file, as a user who
+        copies the target's content in does; ``plant(td)`` runs before flowctl.
         """
         with tempfile.TemporaryDirectory() as td:
             def git(*argv):
@@ -1015,18 +1017,59 @@ class TestCriteriaLinkStoredAsFile(unittest.TestCase):
                                       capture_output=True, text=True).stdout.strip()
             git("init", "-q")
             os.makedirs(os.path.join(td, ".flow"))
-            with open(os.path.join(td, ".flow", "criteria.md"), "w", encoding="utf-8") as fh:
+            criteria = os.path.join(td, ".flow", "criteria.md")
+            with open(criteria, "w", encoding="utf-8") as fh:
                 fh.write(content)
             if as_link:
                 blob = git("hash-object", "-w", ".flow/criteria.md")
                 git("update-index", "--add", "--cacheinfo", f"120000,{blob},.flow/criteria.md")
             else:
                 git("add", ".flow/criteria.md")
+            if replaced_with is not None:
+                with open(criteria, "w", encoding="utf-8") as fh:
+                    fh.write(replaced_with)
+            if plant:
+                plant(td)
             listed = subprocess.run([*FLOWCTL_CMD, "criteria", "list", "--json"],
-                                    capture_output=True, text=True, cwd=td)
+                                    capture_output=True, text=True, cwd=td, env=env)
             block = subprocess.run([*FLOWCTL_CMD, "criteria", "prompt-block"],
-                                   capture_output=True, text=True, cwd=td)
+                                   capture_output=True, text=True, cwd=td, env=env)
             return listed, block
+
+    def test_link_replaced_with_real_content_is_valid_again(self):
+        # The fix the message names: copy the target's content in. The index
+        # still records the link, but the file no longer holds its target path.
+        target = "../vendor/org-guidelines/criteria.md"
+        for replacement in ("# Global acceptance criteria\n",
+                            "# Global acceptance criteria\n\nNone yet.\n", ""):
+            with self.subTest(replacement=replacement):
+                listed, block = self._run(target, as_link=True, replaced_with=replacement)
+                self.assertEqual(listed.returncode, 0, listed.stdout + listed.stderr)
+                self.assertEqual(json.loads(listed.stdout)["count"], 0)
+                self.assertEqual((block.returncode, block.stdout, block.stderr), (0, "", ""))
+        listed, _ = self._run(target, as_link=True,
+                              replaced_with="- **G1:** Every route has a contract test.\n")
+        self.assertEqual(json.loads(listed.stdout)["count"], 1)
+
+    @unittest.skipIf(os.name == "nt", "POSIX resolves a relative PATH entry from the child's cwd")
+    def test_probe_runs_git_from_the_repository_root(self):
+        # A relative PATH entry must resolve where the rest of flowctl runs git,
+        # never inside .flow/, which the branch under review controls.
+        with tempfile.TemporaryDirectory() as outer:
+            ran = os.path.join(outer, "planted-git-ran")
+
+            def plant(td):
+                fake = os.path.join(td, ".flow", "git")
+                with open(fake, "w", encoding="utf-8") as fh:
+                    fh.write(f"#!/bin/sh\ntouch '{ran}'\nexit 1\n")
+                os.chmod(fake, 0o755)
+
+            env = dict(os.environ, PATH="." + os.pathsep + os.environ.get("PATH", ""))
+            listed, block = self._run("../vendor/org-guidelines/criteria.md", as_link=True,
+                                      plant=plant, env=env)
+            self.assertFalse(os.path.exists(ran), "the criteria probe ran .flow/git")
+        self.assertIn("symlink", listed.stdout + listed.stderr)
+        self.assertNotEqual(block.returncode, 0)
 
     def test_link_checked_out_as_a_file_fails_closed(self):
         for target in ("../vendor/org-guidelines/criteria.md", "../Shared Rules/criteria.md",

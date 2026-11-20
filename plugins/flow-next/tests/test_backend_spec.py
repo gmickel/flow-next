@@ -131,6 +131,13 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(
             BACKEND_REGISTRY["codex"]["models"][:3], ["gpt-6.2-sol", "gpt-6.1-sol", "gpt-6-astra"]
         )
+        # The refreshed ladders, pinned by name: medium effort on Cursor, and
+        # Copilot's GPT rungs in codex's order (GPT-6.1 Sol is not served there).
+        self.assertEqual(BACKEND_REGISTRY["cursor"]["default_model"], "gpt-5.6-sol-medium")
+        self.assertEqual(
+            BACKEND_REGISTRY["copilot"]["models"][:4],
+            ["gpt-6.2-sol", "gpt-6-astra", "gpt-6-sol", "gpt-5.6-sol"],
+        )
 
 
 # --- Valid specs ---

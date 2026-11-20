@@ -208,8 +208,9 @@ class CommandSpecGrammar(CommandTest):
                 with self.assertRaises(ValueError) as ctx:
                     flowctl.BackendSpec.parse(raw)
                 self.assertIn("command:<label>", str(ctx.exception))
-                # fullmatch: JSON Schema's `$` never matches before a trailing newline.
-                self.assertFalse(any(re.fullmatch(p, raw) for p in patterns))
+                # search, as Python's jsonschema applies a pattern, where `$` may
+                # match before a trailing newline; ECMA engines must agree.
+                self.assertFalse(any(re.search(p, raw) for p in patterns))
         self.assertEqual(flowctl.BackendSpec.parse("command:grok").model, "grok")
 
     def test_padded_command_spec_never_runs_from_env_or_draw(self):
@@ -709,6 +710,24 @@ class CommandSessionPass(CommandTest):
                     self.assertIn("own label", json.loads(out)["error"])
             self.assertEqual(len(env.requests()), 1)
 
+    def test_padded_explicit_spec_is_refused_before_it_is_compared(self):
+        with _flow_repo() as (repo, base):
+            env = CommandRepo(repo, [NEEDS_WORK])
+            receipt = repo / "r.json"
+            self.assertEqual(impl_review(base, receipt, "--spec", "command:fake")[0], 0)
+            findings = repo / "findings.jsonl"
+            findings.write_text(json.dumps({"id": "f1", "title": "off by one"}) + "\n",
+                                encoding="utf-8")
+            for padded in (" command:fake ", "command:fake\n", "command: fake"):
+                for sub, extra in (("validate", ("--findings-file", str(findings))),
+                                   ("deep-pass", ("--pass", "adversarial"))):
+                    with self.subTest(sub=sub, padded=padded):
+                        code, out, err = _run_cli("command", sub, *extra, "--receipt",
+                                                  str(receipt), "--spec", padded, "--json")
+                        self.assertEqual(code, 2, out + err)
+                        self.assertIn("command:<label>", out + err)
+            self.assertEqual(len(env.requests()), 1)
+
 
 class CommandReviewFixes(CommandTest):
     def test_fresh_retry_never_inherits_the_failed_calls_model(self):
@@ -786,6 +805,66 @@ class CommandReviewFixes(CommandTest):
             self.assertFalse(receipt.exists())
             self.assertEqual(env.rounds(), 0)
 
+    def test_oversized_cleanup_finishes_before_the_failure_returns(self):
+        # The command floods and exits at once; a slow cleanup that fails must
+        # still be named, however long it outlasts the pipe grace.
+        argv = [sys.executable, "-c",
+                f"import sys; sys.stdout.write('x' * {flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10})"]
+        calls = []
+
+        def slow_failing_stop(proc):
+            calls.append(proc.pid)
+            time.sleep(1)
+            return "cannot kill process 4242: Operation not permitted"
+
+        with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.2), \
+                mock.patch.object(flowctl, "_stop_review_command_tree",
+                                  side_effect=slow_failing_stop):
+            _, _, _, problem, stop_error = flowctl._run_review_command(
+                argv, b"{}", timeout=60, cwd=Path.home(), env=dict(os.environ))
+        self.assertEqual(problem, "oversized")
+        self.assertEqual(stop_error, "cannot kill process 4242: Operation not permitted")
+        self.assertEqual(len(calls), 1, "one owner stops the tree")
+
+    @unittest.skipIf(os.name == "nt", "a real SIGINT reaches the coordinator on POSIX only")
+    def test_interrupted_fanout_stops_running_command_draws_promptly(self):
+        import signal
+        import threading
+        import types
+        with tempfile.TemporaryDirectory() as td:
+            def draw(row, _prompt, _repo_root, _args, _sidecar):
+                pid_file = Path(td) / f"{row['axis']}.pid"
+                child = (f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); "
+                         "time.sleep(20)")
+                return flowctl._run_review_command([sys.executable, "-c", child], b"{}",
+                                                   timeout=60, cwd=Path.home(),
+                                                   env=dict(os.environ))
+
+            draws = [{"axis": "correctness"}, {"axis": "contracts"}]
+            timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGINT))
+            started = time.monotonic()
+            with mock.patch.object(flowctl, "_review_fanout_run_draw", side_effect=draw):
+                timer.start()
+                try:
+                    with self.assertRaises(KeyboardInterrupt):
+                        flowctl._review_fanout_dispatch(
+                            draws, {"correctness": "", "contracts": ""}, Path(td),
+                            types.SimpleNamespace(fanout_execution="concurrent"), Path(td))
+                finally:
+                    timer.cancel()
+            elapsed = time.monotonic() - started
+            pids = [int((Path(td) / f"{row['axis']}.pid").read_text()) for row in draws]
+            try:
+                self.assertLess(elapsed, 10, "the interrupt waited for the reviewers")
+                deadline = time.monotonic() + 5
+                while any(map(_alive, pids)) and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                self.assertEqual([pid for pid in pids if _alive(pid)], [])
+            finally:
+                for pid in pids:
+                    if _alive(pid):
+                        os.kill(pid, 9)
+
     def test_response_flushed_before_a_lingering_helper_is_kept(self):
         with _flow_repo() as (repo, base), \
                 mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5):
@@ -833,6 +912,8 @@ class CommandReviewFixes(CommandTest):
             # (primary draw's step, the session the receipt and the passes may use)
             (dict(SHIP, response=dict(SHIP["response"], sessionId="fake-1")), "fake-1"),
             ({"raw": "", "exit": 3, "stderr": "quota exceeded\n"}, None),
+            # A failed draw's own session id is not a resumable session either.
+            ({"response": {"exitCode": 2, "sessionId": "fake-dead", "stderr": "boom"}}, None),
         )
         for primary_step, expected in cases:
             with self.subTest(expected=expected), _flow_repo() as (repo, base):
@@ -875,6 +956,75 @@ class CommandReviewFixes(CommandTest):
                              for call in env.requests()[calls_before:]]
                 self.assertNotIn("other-1", continued)
                 self.assertEqual(continued, [expected] * 2 if expected else [])
+
+
+def _documented_agy_wrapper() -> str:
+    """The Antigravity review wrapper exactly as flowctl.md documents it."""
+    doc = (Path(flowctl.__file__).resolve().parents[1] / "docs" / "flowctl.md").read_text(
+        encoding="utf-8")
+    section = doc.split("**Antigravity CLI wrapper.**", 1)[1]
+    return section.split("```python\n", 1)[1].split("\n```", 1)[0] + "\n"
+
+
+FAKE_AGY = textwrap.dedent("""\
+    import json, os, sys
+    sys.stdin.read()
+    with open(os.environ["FAKE_AGY_LOG"], "a", encoding="utf-8") as fh:
+        fh.write(os.path.realpath(__file__) + "\\n")
+    print(json.dumps({"event": "init", "init": {"model": "gemini-x"}}))
+    print(json.dumps({"event": "result", "result": {
+        "status": "SUCCESS", "response": "<verdict>SHIP</verdict>", "conversation_id": "c1"}}))
+""")
+
+
+@unittest.skipIf(os.name == "nt", "the wrapper's PATH lookup is exercised with POSIX shebangs")
+class DocumentedAgyWrapper(unittest.TestCase):
+    """The review wrapper never runs an `agy` the checkout under review supplies."""
+
+    def _install(self, directory: Path) -> Path:
+        directory.mkdir(parents=True, exist_ok=True)
+        agy = directory / "agy"
+        agy.write_text(f"#!{sys.executable}\n" + FAKE_AGY, encoding="utf-8")
+        agy.chmod(0o755)
+        return agy
+
+    def _review(self, td: Path, path_entries) -> tuple[dict, list]:
+        import subprocess
+        (td / "checkout").mkdir(exist_ok=True)
+        wrapper = td / "review-agy.py"
+        wrapper.write_text(_documented_agy_wrapper(), encoding="utf-8")
+        log = td / "agy.log"
+        request = {"sessionId": None, "timeoutSeconds": 120, "prompt": "review",
+                   "repositoryPath": str(td / "checkout")}
+        env = dict(os.environ, FAKE_AGY_LOG=str(log),
+                   PATH=os.pathsep.join([*path_entries, "/usr/bin", "/bin"]))
+        run = subprocess.run([sys.executable, str(wrapper), "gemini-x"],
+                             input=json.dumps(request), capture_output=True, text=True,
+                             cwd=str(td), env=env, timeout=60)
+        ran = log.read_text(encoding="utf-8").split() if log.exists() else []
+        return json.loads(run.stdout), ran
+
+    def test_runs_agy_from_an_absolute_path_outside_the_checkout(self):
+        with tempfile.TemporaryDirectory() as raw:
+            td = Path(raw).resolve()
+            trusted = self._install(td / "bin")
+            response, ran = self._review(td, [str(td / "bin")])
+            self.assertEqual(response["exitCode"], 0, response)
+            self.assertIn("SHIP", response["output"])
+            self.assertEqual(response["observedModel"], "gemini-x")
+            self.assertEqual(ran, [str(trusted)])
+
+    def test_an_agy_inside_the_checkout_never_runs(self):
+        for entries in (["."], ["checkout"], ["{checkout}"]):
+            with self.subTest(entries=entries), tempfile.TemporaryDirectory() as raw:
+                td = Path(raw).resolve()
+                self._install(td / "checkout")
+                entries = [e.format(checkout=td / "checkout") for e in entries]
+                # "." is the checkout once a wrapper changes into it.
+                response, ran = self._review(td, entries)
+                self.assertEqual(ran, [], "the checkout's agy ran")
+                self.assertNotEqual(response["exitCode"], 0)
+                self.assertIn("agy", response["stderr"])
 
 
 if __name__ == "__main__":
