@@ -29,7 +29,7 @@ The unattended failure the first two prevent: a review that silently judges no s
 - **R6:** A command review backend's error for a program that cannot be found names the variable and the label and does not print the program path or any other part of the variable's value. [paraphrase]
   Errors: no error surface beyond the message itself.
 - **R7:** In a fan-out whose draws use different command labels, the validate and deep passes continue on a session of the label that ran the primary draw, never on another label's session. [paraphrase]
-  Errors: no session for that label → the pass starts fresh, as it does today when a resume fails.
+  Errors: no session for the primary draw's label → the validate and deep passes do not run, as on every backend when there is no session to resume.
 - **R8:** The runtime and the config schema accept exactly the same backend strings around whitespace: `command: grok` is refused by both. [paraphrase]
   Errors: no error surface beyond the refusal.
 - **R9:** On a host that reads `AGENTS.md` (Muse, Antigravity), re-running setup with a saved "CLAUDE.md only" answer still writes the snippet where that host reads it, or says plainly that the host will not see it. [paraphrase]
