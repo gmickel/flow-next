@@ -787,6 +787,42 @@ class CommandReviewFixes(CommandTest):
                                  ("command:" + label, label))
                 self.assertEqual(published["session_id"] or None, expected)
 
+    def test_legacy_round_with_no_command_survivor_records_nothing(self):
+        # A 9.17.0 pending primary has no label; with only another backend's draw
+        # surviving, no label can be recovered, so finalize writes no receipt.
+        real_run_draw = flowctl._review_fanout_run_draw
+
+        def interrupted_dispatch(draws, prompts, repo_root, args, sidecar_dir):
+            for draw in draws[1:]:
+                real_run_draw(draw, prompts[draw["axis"]], repo_root, args, sidecar_dir)
+            raise KeyboardInterrupt
+
+        with _flow_repo() as (repo, base):
+            CommandRepo(repo, [SHIP], extra_labels=("other",))
+            receipt = repo / "fanout.json"
+            with mock.patch.object(flowctl, "_review_fanout_dispatch",
+                                   side_effect=interrupted_dispatch), \
+                    self.assertRaises(KeyboardInterrupt):
+                _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                         "--receipt", str(receipt), "--spec", "command:fake", "--draw",
+                         "correctness", "--draw", "contracts=command:other", "--json")
+            rid = next((repo / ".flow" / "review-fanout").iterdir()).name
+            meta_file = repo / ".flow" / "review-fanout" / rid / "meta.json"
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            for row in meta["draws"]:
+                row.pop("label")
+                if row["axis"] == "contracts":
+                    row["backend"] = "codex"  # the survivor ran on another backend
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+            merged = repo / "merged.md"
+            merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
+            code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
+                                      "--base", base, "--rid", rid, "--merged-file",
+                                      str(merged), "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 2, out + err)
+            self.assertIn("re-dispatch", out + err)
+            self.assertFalse(receipt.exists())
+
     def test_session_passes_never_continue_another_labels_draw(self):
         cases = (
             # (primary draw's step, the session the receipt and the passes may use)

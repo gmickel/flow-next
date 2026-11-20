@@ -1149,12 +1149,14 @@ class TestReceiptTallyTerminator(unittest.TestCase):
                 self.assertEqual([c["id"] for c in out], ["G1"])
 
     def test_bold_tally_line_ends_the_section(self):
-        text = ("## Global criteria\nG1: met - ok\n"
-                "**Classification counts:** 0 introduced, 0 pre_existing.\n")
-        self.assertEqual(flowctl.parse_classification_counts(text),
-                         {"introduced": 0, "pre_existing": 0})
-        self.assertEqual(flowctl.parse_review_criteria(text),
-                         [{"id": "G1", "status": "met", "note": "ok"}])
+        for tally in ("**Classification counts:** 0 introduced, 0 pre_existing.",
+                      "**Classification  counts:** 0 introduced, 0 pre_existing."):
+            with self.subTest(tally=tally):
+                text = f"## Global criteria\nG1: met - ok\n{tally}\n"
+                self.assertEqual(flowctl.parse_classification_counts(text),
+                                 {"introduced": 0, "pre_existing": 0})
+                self.assertEqual(flowctl.parse_review_criteria(text),
+                                 [{"id": "G1", "status": "met", "note": "ok"}])
 
     def test_fenced_tally_block_ends_the_section(self):
         text = ("## Global criteria\nG1: met - ok\n```json\n"
