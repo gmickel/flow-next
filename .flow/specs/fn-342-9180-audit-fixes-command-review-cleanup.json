@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-342-9180-audit-fixes-command-review-cleanup",
+  "created_at": "2026-11-20T10:13:23.114017Z",
+  "depends_on_epics": [],
+  "id": "fn-342-9180-audit-fixes-command-review-cleanup",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-342-9180-audit-fixes-command-review-cleanup.md",
+  "status": "open",
+  "title": "9.18.0 audit fixes: command review cleanup and Antigravity recipe",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-20T10:13:23.117498Z"
+}
