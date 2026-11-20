@@ -2970,7 +2970,7 @@ Spec form is exactly `command:<label>`: a bare `command`, an empty label, a labe
 
 **Contract.** flowctl runs the argv directly, with no shell and no interpolation, starting in your home directory; a leading `~` in any element expands to the home directory. The program is fixed before dispatch: a bare name is looked up in `PATH`'s absolute directories, never the current directory (a name not found there is refused), a relative path is taken from the home directory, and a program inside the checkout under review, or a checkout symlink to one outside it, is refused. On Windows a `.cmd` or `.bat` first element is refused, because Windows runs those through `cmd.exe` and its interpolation: name the interpreter first (`["python", "~/bin/review-opencode.py", ...]`). The Windows path is covered by unit tests only. It writes one JSON request to the command's standard input, the same request the [review execution URL](orchestration.md#review-backends-cross-model-review) receives: `schemaVersion` (1), `backend` (`command`), `model` and `effort` (both `null`), `prompt`, `repositoryPath`, `sessionId`, `resumeOnly`, `permissionMode` (`read-only`), `timeoutSeconds` and `requestId`. It reads one JSON response from standard output, in the same shape: `schemaVersion` (1), `output` (the reviewer's text, which carries the verdict tag), `stderr`, `exitCode`, and optionally `sessionId`, `resumeFailed` and `observedModel`. The prompt names a diff file under `.flow/tmp/` for reviewers that cannot run `git`.
 
-A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict. A timeout or an oversized response stops the program flowctl started, and only that program: flowctl does not track what the program starts in turn. A wrapper must pass the request's `timeoutSeconds` on to whatever it runs and must not detach it (a new session, a daemon). Ctrl-C reaches the wrapper's children only while they stay in its process group.
+A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict. A timeout or an oversized response stops the program flowctl started, and only that program: flowctl does not track what the program starts in turn. A wrapper must pass the request's `timeoutSeconds` on to whatever it runs, with a deadline that ends before flowctl's so the wrapper can still stop it, and must not detach it (a new session, a daemon); both examples below give their CLI 15 seconds less, or half the budget when it is shorter. Ctrl-C reaches the wrapper's children only while they stay in its process group.
 
 **Receipt.** `mode: "command"`, `label`, `spec: "command:<label>"`, and `model`: the `observedModel` the command reported, or `"not reported"`.
 
@@ -3005,7 +3005,7 @@ def main():
              "--format", "json", "--archived"],
             input=request["prompt"], capture_output=True, text=True,
             cwd=request["repositoryPath"],
-            timeout=max(30, request["timeoutSeconds"] - 15))
+            timeout=max(request["timeoutSeconds"] / 2, request["timeoutSeconds"] - 15))
     except subprocess.TimeoutExpired:
         return reply(stderr="opencode timed out", exit_code=124)
     if run.returncode != 0:
@@ -3025,10 +3025,10 @@ main()
 
 ```bash
 export FLOW_REVIEW_COMMAND_AGY='["python3", "~/bin/review-agy.py", "<model>"]'
-export AGY_PATH=/absolute/path/to/agy   # where `command -v agy` points
+export AGY_PATH=/absolute/path/to/agy   # your installed agy, outside any checkout
 ```
 
-It runs `agy` from the absolute path in `AGY_PATH` and looks nothing up in `PATH`, so the branch under review can never supply the program; when `AGY_PATH` is unset, not absolute or not an executable file, it fails without running a review. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
+It runs `agy` from the absolute path in `AGY_PATH` and looks nothing up in `PATH`, so the program is the one you named: point it at your installed `agy`, never at a path inside a checkout. When `AGY_PATH` is unset, not absolute or not an executable file, it fails without running a review. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
 
 ```python
 """flow-next review command: one review through Antigravity CLI (`agy -p`)."""
@@ -3065,7 +3065,9 @@ def main():
     line = json.dumps({"event": "user", "message": {"content": request["prompt"]}}) + "\n"
     try:
         run = subprocess.run(argv, input=line, capture_output=True, text=True,
-                             cwd=request["repositoryPath"], timeout=request["timeoutSeconds"])
+                             cwd=request["repositoryPath"],
+                             timeout=max(request["timeoutSeconds"] / 2,
+                                         request["timeoutSeconds"] - 15))
     except subprocess.TimeoutExpired:
         return reply(stderr="agy timed out", exit_code=124, session=session)
     init, result = {}, None

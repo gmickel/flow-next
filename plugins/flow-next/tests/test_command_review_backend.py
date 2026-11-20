@@ -830,8 +830,11 @@ SLEEPING_REVIEWER = textwrap.dedent("""\
         sys.exit(0)
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
                              cwd=os.path.dirname(sys.executable))
-    with open(os.environ["SLEEPING_REVIEWER_PIDS"], "w", encoding="utf-8") as fh:
+    # One file per reviewer: fan-out draws run at once.
+    pids = os.path.join(os.environ["SLEEPING_REVIEWER_PIDS"], str(os.getpid()))
+    with open(pids + ".tmp", "w", encoding="utf-8") as fh:
         fh.write(f"{os.getpid()} {child.pid}")
+    os.replace(pids + ".tmp", pids)
     time.sleep(60)
 """)
 
@@ -856,12 +859,14 @@ class CtrlCReachesTheReviewer(unittest.TestCase):
         import signal
         import subprocess
         import time
-        for backend in ("command", "codex"):
-            with self.subTest(backend=backend), _flow_repo() as (repo, base):
+        for backend, fanout in (("command", False), ("command", True),
+                                ("codex", False), ("codex", True)):
+            with self.subTest(backend=backend, fanout=fanout), _flow_repo() as (repo, base):
                 reviewer = repo.parent / f"{repo.name}-reviewer.py"
                 reviewer.write_text(SLEEPING_REVIEWER, encoding="utf-8")
-                pids_file = repo.parent / f"{repo.name}-pids"
-                env = dict(os.environ, SLEEPING_REVIEWER_PIDS=str(pids_file))
+                pids_dir = repo.parent / f"{repo.name}-pids"
+                pids_dir.mkdir()
+                env = dict(os.environ, SLEEPING_REVIEWER_PIDS=str(pids_dir))
                 env.pop("FLOW_REVIEW_BACKEND", None)
                 if backend == "command":
                     env[command_var("fake")] = json.dumps([sys.executable, str(reviewer)])
@@ -874,22 +879,25 @@ class CtrlCReachesTheReviewer(unittest.TestCase):
                     (bin_dir / "codex").chmod(0o755)
                     env["PATH"] = os.pathsep.join([str(bin_dir), env.get("PATH", "")])
                     spec = "codex"
+                review = (["impl-review-fanout", TASK_ID, "--draw", "correctness", "--draw",
+                           "contracts"] if fanout else ["impl-review", TASK_ID])
+                reviewers = 2 if fanout else 1
                 # Its own process group stands in for the terminal's foreground group.
                 proc = subprocess.Popen(
-                    [sys.executable, flowctl.__file__, backend, "impl-review", TASK_ID,
-                     "--base", base, "--spec", spec, "--receipt", str(repo / "r.json"),
-                     "--json"],
+                    [sys.executable, flowctl.__file__, backend, *review, "--base", base,
+                     "--spec", spec, "--receipt", str(repo / "r.json"), "--json"],
                     cwd=repo, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, start_new_session=True)
                 pids = []
                 try:
                     deadline = time.monotonic() + 30
                     while time.monotonic() < deadline and proc.poll() is None:
-                        if pids_file.exists() and len(pids_file.read_text().split()) == 2:
-                            pids = [int(pid) for pid in pids_file.read_text().split()]
+                        written = [p for p in pids_dir.iterdir() if p.suffix != ".tmp"]
+                        if len(written) == reviewers:
+                            pids = [int(pid) for p in written for pid in p.read_text().split()]
                             break
                         time.sleep(0.1)
-                    if len(pids) != 2:
+                    if len(pids) != 2 * reviewers:
                         proc.kill()
                         self.fail(f"the reviewer never started: {proc.communicate()}")
                     os.killpg(proc.pid, signal.SIGINT)
@@ -969,6 +977,32 @@ class DocumentedAgyWrapper(unittest.TestCase):
             self.assertEqual(response["observedModel"], "gemini-x")
             self.assertEqual(ran, [str(trusted)])
 
+    def test_a_stalled_agy_is_stopped_before_flowctls_timeout(self):
+        # flowctl stops only the wrapper, so the wrapper must stop agy first.
+        with tempfile.TemporaryDirectory() as raw:
+            td = Path(raw).resolve()
+            pid_file = td / "agy.pid"
+            agy = td / "bin" / "agy"
+            agy.parent.mkdir()
+            agy.write_text(f"#!{sys.executable}\nimport os, time\n"
+                           f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+                           "time.sleep(60)\n", encoding="utf-8")
+            agy.chmod(0o755)
+            wrapper = td / "review-agy.py"
+            wrapper.write_text(_documented_agy_wrapper(), encoding="utf-8")
+            (td / "checkout").mkdir()
+            request = {"sessionId": None, "timeoutSeconds": 4, "prompt": "review",
+                       "repositoryPath": str(td / "checkout")}
+            flowctl._run_review_command(
+                [sys.executable, str(wrapper), "gemini-x"], json.dumps(request).encode(),
+                timeout=request["timeoutSeconds"], cwd=td, env=dict(os.environ, AGY_PATH=str(agy)))
+            pid = int(pid_file.read_text(encoding="utf-8"))
+            try:
+                self.assertFalse(CtrlCReachesTheReviewer._running(pid), "agy outlived the review")
+            finally:
+                if CtrlCReachesTheReviewer._running(pid):
+                    os.kill(pid, 9)
+
     def test_unset_relative_or_unrunnable_path_runs_no_review(self):
         with tempfile.TemporaryDirectory() as raw:
             td = Path(raw).resolve()
@@ -979,8 +1013,8 @@ class DocumentedAgyWrapper(unittest.TestCase):
                     self._install(td / "bin")
                     response, ran = self._review(td, agy_path)
                     self.assertEqual(ran, [], "an agy ran without an absolute AGY_PATH")
-                    self.assertNotEqual(response["exitCode"], 0)
-                    self.assertIn("AGY_PATH must be the absolute path", response["stderr"])
+                    self.assertEqual(response["exitCode"], 127)
+                    self.assertIn("AGY_PATH", response["stderr"])
 
 
 if __name__ == "__main__":
