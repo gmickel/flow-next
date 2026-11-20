@@ -26,6 +26,16 @@ The unattended failure the first two prevent: a review that silently judges no s
   Errors: `command:<label>` with a label that is not configured yet is still accepted at set time, since the entry may be added afterwards. [inferred]
 - **R5:** The copilot backend's outside-repository read check from fn-336 is run once its quota allows, and the teams guide's backend list is updated from unchecked to the observed result. [paraphrase]
   Errors: if it still cannot be exercised, the docs keep saying unchecked.
+- **R6:** A command review backend's error for a program that cannot be found names the variable and the label and does not print the program path or any other part of the variable's value. [paraphrase]
+  Errors: no error surface beyond the message itself.
+- **R7:** In a fan-out whose draws use different command labels, the validate and deep passes continue on a session of the label that ran the primary draw, never on another label's session. [paraphrase]
+  Errors: no session for that label → the pass starts fresh, as it does today when a resume fails.
+- **R8:** The runtime and the config schema accept exactly the same backend strings around whitespace: `command: grok` is refused by both. [paraphrase]
+  Errors: no error surface beyond the refusal.
+- **R9:** On a host that reads `AGENTS.md` (Muse, Antigravity), re-running setup with a saved "CLAUDE.md only" answer still writes the snippet where that host reads it, or says plainly that the host will not see it. [paraphrase]
+  Errors: a host that reads `CLAUDE.md` is unchanged.
+- **R10:** When memory is enabled but not initialized, plan's memory scan says so in one plain line instead of printing that the scan failed. [paraphrase]
+  Errors: a real scan failure still reports as a failure.
 
 ## Boundaries
 
@@ -35,7 +45,7 @@ The unattended failure the first two prevent: a review that silently judges no s
 
 ## Decision Context
 
-One small spec instead of five issues: the items are each a few lines, share the same two areas, and none is urgent enough to hold the release.
+One small spec instead of separate issues: the items are each a few lines and share the same few areas. They were found while building and auditing 9.17.0 and the Antigravity host, and the maintainer's rule is that the next release waits until found things that need fixing are fixed, so this spec ships before it. R6 to R8 come from the 9.17.0 final audit's minor findings; R9 and R10 were found while building the Antigravity host.
 
 ## Parked unknowns
 
