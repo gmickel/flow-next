@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-344-9180-last-fixes-legacy-fan-out-rows",
   "spec_path": ".flow/tasks/fn-344-9180-last-fixes-legacy-fan-out-rows.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement 9.18.0 last fixes: legacy fan-out rows, criteria section end",
   "updated_at": "2026-11-20T13:00:49.016616Z"
 }
