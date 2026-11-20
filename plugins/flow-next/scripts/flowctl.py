@@ -46351,9 +46351,13 @@ def _stop_review_command_tree(proc) -> Optional[str]:
     return stop_error
 
 
+REVIEW_COMMAND_PS_PATHS = ("/bin/ps", "/usr/bin/ps")
+
+
 def _review_command_descendants(root: int) -> Optional[list]:
     """Every process descended from ``root``, by parent pid (POSIX ``ps``); None if unlisted."""
-    ps = _review_command_lookup("ps")   # never a program from the checkout
+    # A fixed system path: no PATH entry, absolute or not, can point into the checkout.
+    ps = next((p for p in REVIEW_COMMAND_PS_PATHS if os.access(p, os.X_OK)), None)
     if not ps:
         return None
     try:

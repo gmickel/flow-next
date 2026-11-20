@@ -522,7 +522,7 @@ class CommandImplReview(CommandTest):
         self.assertEqual(problem, "timeout")
         self.assertIn("Operation not permitted", stop_error)
         # Helpers outside the group cannot be found without a process listing.
-        with mock.patch.object(flowctl, "_review_command_lookup", return_value=None):
+        with mock.patch.object(flowctl, "REVIEW_COMMAND_PS_PATHS", ()):
             _, _, _, problem, stop_error = flowctl._run_review_command(
                 argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
         self.assertEqual(problem, "timeout")
