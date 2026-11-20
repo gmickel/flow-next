@@ -51246,10 +51246,13 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     receipt_draws = _review_fanout_receipt_draws(meta_draws)
     primary = _review_fanout_primary_draw(meta, meta_draws, args.review_backend)
     if args.review_backend == "command" and not primary.get("label"):
+        refunded = _review_fanout_refund_stale_round(
+            meta, args, "the primary draw's command label is unknown", "label_unknown",
+        )
         error_exit(
             "fan-out finalize: the primary draw's command label is unknown (a round "
             "interrupted under 9.17.0 with no surviving command draw); re-dispatch "
-            "the review. Nothing was recorded.",
+            f"the review. No verdict was recorded.{refunded}",
             use_json=args.json,
             code=2,
         )
