@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-339-follow-ups-from-the-criteria-and",
   "impl_review_rounds": {
-    "fn-339-follow-ups-from-the-criteria-and.1": 3
+    "fn-339-follow-ups-from-the-criteria-and.1": 0
   },
   "next_task": 1,
   "no_plan": true,
@@ -301,9 +301,40 @@
       "task": "fn-339-follow-ups-from-the-criteria-and.1",
       "timestamp": "2026-11-20T00:51:38.463563Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e73753f647792650b5d07e3e41b2485402ef286d420470852c1ee1986a3040e4",
+      "backend": "codex",
+      "base_sha": "24f4c6a1d0ca17f1474475437714fcefb8852a20",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "421a895c97e866b73fc88a6ef580f00dd3621655",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2248,
+      "output_sha256": "22ada66432334324972866ad5ebfca2d7a5666b1c646f00a610ea3a3b4551074",
+      "reservation_id": "42ff3c9b51824f2c94609858d4ec4638",
+      "round_consumed": true,
+      "scope": "impl:fn-339-follow-ups-from-the-criteria-and.1",
+      "superseded_by": null,
+      "task": "fn-339-follow-ups-from-the-criteria-and.1",
+      "timestamp": "2026-11-20T01:35:10.333698Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-339-follow-ups-from-the-criteria-and.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -323,5 +354,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-20T00:55:46.120413Z"
+  "updated_at": "2026-11-20T01:35:10.337006Z"
 }
