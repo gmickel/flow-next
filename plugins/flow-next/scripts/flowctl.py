@@ -46528,6 +46528,8 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         if overflowed and not stopped:
             # The response overflowed after the command exited: a helper wrote it.
             stop()
+        if stopped and cancel.is_set():
+            raise KeyboardInterrupt   # interrupted while it was stopped: report it below
     except BaseException:
         # Its own session no longer receives the terminal's interrupt, during the
         # wait or while a helper it left still holds the pipes. A fan-out draw keeps
