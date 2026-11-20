@@ -50649,14 +50649,20 @@ def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
             and not row.get("failed")
             and row.get("session_id")
             and row.get("backend") == backend
-            and (backend != "command" or row.get("label") == primary_label)
+            # A 9.17.0 pending row has no label: keep that release's choice.
+            and (backend != "command" or primary_label is None
+                 or row.get("label") == primary_label)
         ):
             return row
     if isinstance(primary, dict):
         if backend == "command" and primary.get("failed"):
             # The label still stamps the receipt; a failed draw's session id
-            # is not one validate or deep-pass may continue.
-            return dict(primary, session_id=None)
+            # is not one validate or deep-pass may continue. A 9.17.0 pending
+            # row has no label, so a surviving draw's label stamps it.
+            label = primary_label or next(
+                (row.get("label") for row in draws if isinstance(row, dict)
+                 and not row.get("failed") and row.get("backend") == backend), None)
+            return dict(primary, session_id=None, label=label)
         return primary
     for row in draws:
         if isinstance(row, dict):
