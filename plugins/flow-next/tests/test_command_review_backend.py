@@ -938,31 +938,46 @@ class CommandReviewFixes(CommandTest):
                     timer.cancel()
             self.assertTrue(published.exists(), "the coordinator abandoned a draw still stopping")
 
-    def test_cancel_during_the_reap_does_not_stop_the_tree_twice(self):
+    def test_cancel_during_a_stop_is_reported_once_and_keeps_the_draw_waited_on(self):
+        # The fan-out is interrupted while a timed-out or oversized command is being
+        # stopped and the wrapper survives: one stop, a warning, the pid still published.
+        import io
         import threading
-        procs = []
+        flood = flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10
+        cases = {
+            "timeout": ("import time; time.sleep(30)", 0.3),
+            "oversized": (f"import sys, time; sys.stdout.write('x' * {flood}); "
+                          "sys.stdout.flush(); time.sleep(30)", 60),
+        }
+        for name, (child, timeout) in cases.items():
+            with self.subTest(name):
+                procs = []
+                state = {"cancel": threading.Event(), "pid": None}
 
-        def stop_and_cancel(proc):
-            procs.append(proc)
-            state["cancel"].set()   # the fan-out is interrupted while the stop reaps
-            return None
+                def stop_and_cancel(proc, state=state, procs=procs):
+                    procs.append(proc)
+                    state["cancel"].set()
+                    return "cannot kill process 4242: Operation not permitted"
 
-        state = {"cancel": threading.Event(), "pid": None}
-        flowctl._REVIEW_COMMAND_DRAW.state = state
-        try:
-            with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.3), \
-                    mock.patch.object(flowctl, "_stop_review_command_tree",
-                                      side_effect=stop_and_cancel) as stop, \
-                    self.assertRaises(KeyboardInterrupt):
-                flowctl._run_review_command(
-                    [sys.executable, "-c", "import time; time.sleep(30)"], b"{}",
-                    timeout=0.3, cwd=Path.home(), env=dict(os.environ))
-        finally:
-            del flowctl._REVIEW_COMMAND_DRAW.state
-            for proc in procs:
-                proc.kill()
-                proc.wait()
-        self.assertEqual(stop.call_count, 1, "one owner stops the tree")
+                flowctl._REVIEW_COMMAND_DRAW.state = state
+                try:
+                    with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.3), \
+                            mock.patch.object(flowctl, "_stop_review_command_tree",
+                                              side_effect=stop_and_cancel) as stop, \
+                            mock.patch("sys.stderr", new_callable=io.StringIO) as err, \
+                            self.assertRaises(KeyboardInterrupt):
+                        flowctl._run_review_command(
+                            [sys.executable, "-c", child], b"{}", timeout=timeout,
+                            cwd=Path.home(), env=dict(os.environ))
+                finally:
+                    del flowctl._REVIEW_COMMAND_DRAW.state
+                    for proc in procs:
+                        proc.kill()
+                        proc.wait()
+                self.assertEqual(stop.call_count, 1, "one owner stops the tree")
+                self.assertIn("its process tree was not stopped: cannot kill process 4242",
+                              err.getvalue())
+                self.assertEqual(state["pid"], procs[0].pid)
 
     def test_response_flushed_before_a_lingering_helper_is_kept(self):
         with _flow_repo() as (repo, base), \
