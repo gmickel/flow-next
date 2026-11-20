@@ -1,7 +1,7 @@
 {
   "name": "flow-next",
-  "version": "9.17.0",
-  "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Compatible with Codex, Claude Code, and Factory Droid.",
+  "version": "9.18.0",
+  "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode, Meta Muse Code and Google Antigravity CLI.",
   "author": {
     "name": "Gordon Mickel",
     "email": "gordon@mickel.tech",
