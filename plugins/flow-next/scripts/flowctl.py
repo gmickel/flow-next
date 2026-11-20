@@ -28370,14 +28370,17 @@ def _criteria_link_stored_as_file(path: Path) -> bool:
             return None
         return proc.stdout if proc.returncode == 0 else None
 
-    staged = git("ls-files", "--stage", "--", rel)
-    if not staged or not staged.startswith(b"120000 "):
+    staged = git("ls-files", "--stage", "--", rel) or b""
+    # One line per stage; a conflicted merge lists several (1, 2, 3).
+    targets = [git("cat-file", "blob", line.split()[1].decode("ascii", "replace"))
+               for line in staged.splitlines() if line.startswith(b"120000 ")]
+    if not targets:
         return False
-    target = git("cat-file", "blob", staged.split()[1].decode("ascii", "replace"))
     try:
-        return target is not None and path.read_bytes() == target
+        held = path.read_bytes()
     except OSError:
         return False
+    return any(target is not None and held == target for target in targets)
 
 
 def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
@@ -41496,13 +41499,17 @@ def _run_validator_pass(
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
             if backend == "command" and prior_mode == "command":
-                if spec_arg:
-                    # The strict parser first, so a padded spelling is refused here
-                    # as it is everywhere else, never stripped into a match.
+                if spec_arg is not None:
+                    # The strict parser first, so a padded or empty spelling is refused
+                    # here as it is everywhere else, never stripped into a match.
                     try:
                         BackendSpec.parse(spec_arg)
                     except ValueError as exc:
-                        error_exit(str(exc), use_json=use_json, code=2)
+                        error_exit(
+                            f"--spec {spec_arg!r}: {exc}; pass the receipt's command:<label> "
+                            f"({prior.get('spec')}) or omit --spec",
+                            use_json=use_json, code=2,
+                        )
                 if spec_arg and spec_arg != prior.get("spec"):
                     error_exit(
                         f"--spec {spec_arg!r} does not match the receipt's "
@@ -42413,13 +42420,17 @@ def _run_deep_pass(
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
             if backend == "command" and prior_mode == "command":
-                if spec_arg:
-                    # The strict parser first, so a padded spelling is refused here
-                    # as it is everywhere else, never stripped into a match.
+                if spec_arg is not None:
+                    # The strict parser first, so a padded or empty spelling is refused
+                    # here as it is everywhere else, never stripped into a match.
                     try:
                         BackendSpec.parse(spec_arg)
                     except ValueError as exc:
-                        error_exit(str(exc), use_json=use_json, code=2)
+                        error_exit(
+                            f"--spec {spec_arg!r}: {exc}; pass the receipt's command:<label> "
+                            f"({prior.get('spec')}) or omit --spec",
+                            use_json=use_json, code=2,
+                        )
                 if spec_arg and spec_arg != prior.get("spec"):
                     error_exit(
                         f"--spec {spec_arg!r} does not match the receipt's "
@@ -46431,6 +46442,8 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
     out = bytearray()
     tail = bytearray()
     oversized = threading.Event()
+    window = threading.Lock()   # guards ``collecting`` and the overflow decision
+    collecting = [True]
     stop_errors: list = []
 
     def feed():
@@ -46443,10 +46456,11 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         # read1 returns what is available, so a flushed response is collected
         # even while a lingering helper keeps the pipe from reaching EOF.
         for chunk in iter(lambda: proc.stdout.read1(65536), b""):
-            if not oversized.is_set():
-                out.extend(chunk)
-                if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
-                    oversized.set()   # the caller stops the tree; the reader only signals
+            with window:
+                if collecting[0] and not oversized.is_set():
+                    out.extend(chunk)
+                    if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
+                        oversized.set()   # the caller stops the tree; the reader only signals
 
     def drain_err():
         for chunk in iter(lambda: proc.stderr.read1(65536), b""):
@@ -46461,13 +46475,24 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return False
-            oversized.wait(min(0.05, remaining))
+            if oversized.is_set():
+                time.sleep(min(0.05, remaining))
+            else:
+                oversized.wait(min(0.05, remaining))
         return True
 
     def drained() -> bool:
         for thread in threads:
             thread.join(timeout=0.01)
         return not any(thread.is_alive() for thread in threads)
+
+    def stop() -> None:
+        # The one owner of cleanup: stop the tree, then reap within a bound.
+        nonlocal stopped
+        stop_errors.append(_stop_review_command_tree(proc))
+        stopped = True
+        if not wait_until(time.monotonic() + COMMAND_PIPE_GRACE, lambda: proc.poll() is not None):
+            stop_errors.append(f"the command (pid {proc.pid}) did not exit after it was stopped")
 
     threads = [threading.Thread(target=fn, daemon=True) for fn in (feed, drain_out, drain_err)]
     for thread in threads:
@@ -46479,25 +46504,26 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
                           lambda: proc.poll() is not None or oversized.is_set()):
             problem = "timeout"
         if problem or oversized.is_set():
-            stop_errors.append(_stop_review_command_tree(proc))
-            stopped = True
-            proc.wait()
+            stop()
         # A child the command left running may hold the pipes open; do not wait on it.
         wait_until(time.monotonic() + COMMAND_PIPE_GRACE,
                    lambda: oversized.is_set() or drained())
-        if oversized.is_set() and not stopped:
+        with window:
+            # The response window closes: output after this point is never counted.
+            collecting[0] = False
+            overflowed = oversized.is_set()
+        if overflowed and not stopped:
             # The response overflowed after the command exited: a helper wrote it.
-            stop_errors.append(_stop_review_command_tree(proc))
-            stopped = True
+            stop()
     except BaseException:
         # Its own session no longer receives the terminal's interrupt, during the
         # wait or while a helper it left still holds the pipes.
         stop_error = _stop_review_command_tree(proc)
         if stop_error:
-            print(f"review command interrupted; its process tree was not stopped: {stop_error}",
-                  file=sys.stderr)
+            print(f"review command (pid {proc.pid}) interrupted; its process tree was not "
+                  f"stopped: {stop_error}", file=sys.stderr)
         raise
-    if oversized.is_set():
+    if overflowed:
         problem = problem or "oversized"
     stop_error = next((e for e in stop_errors if e), None)
     return (proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail),

@@ -718,7 +718,7 @@ class CommandSessionPass(CommandTest):
             findings = repo / "findings.jsonl"
             findings.write_text(json.dumps({"id": "f1", "title": "off by one"}) + "\n",
                                 encoding="utf-8")
-            for padded in (" command:fake ", "command:fake\n", "command: fake"):
+            for padded in (" command:fake ", "command:fake\n", "command: fake", ""):
                 for sub, extra in (("validate", ("--findings-file", str(findings))),
                                    ("deep-pass", ("--pass", "adversarial"))):
                     with self.subTest(sub=sub, padded=padded):
@@ -825,6 +825,33 @@ class CommandReviewFixes(CommandTest):
         self.assertEqual(problem, "oversized")
         self.assertEqual(stop_error, "cannot kill process 4242: Operation not permitted")
         self.assertEqual(len(calls), 1, "one owner stops the tree")
+
+    def test_a_wrapper_that_survives_its_stop_is_reported_not_waited_on(self):
+        # The stop claims success but leaves the command running: reaping is bounded.
+        flood = flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10
+        argv = [sys.executable, "-c",
+                f"import sys, time; sys.stdout.write('x' * {flood}); sys.stdout.flush(); "
+                "time.sleep(30)"]
+        procs = []
+
+        def stop_nothing(proc):
+            procs.append(proc)
+            return None
+
+        started = time.monotonic()
+        try:
+            with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5), \
+                    mock.patch.object(flowctl, "_stop_review_command_tree",
+                                      side_effect=stop_nothing):
+                _, _, _, problem, stop_error = flowctl._run_review_command(
+                    argv, b"{}", timeout=60, cwd=Path.home(), env=dict(os.environ))
+        finally:
+            for proc in procs:
+                proc.kill()
+                proc.wait()
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(problem, "oversized")
+        self.assertIn("did not exit after it was stopped", stop_error)
 
     @unittest.skipIf(os.name == "nt", "a real SIGINT reaches the coordinator on POSIX only")
     def test_interrupted_fanout_stops_running_command_draws_promptly(self):
@@ -1025,6 +1052,17 @@ class DocumentedAgyWrapper(unittest.TestCase):
                 self.assertEqual(ran, [], "the checkout's agy ran")
                 self.assertNotEqual(response["exitCode"], 0)
                 self.assertIn("agy", response["stderr"])
+
+    def test_a_checkout_link_to_an_outside_agy_is_refused(self):
+        # The checkout chose the program even though it points outside.
+        with tempfile.TemporaryDirectory() as raw:
+            td = Path(raw).resolve()
+            self._install(td / "trusted")
+            (td / "checkout" / "bin").mkdir(parents=True)
+            (td / "checkout" / "bin" / "agy").symlink_to(td / "trusted" / "agy")
+            response, ran = self._review(td, [str(td / "checkout" / "bin")])
+            self.assertEqual(ran, [])
+            self.assertNotEqual(response["exitCode"], 0)
 
 
 if __name__ == "__main__":

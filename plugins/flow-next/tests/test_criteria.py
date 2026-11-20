@@ -1051,6 +1051,24 @@ class TestCriteriaLinkStoredAsFile(unittest.TestCase):
                               replaced_with="- **G1:** Every route has a contract test.\n")
         self.assertEqual(json.loads(listed.stdout)["count"], 1)
 
+    def test_conflicted_link_matching_any_stage_fails_closed(self):
+        # A merge leaves stages 1, 2 and 3; the file holds the stage-2 target.
+        def conflicted(td):
+            def git(*argv, stdin=None):
+                return subprocess.run(["git", *argv], cwd=td, check=True, input=stdin,
+                                      capture_output=True, text=True).stdout.strip()
+            blobs = [git("hash-object", "-w", "--stdin", stdin=target)
+                     for target in ("../a/criteria.md", "../ours/criteria.md",
+                                    "../theirs/criteria.md")]
+            git("update-index", "--force-remove", ".flow/criteria.md")
+            git("update-index", "--index-info", stdin="".join(
+                f"120000 {blob} {stage}\t.flow/criteria.md\n"
+                for stage, blob in enumerate(blobs, start=1)))
+        listed, block = self._run("../ours/criteria.md", as_link=True, plant=conflicted)
+        self.assertNotEqual(listed.returncode, 0, listed.stdout)
+        self.assertIn("symlink", listed.stdout + listed.stderr)
+        self.assertNotEqual(block.returncode, 0)
+
     @unittest.skipIf(os.name == "nt", "POSIX resolves a relative PATH entry from the child's cwd")
     def test_probe_runs_git_from_the_repository_root(self):
         # A relative PATH entry must resolve where the rest of flowctl runs git,

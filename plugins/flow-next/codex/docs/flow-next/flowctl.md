@@ -3027,13 +3027,12 @@ main()
 export FLOW_REVIEW_COMMAND_AGY='["python3", "~/bin/review-agy.py", "<model>"]'
 ```
 
-It runs `agy` by the absolute path it finds in `PATH`'s absolute directories, skipping any copy inside the checkout under review, and fails without running a review when there is none, so the branch under review can never supply the program. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
+It runs `agy` by the absolute path it finds in `PATH`'s absolute directories, skipping a candidate whose path or resolved target lies inside the checkout under review, and fails without running a review when there is none, so the branch under review can never supply the program. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
 
 ```python
 """flow-next review command: one review through Antigravity CLI (`agy -p`)."""
 import json
 import os
-import shutil
 import subprocess
 import sys
 
@@ -3048,20 +3047,34 @@ def reply(output="", stderr="", exit_code=0, session=None, resume_failed=False, 
                "resumeFailed": resume_failed, "observedModel": model}, sys.stdout)
 
 
+def inside(path, checkout):
+    try:
+        return os.path.commonpath([path, checkout]) == checkout
+    except ValueError:   # another drive
+        return False
+
+
 def find_agy(checkout):
-    """agy's absolute path from PATH's absolute directories, never inside the checkout."""
+    """agy's absolute path from PATH's absolute directories, never from the checkout.
+
+    A candidate is refused when its own path or the file it resolves to lies in
+    the checkout under review, so a link there cannot pick the program either.
+    """
     checkout = os.path.realpath(checkout)
+    names = ["agy"]
+    if os.name == "nt":
+        names = ["agy" + ext.lower() for ext in os.environ.get("PATHEXT", ".EXE").split(";") if ext]
     for entry in os.environ.get("PATH", "").split(os.pathsep):
-        found = os.path.isabs(entry) and shutil.which("agy", path=entry)
-        if not found:
+        if not os.path.isabs(entry):
             continue
-        real = os.path.realpath(found)
-        try:
-            inside = os.path.commonpath([real, checkout]) == checkout
-        except ValueError:   # another drive
-            inside = False
-        if not inside:
-            return found
+        for name in names:
+            path = os.path.join(entry, name)
+            real = os.path.realpath(path)
+            if not (os.path.isfile(real) and os.access(real, os.X_OK)):
+                continue
+            if inside(os.path.abspath(path), checkout) or inside(real, checkout):
+                continue
+            return real
     return None
 
 
