@@ -748,9 +748,16 @@ class CommandReviewFixes(CommandTest):
                 real_run_draw(draw, prompts[draw["axis"]], repo_root, args, sidecar_dir)
             raise KeyboardInterrupt
 
-        for survivor, expected in (("command:fake", "cmd-2"), ("command:other", None)):
-            with self.subTest(survivor=survivor), _flow_repo() as (repo, base):
-                CommandRepo(repo, [dict(SHIP, response=dict(SHIP["response"], sessionId="cmd-2"))],
+        # A 9.17.0 pending row carries no label: the survivor's own label and session
+        # stand, and a survivor without a session still supplies the label.
+        for survivor, session, expected, legacy in (("command:fake", "cmd-2", "cmd-2", False),
+                                                    ("command:other", "cmd-2", None, False),
+                                                    ("command:fake", "cmd-2", "cmd-2", True),
+                                                    ("command:other", "cmd-2", "cmd-2", True),
+                                                    ("command:other", None, None, True)):
+            with self.subTest(survivor=survivor, session=session, legacy=legacy), \
+                    _flow_repo() as (repo, base):
+                CommandRepo(repo, [dict(SHIP, response=dict(SHIP["response"], sessionId=session))],
                             extra_labels=("other",))
                 receipt = repo / "fanout.json"
                 with mock.patch.object(flowctl, "_review_fanout_dispatch",
@@ -761,6 +768,13 @@ class CommandReviewFixes(CommandTest):
                              "--draw", "correctness", "--draw", f"contracts={survivor}",
                              "--json")
                 rid = next((repo / ".flow" / "review-fanout").iterdir()).name
+                if legacy:
+                    meta_file = repo / ".flow" / "review-fanout" / rid / "meta.json"
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    for row in meta["draws"]:
+                        if row.get("failure_class") == "dispatch_interrupted":
+                            row.pop("label")
+                    meta_file.write_text(json.dumps(meta), encoding="utf-8")
                 merged = repo / "merged.md"
                 merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
                 code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
@@ -768,8 +782,9 @@ class CommandReviewFixes(CommandTest):
                                           str(merged), "--receipt", str(receipt), "--json")
                 self.assertEqual(code, 0, out + err)
                 published = json.loads(receipt.read_text())
+                label = survivor.split(":")[1] if legacy else "fake"
                 self.assertEqual((published["spec"], published["label"]),
-                                 ("command:fake", "fake"))
+                                 ("command:" + label, label))
                 self.assertEqual(published["session_id"] or None, expected)
 
     def test_session_passes_never_continue_another_labels_draw(self):
