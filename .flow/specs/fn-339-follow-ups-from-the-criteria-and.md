@@ -16,8 +16,8 @@ The unattended failure the first two prevent: a review that silently judges no s
 
 ## Acceptance Criteria
 
-- **R1:** A `.flow/criteria.md` whose whole content is a single path, which is what git writes for a symlink on a checkout without symlink support, fails the review closed with a message that says so, the way a broken link already does. [paraphrase]
-  Errors: a file with zero criteria for any other reason (headings, prose, commented examples) stays valid and silent, as today.
+- **R1:** A `.flow/criteria.md` that git's index records as a symbolic link, but that this checkout wrote as a plain file still holding the link's target path (what git does on a checkout without symlink support), fails the review closed with a message that says so, the way a broken link already does. The link is detected from the index, never from the file's text. [paraphrase]
+  Errors: a regular file with zero criteria stays valid and silent, as today, whatever it holds (headings, prose, commented examples, or text that looks like a path), and so does a link's placeholder once real content replaces it.
 - **R2:** The receipt keeps a review's per-criterion section when a tally line follows it directly. The defect is reproduced from the reviewer output that showed it before it is fixed, and a regression test covers it. [paraphrase]
   Errors: if it no longer reproduces on current main, record that and change nothing.
 - **R3:** When a command review backend times out, its whole process tree is stopped, not only the direct child, so a wrapper's CLI does not keep running. [paraphrase]

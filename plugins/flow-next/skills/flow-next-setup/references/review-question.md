@@ -25,7 +25,7 @@
 }
 ```
 
-**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend (on `antigravity`, say in the question and the Host description that its subagent models are tiers with no named-model pin, so host review fails closed for every writer and cross-family review needs an external backend); when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend (on `antigravity`, say in the question and the Host description that its subagent models are tiers with no named-model pin, so host review fails closed for every writer and cross-family review needs an external backend); when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer). **On `antigravity`, mark no option Recommended and call none cross-family:** its session model can come from any family Antigravity serves (GPT-OSS included), so setup cannot know which reviewer is from another family; the question asks the person to pick a backend from a family other than the session model's:
 ```json
 {
   "header": "Review",

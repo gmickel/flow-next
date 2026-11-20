@@ -209,7 +209,11 @@ The finalizer is deterministic and atomic — only it records or refunds:
   atomically. Receipt top-level `session_id`/`model` are the primary
   (correctness) draw's — or, when the primary FAILED (or returned no
   session), the first surviving draw's on the same backend, so round 2 and the
-  optional phases still get a resumable session; `draws[]` honestly records
+  optional phases still get a resumable session. On the `command` backend that
+  fallback stays on the primary draw's label: another label's session is
+  another program's, and a failed primary's own session id is never kept.
+  With no surviving draw on that label the receipt records no session and
+  `--validate` / `--deep` are skipped, as for any round without one; `draws[]` honestly records
   each draw's axis, model, session_id, verdict, and failed flag either way (the
   failed primary included).
 - Re-invocable with the same merged file (quiet replay) — recoverable after a
