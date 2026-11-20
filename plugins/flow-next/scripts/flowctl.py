@@ -46353,7 +46353,7 @@ COMMAND_PIPE_GRACE = 5
 # A fan-out draw's worker thread carries its dispatch's state here: ``cancel``
 # (set by an interrupted coordinator, so a command its own session keeps from
 # the terminal's interrupt stops its tree and raises) and ``pid`` (the command
-# running now, which the coordinator waits on while it is stopped).
+# running or being stopped now, which the coordinator waits on).
 _REVIEW_COMMAND_DRAW = threading.local()
 
 # Longest a stop can take: the POSIX process listing (10 s) or Windows taskkill
@@ -46502,7 +46502,9 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         nonlocal stopped
         stop_errors.append(_stop_review_command_tree(proc))
         stopped = True
-        if not wait_until(time.monotonic() + COMMAND_PIPE_GRACE, lambda: proc.poll() is not None):
+        try:
+            proc.wait(timeout=COMMAND_PIPE_GRACE)   # reap it, so no zombie outlives the stop
+        except subprocess.TimeoutExpired:
             stop_errors.append(f"the command (pid {proc.pid}) did not exit after it was stopped")
 
     threads = [threading.Thread(target=fn, daemon=True) for fn in (feed, drain_out, drain_err)]
@@ -46528,17 +46530,14 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
             stop()
     except BaseException:
         # Its own session no longer receives the terminal's interrupt, during the
-        # wait or while a helper it left still holds the pipes.
-        stop_error = _stop_review_command_tree(proc)
-        try:
-            proc.wait(timeout=COMMAND_PIPE_GRACE)   # reap it, so no zombie outlives the stop
-        except subprocess.TimeoutExpired:
-            stop_error = stop_error or f"the command (pid {proc.pid}) did not exit after it was stopped"
+        # wait or while a helper it left still holds the pipes. A fan-out draw keeps
+        # its pid published, so the coordinator waits out the stop it is making.
+        if not stopped:
+            stop()
+        stop_error = next((e for e in stop_errors if e), None)
         if stop_error:
             print(f"review command (pid {proc.pid}) interrupted; its process tree was not "
                   f"stopped: {stop_error}", file=sys.stderr)
-        if draw is not None:
-            draw["pid"] = None
         raise
     if draw is not None:
         draw["pid"] = None
