@@ -20,7 +20,7 @@ The unattended failure the first two prevent: a review that silently judges no s
   Errors: a regular file with zero criteria stays valid and silent, as today, whatever it holds (headings, prose, commented examples, or text that looks like a path), and so does a link's placeholder once real content replaces it.
 - **R2:** The receipt keeps a review's per-criterion section when a tally line follows it directly. The defect is reproduced from the reviewer output that showed it before it is fixed, and a regression test covers it. [paraphrase]
   Errors: if it no longer reproduces on current main, record that and change nothing.
-- **R3:** When a command review backend times out, its whole process tree is stopped, not only the direct child, so a wrapper's CLI does not keep running. [paraphrase]
+- **R3:** *(withdrawn by fn-343-command-review-backend-drop-process: flowctl stops only the program it started, as in 9.17.0, and the docs tell wrapper authors to pass the timeout on.)* When a command review backend times out, its whole process tree is stopped, not only the direct child, so a wrapper's CLI does not keep running. [paraphrase]
   Errors: a tree that cannot be stopped is reported in the failure reason; the round is still refunded.
 - **R4:** Setting `review.backend` to a bare `command` with no label is refused when it is set, naming the `command:<label>` form, instead of failing later at review time. [paraphrase]
   Errors: `command:<label>` with a label that is not configured yet is still accepted at set time, since the entry may be added afterwards. [inferred]

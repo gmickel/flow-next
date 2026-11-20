@@ -500,31 +500,15 @@ class TestReviewFanout(unittest.TestCase):
                     return "provider unavailable", "sess-correctness", 1, "provider unavailable"
             return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
 
-        real_wait = threading.Event.wait
-        interrupted = []
-
-        def called_from_dispatch() -> bool:
-            # The nearest caller outside mock's own frames.
-            frame = sys._getframe(2)
-            while frame is not None and (frame.f_code.co_filename == "<string>"
-                                         or frame.f_code.co_filename.endswith("mock.py")):
-                frame = frame.f_back
-            return frame is not None and frame.f_code.co_name == "_review_fanout_dispatch"
-
-        def interrupted_wait(event, timeout=None):
-            # The coordinator's untimed wait for the first draw is interrupted
-            # once; every other wait (timed, or anyone else's, such as a thread
-            # start inside subprocess on Windows) runs for real.
-            if timeout is not None or interrupted or not called_from_dispatch():
-                return real_wait(event, timeout)
-            interrupted.append(event)
+        def interrupted_result(future, *args, **kwargs):
             try:
                 self.assertTrue(started.wait(timeout=5), "the real first draw worker must be active")
+                self.assertTrue(future.running(), "interrupt must occur during the coordinator wait")
             finally:
                 release.set()
             raise KeyboardInterrupt("coordinator interrupted while first worker was active")
 
-        with mock.patch.object(threading.Event, "wait", autospec=True, side_effect=interrupted_wait):
+        with mock.patch("concurrent.futures.Future.result", autospec=True, side_effect=interrupted_result):
             with self.assertRaisesRegex(KeyboardInterrupt, "coordinator interrupted"):
                 self._dispatch(fake)
         self.assertEqual(calls, ["correctness"], "later draws must never start after coordinator interruption")

@@ -20,9 +20,9 @@ The unattended failures these prevent: a review that runs a program from the che
   Errors: `agy` not found, or found only inside the checkout → the wrapper fails with a clear message and no review runs.
 - **R2:** The criteria check that detects a link written as a file runs git from the repository root, not from `.flow/`, so its program lookup is the same one the rest of flowctl already uses. [paraphrase]
   Errors: no error surface beyond the existing ones.
-- **R3:** Interrupting a fan-out (Ctrl-C) stops every running command reviewer's process tree promptly; the interrupt does not wait for reviewers to finish or time out. [paraphrase]
+- **R3:** *(withdrawn by fn-343-command-review-backend-drop-process: flowctl stops only the program it started, as in 9.17.0, and the docs tell wrapper authors to pass the timeout on.)* Interrupting a fan-out (Ctrl-C) stops every running command reviewer's process tree promptly; the interrupt does not wait for reviewers to finish or time out. [paraphrase]
   Errors: a tree that cannot be stopped is named in the output.
-- **R4:** When a command reviewer's response is oversized, cleanup of its process tree finishes before the failure is returned, and a helper that could not be stopped is named in that failure. One owner does the cleanup; the reader only signals. [paraphrase]
+- **R4:** *(withdrawn by fn-343-command-review-backend-drop-process: flowctl stops only the program it started, as in 9.17.0, and the docs tell wrapper authors to pass the timeout on.)* When a command reviewer's response is oversized, cleanup of its process tree finishes before the failure is returned, and a helper that could not be stopped is named in that failure. One owner does the cleanup; the reader only signals. [paraphrase]
   Errors: cleanup that exceeds its bound is reported as not stopped, never as stopped.
 - **R5:** The link-as-file criteria error fires only while the working-tree file still holds the tracked link target. After the file is replaced with real content, including a document with headings and no criteria, the file is valid again. [paraphrase]
   Errors: an unreadable file keeps its existing error.

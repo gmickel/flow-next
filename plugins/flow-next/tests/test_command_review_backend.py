@@ -13,7 +13,6 @@ import re
 import sys
 import tempfile
 import textwrap
-import time
 import unittest
 from unittest import mock
 
@@ -76,31 +75,6 @@ NEEDS_WORK = {"response": {
 
 def command_var(label):
     return "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
-
-
-def _alive(pid):
-    """True while ``pid`` runs (a reaped or zombie process is not running)."""
-    if os.name == "nt":
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, pid)
-        if not handle:
-            return False
-        try:
-            return kernel32.WaitForSingleObject(handle, 0) == 0x102   # WAIT_TIMEOUT
-        finally:
-            kernel32.CloseHandle(handle)
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
-    except OSError:
-        return True
 
 
 class CommandTest(unittest.TestCase):
@@ -477,58 +451,6 @@ class CommandImplReview(CommandTest):
             self.assertNotIn(missing.name, out + err)
             self.assertEqual(env.rounds(), 0)
 
-    def test_timeout_stops_the_whole_process_tree(self):
-        with _flow_repo() as (repo, base), \
-                mock.patch.dict(os.environ, {"FLOW_REVIEW_EXEC_TIMEOUT": "3"}):
-            pid_file = repo.parent / f"{repo.name}-helper.pid"
-            spawner = repo.parent / f"{repo.name}-spawner.py"
-            # Outside the repo: Windows cannot delete a directory a live process sits in.
-            # One helper in the wrapper's group, one that left it for a session of its own.
-            spawner.write_text(textwrap.dedent("""
-                import os, subprocess, sys, time
-                sleeper = [sys.executable, "-c", "import time; time.sleep(60)"]
-                where = os.path.dirname(sys.executable)
-                helpers = [subprocess.Popen(sleeper, cwd=where)]
-                if os.name != "nt":
-                    helpers.append(subprocess.Popen(sleeper, cwd=where, start_new_session=True))
-                with open(sys.argv[1], "w", encoding="utf-8") as fh:
-                    fh.write(" ".join(str(h.pid) for h in helpers))
-                time.sleep(60)
-            """), encoding="utf-8")
-            env = CommandRepo(repo, [SHIP], commands={
-                "fake": [sys.executable, str(spawner), str(pid_file)]})
-            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
-            helpers = [int(pid) for pid in pid_file.read_text(encoding="utf-8").split()]
-            try:
-                self.assertNotEqual(code, 0)
-                self.assertIn("timed out", out + err)
-                self.assertNotIn("not stopped", out + err)
-                self.assertEqual(env.rounds(), 0)
-                deadline = time.monotonic() + 10
-                while any(map(_alive, helpers)) and time.monotonic() < deadline:
-                    time.sleep(0.1)
-                self.assertEqual([pid for pid in helpers if _alive(pid)], [],
-                                 "the wrapper's helpers outlived the timeout")
-            finally:
-                for pid in helpers:
-                    if _alive(pid) and os.name != "nt":
-                        os.kill(pid, 9)
-
-    @unittest.skipIf(os.name == "nt", "the POSIX process-group kill is what is refused here")
-    def test_a_tree_that_cannot_be_stopped_is_named_in_the_reason(self):
-        argv = [sys.executable, "-c", "import time; time.sleep(30)"]
-        with mock.patch.object(flowctl.os, "killpg", side_effect=PermissionError(1, "Operation not permitted")):
-            returncode, _, _, problem, stop_error = flowctl._run_review_command(
-                argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
-        self.assertEqual(problem, "timeout")
-        self.assertIn("Operation not permitted", stop_error)
-        # Helpers outside the group cannot be found without a process listing.
-        with mock.patch.object(flowctl, "REVIEW_COMMAND_PS_PATHS", ()):
-            _, _, _, problem, stop_error = flowctl._run_review_command(
-                argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
-        self.assertEqual(problem, "timeout")
-        self.assertIn("cannot list its processes", stop_error)
-
     def test_leading_tilde_expands_in_every_element(self):
         os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
                            "FLOW_REVIEW_COMMAND_G": json.dumps(
@@ -787,198 +709,6 @@ class CommandReviewFixes(CommandTest):
             self.assertFalse(receipt.exists())
             self.assertEqual(env.rounds(), 0)
 
-    def test_oversized_output_names_a_tree_that_cannot_be_stopped(self):
-        real_stop = flowctl._stop_review_command_tree
-
-        def stop_but_report(proc):
-            real_stop(proc)
-            return "cannot kill process 4242: Operation not permitted"
-
-        with _flow_repo() as (repo, base), \
-                mock.patch.object(flowctl, "_stop_review_command_tree", side_effect=stop_but_report):
-            env = CommandRepo(repo, [{"flood": flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10}])
-            receipt = repo / "r.json"
-            code, out, err = impl_review(base, receipt, "--spec", "command:fake")
-            self.assertNotEqual(code, 0)
-            self.assertIn("exceeds 16 MiB; its process tree was not stopped: "
-                          "cannot kill process 4242", out + err)
-            self.assertFalse(receipt.exists())
-            self.assertEqual(env.rounds(), 0)
-
-    def test_oversized_cleanup_finishes_before_the_failure_returns(self):
-        # The command floods and exits at once; a slow cleanup that fails must
-        # still be named, however long it outlasts the pipe grace.
-        argv = [sys.executable, "-c",
-                f"import sys; sys.stdout.write('x' * {flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10})"]
-        calls = []
-
-        def slow_failing_stop(proc):
-            calls.append(proc.pid)
-            time.sleep(1)
-            return "cannot kill process 4242: Operation not permitted"
-
-        with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.2), \
-                mock.patch.object(flowctl, "_stop_review_command_tree",
-                                  side_effect=slow_failing_stop):
-            _, _, _, problem, stop_error = flowctl._run_review_command(
-                argv, b"{}", timeout=60, cwd=Path.home(), env=dict(os.environ))
-        self.assertEqual(problem, "oversized")
-        self.assertEqual(stop_error, "cannot kill process 4242: Operation not permitted")
-        self.assertEqual(len(calls), 1, "one owner stops the tree")
-
-    def test_a_wrapper_that_survives_its_stop_is_reported_not_waited_on(self):
-        # The stop claims success but leaves the command running: reaping is bounded.
-        flood = flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10
-        argv = [sys.executable, "-c",
-                f"import sys, time; sys.stdout.write('x' * {flood}); sys.stdout.flush(); "
-                "time.sleep(30)"]
-        procs = []
-
-        def stop_nothing(proc):
-            procs.append(proc)
-            return None
-
-        started = time.monotonic()
-        try:
-            with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5), \
-                    mock.patch.object(flowctl, "_stop_review_command_tree",
-                                      side_effect=stop_nothing):
-                _, _, _, problem, stop_error = flowctl._run_review_command(
-                    argv, b"{}", timeout=60, cwd=Path.home(), env=dict(os.environ))
-        finally:
-            for proc in procs:
-                proc.kill()
-                proc.wait()
-        self.assertLess(time.monotonic() - started, 10)
-        self.assertEqual(problem, "oversized")
-        self.assertIn("did not exit after it was stopped", stop_error)
-
-    @unittest.skipIf(os.name == "nt", "a real SIGINT reaches the coordinator on POSIX only")
-    def test_interrupted_fanout_stops_running_command_draws_promptly(self):
-        import signal
-        import threading
-        import types
-        with tempfile.TemporaryDirectory() as td:
-            def draw(row, _prompt, _repo_root, _args, _sidecar):
-                if row["axis"] == "integration":
-                    time.sleep(20)   # a draw that cannot be cancelled, like a managed HTTP call
-                    return {}
-                pid_file = Path(td) / f"{row['axis']}.pid"
-                child = (f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); "
-                         "time.sleep(20)")
-                return flowctl._run_review_command([sys.executable, "-c", child], b"{}",
-                                                   timeout=60, cwd=Path.home(),
-                                                   env=dict(os.environ))
-
-            draws = [{"axis": "correctness"}, {"axis": "contracts"}, {"axis": "integration"}]
-            timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGINT))
-            started = time.monotonic()
-            with mock.patch.object(flowctl, "_review_fanout_run_draw", side_effect=draw):
-                timer.start()
-                try:
-                    with self.assertRaises(KeyboardInterrupt):
-                        flowctl._review_fanout_dispatch(
-                            draws, {row["axis"]: "" for row in draws}, Path(td),
-                            types.SimpleNamespace(fanout_execution="concurrent"), Path(td))
-                finally:
-                    timer.cancel()
-            elapsed = time.monotonic() - started
-            pids = [int((Path(td) / f"{row['axis']}.pid").read_text()) for row in draws[:2]]
-            try:
-                self.assertLess(elapsed, 10, "the interrupt waited for the reviewers")
-                deadline = time.monotonic() + 5
-                while any(map(_alive, pids)) and time.monotonic() < deadline:
-                    time.sleep(0.1)
-                self.assertEqual([pid for pid in pids if _alive(pid)], [])
-                # Reaped too: a zombie would read as running where /proc is absent.
-                for pid in pids:
-                    with self.assertRaises(ChildProcessError):
-                        os.waitpid(pid, os.WNOHANG)
-            finally:
-                for pid in pids:
-                    if _alive(pid):
-                        os.kill(pid, 9)
-
-    @unittest.skipIf(os.name == "nt", "a real SIGINT reaches the coordinator on POSIX only")
-    def test_interrupted_fanout_waits_for_a_slow_stop_to_publish(self):
-        # The tree stop outlasts the pipe grace; the draw still publishes before the raise.
-        import signal
-        import threading
-        import types
-        real_stop = flowctl._stop_review_command_tree
-
-        def slow_stop(proc):
-            time.sleep(1)
-            return real_stop(proc)
-
-        with tempfile.TemporaryDirectory() as td:
-            published = Path(td) / "published"
-
-            def draw(_row, _prompt, _repo_root, _args, _sidecar):
-                try:
-                    return flowctl._run_review_command(
-                        [sys.executable, "-c", "import time; time.sleep(20)"], b"{}",
-                        timeout=60, cwd=Path.home(), env=dict(os.environ))
-                finally:
-                    time.sleep(0.5)   # publishing its outcome for recovery
-                    published.write_text("yes")
-
-            draws = [{"axis": "correctness"}]
-            timer = threading.Timer(1, os.kill, (os.getpid(), signal.SIGINT))
-            with mock.patch.object(flowctl, "_review_fanout_run_draw", side_effect=draw), \
-                    mock.patch.object(flowctl, "_stop_review_command_tree", side_effect=slow_stop), \
-                    mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.2):
-                timer.start()
-                try:
-                    with self.assertRaises(KeyboardInterrupt):
-                        flowctl._review_fanout_dispatch(
-                            draws, {"correctness": ""}, Path(td),
-                            types.SimpleNamespace(fanout_execution="concurrent"), Path(td))
-                finally:
-                    timer.cancel()
-            self.assertTrue(published.exists(), "the coordinator abandoned a draw still stopping")
-
-    def test_cancel_during_a_stop_is_reported_once_and_keeps_the_draw_waited_on(self):
-        # The fan-out is interrupted while a timed-out or oversized command is being
-        # stopped and the wrapper survives: one stop, a warning, the pid still published.
-        import io
-        import threading
-        flood = flowctl.REVIEW_EXECUTION_RESPONSE_MAX + 10
-        cases = {
-            "timeout": ("import time; time.sleep(30)", 0.3),
-            "oversized": (f"import sys, time; sys.stdout.write('x' * {flood}); "
-                          "sys.stdout.flush(); time.sleep(30)", 60),
-        }
-        for name, (child, timeout) in cases.items():
-            with self.subTest(name):
-                procs = []
-                state = {"cancel": threading.Event(), "pid": None}
-
-                def stop_and_cancel(proc, state=state, procs=procs):
-                    procs.append(proc)
-                    state["cancel"].set()
-                    return "cannot kill process 4242: Operation not permitted"
-
-                flowctl._REVIEW_COMMAND_DRAW.state = state
-                try:
-                    with mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.3), \
-                            mock.patch.object(flowctl, "_stop_review_command_tree",
-                                              side_effect=stop_and_cancel) as stop, \
-                            mock.patch("sys.stderr", new_callable=io.StringIO) as err, \
-                            self.assertRaises(KeyboardInterrupt):
-                        flowctl._run_review_command(
-                            [sys.executable, "-c", child], b"{}", timeout=timeout,
-                            cwd=Path.home(), env=dict(os.environ))
-                finally:
-                    del flowctl._REVIEW_COMMAND_DRAW.state
-                    for proc in procs:
-                        proc.kill()
-                        proc.wait()
-                self.assertEqual(stop.call_count, 1, "one owner stops the tree")
-                self.assertIn("its process tree was not stopped: cannot kill process 4242",
-                              err.getvalue())
-                self.assertEqual(state["pid"], procs[0].pid)
-
     def test_response_flushed_before_a_lingering_helper_is_kept(self):
         with _flow_repo() as (repo, base), \
                 mock.patch.object(flowctl, "COMMAND_PIPE_GRACE", 0.5):
@@ -986,19 +716,6 @@ class CommandReviewFixes(CommandTest):
             code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
             self.assertEqual(code, 0, err)
             self.assertEqual(json.loads(out)["verdict"], "SHIP")
-
-    def test_interrupt_while_draining_pipes_still_stops_the_tree(self):
-        # The command has exited; a helper it left may still hold the pipes.
-        argv = [sys.executable, "-c", "pass"]
-        with mock.patch.object(flowctl, "_stop_review_command_tree",
-                               wraps=flowctl._stop_review_command_tree) as stop, \
-                mock.patch.object(flowctl.threading.Thread, "join",
-                                  side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                flowctl._run_review_command(argv, b"{}", timeout=30, cwd=Path.home(),
-                                            env=dict(os.environ))
-        stop.assert_called_once()
-        self.assertEqual(stop.call_args.args[0].args, argv)
 
     def test_command_draw_rows_name_their_label(self):
         with _flow_repo() as (repo, base):
@@ -1106,6 +823,92 @@ class CommandReviewFixes(CommandTest):
                 self.assertEqual(continued, [expected] * 2 if expected else [])
 
 
+SLEEPING_REVIEWER = textwrap.dedent("""\
+    import os, subprocess, sys, time
+    if "--version" in sys.argv:
+        print("codex-cli 0.170.0")
+        sys.exit(0)
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                             cwd=os.path.dirname(sys.executable))
+    with open(os.environ["SLEEPING_REVIEWER_PIDS"], "w", encoding="utf-8") as fh:
+        fh.write(f"{os.getpid()} {child.pid}")
+    time.sleep(60)
+""")
+
+
+@unittest.skipIf(os.name == "nt", "a terminal's Ctrl-C signals the foreground process group on POSIX")
+class CtrlCReachesTheReviewer(unittest.TestCase):
+    """Ctrl-C reaches flowctl and the reviewer it started, as for any CLI backend."""
+
+    @staticmethod
+    def _running(pid):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        try:
+            with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+                return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
+        except OSError:
+            return True
+
+    def test_ctrl_c_stops_flowctl_and_its_reviewer(self):
+        import signal
+        import subprocess
+        import time
+        for backend in ("command", "codex"):
+            with self.subTest(backend=backend), _flow_repo() as (repo, base):
+                reviewer = repo.parent / f"{repo.name}-reviewer.py"
+                reviewer.write_text(SLEEPING_REVIEWER, encoding="utf-8")
+                pids_file = repo.parent / f"{repo.name}-pids"
+                env = dict(os.environ, SLEEPING_REVIEWER_PIDS=str(pids_file))
+                env.pop("FLOW_REVIEW_BACKEND", None)
+                if backend == "command":
+                    env[command_var("fake")] = json.dumps([sys.executable, str(reviewer)])
+                    spec = "command:fake"
+                else:
+                    bin_dir = repo.parent / f"{repo.name}-bin"
+                    bin_dir.mkdir()
+                    (bin_dir / "codex").write_text(f"#!{sys.executable}\n" + SLEEPING_REVIEWER,
+                                                   encoding="utf-8")
+                    (bin_dir / "codex").chmod(0o755)
+                    env["PATH"] = os.pathsep.join([str(bin_dir), env.get("PATH", "")])
+                    spec = "codex"
+                # Its own process group stands in for the terminal's foreground group.
+                proc = subprocess.Popen(
+                    [sys.executable, flowctl.__file__, backend, "impl-review", TASK_ID,
+                     "--base", base, "--spec", spec, "--receipt", str(repo / "r.json"),
+                     "--json"],
+                    cwd=repo, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, start_new_session=True)
+                pids = []
+                try:
+                    deadline = time.monotonic() + 30
+                    while time.monotonic() < deadline and proc.poll() is None:
+                        if pids_file.exists() and len(pids_file.read_text().split()) == 2:
+                            pids = [int(pid) for pid in pids_file.read_text().split()]
+                            break
+                        time.sleep(0.1)
+                    if len(pids) != 2:
+                        proc.kill()
+                        self.fail(f"the reviewer never started: {proc.communicate()}")
+                    os.killpg(proc.pid, signal.SIGINT)
+                    proc.communicate(timeout=15)
+                    self.assertNotEqual(proc.returncode, 0)
+                    deadline = time.monotonic() + 10
+                    while any(map(self._running, pids)) and time.monotonic() < deadline:
+                        time.sleep(0.1)
+                    self.assertEqual([pid for pid in pids if self._running(pid)], [])
+                    self.assertFalse((repo / "r.json").exists())
+                finally:
+                    if proc.poll() is None:
+                        proc.kill()
+                        proc.communicate()
+                    for pid in pids:
+                        if self._running(pid):
+                            os.kill(pid, 9)
+
+
 def _documented_agy_wrapper() -> str:
     """The Antigravity review wrapper exactly as flowctl.md documents it."""
     doc = (Path(flowctl.__file__).resolve().parents[1] / "docs" / "flowctl.md").read_text(
@@ -1125,9 +928,9 @@ FAKE_AGY = textwrap.dedent("""\
 """)
 
 
-@unittest.skipIf(os.name == "nt", "the wrapper's PATH lookup is exercised with POSIX shebangs")
+@unittest.skipIf(os.name == "nt", "the fake agy runs through a POSIX shebang")
 class DocumentedAgyWrapper(unittest.TestCase):
-    """The review wrapper never runs an `agy` the checkout under review supplies."""
+    """The review wrapper runs only the `agy` named by AGY_PATH, never one from PATH."""
 
     def _install(self, directory: Path) -> Path:
         directory.mkdir(parents=True, exist_ok=True)
@@ -1136,54 +939,48 @@ class DocumentedAgyWrapper(unittest.TestCase):
         agy.chmod(0o755)
         return agy
 
-    def _review(self, td: Path, path_entries) -> tuple[dict, list]:
+    def _review(self, td: Path, agy_path) -> tuple[dict, list]:
         import subprocess
-        (td / "checkout").mkdir(exist_ok=True)
+        # An agy in the checkout comes first on PATH: it must never run.
+        decoy = self._install(td / "checkout")
         wrapper = td / "review-agy.py"
         wrapper.write_text(_documented_agy_wrapper(), encoding="utf-8")
         log = td / "agy.log"
         request = {"sessionId": None, "timeoutSeconds": 120, "prompt": "review",
                    "repositoryPath": str(td / "checkout")}
         env = dict(os.environ, FAKE_AGY_LOG=str(log),
-                   PATH=os.pathsep.join([*path_entries, "/usr/bin", "/bin"]))
+                   PATH=os.pathsep.join([str(decoy.parent), "/usr/bin", "/bin"]))
+        env.pop("AGY_PATH", None)
+        if agy_path is not None:
+            env["AGY_PATH"] = agy_path
         run = subprocess.run([sys.executable, str(wrapper), "gemini-x"],
                              input=json.dumps(request), capture_output=True, text=True,
-                             cwd=str(td), env=env, timeout=60)
+                             cwd=str(td / "checkout"), env=env, timeout=60)
         ran = log.read_text(encoding="utf-8").split() if log.exists() else []
         return json.loads(run.stdout), ran
 
-    def test_runs_agy_from_an_absolute_path_outside_the_checkout(self):
+    def test_runs_the_agy_named_by_its_absolute_path(self):
         with tempfile.TemporaryDirectory() as raw:
             td = Path(raw).resolve()
             trusted = self._install(td / "bin")
-            response, ran = self._review(td, [str(td / "bin")])
+            response, ran = self._review(td, str(trusted))
             self.assertEqual(response["exitCode"], 0, response)
             self.assertIn("SHIP", response["output"])
             self.assertEqual(response["observedModel"], "gemini-x")
             self.assertEqual(ran, [str(trusted)])
 
-    def test_an_agy_inside_the_checkout_never_runs(self):
-        for entries in (["."], ["checkout"], ["{checkout}"]):
-            with self.subTest(entries=entries), tempfile.TemporaryDirectory() as raw:
-                td = Path(raw).resolve()
-                self._install(td / "checkout")
-                entries = [e.format(checkout=td / "checkout") for e in entries]
-                # "." is the checkout once a wrapper changes into it.
-                response, ran = self._review(td, entries)
-                self.assertEqual(ran, [], "the checkout's agy ran")
-                self.assertNotEqual(response["exitCode"], 0)
-                self.assertIn("agy", response["stderr"])
-
-    def test_a_checkout_link_to_an_outside_agy_is_refused(self):
-        # The checkout chose the program even though it points outside.
+    def test_unset_relative_or_unrunnable_path_runs_no_review(self):
         with tempfile.TemporaryDirectory() as raw:
             td = Path(raw).resolve()
-            self._install(td / "trusted")
-            (td / "checkout" / "bin").mkdir(parents=True)
-            (td / "checkout" / "bin" / "agy").symlink_to(td / "trusted" / "agy")
-            response, ran = self._review(td, [str(td / "checkout" / "bin")])
-            self.assertEqual(ran, [])
-            self.assertNotEqual(response["exitCode"], 0)
+            plain = td / "plain-agy"
+            plain.write_text("not a program\n", encoding="utf-8")
+            for agy_path in (None, "", "agy", "bin/agy", str(plain), str(td / "missing")):
+                with self.subTest(agy_path=agy_path):
+                    self._install(td / "bin")
+                    response, ran = self._review(td, agy_path)
+                    self.assertEqual(ran, [], "an agy ran without an absolute AGY_PATH")
+                    self.assertNotEqual(response["exitCode"], 0)
+                    self.assertIn("AGY_PATH must be the absolute path", response["stderr"])
 
 
 if __name__ == "__main__":
