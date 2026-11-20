@@ -7838,7 +7838,7 @@ class BackendSpec:
             # Exactly the config schema's ``^command:<label>$``: no whitespace anywhere.
             if not label or len(parts) > 2 or re.search(r"\s", str(spec)):
                 raise ValueError(
-                    f"Backend 'command' takes exactly one label: command:<label>, "
+                    f"Backend 'command' takes exactly one label and no whitespace: command:<label>, "
                     f"whose argv is in FLOW_REVIEW_COMMAND_<LABEL> (got {raw!r})"
                 )
             if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
