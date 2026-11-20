@@ -12,7 +12,7 @@ Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatev
 
 ### Changed
 
-- **A bare `copilot` reviewer falls back through the same GPT models as `codex`.** When GPT-6.2 Sol is unavailable, the fallback now tries GPT-6 Astra and then GPT-6 Sol before older models. GPT-6.1 Sol, the next model on the `codex` list, is skipped because GitHub's supported-models page does not list it for the Copilot CLI. The default stays GPT-6.2 Sol at medium.
+- **A bare `copilot` reviewer falls back through the same GPT models as `codex`.** When GPT-6.2 Sol is unavailable, the fallback now tries GPT-6 Astra and then GPT-6 Sol. GPT-6.1 Sol, which comes between them on the `codex` list, is skipped because GitHub's supported-models page does not list it for the Copilot CLI. The default stays GPT-6.2 Sol at medium. GPT-5.6 Sol joins the list after GPT-6 Sol. The list drops the models GitHub has retired from Copilot: GPT-5.5, GPT-5.4, GPT-5.4 mini, GPT-5 mini, GPT-4.1, Claude Opus 5, Claude Opus 4.7, 4.6 and 4.5, and Claude Sonnet 4.5 and 4. A pin such as `copilot:gpt-5.5` still runs as named, with an unknown-model warning. Claude Opus 4.8 stays, because GitHub still lists it for the Copilot CLI.
 - **A bare `cursor` reviewer runs GPT-5.6 Sol at medium effort instead of high.** Medium is the effort the reviewer study chose for `codex` and `copilot`. Cursor's model list has no GPT-6 model, so GPT-5.6 Sol remains the top. Claude Opus 5.5 joins the fallback ahead of Opus 5. The ranking drops three models Cursor no longer serves: GPT-5.6 Terra, Claude Opus 4.7 and GPT-5.4. To keep the old default, run `flowctl config set review.backend cursor:gpt-5.6-sol-high`.
 
 ## [flow-next 9.17.0] - 2026-11-19

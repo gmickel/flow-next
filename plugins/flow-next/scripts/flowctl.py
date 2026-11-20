@@ -7543,8 +7543,9 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # the model for the Copilot CLI: gpt-6.1-sol is GA in Copilot but has no
         # row in the docs' per-client table (checked 2026-11-20), so it is left
         # out. The ladder steps down on the model-unavailable signature.
-        # (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex`` — they 400 "Model not
-        # available".)
+        # Ids the docs' retirement table marks retired and no longer list are
+        # dropped (checked 2026-11-20); claude-opus-4.8 stays because the docs
+        # still list it for the CLI (annual-plan subscribers keep it).
         # SOURCE OF TRUTH for this list: the GitHub Copilot supported-models
         # docs (docs.github.com/copilot/reference/ai-models/supported-models),
         # NOT a local ``--model`` probe — Copilot availability is org-policy
@@ -7558,24 +7559,14 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
             "gpt-6.2-sol",  # GA in Copilot (observed 2026-11-18); medium carries over from the codex study
             "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
             "gpt-6-sol",  # GA in the Copilot CLI per docs 2026-11-20
-            "gpt-5.5",
-            "gpt-5.4",
+            "gpt-5.6-sol",  # GA in the Copilot CLI per docs 2026-11-20; codex's next rung
             "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
-            "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-sonnet-5",
             "claude-opus-4.8",
-            "claude-opus-4.7",
-            "claude-opus-4.6",
-            "claude-opus-4.5",
-            "claude-sonnet-4.5",
-            "claude-sonnet-4",
             "claude-haiku-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-haiku-4.5",
-            "gpt-5.4-mini",
-            "gpt-5.3-codex",
-            "gpt-5-mini",
-            "gpt-4.1",
+            "gpt-5.3-codex",  # the docs' long-term support model
         ],
         # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
         # ``minimal`` — Claude-family models reject ``--effort`` entirely, which

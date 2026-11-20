@@ -1546,9 +1546,10 @@ echo -e "${YELLOW}--- copilot e2e (requires copilot CLI) ---${NC}"
 # we gate on `available` alone and let a real auth failure fail the e2e below.
 copilot_available="$(command -v copilot >/dev/null 2>&1 && echo True || echo False)"
 if [[ "$copilot_available" == "True" ]]; then
-  # Use gpt-5-mini + effort=low to minimize premium-request cost and wall time.
+  # Use gpt-5.3-codex (Copilot's long-term support model) + effort=low to
+  # minimize premium-request cost and wall time.
   # Note: claude-family models reject --effort (task-1 finding), so GPT is required.
-  export FLOW_COPILOT_MODEL=gpt-5-mini
+  export FLOW_COPILOT_MODEL=gpt-5.3-codex
   export FLOW_COPILOT_EFFORT=low
 
   # Create a simple spec + task for testing
@@ -1601,7 +1602,7 @@ assert "session_id" in data, "Missing session_id in receipt"
 # New vs codex: copilot receipts must carry model + effort fields
 assert data.get("model"), f"Missing or empty model in receipt: {data.get('model')!r}"
 assert data.get("effort"), f"Missing or empty effort in receipt: {data.get('effort')!r}"
-assert data["model"] == "gpt-5-mini", f"Expected model=gpt-5-mini, got {data['model']}"
+assert data["model"] == "gpt-5.3-codex", f"Expected model=gpt-5.3-codex, got {data['model']}"
 assert data["effort"] == "low", f"Expected effort=low, got {data['effort']}"
 PY
       echo -e "${GREEN}✓${NC} copilot plan-review e2e"
@@ -1644,7 +1645,7 @@ assert "verdict" in data, "Missing verdict in receipt"
 assert "session_id" in data, "Missing session_id in receipt"
 assert data.get("model"), f"Missing or empty model in receipt: {data.get('model')!r}"
 assert data.get("effort"), f"Missing or empty effort in receipt: {data.get('effort')!r}"
-assert data["model"] == "gpt-5-mini", f"Expected model=gpt-5-mini, got {data['model']}"
+assert data["model"] == "gpt-5.3-codex", f"Expected model=gpt-5.3-codex, got {data['model']}"
 assert data["effort"] == "low", f"Expected effort=low, got {data['effort']}"
 PY
       echo -e "${GREEN}✓${NC} copilot impl-review e2e"
