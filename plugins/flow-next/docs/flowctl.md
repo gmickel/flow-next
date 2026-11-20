@@ -3025,7 +3025,7 @@ export FLOW_REVIEW_COMMAND_AGY='["python3", "~/bin/review-agy.py", "<model>"]'
 export AGY_PATH=/absolute/path/to/agy   # your installed agy, outside any checkout
 ```
 
-It runs `agy` from the absolute path in `AGY_PATH` and looks nothing up in `PATH`, so the program is the one you named: point it at your installed `agy`, never at a path inside a checkout. When `AGY_PATH` is unset, not absolute or not an executable file, it fails without running a review. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
+It runs `agy` from the absolute path in `AGY_PATH` and looks nothing up in `PATH`, so the program is the one you named: point it at your installed `agy`, never at a path inside a checkout. When `AGY_PATH` is unset, not absolute or not an executable file, it fails without running a review. It sends the prompt on stdin as one `stream-json` event, gives `agy` a `--print-timeout` that ends 5 seconds before the wrapper's own stop (never under 1 second); that stop, the backstop, comes at half of flowctl's timeout or 15 seconds under it, whichever is later. It reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
 
 ```python
 """flow-next review command: one review through Antigravity CLI (`agy -p`)."""
@@ -3053,18 +3053,17 @@ def main():
     if not (os.path.isabs(agy) and os.path.isfile(agy) and os.access(agy, os.X_OK)):
         return reply(stderr="AGY_PATH must be the absolute path of the agy executable",
                      exit_code=127, session=session)
+    stop = max(request["timeoutSeconds"] / 2, request["timeoutSeconds"] - 15)
     argv = [agy, "--input-format", "stream-json", "--output-format", "stream-json",
             "--model", model, "--settings", json.dumps(DENY), "--disable-slash-commands",
-            "--print-timeout", f"{max(30, request['timeoutSeconds'] - 15)}s"]
+            "--print-timeout", f"{max(1, int(stop) - 5)}s"]
     if session:
         argv += ["--conversation", session]
     argv.append("-p=")  # flags first; the prompt arrives on stdin
     line = json.dumps({"event": "user", "message": {"content": request["prompt"]}}) + "\n"
     try:
         run = subprocess.run(argv, input=line, capture_output=True, text=True,
-                             cwd=request["repositoryPath"],
-                             timeout=max(request["timeoutSeconds"] / 2,
-                                         request["timeoutSeconds"] - 15))
+                             cwd=request["repositoryPath"], timeout=stop)
     except subprocess.TimeoutExpired:
         return reply(stderr="agy timed out", exit_code=124, session=session)
     init, result = {}, None

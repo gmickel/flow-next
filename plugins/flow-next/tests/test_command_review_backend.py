@@ -748,9 +748,16 @@ class CommandReviewFixes(CommandTest):
                 real_run_draw(draw, prompts[draw["axis"]], repo_root, args, sidecar_dir)
             raise KeyboardInterrupt
 
-        for survivor, expected in (("command:fake", "cmd-2"), ("command:other", None)):
-            with self.subTest(survivor=survivor), _flow_repo() as (repo, base):
-                CommandRepo(repo, [dict(SHIP, response=dict(SHIP["response"], sessionId="cmd-2"))],
+        # A 9.17.0 pending row carries no label: the survivor's own label and session
+        # stand, and a survivor without a session still supplies the label.
+        for survivor, session, expected, legacy in (("command:fake", "cmd-2", "cmd-2", False),
+                                                    ("command:other", "cmd-2", None, False),
+                                                    ("command:fake", "cmd-2", "cmd-2", True),
+                                                    ("command:other", "cmd-2", "cmd-2", True),
+                                                    ("command:other", None, None, True)):
+            with self.subTest(survivor=survivor, session=session, legacy=legacy), \
+                    _flow_repo() as (repo, base):
+                CommandRepo(repo, [dict(SHIP, response=dict(SHIP["response"], sessionId=session))],
                             extra_labels=("other",))
                 receipt = repo / "fanout.json"
                 with mock.patch.object(flowctl, "_review_fanout_dispatch",
@@ -761,6 +768,13 @@ class CommandReviewFixes(CommandTest):
                              "--draw", "correctness", "--draw", f"contracts={survivor}",
                              "--json")
                 rid = next((repo / ".flow" / "review-fanout").iterdir()).name
+                if legacy:
+                    meta_file = repo / ".flow" / "review-fanout" / rid / "meta.json"
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    for row in meta["draws"]:
+                        if row.get("failure_class") == "dispatch_interrupted":
+                            row.pop("label")
+                    meta_file.write_text(json.dumps(meta), encoding="utf-8")
                 merged = repo / "merged.md"
                 merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
                 code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
@@ -768,9 +782,56 @@ class CommandReviewFixes(CommandTest):
                                           str(merged), "--receipt", str(receipt), "--json")
                 self.assertEqual(code, 0, out + err)
                 published = json.loads(receipt.read_text())
+                label = survivor.split(":")[1] if legacy else "fake"
                 self.assertEqual((published["spec"], published["label"]),
-                                 ("command:fake", "fake"))
+                                 ("command:" + label, label))
                 self.assertEqual(published["session_id"] or None, expected)
+
+    def test_legacy_round_with_no_command_survivor_records_nothing(self):
+        # A 9.17.0 pending primary has no label; with only another backend's draw
+        # surviving, no label can be recovered, so finalize writes no receipt.
+        real_run_draw = flowctl._review_fanout_run_draw
+
+        def interrupted_dispatch(draws, prompts, repo_root, args, sidecar_dir):
+            for draw in draws[1:]:
+                real_run_draw(draw, prompts[draw["axis"]], repo_root, args, sidecar_dir)
+            raise KeyboardInterrupt
+
+        with _flow_repo() as (repo, base):
+            CommandRepo(repo, [SHIP], extra_labels=("other",))
+            receipt = repo / "fanout.json"
+            with mock.patch.object(flowctl, "_review_fanout_dispatch",
+                                   side_effect=interrupted_dispatch), \
+                    self.assertRaises(KeyboardInterrupt):
+                _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                         "--receipt", str(receipt), "--spec", "command:fake", "--draw",
+                         "correctness", "--draw", "contracts=command:other", "--json")
+            rid = next((repo / ".flow" / "review-fanout").iterdir()).name
+            meta_file = repo / ".flow" / "review-fanout" / rid / "meta.json"
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+            for row in meta["draws"]:
+                row.pop("label")
+                if row["axis"] == "contracts":
+                    row["backend"] = "codex"  # the survivor ran on another backend
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+            draw_file = meta_file.with_name("contracts.json")
+            draw = json.loads(draw_file.read_text(encoding="utf-8"))
+            draw.pop("label")
+            draw["backend"] = "codex"
+            draw_file.write_text(json.dumps(draw), encoding="utf-8")
+            merged = repo / "merged.md"
+            merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
+            code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
+                                      "--base", base, "--rid", rid, "--merged-file",
+                                      str(merged), "--receipt", str(receipt), "--json")
+            self.assertEqual(code, 2, out + err)
+            self.assertIn("re-dispatch", out + err)
+            self.assertFalse(receipt.exists())
+            # The advertised re-dispatch can start: the round was refunded.
+            code, out, err = _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                                      "--receipt", str(receipt), "--spec", "command:fake",
+                                      "--draw", "correctness", "--json")
+            self.assertEqual(code, 0, out + err)
 
     def test_session_passes_never_continue_another_labels_draw(self):
         cases = (
@@ -984,8 +1045,9 @@ class DocumentedAgyWrapper(unittest.TestCase):
             pid_file = td / "agy.pid"
             agy = td / "bin" / "agy"
             agy.parent.mkdir()
-            agy.write_text(f"#!{sys.executable}\nimport os, time\n"
-                           f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+            agy.write_text(f"#!{sys.executable}\nimport os, sys, time\n"
+                           f"open({str(pid_file)!r}, 'w').write(str(os.getpid()) + ' '"
+                           " + sys.argv[sys.argv.index('--print-timeout') + 1])\n"
                            "time.sleep(60)\n", encoding="utf-8")
             agy.chmod(0o755)
             wrapper = td / "review-agy.py"
@@ -996,9 +1058,13 @@ class DocumentedAgyWrapper(unittest.TestCase):
             flowctl._run_review_command(
                 [sys.executable, str(wrapper), "gemini-x"], json.dumps(request).encode(),
                 timeout=request["timeoutSeconds"], cwd=td, env=dict(os.environ, AGY_PATH=str(agy)))
-            pid = int(pid_file.read_text(encoding="utf-8"))
+            pid, deadline = pid_file.read_text(encoding="utf-8").split()
+            pid = int(pid)
             try:
                 self.assertFalse(CtrlCReachesTheReviewer._running(pid), "agy outlived the review")
+                # agy's own deadline comes first; the wrapper's stop is the backstop.
+                self.assertRegex(deadline, r"^[0-9]+s$")
+                self.assertLess(int(deadline[:-1]), request["timeoutSeconds"] / 2)
             finally:
                 if CtrlCReachesTheReviewer._running(pid):
                     os.kill(pid, 9)

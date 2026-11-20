@@ -6449,8 +6449,8 @@ _REVIEW_CRITERIA_MAX_NOTE = 400
 # The tally lines and fenced tally block the review prompts ask for after the
 # findings; reviewers often write them straight after the criteria section.
 _REVIEW_CRITERIA_TALLY_RE = re.compile(
-    r"^(```|(classification counts|suppressed findings|unaddressed r-ids"
-    r"|protected-path filter)\s*:)",
+    r"^[\s>*_`]*(classification\s+counts|suppressed\s+findings"
+    r"|unaddressed(?:\s+r[-_ ]?ids?)?|protected-path\s+filter)[\s*_`]*:",
     re.IGNORECASE,
 )
 
@@ -6464,7 +6464,7 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
     with an exact grammar, so ANY non-blank line inside it that is not a valid
     record (after stripping a plain bullet marker) is ambiguity and returns
     None - as do duplicate ids and oversized content. A heading, the verdict
-    tag, or a tally line (or its fence) ends the section. Degrade-to-absent,
+    tag, or a tally line or fenced tally block ends the section. Degrade-to-absent,
     never an error; this subsumes every Markdown-prefix variant (ordered
     lists, blockquotes, exotic bullets) generically instead of enumerating
     them.
@@ -6481,10 +6481,16 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             return None
         entries: list[dict] = []
         seen: set[str] = set()
-        for line in lines[idx + 1:]:
-            stripped = line.strip()
+        for pos in range(idx + 1, len(lines)):
+            stripped = lines[pos].strip()
             if re.match(r"^#{1,6}\s", stripped):
                 break
+            if stripped.startswith("```"):
+                close = next((j for j in range(pos + 1, len(lines))
+                              if lines[j].strip() == "```"), None)
+                block = "\n".join(lines[pos:close + 1]) if close else ""
+                if block.count("```") == 2 and extract_review_json_block(block) is not None:
+                    break  # the fenced tally block; any other fence is ambiguous
             if not stripped:
                 continue
             if re.match(
@@ -50649,14 +50655,20 @@ def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
             and not row.get("failed")
             and row.get("session_id")
             and row.get("backend") == backend
-            and (backend != "command" or row.get("label") == primary_label)
+            # A 9.17.0 pending row has no label: keep that release's choice.
+            and (backend != "command" or primary_label is None
+                 or row.get("label") == primary_label)
         ):
             return row
     if isinstance(primary, dict):
         if backend == "command" and primary.get("failed"):
             # The label still stamps the receipt; a failed draw's session id
-            # is not one validate or deep-pass may continue.
-            return dict(primary, session_id=None)
+            # is not one validate or deep-pass may continue. A 9.17.0 pending
+            # row has no label, so a surviving draw's label stamps it.
+            label = primary_label or next(
+                (row.get("label") for row in draws if isinstance(row, dict)
+                 and not row.get("failed") and row.get("backend") == backend), None)
+            return dict(primary, session_id=None, label=label)
         return primary
     for row in draws:
         if isinstance(row, dict):
@@ -51233,6 +51245,17 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     unaddressed_rids = parse_unaddressed_rids(merged_text)
     receipt_draws = _review_fanout_receipt_draws(meta_draws)
     primary = _review_fanout_primary_draw(meta, meta_draws, args.review_backend)
+    if args.review_backend == "command" and not primary.get("label"):
+        refunded = _review_fanout_refund_stale_round(
+            meta, args, "the primary draw's command label is unknown", "label_unknown",
+        )
+        error_exit(
+            "fan-out finalize: the primary draw's command label is unknown (a round "
+            "interrupted under 9.17.0 with no surviving command draw); re-dispatch "
+            f"the review. No verdict was recorded.{refunded}",
+            use_json=args.json,
+            code=2,
+        )
     resolved_spec = BackendSpec(
         backend=args.review_backend,
         # A command spec carries its label; the observed model is the receipt's.
