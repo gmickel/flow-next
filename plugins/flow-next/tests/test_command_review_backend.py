@@ -13,6 +13,7 @@ import re
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from unittest import mock
 
@@ -75,6 +76,31 @@ NEEDS_WORK = {"response": {
 
 def command_var(label):
     return "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
+
+
+def _alive(pid):
+    """True while ``pid`` runs (a reaped or zombie process is not running)."""
+    if os.name == "nt":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, pid)
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102   # WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return True
 
 
 class CommandTest(unittest.TestCase):
@@ -170,6 +196,37 @@ class CommandSpecGrammar(CommandTest):
                     self.assertIn("FLOW_REVIEW_COMMAND_", str(exc))
                 self.assertEqual(runtime, label in LABELS_ACCEPTED)
                 self.assertEqual(bool(re.fullmatch(patterns[0], f"command:{label}")), runtime)
+
+    def test_whitespace_is_refused_by_runtime_and_schema_alike(self):
+        schema = json.loads((Path(flowctl.__file__).resolve().parents[1] / "schema"
+                             / "flow-config.schema.json").read_text(encoding="utf-8"))
+        backend = schema["properties"]["review"]["properties"]["backend"]
+        patterns = [branch["pattern"] for branch in backend["anyOf"] if "pattern" in branch]
+        for raw in ("command: grok", "command:grok ", " command:grok", "command :grok",
+                    "command:\tgrok", "command:grok\n"):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError) as ctx:
+                    flowctl.BackendSpec.parse(raw)
+                self.assertIn("command:<label>", str(ctx.exception))
+                self.assertFalse(any(re.search(p, raw) for p in patterns))
+        self.assertEqual(flowctl.BackendSpec.parse("command:grok").model, "grok")
+
+    def test_config_set_refuses_a_command_without_a_label(self):
+        with _flow_repo() as (repo, _base):
+            for raw in ("command", "command:", "command: grok"):
+                with self.subTest(raw=raw):
+                    code, out, err = _run_cli("config", "set", "review.backend", raw, "--json")
+                    self.assertNotEqual(code, 0, out)
+                    self.assertIn("command:<label>", out + err)
+                    config_file = repo / ".flow" / "config.json"
+                    config = json.loads(config_file.read_text()) if config_file.exists() else {}
+                    self.assertNotEqual(config.get("review", {}).get("backend"), raw)
+            # A label whose variable is not set yet is accepted: it may be added afterwards.
+            os.environ.pop("FLOW_REVIEW_COMMAND_LATER", None)
+            code, out, err = _run_cli("config", "set", "review.backend", "command:later", "--json")
+            self.assertEqual(code, 0, out + err)
+            config = json.loads((repo / ".flow" / "config.json").read_text())
+            self.assertEqual(config["review"]["backend"], "command:later")
 
 
 class CommandImplReview(CommandTest):
@@ -394,8 +451,52 @@ class CommandImplReview(CommandTest):
             env = CommandRepo(repo, [SHIP], commands={"fake": [str(missing)]})
             code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
             self.assertNotEqual(code, 0)
-            self.assertIn("executable not found", out + err)
+            self.assertIn("not found", out + err)
+            # The message names the variable and the label, never any of its value.
+            self.assertIn("FLOW_REVIEW_COMMAND_FAKE", out + err)
+            self.assertIn("command:fake", out + err)
+            self.assertNotIn(missing.name, out + err)
             self.assertEqual(env.rounds(), 0)
+
+    def test_timeout_stops_the_whole_process_tree(self):
+        with _flow_repo() as (repo, base), \
+                mock.patch.dict(os.environ, {"FLOW_REVIEW_EXEC_TIMEOUT": "3"}):
+            pid_file = repo.parent / f"{repo.name}-helper.pid"
+            spawner = repo.parent / f"{repo.name}-spawner.py"
+            # Outside the repo: Windows cannot delete a directory a live process sits in.
+            spawner.write_text(textwrap.dedent("""
+                import os, subprocess, sys, time
+                helper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                                          cwd=os.path.dirname(sys.executable))
+                with open(sys.argv[1], "w", encoding="utf-8") as fh:
+                    fh.write(str(helper.pid))
+                time.sleep(60)
+            """), encoding="utf-8")
+            env = CommandRepo(repo, [SHIP], commands={
+                "fake": [sys.executable, str(spawner), str(pid_file)]})
+            code, out, err = impl_review(base, repo / "r.json", "--spec", "command:fake")
+            helper = int(pid_file.read_text(encoding="utf-8"))
+            try:
+                self.assertNotEqual(code, 0)
+                self.assertIn("timed out", out + err)
+                self.assertNotIn("not stopped", out + err)
+                self.assertEqual(env.rounds(), 0)
+                deadline = time.monotonic() + 10
+                while _alive(helper) and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                self.assertFalse(_alive(helper), "the wrapper's helper outlived the timeout")
+            finally:
+                if _alive(helper) and os.name != "nt":
+                    os.kill(helper, 9)
+
+    @unittest.skipIf(os.name == "nt", "the POSIX process-group kill is what is refused here")
+    def test_a_tree_that_cannot_be_stopped_is_named_in_the_reason(self):
+        argv = [sys.executable, "-c", "import time; time.sleep(30)"]
+        with mock.patch.object(flowctl.os, "killpg", side_effect=PermissionError(1, "Operation not permitted")):
+            returncode, _, _, problem, stop_error = flowctl._run_review_command(
+                argv, b"{}", timeout=1, cwd=Path.home(), env=dict(os.environ))
+        self.assertEqual(problem, "timeout")
+        self.assertIn("Operation not permitted", stop_error)
 
     def test_leading_tilde_expands_in_every_element(self):
         os.environ.update({"HOME": "/home/someone", "USERPROFILE": "/home/someone",
@@ -665,6 +766,51 @@ class CommandReviewFixes(CommandTest):
             self.assertEqual((rows["correctness"]["backend"], rows["correctness"]["label"]),
                              ("command", "fake"))
             self.assertEqual(rows["contracts"]["label"], "other")
+
+    def test_session_passes_never_continue_another_labels_draw(self):
+        cases = (
+            # (primary draw's step, the session the receipt and the passes may use)
+            (dict(SHIP, response=dict(SHIP["response"], sessionId="fake-1")), "fake-1"),
+            ({"raw": "", "exit": 3, "stderr": "quota exceeded\n"}, None),
+        )
+        for primary_step, expected in cases:
+            with self.subTest(expected=expected), _flow_repo() as (repo, base):
+                env = CommandRepo(repo, [primary_step])
+                other_plan = repo / "plan-other.json"
+                other_plan.write_text(json.dumps(
+                    [dict(SHIP, response=dict(SHIP["response"], sessionId="other-1"))]),
+                    encoding="utf-8")
+                os.environ[command_var("other")] = json.dumps(
+                    [env.argv[0], env.argv[1], str(other_plan), str(env.log)])
+                receipt = repo / "fanout.json"
+                code, out, err = _run_cli("command", "impl-review-fanout", TASK_ID, "--base",
+                                          base, "--receipt", str(receipt), "--spec",
+                                          "command:fake", "--draw", "correctness", "--draw",
+                                          "contracts=command:other", "--json")
+                self.assertEqual(code, 0, out + err)
+                merged = repo / "merged.md"
+                merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
+                code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
+                                          "--base", base, "--rid", json.loads(out)["rid"],
+                                          "--merged-file", str(merged), "--receipt",
+                                          str(receipt), "--json")
+                self.assertEqual(code, 0, out + err)
+                published = json.loads(receipt.read_text())
+                self.assertEqual(published["spec"], "command:fake")
+                self.assertEqual(published["session_id"], expected)
+                calls_before = len(env.requests())
+                findings = repo / "findings.jsonl"
+                findings.write_text(json.dumps({"id": "f1", "title": "x"}) + "\n",
+                                    encoding="utf-8")
+                env.set_plan([{"response": {"output": "Validated.", "sessionId": "ECHO"}}])
+                for sub, extra in (("validate", ("--findings-file", str(findings))),
+                                   ("deep-pass", ("--pass", "adversarial"))):
+                    _run_cli("command", sub, *extra, "--receipt", str(receipt), "--json")
+                continued = [call["request"]["sessionId"]
+                             for call in env.requests()[calls_before:]]
+                self.assertNotIn("other-1", continued)
+                if expected:
+                    self.assertEqual(continued[:1], [expected])
 
 
 if __name__ == "__main__":

@@ -1000,6 +1000,85 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
             self.assertIn("broken symlink", r.stdout + r.stderr)
 
 
+class TestCriteriaLinkStoredAsFile(unittest.TestCase):
+    """A checkout without symlink support writes the link as a file holding its target path."""
+
+    def _criteria_list(self, content):
+        import tempfile, os as _os, subprocess
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q", td], check=True)
+            flow = _os.path.join(td, ".flow")
+            _os.makedirs(flow)
+            with open(_os.path.join(flow, "criteria.md"), "w", encoding="utf-8") as fh:
+                fh.write(content)
+            return subprocess.run(
+                [*FLOWCTL_CMD, "criteria", "list", "--json"],
+                capture_output=True, text=True, cwd=td,
+            )
+
+    def test_link_target_alone_fails_closed(self):
+        for content in ("../vendor/org-guidelines/criteria.md",
+                        "../vendor/org-guidelines/criteria.md\n",
+                        "..\\shared\\criteria.md"):
+            with self.subTest(content=content):
+                r = self._criteria_list(content)
+                self.assertNotEqual(r.returncode, 0, r.stdout)
+                self.assertIn("symlink", r.stdout + r.stderr)
+                _, errors = flowctl._criteria_parse(content)
+                self.assertTrue(any("symlink" in e for e in errors), errors)
+
+    def test_other_zero_criteria_files_stay_valid_and_silent(self):
+        for content in ("# Global acceptance criteria\n",
+                        "No standing criteria yet.\n",
+                        "<!-- - **G1:** example -->\n",
+                        "TODO\n",
+                        ""):
+            with self.subTest(content=content):
+                r = self._criteria_list(content)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(json.loads(r.stdout)["count"], 0)
+
+
+class TestReceiptTallyTerminator(unittest.TestCase):
+    """A tally line straight after the criteria section ends it, as reviewers write it."""
+
+    # The section and tally as a codex reviewer returned them (trailing double-space breaks kept).
+    REVIEWER_TAIL = (
+        "## Global criteria\n\n"
+        "G1: n/a - The diff adds no always-loaded prompt prose.  \n"
+        "G2: n/a - The diff changes no tests.  \n"
+        "G4: met - The change documents existing behavior without adding a workflow requirement.\n\n"
+        "Classification counts: 0 introduced, 0 pre_existing.\n\n"
+        "```json\n"
+        '{"classification_counts":{"introduced":0,"pre_existing":0},"unaddressed":[]}\n'
+        "```\n\n"
+        "<verdict>SHIP</verdict>\n"
+    )
+
+    def test_reviewer_output_keeps_its_criteria(self):
+        out = flowctl.parse_review_criteria(self.REVIEWER_TAIL)
+        self.assertEqual([(c["id"], c["status"]) for c in out],
+                         [("G1", "n/a"), ("G2", "n/a"), ("G4", "met")])
+
+    def test_each_tally_line_ends_the_section(self):
+        for tally in ("Classification counts: 1 introduced, 0 pre_existing.",
+                      "Suppressed findings: 2 at confidence 25",
+                      "Unaddressed R-IDs: []",
+                      "Protected-path filter: dropped 1 finding"):
+            with self.subTest(tally=tally):
+                text = f"## Global criteria\nG1: met - ok\n{tally}\nG2: violated - after the tally\n"
+                out = flowctl.parse_review_criteria(text)
+                self.assertEqual([c["id"] for c in out], ["G1"])
+
+    def test_fenced_tally_block_ends_the_section(self):
+        text = "## Global criteria\nG1: met - ok\n```json\n{}\n```\n"
+        self.assertEqual([c["id"] for c in flowctl.parse_review_criteria(text)], ["G1"])
+
+    def test_other_prose_after_the_section_still_degrades(self):
+        text = "## Global criteria\nG1: met - ok\nAlso, I liked it.\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+
 class TestGidNumberGrammar(unittest.TestCase):
     """Round 15: G-IDs start at 1, no leading zeros - consistently on both surfaces."""
 
