@@ -23609,6 +23609,8 @@ def evidence_host() -> str:
     claude_manifest = (root / ".claude-plugin" / "plugin.json").is_file()
     if (root / ".flow-next-muse-bundle").exists():
         return "muse"
+    if (root / ".flow-next-antigravity-bundle").exists():
+        return "antigravity"
     if env.get("DROID_PLUGIN_ROOT"):
         return "droid"
     cursor_home = Path(env.get("CURSOR_HOME") or Path.home() / ".cursor").resolve()
@@ -57385,7 +57387,7 @@ def main() -> None:
     # setup-block (fn-99): deterministic marker-block lifecycle for setup docs.
     p_setup_status = subparsers.add_parser("setup-status", help="Read setup probes in one call")
     p_setup_status.add_argument("--plugin-root")
-    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode", "muse"], default="claude-code")
+    p_setup_status.add_argument("--platform", choices=["claude-code", "codex", "droid", "cursor", "grok", "opencode", "muse", "antigravity"], default="claude-code")
     p_setup_status.add_argument("--json", action="store_true")
     p_setup_status.set_defaults(func=cmd_setup_status)
 

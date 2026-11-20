@@ -25,6 +25,8 @@ CURSOR_HOME_ABS="$(cd "${HOME}/.cursor" 2>/dev/null && pwd -P || printf '%s' "${
 
 if [ -f "${PLUGIN_ROOT}/.flow-next-muse-bundle" ]; then
   PLATFORM="muse"
+elif [ -f "${PLUGIN_ROOT}/.flow-next-antigravity-bundle" ]; then
+  PLATFORM="antigravity"
 elif [ -n "${DROID_PLUGIN_ROOT:-}" ]; then
   PLATFORM="droid"
 elif [ -n "${CURSOR_AGENT:-}" ] \
@@ -46,8 +48,8 @@ else
 fi
 ```
 
-**Never reorder the rungs.** The Muse bundle marker at the plugin root comes first: only `install-muse.sh` writes
-it, so no inherited variable can outrank it. Each host's own signal (Droid, Cursor, Grok, OpenCode) outranks the
+**Never reorder the rungs.** The Muse and Antigravity bundle markers at the plugin root come first: only
+`install-muse.sh` and `install-antigravity.sh` write them, so no inherited variable can outrank them. Each host's own signal (Droid, Cursor, Grok, OpenCode) outranks the
 inherited `CLAUDECODE` marker, and `codex` is the fallback. Nested Droid → Grok is unsupported: a
 grok child that inherits `DROID_PLUGIN_ROOT` classifies as `droid`, so stop NEEDS_HUMAN unless a
 smoke confirms `DROID_PLUGIN_ROOT` does not propagate. The rationale for each rung and the
@@ -58,11 +60,11 @@ Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
 - Which docs file to prefer (CLAUDE.md vs AGENTS.md)
 - Whether to copy Codex agents to project (hooks are **not** copied)
-- Which command-name syntax the docs snippet uses (Claude-format skill ids for Claude Code / Droid / **Cursor** / **Grok** / **Muse**; `/flow-next-plan` flat form for **OpenCode**; `$flow-next-plan` for Codex)
+- Which command-name syntax the docs snippet uses (Claude-format skill ids for Claude Code / Droid / **Cursor** / **Grok** / **Muse** / **Antigravity**; `/flow-next-plan` flat form for **OpenCode**; `$flow-next-plan` for Codex)
 
 ### Done when
 
-- `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok` / `opencode` / `muse`.
+- `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok` / `opencode` / `muse` / `antigravity`.
 - **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, a Claude Code run classified `codex` because the cascade looked for `CLAUDE_PLUGIN_ROOT` instead of `CLAUDECODE`, or an OpenCode install classified `codex` because the cascade missed `.flow-next-opencode-manifest`, has broken this.
 
 ## Step 1: Initialize .flow/
@@ -246,7 +248,7 @@ Use the Step 2 response, without repeating shell probes or config calls:
 
 Choose the correct template based on platform:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
-- **Claude Code / Droid / Cursor / Grok / Muse**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — names skills by id (`flow-next:flow-next-plan`) (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
+- **Claude Code / Droid / Cursor / Grok / Muse / Antigravity**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — names skills by id (`flow-next:flow-next-plan`) (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
 - **OpenCode** (`PLATFORM=opencode`): same Claude-flavor template as above, rewritten `/flow-next:` → `/flow-next-` (flat command names; never `$flow-next-`) and skill ids `flow-next:flow-next-` → `flow-next-`. Lifecycle snippet lands in AGENTS.md. Rewrite the template into a temp file *before* any `setup-block` call so the helper hashes the bytes actually applied:
 
   ```bash
@@ -408,13 +410,13 @@ esac
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
-- AGENTS.md on **Claude Code / Droid / Cursor / Grok / Muse**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (names skills by Claude-format id — Cursor and Grok resolve those ids, so their AGENTS.md must carry this snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
+- AGENTS.md on **Claude Code / Droid / Cursor / Grok / Muse / Antigravity**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (names skills by Claude-format id — Cursor and Grok resolve those ids, so their AGENTS.md must carry this snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
 - AGENTS.md on **OpenCode**: use the Claude-flavor snippet rewritten `/flow-next:` → `/flow-next-` via the 6b temp-template block (`$SNIPPET_TEMPLATE`). Never the Codex `$flow-next-` form. Pass that rewritten file as `--template` to every `setup-block apply` / `resolve` for this platform so hashes match the bytes written.
 - CLAUDE.md (any platform — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md). On OpenCode, if CLAUDE.md is also a resolved target, apply the same `/flow-next:` → `/flow-next-` rewrite (same `$SNIPPET_TEMPLATE`) so both files carry the flat form.
 
 **Resolve the target file set:** an explicit Docs-question answer is authoritative - if the user is asked and selects specific files (or declines one), honor exactly that; never touch a file the user just deselected. The one addition is a backfill for the SKIPPED case: when the Docs question is omitted entirely because the block is already current (per the Note above), still run `apply` on each already-marker-bearing file. Rationale: a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". `apply` on a current block is cheap and idempotent - it returns `unchanged` and records the missing hash. So: resolve targets = files chosen by the Docs question when it was asked; OR, when the Docs question was skipped, the files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker. Run the helper once per resolved file.
 
-**Saved answer on a host that reads AGENTS.md** (`PLATFORM` one of: `muse`): when this run did not ask the Docs question and the snippet goes to `CLAUDE.md` but not `AGENTS.md` (a saved `Skip` writes neither and gets no line), the host will not see the snippet if a repository-root `AGENTS.md` exists (it is read in place of `CLAUDE.md`) or if the host does not read `CLAUDE.md` at all. Then do not write `AGENTS.md` on the saved answer; print in the summary: `Docs: this host reads AGENTS.md and will not see the CLAUDE.md snippet; re-run /flow-next:setup and ask to change the Docs answer to add it there.`
+**Saved answer on a host that reads AGENTS.md** (`PLATFORM` one of: `muse`, `antigravity`): when this run did not ask the Docs question and the snippet goes to `CLAUDE.md` but not `AGENTS.md` (a saved `Skip` writes neither and gets no line), the host will not see the snippet if a repository-root `AGENTS.md` exists (it is read in place of `CLAUDE.md`) or if the host does not read `CLAUDE.md` at all. Then do not write `AGENTS.md` on the saved answer; print in the summary: `Docs: this host reads AGENTS.md and will not see the CLAUDE.md snippet; re-run /flow-next:setup and ask to change the Docs answer to add it there.`
 
 For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marker-scoped replace, per-`(path, id)` pristine-hash tracking in `.flow/meta.json` `setup.block_hashes` - a nested `{<path>: {<id>: <hash>}}` map; these call sites pass no `--id`, so they always read/write the default `FLOW-NEXT` id) are deterministic flowctl plumbing; this step owns only the ask:
 
@@ -452,7 +454,7 @@ Resolve the target with this ladder, first match wins:
 
 1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`.
 2. Otherwise the files already carrying `<!-- BEGIN FLOW-NEXT -->`.
-3. Otherwise Codex / Cursor / Grok / OpenCode / Muse → `AGENTS.md`; Claude Code / Droid →
+3. Otherwise Codex / Cursor / Grok / OpenCode / Muse / Antigravity → `AGENTS.md`; Claude Code / Droid →
    `CLAUDE.md`.
 
 Per target, in order:
@@ -499,7 +501,7 @@ store, request, or configure the key. See [judge](../../docs/judge.md).
 ```
 Flow-Next setup complete!
 
-Platform: <claude-code|codex|droid|cursor|grok|opencode|muse>
+Platform: <claude-code|codex|droid|cursor|grok|opencode|muse|antigravity>
 
 Written:
 - <CLAUDE.md and/or AGENTS.md> flow-next snippet (marker-fenced, sentinel v<N>)
@@ -549,6 +551,13 @@ Muse Code host notes:
 - Start Muse with --disable-sandbox: the review CLIs cannot run inside Muse's sandbox
 - Detection: ${PLUGIN_ROOT}/.flow-next-muse-bundle (written by install-muse.sh; never an env var)
 - Update with scripts/install-muse.sh, not a marketplace install
+```
+
+**If PLATFORM=antigravity, also show:**
+```
+Antigravity CLI host notes:
+- Start flow-next sessions with agy --settings '{"toolPermission":"always-proceed"}' so workers can commit and run review CLIs; only in an environment you already trust
+- Update with scripts/install-antigravity.sh
 ```
 
 **If PLATFORM=codex, also show:**
