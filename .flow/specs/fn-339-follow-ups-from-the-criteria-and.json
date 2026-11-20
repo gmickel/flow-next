@@ -310,7 +310,7 @@
     "impl:fn-339-follow-ups-from-the-criteria-and.1": 0
   },
   "spec_path": ".flow/specs/fn-339-follow-ups-from-the-criteria-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Follow-ups from the criteria and command-backend work",
   "tracker": {
     "baseHashFlow": null,
@@ -323,5 +323,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-20T00:52:14.169540Z"
+  "updated_at": "2026-11-20T00:55:46.120413Z"
 }
