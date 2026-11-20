@@ -164,7 +164,7 @@
     "impl:fn-343-command-review-backend-drop-process.1": 0
   },
   "spec_path": ".flow/specs/fn-343-command-review-backend-drop-process.md",
-  "status": "open",
+  "status": "done",
   "title": "Command review backend: drop process-tree management",
   "tracker": {
     "baseHashFlow": null,
@@ -177,5 +177,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-20T12:30:35.247940Z"
+  "updated_at": "2026-11-20T12:32:50.954085Z"
 }

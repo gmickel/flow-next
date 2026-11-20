@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-343-command-review-backend-drop-process",
   "spec_path": ".flow/tasks/fn-343-command-review-backend-drop-process.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Command review backend: drop process-tree management",
   "updated_at": "2026-11-20T12:14:48.377349Z"
 }
