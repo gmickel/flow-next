@@ -12,6 +12,8 @@ Locks:
       still wins; absence of the file is not an OpenCode signal.
       A PLUGIN_ROOT carrying .flow-next-muse-bundle is muse ahead of every
       inherited marker; MUSE_SESSION_ID alone decides nothing.
+      A PLUGIN_ROOT carrying .flow-next-antigravity-bundle is antigravity the
+      same way; inherited ANTIGRAVITY_* variables alone decide nothing.
   (b) Codex mirror Step-0 is unconditional PLATFORM=codex — even with
       GROK_AGENT=1 and every other host signal set, the mirror returns codex.
 
@@ -46,6 +48,7 @@ HOST_ENV_KEYS = (
     "CURSOR_TRACE_ID",
     "CODEX_HOME",
     "MUSE_SESSION_ID",
+    "ANTIGRAVITY_CONVERSATION_ID",
 )
 
 _BASH = shutil.which("bash")
@@ -156,6 +159,14 @@ def _build_muse_install(home: Path) -> Path:
     return root
 
 
+def _build_antigravity_install(home: Path) -> Path:
+    """Temp Antigravity bundle: the install-antigravity.sh marker beside the Claude manifest."""
+    root = _build_claude_install(home)
+    (root / ".flow-next-antigravity-bundle").write_text(
+        "flow-next Antigravity CLI bundle\n", encoding="utf-8")
+    return root
+
+
 def _build_neutral_root(home: Path) -> Path:
     """A plugin root that is not under ~/.cursor and carries no host manifest."""
     root = home / "plugin-src" / "flow-next"
@@ -169,6 +180,7 @@ ROOTS = {
     "cursor": _build_cursor_install,
     "opencode": _build_opencode_install,
     "muse": _build_muse_install,
+    "antigravity": _build_antigravity_install,
 }
 
 # (case, plugin root kind, host env, expected PLATFORM)
@@ -215,6 +227,18 @@ CANONICAL_CASES = (
     ("inherited MUSE_SESSION_ID on a codex root", "neutral", {"MUSE_SESSION_ID": "s"}, "codex"),
     ("inherited MUSE_SESSION_ID on a claude root", "claude",
      {"MUSE_SESSION_ID": "s", "CLAUDECODE": "1"}, "claude-code"),
+    ("antigravity bundle", "antigravity", {"ANTIGRAVITY_CONVERSATION_ID": "c"}, "antigravity"),
+    # The Antigravity install also carries the Claude manifest, and a session
+    # launched from a Claude Code shell inherits CLAUDECODE.
+    ("antigravity bundle with inherited CLAUDECODE", "antigravity",
+     {"ANTIGRAVITY_CONVERSATION_ID": "c", "CLAUDECODE": "1"}, "antigravity"),
+    ("antigravity bundle with inherited grok and droid", "antigravity",
+     {"GROK_AGENT": "1", "DROID_PLUGIN_ROOT": "/tmp/droid"}, "antigravity"),
+    # Codex and Claude Code children of an Antigravity shell inherit its variables.
+    ("inherited ANTIGRAVITY_CONVERSATION_ID on a codex root", "neutral",
+     {"ANTIGRAVITY_CONVERSATION_ID": "c"}, "codex"),
+    ("inherited ANTIGRAVITY_CONVERSATION_ID on a claude root", "claude",
+     {"ANTIGRAVITY_CONVERSATION_ID": "c", "CLAUDECODE": "1"}, "claude-code"),
 )
 
 # The Codex mirror returns codex whatever the host signals say.

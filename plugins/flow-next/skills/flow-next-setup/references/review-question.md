@@ -6,6 +6,8 @@
 
 **Four options, not seven.** Each menu below is a catalog; the question carries four of its options, in the menu's order: Host, None, and the first two CLI options whose `HAVE_*` is 1 (when fewer than two are detected, fill from the undetected ones in menu order; on `PLATFORM=codex`, take Codex CLI last, since it is the writer's family). A backend left off the menu is set with `flowctl config set review.backend <name>`, which Step 8's summary names.
 
+**On `PLATFORM=antigravity`, nothing is left off.** Host review fails closed there for every writer, so the first question carries None, the first two CLI options by the rule above, and `{"label": "More backends", "description": "Host and the review CLIs not listed here, in one more question"}` in Host's place. Choosing it asks one follow-up question in its own `AskUserQuestion` call holding Host and the two remaining CLI options, in menu order and with the same labels and descriptions; that answer is the review answer.
+
 **When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor:
 ```json
 {
@@ -23,7 +25,7 @@
 }
 ```
 
-**When `PLATFORM=grok` or `PLATFORM=muse`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM` is `grok`, `muse` or `antigravity`** — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend (on `antigravity`, say in the question and the Host description that its subagent models are tiers with no named-model pin, so host review fails closed for every writer and cross-family review needs an external backend); when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
   "header": "Review",
@@ -40,7 +42,7 @@
 }
 ```
 
-**When `PLATFORM` is none of `cursor`, `grok`, `muse`** (Claude Code / Droid / Codex / OpenCode — unchanged; Cursor uses its dedicated menu above and Grok and Muse share theirs; OpenCode uses this default Host + None menu):
+**When `PLATFORM` is none of `cursor`, `grok`, `muse`, `antigravity`** (Claude Code / Droid / Codex / OpenCode — unchanged; Cursor uses its dedicated menu above and Grok, Muse and Antigravity share theirs; OpenCode uses this default Host + None menu):
 ```json
 {
   "header": "Review",

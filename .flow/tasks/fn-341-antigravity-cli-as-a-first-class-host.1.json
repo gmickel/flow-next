@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-19T22:55:39.650430Z",
+  "depends_on": [],
+  "id": "fn-341-antigravity-cli-as-a-first-class-host.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-341-antigravity-cli-as-a-first-class-host",
+  "spec_path": ".flow/tasks/fn-341-antigravity-cli-as-a-first-class-host.1.md",
+  "status": "done",
+  "title": "Implement Antigravity CLI as a first-class host and a driven target",
+  "updated_at": "2026-11-19T22:55:39.650430Z"
+}

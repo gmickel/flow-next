@@ -3021,6 +3021,73 @@ def main():
 main()
 ```
 
+**Antigravity CLI wrapper.** `~/bin/review-agy.py` runs one review through `agy -p` in the repository under review, on the model named after the script (`agy models` lists them):
+
+```bash
+export FLOW_REVIEW_COMMAND_AGY='["python3", "~/bin/review-agy.py", "<model>"]'
+```
+
+It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
+
+```python
+"""flow-next review command: one review through Antigravity CLI (`agy -p`)."""
+import json
+import subprocess
+import sys
+
+# Session-only settings: every file write and every shell command is refused at
+# the tool level; file reads stay allowed.
+DENY = {"permissions": {"deny": ["write_file(/)", "command(regex:.*)"]}}
+
+
+def reply(output="", stderr="", exit_code=0, session=None, resume_failed=False, model=None):
+    json.dump({"schemaVersion": 1, "output": output, "stderr": stderr,
+               "exitCode": exit_code, "sessionId": session,
+               "resumeFailed": resume_failed, "observedModel": model}, sys.stdout)
+
+
+def main():
+    model = sys.argv[1]
+    request = json.load(sys.stdin)
+    session = request["sessionId"]
+    argv = ["agy", "--input-format", "stream-json", "--output-format", "stream-json",
+            "--model", model, "--settings", json.dumps(DENY), "--disable-slash-commands",
+            "--print-timeout", f"{max(30, request['timeoutSeconds'] - 15)}s"]
+    if session:
+        argv += ["--conversation", session]
+    argv.append("-p=")  # flags first; the prompt arrives on stdin
+    line = json.dumps({"event": "user", "message": {"content": request["prompt"]}}) + "\n"
+    try:
+        run = subprocess.run(argv, input=line, capture_output=True, text=True,
+                             cwd=request["repositoryPath"], timeout=request["timeoutSeconds"])
+    except subprocess.TimeoutExpired:
+        return reply(stderr="agy timed out", exit_code=124, session=session)
+    init, result = {}, None
+    for raw in run.stdout.splitlines():
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            continue
+        if event.get("event") == "init":
+            init = event.get("init") or {}
+        elif event.get("event") == "result":
+            result = event.get("result") or {}
+    observed = init.get("model")
+    if result is None or run.returncode != 0 or result.get("status") != "SUCCESS":
+        error = (result or {}).get("error") or run.stderr[-2000:]
+        return reply(stderr=error, exit_code=run.returncode or 1, session=session, model=observed)
+    got = result.get("conversation_id") or None
+    if session and got != session:
+        # agy starts a new conversation, exit 0, when it does not know the id.
+        return reply(stderr=f"resume of {session} started {got}", exit_code=3,
+                     session=session, resume_failed=True, model=observed)
+    reply(output=result.get("response", ""), stderr=run.stderr[-2000:],
+          session=got, model=observed)
+
+
+main()
+```
+
 ### review-deep-auto
 
 Print the deep-pass set that auto-enables for a changed-file list. Used by `--deep` (without explicit list) to derive `security` / `performance` based on file globs (Dockerfiles → security; large refactors / hot paths → performance).
