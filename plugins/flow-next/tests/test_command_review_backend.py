@@ -814,6 +814,11 @@ class CommandReviewFixes(CommandTest):
                 if row["axis"] == "contracts":
                     row["backend"] = "codex"  # the survivor ran on another backend
             meta_file.write_text(json.dumps(meta), encoding="utf-8")
+            draw_file = meta_file.with_name("contracts.json")
+            draw = json.loads(draw_file.read_text(encoding="utf-8"))
+            draw.pop("label")
+            draw["backend"] = "codex"
+            draw_file.write_text(json.dumps(draw), encoding="utf-8")
             merged = repo / "merged.md"
             merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
             code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
