@@ -94,7 +94,7 @@
             },
             {
               "type": "string",
-              "pattern": "^command:[a-z0-9_-]+$"
+              "pattern": "^command:[a-z0-9_-]+(?![\\s\\S])"
             }
           ],
           "default": null

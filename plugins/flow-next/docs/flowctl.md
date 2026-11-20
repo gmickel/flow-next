@@ -2967,7 +2967,7 @@ Spec form is exactly `command:<label>`: a bare `command`, an empty label, a labe
 
 **Contract.** flowctl runs the argv directly, with no shell and no interpolation, starting in your home directory; a leading `~` in any element expands to the home directory. The program is fixed before dispatch: a bare name is looked up in `PATH`'s absolute directories, never the current directory (a name not found there is refused), a relative path is taken from the home directory, and a program inside the checkout under review, or a checkout symlink to one outside it, is refused. On Windows a `.cmd` or `.bat` first element is refused, because Windows runs those through `cmd.exe` and its interpolation: name the interpreter first (`["python", "~/bin/review-opencode.py", ...]`). The Windows path is covered by unit tests only. It writes one JSON request to the command's standard input, the same request the [review execution URL](orchestration.md#review-backends-cross-model-review) receives: `schemaVersion` (1), `backend` (`command`), `model` and `effort` (both `null`), `prompt`, `repositoryPath`, `sessionId`, `resumeOnly`, `permissionMode` (`read-only`), `timeoutSeconds` and `requestId`. It reads one JSON response from standard output, in the same shape: `schemaVersion` (1), `output` (the reviewer's text, which carries the verdict tag), `stderr`, `exitCode`, and optionally `sessionId`, `resumeFailed` and `observedModel`. The prompt names a diff file under `.flow/tmp/` for reviewers that cannot run `git`.
 
-A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict. A timeout or an oversized response stops the command with every process it started: on Linux and macOS its process group plus any descendant that left the group, on Windows the tree `taskkill /T` finds. A process that detached completely before then (left the session or group and outlived the process that started it) is no longer in the tree and is not stopped on any platform. A tree that cannot be stopped is named in the failure reason.
+A non-zero exit, a timeout (`FLOW_REVIEW_EXEC_TIMEOUT`), a missing executable, output that is not that shape or is over 16 MiB, or a response with a non-zero `exitCode` gives no verdict: the round is refunded and the attempt recorded with its reason. The command's raw output is never read as a verdict. A timeout or an oversized response stops the command with every process it started: on Linux and macOS its process group plus any descendant that left the group, on Windows the tree `taskkill /T` finds. A process that detached completely before then (left the session or group and outlived the process that started it) is no longer in the tree and is not stopped on any platform. On Windows the same holds for a helper whose wrapper has already exited when the tree is stopped, for example when the helper wrote the oversized response or the review was interrupted while it still held the output: `taskkill /T` finds the tree only through the wrapper, so that helper may keep running. A tree that cannot be stopped is named in the failure reason. Interrupting a fan-out (Ctrl-C) stops every command draw still running the same way; other draws get at most the 5-second pipe grace to record their outcome, so the interrupt never waits for a draw to finish or time out.
 
 **Receipt.** `mode: "command"`, `label`, `spec: "command:<label>"`, and `model`: the `observedModel` the command reported, or `"not reported"`.
 
@@ -3024,11 +3024,12 @@ main()
 export FLOW_REVIEW_COMMAND_AGY='["python3", "~/bin/review-agy.py", "<model>"]'
 ```
 
-It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
+It runs `agy` by the absolute path it finds in `PATH`'s absolute directories, skipping a candidate whose path or resolved target lies inside the checkout under review, and fails without running a review when there is none, so the branch under review can never supply the program. It sends the prompt on stdin as one `stream-json` event, passes `--print-timeout` 15 seconds under flowctl's timeout (30 seconds at least; the outer timeout still ends the call), and reports the model from the session's `init` event. Read-only access comes from session-only deny rules that refuse every file write and edit (`write_file(/)`, a path prefix) and every shell command at the tool level; `--mode plan` is not read-only, and `write_file(regex:.*)` did not refuse writes on Antigravity CLI 1.5.13. A re-review resumes with `--conversation`; for an id it does not know, `agy` starts a new conversation and still exits 0, so a returned id that differs from the requested one is reported as a failed resume, and flowctl runs the review again fresh. The deny rules were not tested against MCP, browser or web tools, and reads outside the repository stay allowed; run it where that is acceptable.
 
 ```python
 """flow-next review command: one review through Antigravity CLI (`agy -p`)."""
 import json
+import os
 import subprocess
 import sys
 
@@ -3043,11 +3044,48 @@ def reply(output="", stderr="", exit_code=0, session=None, resume_failed=False, 
                "resumeFailed": resume_failed, "observedModel": model}, sys.stdout)
 
 
+def inside(path, checkout):
+    # normcase: Windows paths compare without regard to case.
+    path, checkout = os.path.normcase(path), os.path.normcase(checkout)
+    try:
+        return os.path.commonpath([path, checkout]) == checkout
+    except ValueError:   # another drive
+        return False
+
+
+def find_agy(checkout):
+    """agy's absolute path from PATH's absolute directories, never from the checkout.
+
+    A candidate is refused when its own path or the file it resolves to lies in
+    the checkout under review, so a link there cannot pick the program either.
+    """
+    checkout = os.path.realpath(checkout)
+    names = ["agy"]
+    if os.name == "nt":
+        names = ["agy" + ext.lower() for ext in os.environ.get("PATHEXT", ".EXE").split(";") if ext]
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not os.path.isabs(entry):
+            continue
+        for name in names:
+            path = os.path.join(entry, name)
+            real = os.path.realpath(path)
+            if not (os.path.isfile(real) and os.access(real, os.X_OK)):
+                continue
+            if inside(os.path.abspath(path), checkout) or inside(real, checkout):
+                continue
+            return real
+    return None
+
+
 def main():
     model = sys.argv[1]
     request = json.load(sys.stdin)
     session = request["sessionId"]
-    argv = ["agy", "--input-format", "stream-json", "--output-format", "stream-json",
+    agy = find_agy(request["repositoryPath"])
+    if not agy:
+        return reply(stderr="agy not found in PATH's absolute directories outside the "
+                     "checkout under review", exit_code=127, session=session)
+    argv = [agy, "--input-format", "stream-json", "--output-format", "stream-json",
             "--model", model, "--settings", json.dumps(DENY), "--disable-slash-commands",
             "--print-timeout", f"{max(30, request['timeoutSeconds'] - 15)}s"]
     if session:

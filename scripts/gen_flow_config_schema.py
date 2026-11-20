@@ -483,7 +483,9 @@ def _review_backend_fragment() -> dict:
             },
             *effort_branches,
             {"type": "string", "pattern": f"^({only_alt}):[^:\\s]*:?$"},  # model-only: optional trailing empty effort colon
-            {"type": "string", "pattern": f"^command:{flowctl.REVIEW_COMMAND_LABEL_RE.pattern}$"},
+            # (?![\s\S]) ends at end of input in ECMA and Python search alike;
+            # `$` would accept a trailing newline under Python's re.search.
+            {"type": "string", "pattern": f"^command:{flowctl.REVIEW_COMMAND_LABEL_RE.pattern}(?![\\s\\S])"},
         ],
     }
 

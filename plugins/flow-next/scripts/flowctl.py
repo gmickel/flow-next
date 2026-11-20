@@ -28348,20 +28348,39 @@ def _criteria_link_stored_as_file(path: Path) -> bool:
     """True when git tracks ``path`` as a symlink but the checkout holds a plain file.
 
     That is what git writes for a link on a checkout without symlink support:
-    a link that never resolved, not a file with zero criteria. Asked only after
-    the file parsed to zero criteria, so criteria-bearing repos pay nothing.
+    a link that never resolved, not a file with zero criteria. Only while the
+    file still holds the tracked link's target: once real content is copied in,
+    it is an ordinary criteria file again. Asked only after the file parsed to
+    zero criteria, so criteria-bearing repos pay nothing. Git runs from the
+    repository root, where the rest of flowctl runs it, never from ``.flow/``.
     """
     if path.is_symlink() or not path.is_file():
         return False
+    root = get_repo_root()
     try:
-        proc = subprocess.run(
-            ["git", "ls-files", "--stage", "--", path.name],
-            cwd=str(path.parent), capture_output=True, text=True,
-            timeout=5, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
+        rel = path.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
         return False
-    return proc.returncode == 0 and proc.stdout.startswith("120000 ")
+
+    def git(*argv: str) -> Optional[bytes]:
+        try:
+            proc = subprocess.run(["git", *argv], cwd=str(root), capture_output=True,
+                                  timeout=5, check=False)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return proc.stdout if proc.returncode == 0 else None
+
+    staged = git("ls-files", "--stage", "--", rel) or b""
+    # One line per stage; a conflicted merge lists several (1, 2, 3).
+    targets = [git("cat-file", "blob", line.split()[1].decode("ascii", "replace"))
+               for line in staged.splitlines() if line.startswith(b"120000 ")]
+    if not targets:
+        return False
+    try:
+        held = path.read_bytes()
+    except OSError:
+        return False
+    return any(target is not None and held == target for target in targets)
 
 
 def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
@@ -41480,7 +41499,18 @@ def _run_validator_pass(
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
             if backend == "command" and prior_mode == "command":
-                if spec_arg and spec_arg.strip() != prior.get("spec"):
+                if spec_arg is not None:
+                    # The strict parser first, so a padded or empty spelling is refused
+                    # here as it is everywhere else, never stripped into a match.
+                    try:
+                        BackendSpec.parse(spec_arg)
+                    except ValueError as exc:
+                        error_exit(
+                            f"--spec {spec_arg!r}: {exc}; pass the receipt's command:<label> "
+                            f"({prior.get('spec')}) or omit --spec",
+                            use_json=use_json, code=2,
+                        )
+                if spec_arg and spec_arg != prior.get("spec"):
                     error_exit(
                         f"--spec {spec_arg!r} does not match the receipt's "
                         f"{prior.get('spec')!r}: a command session continues only "
@@ -42390,7 +42420,18 @@ def _run_deep_pass(
             prior_mode = prior.get("mode")
             prior_model = prior.get("model")
             if backend == "command" and prior_mode == "command":
-                if spec_arg and spec_arg.strip() != prior.get("spec"):
+                if spec_arg is not None:
+                    # The strict parser first, so a padded or empty spelling is refused
+                    # here as it is everywhere else, never stripped into a match.
+                    try:
+                        BackendSpec.parse(spec_arg)
+                    except ValueError as exc:
+                        error_exit(
+                            f"--spec {spec_arg!r}: {exc}; pass the receipt's command:<label> "
+                            f"({prior.get('spec')}) or omit --spec",
+                            use_json=use_json, code=2,
+                        )
+                if spec_arg and spec_arg != prior.get("spec"):
                     error_exit(
                         f"--spec {spec_arg!r} does not match the receipt's "
                         f"{prior.get('spec')!r}: a command session continues only "
@@ -46309,6 +46350,16 @@ def _last_line(text: str) -> str:
 # started still holds the pipes.
 COMMAND_PIPE_GRACE = 5
 
+# A fan-out draw's worker thread carries its dispatch's state here: ``cancel``
+# (set by an interrupted coordinator, so a command its own session keeps from
+# the terminal's interrupt stops its tree and raises) and ``pid`` (the command
+# running or being stopped now, which the coordinator waits on).
+_REVIEW_COMMAND_DRAW = threading.local()
+
+# Longest a stop can take: the POSIX process listing (10 s) or Windows taskkill
+# (30 s), then the bounded reap.
+REVIEW_COMMAND_STOP_BOUND = 30 + COMMAND_PIPE_GRACE + 5
+
 
 def _stop_review_command_tree(proc) -> Optional[str]:
     """Kill a review command and every process it started; say why not, or None.
@@ -46390,12 +46441,20 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
     its whole process tree; ``stop_error`` says why the tree could not be.
     Raises OSError (FileNotFoundError included) when it cannot start.
     """
+    draw = getattr(_REVIEW_COMMAND_DRAW, "state", None)   # set on a fan-out worker
+    cancel = draw["cancel"] if draw is not None else threading.Event()
+    if cancel.is_set():
+        raise KeyboardInterrupt
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, cwd=str(cwd), env=env,
                             start_new_session=os.name != "nt")
+    if draw is not None:
+        draw["pid"] = proc.pid
     out = bytearray()
     tail = bytearray()
     oversized = threading.Event()
+    window = threading.Lock()   # guards ``collecting`` and the overflow decision
+    collecting = [True]
     stop_errors: list = []
 
     def feed():
@@ -46408,39 +46467,84 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         # read1 returns what is available, so a flushed response is collected
         # even while a lingering helper keeps the pipe from reaching EOF.
         for chunk in iter(lambda: proc.stdout.read1(65536), b""):
-            if not oversized.is_set():
-                out.extend(chunk)
-                if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
-                    oversized.set()
-                    stop_errors.append(_stop_review_command_tree(proc))
+            with window:
+                if collecting[0] and not oversized.is_set():
+                    out.extend(chunk)
+                    if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
+                        oversized.set()   # the caller stops the tree; the reader only signals
 
     def drain_err():
         for chunk in iter(lambda: proc.stderr.read1(65536), b""):
             tail.extend(chunk)
             del tail[:-65536]
 
+    def wait_until(deadline: float, done) -> bool:
+        # Polls so an oversized response or an interrupted fan-out is seen at once.
+        while not done():
+            if cancel.is_set():
+                raise KeyboardInterrupt
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if oversized.is_set():
+                time.sleep(min(0.05, remaining))
+            else:
+                oversized.wait(min(0.05, remaining))
+        return True
+
+    def drained() -> bool:
+        for thread in threads:
+            thread.join(timeout=0.01)
+        return not any(thread.is_alive() for thread in threads)
+
+    def stop() -> None:
+        # The one owner of cleanup: stop the tree, then reap within a bound.
+        nonlocal stopped
+        stop_errors.append(_stop_review_command_tree(proc))
+        stopped = True
+        try:
+            proc.wait(timeout=COMMAND_PIPE_GRACE)   # reap it, so no zombie outlives the stop
+        except subprocess.TimeoutExpired:
+            stop_errors.append(f"the command (pid {proc.pid}) did not exit after it was stopped")
+
     threads = [threading.Thread(target=fn, daemon=True) for fn in (feed, drain_out, drain_err)]
     for thread in threads:
         thread.start()
     problem = None
+    stopped = False
     try:
-        try:
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
+        if not wait_until(time.monotonic() + timeout,
+                          lambda: proc.poll() is not None or oversized.is_set()):
             problem = "timeout"
-            stop_errors.append(_stop_review_command_tree(proc))
-            proc.wait()
+        if problem or oversized.is_set():
+            stop()
         # A child the command left running may hold the pipes open; do not wait on it.
-        deadline = time.monotonic() + COMMAND_PIPE_GRACE
-        for thread in threads:
-            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        wait_until(time.monotonic() + COMMAND_PIPE_GRACE,
+                   lambda: oversized.is_set() or drained())
+        with window:
+            # The response window closes: output after this point is never counted.
+            collecting[0] = False
+            overflowed = oversized.is_set()
+        if overflowed and not stopped:
+            # The response overflowed after the command exited: a helper wrote it.
+            stop()
+        if stopped and cancel.is_set():
+            raise KeyboardInterrupt   # interrupted while it was stopped: report it below
     except BaseException:
         # Its own session no longer receives the terminal's interrupt, during the
-        # wait or while a helper it left still holds the pipes.
-        _stop_review_command_tree(proc)
+        # wait or while a helper it left still holds the pipes. A fan-out draw keeps
+        # its pid published, so the coordinator waits out the stop it is making.
+        if not stopped:
+            stop()
+        stop_error = next((e for e in stop_errors if e), None)
+        if stop_error:
+            print(f"review command (pid {proc.pid}) interrupted; its process tree was not "
+                  f"stopped: {stop_error}", file=sys.stderr)
         raise
-    if oversized.is_set():
-        problem = "oversized"
+    if draw is not None:
+        draw["pid"] = None
+    if overflowed:
+        problem = problem or "oversized"
     stop_error = next((e for e in stop_errors if e), None)
     return (proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail),
             problem, stop_error)
@@ -49199,32 +49303,68 @@ def _review_fanout_run_draw(
 
 
 def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
-    from concurrent.futures import ThreadPoolExecutor
-
     execution = getattr(args, "fanout_execution", None)
     if execution is None:
         execution = _review_fanout_execution()
-    max_workers = 1 if execution == "sequential" else len(draws)
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+    outcomes: list = [None] * len(draws)
+    cancel = threading.Event()   # this dispatch's; never cleared, so a late worker still sees it
+    states = [{"cancel": cancel, "pid": None, "done": threading.Event()} for _ in draws]
+
+    def run(index: int, draw: dict) -> None:
+        _REVIEW_COMMAND_DRAW.state = states[index]
+        try:
+            outcomes[index] = (True, _review_fanout_run_draw(
+                draw, prompts[draw["axis"]], repo_root, args, sidecar_dir))
+        except BaseException as exc:   # re-raised by the coordinator below
+            outcomes[index] = (False, exc)
+        finally:
+            states[index]["done"].set()
+
+    def result(index: int):
+        ok, value = outcomes[index]
+        if not ok:
+            raise value
+        return value
+
+    # Daemon workers, so an interrupted coordinator never waits on a draw it
+    # cannot cancel (a managed HTTP call). Completion is each worker's own event:
+    # an interrupted Thread.join can misreport is_alive.
+    workers = [threading.Thread(target=run, args=(index, draw), daemon=True)
+               for index, draw in enumerate(draws)]
+    try:
         if execution == "sequential":
-            # Await each worker before submitting the next: coordinator interruption
-            # must not leave queued reviewers for executor shutdown to launch.
+            # Await each draw before starting the next: interruption leaves none queued.
             results = []
-            for draw in draws:
-                future = pool.submit(
-                    _review_fanout_run_draw,
-                    draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
-                )
-                results.append(future.result())
+            for index, worker in enumerate(workers):
+                worker.start()
+                states[index]["done"].wait()
+                results.append(result(index))
             return results
-        futs = [
-            pool.submit(
-                _review_fanout_run_draw,
-                draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
-            )
-            for draw in draws
-        ]
-        return [fut.result() for fut in futs]
+        for worker in workers:
+            worker.start()
+        for state in states:
+            state["done"].wait()
+        return [result(index) for index in range(len(workers))]
+    except BaseException:
+        # Command draws stop their trees. Every unfinished draw gets the pipe grace
+        # to publish its outcome for recovery; one still stopping a command gets
+        # as long as a stop can take and is named if it outlasts that. A draw that
+        # cannot be cancelled (a managed HTTP call) is never waited on beyond it.
+        cancel.set()
+        started = time.monotonic()
+        for state in states:
+            while not state["done"].is_set():
+                bound = (REVIEW_COMMAND_STOP_BOUND if state["pid"] is not None
+                         else COMMAND_PIPE_GRACE)
+                remaining = started + bound - time.monotonic()
+                if remaining <= 0:
+                    if state["pid"] is not None:
+                        print(f"review command (pid {state['pid']}) was still being stopped "
+                              "when the review was interrupted; its process tree may still run",
+                              file=sys.stderr)
+                    break
+                state["done"].wait(min(0.05, remaining))
+        raise
 
 
 def _review_fanout_write_meta(
@@ -50679,6 +50819,10 @@ def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
         ):
             return row
     if isinstance(primary, dict):
+        if backend == "command" and primary.get("failed"):
+            # The label still stamps the receipt; a failed draw's session id
+            # is not one validate or deep-pass may continue.
+            return dict(primary, session_id=None)
         return primary
     for row in draws:
         if isinstance(row, dict):
