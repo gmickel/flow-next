@@ -827,6 +827,11 @@ class CommandReviewFixes(CommandTest):
             self.assertEqual(code, 2, out + err)
             self.assertIn("re-dispatch", out + err)
             self.assertFalse(receipt.exists())
+            # The advertised re-dispatch can start: the round was refunded.
+            code, out, err = _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                                      "--receipt", str(receipt), "--spec", "command:fake",
+                                      "--draw", "correctness", "--json")
+            self.assertEqual(code, 0, out + err)
 
     def test_session_passes_never_continue_another_labels_draw(self):
         cases = (
