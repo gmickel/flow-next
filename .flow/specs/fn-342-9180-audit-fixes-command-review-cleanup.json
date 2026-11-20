@@ -508,7 +508,7 @@
     "impl:fn-342-9180-audit-fixes-command-review-cleanup.1": 0
   },
   "spec_path": ".flow/specs/fn-342-9180-audit-fixes-command-review-cleanup.md",
-  "status": "open",
+  "status": "done",
   "title": "9.18.0 audit fixes: command review cleanup and Antigravity recipe",
   "tracker": {
     "baseHashFlow": null,
@@ -521,5 +521,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-20T10:50:28.690662Z"
+  "updated_at": "2026-11-20T10:50:53.825077Z"
 }
