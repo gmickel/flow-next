@@ -6487,7 +6487,7 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
                 break
             if stripped.startswith("```"):
                 close = next((j for j in range(pos + 1, len(lines))
-                              if lines[j].strip().startswith("```")), None)
+                              if lines[j].strip() == "```"), None)
                 block = "\n".join(lines[pos:close + 1]) if close else ""
                 if block.count("```") == 2 and extract_review_json_block(block) is not None:
                     break  # the fenced tally block; any other fence is ambiguous
