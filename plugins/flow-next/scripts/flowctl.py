@@ -6449,8 +6449,8 @@ _REVIEW_CRITERIA_MAX_NOTE = 400
 # The tally lines and fenced tally block the review prompts ask for after the
 # findings; reviewers often write them straight after the criteria section.
 _REVIEW_CRITERIA_TALLY_RE = re.compile(
-    r"^(```|(classification counts|suppressed findings|unaddressed r-ids"
-    r"|protected-path filter)\s*:)",
+    r"^[\s>*_`]*(classification counts|suppressed findings|unaddressed r-ids"
+    r"|protected-path filter)[\s*_`]*:",
     re.IGNORECASE,
 )
 
@@ -6464,7 +6464,7 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
     with an exact grammar, so ANY non-blank line inside it that is not a valid
     record (after stripping a plain bullet marker) is ambiguity and returns
     None - as do duplicate ids and oversized content. A heading, the verdict
-    tag, or a tally line (or its fence) ends the section. Degrade-to-absent,
+    tag, or a tally line or fenced tally block ends the section. Degrade-to-absent,
     never an error; this subsumes every Markdown-prefix variant (ordered
     lists, blockquotes, exotic bullets) generically instead of enumerating
     them.
@@ -6481,10 +6481,14 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
             return None
         entries: list[dict] = []
         seen: set[str] = set()
-        for line in lines[idx + 1:]:
-            stripped = line.strip()
+        for pos in range(idx + 1, len(lines)):
+            stripped = lines[pos].strip()
             if re.match(r"^#{1,6}\s", stripped):
                 break
+            fence = stripped.startswith("```") and _REVIEW_JSON_FENCE_RE.match(
+                "\n".join(lines[pos:]).lstrip())
+            if fence and extract_review_json_block(fence.group(0)) is not None:
+                break  # the fenced tally block; any other fence is ambiguous
             if not stripped:
                 continue
             if re.match(
