@@ -370,7 +370,7 @@ class TestResolve(unittest.TestCase):
     def test_bare_cursor_fills_model_effort_stays_none(self) -> None:
         # Model fills from registry default; effort stays None (no effort axis).
         r = BackendSpec.parse("cursor").resolve()
-        self.assertEqual(r, BackendSpec("cursor", "gpt-5.6-sol-high", None))
+        self.assertEqual(r, BackendSpec("cursor", BACKEND_REGISTRY["cursor"]["models"][0], None))
 
     def test_cursor_env_fills_missing_model(self) -> None:
         os.environ["FLOW_CURSOR_MODEL"] = "composer-2.5"
@@ -1210,7 +1210,7 @@ class TestClaudeReviewSpecResolution(unittest.TestCase):
 
     def test_configured_cursor_default_coerces_to_claude_default(self) -> None:
         args = argparse.Namespace(spec=None, json=False)
-        cursor_default = BackendSpec("cursor", "gpt-5.6-sol-high", None)
+        cursor_default = BackendSpec("cursor", BACKEND_REGISTRY["cursor"]["models"][0], None)
         with mock.patch.object(
             flowctl, "resolve_review_spec", return_value=cursor_default
         ):

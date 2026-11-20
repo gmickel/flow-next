@@ -7549,10 +7549,13 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "copilot": {
         # fn-76: ORDERED quality ranking (strongest first); ``default_model`` ==
-        # ``models[0]``. copilot 1.0.65 rejects gpt-5.6-sol (``--model flag is
-        # not available``), so the ranking top stays gpt-5.5; the ladder steps
-        # down on that signature. (1.0.65 dropped ``gpt-5.2`` / ``gpt-5.2-codex``
-        # — they 400 "Model not available".)
+        # ``models[0]``. The GPT rungs follow codex's order where the docs list
+        # the model for the Copilot CLI: gpt-6.1-sol is GA in Copilot but has no
+        # row in the docs' per-client table (checked 2026-11-20), so it is left
+        # out. The ladder steps down on the model-unavailable signature.
+        # Ids the docs' retirement table marks retired and no longer list are
+        # dropped (checked 2026-11-20); claude-opus-4.8 stays because the docs
+        # still list it for the CLI (annual-plan subscribers keep it).
         # SOURCE OF TRUTH for this list: the GitHub Copilot supported-models
         # docs (docs.github.com/copilot/reference/ai-models/supported-models),
         # NOT a local ``--model`` probe — Copilot availability is org-policy
@@ -7565,24 +7568,15 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         "models": [
             "gpt-6.2-sol",  # GA in Copilot (observed 2026-11-18); medium carries over from the codex study
             "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
-            "gpt-5.5",
-            "gpt-5.4",
+            "gpt-6-sol",  # GA in the Copilot CLI per docs 2026-11-20
+            "gpt-5.6-sol",  # GA in the Copilot CLI per docs 2026-11-20; codex's next rung
             "claude-opus-5.5",  # GA in the CLI per docs 2026-10-07
-            "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-sonnet-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-sonnet-5",
             "claude-opus-4.8",
-            "claude-opus-4.7",
-            "claude-opus-4.6",
-            "claude-opus-4.5",
-            "claude-sonnet-4.5",
-            "claude-sonnet-4",
             "claude-haiku-5.5",  # GA in the CLI per docs 2026-10-07
             "claude-haiku-4.5",
-            "gpt-5.4-mini",
-            "gpt-5.3-codex",
-            "gpt-5-mini",
-            "gpt-4.1",
+            "gpt-5.3-codex",  # the docs' long-term support model
         ],
         # Copilot exposes ``xhigh`` in addition to standard tiers. No ``none`` /
         # ``minimal`` — Claude-family models reject ``--effort`` entirely, which
@@ -7601,20 +7595,26 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``default_model`` == ``models[0]``. Cursor's fallback (run_cursor_exec)
         # consults ``cursor-agent --list-models`` on failure and dispatches the
         # best ``list ∩ ranking`` entry. Model strings are verbatim from
-        # ``cursor-agent --list-models`` (v2026.07); keep synced.
+        # ``cursor-agent --list-models`` (2026.11.19-f005e9d, listed
+        # 2026-11-20); keep synced. That list has no GPT-6.x model, so GPT-5.6
+        # Sol stays the top family, at medium per the reviewer study; it no
+        # longer lists gpt-5.6-terra, claude-opus-4-7 or gpt-5.4. The probing
+        # account has third-party models off, so it refused every OpenAI and
+        # Claude rung, the old default included (``ActionRequiredError: ... is
+        # not included in your weekly usage``), and ran only composer-2.5 and
+        # auto. That refusal is not the model-unavailable signature, so the
+        # ladder does not step on it.
         "models": [
+            "gpt-5.6-sol-medium",
             "gpt-5.6-sol-high",
             "gpt-5.6-sol-xhigh",
             "gpt-5.6-sol-max",
-            "gpt-5.6-sol-medium",
             "gpt-5.6-sol-low",
-            "gpt-5.6-terra-high",
             "gpt-5.6-luna-high",
+            "claude-opus-5-5-high",  # listed 2026-11-20; high matches the claude backend's default effort
             "claude-opus-5-thinking-high",  # probed live 2026-07-24 (launch-day slug)
             "claude-opus-4-8-thinking-high",
-            "claude-opus-4-7-thinking-high",
             "gpt-5.5-high",
-            "gpt-5.4-high",
             "gpt-5.3-codex-xhigh",
             "gpt-5.3-codex-high",
             "gpt-5.3-codex",
@@ -7624,7 +7624,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         ],
         # Cursor bakes reasoning effort into the model name — no ``--effort`` flag.
         "efforts": None,
-        "default_model": "gpt-5.6-sol-high",  # == models[0] (fn-76 invariant)
+        "default_model": "gpt-5.6-sol-medium",  # == models[0] (fn-76 invariant)
     },
     "claude": {
         # fn-221: the Claude Code CLI (``claude -p``) as a packaged review
