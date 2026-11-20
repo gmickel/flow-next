@@ -1021,6 +1021,40 @@ class CommandReviewFixes(CommandTest):
                              ("command", "fake"))
             self.assertEqual(rows["contracts"]["label"], "other")
 
+    def test_interrupted_fanout_keeps_a_same_label_survivors_session(self):
+        # Ctrl-C after the secondary draw published and before the primary did:
+        # finalize recovers the primary from its pending row in meta.json.
+        real_run_draw = flowctl._review_fanout_run_draw
+
+        def interrupted_dispatch(draws, prompts, repo_root, args, sidecar_dir):
+            for draw in draws[1:]:
+                real_run_draw(draw, prompts[draw["axis"]], repo_root, args, sidecar_dir)
+            raise KeyboardInterrupt
+
+        for survivor, expected in (("command:fake", "cmd-2"), ("command:other", None)):
+            with self.subTest(survivor=survivor), _flow_repo() as (repo, base):
+                CommandRepo(repo, [dict(SHIP, response=dict(SHIP["response"], sessionId="cmd-2"))],
+                            extra_labels=("other",))
+                receipt = repo / "fanout.json"
+                with mock.patch.object(flowctl, "_review_fanout_dispatch",
+                                       side_effect=interrupted_dispatch), \
+                        self.assertRaises(KeyboardInterrupt):
+                    _run_cli("command", "impl-review-fanout", TASK_ID, "--base", base,
+                             "--receipt", str(receipt), "--spec", "command:fake",
+                             "--draw", "correctness", "--draw", f"contracts={survivor}",
+                             "--json")
+                rid = next((repo / ".flow" / "review-fanout").iterdir()).name
+                merged = repo / "merged.md"
+                merged.write_text("No findings.\n<verdict>SHIP</verdict>\n", encoding="utf-8")
+                code, out, err = _run_cli("command", "impl-review-fanout-finalize", TASK_ID,
+                                          "--base", base, "--rid", rid, "--merged-file",
+                                          str(merged), "--receipt", str(receipt), "--json")
+                self.assertEqual(code, 0, out + err)
+                published = json.loads(receipt.read_text())
+                self.assertEqual((published["spec"], published["label"]),
+                                 ("command:fake", "fake"))
+                self.assertEqual(published["session_id"] or None, expected)
+
     def test_session_passes_never_continue_another_labels_draw(self):
         cases = (
             # (primary draw's step, the session the receipt and the passes may use)
