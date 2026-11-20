@@ -6446,6 +6446,13 @@ _REVIEW_CRITERIA_LINE_RE = re.compile(
 )
 _REVIEW_CRITERIA_MAX_ENTRIES = 100
 _REVIEW_CRITERIA_MAX_NOTE = 400
+# The tally lines and fenced tally block the review prompts ask for after the
+# findings; reviewers often write them straight after the criteria section.
+_REVIEW_CRITERIA_TALLY_RE = re.compile(
+    r"^(```|(classification counts|suppressed findings|unaddressed r-ids"
+    r"|protected-path filter)\s*:)",
+    re.IGNORECASE,
+)
 
 
 def parse_review_criteria(output: str) -> Optional[list[dict]]:
@@ -6456,7 +6463,8 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
     follows any quoted prompt text). The section is machine-mandated output
     with an exact grammar, so ANY non-blank line inside it that is not a valid
     record (after stripping a plain bullet marker) is ambiguity and returns
-    None - as do duplicate ids and oversized content. Degrade-to-absent,
+    None - as do duplicate ids and oversized content. A heading, the verdict
+    tag, or a tally line (or its fence) ends the section. Degrade-to-absent,
     never an error; this subsumes every Markdown-prefix variant (ordered
     lists, blockquotes, exotic bullets) generically instead of enumerating
     them.
@@ -6485,6 +6493,8 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
                 stripped,
             ):
                 break  # the required terminal verdict tag ends the section
+            if _REVIEW_CRITERIA_TALLY_RE.match(stripped):
+                break
             if stripped.startswith(("- ", "* ", "+ ")):
                 stripped = stripped[2:].strip()
             m = _REVIEW_CRITERIA_LINE_RE.match(stripped)
@@ -7824,10 +7834,11 @@ class BackendSpec:
             )
         reg = BACKEND_REGISTRY[backend]
         if backend == "command":
-            label = parts[1].strip() if len(parts) > 1 else ""
-            if not label or len(parts) > 2:
+            label = parts[1] if len(parts) > 1 else ""
+            # Exactly the config schema's ``^command:<label>$``: no whitespace anywhere.
+            if not label or len(parts) > 2 or re.search(r"\s", str(spec)):
                 raise ValueError(
-                    f"Backend 'command' takes exactly one label: command:<label>, "
+                    f"Backend 'command' takes exactly one label and no whitespace: command:<label>, "
                     f"whose argv is in FLOW_REVIEW_COMMAND_<LABEL> (got {raw!r})"
                 )
             if not REVIEW_COMMAND_LABEL_RE.fullmatch(label):
@@ -8189,11 +8200,13 @@ def resolve_review_spec(
                 pass
 
     # 3: FLOW_REVIEW_BACKEND env (spec-form or bare backend)
-    env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    env_raw = os.environ.get("FLOW_REVIEW_BACKEND", "")
+    env_val = env_raw.strip()
     if _is_removed_backend_value(env_val):
         return _ret(BackendSpec(backend_hint).resolve(), "removed")
     if env_val:
-        parsed = parse_backend_spec_lenient(env_val, warn=True)
+        # The unstripped value: a command spec allows no whitespace, as in the schema.
+        parsed = parse_backend_spec_lenient(env_raw, warn=True)
         if parsed is not None:
             return _ret(parsed.resolve(), "env")
 
@@ -20463,9 +20476,9 @@ def cmd_config_set(args: argparse.Namespace) -> None:
 
     # fn-123 R5 - reject invalid host backend specs at WRITE time. The read-time
     # lenient parser treats a bad host spec as unset (loud, but late); accepting
-    # `host:opus` here and failing later is a worse contract. Only host and the
-    # removed backends are write-validated - legacy lenience for other backends'
-    # stored values stays.
+    # `host:opus` here and failing later is a worse contract. Only host, command
+    # and the removed backends are write-validated - legacy lenience for other
+    # backends' stored values stays.
     if canonical_key == "review.backend" and isinstance(args.value, str):
         _rb_first = args.value.strip().split(":", 1)[0].strip()
         if _rb_first in REMOVED_REVIEW_BACKENDS:
@@ -20477,6 +20490,12 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 f"block, not the backend string. Use: flowctl config set review.backend host",
                 use_json=args.json,
             )
+        # A command spec without its label can never run; an unset variable may be set later.
+        if _rb_first == "command":
+            try:
+                BackendSpec.parse(args.value)
+            except ValueError as exc:
+                error_exit(str(exc), use_json=args.json)
 
     # fn-134.2 — tracker.specIds is a strict string-enum (flow|tracker). Reject
     # invalid values at WRITE time so a typo never lands on disk. READ-side
@@ -20570,14 +20589,15 @@ def cmd_review_backend(args: argparse.Namespace) -> None:
         except Exception:
             pass
 
-    env_val = os.environ.get("FLOW_REVIEW_BACKEND", "").strip()
+    env_raw = os.environ.get("FLOW_REVIEW_BACKEND", "")
+    env_val = env_raw.strip()
     if spec is None and not removed and _is_removed_backend_value(env_val):
         removed = True
     if spec is None and not removed and env_val:
         # Lenient parse handles spec-form and legacy bare values; degrades on
         # bad input rather than silently falling to ASK (previous behavior
         # quietly dropped ``codex:gpt-5.2``).
-        parsed = parse_backend_spec_lenient(env_val, warn=False)
+        parsed = parse_backend_spec_lenient(env_raw, warn=False)
         if parsed is not None:
             spec = parsed.resolve()
             source = "env"
@@ -28316,6 +28336,34 @@ def get_criteria_path() -> Path:
     return get_flow_dir() / CRITERIA_FILE
 
 
+CRITERIA_LINK_AS_FILE_ERROR = (
+    "invalid .flow/criteria.md: git tracks it as a symlink, but this checkout "
+    "holds a plain file with the link's target path (git without symlink "
+    "support); run `git config core.symlinks true` and "
+    "`git checkout -- .flow/criteria.md`, or copy the target's content in"
+)
+
+
+def _criteria_link_stored_as_file(path: Path) -> bool:
+    """True when git tracks ``path`` as a symlink but the checkout holds a plain file.
+
+    That is what git writes for a link on a checkout without symlink support:
+    a link that never resolved, not a file with zero criteria. Asked only after
+    the file parsed to zero criteria, so criteria-bearing repos pay nothing.
+    """
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "--stage", "--", path.name],
+            cwd=str(path.parent), capture_output=True, text=True,
+            timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.startswith("120000 ")
+
+
 def _criteria_parse(text: str) -> tuple[list[dict], list[str]]:
     """Parse criteria markdown into ([{id, text}], [error strings]).
 
@@ -28401,6 +28449,8 @@ def cmd_criteria_list(args: argparse.Namespace) -> None:
             "invalid .flow/criteria.md: " + "; ".join(errors),
             use_json=use_json,
         )
+    if not entries and _criteria_link_stored_as_file(path):
+        error_exit(CRITERIA_LINK_AS_FILE_ERROR, use_json=use_json)
 
     if use_json:
         json_output(
@@ -28482,6 +28532,8 @@ def build_global_criteria_block() -> str:
             + " (run `flowctl criteria list` to diagnose)"
         )
     if not entries:
+        if _criteria_link_stored_as_file(path):
+            raise ValueError(CRITERIA_LINK_AS_FILE_ERROR)
         return ""
     bullets = "\n".join(f"- **{e['id']}:** {e['text']}" for e in entries)
     return _GLOBAL_CRITERIA_BLOCK_TEMPLATE.format(criteria_bullets=bullets)
@@ -46156,6 +46208,11 @@ def _review_command_lookup(name: str) -> Optional[str]:
     return None
 
 
+def _review_command_var(label: str) -> str:
+    """The machine-local variable that holds ``command:<label>``'s argv."""
+    return "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
+
+
 def _review_command_argv(label: Optional[str]) -> list:
     """The argv in the machine-local ``FLOW_REVIEW_COMMAND_<LABEL>`` variable.
 
@@ -46174,7 +46231,7 @@ def _review_command_argv(label: Optional[str]) -> list:
             f"command label {label!r} may use only lowercase letters, digits, "
             "'-' and '_', so it names one FLOW_REVIEW_COMMAND_<LABEL> variable"
         )
-    var = "FLOW_REVIEW_COMMAND_" + label.upper().replace("-", "_")
+    var = _review_command_var(label)
     review = load_flow_config().get("review")
     if isinstance(review, dict) and "commands" in review:
         raise ValueError(
@@ -46253,19 +46310,93 @@ def _last_line(text: str) -> str:
 COMMAND_PIPE_GRACE = 5
 
 
+def _stop_review_command_tree(proc) -> Optional[str]:
+    """Kill a review command and every process it started; say why not, or None.
+
+    POSIX starts the command in its own session, so one signal reaches its process
+    group; descendants that left the group (a helper in a session of its own) are
+    found by parent pid while the command still runs, and killed one by one.
+    Windows walks the tree from the still-running command with taskkill, by
+    absolute path so the checkout's directory is never searched for it.
+    """
+    stop_error = None
+    if os.name == "nt":
+        taskkill = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
+                                "System32", "taskkill.exe")
+        try:
+            done = subprocess.run([taskkill, "/T", "/F", "/PID", str(proc.pid)],
+                                  capture_output=True, timeout=30, check=False)
+            if done.returncode not in (0, 128):   # 128: the process had already exited
+                stop_error = f"taskkill exited {done.returncode}"
+        except (OSError, subprocess.SubprocessError) as exc:
+            stop_error = f"taskkill failed: {exc}"
+    else:
+        import signal
+        descendants = _review_command_descendants(proc.pid)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            stop_error = f"cannot kill its process group: {exc.strerror or exc}"
+        if descendants is None:
+            stop_error = stop_error or "cannot list its processes to stop any outside its group"
+        for pid in descendants or ():
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                stop_error = stop_error or f"cannot kill process {pid}: {exc.strerror or exc}"
+    with suppress(OSError):
+        proc.kill()
+    return stop_error
+
+
+REVIEW_COMMAND_PS_PATHS = ("/bin/ps", "/usr/bin/ps")
+
+
+def _review_command_descendants(root: int) -> Optional[list]:
+    """Every process descended from ``root``, by parent pid (POSIX ``ps``); None if unlisted."""
+    # A fixed system path: no PATH entry, absolute or not, can point into the checkout.
+    ps = next((p for p in REVIEW_COMMAND_PS_PATHS if os.access(p, os.X_OK)), None)
+    if not ps:
+        return None
+    try:
+        listing = subprocess.run([ps, "-A", "-o", "pid=", "-o", "ppid="],
+                                 capture_output=True, text=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    children: dict = {}
+    for line in listing.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0].isdigit() and fields[1].isdigit():
+            children.setdefault(int(fields[1]), []).append(int(fields[0]))
+    found, frontier = [], [root]
+    while frontier:
+        for child in children.get(frontier.pop(), ()):
+            if child not in found:
+                found.append(child)
+                frontier.append(child)
+    return found
+
+
 def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict):
-    """Run a review command; return (returncode, stdout, stderr_tail, problem).
+    """Run a review command; return (returncode, stdout, stderr_tail, problem, stop_error).
 
     stdout is kept up to REVIEW_EXECUTION_RESPONSE_MAX + 1 bytes and the command
     is killed once it writes more; only the last 64 KiB of stderr is kept.
-    ``problem`` is "timeout" or "oversized" when the command was stopped.
+    ``problem`` is "timeout" or "oversized" when the command was stopped, with
+    its whole process tree; ``stop_error`` says why the tree could not be.
     Raises OSError (FileNotFoundError included) when it cannot start.
     """
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, cwd=str(cwd), env=env)
+                            stderr=subprocess.PIPE, cwd=str(cwd), env=env,
+                            start_new_session=os.name != "nt")
     out = bytearray()
     tail = bytearray()
     oversized = threading.Event()
+    stop_errors: list = []
 
     def feed():
         with suppress(OSError):
@@ -46281,8 +46412,7 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
                 out.extend(chunk)
                 if len(out) > REVIEW_EXECUTION_RESPONSE_MAX:
                     oversized.set()
-                    with suppress(OSError):
-                        proc.kill()
+                    stop_errors.append(_stop_review_command_tree(proc))
 
     def drain_err():
         for chunk in iter(lambda: proc.stderr.read1(65536), b""):
@@ -46294,19 +46424,26 @@ def _run_review_command(argv, data: bytes, *, timeout: int, cwd: Path, env: dict
         thread.start()
     problem = None
     try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        problem = "timeout"
-        with suppress(OSError):
-            proc.kill()
-        proc.wait()
-    # A child the command left running may hold the pipes open; do not wait on it.
-    deadline = time.monotonic() + COMMAND_PIPE_GRACE
-    for thread in threads:
-        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            problem = "timeout"
+            stop_errors.append(_stop_review_command_tree(proc))
+            proc.wait()
+        # A child the command left running may hold the pipes open; do not wait on it.
+        deadline = time.monotonic() + COMMAND_PIPE_GRACE
+        for thread in threads:
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    except BaseException:
+        # Its own session no longer receives the terminal's interrupt, during the
+        # wait or while a helper it left still holds the pipes.
+        _stop_review_command_tree(proc)
+        raise
     if oversized.is_set():
         problem = "oversized"
-    return proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail), problem
+    stop_error = next((e for e in stop_errors if e), None)
+    return (proc.returncode, bytes(out[:REVIEW_EXECUTION_RESPONSE_MAX + 1]), bytes(tail),
+            problem, stop_error)
 
 
 def _command_run_exec(
@@ -46328,6 +46465,7 @@ def _command_run_exec(
     """
     label = spec.model or ""
     name = f"command:{label}"
+    var = _review_command_var(label)
     # The label rides spec.model; only an observed model may reach a receipt.
     resolution_out["model"] = "not reported"
     try:
@@ -46352,20 +46490,24 @@ def _command_run_exec(
             request_scope=getattr(args, "managed_review_request_scope", None),
         )
         try:
-            returncode, raw, stderr_tail, problem = _run_review_command(
+            returncode, raw, stderr_tail, problem, stop_error = _run_review_command(
                 argv, json.dumps(payload).encode("utf-8"),
                 # Started outside the checkout, so a relative argument never resolves
                 # inside the branch under review.
                 timeout=timeout, cwd=Path.home(), env=env,
             )
+        # Name the variable, never any part of its value.
         except FileNotFoundError:
-            return None, ("", sid or "", 2, f"{name}: executable not found: {argv[0]}")
+            return None, ("", sid or "", 2, f"{name}: the program in {var} was not found")
         except OSError as exc:
-            return None, ("", sid or "", 2, f"{name}: cannot run {argv[0]}: {exc}")
-        if problem == "timeout":
-            return None, ("", sid or "", 2, f"{name} timed out ({timeout}s)")
-        if problem == "oversized":
-            return None, ("", sid or "", 2, f"{name}: invalid response: response exceeds 16 MiB")
+            return None, ("", sid or "", 2, f"{name}: cannot run the program in {var}: "
+                          f"{exc.strerror or type(exc).__name__}")
+        if problem:
+            not_stopped = (f"; its process tree was not stopped: {stop_error}"
+                           if stop_error else "")
+            reason = (f"{name} timed out ({timeout}s)" if problem == "timeout"
+                      else f"{name}: invalid response: response exceeds 16 MiB")
+            return None, ("", sid or "", 2, reason + not_stopped)
         if returncode != 0:
             detail = _last_line(stderr_tail.decode("utf-8", errors="replace"))
             return None, ("", sid or "", returncode if returncode > 0 else 2,
@@ -48795,7 +48937,7 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
     seen: list[str] = []
     draws: list[dict] = []
     for raw in raw_draws:
-        token = (raw or "").strip()
+        token = raw or ""
         if "=" in token:
             axis, spec_str = token.split("=", 1)
         else:
@@ -48815,14 +48957,14 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
         if spec_str is None:
             spec = default_spec
         else:
-            spec_str = spec_str.strip()
-            if not spec_str:
+            if not spec_str.strip():
                 error_exit(
                     f"invalid --draw spec for {axis}: empty",
                     use_json=args.json,
                     code=2,
                 )
             try:
+                # Unstripped: a command spec allows no whitespace, as in the schema.
                 spec = BackendSpec.parse(spec_str).resolve()
                 if spec.backend == "command":
                     _review_command_argv(spec.model)
@@ -50509,7 +50651,8 @@ def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
     (PR #392 r16) — a partial fan-out that lost its primary must still hand
     round 2 and the optional phases a resumable session rather than
     ``session_id: null``. ``draws[]`` stays honest either way (the failed
-    primary is recorded).
+    primary is recorded). On the command backend the fallback keeps the
+    primary draw's label: another label's session is another program's.
     """
     axis = meta.get("primary_axis")
     primary = next(
@@ -50525,12 +50668,14 @@ def _review_fanout_primary_draw(meta: dict, draws: list, backend: str) -> dict:
         and primary.get("session_id")
     ):
         return primary
+    primary_label = primary.get("label") if isinstance(primary, dict) else None
     for row in draws:
         if (
             isinstance(row, dict)
             and not row.get("failed")
             and row.get("session_id")
             and row.get("backend") == backend
+            and (backend != "command" or row.get("label") == primary_label)
         ):
             return row
     if isinstance(primary, dict):
@@ -51138,7 +51283,7 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         error_exit(
             "fan-out finalize: no resumable primary session (the primary "
             "draw failed and no surviving draw carries a session on the "
-            "review's backend), so "
+            "review's backend, or on a command review the primary's label), so "
             "the deep / validator passes cannot run — re-run this finalize "
             "WITHOUT --phases-resume-session, keeping --hold-for-phases only "
             "when --interactive is enabled, and skip the deep / validator "

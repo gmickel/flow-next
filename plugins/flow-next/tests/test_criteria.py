@@ -1000,6 +1000,101 @@ class TestCriteriaBrokenSymlink(unittest.TestCase):
             self.assertIn("broken symlink", r.stdout + r.stderr)
 
 
+class TestCriteriaLinkStoredAsFile(unittest.TestCase):
+    """A checkout without symlink support writes the link as a file holding its target path."""
+
+    def _run(self, content, *, as_link):
+        """criteria list and prompt-block on a plain .flow/criteria.md holding ``content``.
+
+        ``as_link`` records it in the index as a symlink (mode 120000), exactly
+        what a checkout with ``core.symlinks`` off has for a committed link.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            def git(*argv):
+                return subprocess.run(["git", *argv], cwd=td, check=True,
+                                      capture_output=True, text=True).stdout.strip()
+            git("init", "-q")
+            os.makedirs(os.path.join(td, ".flow"))
+            with open(os.path.join(td, ".flow", "criteria.md"), "w", encoding="utf-8") as fh:
+                fh.write(content)
+            if as_link:
+                blob = git("hash-object", "-w", ".flow/criteria.md")
+                git("update-index", "--add", "--cacheinfo", f"120000,{blob},.flow/criteria.md")
+            else:
+                git("add", ".flow/criteria.md")
+            listed = subprocess.run([*FLOWCTL_CMD, "criteria", "list", "--json"],
+                                    capture_output=True, text=True, cwd=td)
+            block = subprocess.run([*FLOWCTL_CMD, "criteria", "prompt-block"],
+                                   capture_output=True, text=True, cwd=td)
+            return listed, block
+
+    def test_link_checked_out_as_a_file_fails_closed(self):
+        for target in ("../vendor/org-guidelines/criteria.md", "../Shared Rules/criteria.md",
+                       "criteria"):
+            with self.subTest(target=target):
+                listed, block = self._run(target, as_link=True)
+                self.assertNotEqual(listed.returncode, 0, listed.stdout)
+                self.assertIn("symlink", listed.stdout + listed.stderr)
+                self.assertNotEqual(block.returncode, 0)
+                self.assertIn("symlink", block.stderr)
+                self.assertEqual(block.stdout, "")
+
+    def test_other_zero_criteria_files_stay_valid_and_silent(self):
+        for content in ("# Global acceptance criteria\n",
+                        "No standing criteria yet.\n",
+                        "<!-- - **G1:** example -->\n",
+                        "<!--see:docs/criteria.md-->\n",
+                        "[review](./review.md)\n",
+                        "../vendor/org-guidelines/criteria.md\n",
+                        "N/A\n",
+                        ""):
+            with self.subTest(content=content):
+                listed, block = self._run(content, as_link=False)
+                self.assertEqual(listed.returncode, 0, listed.stdout + listed.stderr)
+                self.assertEqual(json.loads(listed.stdout)["count"], 0)
+                self.assertEqual((block.returncode, block.stdout, block.stderr), (0, "", ""))
+
+
+class TestReceiptTallyTerminator(unittest.TestCase):
+    """A tally line straight after the criteria section ends it, as reviewers write it."""
+
+    # The section and tally as a codex reviewer returned them (trailing double-space breaks kept).
+    REVIEWER_TAIL = (
+        "## Global criteria\n\n"
+        "G1: n/a - The diff adds no always-loaded prompt prose.  \n"
+        "G2: n/a - The diff changes no tests.  \n"
+        "G4: met - The change documents existing behavior without adding a workflow requirement.\n\n"
+        "Classification counts: 0 introduced, 0 pre_existing.\n\n"
+        "```json\n"
+        '{"classification_counts":{"introduced":0,"pre_existing":0},"unaddressed":[]}\n'
+        "```\n\n"
+        "<verdict>SHIP</verdict>\n"
+    )
+
+    def test_reviewer_output_keeps_its_criteria(self):
+        out = flowctl.parse_review_criteria(self.REVIEWER_TAIL)
+        self.assertEqual([(c["id"], c["status"]) for c in out],
+                         [("G1", "n/a"), ("G2", "n/a"), ("G4", "met")])
+
+    def test_each_tally_line_ends_the_section(self):
+        for tally in ("Classification counts: 1 introduced, 0 pre_existing.",
+                      "Suppressed findings: 2 at confidence 25",
+                      "Unaddressed R-IDs: []",
+                      "Protected-path filter: dropped 1 finding"):
+            with self.subTest(tally=tally):
+                text = f"## Global criteria\nG1: met - ok\n{tally}\nG2: violated - after the tally\n"
+                out = flowctl.parse_review_criteria(text)
+                self.assertEqual([c["id"] for c in out], ["G1"])
+
+    def test_fenced_tally_block_ends_the_section(self):
+        text = "## Global criteria\nG1: met - ok\n```json\n{}\n```\n"
+        self.assertEqual([c["id"] for c in flowctl.parse_review_criteria(text)], ["G1"])
+
+    def test_other_prose_after_the_section_still_degrades(self):
+        text = "## Global criteria\nG1: met - ok\nAlso, I liked it.\n"
+        self.assertIsNone(flowctl.parse_review_criteria(text))
+
+
 class TestGidNumberGrammar(unittest.TestCase):
     """Round 15: G-IDs start at 1, no leading zeros - consistently on both surfaces."""
 
