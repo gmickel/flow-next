@@ -23,20 +23,23 @@ and follow its autonomous refusal, ask and plan-first sections before the Direct
 
 ## Direct route: mint the implicit task
 
-Re-read `$FLOWCTL show <spec-id> --json` and apply Phase 1's direct-route review
-gate before writing the route or minting. A persisted `needs_work` / `needs_human`
-or a request for design review made during the fork stops this run with
-`NEEDS_HUMAN`; instruct separate `$flow-next-plan-review` for this spec before
+If the interactive ask in `no-plan-ask.md` ran, re-read `$FLOWCTL show <spec-id> --json`
+and re-apply Phase 1's direct-route review gate before writing the route or minting; on a
+clean `NO_PLAN=1` fast path Phase 1 already read `show` and applied that gate. A persisted
+`needs_work` / `needs_human` or a request for design review made during the fork stops this
+run with `NEEDS_HUMAN`; instruct separate `$flow-next-plan-review` for this spec before
 re-invoking work. No backend or `--no-plan` choice bypasses that gate.
 
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
 worker could act on): hand back to the user with a pointer to `$flow-next-plan` or
 `$flow-next-refine` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
-task, no further confirmation. First persist the accepted route, including flag-only
-and interactive choices. Stop on a failed write; never mint after one. This survives
-a crash before mint without fabricating a plan-review verdict.
+task, no further confirmation. First persist the accepted route when `no_plan` is not
+already `true` on the spec, including flag-only and interactive choices. Stop on a failed
+write; never mint after one. This survives a crash before mint without fabricating a
+plan-review verdict.
 
 ```bash
+# Skip spec set-no-plan when Phase 1's show JSON already reported no_plan == true.
 $FLOWCTL spec set-no-plan <spec-id> --json
 $FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfies "R1,R2,..." \
   --acceptance "Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly." \

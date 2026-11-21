@@ -138,7 +138,7 @@ When 1.3 loaded a feature, scenario steps use its routes and commands.
 2. **Boundaries** are non-goals: never test them, and never file a "missing" feature a boundary
    excludes.
 3. **Decision context** supplies the expected behaviour for the scenarios it governs.
-4. **Prior bugs.** Search `$FLOWCTL memory search "<surface or module>" --track bug` for the
+4. **Prior bugs.** Search `$FLOWCTL memory search "<surface or module>" --track bug --limit 10` for the
    touched surfaces and add a `regression` scenario (no R-ID; it does not count toward coverage)
    for each prior bug that still plausibly applies, unless a boundary excludes it or the diff
    removed the code.

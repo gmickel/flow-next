@@ -11,14 +11,8 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SCRIPTS="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-resolve-pr/scripts"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-# The origin remote names the forge (fast local check for canonical hosts; flowctl fallback for custom SSH aliases).
-ORIGIN_HOST="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#' | tr '[:upper:]' '[:lower:]')" || ORIGIN_HOST=""
-case "$ORIGIN_HOST" in
-  github.com|ssh.github.com) FORGE=github ;;
-  gitlab.com) FORGE=gitlab ;;
-  bitbucket.org|ssh.bitbucket.org|altssh.bitbucket.org) FORGE=bitbucket ;;
-  *) FORGE="$("$FLOWCTL" pilot snapshot --forge-only --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true ;;
-esac
+# The origin remote names the forge (flowctl's local --forge-only rule; no PR list or spec scan); anything unread stays on GitHub.
+FORGE="$("$FLOWCTL" pilot snapshot --forge-only --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true
 FORGE="${FORGE:-github}"
 ```
 

@@ -7,13 +7,15 @@ Read the one section the sentinel named.
 
 ## Tracker sync
 
-Runs after the write-back when the tracker bridge is active and `tracker.perEvent.interview` (the key keeps its old name) is set to anything but `off`. Refinements made in flow go to the tracker, and tracker-side edits fold into the right spec sections. Re-read the setting once and map it to the operation:
+Runs after the write-back when the tracker bridge is active and `tracker.perEvent.interview` (the key keeps its old name) is set to anything but `off`. Refinements made in flow go to the tracker, and tracker-side edits fold into the right spec sections. Read the setting from `$REFINE_PREFLIGHT` (falling back to `config get` only if the preflight config probe was not ok) and map it to the operation:
 
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-LEAF="$("$FLOWCTL" config get tracker.perEvent.interview --json | jq -r '.value')"
+REFINE_PREFLIGHT="${TMPDIR:-/tmp}/flow-refine-preflight-<suffix>.json"   # same literal path as Setup
+LEAF="$(jq -er 'if .probes.config.status == "ok" then (.value.tracker.perEvent.interview // "off") else error("config probe") end' "$REFINE_PREFLIGHT" 2>/dev/null)" \
+  || LEAF="$("$FLOWCTL" config get tracker.perEvent.interview --json | jq -r '.value')"
 case "$LEAF" in
   pull|push|reconcile|comment) OP="$LEAF" ;;
   *) OP="off" ;;   # off, null, or malformed: stay silent
@@ -43,7 +45,7 @@ Only for a spec input; tasks and files carry no spec readiness. Runs after the w
 
 The gate fails open to this file, so check both conditions before asking:
 
-- At least one spec in the repo is already ready (`$FLOWCTL specs --json`). Repos that have not adopted readiness never see this question; the first adoption comes from `flowctl spec ready`, the tracker setup, or prime, never from this prompt.
+- At least one spec in the repo is already ready: reuse `$READY_ADOPTED` from `SKILL.md`'s post-write-back probe when non-empty (only re-run `$FLOWCTL specs --json | jq '[.specs[] | select(.ready == true)] | length'` if that probe failed). Repos that have not adopted readiness never see this question; the first adoption comes from `flowctl spec ready`, the tracker setup, or prime, never from this prompt.
 - `tracker.readyState` is not configured. When the tracker owns readiness, a local mark would be reverted by the next sync, so do not offer one.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.

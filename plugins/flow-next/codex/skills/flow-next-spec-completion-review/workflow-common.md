@@ -114,4 +114,4 @@ final verdict.
 - **Checking code quality** - That's impl-review's job; focus on spec compliance
 - **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)
 
-Backend-specific anti-patterns live in each `workflow-<backend>.md` file.
+Host-backend anti-patterns live in [workflow-host.md](workflow-host.md).

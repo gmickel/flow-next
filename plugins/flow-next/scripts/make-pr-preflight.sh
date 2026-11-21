@@ -130,7 +130,7 @@ done
 CLOSED_IDS=""; CLOSED_IDS_BASE=""
 if [[ -z "$SPEC_ID" ]]; then
   CLOSED_IDS_BASE="${BASE_REF:-$CHAIN_BASE}"
-  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "$CLOSED_IDS_BASE" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CLOSED_IDS_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
+  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
   if [[ -z "$SPEC_ID" ]]; then
     # The exit ends this shell; the no-spec path needs the forge's values from this line.

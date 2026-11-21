@@ -19,8 +19,8 @@ human reviewer and the land gate decide.
 
 It runs when the user invokes it, or as the optional `pipeline.qa` stage (`off | on | auto`,
 default `off`) that `/flow-next:flow` runs after all tasks are done and before make-pr. When
-setting or reading that key, read [gate-selection.md](../flow-next-flow/references/gate-selection.md);
-[`flowctl.md`](../../docs/flow-next/flowctl.md) has the config row. Enable the stage only where
+setting or reading that key, read [gate-selection.md](../flow-next-flow/references/gate-selection.md)
+(`flowctl config get pipeline.qa`). Enable the stage only where
 `/flow-next:prime` reports the app is QA-ready (seeded data, a documented dev login, a drivable
 surface, readable runtime evidence); otherwise every run ends BLOCKED.
 

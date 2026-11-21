@@ -10,8 +10,12 @@ For `TARGETED_TYPE=review_thread` (inline review comment):
 
 ```bash
 COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id)
-THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
-THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
+# Match directly inside FEEDBACK_JSON first; fall back to get-thread-for-comment only if absent (e.g. resolved thread).
+THREAD_ID=$(jq -r --arg cid "$COMMENT_NODE_ID" 'first(.review_threads[] | select(.comments[]?.id == $cid) | .id) // empty' <<<"$FEEDBACK_JSON")
+if [[ -z "$THREAD_ID" ]]; then
+  THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
+  THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
+fi
 # Keep only the matching thread; drop pr_comments + review_bodies; zero cross-invocation signal.
 FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
   .review_threads |= map(select(.id == $tid))
@@ -21,7 +25,7 @@ FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
 ' <<<"$FEEDBACK_JSON")
 ```
 
-For `TARGETED_TYPE=pr_comment` (top-level PR comment) — bypass thread lookup entirely, fetch the single comment via REST and build a minimal feedback payload:
+For `TARGETED_TYPE=pr_comment` (top-level PR comment) — Phase 1 skipped `get-pr-comments`; fetch the single comment via REST and build a minimal feedback payload:
 
 ```bash
 PR_COMMENT_JSON=$(gh api "repos/$OWNER/$REPO/issues/comments/$COMMENT_REST_ID" \

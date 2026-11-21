@@ -31,7 +31,7 @@ mkdir -p "$RUN_DIR"
 
 **Entry gate (before any inspection):**
 
-1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`) AND zero untracked product files (`git status --porcelain --untracked-files -- . ':(exclude).flow/'` must be empty - `git diff` cannot see an untracked file, and an untracked route source would let the audit prove and map product code absent from the PR's base). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
+1. **On the default base.** Resolve the default branch locally first (`git symbolic-ref --quiet --short refs/remotes/origin/HEAD | sed 's#^origin/##'`), falling back to `gh repo view --json defaultBranchRef` or `git remote show origin` only if unset. Fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`) AND zero untracked product files (`git status --porcelain --untracked-files -- . ':(exclude).flow/'` must be empty - `git diff` cannot see an untracked file, and an untracked route source would let the audit prove and map product code absent from the PR's base). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
 2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
 3. **Record the base revision.** Persist `git rev-parse origin/<default>` (e.g. to `$RUN_DIR/entry_base`) - Phase 6's staleness recheck compares revisions, never the working tree, so the run's own later edits can never masquerade as base movement.
 4. **Ship names.** Read the repo's branch and commit naming rules now (project instructions, contributing docs, commit hooks) and note in the run notes how Phase 6 will name the branch and commit. When those rules need a value you cannot know, such as a ticket key, ask for it now, before Phase 1; when nobody can answer (a host loop), end `BLOCKED` naming the missing value. A pass that proves routes and then cannot name its commit has wasted the proofs.
@@ -55,29 +55,18 @@ Read `.flow/features/README.md`. List `.flow/features/*.md`, excluding the index
 | Duplicate slug or path | Keep one; drop the extra |
 | Dead path (row points at nothing) | Drop the row |
 
-**Drift memos.** Consume the `feature-map-drift` tag:
-
-```bash
-# Deterministic tag filter, never scored search: memory search tokenizes its
-# query, so "feature-map-drift" would match on the loose tokens (feature, map,
-# drift) and can miss or misrank the exact tag. Enumerate and filter instead.
-DRIFT_RAW="$($FLOWCTL memory list --track knowledge --json 2>/dev/null || true)"
-DRIFT_IDS="$(printf '%s' "$DRIFT_RAW" | jq -r '[.entries[]? | select((.tags // []) | index("feature-map-drift"))] | .[].entry_id' 2>/dev/null || true)"
-```
-
-Empty → no memos, continue. Fold every listed memo into this pass's targets (feature slug, route, Surface from its title). Titles, tags, named routes only. Never paste memory bodies into later prompts.
-
-**Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
-
-Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay in the live-pass queue and are marked doc drift for Phase 5.
-
-**Provenance facts.** Record the map's last-proven state before any edit. In a home-base workspace, where sibling repos hold the product code, add `--repo <path>` to this command for each one the project instructions name, so their commits age the map:
+**Provenance facts and drift memos.** Record the map's last-proven state and open `feature-map-drift` memos in one call before any edit. In a home-base workspace, where sibling repos hold the product code, add `--repo <path>` to this command for each one the project instructions name, so their commits age the map:
 
 ```bash
 "$FLOWCTL" features status --json > "$RUN_DIR/features-status.json"
 ```
 
-Rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
+- **Drift memos:** read `.open_drift[]` from `$RUN_DIR/features-status.json` (deterministic tag filter inside flowctl). Empty → no memos, continue. Fold every listed memo into this pass's targets (feature slug, route, Surface from its title). Titles, tags, named routes only. Never paste memory bodies into later prompts.
+- **Due rows:** rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
+
+**Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
+
+Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay in the live-pass queue and are marked doc drift for Phase 5.
 
 **Partial-seed retries.** The index's "identified, not yet proven" entries (a prior seed named them as failed routes) join this pass's live-pass queue as candidates - proving them is the retry the seed verdict promised. One that proves gains its feature file; one that fails again stays named in the index and in this run's outcome reason.
 
@@ -152,32 +141,13 @@ The orchestrator (this skill, main thread) merges payloads. Readers do not write
 
 **Goal:** every remaining feature is exercised once against an instance this run started. Required even when source looks clean.
 
-`cli` surfaces drive directly - run the documented command in a run-owned session and capture stdout/stderr/exit per the proof standards; the drive-skill pointer is for UI surfaces. Read [references/doctor-and-proof.md](references/doctor-and-proof.md) **before the first drive**, on each fresh session, and again after any failed drive. Skipping a required Doctor run has broken this.
+Read [references/doctor-and-proof.md](references/doctor-and-proof.md) before the first drive; it owns Doctor timing, process ownership (never drive a foreign instance or kill by process name), orphaned-port / concurrent-isolation `BLOCKED` stops, wedged-UI recovery, proof standards (action + resulting state, side effects, real user paths, `verified-unreachable` pair), and cleanup (never delete evidence under `$RUN_DIR`).
 
-Never drive an instance this run did not start. An orphaned port (a process this run did not start) ends `BLOCKED` with the reclaim instruction for the human. Never kill by process name. Two concurrent runs isolate by disposable profile/port; where the app cannot run twice, the owned-port check fails and this run ends `BLOCKED`. Never a shared drive.
+A checkout that does not build or start as-is, or a host with no usable driver, ends `BLOCKED` naming the breakage or missing driver (seed uses `REFUSED`; maintain's outcome set is `CLEAN`/`CHANGED`/`BLOCKED`). Never write map edits against a broken base.
 
-A checkout that does not build or start as-is: end `BLOCKED` naming the precise breakage. No usable driver on this host: end `BLOCKED` naming the missing driver. (Seed uses `REFUSED` for these; maintain's outcome set is exactly clean/changed/blocked, so a pre-pass failure here is a named block.) Never write map edits against a broken base.
+Start the run-owned instance, run Doctor, then execute the drive plan (`cli` surfaces run their documented command directly and capture stdout/stderr/exit; UI surfaces use the flow-next-drive pointer above). Keep the instance up until any Phase 5 harness fix is re-driven through the same Doctor + drive + proof loop; run final teardown after the last drive and verify every evidence path under `$RUN_DIR` still exists.
 
-Start the instance this run will own. Doctor once for this session, then execute the drive plan:
-
-1. **Doctor** (before first drive this session; after any failed drive; on a fresh session).
-2. **Drive** via the flow-next-drive pointer above. Universal flow: observe → snapshot fresh refs → act → verify → capture.
-3. **Proof** follows [references/doctor-and-proof.md](references/doctor-and-proof.md): capture the user action **and** the resulting state, not just the final screen; verify side effects beside what is visible; exercise the real user path, never a test-only endpoint.
-
-Evidence lands at named paths under `$RUN_DIR`. Reference by path.
-
-**`verified-unreachable`** only with both:
-
-- the **concrete prerequisite** that was unmet
-- the **route that was attempted**
-
-Never record it as verified-via-another-path. An unstated prerequisite is itself drift: queue it for Phase 5 as map drift, not as a pass.
-
-Wedged UI on a healthy process (Doctor cannot see it): reset to a known state or relaunch rather than hoping. Doctor again on the recovered instance before the next drive.
-
-A harness fix from Phase 5 is re-driven live (this same Doctor + drive + proof loop) **before it ships**. Keep the instance up until that re-drive finishes.
-
-**Final teardown after the last drive of this run**, including any Phase 5 re-drive. Cleanup removes instances and scratch this run started, **never evidence**. After teardown, verify each evidence file still exists at its named path. A cleanup that eats the proof fails the step.
+An unstated prerequisite is itself drift: queue it for Phase 5 as map drift, not as a pass.
 
 ### Done when
 

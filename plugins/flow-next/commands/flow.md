@@ -11,4 +11,4 @@ The ONLY purpose of this command is to call the `flow-next-flow` skill. You MUST
 
 **Arguments:** $ARGUMENTS
 
-Pass the arguments to the skill verbatim. The skill routes from its shared routing reference, dispatches the existing stage skills, re-evaluates after each hop, and stops at the next human decision. `--explain` prints the route and its reason with no `.flow/` write and no dispatch. `--auto` runs the same route unattended from the ready flag, hop after hop to a terminal (`--tick` for exactly one hop), and ends with one `PILOT_VERDICT` line. `--until=merge` independently selects gated landing through the existing land stage for the selected spec and PR. Default unattended flow stops before merge; plain attended flow offers landing for an existing PR and asks once unless current scoped authorization already exists. The skill's tail reference owns consent, continuation, and recovery.
+Pass the arguments to the skill verbatim. The skill owns routing, `--explain`, `--auto` (`--tick`, `--backlog`, `--goal`, `--from-issue`), and `--until=merge` landing authority.

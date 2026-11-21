@@ -67,8 +67,10 @@ and apply it before any claim; `--reclaim` is passed only for an owner it admits
 - **Intentional tasks:** any other non-empty task set is the planned route,
   including extra tasks added after direct execution. A stale `no_plan: true` or
   invocation flag does not replace it; report that the existing tasks govern.
-- Read the ready frontier: `$FLOWCTL ready --spec <id> --json`. An admitted
-  direct owner is selected by 3a even when this list is empty.
+- Use the `tasks` array already returned by `$FLOWCTL show <id> --json` to decide
+  between the inline single-task path and the multi-task route (Phase 3's `multi-task.md`
+  reads `$FLOWCTL ready --spec <id> --json` at 3a when needed). An admitted direct owner
+  is selected by 3a even when the ready list is empty.
 
 **Spec file (kind 4) or idea text (kind 5):** read
 [references/spec-less-start.md](references/spec-less-start.md) and create the spec and its single
@@ -180,10 +182,11 @@ here, inline.** Print `Scheduling: inline (single task)`.
 1. **Claim and re-anchor.** `$FLOWCTL start <task-id> --json` (add `--reclaim` only for a direct
    owner Phase 1 admitted for resume), then `$FLOWCTL anchor <task-id> --md`: the task, its spec,
    git state, matching glossary terms and the memory index. Search memory
-   (`$FLOWCTL memory search "<keyword>" --json`) when an entry looks relevant. Record the base:
+   (`$FLOWCTL memory search "<keyword>" --limit 10 --json`) when an entry looks relevant. Record the base:
    `mkdir -p .flow/tmp && git rev-parse HEAD > .flow/tmp/base_commit`.
 2. **Tracker.** Run `$FLOWCTL sync active --json > <run-sync-active.json>` once (a run-unique file
-   under `.flow/tmp/`). Only when it reports `active: true` (or fails) read
+   under `.flow/tmp/`), or reuse the snapshot `spec-id-mint.md` already wrote when `.flow/config.json`
+   is unchanged. Only when it reports `active: true` (or fails) read
    [references/tracker-touchpoints.md](references/tracker-touchpoints.md), passing it that file, and fire its
    `First claim` section now, its `Task done` section after step 6, and its `Completion review`
    section when step 7 ran a completion review that returned SHIP; otherwise nothing fires.

@@ -365,60 +365,9 @@ never invents them.
 
 ## Interactive Walkthrough Phase (--interactive) — all backends
 
-When `INTERACTIVE=true` AND the primary review verdict is `NEEDS_WORK`
-(still NEEDS_WORK after validator if `--validate` also set), walk through
-each finding with the user before entering the fix loop. The skill-side
-loop in [walkthrough.md](walkthrough.md) drives `plain-text numbered prompt`; flowctl provides
-helpers for the defer sink + receipt merge.
+When `INTERACTIVE=true` AND the verdict is still `NEEDS_WORK` (after `--deep` / `--validate` if enabled), read [walkthrough.md](walkthrough.md) and run its per-finding walkthrough (`Apply` / `Defer` / `Skip` / `Acknowledge` / `LFG the rest`), defer sink (`review-walkthrough-defer`), receipt stamp (`review-walkthrough-record`), and Apply-only fixer dispatch. When `INTERACTIVE=false`, skip this phase. Under any autonomy marker (`mode:autonomous`, `FLOW_AUTONOMOUS=1`), ignore `--interactive`, say so once, and run the normal fix loop.
 
-**Preserved by default:** when `INTERACTIVE=false`, this entire section is
-skipped — the fix loop runs against all surviving findings as before.
-Under any autonomy marker (`mode:autonomous`, `FLOW_AUTONOMOUS=1`) nobody is there to walk with:
-ignore `--interactive`, say so once, and run the fix loop.
-
-### Step W.1: Extract findings for the walkthrough
-
-Reuse the validator pass extraction (Step V.1) — same JSON-Lines shape,
-same `/tmp/walkthrough-findings.jsonl`. If `--validate` already ran, use
-the kept set; if `--deep` also ran, use the merged+promoted set.
-
-If zero findings remain (e.g., all validator-dropped), skip the
-walkthrough — nothing to ask about. Verdict should already be SHIP.
-
-### Step W.2: Present each finding + record decision
-
-The skill loops over findings and calls the plain-text numbered prompt (see
-walkthrough.md for platform mapping). For each finding, collect one of:
-
-- Apply (implement fix)
-- Defer (record in sink)
-- Skip (ignore)
-- Acknowledge (note no action)
-- LFG the rest (auto-classify remainder)
-
-Write per-bucket JSONL files for downstream helpers:
-
-```bash
-/tmp/walkthrough-apply.jsonl
-/tmp/walkthrough-defer.jsonl
-/tmp/walkthrough-skip.jsonl
-/tmp/walkthrough-ack.jsonl
-```
-
-"LFG the rest" auto-classifies: P0/P1 @ confidence ≥ 75 → Apply;
-otherwise → Defer.
-
-**Lease renewal while waiting on a human.** A walkthrough has no
-time bound — it blocks once per finding on a reply — but the optional-phase
-lease expires on the liveness bound, and a reply can arrive after it did.
-When the lease is held (an optional flag is enabled), run the RENEW block
-below before EACH plain-text numbered prompt AND immediately after EACH reply, and
-again before Step W.3, W.4, and W.5; a hold for the same owning rid is a
-renewal. A refused renewal means another coordinator's live lease or
-reservation owns the scope now: stop the walkthrough and re-route instead of
-writing over the newer review. W.4's receipt stamp is additionally
-ownership-bound (`--rid`). Restate the count and the rid as literals (shell
-state does not survive across prompt turns).
+**Lease renewal while waiting on a human (applies alongside walkthrough.md).** A walkthrough blocks once per finding on a human reply and can outlive the optional-phase lease TTL. When the lease is held (`OPTIONAL_PHASES_COUNT != 0`), run this renewal block before EACH plain-text numbered prompt, immediately after EACH reply, and before `review-walkthrough-defer`, `review-walkthrough-record` (pass `--rid "$OWNING_RID"` so the stamp is ownership-bound; exit 2 means another coordinator owns the scope), and fixer dispatch; a refused renewal stops the walkthrough and re-routes instead of writing over a newer review:
 
 ```bash
 OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
@@ -430,74 +379,5 @@ if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
   }
 fi
 ```
-
-### Step W.3: Append deferred findings to sink
-
-Run the W.2 RENEW block first (the last reply may have outlived the lease).
-
-```bash
-DEFER_COUNT=$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)
-if [[ "$DEFER_COUNT" -gt 0 ]]; then
-  $FLOWCTL review-walkthrough-defer \
-    --findings-file /tmp/walkthrough-defer.jsonl \
-    --receipt "$RECEIPT_PATH" \
-    --json
-fi
-```
-
-The helper derives the branch slug via `git branch --show-current`,
-creates `.flow/review-deferred/` if absent, and appends a timestamped
-section to `.flow/review-deferred/<branch-slug>.md`.
-
-### Step W.4: Record walkthrough counts in receipt
-
-Run the W.2 RENEW block first. The stamp is ownership-bound: with `--rid`
-it runs under the receipt lock and refuses (exit 2, nothing written) when the
-receipt is another round's or another coordinator holds the live lease —
-treat that refusal like a refused renewal (stop, re-route).
-
-```bash
-OWNING_RID="<owning rid>"
-$FLOWCTL review-walkthrough-record \
-  --receipt "$RECEIPT_PATH" \
-  --rid "$OWNING_RID" \
-  --applied  "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
-  --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
-  --skipped  "$(wc -l < /tmp/walkthrough-skip.jsonl  2>/dev/null || echo 0)" \
-  --acknowledged "$(wc -l < /tmp/walkthrough-ack.jsonl 2>/dev/null || echo 0)" \
-  --lfg-rest "${LFG_USED:-false}" \
-  --json
-```
-
-Receipt gains:
-
-```json
-{
-  "walkthrough": {
-    "applied": 3,
-    "deferred": 2,
-    "skipped": 1,
-    "acknowledged": 0,
-    "lfg_rest": false
-  },
-  "walkthrough_timestamp": "2026-04-24T18:42:00Z"
-}
-```
-
-Additive — existing consumers ignore the new key. Walkthrough never
-flips the verdict; it only sorts findings.
-
-### Step W.5: Fixer dispatch (Apply list only)
-
-Run the W.2 RENEW block first — fixes must never land over a newer review.
-
-If `/tmp/walkthrough-apply.jsonl` is non-empty, dispatch the worker
-agent (or an inline fixer) restricted to those findings. Do **not**
-re-run the primary review inside this session — commit fixes and exit.
-Re-review is a separate user invocation.
-
-If the Apply list is empty, exit without dispatching — the user chose
-to defer / skip / acknowledge everything. The sink captures the
-deferred items for later revisit.
 
 ---

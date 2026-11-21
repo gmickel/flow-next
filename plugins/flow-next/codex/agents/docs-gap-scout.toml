@@ -28,7 +28,7 @@ ls -la website/ site/ pages/ 2>/dev/null
 
 # API docs
 ls -la openapi.* swagger.* api-docs/ 2>/dev/null
-find . -name "*.openapi.yaml" -o -name "*.swagger.json" 2>/dev/null | head -5
+find . \\( -name node_modules -o -name .git -o -name .venv -o -name vendor -o -name dist \\) -prune -o \\( -name "*.openapi.yaml" -o -name "*.swagger.json" \\) -print 2>/dev/null | head -5
 
 # Component docs
 ls -la .storybook/ stories/ 2>/dev/null
@@ -42,12 +42,12 @@ ls -la adr/ adrs/ decisions/ architecture/ 2>/dev/null
 # Generated docs
 ls -la typedoc.json jsdoc.json mkdocs.yml 2>/dev/null
 
-# Project glossary (root + subdirs) — prefer flowctl when present
+# Project glossary (root + subdirs) — filter to REQUEST terms via --match
 # Returns {groups: [{path, entries, count}], file_count, total_terms}
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-"$FLOWCTL" glossary list --json 2>/dev/null \\
+"$FLOWCTL" glossary list --match "<REQUEST keywords>" --json 2>/dev/null \\
   || find . -name GLOSSARY.md -not -path './node_modules/*' -not -path './.git/*' 2>/dev/null
 
 # Decision records (flow-next memory category)
@@ -55,7 +55,7 @@ ls -la .flow/memory/knowledge/decisions/ 2>/dev/null
 ```
 
 Notes on the glossary scan:
-- Prefer `flowctl glossary list --json` — it walks ancestors and groups by file. Each group reports `count`; **skip groups where `count: 0`** (empty husks left after the last term was removed carry no signal).
+- Prefer `flowctl glossary list --match "<REQUEST keywords>" --json` — it walks ancestors, filters to matching terms, and groups by file. Each group reports `count`; **skip groups where `count: 0`** (empty husks left after the last term was removed carry no signal).
 - Fall back to raw `find` only when flowctl is unavailable.
 
 ### 2. Categorize what exists
@@ -95,6 +95,8 @@ For identified docs, quick scan to understand structure:
 - Are there existing ADRs to follow as template?
 
 ## Output Format
+
+**Output budget (hard).** This flows into the planner's context — be a pointer, not a paste. Keep it **under ~450 tokens**. One line per doc/glossary/decision item; omit any section with no entries.
 
 - **Negative claims carry their search basis** — a "no convention/doc/index exists" finding names the paths and terms it rests on (`no adding-a-doc convention — searched agent_docs/ and docs/README.md for "adding"`): a concrete path or glob plus the literal string, never "the repo" or "everything". Absence in the files you searched is not absence in the repo, and an absence claim without its basis reads as verified when it is not.
 

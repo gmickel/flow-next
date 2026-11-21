@@ -4,6 +4,17 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## [Unreleased]
+
+### Changed
+
+- **Faster startup, forge checks, and memory audits.** `flowctl --help` now takes its authenticated static fast path on Python 3.11 through 3.13 as well as 3.14, and default C/English locales skip `argparse` gettext catalog probes. `flowctl memory audit-scan` batches git status and `.flow/memory/` history into one pass (about 5x faster on mature stores). `resolve-pr` and `land` detect canonical forge hosts locally with a `--forge-only` fallback on `flowctl pilot snapshot` instead of listing all PRs and specs; `make-pr` skips unnecessary `ssh -G`, duplicate `show` calls, empty `closed-in-range` checks, and update-mode sleep; `resolve-pr` paginates only unexhausted threads over stdin and combines thread reply and resolve into one GraphQL mutation.
+- **Leaner skill context and single-reviewer fast paths.** Open-spec and open-task recipes filter out closed history before printing, unbounded `memory search` calls cap results at 10, `docs-gap-scout` filters glossary lookups with `--match`, and `qa` drops its link to `docs/flowctl.md`. Single-reviewer CLI `impl-review` rounds invoke `flowctl <backend> impl-review` directly instead of the two-phase fan-out merge, fan-out rounds materialize one shared diff per round, and CLI `plan-review` and `spec-completion-review` dispatch directly from each skill's CLI fast path without loading separate per-backend markdown files.
+
+### Fixed
+
+- **Review re-review preambles and effort fallbacks.** Plan re-review preambles no longer tell the read-only reviewer to run `flowctl task set-spec`, completion re-reviews apply the convergence ratchet closing when prior findings are present instead of asking for full re-verification, completion review prompts drop the duplicate terminal role header, and fallback effort strings in `run_codex_exec` and `run_copilot_exec` match the `medium` registry default.
+
 ## [flow-next 9.18.0] - 2026-11-20
 
 Flow-Next runs in Google's Antigravity CLI, and the host you already use can drive Antigravity. One installer puts every skill and all 21 agents into Antigravity, with agent models mapped to its tiers, and checks that each one loads; setup recognizes the host and the `/flow-next:<name>` commands work as typed. On Antigravity CLI 1.5.13 a full plan ran with its scouts and a codex plan review, and work on a two-task spec had each worker commit its task and pass a codex review. From Claude Code, Codex or another host, the bridge recipe in `flowctl usage` hands Antigravity a self-contained implementation task with push and history rewrite denied, and a read-only `agy` wrapper puts Antigravity behind your reviews as a review command; it reached SHIP in a live review and resumed its conversation on the re-review. Bare `copilot` and `cursor` reviewers now fall back through the models their CLI serves today, and a bare `cursor` reviewer runs at medium effort, as `codex` and `copilot` do. A shared criteria link checked out as a plain file now fails the review closed instead of reviewing without your standing criteria, and a completion receipt keeps its per-criterion verdicts when a tally line follows them.

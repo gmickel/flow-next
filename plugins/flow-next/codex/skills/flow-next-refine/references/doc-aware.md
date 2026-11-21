@@ -19,9 +19,10 @@ When `DOC_AWARE=1`: read [doc-aware-docs.md](doc-aware-docs.md) for the glossary
 
 ### Behavior (e) — Code-versus-strategy contradiction (`STRATEGY_AWARE=1` only)
 
-Parallel structure to behavior (a) — Phase-zero glossary scan. Before drafting the first question batch in a `STRATEGY_AWARE=1` session, run a strategy scan against the user's request.
+Parallel structure to behavior (a) — Phase-zero glossary scan. Before drafting the first question batch in a `STRATEGY_AWARE=1` session, run a strategy scan against the user's request. Reuse the `STRATEGY.md` content already read in `SKILL.md` §Investigate before asking (only call `"$FLOWCTL" strategy read --json` if `STRATEGY.md` was not already read this session):
 
 ```bash
+# Only needed if STRATEGY.md was not already read in SKILL.md
 "$FLOWCTL" strategy read --json
 ```
 

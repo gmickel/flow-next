@@ -34,8 +34,8 @@ class ClusterReplyTests(unittest.TestCase):
     def _run(self, shell, verdicts):
         with tempfile.TemporaryDirectory() as tmp:
             scripts, calls = Path(tmp), Path(tmp) / "calls"
-            # The reply script reads its body from stdin; the resolve script, like the real one, reads none.
-            (scripts / "reply-to-pr-thread").write_text(f'cat >/dev/null; echo "reply-to-pr-thread $1" >> "{calls}"\n')
+            # The reply script reads its body from stdin and accepts optional --resolve to combine GraphQL mutations.
+            (scripts / "reply-to-pr-thread").write_text(f'cat >/dev/null; echo "reply-to-pr-thread $*" >> "{calls}"\n')
             (scripts / "resolve-pr-thread").write_text(f'echo "resolve-pr-thread $1" >> "{calls}"\n')
             env = dict(os.environ, SCRIPTS=str(scripts), PR_NUMBER="7", VERDICTS=json.dumps(verdicts))
             result = subprocess.run([*shell, "-c", _fence("reply-to-pr-thread")], env=env, text=True,
@@ -47,15 +47,15 @@ class ClusterReplyTests(unittest.TestCase):
         for shell in SHELLS:
             with self.subTest(shell=shell[0]):
                 calls = self._run(shell, [_verdict("PRRT_a", "fixed"), _verdict("PRRT_b", "fixed")])
-                self.assertEqual(sorted(calls), ["reply-to-pr-thread PRRT_a", "reply-to-pr-thread PRRT_b",
-                                                 "resolve-pr-thread PRRT_a", "resolve-pr-thread PRRT_b"])
+                self.assertEqual(sorted(calls), ["reply-to-pr-thread PRRT_a --resolve",
+                                                 "reply-to-pr-thread PRRT_b --resolve"])
 
     def test_needs_human_thread_in_a_cluster_is_replied_not_resolved(self):
         for shell in SHELLS:
             with self.subTest(shell=shell[0]):
                 calls = self._run(shell, [_verdict("PRRT_a", "fixed"), _verdict("PRRT_b", "needs-human")])
-                self.assertEqual(sorted(calls), ["reply-to-pr-thread PRRT_a", "reply-to-pr-thread PRRT_b",
-                                                 "resolve-pr-thread PRRT_a"])
+                self.assertEqual(sorted(calls), ["reply-to-pr-thread PRRT_a --resolve",
+                                                 "reply-to-pr-thread PRRT_b"])
 
 
 if __name__ == "__main__":

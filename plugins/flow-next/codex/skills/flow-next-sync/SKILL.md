@@ -78,10 +78,7 @@ $FLOWCTL tasks --spec "$SPEC" --json
 
 Filter to `status: todo` or `status: blocked`. Exclude the source task itself.
 
-**For spec ID input:**
-```bash
-$FLOWCTL tasks --spec "<spec-id>" --json
-```
+**For spec ID input:** reuse the `tasks` array already returned by Step 3's `$FLOWCTL show <spec-id> --json` (no second `tasks --spec` call needed).
 
 1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_IDS`):
    - Prefer most recently updated task with `status: done`
@@ -115,15 +112,10 @@ SYNC_CONTEXT=$(mktemp -d "$(pwd)/.flow/tmp/plan-sync.XXXXXX") || exit 2
 GLOSSARY_JSON_FILE="$SYNC_CONTEXT/glossary.json"
 DECISIONS_JSON_FILE="$SYNC_CONTEXT/decisions.json"
 STRATEGY_CONTENT_FILE="$SYNC_CONTEXT/strategy.json"
-if ! "$FLOWCTL" glossary list --json > "$GLOSSARY_JSON_FILE" 2>/dev/null || [ ! -s "$GLOSSARY_JSON_FILE" ]; then
-  printf '%s\n' '{"groups":[],"file_count":0,"total_terms":0}' > "$GLOSSARY_JSON_FILE"
-fi
-if ! "$FLOWCTL" memory list --track knowledge --category decisions --json > "$DECISIONS_JSON_FILE" 2>/dev/null || [ ! -s "$DECISIONS_JSON_FILE" ]; then
-  printf '%s\n' '{"entries":[],"legacy":[],"count":0,"status":"active"}' > "$DECISIONS_JSON_FILE"
-fi
-if ! "$FLOWCTL" strategy read --json > "$STRATEGY_CONTENT_FILE" 2>/dev/null || [ ! -s "$STRATEGY_CONTENT_FILE" ]; then
-  printf '%s\n' '{}' > "$STRATEGY_CONTENT_FILE"
-fi
+("$FLOWCTL" glossary list --json > "$GLOSSARY_JSON_FILE" 2>/dev/null && [ -s "$GLOSSARY_JSON_FILE" ]) || printf '%s\n' '{"groups":[],"file_count":0,"total_terms":0}' > "$GLOSSARY_JSON_FILE" &
+("$FLOWCTL" memory list --track knowledge --category decisions --json > "$DECISIONS_JSON_FILE" 2>/dev/null && [ -s "$DECISIONS_JSON_FILE" ]) || printf '%s\n' '{"entries":[],"legacy":[],"count":0,"status":"active"}' > "$DECISIONS_JSON_FILE" &
+("$FLOWCTL" strategy read --json > "$STRATEGY_CONTENT_FILE" 2>/dev/null && [ -s "$STRATEGY_CONTENT_FILE" ]) || printf '%s\n' '{}' > "$STRATEGY_CONTENT_FILE" &
+wait
 printf '%s\n' "$GLOSSARY_JSON_FILE" "$DECISIONS_JSON_FILE" "$STRATEGY_CONTENT_FILE"
 ```
 

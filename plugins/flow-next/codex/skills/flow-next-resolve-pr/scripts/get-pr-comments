@@ -3,8 +3,11 @@ set -euo pipefail
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 
-PR_NUMBER="${1:?Usage: $0 PR_NUMBER}"
-OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER [OWNER/REPO]}"
+OWNER_REPO="${2:-}"
+if [ -z "$OWNER_REPO" ]; then
+  OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+fi
 OWNER="${OWNER_REPO%/*}"
 REPO="${OWNER_REPO#*/}"
 
@@ -112,50 +115,60 @@ fetch_thread_comments() {
 # Walk reviewThreads pages and collect raw nodes + static surfaces (author,
 # pr_comments, review_bodies) from the first page.
 first_page="$(fetch_page "")"
-author="$(echo "$first_page" | jq -r '.data.repository.pullRequest.author.login')"
-pr_comments="$(echo "$first_page" | jq '.data.repository.pullRequest.comments.nodes')"
-review_bodies="$(echo "$first_page" | jq '.data.repository.pullRequest.reviews.nodes')"
-
-threads="$(echo "$first_page" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
-has_next="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
-cursor="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+IFS=$'\x1f' read -r author has_next cursor < <(
+  printf '%s' "$first_page" | jq -r '[
+    (.data.repository.pullRequest.author.login // ""),
+    ((.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage // false) | tostring),
+    (.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // "")
+  ] | join("\u001f")'
+)
+pr_comments="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.comments.nodes')"
+review_bodies="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.reviews.nodes')"
+threads="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.reviewThreads.nodes')"
 
 while [ "$has_next" = "true" ]; do
   next="$(fetch_page "$cursor")"
-  next_nodes="$(echo "$next" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
-  threads="$(jq -s '.[0] + .[1]' <(echo "$threads") <(echo "$next_nodes"))"
-  has_next="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
-  cursor="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+  next_nodes="$(printf '%s' "$next" | jq -c '.data.repository.pullRequest.reviewThreads.nodes')"
+  threads="$(printf '%s\n%s\n' "$threads" "$next_nodes" | jq -cs '.[0] + .[1]')"
+  IFS=$'\x1f' read -r has_next cursor < <(
+    printf '%s' "$next" | jq -r '[
+      ((.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage // false) | tostring),
+      (.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // "")
+    ] | join("\u001f")'
+  )
 done
 
-# Fetch additional thread-comments pages when any thread's initial page is
-# not exhausted. Mutates $threads in place.
-thread_count="$(echo "$threads" | jq 'length')"
-i=0
-while [ "$i" -lt "$thread_count" ]; do
-  tid="$(echo "$threads" | jq -r ".[$i].id")"
-  chas_next="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.hasNextPage")"
-  ccursor="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.endCursor")"
+# Fetch additional thread-comments pages ONLY for threads whose initial page is
+# not exhausted (1 jq scan over all threads instead of 3*N forks).
+while IFS=$'\x1f' read -r i tid ccursor; do
+  [ -n "$i" ] || continue
+  chas_next="true"
   while [ "$chas_next" = "true" ]; do
     page="$(fetch_thread_comments "$tid" "$ccursor")"
-    more_nodes="$(echo "$page" | jq '.data.node.comments.nodes')"
-    threads="$(echo "$threads" | jq --argjson idx "$i" --argjson more "$more_nodes" '
-      .[$idx].comments.nodes = (.[$idx].comments.nodes + $more)
+    more_nodes="$(printf '%s' "$page" | jq -c '.data.node.comments.nodes')"
+    threads="$(printf '%s\n%s\n' "$threads" "$more_nodes" | jq -cs --argjson idx "$i" '
+      .[1] as $more | .[0] | .[$idx].comments.nodes += $more
     ')"
-    chas_next="$(echo "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
-    ccursor="$(echo "$page" | jq -r '.data.node.comments.pageInfo.endCursor')"
+    IFS=$'\x1f' read -r chas_next ccursor < <(
+      printf '%s' "$page" | jq -r '[
+        ((.data.node.comments.pageInfo.hasNextPage // false) | tostring),
+        (.data.node.comments.pageInfo.endCursor // "")
+      ] | join("\u001f")'
+    )
   done
-  i=$((i + 1))
-done
+done < <(
+  printf '%s' "$threads" | jq -r '
+    to_entries[]
+    | select(.value.comments.pageInfo.hasNextPage == true)
+    | [(.key | tostring), .value.id, (.value.comments.pageInfo.endCursor // "")]
+    | join("\u001f")'
+)
 
-# Shape the final payload.
-jq -n \
+# Shape the final payload via stdin (avoids ARG_MAX on large PRs).
+printf '%s\n%s\n%s\n' "$threads" "$pr_comments" "$review_bodies" | jq -s \
   --arg pr "$PR_NUMBER" \
   --arg author "$author" \
-  --argjson threads "$threads" \
-  --argjson prc "$pr_comments" \
-  --argjson rvb "$review_bodies" \
-  '{
+  '.[0] as $threads | .[1] as $prc | .[2] as $rvb | {
     pr_number: ($pr | tonumber),
     review_threads: [
       $threads[]

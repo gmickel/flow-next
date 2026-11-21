@@ -6,25 +6,15 @@ user-invocable: false
 
 # Plan Review Mode
 
-**Workflow is backend-split. Read [workflow.md](workflow.md) for common
-orchestration and backend resolution, then read ONLY the file matching the
-selected review backend:**
-
-- `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
-- `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
-- `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
-- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
-- `BACKEND=command` → [workflow-command.md](workflow-command.md)
-- `BACKEND=host` → [workflow-host.md](workflow-host.md)
-
-Do not load the other backend files. `BACKEND=none` and an unknown explicit
-value terminate from the common workflow without loading any backend file.
-
 Conduct a John Carmack-level review of spec plans.
 
 **Role**: Code Review Coordinator (NOT the reviewer)
-**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor),
-Claude Code CLI (claude), a configured review command (`command:<label>`), or host-native (`host`)
+**Backends**: Codex CLI (`codex`), GitHub Copilot CLI (`copilot`), Cursor CLI (`cursor`),
+Claude Code CLI (`claude`), a configured review command (`command:<label>`), or host-native (`host`).
+
+- **CLI backends (`codex`, `copilot`, `cursor`, `claude`, `command`):** run directly from the **CLI Fast Path** below after [workflow.md](workflow.md) Phase 0 & 1 — no extra backend file read needed.
+- **`BACKEND=host`:** read [workflow-host.md](workflow-host.md) after [workflow.md](workflow.md) Phase 0 & 1.
+- **`BACKEND=none` or unknown explicit value:** terminate from [workflow.md](workflow.md) Phase 0 without reading `workflow-host.md`.
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
@@ -50,9 +40,6 @@ resolves `SPEC_ID`, and handles `ASK`, `none` and unknown values. Never invoke
 - `none` skips only when selected explicitly or resolved from configuration.
 - **Foreground rule:** run every `flowctl <backend> plan-review` call as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7) — never `run_in_background` + monitor/poll (a background completion does not reliably resume a subagent context). Host-backend subagent dispatches are also blocking.
 
-Backend-specific invocation, availability, model, session-continuity, receipt,
-and anti-pattern rules live only in the selected backend file.
-
 ## Input
 
 Arguments: $ARGUMENTS
@@ -62,12 +49,36 @@ unattended run (working-rules.md's review loop applies); it is not a focus area.
 
 ## Workflow
 
-1. Execute [workflow.md](workflow.md) Phase 0.
-2. If it returns for `none` or an unknown value, stop. Do not read a backend file.
-3. Read exactly the selected `workflow-<backend>.md`.
-4. Execute one backend dispatch and carry its verdict directly into the shared
-   Fix Loop below.
-5. Continue in that loop until its terminal contract is satisfied.
+1. Execute [workflow.md](workflow.md) Phase 0 and Phase 1 (saves the mandatory checkpoint).
+2. If Phase 0 returns for `none` or an unknown value, stop.
+3. For `codex`, `copilot`, `cursor`, `claude`, or `command`, execute the **CLI Fast Path** below; for `host`, read and follow [workflow-host.md](workflow-host.md).
+4. Carry the verdict directly into the shared Fix Loop below until its terminal contract is satisfied.
+
+## CLI Fast Path (`codex`, `copilot`, `cursor`, `claude`, `command`)
+
+Use `$FLOWCTL "$BACKEND" plan-review` exclusively — never call `codex exec`, `claude -p`, `cursor-agent`, or `copilot` directly, never reconstruct the prompt in prose, and never fabricate a first-call resume id. Always pass `--receipt` (re-reviews resume only when the prior receipt matches the same backend mode, and same label for `command`).
+
+- **`claude` same-family advisory:** on a Claude Code host, writer and reviewer share a model family; the receipt records it and the run proceeds (prefer `codex` or `host` when family independence matters).
+- **`cursor`:** effort is baked into the model name (`cursor:<model>`); `cursor:<model>:<effort>` is rejected.
+- **`command`:** when `--review=command:<label>` named a label, pass `--spec "command:<label>"` on the first review and every fix-loop re-review; a bare `--review=command` leaves the label to the configured backend (`FLOW_REVIEW_COMMAND_<LABEL>`).
+
+```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+SPEC_ID="<spec id resolved in workflow.md Phase 0>"            # substitute literally
+BACKEND="<codex|copilot|cursor|claude|command>"                # substitute literally
+REVIEW_SPEC="<command:<label> when --review named one, else empty>"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/plan-review-receipt-${SPEC_ID}.json}"
+
+args=("$SPEC_ID" --receipt "$RECEIPT_PATH")
+[ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
+"$FLOWCTL" "$BACKEND" plan-review "${args[@]}"
+```
+
+Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`. The handler owns `plan_review_status`, `plan_reviewed_at`, cumulative rounds, and receipt writes. A re-review repeats this same fence after updating the spec/tasks.
 
 ## Fix Loop (INTERNAL)
 

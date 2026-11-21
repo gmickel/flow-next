@@ -35,38 +35,9 @@ Global headers (all domains):
 agent-browser set headers '{"X-Custom-Header": "value"}'
 ```
 
-## Cookies
+## Cookies, Storage, and HTTP Basic Auth
 
-```bash
-agent-browser cookies                    # Get all cookies
-agent-browser cookies set name "value"   # Set cookie
-agent-browser cookies clear              # Clear all cookies
-```
-
-## Local Storage
-
-```bash
-agent-browser storage local              # Get all localStorage
-agent-browser storage local key          # Get specific key
-agent-browser storage local set key val  # Set value
-agent-browser storage local clear        # Clear all
-```
-
-## Session Storage
-
-```bash
-agent-browser storage session            # Get all sessionStorage
-agent-browser storage session key        # Get specific key
-agent-browser storage session set k v    # Set value
-agent-browser storage session clear      # Clear all
-```
-
-## HTTP Basic Auth
-
-```bash
-agent-browser set credentials username password
-agent-browser open https://protected-site.com
-```
+Basic `cookies`, `storage local`, `storage session`, and `set credentials` syntax lives in [commands.md](commands.md).
 
 ## OAuth / SSO Flows
 
@@ -115,54 +86,29 @@ agent-browser state save ./2fa-state.json
 
 ## Token Refresh Handling
 
-For sessions with expiring tokens:
+For sessions with expiring tokens (covers both first-time login and state-save reuse):
 
 ```bash
 STATE_FILE="./auth-state.json"
 
-# Try loading existing state
 if [[ -f "$STATE_FILE" ]]; then
     agent-browser state load "$STATE_FILE"
     agent-browser open https://app.example.com/dashboard
-
-    # Check if session still valid
     URL=$(agent-browser get url)
-    if [[ "$URL" == *"/login"* ]]; then
-        echo "Session expired, re-authenticating..."
-        agent-browser snapshot -i
-        agent-browser fill @e1 "$USERNAME"
-        agent-browser fill @e2 "$PASSWORD"
-        agent-browser click @e3
-        agent-browser wait --url "**/dashboard"
-        agent-browser state save "$STATE_FILE"
-    fi
 else
-    # First-time login
+    URL="/login"
     agent-browser open https://app.example.com/login
-    # ... login flow ...
 fi
-```
 
-## Example: Full Login Flow with State Save
-
-```bash
-# First run: perform login
-agent-browser open https://app.example.com/login
-agent-browser snapshot -i
-agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
-agent-browser click @e3
-agent-browser wait --url "**/dashboard"
-agent-browser wait --load networkidle
-agent-browser snapshot -i  # Verify dashboard
-agent-browser state save auth.json
-agent-browser close
-```
-
-```bash
-# Subsequent runs: skip login
-agent-browser state load auth.json
-agent-browser open https://app.example.com/dashboard
+if [[ "$URL" == *"/login"* ]]; then
+    agent-browser snapshot -i
+    agent-browser fill @e1 "$USERNAME"
+    agent-browser fill @e2 "$PASSWORD"
+    agent-browser click @e3
+    agent-browser wait --url "**/dashboard"
+    agent-browser wait --load networkidle
+    agent-browser state save "$STATE_FILE"
+fi
 ```
 
 ## Session Isolation

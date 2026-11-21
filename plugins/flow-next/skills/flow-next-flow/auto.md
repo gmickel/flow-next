@@ -230,7 +230,9 @@ Derive dispatch flags from the snapshot. Only an explicit review option
 is forwarded; the stage otherwise resolves its configured backend.
 
 ```bash
-REVIEW_ARG=""; QA_STAGE_ENABLED=0; QA_STAGE_AUTO=0
+REVIEW_ARG=""
+QA_STAGE_ENABLED=0
+QA_STAGE_AUTO=0
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
 printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
 IFS=$'\x1f' read -r BACKEND_NAME QA_GATE QA_FRESH < <(

@@ -20,21 +20,14 @@ You receive:
 
 ## Process
 
-### 1. List open specs
+### 1. List open specs and unmerged branch specs (one call)
 
 ```bash
-<FLOWCTL> specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'
+<FLOWCTL> specs --refs --json \\
+  | jq -c '[.specs[] | select(.status == "open" or (.live | length) > 0) | {id, title, status, on_base, live}]'
 ```
 
-The projection keeps open specs only (id, title, status); done specs never reach you.
-
-### 1b. Specs with unmerged changes on other branches
-
-```bash
-<FLOWCTL> specs --refs --json | jq -c '[.specs[] | select(.live != []) | {id, title, on_base, live}]'
-```
-
-Each entry is in-flight work on the branches in `live[].ref`, whatever its status. Read a copy with `git show '<ref>:.flow/specs/<id>.md'`, the whole revision as one single-quoted argument because a pushed ref name can hold shell syntax such as `$(...)`; skip any ref containing a `'`. Judge it like an open spec, naming the ref. An older flowctl rejects `--refs` (exit 2, `unrecognized arguments: --refs`); then continue with step 1's list alone.
+One call returns both open specs in the checkout (`status == "open"`) and in-flight work on other branches (`live != []`, whatever its status); done checkout-only specs never reach you. Read a branch copy with `git show '<ref>:.flow/specs/<id>.md'`, the whole revision as one single-quoted argument because a pushed ref name can hold shell syntax such as `$(...)`; skip any ref containing a `'`. Judge it like an open spec, naming the ref. An older flowctl rejects `--refs` (exit 2, `unrecognized arguments: --refs`); fall back to `<FLOWCTL> specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'`.
 
 ### 2. For each open spec, read it
 

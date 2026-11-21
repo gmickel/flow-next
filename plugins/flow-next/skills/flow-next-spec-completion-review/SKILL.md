@@ -6,21 +6,13 @@ user-invocable: false
 
 # Spec Completion Review Mode
 
-**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy), then read ONLY the file matching your active backend:**
-
-- `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
-- `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
-- `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
-- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
-- `BACKEND=command` → [workflow-command.md](workflow-command.md)
-- `BACKEND=host` → [workflow-host.md](workflow-host.md)
-
-Do not load the others — only the active backend's file is needed.
-
 Verify that the combined implementation of all tasks in a spec satisfies the spec requirements. This is NOT a code quality review (that's impl-review's job) — this confirms spec compliance only.
 
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
-**Backends**: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), a configured review command (`command:<label>`), or host-native (`host`)
+**Backends**: Codex CLI (`codex`), GitHub Copilot CLI (`copilot`), Cursor CLI (`cursor`), Claude Code CLI (`claude`), a configured review command (`command:<label>`), or host-native (`host`).
+
+- **CLI backends (`codex`, `copilot`, `cursor`, `claude`, `command`):** read [workflow-common.md](workflow-common.md) for Phase 0 and the Fix Loop, then run the **CLI Fast Path** below — no extra backend file read needed.
+- **`BACKEND=host`:** read [workflow-common.md](workflow-common.md), then read [workflow-host.md](workflow-host.md).
 
 Read [working-rules.md](../../references/working-rules.md) first unless you already have this run; it holds for every step of this skill.
 
@@ -28,15 +20,13 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 **The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Never invoke `flowctl review-backend` a second time in the same run.
 
-Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them. For `--review=command:<label>`, set `BACKEND=command` and keep the label for the backend file.
+Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them. For `--review=command:<label>`, set `BACKEND=command` and pass `--spec "command:<label>"` on the first review and every fix-loop re-review.
 
 ## Backend at a glance
 
 The per-backend summary (models, env vars, `--spec` forms and `FLOW_REVIEW_BACKEND` spec-form examples) and the `backend[:model[:effort]]` spec grammar live in [references/backend-at-a-glance.md](references/backend-at-a-glance.md). Read it **only** when you surface backend guidance to the user (ASK branch, recommendation, override hint) — routing does not need it.
 
 ## Critical Rules
-
-Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-claude.md`, `workflow-command.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
 
 **For host backend:**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -110,7 +100,35 @@ reset the verdict counter for transport health.
 use `--force`, or redispatch autonomously. A human may edit the exact artifact,
 explicitly reset, or deliberately apply `--force`.
 
-### Step 1: Fix loop and terminal status
+### Step 1: CLI Fast Path (`codex`, `copilot`, `cursor`, `claude`, `command`)
+
+For `BACKEND=host`, read and follow [workflow-host.md](workflow-host.md) instead.
+
+For CLI backends, use `$FLOWCTL "$BACKEND" completion-review` exclusively — never call `codex exec`, `claude -p`, `cursor-agent`, or `copilot` directly, and never fabricate a first-call resume id. Always pass `--receipt` (re-reviews resume only when the prior receipt matches the same backend mode, and same label for `command`).
+
+- **`claude` same-family advisory:** on a Claude Code host, writer and reviewer share a model family; the receipt records it and the run proceeds.
+- **`cursor`:** effort is baked into the model name (`cursor:<model>`); `cursor:<model>:<effort>` is rejected.
+- **`command`:** pass `--spec "command:<label>"` when `--review=command:<label>` named a label (first review and every fix-loop re-review); a bare `--review=command` leaves the label to the configured backend (`FLOW_REVIEW_COMMAND_<LABEL>`).
+
+```bash
+# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
+# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+SPEC_ID="<spec id resolved in Phase 0>"                        # substitute literally
+BACKEND="<codex|copilot|cursor|claude|command>"                # substitute literally
+REVIEW_SPEC="<command:<label> when --review named one, else empty>"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-$(git rev-parse --show-toplevel)/.flow/tmp/completion-review-receipt-${SPEC_ID}.json}"
+
+args=("$SPEC_ID" --receipt "$RECEIPT_PATH")
+[ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
+"$FLOWCTL" "$BACKEND" completion-review "${args[@]}"
+```
+
+Output includes `VERDICT=SHIP|NEEDS_WORK|NEEDS_HUMAN`. The handler writes `completion_review_status`, `completion_reviewed_at`, cumulative rounds, and the receipt (including additive `criteria` when `.flow/criteria.md` exists).
+
+### Step 2: Fix loop and terminal status
 
 Both are backend-agnostic and live in [workflow-common.md](workflow-common.md) — already in context from Phase 0:
 

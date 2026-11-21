@@ -16,8 +16,8 @@ If the focus-hint argument names a specific section, jump to that section. Other
 The revisit routing otherwise ranks sections by `<!-- worth revisiting -->` markers + "looks weak" — pure vibes. But real drift is *measurable*: which declared tracks are actually shipping, and whether recent work maps to the stated direction. A maintenance run's job is to surface drift the user didn't notice — not just ask "which section feels stale?". (Ironic asymmetry otherwise: `/flow-next:prospect` does full repo grounding to generate ideas against this doc, while the doc itself is validated by feel.) Scan before asking:
 
 ```bash
-LAST_UPDATED="$("$FLOWCTL" strategy read --json 2>/dev/null | jq -r '.last_updated // ""')"
-RECENT_SPECS="$("$FLOWCTL" specs --json 2>/dev/null | jq -r '.specs[]? | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
+# Reuse last_updated from 2.1's strategy read; bound historical done specs to the last 30 (keep all open)
+RECENT_SPECS="$("$FLOWCTL" specs --json 2>/dev/null | jq -r '([.specs[]? | select(.status != "done")] + ([.specs[]? | select(.status == "done")] | .[-30:]))[] | "\(.id)\t\(.status)\t\(.title // "")"' 2>/dev/null)"
 ```
 
 With the current `## Tracks` (from 2.1), the `## Not working on` list, and `RECENT_SPECS`, the host agent JUDGES the mapping (spec subject → track name — the same host-agent judgment prospect uses to ground candidates, NOT a keyword scorer) and surfaces drift signals:

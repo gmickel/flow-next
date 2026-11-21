@@ -150,9 +150,9 @@ CONFIG_READ_OVERRIDES = {
     ("plan", "active"): [],
     ("plan", "inactive"): [],
     ("interview", "inactive"): [],
-    # Interview now uses the preflight for its spine gate; the loaded reference
-    # retains the operation lookup.
-    ("interview", "active"): [_INTERVIEW_LEAF],
+    # fn-345: interview's loaded reference also consumes the already-captured
+    # preflight bundle instead of repeating `config get tracker.perEvent.interview`.
+    ("interview", "active"): [],
     ("interview", "active", "off"): [],
     # QA's spine gate probes only the leaf; the bridge check moved into the
     # reference the sentinel loads, so an `off` leaf never reaches it.
