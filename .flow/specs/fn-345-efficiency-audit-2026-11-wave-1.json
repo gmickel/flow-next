@@ -10,6 +10,7 @@
   "id": "fn-345-efficiency-audit-2026-11-wave-1",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -28,5 +29,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-21T22:39:26.162490Z"
+  "updated_at": "2026-11-21T22:39:50.908563Z"
 }
