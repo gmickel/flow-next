@@ -138,6 +138,20 @@ class BootstrapHelpFastPathTest(unittest.TestCase):
         with mock.patch.object(bootstrap.sys, "version_info", (3, 99, 0)):
             self.assertFalse(bootstrap._root_help_fast_path(source))
 
+    def test_python_313_uses_inline_layout_while_312_wraps(self) -> None:
+        source = SCRIPTS / "flowctl.py"
+        env = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+        out_by_minor = {}
+        for minor in ((3, 12, 0), (3, 13, 0)):
+            buf = io.StringIO()
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(bootstrap.sys, "version_info", minor), \
+                 mock.patch.object(bootstrap.sys, "stdout", buf):
+                self.assertTrue(bootstrap._root_help_fast_path(source))
+            out_by_minor[minor[:2]] = buf.getvalue()
+        self.assertTrue(out_by_minor[(3, 13)].splitlines()[1].endswith("} ..."))
+        self.assertFalse(out_by_minor[(3, 12)].splitlines()[1].endswith("} ..."))
+
 
 class AuditScanBatchingTest(MemoryRepoTemplate, unittest.TestCase):
     """R4: batched cmd_memory_audit_scan preserves dirty, module_changed, and rename counts."""
@@ -486,6 +500,62 @@ cat "{Path(tmp) / 'p1.json'}"
             )
             self.assertNotEqual(res.returncode, 0)
             self.assertEqual(res.stdout.strip(), "")
+
+    def test_get_pr_comments_fails_on_missing_page_info(self) -> None:
+        script = (
+            ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "get-pr-comments"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            malformed = json.dumps({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "author": {"login": "dev"},
+                            "comments": {"nodes": []},
+                            "reviews": {"nodes": []},
+                            "reviewThreads": {
+                                "nodes": [],
+                            },
+                        }
+                    }
+                }
+            })
+            (Path(tmp) / "bad.json").write_text(malformed, encoding="utf-8")
+            self._write_fake_gh(bin_dir, f'cat "{Path(tmp) / "bad.json"}"\n')
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+            res = subprocess.run(
+                [str(script), "42", "acme/widget"],
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertNotEqual(res.returncode, 0)
+
+    def test_get_thread_for_comment_fails_on_graphql_errors_and_missing_page_info(self) -> None:
+        script = (
+            ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "get-thread-for-comment"
+        )
+        payloads = [
+            {"errors": [{"message": "Could not resolve to a PullRequest"}], "data": {"repository": {"pullRequest": None}}},
+            {"data": {"repository": {"pullRequest": {"reviewThreads": {"nodes": []}}}}},
+        ]
+        for idx, payload in enumerate(payloads):
+            with self.subTest(case=idx), tempfile.TemporaryDirectory() as tmp:
+                bin_dir = Path(tmp) / "bin"
+                bin_dir.mkdir()
+                (Path(tmp) / "bad.json").write_text(json.dumps(payload), encoding="utf-8")
+                self._write_fake_gh(bin_dir, f'cat "{Path(tmp) / "bad.json"}"\n')
+                env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+                res = subprocess.run(
+                    [str(script), "42", "C1", "acme/widget"],
+                    text=True,
+                    capture_output=True,
+                    env=env,
+                )
+                self.assertNotEqual(res.returncode, 0)
+                self.assertEqual(res.stdout.strip(), "")
 
 
 if __name__ == "__main__":

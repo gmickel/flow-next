@@ -9,8 +9,8 @@
 For `TARGETED_TYPE=review_thread` (inline review comment) — Phase 1 skipped `get-pr-comments`; resolve the comment's thread directly and build a minimal single-thread feedback payload:
 
 ```bash
-COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id)
-THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
+COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id) || exit 1
+THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO") || exit 1
 if [[ -n "$THREAD_JSON" ]]; then
   FEEDBACK_JSON=$(printf '%s\n' "$THREAD_JSON" | jq --arg pr "$PR_NUMBER" '
     {
