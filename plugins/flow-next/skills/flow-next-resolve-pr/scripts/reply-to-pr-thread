@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-THREAD_ID="${1:?Usage: echo REPLY_TEXT | $0 THREAD_ID [--resolve]}"
-RESOLVE=0
-[ "${2:-}" = "--resolve" ] && RESOLVE=1
+THREAD_ID="${1:?Usage: echo REPLY_TEXT | $0 THREAD_ID}"
 REPLY_TEXT=$(cat)
 
 if [ -z "$REPLY_TEXT" ]; then
@@ -11,21 +9,9 @@ if [ -z "$REPLY_TEXT" ]; then
   exit 1
 fi
 
-if [ "$RESOLVE" = "1" ]; then
-  gh api graphql -F threadId="$THREAD_ID" -f body="$REPLY_TEXT" -f query='
-mutation($threadId: ID!, $body: String!) {
-  addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
-    comment { id url }
-  }
-  resolveReviewThread(input: {threadId: $threadId}) {
-    thread { id isResolved }
-  }
-}'
-else
-  gh api graphql -F threadId="$THREAD_ID" -f body="$REPLY_TEXT" -f query='
+gh api graphql -F threadId="$THREAD_ID" -f body="$REPLY_TEXT" -f query='
 mutation($threadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) {
     comment { id url }
   }
 }'
-fi

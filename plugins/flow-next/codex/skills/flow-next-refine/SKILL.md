@@ -94,7 +94,7 @@ Stop when no question that passes the test remains. Asking nothing is a good out
 
 ### Investigate before asking
 
-Before the first round, read `STRATEGY.md` and search the other project docs for what the spec touches rather than reading them end to end: `README.md`, `CHANGELOG.md`, `GLOSSARY.md`, the decisions track (`$FLOWCTL memory list --track knowledge --category decisions --json`), the titles of open specs (`$FLOWCTL specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title}]'`), and `docs/` when present. Then sort each candidate question:
+Before the first round, read `STRATEGY.md` and search the other project docs for what the spec touches rather than reading them end to end: `README.md`, `CHANGELOG.md`, `GLOSSARY.md`, the decisions track (`$FLOWCTL memory list --track knowledge --category decisions --json`), the titles of open specs (`$FLOWCTL specs --json | jq -c '[.specs[]? | select(.status == "open") | {id, title}]'`), and `docs/` when present. Then sort each candidate question:
 
 - **The code answers it** (what exists, how it is wired, which conventions hold): read and search; log it under `## Resolved via Codebase` with `file:line` evidence.
 - **The project docs answer it** (what the strategy says, what shipped, what was decided): log it under `## Resolved via Project Docs` with `path:line` evidence.

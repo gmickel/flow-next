@@ -37,7 +37,22 @@ agent-browser set headers '{"X-Custom-Header": "value"}'
 
 ## Cookies, Storage, and HTTP Basic Auth
 
-Basic `cookies`, `storage local`, `storage session`, and `set credentials` syntax lives in [commands.md](commands.md).
+```bash
+# Cookies
+agent-browser cookies                    # Get all cookies
+agent-browser cookies set name "value"   # Set cookie
+agent-browser cookies clear              # Clear all cookies
+
+# Local / Session storage (replace `local` with `session` for sessionStorage)
+agent-browser storage local              # Get all
+agent-browser storage local key          # Get specific key
+agent-browser storage local set key val  # Set value
+agent-browser storage local clear        # Clear all
+
+# HTTP Basic Auth
+agent-browser set credentials username password
+agent-browser open https://protected-site.com
+```
 
 ## OAuth / SSO Flows
 

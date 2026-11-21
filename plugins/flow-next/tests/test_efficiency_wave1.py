@@ -71,18 +71,18 @@ class ReviewPromptFixesTest(unittest.TestCase):
         self.assertNotIn("Task Spec Sync Required", preamble)
         self.assertNotIn("flowctl task set-spec", preamble)
 
-    def test_completion_rereview_uses_ratchet_closing_when_ratchet_present(self) -> None:
-        preamble = flowctl.build_rereview_preamble(
+    def test_completion_rereview_branches_on_ratchet_presence(self) -> None:
+        with_ratchet = flowctl.build_rereview_preamble(
             ["src/app.py"],
             "completion",
             prior_findings="Finding #1: missing R2 check.",
         )
-        self.assertIn("Apply the CONVERGENCE RATCHET contract above", preamble)
-        self.assertNotIn("Re-verify each requirement from the epic spec", preamble)
-
-    def test_completion_rereview_without_ratchet_keeps_fresh_instruction(self) -> None:
-        preamble = flowctl.build_rereview_preamble(["src/app.py"], "completion")
-        self.assertIn("Re-verify each requirement from the epic spec", preamble)
+        without_ratchet = flowctl.build_rereview_preamble(["src/app.py"], "completion")
+        self.assertIn("CONVERGENCE RATCHET", with_ratchet)
+        self.assertNotIn("CONVERGENCE RATCHET", without_ratchet)
+        with_lines = [line for line in with_ratchet.splitlines() if line.strip()]
+        without_lines = [line for line in without_ratchet.splitlines() if line.strip()]
+        self.assertNotEqual(with_lines[-2], without_lines[-2])
 
     def test_completion_review_prompt_omits_duplicate_terminal_role_header(self) -> None:
         prompt = flowctl.build_completion_review_prompt(
@@ -91,22 +91,26 @@ class ReviewPromptFixesTest(unittest.TestCase):
             spec_path=".flow/specs/fn-1.md",
             task_spec_paths=[".flow/tasks/fn-1.1.md"],
         )
-        self.assertNotIn("TERMINAL REVIEWER ROLE", prompt)
-        self.assertIn("You ARE the reviewer", prompt)
+        self.assertNotIn("## TERMINAL REVIEWER ROLE", prompt)
 
-    def test_materialise_review_diff_reuses_precomputed_diff_text(self) -> None:
+    def test_attach_review_diff_reuses_shared_round_diff_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            (repo / ".flow" / "tmp").mkdir(parents=True)
-            with mock.patch.object(flowctl, "_review_diff_text", side_effect=AssertionError("should not spawn git diff")):
-                leaf = flowctl._materialise_review_diff(
-                    repo,
-                    "rid-1-correctness",
-                    "aaaaaaa",
-                    "bbbbbbb",
-                    diff_text="diff --git a/x b/x\n",
-                )
-            self.assertEqual(leaf.read_text(encoding="utf-8"), "diff --git a/x b/x\n")
+            diff_dir = repo / ".flow" / "tmp" / "claude-review"
+            diff_dir.mkdir(parents=True)
+            shared = diff_dir / "rid-1-aaaaaaa-bbbbbbb.diff"
+            shared.write_text("diff --git a/x b/x\n", encoding="utf-8")
+            ns = mock.MagicMock(
+                review_range=("aaaaaaa", "bbbbbbb", "rid-1-correctness"),
+                _review_diff_path=shared,
+            )
+            with mock.patch.object(
+                flowctl,
+                "_materialise_review_diff",
+                side_effect=AssertionError("should reuse shared round diff path"),
+            ):
+                out = flowctl._attach_review_diff("PROMPT", "claude", repo, ns)
+            self.assertIn(str(shared), out)
 
 
 class BootstrapHelpFastPathTest(unittest.TestCase):
@@ -213,14 +217,72 @@ class AuditScanBatchingTest(MemoryRepoTemplate, unittest.TestCase):
         self.assertEqual(rows[moved]["recurrence"]["commits"], 2)
         self.assertEqual(rows[e2["entry_id"]]["recurrence"]["commits"], 1)
 
+    def test_dot_prefixed_module_and_untracked_nested_file_and_apply_null_delete(self) -> None:
+        (self.root / ".github" / "workflows").mkdir(parents=True)
+        (self.root / ".github" / "workflows" / "ci.yml").write_text("name: ci\n", encoding="utf-8")
+        e_dot = self._run(
+            "memory", "add", "--track", "bug", "--category", "runtime-errors",
+            "--title", "CI workflow trigger drift", "--module", "./.github",
+        )
+        e_untracked = self._run(
+            "memory", "add", "--track", "bug", "--category", "runtime-errors",
+            "--title", "New subdir alert", "--module", "pkg/newdir/file.py",
+        )
+        old_env = {
+            **os.environ,
+            "GIT_AUTHOR_DATE": "2020-01-01T00:00:00Z",
+            "GIT_COMMITTER_DATE": "2020-01-01T00:00:00Z",
+        }
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=self.root, check=True, capture_output=True, env=old_env)
+
+        # Stamp both entries + harden e_dot, then clear hardened_into via memory apply set=null.
+        self._run("memory", "mark-hardened", e_dot["entry_id"], "--gate-ref", ".github/workflows/ci.yml#ci -- test")
+        plan = self.root / "plan.json"
+        plan.write_text(
+            json.dumps({
+                "entries": [
+                    {"id": e_dot["entry_id"], "stamp": True, "set": {"status": "active", "hardened_into": None}},
+                    {"id": e_untracked["entry_id"], "stamp": True},
+                ]
+            }),
+            encoding="utf-8",
+        )
+        self._run("memory", "apply", "--plan", str(plan))
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "stamp"], cwd=self.root, check=True, capture_output=True)
+
+        # Dirty .github/workflows/ci.yml AND create an untracked file inside an untracked directory.
+        (self.root / ".github" / "workflows" / "ci.yml").write_text("name: ci-v2\n", encoding="utf-8")
+        (self.root / "pkg" / "newdir").mkdir(parents=True)
+        (self.root / "pkg" / "newdir" / "file.py").write_text("x = 1\n", encoding="utf-8")
+
+        rows = {r["id"]: r for r in self._run("memory", "audit-scan")["entries"]}
+        self.assertTrue(rows[e_dot["entry_id"]]["module_changed"])
+        self.assertNotIn("hardened_into", rows[e_dot["entry_id"]]["frontmatter"])
+        self.assertTrue(rows[e_untracked["entry_id"]]["module_changed"])
+
 
 class SetupAndPrimeFoldedFieldsTest(unittest.TestCase):
     """R5: setup-status exposes features_status; prime classify exposes features_status and glossary_terms."""
 
-    def test_setup_status_includes_features_status(self) -> None:
+    def test_setup_status_includes_features_status_and_respects_config_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "t@e.com"], cwd=repo, check=True)
+            (repo / ".flow" / "features").mkdir(parents=True)
+            (repo / ".flow" / "config.json").write_text(
+                json.dumps({"features": {"staleAfterCommits": "2"}}),
+                encoding="utf-8",
+            )
+            (repo / ".flow" / "memory" / "knowledge" / "conventions").mkdir(parents=True)
+            (repo / ".flow" / "memory" / "knowledge" / "conventions" / "drift-2026-01-01.md").write_text(
+                "---\ntitle: drift note\ndate: 2026-01-01\ntrack: knowledge\ncategory: conventions\n"
+                "applies_when: always\ntags: [feature-map-drift]\nstatus: active\n---\n\nbody\n",
+                encoding="utf-8",
+            )
             res = subprocess.run(
                 [*FLOWCTL_CMD, "setup-status", "--json"],
                 cwd=repo,
@@ -229,70 +291,50 @@ class SetupAndPrimeFoldedFieldsTest(unittest.TestCase):
             )
             self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
             data = json.loads(res.stdout)
-            self.assertIn("features_status", data)
-            self.assertEqual(data["features_status"]["recommendation"], "seed")
+            self.assertEqual(data["features_status"]["recommendation"], "maintain")
+            self.assertTrue(data["features_status"]["due"])
+            self.assertTrue(
+                any("drift" in r for r in data["features_status"]["reasons"]),
+                data["features_status"],
+            )
+            full_feat = flowctl._compute_features_status(
+                repo_root_override=repo, use_json=True
+            )
+            self.assertEqual(full_feat["threshold"], 2)
 
-    def test_prime_classify_includes_features_status_and_glossary_terms(self) -> None:
+    def test_prime_classify_includes_features_status_and_package_glossary_terms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True)
             subprocess.run(["git", "config", "user.email", "t@e.com"], cwd=repo, check=True)
-            (repo / "src").mkdir()
-            (repo / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
-            (repo / "GLOSSARY.md").write_text(
+            pkg = repo / "packages" / "web"
+            pkg.mkdir(parents=True)
+            (pkg / "app.py").write_text("x = 1\n", encoding="utf-8")
+            (pkg / "GLOSSARY.md").write_text(
                 "# Glossary\n\n## Widget\n\nA sample term.\n",
                 encoding="utf-8",
             )
             subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-qm", "seed"], cwd=repo, check=True)
 
-            payload = flowctl._prime_classify(repo)
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(pkg)
+                payload = flowctl._prime_classify(repo)
+            finally:
+                os.chdir(old_cwd)
             self.assertEqual(payload["substance"]["features_status"]["recommendation"], "seed")
             self.assertEqual(payload["substance"]["glossary_terms"]["total_terms"], 1)
 
 
 class ResolvePrShellScriptsTest(unittest.TestCase):
-    """R2: get-pr-comments single-pass pagination + OWNER/REPO arg; reply-to-pr-thread --resolve."""
+    """R2: get-pr-comments single-pass pagination + OWNER/REPO arg."""
 
     def _write_fake_gh(self, bin_dir: Path, script_body: str) -> None:
         gh = bin_dir / "gh"
         gh.write_text("#!/usr/bin/env bash\n" + script_body, encoding="utf-8")
         gh.chmod(0o755)
-
-    def test_reply_to_pr_thread_combines_resolve_into_one_mutation(self) -> None:
-        script = ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "reply-to-pr-thread"
-        with tempfile.TemporaryDirectory() as tmp:
-            bin_dir = Path(tmp) / "bin"
-            bin_dir.mkdir()
-            log = Path(tmp) / "gh.log"
-            self._write_fake_gh(
-                bin_dir,
-                f'printf "%s\\n---\\n" "$*" >> "{log}"\necho "{{\\"data\\":{{}}}}"\n',
-            )
-            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
-            r1 = subprocess.run(
-                [str(script), "PRRT_123"],
-                input="Fixed in abc1234",
-                text=True,
-                capture_output=True,
-                env=env,
-            )
-            self.assertEqual(r1.returncode, 0, r1.stderr)
-            r2 = subprocess.run(
-                [str(script), "PRRT_123", "--resolve"],
-                input="Fixed in abc1234",
-                text=True,
-                capture_output=True,
-                env=env,
-            )
-            self.assertEqual(r2.returncode, 0, r2.stderr)
-            calls = [c for c in log.read_text(encoding="utf-8").split("\n---\n") if c.strip()]
-            self.assertEqual(len(calls), 2)
-            self.assertIn("addPullRequestReviewThreadReply", calls[0])
-            self.assertNotIn("resolveReviewThread", calls[0])
-            self.assertIn("addPullRequestReviewThreadReply", calls[1])
-            self.assertIn("resolveReviewThread", calls[1])
 
     def test_get_pr_comments_accepts_owner_repo_and_paginates_only_unexhausted_threads(self) -> None:
         script = ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "get-pr-comments"

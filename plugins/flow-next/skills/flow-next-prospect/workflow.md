@@ -368,10 +368,21 @@ The `GENERATION_TARGET_DESCRIPTION` slot:
 Write the model output with the **Write tool** to a literal unique path (e.g. `/tmp/flow-prospect-candidates-<suffix>.json`, your resolved temp dir) and validate with `jq`:
 
 ```bash
+CANDIDATES_RAW="/tmp/flow-prospect-candidates-<suffix>.json"
 CANDIDATES_YAML=$(jq -c '
-  if type == "object" and (.candidates | type == "array") then .candidates else . end
-  | [ .[] | select((.title // "") != "" and (.summary // "") != "" and ((.affected_areas // []) | length) > 0) ]
-' "/tmp/flow-prospect-candidates-<suffix>.json")
+  (if type == "object" and (.candidates | type == "array") then .candidates
+   elif type == "array" then .
+   else error("candidates must be a JSON array") end)
+  | [ .[] | select(
+      type == "object"
+      and (.title | type == "string" and length > 0)
+      and (.summary | type == "string" and length > 0)
+      and (.affected_areas | type == "array" and length > 0 and all(type == "string" and length > 0))
+    ) ]
+' "$CANDIDATES_RAW")
+TOTAL_IN=$(jq 'if type == "object" and (.candidates | type == "array") then (.candidates | length) else length end' "$CANDIDATES_RAW")
+VALID_OUT=$(printf '%s' "$CANDIDATES_YAML" | jq 'length')
+[ "$VALID_OUT" -lt "$TOTAL_IN" ] && echo "Phase 2: dropped $((TOTAL_IN - VALID_OUT)) malformed candidate(s)" >&2 || true
 ```
 
 Any candidate missing `title`, `summary`, or non-empty `affected_areas` is dropped before Phase 3 (warn on stderr when the count shrinks). Hand the validated JSON array (`CANDIDATES_YAML`) to Phase 3.

@@ -87,9 +87,13 @@ GLOSSARY_CACHE="${TMPDIR:-/tmp}/flow-audit-glossary-<suffix>.json"   # literal p
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
 RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
-  printf '%s\n' "$RAW" > "$GLOSSARY_CACHE"
-  VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
-  [ "$VAL" = "true" ] && ACTIVE=1
+  if VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)"; then
+    printf '%s\n' "$RAW" > "$GLOSSARY_CACHE"
+    [ "$VAL" = "true" ] && ACTIVE=1
+  else
+    rm -f "$GLOSSARY_CACHE"
+    ACTIVE=1   # parse ERROR ⇒ ACTIVE (do not cache malformed payload)
+  fi
 fi
 if [ "$ACTIVE" = "1" ]; then
   echo "GATE ACTIVE — read and execute references/glossary-scan.md, then continue with Phase 0.75."
@@ -136,7 +140,7 @@ Recurrence is inferred from these **write-side artifacts plus LLM judgment**. Th
 An entry with `status: hardened` skips both auto-Keep and full investigation. Use the snapshot's `hardened_rule_present` literal-substring result, and apply the same activeness check as Phase 4's verification (resolved lint config, live CI job, substantive instruction file):
 
 - **Gate present and active** → report as still-hardened. No investigation, no write.
-- **Gate gone or inactive** → propose un-graduation via `flowctl memory mark-fresh "$entry_id"` (returns the entry to `active` and drops `hardened_into`), citing which surface was checked and what was missing. Interactive asks in Phase 3; autofix reports it under Recommended without applying.
+- **Gate gone or inactive** → propose un-graduation (batched via Phase 4's `memory apply` plan with `"stamp":true,"set":{"status":"active","hardened_into":null}`, or standalone `flowctl memory mark-fresh "$entry_id"`), citing which surface was checked and what was missing. Interactive asks in Phase 3; autofix reports it under Recommended without applying.
 - **Gate upgraded** (a better surface now enforces the class) → re-`mark-hardened` with the new ref; it is idempotent and replaces `hardened_into`.
 
 Without this check a reverted lint rule would strand the lesson permanently: excluded from default `memory list` / `search` (so memory-scout never re-injects it) with no path back.

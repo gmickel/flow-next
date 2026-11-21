@@ -127,9 +127,9 @@ for candidate in origin/main main origin/master master; do
     break
   fi
 done
-CLOSED_IDS=""; CLOSED_IDS_BASE=""
+CLOSED_IDS=""; CLOSED_IDS_SHA=""
 if [[ -z "$SPEC_ID" ]]; then
-  CLOSED_IDS_BASE="${BASE_REF:-$CHAIN_BASE}"
+  CLOSED_IDS_SHA=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${BASE_REF:-$CHAIN_BASE}^{commit}" 2>/dev/null || true)
   CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
   if [[ -z "$SPEC_ID" ]]; then
@@ -147,7 +147,8 @@ if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
   SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null) || SPEC_JSON=""
   SPEC_DEPS=$(printf '%s' "$SPEC_JSON" | jq -r '.depends_on_epics[]?' 2>/dev/null || true)
   if [[ -n "$SPEC_DEPS" ]]; then
-    if [[ "$CLOSED_IDS_BASE" != "$CHAIN_BASE" || -z "$CLOSED_IDS" ]]; then
+    CHAIN_BASE_SHA=$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${CHAIN_BASE}^{commit}" 2>/dev/null || true)
+    if [[ -z "$CLOSED_IDS_SHA" || "$CLOSED_IDS_SHA" != "$CHAIN_BASE_SHA" || -z "$CLOSED_IDS" ]]; then
       CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
     fi
   fi

@@ -21,14 +21,16 @@ You receive:
 
 ## Process
 
-### 1. List open specs and unmerged branch specs (one call)
+### 1. List open checkout specs and unmerged branch specs (one shell call)
 
 ```bash
-<FLOWCTL> specs --refs --json \
-  | jq -c '[.specs[] | select(.status == "open" or (.live | length) > 0) | {id, title, status, on_base, live}]'
+# Checkout working tree (includes uncommitted/newly captured specs) + unmerged branch refs in one pass:
+<FLOWCTL> specs --json | jq -c '[.specs[]? | select(.status == "open") | {id, title, status}]'
+<FLOWCTL> specs --refs --json 2>/dev/null \
+  | jq -c '[.specs[]? | select((.live // []) | length > 0) | {id, title, on_base, live}]' || true
 ```
 
-One call returns both open specs in the checkout (`status == "open"`) and in-flight work on other branches (`live != []`, whatever its status); done checkout-only specs never reach you. Read a branch copy with `git show '<ref>:.flow/specs/<id>.md'`, the whole revision as one single-quoted argument because a pushed ref name can hold shell syntax such as `$(...)`; skip any ref containing a `'`. Judge it like an open spec, naming the ref. An older flowctl rejects `--refs` (exit 2, `unrecognized arguments: --refs`); fall back to `<FLOWCTL> specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'`.
+The first projection keeps open specs in the checkout (including uncommitted specs); done specs never reach you. The second returns in-flight work on other branches in `live[].ref`, whatever its status (an older flowctl rejecting `--refs` falls through cleanly to the checkout list alone). Read a branch copy with `git show '<ref>:.flow/specs/<id>.md'`, the whole revision as one single-quoted argument because a pushed ref name can hold shell syntax such as `$(...)`; skip any ref containing a `'`. Judge it like an open spec, naming the ref.
 
 ### 2. For each open spec, read it
 

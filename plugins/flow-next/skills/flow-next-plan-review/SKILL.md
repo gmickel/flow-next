@@ -63,8 +63,6 @@ Use `$FLOWCTL "$BACKEND" plan-review` exclusively — never call `codex exec`, `
 - **`command`:** when `--review=command:<label>` named a label, pass `--spec "command:<label>"` on the first review and every fix-loop re-review; a bare `--review=command` leaves the label to the configured backend (`FLOW_REVIEW_COMMAND_<LABEL>`).
 
 ```bash
-# FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
-# NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"

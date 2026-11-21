@@ -5,7 +5,7 @@
 When the bridge is active, invoke the inline tracker-sync wrapper with the prepared snapshots and optional
 private breadcrumb, making one lifecycle call:
 ```bash
-TRK_ACTIVE="${TRK_ACTIVE:-$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty')}"
+TRK_ACTIVE="${TRK_ACTIVE:-$("$FLOWCTL" sync active --json 2>/dev/null | jq -r 'if .active == null then "" else (.active | tostring) end')}"
 if [[ -n "$PR_URL" ]] && [ "$TRK_ACTIVE" = "true" ]; then
   # "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr --pr-url "$PR_URL" <other legal file flags>
   :

@@ -47,10 +47,10 @@ A ready or captured spec is plan input. An unshaped, oversized idea with several
 **Review.** `--review=codex` ("review with codex", "codex review", "use codex"), `--review=host` ("host review", "use host": the host-native fresh-context reviewer), `--review=none` or `--no-review` ("no review", "skip review").
 
 
-Initialize (when `.flow/` is absent), check for flowctl copies left by an older install layout, and capture one preflight snapshot before routing or scouting (also under autonomy), from the repository root (never this skill's directory, where flowctl finds no config). Every later config read uses this literal path:
+Initialize, check for flowctl copies left by an older install layout, and capture one preflight snapshot before routing or scouting (also under autonomy), from the repository root (never this skill's directory, where flowctl finds no config). Every later config read uses this literal path:
 
 ```bash
-[ -d .flow ] || $FLOWCTL init --json
+$FLOWCTL init --json
 LEFTOVERS=""
 for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
          .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \

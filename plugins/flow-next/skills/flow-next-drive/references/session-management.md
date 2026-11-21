@@ -77,7 +77,13 @@ agent-browser --session variant-b screenshot /tmp/variant-b.png
 
 ## Cleanup and Best Practices
 
-Omitting `--session` uses the default session. Always close sessions when done (`agent-browser [--session <name>] close`; `agent-browser session list` in [commands.md](commands.md)) to avoid leaked browser processes.
+Omitting `--session` uses the default session. Always close sessions when done to avoid leaked browser processes:
+
+```bash
+agent-browser --session auth close     # Close specific session
+agent-browser session list             # List active sessions
+agent-browser close                    # Close default session
+```
 
 1. **Name sessions semantically**: `--session github-auth` not `--session s1`
 2. **Secure state files**: Don't commit (contain auth tokens), add to `.gitignore`

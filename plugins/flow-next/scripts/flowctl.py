@@ -25692,6 +25692,47 @@ def _memory_audit_paths(memory_dir: Path) -> list[Path]:
                   and not p.is_symlink())
 
 
+def _extract_substantive_commits(
+    lines: list[str], audit_meta_re: re.Pattern[str], *, by_path: bool = False
+) -> Any:
+    """Count substantive (non-audit-metadata) commit hashes from git log --patch --unified=0."""
+    if by_path:
+        commits_by_path: dict[str, set[str]] = {}
+        renamed_paths: set[str] = set()
+        commit: Optional[str] = None
+        cur_path: Optional[str] = None
+        for line in lines:
+            if line.startswith("COMMIT "):
+                commit = line[7:]
+                cur_path = None
+            elif line.startswith("diff --git "):
+                parts = line.split(" b/", 1)
+                cur_path = parts[1] if len(parts) == 2 else None
+            elif line.startswith("rename to "):
+                cur_path = line[len("rename to "):]
+                renamed_paths.add(cur_path)
+            elif line.startswith("+++ b/"):
+                cur_path = line[6:]
+            elif line.startswith(("--- ", "+++ ")):
+                continue
+            elif line.startswith(("+", "-")) and commit and cur_path:
+                if not audit_meta_re.match(line[1:]):
+                    commits_by_path.setdefault(cur_path, set()).add(commit)
+        return commits_by_path, renamed_paths
+
+    substantive: set[str] = set()
+    commit = None
+    for line in lines:
+        if line.startswith("COMMIT "):
+            commit = line[7:]
+        elif line.startswith(("--- ", "+++ ")):
+            continue
+        elif line.startswith(("+", "-")) and commit:
+            if not audit_meta_re.match(line[1:]):
+                substantive.add(commit)
+    return substantive
+
+
 def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
     """Collect evidence only; recurrence and gate activeness remain host judgments."""
     memory_dir = require_memory_enabled(args)
@@ -25704,9 +25745,9 @@ def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
         result = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True)
         return result.stdout.splitlines() if result.returncode == 0 else None
 
-    # One batched working-tree dirty scan instead of N per-entry git status calls.
+    # One batched working-tree dirty scan (-uall enumerates untracked files inside dirs).
     dirty_res = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "-z"],
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain=v1", "-uall", "-z"],
         cwd=root, capture_output=True, text=True,
     )
     dirty_paths: Optional[set[str]] = None
@@ -25737,39 +25778,41 @@ def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
         "-c", "core.quotepath=false",
         "log", "-M", "--format=COMMIT %H", "--patch", "--unified=0", "--", mem_rel,
     )
-    batch_commits: dict[str, set[str]] = {}
-    renamed_paths: set[str] = set()
     if batch_history is not None:
-        commit = None
-        cur_path = None
-        for line in batch_history:
-            if line.startswith("COMMIT "):
-                commit = line[7:]
-                cur_path = None
-            elif line.startswith("diff --git "):
-                parts = line.split(" b/", 1)
-                cur_path = parts[1] if len(parts) == 2 else None
-            elif line.startswith("rename to "):
-                cur_path = line[len("rename to "):]
-                renamed_paths.add(cur_path)
-            elif line.startswith("+++ b/"):
-                cur_path = line[6:]
-            elif line.startswith(("--- ", "+++ ")):
-                continue
-            elif line.startswith(("+", "-")) and commit and cur_path:
-                if not audit_meta_re.match(line[1:]):
-                    batch_commits.setdefault(cur_path, set()).add(commit)
+        batch_commits, renamed_paths = _extract_substantive_commits(
+            batch_history, audit_meta_re, by_path=True
+        )
+    else:
+        batch_commits, renamed_paths = {}, set()
 
     module_log_cache: dict[tuple[str, str], Optional[list[str]]] = {}
+    module_dirty_cache: dict[str, Optional[bool]] = {}
 
     def _module_is_dirty(module: str) -> Optional[bool]:
-        if dirty_paths is None:
-            return None
-        norm = module.replace("\\", "/").lstrip("./").rstrip("/")
-        if not norm:
-            return bool(dirty_paths)
-        prefix = norm + "/"
-        return any(p == norm or p.startswith(prefix) for p in dirty_paths)
+        if module in module_dirty_cache:
+            return module_dirty_cache[module]
+        # Fall back to git's native pathspec matcher for globs/magic/parent refs.
+        if (
+            dirty_paths is None
+            or any(ch in module for ch in ("*", "?", "["))
+            or module.startswith((":(", "/"))
+            or ".." in module.replace("\\", "/").split("/")
+        ):
+            scoped = git_lines("status", "--porcelain", "--", module)
+            ans: Optional[bool] = bool(scoped) if scoped is not None else None
+            module_dirty_cache[module] = ans
+            return ans
+        norm = module.replace("\\", "/")
+        while norm.startswith("./"):
+            norm = norm[2:]
+        norm = norm.rstrip("/")
+        if not norm or norm == ".":
+            ans = bool(dirty_paths)
+        else:
+            prefix = norm + "/"
+            ans = any(p == norm or p.startswith(prefix) for p in dirty_paths)
+        module_dirty_cache[module] = ans
+        return ans
 
     entries = []
     for path in _memory_audit_paths(memory_dir):
@@ -25785,16 +25828,7 @@ def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
         else:
             history = git_lines("log", "--follow", "--format=COMMIT %H", "--patch", "--unified=0", "--", str(path))
             history_ok = history is not None
-            substantive = set()
-            commit = None
-            for line in history or []:
-                if line.startswith("COMMIT "):
-                    commit = line[7:]
-                elif line.startswith(("--- ", "+++ ")):
-                    continue
-                elif line.startswith(("+", "-")) and commit:
-                    if not audit_meta_re.match(line[1:]):
-                        substantive.add(commit)
+            substantive = _extract_substantive_commits(history or [], audit_meta_re)
         module = fm.get("module")
         module_path = root / str(module) if module else None
         audited = fm.get("last_audited")
@@ -25862,7 +25896,11 @@ def _memory_apply_item(memory_dir: Path, item: dict[str, Any]) -> list[str]:
     fields = item.get("set", {})
     if not isinstance(fields, dict):
         raise ValueError("set must be an object")
-    fm.update(fields)
+    for fk, fv in fields.items():
+        if fv is None:
+            fm.pop(fk, None)
+        else:
+            fm[fk] = fv
     if item.get("stamp"):
         fm["last_audited"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     target = resolve(item["move"]) if item.get("move") else source
@@ -46313,13 +46351,17 @@ def _attach_review_diff(
     if review_range is None:
         return prompt
     base, head, receipt_id = review_range
-    diff_path = _materialise_review_diff(
-        repo_root,
-        receipt_id,
-        base,
-        head,
-        diff_text=getattr(args, "_review_diff_text", None),
-    )
+    pre_path = getattr(args, "_review_diff_path", None)
+    if isinstance(pre_path, Path) and pre_path.is_file() and not pre_path.is_symlink():
+        diff_path = pre_path
+    else:
+        diff_path = _materialise_review_diff(
+            repo_root,
+            receipt_id,
+            base,
+            head,
+            diff_text=getattr(args, "_review_diff_text", None),
+        )
     return prompt + _diff_transport_note(diff_path, base, head, backend)
 
 
@@ -49163,7 +49205,8 @@ def _review_fanout_run_draw(
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
     if getattr(args, "review_range", None):
-        # One diff file per draw: a shell-less reviewer may hold it open.
+        # Preserve per-draw receipt id in review_range; _attach_review_diff reuses
+        # args._review_diff_path when a shared immutable round diff was pre-materialized.
         base_sha, head_sha, rid = args.review_range
         args.review_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
@@ -50469,15 +50512,16 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Claude, copilot and cursor reviewers: each draw gets the reviewed diff by path.
-    # Reuse the already-computed identity_diff text so fan-out never spawns git diff 3x.
+    # Claude, copilot and cursor reviewers: materialize ONE shared immutable diff file
+    # per round (using unstripped git diff bytes for both task and standalone scopes).
     args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
-    if identity_diff is not None:
-        args._review_diff_text = (
-            identity_diff + "\n"
-            if identity_diff and not identity_diff.endswith("\n")
-            else identity_diff
-        )
+    if any(d["spec"].backend in ("claude", "copilot", "cursor") for d in draws):
+        try:
+            args._review_diff_path = _materialise_review_diff(
+                repo_root, rid, reviewed_base_sha, reviewed_head_sha
+            )
+        except (ReviewDiffError, OSError):
+            pass
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:
         _review_fanout_write_meta(
@@ -53181,9 +53225,8 @@ _FEATURES_LAST_PROVEN_RE = re.compile(
 )
 
 
-def get_features_stale_after_commits() -> int:
-    """Configured due threshold in surface-touching commits (default 50)."""
-    raw = get_config("features.staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+def _parse_features_stale_after_commits(raw: Any) -> int:
+    """Parse features.staleAfterCommits threshold (default 50)."""
     if isinstance(raw, bool):
         return FEATURES_DEFAULT_STALE_AFTER_COMMITS
     try:
@@ -53191,6 +53234,13 @@ def get_features_stale_after_commits() -> int:
     except (TypeError, ValueError):
         return FEATURES_DEFAULT_STALE_AFTER_COMMITS
     return n if n >= 1 else FEATURES_DEFAULT_STALE_AFTER_COMMITS
+
+
+def get_features_stale_after_commits() -> int:
+    """Configured due threshold in surface-touching commits (default 50)."""
+    return _parse_features_stale_after_commits(
+        get_config("features.staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+    )
 
 
 def _features_parse_last_proven(text: str) -> tuple[str, Optional[dict]]:
@@ -53301,18 +53351,17 @@ def _compute_features_status(
         except (OSError, UnicodeError, ValueError):
             raw_cfg = {}
         raw_feat = raw_cfg.get("features") if isinstance(raw_cfg.get("features"), dict) else {}
-        raw_thresh = raw_feat.get("staleAfterCommits")
-        threshold = (
-            raw_thresh
-            if isinstance(raw_thresh, int) and not isinstance(raw_thresh, bool) and raw_thresh > 0
-            else FEATURES_DEFAULT_STALE_AFTER_COMMITS
+        threshold = _parse_features_stale_after_commits(
+            raw_feat.get("staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
         )
         raw_mem = raw_cfg.get("memory") if isinstance(raw_cfg.get("memory"), dict) else {}
-        mem_enabled = bool(raw_mem.get("enabled", False))
+        mem_default = bool(get_default_config().get("memory", {}).get("enabled", True))
+        mem_enabled = bool(raw_mem.get("enabled", mem_default))
     else:
         flow_dir = get_flow_dir()
         threshold = get_features_stale_after_commits()
-        mem_enabled = bool(get_config("memory.enabled", False))
+        mem_default = bool(get_default_config().get("memory", {}).get("enabled", True))
+        mem_enabled = bool(get_config("memory.enabled", mem_default))
         repo_root, _head, _err = _gate_repo_and_head()
 
     features_dir = flow_dir / "features"
@@ -56940,11 +56989,16 @@ def _prime_collect_glossary_terms(root: Path) -> "tuple[dict[str, Any], _PrimeCo
     total = 0
     files: list[str] = []
     try:
-        candidate = root / "GLOSSARY.md"
-        if candidate.is_file():
+        resolved_root = root.resolve()
+        cwd = Path.cwd().resolve()
+        start = cwd if (cwd == resolved_root or resolved_root in cwd.parents) else resolved_root
+        paths = find_all_glossaries(start=start)
+        if not paths and (resolved_root / GLOSSARY_FILE).is_file():
+            paths = [resolved_root / GLOSSARY_FILE]
+        for candidate in paths:
             col.op(1)
             entries = _glossary_load(candidate)
-            total = len(entries)
+            total += len(entries)
             files.append(str(candidate))
     except Exception as exc:  # defensive: prime classify never crashes on a collector
         col.fail(f"glossary_terms failed: {exc}")

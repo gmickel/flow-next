@@ -38,9 +38,11 @@ find . \( -name node_modules -o -name .git -o -name .venv -o -name vendor \) -pr
   \( -name 'logback.xml' -o -name 'log4j*.xml' -o -name 'logging.config.*' -o -name 'alerts.yml' -o -name 'alertmanager.yml' -o -name 'alert-rules.yml' \) \
   -print 2>/dev/null | head -20
 
-# 5. Source-code signals (OB2 trace propagation + OB5 health routes) in OWN source
-grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id|/healthz?|/ready|/live|/ping" \
-  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist,.git,.venv} . 2>/dev/null | head -20
+# 5. Source-code signals in OWN source (independent caps so trace hits never hide health routes)
+grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id" \
+  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist,.git,.venv} . 2>/dev/null | head -10
+grep -rE "/health|/healthz|/ready|/live|/ping" \
+  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist,.git,.venv} . 2>/dev/null | head -10
 
 # 6. Infra health checks (OB5: Docker HEALTHCHECK + k8s liveness/readiness probes)
 grep -rEl "HEALTHCHECK" --include=Dockerfile* --exclude-dir={node_modules,.git} . 2>/dev/null | head -10

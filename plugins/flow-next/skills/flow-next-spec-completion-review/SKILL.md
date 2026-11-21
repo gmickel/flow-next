@@ -20,7 +20,7 @@ Read [working-rules.md](../../references/working-rules.md) first unless you alre
 
 **The executable Phase 0 lives in [workflow-common.md](workflow-common.md) §"Phase 0: Backend Detection" — Read it and execute it ONCE, before any other bash in this skill.** It defines `$FLOWCTL` (bundled — NOT installed globally; `which flowctl` fails, expected), resolves `$BACKEND` via the single `flowctl review-backend` call, and handles the ASK / `none` cases. Never invoke `flowctl review-backend` a second time in the same run.
 
-Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them. For `--review=command:<label>`, set `BACKEND=command` and pass `--spec "command:<label>"` on the first review and every fix-loop re-review.
+Exception: a `--review=<backend>` argument wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` setup lines). A value that is not one of the backends below stops as for ASK, naming them. For `--review=command:<label>`, set `BACKEND=command` and retain `<label>` for Step 1.
 
 ## Backend at a glance
 

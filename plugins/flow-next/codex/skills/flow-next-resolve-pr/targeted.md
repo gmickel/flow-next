@@ -6,23 +6,23 @@
 
 **Targeted mode** — narrow `FEEDBACK_JSON` to the single item identified by the URL.
 
-For `TARGETED_TYPE=review_thread` (inline review comment):
+For `TARGETED_TYPE=review_thread` (inline review comment) — Phase 1 skipped `get-pr-comments`; resolve the comment's thread directly and build a minimal single-thread feedback payload:
 
 ```bash
 COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id)
-# Match directly inside FEEDBACK_JSON first; fall back to get-thread-for-comment only if absent (e.g. resolved thread).
-THREAD_ID=$(jq -r --arg cid "$COMMENT_NODE_ID" 'first(.review_threads[] | select(.comments[]?.id == $cid) | .id) // empty' <<<"$FEEDBACK_JSON")
-if [[ -z "$THREAD_ID" ]]; then
-  THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
-  THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
+THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
+if [[ -n "$THREAD_JSON" ]]; then
+  FEEDBACK_JSON=$(printf '%s\n' "$THREAD_JSON" | jq --arg pr "$PR_NUMBER" '
+    {
+      pr_number: ($pr | tonumber),
+      review_threads: [del(.isResolved)],
+      pr_comments: [],
+      review_bodies: [],
+      cross_invocation: {signal: false, resolved_threads: []}
+    }')
+else
+  FEEDBACK_JSON=$(jq -n --arg pr "$PR_NUMBER" '{pr_number: ($pr | tonumber), review_threads: [], pr_comments: [], review_bodies: [], cross_invocation: {signal: false, resolved_threads: []}}')
 fi
-# Keep only the matching thread; drop pr_comments + review_bodies; zero cross-invocation signal.
-FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
-  .review_threads |= map(select(.id == $tid))
-  | .pr_comments = []
-  | .review_bodies = []
-  | .cross_invocation = {signal: false, resolved_threads: []}
-' <<<"$FEEDBACK_JSON")
 ```
 
 For `TARGETED_TYPE=pr_comment` (top-level PR comment) — Phase 1 skipped `get-pr-comments`; fetch the single comment via REST and build a minimal feedback payload:

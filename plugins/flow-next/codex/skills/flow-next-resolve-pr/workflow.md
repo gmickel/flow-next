@@ -110,8 +110,8 @@ if [[ -z "$PR_NUMBER" ]]; then
   fi
 fi
 
-if [[ "$MODE" == "targeted" && "$TARGETED_TYPE" == "pr_comment" ]]; then
-  FEEDBACK_JSON=""   # targeted.md fetches the single top-level comment directly via REST
+if [[ "$MODE" == "targeted" ]]; then
+  FEEDBACK_JSON=""   # targeted.md fetches only the single targeted thread or comment directly
 else
   FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
 fi
@@ -355,7 +355,7 @@ Per verdict, so each thread of a cluster gets its own reply and resolution:
 
 | `feedback_type` | Reply via | Resolve via |
 |---|---|---|
-| `review_thread` | `reply-to-pr-thread` (with `--resolve` unless `verdict == needs-human`) | combined into `reply-to-pr-thread --resolve` (skipped if `needs-human`) |
+| `review_thread` | `reply-to-pr-thread` | `resolve-pr-thread` (skip if `verdict == needs-human`) |
 | `pr_comment` | `gh pr comment $PR_NUMBER --body "<reply_text>"` | (none — no GraphQL resolve for top-level comments) |
 | `review_body` | `gh pr comment $PR_NUMBER --body "<reply_text>"` | (none) |
 
@@ -373,11 +373,8 @@ jq -c '.[]' <<<"$VERDICTS" | while IFS= read -r VERDICT; do
 
   case "$FB_TYPE" in
     review_thread)
-      if [[ "$V" != "needs-human" ]]; then
-        printf '%s\n' "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID" --resolve
-      else
-        printf '%s\n' "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
-      fi
+      printf '%s\n' "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
+      if [[ "$V" != "needs-human" ]]; then bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"; fi
       ;;
     pr_comment|review_body)
       gh pr comment "$PR_NUMBER" --body "$REPLY"
