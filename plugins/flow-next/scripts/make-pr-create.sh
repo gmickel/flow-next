@@ -26,8 +26,10 @@ if [[ "$PUSH_RC" -ne 0 ]]; then
   echo "$PUSH_OUT" >&2
   exit 1
 fi
-sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
-if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
+if [[ "${UPDATE_MODE:-0}" != "1" && -z "${PR_READ:-}" ]]; then
+  sleep 1   # GitHub API eventual-consistency lag on fresh PR create (cli/cli #2691)
+fi
+if [[ "${UPDATE_MODE:-0}" == "1" && -z "${UPDATE_PR_NUMBER:-}" ]]; then
   if [[ -n "${PR_READ:-}" ]]; then
     # A failed read is a failure, never "no open pull request".
     PR_NOUN="pull request"; [[ "${FORGE:-}" != gitlab ]] || PR_NOUN="merge request"
@@ -59,7 +61,8 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
       echo "Error: updating $PR_LABEL failed." >&2; exit 1; }
     echo "Updated $PR_LABEL description (refreshed against the current diff)." >&2
   elif gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
-    PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
+    PR_URL="${EXISTING:-}"
+    [[ -n "$PR_URL" ]] || PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
   else
     echo "Error: gh pr edit #$UPDATE_PR_NUMBER --body-file failed." >&2

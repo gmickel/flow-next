@@ -27,12 +27,17 @@ bitbucket_reads() {
   # A dry run names the forge too, so its reads match a real run; it skips the stops and checks.
   ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || ORIGIN_URL=""
   ORIGIN_HOST=$(printf '%s' "$ORIGIN_URL" | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#')
-  if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* || "$ORIGIN_URL" == git+ssh://* ]]; then
-    SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
-    [[ -z "$SSH_HOST" ]] || ORIGIN_HOST="$SSH_HOST"
-  fi
   # A hostname is case-insensitive, as in the Python rule.
   ORIGIN_HOST=$(printf '%s' "$ORIGIN_HOST" | tr '[:upper:]' '[:lower:]')
+  if [[ "$ORIGIN_URL" != *://* || "$ORIGIN_URL" == ssh://* || "$ORIGIN_URL" == git+ssh://* ]]; then
+    case "$ORIGIN_HOST" in
+      github.com|ssh.github.com|gitlab.com|bitbucket.org|ssh.bitbucket.org|altssh.bitbucket.org) : ;;
+      *)
+        SSH_HOST=$(ssh -G "$ORIGIN_HOST" 2>/dev/null | awk '/^hostname /{print $2; exit}') || SSH_HOST=""
+        [[ -z "$SSH_HOST" ]] || ORIGIN_HOST=$(printf '%s' "$SSH_HOST" | tr '[:upper:]' '[:lower:]')
+        ;;
+    esac
+  fi
   if [[ "$ORIGIN_HOST" == github.com || "$ORIGIN_HOST" == ssh.github.com ]]; then
     FORGE=github
   elif [[ "$ORIGIN_HOST" == bitbucket.org || "$ORIGIN_HOST" == ssh.bitbucket.org || "$ORIGIN_HOST" == altssh.bitbucket.org ]]; then
@@ -122,8 +127,10 @@ for candidate in origin/main main origin/master master; do
     break
   fi
 done
+CLOSED_IDS=""; CLOSED_IDS_BASE=""
 if [[ -z "$SPEC_ID" ]]; then
-  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "${BASE_REF:-$CHAIN_BASE}" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "${BASE_REF:-$CHAIN_BASE}" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
+  CLOSED_IDS_BASE="${BASE_REF:-$CHAIN_BASE}"
+  CLOSED_IDS='{"spec_ids":[]}'; [[ -z "$CLOSED_IDS_BASE" ]] || CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CLOSED_IDS_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
   SPEC_ID=$(printf '%s' "$CLOSED_IDS" | jq -r '.spec_ids[-1] // empty')
   if [[ -z "$SPEC_ID" ]]; then
     # The exit ends this shell; the no-spec path needs the forge's values from this line.
@@ -131,11 +138,20 @@ if [[ -z "$SPEC_ID" ]]; then
     echo "NO_SPEC"; exit 4
   fi
 fi
+SPEC_JSON=""
 CHAIN_PARENT=""; CHAIN_PARENT_BRANCH=""; CHAIN_BOUNDARY=""; PARENT_PR=""; PARENT_PR_STATE=""; CHAIN_REWRITE=0; REWRITE_ONTO=""
 if [[ -z "$BASE_REF" && -n "$CHAIN_BASE" ]]; then
-  [[ "$CHAIN_BASE" == origin/* ]] && { git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2; }
-  CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
-  for DEP in $("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null | jq -r '.depends_on_epics[]?'); do
+  if [[ "$DRY_RUN" != "1" && "$CHAIN_BASE" == origin/* ]]; then
+    git -C "$REPO_ROOT" fetch -q origin "refs/heads/${CHAIN_BASE#origin/}:refs/remotes/$CHAIN_BASE" 2>/dev/null || echo "Note: could not refresh $CHAIN_BASE from origin; chain detection uses the local ref." >&2
+  fi
+  SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null) || SPEC_JSON=""
+  SPEC_DEPS=$(printf '%s' "$SPEC_JSON" | jq -r '.depends_on_epics[]?' 2>/dev/null || true)
+  if [[ -n "$SPEC_DEPS" ]]; then
+    if [[ "$CLOSED_IDS_BASE" != "$CHAIN_BASE" || -z "$CLOSED_IDS" ]]; then
+      CLOSED_IDS=$("$FLOWCTL" spec closed-in-range --base "$CHAIN_BASE" --json) || { printf '%s\n' "$CLOSED_IDS" >&2; exit 1; }
+    fi
+  fi
+  for DEP in $SPEC_DEPS; do
     # Closed-set membership excludes closes inherited from a stacked parent branch.
     if printf '%s' "$CLOSED_IDS" | jq -e --arg dep "$DEP" '.spec_ids | index($dep) != null' >/dev/null; then continue; fi
     DEP_JSON=$("$FLOWCTL" show "$DEP" --json 2>/dev/null) || continue
@@ -231,12 +247,22 @@ if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
   echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2; exit 1; fi
 # end:block
 # --- §0.5: tasks-done validation (single show capture = spec-existence validation) ---
-if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
-  echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2; exit 1; fi
-SPEC_ID=$(printf '%s' "$SPEC_JSON" | jq -r '.id')
-OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done" and .status != "retired") | .id] | join(", ")')
-TASK_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]?] | length')
-OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done" and .status != "retired")] | length')
+if [[ -z "${SPEC_JSON:-}" ]]; then
+  if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
+    echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2; exit 1; fi
+fi
+IFS=$'\x1f' read -r SPEC_ID TASK_COUNT OPEN_COUNT REVIEW_PENDING SPEC_STATUS REVIEW_STATUS SPEC_BRANCH OPEN_TASKS < <(
+  printf '%s' "$SPEC_JSON" | jq -r '[
+    (.id // ""),
+    (([.tasks[]?] | length) | tostring),
+    (([.tasks[]? | select(.status != "done" and .status != "retired")] | length) | tostring),
+    ((.completion_review_pending // false) | tostring),
+    (.status // ""),
+    (.completion_review_status // "unknown"),
+    (.branch_name // ""),
+    ([.tasks[]? | select(.status != "done" and .status != "retired") | .id] | join(", "))
+  ] | join("\u001f")'
+)
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
   if [[ "$AUTONOMOUS" == "1" ]]; then
     echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
@@ -249,9 +275,7 @@ if [[ "$TASK_COUNT" -eq 0 ]]; then
   echo "Note: $SPEC_ID has no tasks; the spec remains open and is not closed." >&2
 fi
 # A configured completion review that has not passed keeps the spec open, so land cannot merge unreviewed work (#477).
-REVIEW_PENDING=$(printf '%s' "$SPEC_JSON" | jq -r '.completion_review_pending // false')
-if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
-  REVIEW_STATUS=$(printf '%s' "$SPEC_JSON" | jq -r '.completion_review_status // "unknown"')
+if [[ "$REVIEW_PENDING" == "true" && "$OPEN_COUNT" -eq 0 && "$SPEC_STATUS" != "done" ]]; then
   if [[ "$AUTONOMOUS" == "1" ]]; then
     echo "Error: completion review for $SPEC_ID reads $REVIEW_STATUS. Autonomous context cannot open PRs for unreviewed specs." >&2
     exit 2
@@ -308,7 +332,7 @@ if [[ "${CHAIN_REWRITE:-0}" == "1" ]]; then
 fi
 # fence:spec-close
 SPEC_CLOSED=0
-if [[ "$DRY_RUN" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIEW_PENDING" != "true" && "$(printf '%s' "$SPEC_JSON" | jq -r '.status')" != "done" ]]; then
+if [[ "$DRY_RUN" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIEW_PENDING" != "true" && "$SPEC_STATUS" != "done" ]]; then
   CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: cannot close for a detached PR head" >&2; exit 1; }
   SPEC_CLOSE_PATH=".flow/specs/$SPEC_ID.json"
@@ -323,7 +347,7 @@ if [[ "$DRY_RUN" != "1" && "$TASK_COUNT" -gt 0 && "$OPEN_COUNT" -eq 0 && "$REVIE
   [[ -z "$CLOSE_DIRTY" ]] || {
     echo "Error: pending changes in spec close paths; commit them before make-pr closes the spec; PR not opened" >&2; exit 1;
   }
-  if [[ "$(printf '%s' "$SPEC_JSON" | jq -r '.branch_name // empty')" != "$CURRENT_BRANCH" ]]; then
+  if [[ "$SPEC_BRANCH" != "$CURRENT_BRANCH" ]]; then
     "$FLOWCTL" spec set-branch "$SPEC_ID" --branch "$CURRENT_BRANCH" --json || {
       echo "Error: spec branch update failed; PR not opened" >&2; exit 1;
     }

@@ -252,5 +252,137 @@ class SetupAndPrimeFoldedFieldsTest(unittest.TestCase):
             self.assertEqual(payload["substance"]["glossary_terms"]["total_terms"], 1)
 
 
+class ResolvePrShellScriptsTest(unittest.TestCase):
+    """R2: get-pr-comments single-pass pagination + OWNER/REPO arg; reply-to-pr-thread --resolve."""
+
+    def _write_fake_gh(self, bin_dir: Path, script_body: str) -> None:
+        gh = bin_dir / "gh"
+        gh.write_text("#!/usr/bin/env bash\n" + script_body, encoding="utf-8")
+        gh.chmod(0o755)
+
+    def test_reply_to_pr_thread_combines_resolve_into_one_mutation(self) -> None:
+        script = ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "reply-to-pr-thread"
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            log = Path(tmp) / "gh.log"
+            self._write_fake_gh(
+                bin_dir,
+                f'printf "%s\\n---\\n" "$*" >> "{log}"\necho "{{\\"data\\":{{}}}}"\n',
+            )
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+            r1 = subprocess.run(
+                [str(script), "PRRT_123"],
+                input="Fixed in abc1234",
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr)
+            r2 = subprocess.run(
+                [str(script), "PRRT_123", "--resolve"],
+                input="Fixed in abc1234",
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr)
+            calls = [c for c in log.read_text(encoding="utf-8").split("\n---\n") if c.strip()]
+            self.assertEqual(len(calls), 2)
+            self.assertIn("addPullRequestReviewThreadReply", calls[0])
+            self.assertNotIn("resolveReviewThread", calls[0])
+            self.assertIn("addPullRequestReviewThreadReply", calls[1])
+            self.assertIn("resolveReviewThread", calls[1])
+
+    def test_get_pr_comments_accepts_owner_repo_and_paginates_only_unexhausted_threads(self) -> None:
+        script = ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "get-pr-comments"
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            log = Path(tmp) / "gh.log"
+            first_page = json.dumps({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "author": {"login": "alice"},
+                            "comments": {"nodes": []},
+                            "reviews": {"nodes": []},
+                            "reviewThreads": {
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                "nodes": [
+                                    {
+                                        "id": "T1",
+                                        "isResolved": False,
+                                        "isOutdated": False,
+                                        "path": "a.py",
+                                        "line": 1,
+                                        "originalLine": 1,
+                                        "diffSide": "RIGHT",
+                                        "comments": {
+                                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                            "nodes": [{"id": "C1", "body": "one", "author": {"login": "bob"}, "createdAt": "2026-01-01T00:00:00Z"}],
+                                        },
+                                    },
+                                    {
+                                        "id": "T2",
+                                        "isResolved": False,
+                                        "isOutdated": False,
+                                        "path": "b.py",
+                                        "line": 2,
+                                        "originalLine": 2,
+                                        "diffSide": "RIGHT",
+                                        "comments": {
+                                            "pageInfo": {"hasNextPage": True, "endCursor": "CUR1"},
+                                            "nodes": [{"id": "C2", "body": "two", "author": {"login": "bob"}, "createdAt": "2026-01-01T00:00:00Z"}],
+                                        },
+                                    },
+                                ],
+                            },
+                        }
+                    }
+                }
+            })
+            second_page = json.dumps({
+                "data": {
+                    "node": {
+                        "comments": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [{"id": "C3", "body": "three", "author": {"login": "carol"}, "createdAt": "2026-01-02T00:00:00Z"}],
+                        }
+                    }
+                }
+            })
+            (Path(tmp) / "p1.json").write_text(first_page, encoding="utf-8")
+            (Path(tmp) / "p2.json").write_text(second_page, encoding="utf-8")
+            self._write_fake_gh(
+                bin_dir,
+                f'''printf "%s\\n" "$*" >> "{log}"
+if [ "$1" = "repo" ]; then
+  echo "should not call gh repo view when OWNER/REPO is passed" >&2
+  exit 99
+fi
+if echo "$*" | grep -q "thread=T2"; then
+  cat "{Path(tmp) / 'p2.json'}"
+else
+  cat "{Path(tmp) / 'p1.json'}"
+fi
+''',
+            )
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+            res = subprocess.run(
+                [str(script), "42", "acme/widget"],
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(res.returncode, 0, res.stderr)
+            out = json.loads(res.stdout)
+            self.assertEqual(out["pr_number"], 42)
+            by_id = {t["id"]: t for t in out["review_threads"]}
+            self.assertEqual([c["id"] for c in by_id["T1"]["comments"]], ["C1"])
+            self.assertEqual([c["id"] for c in by_id["T2"]["comments"]], ["C2", "C3"])
+            self.assertNotIn("repo view", log.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()
