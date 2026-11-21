@@ -728,7 +728,7 @@
     "impl:fn-345-efficiency-audit-2026-11-wave-1.1": 0
   },
   "spec_path": ".flow/specs/fn-345-efficiency-audit-2026-11-wave-1.md",
-  "status": "open",
+  "status": "done",
   "title": "Efficiency audit 2026-11 wave 1: mechanical fixes and zero-loss prose pruning",
   "tracker": {
     "baseHashFlow": null,
@@ -741,5 +741,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-21T23:42:29.756331Z"
+  "updated_at": "2026-11-21T23:42:47.726753Z"
 }

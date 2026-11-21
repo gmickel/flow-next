@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-345-efficiency-audit-2026-11-wave-1",
   "spec_path": ".flow/tasks/fn-345-efficiency-audit-2026-11-wave-1.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Efficiency audit 2026-11 wave 1: mechanical fixes and zero-loss prose pruning",
   "updated_at": "2026-11-21T22:39:51.261414Z"
 }
