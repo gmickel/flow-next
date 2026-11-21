@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-345-efficiency-audit-2026-11-wave-1",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-11-21T22:27:31.222663Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-345-efficiency-audit-2026-11-wave-1",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-345-efficiency-audit-2026-11-wave-1.md",
   "status": "open",
   "title": "Efficiency audit 2026-11 wave 1: mechanical fixes and zero-loss prose pruning",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-21T22:27:31.226062Z"
+  "updated_at": "2026-11-21T22:39:26.162490Z"
 }
