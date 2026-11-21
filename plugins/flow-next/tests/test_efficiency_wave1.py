@@ -165,23 +165,27 @@ class AuditScanBatchingTest(MemoryRepoTemplate, unittest.TestCase):
         (self.root / "src" / "dirty.py").write_text("y = 1\n", encoding="utf-8")
         e1 = self._run(
             "memory", "add", "--track", "bug", "--category", "runtime-errors",
-            "--title", "Clean module bug", "--module", "src/clean.py",
+            "--title", "Alpha parser failure", "--module", "src/clean.py",
         )
         e2 = self._run(
             "memory", "add", "--track", "bug", "--category", "runtime-errors",
-            "--title", "Dirty module bug", "--module", "src/dirty.py",
+            "--title", "Beta socket timeout", "--module", "src/dirty.py",
         )
+        old_env = {
+            **os.environ,
+            "GIT_AUTHOR_DATE": "2020-01-01T00:00:00Z",
+            "GIT_COMMITTER_DATE": "2020-01-01T00:00:00Z",
+        }
         subprocess.run(["git", "add", "-A"], cwd=self.root, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-qm", "init"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=self.root, check=True, capture_output=True, env=old_env)
 
-        # Stamp both entries with a future last_audited so git log --since is empty;
-        # then dirty only src/dirty.py.
+        # Stamp both entries (non-substantive) with today's date, then dirty only src/dirty.py.
         plan = self.root / "plan.json"
         plan.write_text(
             json.dumps({
                 "entries": [
-                    {"id": e1["entry_id"], "set": {"last_audited": "2099-01-01"}},
-                    {"id": e2["entry_id"], "set": {"last_audited": "2099-01-01"}},
+                    {"id": e1["entry_id"], "stamp": True},
+                    {"id": e2["entry_id"], "stamp": True},
                 ]
             }),
             encoding="utf-8",

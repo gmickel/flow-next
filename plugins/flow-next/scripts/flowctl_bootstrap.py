@@ -24,6 +24,8 @@ HELP_NAME = "flowctl-help.txt"
 # fast path. A missing/stale manifest declines the fast path safely.
 HELP_SHA256 = "3062c6546a1f07bf2f7c1c0beb83e6312bde15f62bd44a41915de32c2e216c6a"
 HELP_PYTHON = (3, 14)
+HELP_WRAP_PYTHONS = ((3, 11), (3, 12), (3, 13))
+HELP_SUPPORTED_PYTHONS = (*HELP_WRAP_PYTHONS, HELP_PYTHON)
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
     ".flow/usage.md). Reinstall or update the flow-next plugin."
@@ -133,9 +135,12 @@ def _manifest_source_sha(source: Path):
 def _root_help_fast_path(source: Path) -> bool:
     """Write authenticated static help, or decline safely to live argparse."""
     # argparse's default help layout can change between Python minor releases.
-    # The tracked snapshot is authenticated against both source and the runtime
-    # that generated it; other supported runtimes fall back to live argparse.
-    if sys.version_info[:2] != HELP_PYTHON:
+    # The tracked snapshot is authenticated against both source and the
+    # supported runtimes whose layout matches (3.11-3.13 wrap the trailing
+    # ellipsis on line 2; 3.14 keeps it inline); other runtimes fall back to
+    # live argparse.
+    minor = sys.version_info[:2]
+    if minor not in HELP_SUPPORTED_PYTHONS:
         return False
     # argparse deliberately honors terminal width through COLUMNS. Static text
     # is valid only for the default layout captured in flowctl-help.txt.
@@ -153,6 +158,15 @@ def _root_help_fast_path(source: Path) -> bool:
         help_text = help_bytes.decode("utf-8")
     except (OSError, UnicodeError):
         return False
+
+    if minor in HELP_WRAP_PYTHONS:
+        lines = help_text.splitlines(keepends=True)
+        if len(lines) >= 2 and lines[1].endswith("} ...\n"):
+            indent = " " * (len(lines[1]) - len(lines[1].lstrip(" ")))
+            lines[1] = lines[1][:-len(" ...\n")] + "\n" + indent + "...\n"
+            help_text = "".join(lines)
+        else:
+            return False
 
     sys.stdout.write(help_text)
     return True
