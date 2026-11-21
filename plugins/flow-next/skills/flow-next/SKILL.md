@@ -84,8 +84,8 @@ $FLOWCTL validate --all --json | jq '{valid, total_specs, total_tasks, total_err
 
 1. Find relevant spec:
    ```bash
-   # List all specs
-   $FLOWCTL specs --json
+   # List open specs (drop select(...) to include done specs)
+   $FLOWCTL specs --json | jq -c '[.specs[] | select(.status == "open") | {id, title, status}]'
 
    # Or show a specific spec to check its scope
    $FLOWCTL show fn-1 --json
@@ -116,8 +116,8 @@ $FLOWCTL validate --all --json | jq '{valid, total_specs, total_tasks, total_err
 ### "What tasks are there?"
 
 ```bash
-# All tasks, projected (add --spec fn-1-add-oauth for one spec)
-$FLOWCTL tasks --json | jq -c '[.tasks[] | {id, title, status, spec}]'
+# Open tasks, projected (add --spec fn-1-add-oauth for one spec; drop select(...) to include done)
+$FLOWCTL tasks --json | jq -c '[.tasks[] | select(.status != "done") | {id, title, status, spec}]'
 
 # Ready tasks for a spec
 $FLOWCTL ready --spec fn-1-add-oauth --json

@@ -82,17 +82,21 @@ fi
 args=(); [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
 ONE_REVIEWER=0   # 1 when the panel rule above calls for one reviewer
-[ "$ONE_REVIEWER" = 1 ] && args+=(--draw correctness)
 REVIEW_SPEC="<command:<label> when --review named one, else empty>"
 [ -n "$REVIEW_SPEC" ] && args+=(--spec "$REVIEW_SPEC")
-"$FLOWCTL" "$BACKEND" impl-review-fanout "${args[@]}"
+if [ "$ONE_REVIEWER" = 1 ]; then
+  "$FLOWCTL" "$BACKEND" impl-review "${args[@]}"
+else
+  "$FLOWCTL" "$BACKEND" impl-review-fanout "${args[@]}"
+fi
 ```
 
 Pass the caller's focus areas with `--focus "<areas>"`, or else the review focus the project's
 instructions state, for task and branch reviews alike. Triage
 passing means lockfile, docs, release or generated files only: the review is done.
+When `ONE_REVIEWER=1`, `impl-review` writes the receipt and returns the verdict directly — skip step 3 and go straight to step 4.
 
-## 3. Merge and finalize
+## 3. Merge and finalize (multi-reviewer fan-out only)
 
 The fan-out JSON lists each draw's `<axis>.review.md`, its `rid`, and the finalize command. Read
 each review and write a merge plan to a file: `{"keep":["correctness:1"],"collapse":{"contracts:2":"correctness:1"}}`,

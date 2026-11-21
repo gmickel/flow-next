@@ -17,7 +17,11 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 # Literal path; re-type it because variables die across tool calls.
 WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
 SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$WORK_CFG" 2>/dev/null)
-BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
+mkdir -p .flow/tmp
+SYNC_ACTIVE_FILE=".flow/tmp/run-sync-active-<suffix>.json"
+$FLOWCTL sync active --json > "$SYNC_ACTIVE_FILE" 2>/dev/null || rm -f "$SYNC_ACTIVE_FILE"
+BRIDGE_ACTIVE=$(jq -r '.active // false' "$SYNC_ACTIVE_FILE" 2>/dev/null || echo false)
+# Phase 3 reuses $SYNC_ACTIVE_FILE when .flow/config.json is unchanged.
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
   # Named issue -> read it first ($FLOWCTL tracker wire read) for {id,identifier,url}.

@@ -6,13 +6,6 @@ Read only when SKILL.md parsed the exact `--auto` or `--goal` token. One run sel
 
 Reuse the `$FLOWCTL` value SKILL.md's preamble resolved.
 
-Shared shell context for the run:
-
-```bash
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TODAY="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-```
-
 `jq`, `git`, and the origin forge's CLI (`gh`, `glab` on GitLab, or `bkt` on Bitbucket Cloud) must be on PATH when classification reaches the all-done PR branch.
 
 Cold session or run start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
@@ -237,32 +230,27 @@ Derive dispatch flags from the snapshot. Only an explicit review option
 is forwarded; the stage otherwise resolves its configured backend.
 
 ```bash
-REVIEW_ARG=""
+REVIEW_ARG=""; QA_STAGE_ENABLED=0; QA_STAGE_AUTO=0
 [ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
 printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
-BACKEND_NAME="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"')"
+IFS=$'\x1f' read -r BACKEND_NAME QA_GATE QA_FRESH < <(
+  printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '[
+    (([.candidates[]? | select(.id == $id) | .review_backend.spec][0]) // .review_backend.spec // "ASK"),
+    (.config.pipeline.qa // "off"),
+    ((([.candidates[]? | select(.id == $id)][0] // .selected) | .qa_fresh // false) | tostring)
+  ] | join("\u001f")'
+)
 if [ -n "${PILOT_REVIEW:-}" ]; then
   BACKEND_NAME="$PILOT_REVIEW"
   REVIEW_ARG="--review=$PILOT_REVIEW"
 fi
 REVIEW_CONFIGURED=1
 case "$BACKEND_NAME" in ASK|none|"") REVIEW_CONFIGURED=0 ;; esac
-```
-
-A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`.
-
-```bash
-QA_STAGE_ENABLED=0
-QA_STAGE_AUTO=0
-[ -n "${PILOT_SNAPSHOT:-}" ] || PILOT_SNAPSHOT="$(cat "$(git rev-parse --show-toplevel)/.flow/tmp/pilot-snapshot.json" 2>/dev/null)"
-printf '%s' "$PILOT_SNAPSHOT" | jq -e 'type == "object"' >/dev/null 2>&1 || { echo "PILOT_VERDICT=NEEDS_HUMAN spec=${GOAL_SPEC:--} stage=- reason=\"${GOAL_REASON_PREFIX:-}pilot snapshot missing or unreadable; rerun the snapshot step\""; exit 1; }
-QA_GATE="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r '.config.pipeline.qa // "off"')"
 [ "${QA_GATE:-}" = "on" ] && QA_STAGE_ENABLED=1
 [ "${QA_GATE:-}" = "auto" ] && QA_STAGE_AUTO=1
-QA_FRESH="$(printf '%s' "$PILOT_SNAPSHOT" | jq -r --arg id "${SELECTED_SPEC:-}" '([.candidates[]? | select(.id == $id)][0] // .selected) | .qa_fresh // false')"
 ```
 
-`QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not recompute them.
+A selected review gate with `REVIEW_CONFIGURED=0` stops `NEEDS_HUMAN`. `QA_FRESH` comes from `selected.qa_fresh`. [references/gate-selection.md](references/gate-selection.md) owns the judgment. The snapshot implements [references/qa-stage.md](references/qa-stage.md)'s receipt identity, outcome and peeled branch-head checks; do not recompute them.
 
 ### Route (SKILL.md Step 2 runs here)
 
@@ -375,7 +363,7 @@ Done when: exactly one stage skill has been invoked and has returned; a hop that
 
 Echo each hop's observed evidence for the transcript-only driver, decide `advanced` from the receipt and PR re-reads below, and run the post-hop dirty-tree guard. One evidence block and one stage-outcome line per hop stay in the transcript for the whole run.
 
-**Stage-outcome line.** Every evidence echo additionally carries the one `stage:` line `references/gate-selection-more.md` (Receipts) defines for the stage this hop dispatched; a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip. Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one). Record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
+**Stage-outcome line.** Every evidence echo additionally carries the one `stage:` line SKILL.md Step 5 defines for the stage this hop dispatched; a QA skip under `pipeline.qa=auto` is recorded at the classify-time skip. Append `(model: <what actually ran>)` only when this hop knows what executed the stage (a named subagent model, a bridged CLI invoked with an explicit model, a review backend that reported one). Record what ran, never what the routing block preferred, and omit the annotation when the harness did not expose it rather than writing `auto` / `default` / `unknown`. Timestamps only where this hop knows them; token/cost telemetry is out of scope (host-side data flowctl cannot observe).
 
 For `land`, execute `references/tail.md`'s fresh observations and outcome mapping. Pass through the original land result and its per-PR evidence; do not apply the build-stage advancement/strike rules to a landing wait or blocker.
 
@@ -421,6 +409,7 @@ For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt**,
 Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit; peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet; that is the next hop's make-pr):
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SELECTED_SPEC.json"
 QA_OUTCOME=""
 QA_ADVANCED=false
@@ -460,7 +449,7 @@ For `make-pr`, advancement means a forge-confirmed OPEN PR URL for the branch. T
 
 ```bash
 PR_VERIFY_FAILED=0
-PR_VERIFY_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number --limit 10 2>/dev/null) || PR_VERIFY_FAILED=1
+PR_VERIFY_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefName,baseRefName,headRefOid,mergeCommit --limit 10 2>/dev/null) || PR_VERIFY_FAILED=1
 OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r 'first(.[] | select(.state == "OPEN") | .url) // empty' 2>/dev/null) || PR_VERIFY_FAILED=1   # jq is the status-bearing command: no trailing `head` to mask a parse error
 ```
 
@@ -620,6 +609,6 @@ Terminal verdict when no spec was dispatched. **The two cases stay distinct**; a
 
 Backlog mode: see backlog-mode.md §Backlog-mode decision log.
 
-Done when: the ledger reflects this hop (cleared on `ADVANCED`, incremented on healthy-no-advance, untouched on crash-class), one decision-log row per dispatched stage was appended, and either the next hop has started or the terminal verdict line is printed.
+Done when: the ledger reflects this hop (cleared on `ADVANCED`, incremented on healthy-no-advance, untouched on crash-class), one decision-log row per dispatched stage was appended (backlog mode only), and either the next hop has started or the terminal verdict line is printed.
 
 The `PILOT_VERDICT` line is always the last line of the run's output. Print nothing after it.

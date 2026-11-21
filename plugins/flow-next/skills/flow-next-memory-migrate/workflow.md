@@ -288,15 +288,9 @@ rm -f "$TMPFILE"
 
 **Goal:** confirm round-trip on every newly created entry, then print the migration report.
 
-### 3.1 — Verify each new entry round-trips
+### 3.1 — Verify migrated entries
 
-For each `ENTRY_ID` from a successful Phase 2 write, re-read via flowctl:
-
-```bash
-"$FLOWCTL" memory read "$ENTRY_ID" --json > /dev/null
-```
-
-If the read fails (non-zero exit), flag the entry as `verification-failed` in the report. Indicates a write or filesystem issue — the user should investigate before Phase 4 cleanup.
+`flowctl memory add` already validates frontmatter and writes atomically, returning `entry_id` and `path` on exit 0. Confirm each Phase 2 write returned exit 0 with a non-empty `entry_id` and that its `path` exists on disk (no per-entry `memory read` subprocess loop needed); flag any missing file or non-zero exit as `verification-failed` in the report before Phase 4 cleanup.
 
 ### 3.2 — Report structure
 

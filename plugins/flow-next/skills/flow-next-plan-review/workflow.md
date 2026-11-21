@@ -43,10 +43,9 @@ and continue.
 ## Phase 1: Common Review Inputs
 
 The selected backend owns invocation, but all review routes use the current
-persisted spec:
+persisted spec (Phase 0 already validated `$SPEC_ID` with `flowctl show`):
 
 ```bash
-$FLOWCTL show "$SPEC_ID" --json
 $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 

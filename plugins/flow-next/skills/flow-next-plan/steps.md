@@ -63,7 +63,7 @@ When the strategy sentinel prints, read [`references/strategy-alignment.md`](ref
 
 The set follows depth and config, never your sense of what seems relevant; dropping a scout inside the tier has broken this. SHORT skipping the web scouts is a deliberate trade: the implementer can fetch docs during work.
 
-On a Route A spec, first apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names and record the outcome with its reason; `repo-scout`, `spec-scout` and the gap analyst always run.
+On a Route A spec at `STANDARD` or `DEEP` depth (SHORT skips web scouts anyway), first apply the skip rule in [`flow-next-refine/references/research-scope.md`](../flow-next-refine/references/research-scope.md) to the research scouts it names and record the outcome with its reason; `repo-scout`, `spec-scout` and the gap analyst always run. Pass `Year: YYYY` in the brief for web scouts (`docs-scout`, `practice-scout`, `github-scout`) so they do not shell out to `date`.
 
 When github-scout runs, it alone searches GitHub code; repo-scout stays local and the docs and practice scouts use primary documentation. On a host that does not block on dispatch, start Step 3's gap analyst as soon as the repo-grounded scouts return, reconcile the web findings when they land, and join every scout before Step 5. Blocking hosts run Steps 1, 2, 3 in order.
 

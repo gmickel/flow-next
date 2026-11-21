@@ -32,10 +32,14 @@ When `PARALLEL_WAVE` is `true` or `REVIEW_MODE` is `host-deferred`, read [worker
 
 **Every task starts from a re-read of its own spec.** A worker that edited a file before running the anchor call has broken this.
 
-Use the FLOWCTL path and IDs from your prompt. One call fetches the whole re-anchor bundle:
+Use the FLOWCTL path and IDs from your prompt. One call fetches the whole re-anchor bundle and persists `BASE_COMMIT` before any edit (bash variables do NOT survive across separate tool-call Bash blocks; every later block re-reads `BASE_COMMIT=$(cat .flow/tmp/base_commit)`):
 
 ```bash
 <FLOWCTL> anchor <TASK_ID> --md
+mkdir -p .flow/tmp
+BASE_COMMIT=$(git rev-parse HEAD)
+printf '%s\n' "$BASE_COMMIT" > .flow/tmp/base_commit
+echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignored)"
 ```
 
 In parallel-wave mode the conductor owns the task claim ([worker-handover.md](../skills/flow-next-work/references/worker-handover.md)).
@@ -84,14 +88,7 @@ When your prompt carries `BASELINE_HANDOFF`, read [worker-baseline-reuse.md](../
 
 **Suite-output capture rule (Baseline and Verify):** green observation is the command exit code (0, or one the spec names as a normal result), not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs).
 
-**Capture the base commit at Phase-1 end — BEFORE any edit — and PERSIST it to a file** (bash variables do NOT survive across separate tool-call Bash blocks; a later block reading a stale `$BASE_COMMIT` would expand to `..HEAD` and record blank/empty evidence):
-```bash
-mkdir -p .flow/tmp
-BASE_COMMIT=$(git rev-parse HEAD)
-printf '%s\n' "$BASE_COMMIT" > .flow/tmp/base_commit
-echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignored)"
-```
-`BASE_COMMIT` scopes the impl-review diff (Phase 4) and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls, so a block that used the bare variable has broken this.
+`BASE_COMMIT` (persisted in the anchor call above) scopes the impl-review diff (Phase 4) and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — shell variables do not carry across tool calls, so a block that used the bare variable has broken this.
 
 Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `pending (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
 

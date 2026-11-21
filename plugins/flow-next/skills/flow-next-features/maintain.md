@@ -31,7 +31,7 @@ mkdir -p "$RUN_DIR"
 
 **Entry gate (before any inspection):**
 
-1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`) AND zero untracked product files (`git status --porcelain --untracked-files -- . ':(exclude).flow/'` must be empty - `git diff` cannot see an untracked file, and an untracked route source would let the audit prove and map product code absent from the PR's base). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
+1. **On the default base.** Resolve the default branch locally first (`git symbolic-ref --quiet --short refs/remotes/origin/HEAD | sed 's#^origin/##'`), falling back to `gh repo view --json defaultBranchRef` or `git remote show origin` only if unset. Fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`) AND zero untracked product files (`git status --porcelain --untracked-files -- . ':(exclude).flow/'` must be empty - `git diff` cannot see an untracked file, and an untracked route source would let the audit prove and map product code absent from the PR's base). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
 2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
 3. **Record the base revision.** Persist `git rev-parse origin/<default>` (e.g. to `$RUN_DIR/entry_base`) - Phase 6's staleness recheck compares revisions, never the working tree, so the run's own later edits can never masquerade as base movement.
 4. **Ship names.** Read the repo's branch and commit naming rules now (project instructions, contributing docs, commit hooks) and note in the run notes how Phase 6 will name the branch and commit. When those rules need a value you cannot know, such as a ticket key, ask for it now, before Phase 1; when nobody can answer (a host loop), end `BLOCKED` naming the missing value. A pass that proves routes and then cannot name its commit has wasted the proofs.
@@ -55,29 +55,18 @@ Read `.flow/features/README.md`. List `.flow/features/*.md`, excluding the index
 | Duplicate slug or path | Keep one; drop the extra |
 | Dead path (row points at nothing) | Drop the row |
 
-**Drift memos.** Consume the `feature-map-drift` tag:
-
-```bash
-# Deterministic tag filter, never scored search: memory search tokenizes its
-# query, so "feature-map-drift" would match on the loose tokens (feature, map,
-# drift) and can miss or misrank the exact tag. Enumerate and filter instead.
-DRIFT_RAW="$($FLOWCTL memory list --track knowledge --json 2>/dev/null || true)"
-DRIFT_IDS="$(printf '%s' "$DRIFT_RAW" | jq -r '[.entries[]? | select((.tags // []) | index("feature-map-drift"))] | .[].entry_id' 2>/dev/null || true)"
-```
-
-Empty → no memos, continue. Fold every listed memo into this pass's targets (feature slug, route, Surface from its title). Titles, tags, named routes only. Never paste memory bodies into later prompts.
-
-**Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
-
-Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay in the live-pass queue and are marked doc drift for Phase 5.
-
-**Provenance facts.** Record the map's last-proven state before any edit. In a home-base workspace, where sibling repos hold the product code, add `--repo <path>` to this command for each one the project instructions name, so their commits age the map:
+**Provenance facts and drift memos.** Record the map's last-proven state and open `feature-map-drift` memos in one call before any edit. In a home-base workspace, where sibling repos hold the product code, add `--repo <path>` to this command for each one the project instructions name, so their commits age the map:
 
 ```bash
 "$FLOWCTL" features status --json > "$RUN_DIR/features-status.json"
 ```
 
-Rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
+- **Drift memos:** read `.open_drift[]` from `$RUN_DIR/features-status.json` (deterministic tag filter inside flowctl). Empty → no memos, continue. Fold every listed memo into this pass's targets (feature slug, route, Surface from its title). Titles, tags, named routes only. Never paste memory bodies into later prompts.
+- **Due rows:** rows whose `state` is `never-proven` or `malformed`, or whose `stale` is true, are this pass's due rows. A `malformed` row is treated as never proven and reported by name in the run notes and the outcome (the PR body's per-feature outcomes on `CHANGED`, the terminal `reason` otherwise).
+
+**Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
+
+Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay in the live-pass queue and are marked doc drift for Phase 5.
 
 **Partial-seed retries.** The index's "identified, not yet proven" entries (a prior seed named them as failed routes) join this pass's live-pass queue as candidates - proving them is the retry the seed verdict promised. One that proves gains its feature file; one that fails again stays named in the index and in this run's outcome reason.
 

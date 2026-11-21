@@ -12,7 +12,7 @@ Look for existing work on this defect in the affected area (the files the sympto
 
 - open pull requests and branches that change those files (`gh pr list --state open`, `git log <base>..<branch> -- <paths>`);
 - recent commits and reverts on those files (`git log -- <paths>`, including `Revert` subjects);
-- the memory bug track (`flowctl memory search "<symptom>" --track bug`);
+- the memory bug track (`flowctl memory search "<symptom>" --track bug --limit 10`);
 - tracker issues describing the same symptom (`gh issue list --search "<symptom>"`, or the configured tracker).
 
 A source you cannot reach (no network, no `gh` auth, no tracker) is recorded as unchecked with the reason, and the route continues on the rest.

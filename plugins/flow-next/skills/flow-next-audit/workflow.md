@@ -82,10 +82,12 @@ This phase runs in parallel concept to the memory walk — same audit invocation
 
 ```bash
 ACTIVE=0
+GLOSSARY_CACHE="${TMPDIR:-/tmp}/flow-audit-glossary-<suffix>.json"   # literal path reused by references/glossary-scan.md
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
 RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
+  printf '%s\n' "$RAW" > "$GLOSSARY_CACHE"
   VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
   [ "$VAL" = "true" ] && ACTIVE=1
 fi
@@ -148,7 +150,7 @@ Use `module_exists` and `module_changed` from the audit snapshot. Set
 changed=false), `last_audited` exists, and status is not stale. Unknown or failed
 probes keep investigation enabled.
 
-- `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**. A stamp that exits non-zero (flowctl could not parse or validate the frontmatter) is not an auto-Keep: the entry stays in the Phase-1 set with flowctl's error as evidence, and its frontmatter repair is an Update.
+- `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: queue `{"id":"<entry_id>","stamp":true}` for Phase 4's batched `$FLOWCTL memory apply --plan <file> --json` (or run one batched `memory apply` here instead of one `memory mark-fresh` subprocess per entry), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**. If `memory apply` reports an error on an entry (unparseable frontmatter), it is not an auto-Keep: keep it in the Phase-1 set with flowctl's error as evidence, and its frontmatter repair is an Update.
 - Otherwise (never audited → no `last_audited`; no `module` or a logical name → can't change-detect; module path gone → possible Delete; module changed; or already `stale`) → keep it in the Phase-1 investigation set.
 
 **Auto-Kept entries still flow into Phase 1.75 cross-doc analysis and the Phase-5 report.** An auto-Kept entry missing from the contradiction scan or from the report has broken this — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
@@ -436,7 +438,7 @@ Use an apply-plan entry with `remove:true`. Recovery uses
 
 ### 4.6 — Mark-stale flow (autofix ambiguous + Replace-insufficient)
 
-Execute per [phases.md](phases.md) §"Mark stale (autofix ambiguous + Replace-insufficient)" — the `flowctl memory mark-stale` helper with `--reason` + `--audited-by "/flow-next:audit"`. Never hand-edit frontmatter for stale-flagging; the helper is atomic and preserves unknown fields.
+Batch mark-stale entries into Phase 4's `$FLOWCTL memory apply --plan <file> --json` plan (`"stamp":true,"set":{"status":"stale","audit_notes":"<reason> (audited-by: /flow-next:audit)","hardened_into":null}`), or run `flowctl memory mark-stale` with `--reason` + `--audited-by "/flow-next:audit"` for a single standalone mark. Never hand-edit frontmatter for stale-flagging; both helpers are atomic and preserve unknown fields.
 
 ### 4.7 — Harden flow (interactive only — autofix never applies)
 

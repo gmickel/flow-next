@@ -11,8 +11,14 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SCRIPTS="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-resolve-pr/scripts"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-# The origin remote names the forge (flowctl's one forge rule); anything unread stays on GitHub.
-FORGE="$("$FLOWCTL" pilot snapshot --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true
+# The origin remote names the forge (fast local check for canonical hosts; flowctl fallback for custom SSH aliases).
+ORIGIN_HOST="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed -E 's#^[a-z+]+://([^@/]*@)?([^/:]+).*#\2#; s#^([^@/]*@)?([^/:]+):.*#\2#' | tr '[:upper:]' '[:lower:]')" || ORIGIN_HOST=""
+case "$ORIGIN_HOST" in
+  github.com|ssh.github.com) FORGE=github ;;
+  gitlab.com) FORGE=gitlab ;;
+  bitbucket.org|ssh.bitbucket.org|altssh.bitbucket.org) FORGE=bitbucket ;;
+  *) FORGE="$("$FLOWCTL" pilot snapshot --forge-only --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true ;;
+esac
 FORGE="${FORGE:-github}"
 ```
 
@@ -110,7 +116,11 @@ if [[ -z "$PR_NUMBER" ]]; then
   fi
 fi
 
-FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
+if [[ "$MODE" == "targeted" && "$TARGETED_TYPE" == "pr_comment" ]]; then
+  FEEDBACK_JSON=""   # targeted.md fetches the single top-level comment directly via REST
+else
+  FEEDBACK_JSON=$(bash "$SCRIPTS/get-pr-comments" "$PR_NUMBER")
+fi
 ```
 
 `get-pr-comments` returns **open** inline review threads plus top-level PR
@@ -241,10 +251,8 @@ Reviewers ask *"why this approach?"* / *"why is X out of scope?"* — and the an
 CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 SPEC_ID=""; SPEC_PATH=""; DECISIONS_JSON="[]"
 if [[ -n "$CURRENT_BRANCH" ]]; then
-  while IFS= read -r f; do
-    [[ "$(jq -r '.branch_name // ""' "$f" 2>/dev/null)" == "$CURRENT_BRANCH" ]] || continue
-    SPEC_ID="$(jq -r '.id // ""' "$f" 2>/dev/null)"; break
-  done < <(find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null)
+  SPEC_ID="$(find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' \
+    -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id // empty' {} + 2>/dev/null | head -1)"
 fi
 if [[ -n "$SPEC_ID" ]]; then
   SPEC_PATH="$REPO_ROOT/.flow/specs/${SPEC_ID}.md"              # .md sidecar always under .flow/specs/ (make-pr Phase 0)
@@ -353,7 +361,7 @@ Per verdict, so each thread of a cluster gets its own reply and resolution:
 
 | `feedback_type` | Reply via | Resolve via |
 |---|---|---|
-| `review_thread` | `reply-to-pr-thread` | `resolve-pr-thread` (skip if `verdict == needs-human`) |
+| `review_thread` | `reply-to-pr-thread` (with `--resolve` unless `verdict == needs-human`) | combined into `reply-to-pr-thread --resolve` (skipped if `needs-human`) |
 | `pr_comment` | `gh pr comment $PR_NUMBER --body "<reply_text>"` | (none — no GraphQL resolve for top-level comments) |
 | `review_body` | `gh pr comment $PR_NUMBER --body "<reply_text>"` | (none) |
 
@@ -371,8 +379,11 @@ jq -c '.[]' <<<"$VERDICTS" | while IFS= read -r VERDICT; do
 
   case "$FB_TYPE" in
     review_thread)
-      echo "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
-      if [[ "$V" != "needs-human" ]]; then bash "$SCRIPTS/resolve-pr-thread" "$FB_ID"; fi
+      if [[ "$V" != "needs-human" ]]; then
+        printf '%s\n' "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID" --resolve
+      else
+        printf '%s\n' "$REPLY" | bash "$SCRIPTS/reply-to-pr-thread" "$FB_ID"
+      fi
       ;;
     pr_comment|review_body)
       gh pr comment "$PR_NUMBER" --body "$REPLY"
