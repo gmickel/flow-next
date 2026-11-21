@@ -42,7 +42,16 @@ agent-browser --session-name secure open https://app.example.com
 
 ### Manual State Management
 
-See `state save|load|list|show|clear|clean` in [commands.md](commands.md). For authenticated session reuse with expiry handling, see [auth.md](auth.md) §Token Refresh Handling.
+```bash
+agent-browser state save auth.json     # Save cookies, storage, auth state
+agent-browser state load auth.json     # Restore saved state
+agent-browser state list               # List saved states
+agent-browser state show name.json     # Show state contents
+agent-browser state clear name         # Clear saved state
+agent-browser state clean --older-than 7  # Clean old states
+```
+
+For authenticated session reuse with expiry handling, see [auth.md](auth.md) §Token Refresh Handling.
 
 ## Common Patterns
 

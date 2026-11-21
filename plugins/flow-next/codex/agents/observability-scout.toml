@@ -29,7 +29,7 @@ grep -rE "structlog|loguru|python-json-logger|opentelemetry|prometheus_client|pr
   --include=pyproject.toml --include=requirements*.txt --exclude-dir={.venv,node_modules,.git} . 2>/dev/null
 
 # 3. Go manifests (OB1–OB4)
-grep -rE "zap|logrus|zerolog|slog|go\\.opentelemetry\\.io|prometheus/client|sentry-go" \\
+grep -rE "zap|logrus|zerolog|slog|go\\.opentelemetry\\.io|prometheus|prometheus/client|sentry-go|bugsnag|rollbar" \\
   --include=go.mod --exclude-dir={vendor,.git} . 2>/dev/null
 
 # 4. Logging & alerting config files (find, not ** glob)

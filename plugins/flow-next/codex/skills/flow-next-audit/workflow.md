@@ -86,12 +86,12 @@ GLOSSARY_CACHE="${TMPDIR:-/tmp}/flow-audit-glossary-<suffix>.json"   # literal p
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
 RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
-  if VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)"; then
+  if VAL="$(printf '%s' "$RAW" | jq -r 'if (.file_count | type == "number") and (.groups | type == "array") then (.file_count > 0) else error("invalid glossary payload") end' 2>/dev/null)"; then
     printf '%s\n' "$RAW" > "$GLOSSARY_CACHE"
     [ "$VAL" = "true" ] && ACTIVE=1
   else
     rm -f "$GLOSSARY_CACHE"
-    ACTIVE=1   # parse ERROR ⇒ ACTIVE (do not cache malformed payload)
+    ACTIVE=1   # parse or schema ERROR ⇒ ACTIVE (do not cache malformed/incomplete payload)
   fi
 fi
 if [ "$ACTIVE" = "1" ]; then

@@ -88,11 +88,14 @@ fetch_thread_comments_page() {
 # exit. Avoids fetching all threads when the target is early.
 
 check_thread() {
-  # Takes a thread JSON blob; returns 0 + prints the full thread (preserving id/path/line/isResolved) when found.
+  # Takes a thread JSON blob; returns:
+  #   0 + prints the full thread (preserving id/path/line/isResolved) when found
+  #   1 when not matched
+  #   2 on API/pagination/JSON failure (never returns partial comments)
   local thread="$1"
   local tid thas_next tcursor all_comments
-  tid="$(printf '%s' "$thread" | jq -r '.id')"
-  all_comments="$(printf '%s' "$thread" | jq -c '.comments.nodes')"
+  tid="$(printf '%s' "$thread" | jq -r '.id')" || return 2
+  all_comments="$(printf '%s' "$thread" | jq -c 'if (.comments.nodes | type) == "array" then .comments.nodes else error("missing comments.nodes") end')" || return 2
   local matched=0
 
   # First page of comments (already fetched).
@@ -101,19 +104,20 @@ check_thread() {
     matched=1
   fi
 
-  thas_next="$(printf '%s' "$thread" | jq -r '.comments.pageInfo.hasNextPage')"
-  tcursor="$(printf '%s' "$thread" | jq -r '.comments.pageInfo.endCursor')"
+  thas_next="$(printf '%s' "$thread" | jq -r '.comments.pageInfo.hasNextPage')" || return 2
+  tcursor="$(printf '%s' "$thread" | jq -r '.comments.pageInfo.endCursor // empty')" || return 2
   while [ "$thas_next" = "true" ]; do
     local page more_nodes
-    page="$(fetch_thread_comments_page "$tid" "$tcursor")"
-    more_nodes="$(printf '%s' "$page" | jq -c '.data.node.comments.nodes')"
-    all_comments="$(printf '%s\n%s\n' "$all_comments" "$more_nodes" | jq -cs '.[0] + .[1]')"
+    page="$(fetch_thread_comments_page "$tid" "$tcursor")" || return 2
+    more_nodes="$(printf '%s' "$page" | jq -c 'if (.data.node.comments.nodes | type) == "array" then .data.node.comments.nodes else error("missing comments.nodes") end')" || return 2
+    all_comments="$(printf '%s\n%s\n' "$all_comments" "$more_nodes" | jq -cs '.[0] + .[1]')" || return 2
     if [ "$matched" = "0" ] && printf '%s' "$more_nodes" | jq -e --arg cid "$COMMENT_NODE_ID" \
         'map(.id) | index($cid)' >/dev/null; then
       matched=1
     fi
-    thas_next="$(printf '%s' "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
-    tcursor="$(printf '%s' "$page" | jq -r '.data.node.comments.pageInfo.endCursor')"
+    thas_next="$(printf '%s' "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')" || return 2
+    [ "$thas_next" = "true" ] || [ "$thas_next" = "false" ] || return 2
+    tcursor="$(printf '%s' "$page" | jq -r '.data.node.comments.pageInfo.endCursor // empty')" || return 2
   done
 
   if [ "$matched" = "1" ]; then
@@ -128,7 +132,7 @@ check_thread() {
         isOutdated: $t.isOutdated,
         isResolved: $t.isResolved,
         comments: $c
-      }'
+      }' || return 2
     return 0
   fi
   return 1
@@ -142,8 +146,12 @@ while [ "$has_next" = "true" ]; do
   i=0
   while [ "$i" -lt "$count" ]; do
     thread="$(echo "$page" | jq ".data.repository.pullRequest.reviewThreads.nodes[$i]")"
-    if check_thread "$thread"; then
+    rc=0
+    check_thread "$thread" || rc=$?
+    if [ "$rc" -eq 0 ]; then
       exit 0
+    elif [ "$rc" -ne 1 ]; then
+      exit "$rc"
     fi
     i=$((i + 1))
   done

@@ -80,9 +80,10 @@ class ReviewPromptFixesTest(unittest.TestCase):
         without_ratchet = flowctl.build_rereview_preamble(["src/app.py"], "completion")
         self.assertIn("CONVERGENCE RATCHET", with_ratchet)
         self.assertNotIn("CONVERGENCE RATCHET", without_ratchet)
-        with_lines = [line for line in with_ratchet.splitlines() if line.strip()]
-        without_lines = [line for line in without_ratchet.splitlines() if line.strip()]
-        self.assertNotEqual(with_lines[-2], without_lines[-2])
+        with_body = with_ratchet.split("## IMPORTANT:", 1)[1]
+        without_body = without_ratchet.split("## IMPORTANT:", 1)[1]
+        self.assertIn("CONVERGENCE RATCHET", with_body)
+        self.assertNotIn("CONVERGENCE RATCHET", without_body)
 
     def test_completion_review_prompt_omits_duplicate_terminal_role_header(self) -> None:
         prompt = flowctl.build_completion_review_prompt(
@@ -424,6 +425,67 @@ fi
             self.assertEqual([c["id"] for c in by_id["T1"]["comments"]], ["C1"])
             self.assertEqual([c["id"] for c in by_id["T2"]["comments"]], ["C2", "C3"])
             self.assertNotIn("repo view", log.read_text(encoding="utf-8"))
+
+    def test_get_thread_for_comment_propagates_pagination_failure(self) -> None:
+        script = (
+            ROOT / "skills" / "flow-next-resolve-pr" / "scripts" / "get-thread-for-comment"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            first_page = json.dumps({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                "nodes": [
+                                    {
+                                        "id": "T1",
+                                        "isResolved": False,
+                                        "isOutdated": False,
+                                        "path": "a.py",
+                                        "line": 1,
+                                        "originalLine": 1,
+                                        "startLine": None,
+                                        "originalStartLine": None,
+                                        "comments": {
+                                            "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                                            "nodes": [
+                                                {
+                                                    "id": "C1",
+                                                    "body": "first",
+                                                    "author": {"login": "alice"},
+                                                    "createdAt": "2026-01-01T00:00:00Z",
+                                                }
+                                            ],
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    }
+                }
+            })
+            (Path(tmp) / "p1.json").write_text(first_page, encoding="utf-8")
+            self._write_fake_gh(
+                bin_dir,
+                f'''if echo "$*" | grep -q "thread=T1"; then
+  echo "simulated API failure" >&2
+  exit 17
+fi
+cat "{Path(tmp) / 'p1.json'}"
+''',
+            )
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+            res = subprocess.run(
+                [str(script), "42", "C1", "acme/widget"],
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertNotEqual(res.returncode, 0)
+            self.assertEqual(res.stdout.strip(), "")
 
 
 if __name__ == "__main__":

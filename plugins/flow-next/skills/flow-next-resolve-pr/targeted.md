@@ -15,10 +15,18 @@ if [[ -n "$THREAD_JSON" ]]; then
   FEEDBACK_JSON=$(printf '%s\n' "$THREAD_JSON" | jq --arg pr "$PR_NUMBER" '
     {
       pr_number: ($pr | tonumber),
-      review_threads: [del(.isResolved)],
+      # GitHub can surface open review threads as either false or null.
+      # Treat only literal true as resolved (same predicate as get-pr-comments).
+      review_threads: (if .isResolved == true then [] else [del(.isResolved)] end),
       pr_comments: [],
       review_bodies: [],
-      cross_invocation: {signal: false, resolved_threads: []}
+      cross_invocation: (
+        if .isResolved == true then
+          {signal: true, resolved_threads: [{id: .id, path: .path, line: (.line // .originalLine)}]}
+        else
+          {signal: false, resolved_threads: []}
+        end
+      )
     }')
 else
   FEEDBACK_JSON=$(jq -n --arg pr "$PR_NUMBER" '{pr_number: ($pr | tonumber), review_threads: [], pr_comments: [], review_bodies: [], cross_invocation: {signal: false, resolved_threads: []}}')

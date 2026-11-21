@@ -50512,10 +50512,10 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Claude, copilot and cursor reviewers: materialize ONE shared immutable diff file
-    # per round (using unstripped git diff bytes for both task and standalone scopes).
+    # Diff-by-path reviewers (claude, copilot, cursor, command): materialize ONE shared
+    # immutable diff file per round (using unstripped git diff bytes for both task and standalone scopes).
     args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
-    if any(d["spec"].backend in ("claude", "copilot", "cursor") for d in draws):
+    if any(d["spec"].backend in _DIFF_SESSION for d in draws):
         try:
             args._review_diff_path = _materialise_review_diff(
                 repo_root, rid, reviewed_base_sha, reviewed_head_sha
