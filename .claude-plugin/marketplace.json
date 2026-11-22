@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Spec-driven agentic SDLC for Claude Code and Factory Droid. Ships flow-next: zero-dep, durable specs, unattended flow --auto runs.",
-    "version": "9.19.0"
+    "version": "9.20.0"
   },
   "plugins": [
     {
       "name": "flow-next",
       "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Includes 21 subagents, 26 commands, 29 skills.",
-      "version": "9.19.0",
+      "version": "9.20.0",
       "author": {
         "name": "Gordon Mickel",
         "email": "gordon@mickel.tech",
