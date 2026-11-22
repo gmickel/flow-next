@@ -9,7 +9,7 @@
   "priority": null,
   "spec": "fn-348-plan-runs-only-on-a-persons-ask-or",
   "spec_path": ".flow/tasks/fn-348-plan-runs-only-on-a-persons-ask-or.1.md",
-  "status": "todo",
+  "status": "done",
   "title": "Implement Plan runs only on a person's ask or flow's route",
   "updated_at": "2026-11-21T23:50:44.461227Z"
 }

@@ -204,7 +204,7 @@
     "impl:fn-348-plan-runs-only-on-a-persons-ask-or.1": 0
   },
   "spec_path": ".flow/specs/fn-348-plan-runs-only-on-a-persons-ask-or.md",
-  "status": "open",
+  "status": "done",
   "title": "Plan runs only on a person's ask or flow's route: remove the text that sends agents there",
   "tracker": {
     "baseHashFlow": null,
@@ -217,5 +217,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-22T00:11:37.426766Z"
+  "updated_at": "2026-11-22T00:11:54.061515Z"
 }
