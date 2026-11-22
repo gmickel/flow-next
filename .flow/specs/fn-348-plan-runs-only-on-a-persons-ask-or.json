@@ -1,0 +1,221 @@
+{
+  "branch_name": "fn-348-plan-leak",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-11-22T00:11:37.426756Z",
+  "created_at": "2026-11-21T23:49:41.533868Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-348-plan-runs-only-on-a-persons-ask-or",
+  "impl_review_rounds": {
+    "fn-348-plan-runs-only-on-a-persons-ask-or.1": 0
+  },
+  "next_task": 1,
+  "no_plan": true,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "4520256ea99513ac0891f8c627efbe65bafd69ab058c57bb2760c4a26e12a2d7",
+      "backend": "codex",
+      "base_sha": "da1f773f1b90006e8f86aad7c67e8d33d9b3cd7f",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-3b264f311f2632d6b9317d6fdfd0877c",
+            "classification": "introduced",
+            "findingId": "finding-3b264f311f2632d6b9317d6fdfd0877c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1f234de155dd8a4f6c8a862b5f21a9f4",
+            "classification": "introduced",
+            "findingId": "finding-1f234de155dd8a4f6c8a862b5f21a9f4",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7877a851167d7bff1b42e189549301c3",
+            "classification": "introduced",
+            "findingId": "finding-7877a851167d7bff1b42e189549301c3",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b4744011badb8ace543d67bf39063b65",
+            "classification": "introduced",
+            "findingId": "finding-b4744011badb8ace543d67bf39063b65",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-fd8adab7c083a641d98a64ae4ceb2ff2",
+            "classification": "introduced",
+            "findingId": "finding-fd8adab7c083a641d98a64ae4ceb2ff2",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-a5aed191acb392ff575eb3e505f114b9",
+            "classification": "introduced",
+            "findingId": "finding-a5aed191acb392ff575eb3e505f114b9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4b8e409fcc52544f5c90d73bb952de586be81633",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 4382,
+      "output_sha256": "a69507c4196fe6ecf7adc5fc4b8fad79f4b13dc5f32ae5033b540a23c7ed41cb",
+      "reservation_id": "d2833a00616240b88e5a7c4ee5c3bc3b",
+      "round_consumed": true,
+      "scope": "impl:fn-348-plan-runs-only-on-a-persons-ask-or.1",
+      "superseded_by": null,
+      "task": "fn-348-plan-runs-only-on-a-persons-ask-or.1",
+      "timestamp": "2026-11-22T00:08:52.569991Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "09abdef451e8431eed906a8b928d29139037197d55b15f50779c40ec7236657d",
+      "backend": "codex",
+      "base_sha": "da1f773f1b90006e8f86aad7c67e8d33d9b3cd7f",
+      "counter_kind": "impl",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-3b264f311f2632d6b9317d6fdfd0877c",
+            "classification": "introduced",
+            "findingId": "finding-3b264f311f2632d6b9317d6fdfd0877c",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1f234de155dd8a4f6c8a862b5f21a9f4",
+            "classification": "introduced",
+            "findingId": "finding-1f234de155dd8a4f6c8a862b5f21a9f4",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-7877a851167d7bff1b42e189549301c3",
+            "classification": "introduced",
+            "findingId": "finding-7877a851167d7bff1b42e189549301c3",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-b4744011badb8ace543d67bf39063b65",
+            "classification": "introduced",
+            "findingId": "finding-b4744011badb8ace543d67bf39063b65",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-fd8adab7c083a641d98a64ae4ceb2ff2",
+            "classification": "introduced",
+            "findingId": "finding-fd8adab7c083a641d98a64ae4ceb2ff2",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-a5aed191acb392ff575eb3e505f114b9",
+            "classification": "introduced",
+            "findingId": "finding-a5aed191acb392ff575eb3e505f114b9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-83467e87c4fae33e38fd13fcbd7cb727",
+            "classification": "introduced",
+            "findingId": "finding-83467e87c4fae33e38fd13fcbd7cb727",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5b768cdbc88bc4546ada7c06f40aafa3b748f741",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-6.2-sol",
+      "outcome": "verdict",
+      "output_bytes": 2406,
+      "output_sha256": "762cb6b50e98ef82651f8fb3248c9b6451e8a4baec760d000acc8d2acf8e9f9a",
+      "reservation_id": "29bec90a79cd497ebcc8c68d4f5f34cb",
+      "round_consumed": true,
+      "scope": "impl:fn-348-plan-runs-only-on-a-persons-ask-or.1",
+      "superseded_by": null,
+      "task": "fn-348-plan-runs-only-on-a-persons-ask-or.1",
+      "timestamp": "2026-11-22T00:10:08.734263Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-348-plan-runs-only-on-a-persons-ask-or.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-348-plan-runs-only-on-a-persons-ask-or.1": 0
+  },
+  "spec_path": ".flow/specs/fn-348-plan-runs-only-on-a-persons-ask-or.md",
+  "status": "done",
+  "title": "Plan runs only on a person's ask or flow's route: remove the text that sends agents there",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-22T00:11:54.061515Z"
+}

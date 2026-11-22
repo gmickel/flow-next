@@ -311,6 +311,7 @@ class StartupBootstrapTest(unittest.TestCase):
             [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         if sys.version_info[:2] in bootstrap.HELP_SUPPORTED_PYTHONS:

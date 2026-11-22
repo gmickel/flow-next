@@ -21,5 +21,5 @@ Read [workflow.md](workflow.md) and follow each step in order.
 ## Notes
 
 - **Fully optional** - standard plugin usage works without local setup
-- Copies nothing into the repo - plugin updates need no per-repo re-run, on any host
-- Safe to re-run - needed only when the snippet schema bumps or configuration/seeds change
+- Copies nothing into the repo - skills and flowctl update with the plugin, on any host
+- Safe to re-run - needed when the changelog says the docs snippet changed, or configuration/seeds change

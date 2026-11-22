@@ -240,7 +240,6 @@ EOF
 
 Next steps:
   - flowctl repo-map list
-  - /flow-next:plan <spec-id>       (scouts read the index when present)
   - /flow-next:capture              (scouts read the index when present)
 EOF
 else

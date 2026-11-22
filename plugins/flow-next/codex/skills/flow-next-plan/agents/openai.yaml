@@ -1,7 +1,7 @@
 interface:
   display_name: "Flow Plan"
-  short_description: "Create structured build plans from feature requests"
+  short_description: "Task breakdown, only on a person's ask or flow's route"
   brand_color: "#3B82F6"
-  default_prompt: "Plan out this feature: "
+  default_prompt: "Break this spec into tasks: "
 policy:
   allow_implicit_invocation: true

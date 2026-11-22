@@ -584,7 +584,7 @@ Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "s
 - The block is a commented example; edit it to name the models you want per tier.
 
 Notes:
-- Plugin updates need no per-repo action, on any host — nothing was copied, so nothing goes stale. Re-run /flow-next:setup only when setup says the snippet schema bumped, or to change configuration / seed files.
+- Plugin updates need no per-repo action for skills or flowctl, on any host — nothing was copied. Re-run /flow-next:setup when the changelog says the docs snippet changed, so this repo's block gets the new text, or to change configuration / seed files.
 - Live QA stage: off by default. Change it with `flowctl config set pipeline.qa <off|on|auto>`; what each value does is in the flow skill's gate-selection reference (`skills/flow-next-flow/references/gate-selection.md`). Needs a running app plus a browser driver
 - Plan-sync: off by default; configs from older inits may still read enabled. When on, it rewrites later tasks after each wave and makes work run waves instead of the rolling scheduler; a single-task or no-plan spec has nothing for it to update. Turn it off with `flowctl config set planSync.enabled false`
 - Land patience: `flowctl config set land.patienceMinutes <minutes>` sets the wait after the last push when no human authorized the merge in-session.

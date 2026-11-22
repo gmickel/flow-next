@@ -123,6 +123,7 @@ class BootstrapHelpFastPathTest(unittest.TestCase):
             [sys.executable, str(source), "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         buf = io.StringIO()
@@ -343,6 +344,7 @@ class SetupAndPrimeFoldedFieldsTest(unittest.TestCase):
             self.assertEqual(payload["substance"]["glossary_terms"]["total_terms"], 1)
 
 
+@unittest.skipIf(os.name == "nt", "POSIX shell scripts")
 class ResolvePrShellScriptsTest(unittest.TestCase):
     """R2: get-pr-comments single-pass pagination + OWNER/REPO arg."""
 

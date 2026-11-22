@@ -69,11 +69,13 @@ class NextZeroTaskCase(unittest.TestCase):
         status: str = "open",
         plan_review_status: str | None = None,
         no_plan: bool = False,
+        ready: bool = False,
     ) -> None:
         data = {
             "id": spec_id,
             "title": title or spec_id,
             "no_plan": no_plan,
+            "ready": ready,
             "status": status,
             "depends_on_epics": [],
             "spec_path": f".flow/specs/{spec_id}.md",
@@ -168,6 +170,26 @@ class NextZeroTaskCase(unittest.TestCase):
         ):
             with self.subTest(require_review=require_review, verdict=verdict):
                 self.write_spec("fn-1", no_plan=True, plan_review_status=verdict)
+                result = self._cmd_next(require_plan_review=require_review)
+                self.assertEqual(
+                    (result["status"], result["spec"], result["task"], result["reason"]),
+                    (status, "fn-1", None, reason),
+                )
+                self.assertEqual(
+                    self._cmd_next_human(require_plan_review=require_review).strip(),
+                    f"{status} fn-1 {reason}",
+                )
+
+    def test_ready_zero_task_spec_routes_direct_not_plan(self) -> None:
+        # A ready spec with no tasks and no recorded route goes direct by default;
+        # plan runs only on a person's ask, which code never reads.
+        for require_review, verdict, status, reason in (
+            (False, None, "work", "needs_implicit_task"),
+            (True, "unknown", "plan", "needs_plan_review"),
+            (True, "ship", "work", "needs_implicit_task"),
+        ):
+            with self.subTest(require_review=require_review, verdict=verdict):
+                self.write_spec("fn-1", ready=True, plan_review_status=verdict)
                 result = self._cmd_next(require_plan_review=require_review)
                 self.assertEqual(
                     (result["status"], result["spec"], result["task"], result["reason"]),

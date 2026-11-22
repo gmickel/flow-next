@@ -541,7 +541,7 @@ Both verbs are **idempotent no-ops** when the flag already matches (no write, no
 
 ### spec set-no-plan / spec clear-no-plan
 
-Mark or clear the spec-level `no_plan` field, the durable choice to execute through Flow-Next work without separate task planning. Recommended for a ready cohesive spec and a capable coding agent when decomposition adds no coordination value. A ready zero-task spec with `no_plan: true` routes `flow --auto` to work's [no-plan route](pipeline-variations.md#no-plan-route). Capture (`--no-plan`), an explicit setter, accepted direct work, or `flow --auto` applying the plan-versus-no-plan rule to a zero-task ready spec with no recorded route records the choice; a recorded route is consumed, never re-decided.
+Mark or clear the spec-level `no_plan` field, the durable choice to execute through Flow-Next work without separate task planning. Direct is the default for a ready spec; plan runs only when a person asks for a plan or task breakdown. A ready zero-task spec with `no_plan: true` routes `flow --auto` to work's [no-plan route](pipeline-variations.md#no-plan-route). Capture (`--no-plan`), an explicit setter, accepted direct work, or `flow --auto` applying the plan-versus-no-plan rule to a zero-task ready spec with no recorded route records the choice; a recorded route is consumed, never re-decided.
 
 ```bash
 flowctl spec set-no-plan fn-1 [--json]
@@ -1084,9 +1084,9 @@ Output:
 {"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_tasks|needs_implicit_task|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
 
-A non-closed zero-task spec with recorded `no_plan: true` returns `status: work`, its spec ID, `task: null`, and `reason: needs_implicit_task`. This selects work's spec-level direct route; it is neither a runnable task nor completed work. Consumers that require a task must stop safely or invoke spec-level work to mint the owner. An unmet explicit `--require-plan-review` takes precedence for that direct spec and returns `status: plan`, `task: null`, `reason: needs_plan_review`, so the spec can be reviewed before tasks exist.
+A non-closed zero-task spec with recorded `no_plan: true`, or marked ready with no recorded route, returns `status: work`, its spec ID, `task: null`, and `reason: needs_implicit_task`. This selects work's spec-level direct route; it is neither a runnable task nor completed work. Consumers that require a task must stop safely or invoke spec-level work to mint the owner: `work <spec-id>` for a recorded direct spec; for a ready spec with no recorded route, `flow <spec-id>`, which records the route, or `work <spec-id> --no-plan` when direct work is already authorized (plain work asks, or stops with `NEEDS_HUMAN` when unattended). An unmet explicit `--require-plan-review` takes precedence for that direct spec and returns `status: plan`, `task: null`, `reason: needs_plan_review`, so the spec can be reviewed before tasks exist.
 
-An ordinary zero-task spec still returns `status: plan`, `reason: needs_tasks`, before its plan-review check. Selection stops at the first eligible spec in id order. A spec whose only not-done dependency is its chain parent ([`spec chain`](#spec-chain)) is not blocked; one `git ls-remote` serves the whole invocation.
+A zero-task spec that is neither ready nor recorded direct returns `status: plan`, `reason: needs_tasks`, before its plan-review check; plan still runs only when a person asks for a plan or task breakdown. Selection stops at the first eligible spec in id order. A spec whose only not-done dependency is its chain parent ([`spec chain`](#spec-chain)) is not blocked; one `git ls-remote` serves the whole invocation.
 
 The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 
