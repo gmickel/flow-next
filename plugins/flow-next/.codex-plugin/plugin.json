@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "9.18.0",
+  "version": "9.19.0",
   "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Runs on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, OpenCode, Meta Muse Code and Google Antigravity CLI.",
   "author": {
     "name": "Gordon Mickel",
@@ -20,7 +20,7 @@
   "skills": "./codex/skills/",
   "interface": {
     "displayName": "Flow-Next",
-    "shortDescription": "Plan-first workflow with subagent execution",
+    "shortDescription": "Spec-driven workflow with subagent execution",
     "longDescription": "Structured plan-first workflow engine. Tracks specs and tasks in .flow/ directory. Spawns isolated worker subagents per task to prevent context bleed. Prime delivers an opinionated, structure-aware agent-readiness assessment: it classifies the project, judges substance over existence, and leads with an operability verdict + ranked next-actions. 21 subagents, 26 commands, 29 skills.",
     "developerName": "Gordon Mickel",
     "category": "Productivity",
